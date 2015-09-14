@@ -7,7 +7,6 @@ package services
 import (
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
@@ -87,7 +86,7 @@ func (c fallbackClient) SplitQuery(ctx context.Context, keyspace string, sql str
 	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount, reply)
 }
 
-func (c fallbackClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (c fallbackClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
 	return c.fallback.GetSrvKeyspace(ctx, keyspace)
 }
 

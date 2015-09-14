@@ -15,7 +15,6 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/callerid"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -418,7 +417,7 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query s
 	return proto.ProtoToSplitQueryParts(response), nil
 }
 
-func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topopb.SrvKeyspace, error) {
 	request := &pb.GetSrvKeyspaceRequest{
 		Keyspace: keyspace,
 	}
@@ -426,7 +425,7 @@ func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 	if err := conn.rpcConn.Call(ctx, "VTGateP3.GetSrvKeyspace", request, response); err != nil {
 		return nil, err
 	}
-	return topo.ProtoToSrvKeyspace(response.SrvKeyspace), nil
+	return response.SrvKeyspace, nil
 }
 
 func (conn *vtgateConn) Close() {

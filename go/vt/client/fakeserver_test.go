@@ -147,8 +147,8 @@ func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql
 }
 
 // GetSrvKeyspace is part of the VTGateService interface
-func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
-	return &topo.SrvKeyspace{}, nil
+func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
+	return &pb.SrvKeyspace{}, nil
 }
 
 // GetSrvShard is part of the VTGateService interface

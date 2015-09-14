@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import base64
 import json
 import logging
 import optparse
@@ -18,6 +19,7 @@ import MySQLdb
 
 import environment
 
+from vtdb import keyrange_constants
 from vtctl import vtctl_client
 from mysql_flavor import set_mysql_flavor
 from mysql_flavor import mysql_flavor
@@ -864,24 +866,35 @@ def wait_db_read_only(uid):
 def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
   ks = run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
   result = ''
-  for tablet_type in sorted(ks['Partitions'].keys()):
-    result += 'Partitions(%s):' % tablet_type
-    partition = ks['Partitions'][tablet_type]
-    for shard in partition['ShardReferences']:
-      result += ' %s-%s' % (shard['KeyRange']['Start'],
-                            shard['KeyRange']['End'])
-    result += '\n'
+  pmap = {}
+  for partition in ks['partitions']:
+    tablet_type = keyrange_constants.PROTO3_TABLET_TYPE_TO_STRING[partition['served_type']]
+    r = 'Partitions(%s):' % tablet_type
+    for shard in partition['shard_references']:
+      s = ''
+      e = ''
+      if 'key_range' in shard:
+        if 'start' in shard['key_range']:
+          s = shard['key_range']['start']
+          s = base64.b64decode(s).encode('hex')
+        if 'end' in shard['key_range']:
+          e = shard['key_range']['end']
+          e = base64.b64decode(e).encode('hex')
+      r += ' %s-%s' % (s, e)
+    pmap[tablet_type] = r + '\n'
+  for tablet_type in sorted(pmap.keys()):
+    result += pmap[tablet_type]
   logging.debug('Cell %s keyspace %s has data:\n%s', cell, keyspace, result)
   if expected != result:
     raise Exception(
         'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%'
         's\ngot:\n%s' % (
             cell, keyspace, expected, result))
-  if 'keyspace_id' != ks.get('ShardingColumnName'):
-    raise Exception('Got wrong ShardingColumnName in SrvKeyspace: %s' %
+  if 'keyspace_id' != ks.get('sharding_column_name'):
+    raise Exception('Got wrong sharding_column_name in SrvKeyspace: %s' %
                     str(ks))
-  if keyspace_id_type != ks.get('ShardingColumnType'):
-    raise Exception('Got wrong ShardingColumnType in SrvKeyspace: %s' %
+  if keyspace_id_type != keyrange_constants.PROTO3_KIT_TO_STRING[ks.get('sharding_column_type')]:
+    raise Exception('Got wrong sharding_column_type in SrvKeyspace: %s' %
                     str(ks))
 
 

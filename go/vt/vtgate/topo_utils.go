@@ -12,7 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
@@ -42,7 +42,7 @@ func mapKeyspaceIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, k
 	return keyspace, res, nil
 }
 
-func getKeyspaceShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType pb.TabletType) (string, *topo.SrvKeyspace, []topo.ShardReference, error) {
+func getKeyspaceShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType pb.TabletType) (string, *pb.SrvKeyspace, []*pb.ShardReference, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {
 		return "", nil, nil, vterrors.NewVitessError(
@@ -52,20 +52,21 @@ func getKeyspaceShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspa
 	}
 
 	// check if the keyspace has been redirected for this tabletType.
-	tt := topo.ProtoToTabletType(tabletType)
-	if servedFrom, ok := srvKeyspace.ServedFrom[tt]; ok {
-		keyspace = servedFrom
-		srvKeyspace, err = topoServ.GetSrvKeyspace(ctx, cell, keyspace)
-		if err != nil {
-			return "", nil, nil, vterrors.NewVitessError(
-				vtrpc.ErrorCode_INTERNAL_ERROR, err,
-				"keyspace %v fetch error: %v", keyspace, err,
-			)
+	for _, sf := range srvKeyspace.ServedFrom {
+		if sf.TabletType == tabletType {
+			keyspace = sf.Keyspace
+			srvKeyspace, err = topoServ.GetSrvKeyspace(ctx, cell, keyspace)
+			if err != nil {
+				return "", nil, nil, vterrors.NewVitessError(
+					vtrpc.ErrorCode_INTERNAL_ERROR, err,
+					"keyspace %v fetch error: %v", keyspace, err,
+				)
+			}
 		}
 	}
 
-	partition, ok := srvKeyspace.Partitions[tt]
-	if !ok {
+	partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)
+	if partition == nil {
 		return "", nil, nil, vterrors.NewVitessError(
 			vtrpc.ErrorCode_INTERNAL_ERROR, err,
 			"No partition found for tabletType %v in keyspace %v", strings.ToLower(tabletType.String()), keyspace,
@@ -74,7 +75,7 @@ func getKeyspaceShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspa
 	return keyspace, srvKeyspace, partition.ShardReferences, nil
 }
 
-func getShardForKeyspaceID(allShards []topo.ShardReference, keyspaceID []byte) (string, error) {
+func getShardForKeyspaceID(allShards []*pb.ShardReference, keyspaceID []byte) (string, error) {
 	if len(allShards) == 0 {
 		return "", vterrors.FromError(vtrpc.ErrorCode_BAD_INPUT,
 			fmt.Errorf("No shards found for this tabletType"),
@@ -82,7 +83,7 @@ func getShardForKeyspaceID(allShards []topo.ShardReference, keyspaceID []byte) (
 	}
 
 	for _, shardReference := range allShards {
-		if shardReference.KeyRange.Contains(key.KeyspaceId(string(keyspaceID))) {
+		if key.KeyRangeContains(shardReference.KeyRange, keyspaceID) {
 			return shardReference.Name, nil
 		}
 	}
@@ -144,7 +145,7 @@ func mapKeyRangesToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 }
 
 // This maps a list of keyranges to shard names.
-func resolveKeyRangeToShards(allShards []topo.ShardReference, kr *pb.KeyRange) ([]string, error) {
+func resolveKeyRangeToShards(allShards []*pb.ShardReference, kr *pb.KeyRange) ([]string, error) {
 	shards := make([]string, 0, 1)
 
 	if !key.KeyRangeIsPartial(kr) {
@@ -155,7 +156,7 @@ func resolveKeyRangeToShards(allShards []topo.ShardReference, kr *pb.KeyRange) (
 	}
 	for j := 0; j < len(allShards); j++ {
 		shard := allShards[j]
-		if key.KeyRangesIntersect(key.ProtoToKeyRange(kr), shard.KeyRange) {
+		if key.KeyRangesIntersect(kr, shard.KeyRange) {
 			shards = append(shards, shard.Name)
 		}
 	}

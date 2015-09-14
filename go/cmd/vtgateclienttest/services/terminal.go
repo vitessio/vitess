@@ -11,7 +11,6 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
@@ -92,7 +91,7 @@ func (c *terminalClient) SplitQuery(ctx context.Context, keyspace string, sql st
 	return errTerminal
 }
 
-func (c *terminalClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (c *terminalClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
 	return nil, errTerminal
 }
 
