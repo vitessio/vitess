@@ -16,6 +16,7 @@ from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import keyspace
+from vtdb import keyrange_constants
 from vtdb import vtdb_logger
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
@@ -466,7 +467,11 @@ class VTGateConnection(vtgate_client.VTGateClient):
       response = self.client.call('VTGate.GetSrvKeyspace', {
           'Keyspace': name,
           })
-      return keyspace.Keyspace(name, response.reply)
+      # response.reply is a proto3 encoded in bson RPC.
+      # we need to make it back to what keyspace.Keyspace expects
+      return keyspace.Keyspace(
+          name,
+          keyrange_constants.srv_keyspace_proto3_to_old(response.reply))
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self), keyspace=name)
     except:

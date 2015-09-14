@@ -88,7 +88,7 @@ def read_keyspace(topo_client, keyspace_name):
     if not data:
       raise dbexceptions.OperationalError('invalid empty keyspace',
                                           keyspace_name)
-    return Keyspace(keyspace_name, data)
+    return Keyspace(keyspace_name, keyrange_constants.srv_keyspace_proto3_to_old(data))
   except dbexceptions.OperationalError as e:
     raise e
   except Exception as e:
