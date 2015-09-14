@@ -7,6 +7,7 @@ package key
 import (
 	"encoding/hex"
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -93,21 +94,14 @@ func TestKeyStringSort(t *testing.T) {
 }
 
 func TestParseShardingSpec(t *testing.T) {
-	x40, err := HexKeyspaceId("4000000000000000").Unhex()
-	if err != nil {
-		t.Errorf("Unexpected error: %v.", err)
-	}
-	x80, err := HexKeyspaceId("8000000000000000").Unhex()
-	if err != nil {
-		t.Errorf("Unexpected error: %v.", err)
-	}
-
-	goodTable := map[string][]KeyRange{
-		"-": {{Start: MinKey, End: MaxKey}},
+	x40 := []byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	x80 := []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	goodTable := map[string][]*pb.KeyRange{
+		"-": {{}},
 		"-4000000000000000-8000000000000000-": {
-			{Start: MinKey, End: x40},
+			{End: x40},
 			{Start: x40, End: x80},
-			{Start: x80, End: MaxKey},
+			{Start: x80},
 		},
 	}
 	badTable := []string{
@@ -126,8 +120,8 @@ func TestParseShardingSpec(t *testing.T) {
 			continue
 		}
 		for i, w := range wanted {
-			if r[i] != w {
-				t.Errorf("Wrong result: wanted %v, got %v", wanted, r)
+			if !reflect.DeepEqual(r[i], w) {
+				t.Errorf("Wrong result: wanted %v, got %v", w, r[i])
 				break
 			}
 		}

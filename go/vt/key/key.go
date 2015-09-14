@@ -328,13 +328,13 @@ func (p KeyRangeArray) Sort() { sort.Sort(p) }
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
 // string may serve both as the start and end of the keyspace: -a-b-
 // will be parsed as start-a, a-b, b-end.
-func ParseShardingSpec(spec string) ([]KeyRange, error) {
+func ParseShardingSpec(spec string) ([]*pb.KeyRange, error) {
 	parts := strings.Split(spec, "-")
 	if len(parts) == 1 {
 		return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)
 	}
 	old := parts[0]
-	ranges := make([]KeyRange, len(parts)-1)
+	ranges := make([]*pb.KeyRange, len(parts)-1)
 
 	for i, p := range parts[1:] {
 		if p == "" && i != (len(parts)-2) {
@@ -343,15 +343,21 @@ func ParseShardingSpec(spec string) ([]KeyRange, error) {
 		if p != "" && p <= old {
 			return nil, fmt.Errorf("malformed spec: shard limits should be in order: %q", spec)
 		}
-		s, err := HexKeyspaceId(old).Unhex()
+		s, err := hex.DecodeString(old)
 		if err != nil {
 			return nil, err
 		}
-		e, err := HexKeyspaceId(p).Unhex()
+		if len(s) == 0 {
+			s = nil
+		}
+		e, err := hex.DecodeString(p)
 		if err != nil {
 			return nil, err
 		}
-		ranges[i] = KeyRange{Start: s, End: e}
+		if len(e) == 0 {
+			e = nil
+		}
+		ranges[i] = &pb.KeyRange{Start: s, End: e}
 		old = p
 	}
 	return ranges, nil

@@ -156,16 +156,12 @@ func (s *sandbox) DeleteTestConn(shard string, conn tabletconn.TabletConn) {
 
 var DefaultShardSpec = "-20-40-60-80-a0-c0-e0-"
 
-func getAllShards(shardSpec string) (key.KeyRangeArray, error) {
+func getAllShards(shardSpec string) ([]*pbt.KeyRange, error) {
 	shardedKrArray, err := key.ParseShardingSpec(shardSpec)
 	if err != nil {
 		return nil, err
 	}
 	return shardedKrArray, nil
-}
-
-func getKeyRangeName(kr key.KeyRange) string {
-	return fmt.Sprintf("%v-%v", string(kr.Start.Hex()), string(kr.End.Hex()))
 }
 
 func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*pbt.SrvKeyspace, error) {
@@ -176,8 +172,8 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*pbt.SrvKey
 	shards := make([]*pbt.ShardReference, 0, len(shardKrArray))
 	for i := 0; i < len(shardKrArray); i++ {
 		shard := &pbt.ShardReference{
-			Name:     getKeyRangeName(shardKrArray[i]),
-			KeyRange: key.KeyRangeToProto(shardKrArray[i]),
+			Name:     key.KeyRangeString(shardKrArray[i]),
+			KeyRange: shardKrArray[i],
 		}
 		shards = append(shards, shard)
 	}
