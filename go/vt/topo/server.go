@@ -251,7 +251,7 @@ type Impl interface {
 	// that are never going to work. Mutiple notifications with the
 	// same contents may be sent (for instance when the serving graph
 	// is rebuilt, but the content hasn't changed).
-	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *SrvKeyspace, stopWatching chan<- struct{}, err error)
+	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *pb.SrvKeyspace, stopWatching chan<- struct{}, err error)
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.
@@ -266,7 +266,7 @@ type Impl interface {
 	DeleteSrvShard(ctx context.Context, cell, keyspace, shard string) error
 
 	// UpdateSrvKeyspace updates the serving records for a cell, keyspace.
-	UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *SrvKeyspace) error
+	UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *pb.SrvKeyspace) error
 
 	// DeleteSrvKeyspace deletes the cell-local serving records for a keyspace.
 	// Can return ErrNoNode.
@@ -274,7 +274,7 @@ type Impl interface {
 
 	// GetSrvKeyspace reads a SrvKeyspace record.
 	// Can return ErrNoNode.
-	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*SrvKeyspace, error)
+	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error)
 
 	// GetSrvKeyspaceNames returns the list of visible Keyspaces
 	// in this cell. They shall be sorted.

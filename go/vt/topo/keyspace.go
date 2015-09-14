@@ -123,16 +123,16 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType pb.TabletType, cells []st
 	return nil
 }
 
-// ComputeCellServedFrom returns the ServedFrom map for a cell
-func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) map[TabletType]string {
-	result := make(map[TabletType]string)
+// ComputeCellServedFrom returns the ServedFrom list for a cell
+func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*pb.SrvKeyspace_ServedFrom {
+	var result []*pb.SrvKeyspace_ServedFrom
 	for _, ksf := range ki.ServedFroms {
 		if InCellList(cell, ksf.Cells) {
-			result[ProtoToTabletType(ksf.TabletType)] = ksf.Keyspace
+			result = append(result, &pb.SrvKeyspace_ServedFrom{
+				TabletType: ksf.TabletType,
+				Keyspace:   ksf.Keyspace,
+			})
 		}
-	}
-	if len(result) == 0 {
-		return nil
 	}
 	return result
 }

@@ -490,7 +490,7 @@ primary key (name)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    self.assertEqual(ks['SplitShardCount'], 4)
+    self.assertEqual(ks['split_shard_count'], 4)
 
     # we set full_mycnf_args to True as a test in the KIT_BYTES case
     full_mycnf_args = keyspace_id_type == keyrange_constants.KIT_BYTES

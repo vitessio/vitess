@@ -7,7 +7,6 @@
 package vtgateservice
 
 import (
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
@@ -42,7 +41,7 @@ type VTGateService interface {
 	SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error
 
 	// Topology support
-	GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error)
+	GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error)
 
 	// GetSrvShard is not part of the public API, but might be used
 	// by some implementations.
