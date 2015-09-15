@@ -68,7 +68,8 @@ class BasePEP0249Cursor(object):
   def _clear_common_state(self):
     self.index = 0
 
-  def _get_conn(self):
+  @property
+  def connection(self):
     if not self._conn:
       raise dbexceptions.ProgrammingError(
           'Cannot use closed cursor %s.' % self.__class__)
@@ -100,13 +101,13 @@ class BaseListCursor(BasePEP0249Cursor):
     self.effective_caller_id = effective_caller_id
 
   def begin(self):
-    return self._get_conn().begin(self.effective_caller_id)
+    return self.connection.begin(self.effective_caller_id)
 
   def commit(self):
-    return self._get_conn().commit()
+    return self.connection.commit()
 
   def rollback(self):
-    return self._get_conn().rollback()
+    return self.connection.rollback()
 
   def _check_fetch(self):
     if self.results is None:
