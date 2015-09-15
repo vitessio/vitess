@@ -55,10 +55,6 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
     self._clear_list_state()
-    # FIXME: Remove effective_caller_id from interface.
-    effective_caller_id = kargs.get('effective_caller_id')
-    if effective_caller_id:
-      self.set_effective_caller_id(effective_caller_id)
     if self._handle_transaction_sql(sql):
       return
     write_query = bool(write_sql_pattern.match(sql))
@@ -81,9 +77,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     return self.rowcount
 
   def execute_entity_ids(
-      self, sql, bind_variables, entity_keyspace_id_map, entity_column_name,
-      effective_caller_id=None):
-    # FIXME: Remove effective_caller_id from interface.
+      self, sql, bind_variables, entity_keyspace_id_map, entity_column_name):
     self._clear_list_state()
 
     # This is by definition a scatter query, so raise exception.
@@ -91,9 +85,6 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     if write_query:
       raise dbexceptions.DatabaseError(
           'execute_entity_ids is not allowed for write queries')
-    # FIXME: Remove effective_caller_id from interface.
-    if effective_caller_id is not None:
-      self.set_effective_caller_id(effective_caller_id)
     self.results, self.rowcount, self.lastrowid, self.description = (
         self._get_conn()._execute_entity_ids(
             sql,
@@ -157,10 +148,7 @@ class BatchVTGateCursor(VTGateCursor):
     self.keyspace_list.append(keyspace)
     self.keyspace_ids_list.append(keyspace_ids)
 
-  def flush(self, as_transaction=False, effective_caller_id=None):
-    # FIXME: Remove effective_caller_id from interface.
-    if effective_caller_id is not None:
-      self.set_effective_caller_id(effective_caller_id)
+  def flush(self, as_transaction=False):
     self.rowsets = self._get_conn()._execute_batch(
         self.query_list,
         self.bind_vars_list,
@@ -202,10 +190,6 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
     if self._writable:
       raise dbexceptions.ProgrammingError('Streaming query cannot be writable')
     self._clear_stream_state()
-    # FIXME: Remove effective_caller_id from interface.
-    effective_caller_id = kargs.get('effective_caller_id')
-    if effective_caller_id is not None:
-      self.set_effective_caller_id(effective_caller_id)
     self.generator, self.description = self._get_conn()._stream_execute(
         sql,
         bind_variables,

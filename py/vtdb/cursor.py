@@ -15,10 +15,6 @@ class BaseCursor(base_cursor.BaseListCursor):
   # for instance, a key value for shard mapping
   def _execute(self, sql, bind_variables, **kargs):
     self._clear_list_state()
-    # FIXME: Remove effective_caller_id from interface.
-    effective_caller_id = kargs.get('effective_caller_id')
-    if effective_caller_id:
-      self.set_effective_caller_id(effective_caller_id)
     if self._handle_transaction_sql(sql):
       return
     self.results, self.rowcount, self.lastrowid, self.description = (
