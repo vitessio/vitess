@@ -16,6 +16,7 @@ from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import keyspace
+from vtdb import keyrange_constants
 from vtdb import vtdb_logger
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
@@ -116,19 +117,33 @@ class VTGateConnection(vtgate_client.VTGateClient):
   If something goes wrong, this object should be thrown away and a new
   one instantiated.
   """
-  session = None
-  _stream_fields = None
-  _stream_conversions = None
-  _stream_result = None
-  _stream_result_index = None
 
   def __init__(self, addr, timeout, user=None, password=None,
                keyfile=None, certfile=None):
+    self.session = None
     self.addr = addr
+    self.user = user
+    self.password = password
+    self.keyfile = keyfile
+    self.certfile = certfile
     self.timeout = timeout
-    self.client = bsonrpc.BsonRpcClient(
-        addr, timeout, user, password, keyfile=keyfile, certfile=certfile)
+    self.client = self._create_client()
     self.logger_object = vtdb_logger.get_logger()
+
+  def _create_client(self):
+    return bsonrpc.BsonRpcClient(
+        self.addr, self.timeout, self.user, self.password,
+        keyfile=self.keyfile, certfile=self.certfile)
+
+  def _get_client(self):
+    """Get current client or create a new one and connect."""
+    if not self.client:
+      self.client = self._create_client()
+      try:
+        self.client.dial()
+      except gorpc.GoRpcError as e:
+        raise convert_exception(e, str(self))
+    return self.client
 
   def __str__(self):
     return '<VTGateConnection %s >' % self.addr
@@ -137,33 +152,28 @@ class VTGateConnection(vtgate_client.VTGateClient):
     try:
       if not self.is_closed():
         self.close()
-      self.client.dial()
+      self._get_client().dial()
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def close(self):
     if self.session:
       self.rollback()
-    self.client.close()
+    if self.client:
+      self.client.close()
 
   def is_closed(self):
-    return self.client.is_closed()
+    return not self.client or self.client.is_closed()
 
   def cursor(self, *pargs, **kwargs):
-    cursorclass = None
-    if 'cursorclass' in kwargs:
-      cursorclass = kwargs['cursorclass']
-      del kwargs['cursorclass']
-
-    if cursorclass is None:
-      cursorclass = vtgate_cursor.VTGateCursor
+    cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
   def begin(self, effective_caller_id=None):
     try:
       req = {}
       self._add_caller_id(req, effective_caller_id)
-      response = self.client.call('VTGate.Begin2', req)
+      response = self._get_client().call('VTGate.Begin2', req)
       self.effective_caller_id = effective_caller_id
       self.session = None
       self._update_session(response)
@@ -175,7 +185,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       req = {}
       self._add_caller_id(req, self.effective_caller_id)
       self._add_session(req)
-      self.client.call('VTGate.Commit2', req)
+      self._get_client().call('VTGate.Commit2', req)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
     finally:
@@ -187,7 +197,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       req = {}
       self._add_caller_id(req, self.effective_caller_id)
       self._add_session(req)
-      self.client.call('VTGate.Rollback2', req)
+      self._get_client().call('VTGate.Rollback2', req)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
     finally:
@@ -242,7 +252,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     rowcount = 0
     lastrowid = 0
     try:
-      response = self.client.call(exec_method, req)
+      response = self._get_client().call(exec_method, req)
       self._update_session(response)
       reply = response.reply
       if response.reply.get('Error'):
@@ -263,7 +273,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql, keyspace_ids, keyranges,
                               keyspace=keyspace, tablet_type=tablet_type)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
     return results, rowcount, lastrowid, fields
@@ -296,7 +306,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     rowcount = 0
     lastrowid = 0
     try:
-      response = self.client.call('VTGate.ExecuteEntityIds', req)
+      response = self._get_client().call('VTGate.ExecuteEntityIds', req)
       self._update_session(response)
       reply = response.reply
       if response.reply.get('Error'):
@@ -317,7 +327,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql, entity_keyspace_id_map,
                               keyspace=keyspace, tablet_type=tablet_type)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
     return results, rowcount, lastrowid, fields
@@ -347,7 +357,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       }
       self._add_caller_id(req, effective_caller_id)
       self._add_session(req)
-      response = self.client.call('VTGate.ExecuteBatchKeyspaceIds', req)
+      response = self._get_client().call('VTGate.ExecuteBatchKeyspaceIds', req)
       self._update_session(response)
       if response.reply.get('Error'):
         raise gorpc.AppError(
@@ -372,18 +382,36 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self.logger_object.log_private_data(bind_variables_list)
       raise convert_exception(e, str(self), sql_list, keyspace_ids_list,
                               keyspace='', tablet_type=tablet_type)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
     return rowsets
 
-  # we return the fields for the response, and the column conversions
-  # the conversions will need to be passed back to _stream_next
-  # (that way we avoid using a member variable here for such a corner case)
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
   def _stream_execute(
       self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None,
       keyranges=None, not_in_transaction=False, effective_caller_id=None):
+    """Return a generator and the fields for the response.
+
+    This method takes ownership of self.client, since multiple
+    stream_executes can be active at once.
+
+    Args:
+      sql: Str sql.
+      bind_variables: A (str: value) dict.
+      keyspace: Str keyspace.
+      tablet_type: Str tablet_type.
+      keyspace_ids: List of uint64 or bytes keyspace_ids.
+      keyranges: KeyRange objects.
+      not_in_transaction: bool.
+      effective_caller_id: CallerID.
+
+    Returns:
+      Generator, fields pair.
+
+    Raises:
+      dbexceptions.ProgrammingError: On bad input.
+    """
     exec_method = None
     req = None
     if keyspace_ids is not None:
@@ -403,70 +431,64 @@ class VTGateConnection(vtgate_client.VTGateClient):
     self._add_caller_id(req, effective_caller_id)
     self._add_session(req)
 
-    self._stream_fields = []
-    self._stream_conversions = []
-    self._stream_result = None
-    self._stream_result_index = 0
+    stream_fields = []
+    stream_conversions = []
+    rpc_client = self._get_client()
     try:
-      self.client.stream_call(exec_method, req)
-      first_response = self.client.stream_next()
+      rpc_client.stream_call(exec_method, req)
+      first_response = rpc_client.stream_next()
       if first_response:
         reply = first_response.reply['Result']
         for field in reply['Fields']:
-          self._stream_fields.append((field['Name'], field['Type']))
-          self._stream_conversions.append(
+          stream_fields.append((field['Name'], field['Type']))
+          stream_conversions.append(
               field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql, keyspace_ids, keyranges,
                               keyspace=keyspace, tablet_type=tablet_type)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
-    return None, 0, 0, self._stream_fields
 
-  def _stream_next(self):
-    # Terminating condition
-    if self._stream_result_index is None:
-      return None
+    # Take the BsonRpcClient from VTGateConnection. The row_generator
+    # will manage the BsonRpcClient. This VTGateConnection will connect
+    # to a new client if needed.
+    self.client = None
 
-    # See if we need to read more or whether we just pop the next row.
-    while self._stream_result is None:
+    def row_generator():
       try:
-        self._stream_result = self.client.stream_next()
-        if self._stream_result is None:
-          self._stream_result_index = None
-          return None
-        # A session message, if any comes separately with no rows
-        if self._stream_result.reply.get('Session'):
-          self.session = self._stream_result.reply['Session']
-          self._stream_result = None
-          continue
-      except gorpc.GoRpcError as e:
-        raise convert_exception(e, str(self))
-      except:
-        logging.exception('gorpc low-level error')
-        raise
+        while True:
+          try:
+            stream_result = rpc_client.stream_next()
+            if stream_result is None:
+              break
+            # A session message, if any, comes separately with no rows
+            if stream_result.reply.get('Session'):
+              self.session = stream_result.reply['Session']
+            else:
+              for result_item in stream_result.reply['Result']['Rows']:
+                yield tuple(_make_row(result_item, stream_conversions))
+          except gorpc.GoRpcError as e:
+            raise convert_exception(e, str(self))
+          except Exception:
+            logging.exception('gorpc low-level error')
+            raise
+      finally:
+        rpc_client.close()
 
-    row = tuple(_make_row(
-        self._stream_result.reply['Result']['Rows'][self._stream_result_index],
-        self._stream_conversions))
-
-    # If we are reading the last row, set us up to read more data.
-    self._stream_result_index += 1
-    if (self._stream_result_index ==
-        len(self._stream_result.reply['Result']['Rows'])):
-      self._stream_result = None
-      self._stream_result_index = 0
-
-    return row
+    return row_generator(), stream_fields
 
   def get_srv_keyspace(self, name):
     try:
-      response = self.client.call('VTGate.GetSrvKeyspace', {
+      response = self._get_client().call('VTGate.GetSrvKeyspace', {
           'Keyspace': name,
           })
-      return keyspace.Keyspace(name, response.reply)
+      # response.reply is a proto3 encoded in bson RPC.
+      # we need to make it back to what keyspace.Keyspace expects
+      return keyspace.Keyspace(
+          name,
+          keyrange_constants.srv_keyspace_proto3_to_old(response.reply))
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self), keyspace=name)
     except:

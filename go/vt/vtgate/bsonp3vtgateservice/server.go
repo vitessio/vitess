@@ -12,7 +12,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -438,7 +437,7 @@ func (vtg *VTGateP3) GetSrvKeyspace(ctx context.Context, request *pb.GetSrvKeysp
 	if err != nil {
 		return err
 	}
-	response.SrvKeyspace = topo.SrvKeyspaceToProto(ks)
+	response.SrvKeyspace = ks
 	return nil
 }
 

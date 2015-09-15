@@ -252,8 +252,13 @@ func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
 		buffer.WriteByte(byte(tkn.lastChar))
 	}
 	lowered := bytes.ToLower(buffer.Bytes())
-	if keywordID, found := keywords[string(lowered)]; found {
+	loweredStr := string(lowered)
+	if keywordID, found := keywords[loweredStr]; found {
 		return keywordID, lowered
+	}
+	// dual must always be case-insensitive
+	if loweredStr == "dual" {
+		return ID, lowered
 	}
 	return ID, buffer.Bytes()
 }

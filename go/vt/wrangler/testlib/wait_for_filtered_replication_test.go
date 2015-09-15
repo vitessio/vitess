@@ -99,7 +99,7 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	// is called by WaitForFilteredReplication.
 	// Note that for this test we don't mock the BinlogPlayerMap i.e. although
 	// its state says no filtered replication is running, the code under test will
-	// observe otherwise because we call SqlQuery.BroadcastHealth() directly and
+	// observe otherwise because we call TabletServer.BroadcastHealth() directly and
 	// skip going through the tabletmanager's agent.
 	dest.Agent.BinlogPlayerMap = tabletmanager.NewBinlogPlayerMap(ts, nil, nil)
 
@@ -107,7 +107,7 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	testConfig := tabletserver.DefaultQsConfig
 	testConfig.EnablePublishStats = false
 	testConfig.DebugURLPrefix = fmt.Sprintf("TestWaitForFilteredReplication-%d-", rand.Int63())
-	qs := tabletserver.NewSqlQuery(testConfig)
+	qs := tabletserver.NewTabletServer(testConfig)
 	grpcqueryservice.RegisterForTest(dest.RPCServer, qs)
 
 	qs.BroadcastHealth(42, initialStats)

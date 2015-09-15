@@ -732,7 +732,7 @@ func TestVTGateSplitQuery(t *testing.T) {
 	keyranges, _ := key.ParseShardingSpec(DefaultShardSpec)
 	s := createSandbox(keyspace)
 	for _, kr := range keyranges {
-		s.MapTestConn(fmt.Sprintf("%s-%s", kr.Start, kr.End), &sandboxConn{})
+		s.MapTestConn(key.KeyRangeString(kr), &sandboxConn{})
 	}
 	sql := "select col1, col2 from table"
 	splitCount := 24
@@ -771,7 +771,7 @@ func TestVTGateSplitQuery(t *testing.T) {
 	}
 	expectedSqlsByKeyRange := map[kproto.KeyRange][]string{}
 	for _, kr := range keyranges {
-		expectedSqlsByKeyRange[kr] = []string{
+		expectedSqlsByKeyRange[kproto.ProtoToKeyRange(kr)] = []string{
 			"select col1, col2 from table /*split 0 */",
 			"select col1, col2 from table /*split 1 */",
 			"select col1, col2 from table /*split 2 */",

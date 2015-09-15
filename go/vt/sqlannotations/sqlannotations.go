@@ -62,7 +62,7 @@ var (
 	unfriendlyFilteredReplicationRegexp = regexp.MustCompile("/\\* vtgate:: filtered_replication_unfriendly \\*/")
 )
 
-// ParseSQLAnnotation the annotation from the given statement.
+// ParseSQLAnnotation parses the annotation from the given statement.
 // Returns:
 // If a keyspace-id comment exists
 //   'keyspaceId' is set to the parsed keyspace id, 'unfriendly' is set to 'false',

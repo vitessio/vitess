@@ -5,11 +5,12 @@
 package services
 
 import (
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
-	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // successClient implements vtgateservice.VTGateService
@@ -44,32 +45,36 @@ func (c *successClient) Rollback(ctx context.Context, inSession *proto.Session) 
 	return c.fallback.Rollback(ctx, inSession)
 }
 
-func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
 	if keyspace == "big" {
-		return &topo.SrvKeyspace{
-			Partitions: map[topo.TabletType]*topo.KeyspacePartition{
-				topo.TYPE_REPLICA: &topo.KeyspacePartition{
-					ShardReferences: []topo.ShardReference{
-						topo.ShardReference{
+		return &pb.SrvKeyspace{
+			Partitions: []*pb.SrvKeyspace_KeyspacePartition{
+				&pb.SrvKeyspace_KeyspacePartition{
+					ServedType: pb.TabletType_REPLICA,
+					ShardReferences: []*pb.ShardReference{
+						&pb.ShardReference{
 							Name: "shard0",
-							KeyRange: key.KeyRange{
-								Start: key.Uint64Key(0x4000000000000000).KeyspaceId(),
-								End:   key.Uint64Key(0x8000000000000000).KeyspaceId(),
+							KeyRange: &pb.KeyRange{
+								Start: []byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+								End:   []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
 							},
 						},
 					},
 				},
 			},
 			ShardingColumnName: "sharding_column_name",
-			ShardingColumnType: key.KIT_UINT64,
-			ServedFrom: map[topo.TabletType]string{
-				topo.TYPE_MASTER: "other_keyspace",
+			ShardingColumnType: pb.KeyspaceIdType_UINT64,
+			ServedFrom: []*pb.SrvKeyspace_ServedFrom{
+				&pb.SrvKeyspace_ServedFrom{
+					TabletType: pb.TabletType_MASTER,
+					Keyspace:   "other_keyspace",
+				},
 			},
 			SplitShardCount: 128,
 		}, nil
 	}
 	if keyspace == "small" {
-		return &topo.SrvKeyspace{}, nil
+		return &pb.SrvKeyspace{}, nil
 	}
 	return c.fallback.GetSrvKeyspace(ctx, keyspace)
 }

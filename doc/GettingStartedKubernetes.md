@@ -7,6 +7,10 @@ If you already have Kubernetes v0.19+ running in one of the other
 you can skip the <code>gcloud</code> steps.
 The <code>kubectl</code> steps will apply to any Kubernetes cluster.
 
+**Contents:**
+
+<div id="toc"></div>
+
 ## Prerequisites
 
 To complete the exercise in this guide, you must locally install Go 1.3+,
@@ -29,7 +33,7 @@ workspace can be found at
 [http://golang.org/doc/code.html#Organization]
 (http://golang.org/doc/code.html#Organization).
 
-## Build and install <code>vtctlclient</code>
+## Build and install vtctlclient
 
 The <code>vtctlclient</code> tool issues commands to Vitess.
 
@@ -80,7 +84,7 @@ account with a project in the Google Developers Console.
     ID while completing the quickstart. Start with step 2 in the setup
     process.
 
-    <br>**Note:** During the quickstart, you'll generate an SSH key for
+    **Note:** During the quickstart, you'll generate an SSH key for
     Google Compute Engine, and you will be prompted to enter a
     passphrase. You will be prompted for that passphrase several times
     when bringing up your Kubernetes cluster later in this guide.
@@ -101,7 +105,7 @@ $ which kubectl
 # ~/google-cloud-sdk/bin/kubectl
 ```
 
-    <br>If <code>kubectl</code> isn't on your PATH, you can tell our scripts where
+    If <code>kubectl</code> isn't on your PATH, you can tell our scripts where
     to find it by setting the <code>KUBECTL</code> environment variable:
 
     ``` sh
@@ -159,7 +163,7 @@ example  us-central1-b  0.19.3          1.2.3.4       n1-standard-4  RUNNING
         access the requested page. You can find the randomly-generated password
         with <code>kubectl config view</code>:
 
-    ``` sh
+        ``` sh
 $ kubectl config view
 ### example output:
 # apiVersion: v1
@@ -200,7 +204,7 @@ $ cd examples/kubernetes
 vitess/examples/kubernetes$ ./etcd-up.sh
 ```
 
-    <br>This command creates two clusters. One is for the
+    This command creates two clusters. One is for the
     [global cell](http://vitess.io/doc/TopologyService/#global-vs-local),
     and the other is for a
     [local cell](http://vitess.io/overview/concepts.html#cell-(data-center))
@@ -212,9 +216,9 @@ vitess/examples/kubernetes$ ./etcd-up.sh
 $ kubectl get pods
 ```
 
-    <br>It may take a while for each Kubernetes node to download the
+    It may take a while for each Kubernetes node to download the
     Docker images the first time it needs them. While the images
-    are downloading, the pod status will be Pending.<br><br>
+    are downloading, the pod status will be Pending.
 
     **Note:** In this example, each script that has a name ending in
     <code>-up.sh</code> also has a corresponding <code>-down.sh</code>
@@ -243,11 +247,11 @@ vitess/examples/kubernetes$ ./vtctld-up.sh
 # vtctld address: http://2.3.4.5:30000
 ```
 
-    <br>To let you access vtctld from outside Kubernetes, the
+    To let you access vtctld from outside Kubernetes, the
     <code>vtctld</code> service is created with the <code>type: NodePort</code>
     option. This creates an
     [external service](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/services.md#external-services)
-    by exposing a port on each node that forwards to the vtctld service.<br>
+    by exposing a port on each node that forwards to the vtctld service.
 
     The **vtctld address** printed by `vtctld-up.sh` is thus the external IP
     of one of the nodes, combined with the `nodePort` assigned for vtctld.
@@ -258,7 +262,7 @@ vitess/examples/kubernetes$ ./vtctld-up.sh
     Kubernetes, you need to open port 30000 in your platform's firewall.
     (If you don't complete this step, the only way to issue commands
     to <code>vtctld</code> would be to SSH into a Kubernetes node
-    and install and run <code>vtctlclient</code> there.)<br><br>
+    and install and run <code>vtctlclient</code> there.)
 
     On GCE, you can open the port like this:
 
@@ -266,14 +270,14 @@ vitess/examples/kubernetes$ ./vtctld-up.sh
 $ gcloud compute firewall-rules create vtctld --allow tcp:30000
 ```
 
-    <br>You can then access the vtctld web interface at the address printed
+    You can then access the vtctld web interface at the address printed
     by `vtctld-up.sh` above. In this example, the web UI would be at
     `http://2.3.4.5:30000`.
 
 1.  **Use <code>vtctlclient</code> to call <code>vtctld</code>**
 
     You can now run <code>vtctlclient</code> locally to issue commands
-    to the <code>vtctld</code> service on your Kubernetes cluster.<br><br>
+    to the <code>vtctld</code> service on your Kubernetes cluster.
 
     When you call <code>vtctlclient</code>, the command requires
     the IP address and port for your <code>vtctld</code> service.
@@ -281,7 +285,7 @@ $ gcloud compute firewall-rules create vtctld --allow tcp:30000
     provided `kvtctl.sh` script, which uses `kubectl` to discover the
     proper address.
 
-    <br>Now, running `kvtctl.sh help` will test your connection to
+    Now, running `kvtctl.sh help` will test your connection to
     <code>vtctld</code> and also list the <code>vtctlclient</code>
     commands that you can use to administer the Vitess cluster.
 
@@ -301,7 +305,7 @@ vitess/examples/kubernetes$ ./kvtctl.sh help
 vitess/examples/kubernetes$ ./kvtctl.sh help InitTablet
 ```
 
-    <br>See the [vtctl reference](http://vitess.io/reference/vtctl.html) for a
+    See the [vtctl reference](http://vitess.io/reference/vtctl.html) for a
     web-formatted version of the <code>vtctl help</code> output.
 
 1.  **Start vttablets**
@@ -313,7 +317,7 @@ vitess/examples/kubernetes$ ./kvtctl.sh help InitTablet
     containers for vttablet and mysqld inside a single
     [pod](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md).
 
-    <br>Run the following script to launch the vttablet pod, which also includes
+    Run the following script to launch the vttablet pod, which also includes
     mysqld:
 
     ``` sh
@@ -332,7 +336,7 @@ vitess/examples/kubernetes$ ./vttablet-up.sh
 # pods/vttablet-104
 ```
 
-    <br>Wait until you see all 5 tablets listed in the **Topology** summary page
+    Wait until you see all 5 tablets listed in the **Topology** summary page
     for your <code>vtctld</code> instance
     (e.g. <code>http://2.3.4.5:30000/dbtopo</code>).
     This can take some time if a pod was scheduled on a node that needs to
@@ -349,14 +353,14 @@ vitess/examples/kubernetes$ ./kvtctl.sh ListAllTablets test
 # test-0000000104 test_keyspace 0 rdonly 10.64.2.6:15002 10.64.2.6:3306 []
 ```
 
-    <br>Note that of the 5 tablets, the first 3 were assigned to be
+    Note that of the 5 tablets, the first 3 were assigned to be
     **replica** type (for serving live web traffic), while the last 2
     were assigned to be **rdonly** type (for offline processing).
     These allocations can be configured in the `vttablet-up.sh` script.
     See the [tablet](http://vitess.io/overview/concepts.html#tablet)
-    reference for more about the available tablet types.<br>
+    reference for more about the available tablet types.
 
-    <br>By bringing up tablets in a previously empty
+    By bringing up tablets in a previously empty
     [keyspace](http://vitess.io/overview/concepts.html#keyspace),
     you have effectively just created a new
     [shard](http://vitess.io/overview/concepts.html#shard).
@@ -368,19 +372,19 @@ vitess/examples/kubernetes$ ./kvtctl.sh RebuildKeyspaceGraph test_keyspace
 ```
 
     **Note:** Many <code>vtctlclient</code> commands produce no output on
-    success.<br><br>
+    success.
 
     After this command completes, go back to the <code>vtctld</code>
     UI and click the **Topology** link in the top nav bar. You should see the
     three tablets listed. If you click the address of a tablet, you
-    will see the coordination data stored in <code>etcd</code>.<br><br>
+    will see the coordination data stored in <code>etcd</code>.
 
     **_Status pages for vttablets_**
 
     Each <code>vttablet</code> serves a set of HTML status pages on its primary
     port. The <code>vtctld</code> interface provides a **[status]** link for
     each tablet, but the links are actually to internal, per-pod IPs that can
-    only be accessed from within Kubernetes.<br><br>
+    only be accessed from within Kubernetes.
 
     As a workaround, you can access tablet status pages through the apiserver
     proxy, provided by the Kubernetes master. For example, to see the status
@@ -391,14 +395,14 @@ vitess/examples/kubernetes$ ./kvtctl.sh RebuildKeyspaceGraph test_keyspace
 https://1.2.3.4/api/v1/proxy/namespaces/default/pods/vttablet-100:15002/debug/status
 ```
 
-    <br>In the future, we plan to have vtctld directly link through this proxy from
-    the **[status]** link.<br><br>
+    In the future, we plan to have vtctld directly link through this proxy from
+    the **[status]** link.
 
     **_Direct connection to mysqld_**
 
     Since the <code>mysqld</code> within the <code>vttablet</code> pod is only
     meant to be accessed via vttablet, our default bootstrap settings only allow
-    connections from localhost.<br><br>
+    connections from localhost.
 
     If you want to check or manipulate the underlying mysqld, you can issue
     simple queries or commands through `vtctlclient` like this:
@@ -420,9 +424,10 @@ vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELEC
 # }
 ```
 
-    <br>If you need a truly direct connection to mysqld for bulk operations,
+    If you need a truly direct connection to mysqld for bulk operations,
     you can SSH to the Kubernetes node on which the pod is running.
-    Then use [docker exec](https://docs.docker.com/reference/commandline/cli/#exec)
+    Then use
+    [docker exec](https://docs.docker.com/reference/commandline/cli/#exec)
     to launch a bash shell inside the mysql container, and connect with the
     <code>mysql</code> command-line client:
 
@@ -446,7 +451,7 @@ vttablet-100:/# TERM=ansi mysql -u vt_dba -S /vt/vtdataroot/vt_0000000100/mysql.
     The tablets all start as slaves by default. In this step, you
     designate one of the tablets to be the master. Vitess
     automatically connects the other slaves' mysqld instances
-    so that they start replicating from the master's mysqld.<br><br>
+    so that they start replicating from the master's mysqld.
 
     Since this is the first time the shard has been started,
     the tablets are not already doing any replication, and the
@@ -460,17 +465,17 @@ vttablet-100:/# TERM=ansi mysql -u vt_dba -S /vt/vtdataroot/vt_0000000100/mysql.
 vitess/examples/kubernetes$ ./kvtctl.sh InitShardMaster -force test_keyspace/0 test-0000000100
 ```
 
-    <br>**Note:** If you do not include the <code>-force</code> flag 
+    **Note:** If you do not include the <code>-force</code> flag 
     here, the command will first check to ensure the provided
     tablet is the only tablet of type master in the shard.
     However, since none of the slaves are masters, and we're not
     replicating at all, that check would fail and the command
-    would fail as well.<br><br>
+    would fail as well.
 
     After running this command, go back to the **Topology** page
     in the <code>vtctld</code> web interface. When you refresh the
     page, you should see that one tablet is the master
-    and the others are replica or rdonly.<br><br>
+    and the others are replica or rdonly.
 
     You can also run this command on the command line to see the
     same data:
@@ -496,7 +501,7 @@ vitess/examples/kubernetes$ ./kvtctl.sh ListAllTablets test
 vitess/examples/kubernetes$ ./kvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
-    <br>The SQL to create the table is shown below:
+    The SQL to create the table is shown below:
 
     ```
 CREATE TABLE messages (
@@ -508,7 +513,7 @@ CREATE TABLE messages (
 ) ENGINE=InnoDB
 ```
 
-    <br>You can run this command to confirm that the schema was created
+    You can run this command to confirm that the schema was created
     properly on a given tablet, where <code>test-0000000100</code>
     is a tablet alias as shown by the <code>ListAllTablets</code> command:
 

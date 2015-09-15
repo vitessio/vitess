@@ -4,10 +4,7 @@ sharding works in Vitess and the types of sharding that Vitess supports.
 
 **Contents:**
 
-* [Overview](#overview)
-* [Range-based Sharding](#range-based-sharding)
-* [Resharding](#resharding)
-* [Custom Sharding](#custom-sharding)
+<div id="toc"></div>
 
 ## Overview
 

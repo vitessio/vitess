@@ -165,21 +165,24 @@ index by_msg (msg)
     keyspace = 'destination_keyspace'
     ks = utils.run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
     result = ''
-    if 'ServedFrom' in ks and ks['ServedFrom']:
-      for served_from in sorted(ks['ServedFrom'].keys()):
-        result += 'ServedFrom(%s): %s\n' % (served_from,
-                                            ks['ServedFrom'][served_from])
+    if 'served_from' in ks and ks['served_from']:
+      a = []
+      for served_from in sorted(ks['served_from']):
+        tt = keyrange_constants.PROTO3_TABLET_TYPE_TO_STRING[served_from['tablet_type']]
+        a.append('ServedFrom(%s): %s\n' % (tt, served_from['keyspace']))
+      for line in sorted(a):
+        result += line
     logging.debug('Cell %s keyspace %s has data:\n%s', cell, keyspace, result)
     self.assertEqual(
         expected, result,
         'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n'
         '%s\ngot:\n%s' % (
             cell, keyspace, expected, result))
-    self.assertEqual('', ks.get('ShardingColumnName'),
-                     'Got wrong ShardingColumnName in SrvKeyspace: %s' %
+    self.assertNotIn('sharding_column_name', ks,
+                     'Got a sharding_column_name in SrvKeyspace: %s' %
                      str(ks))
-    self.assertEqual('', ks.get('ShardingColumnType'),
-                     'Got wrong ShardingColumnType in SrvKeyspace: %s' %
+    self.assertNotIn('sharding_column_type', ks,
+                     'Got a sharding_column_type in SrvKeyspace: %s' %
                      str(ks))
 
   def _check_blacklisted_tables(self, tablet, expected):

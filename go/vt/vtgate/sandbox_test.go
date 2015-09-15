@@ -16,11 +16,11 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
@@ -32,7 +32,7 @@ const (
 )
 
 func init() {
-	sandboxMap = make(map[string]*sandbox)
+	ksToSandbox = make(map[string]*sandbox)
 	createSandbox(KsTestSharded)
 	createSandbox(KsTestUnsharded)
 	tabletconn.RegisterDialer("sandbox", sandboxDialer)
@@ -40,28 +40,28 @@ func init() {
 }
 
 var sandboxMu sync.Mutex
-var sandboxMap map[string]*sandbox
+var ksToSandbox map[string]*sandbox
 
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
 	s := &sandbox{}
 	s.Reset()
-	sandboxMap[keyspace] = s
+	ksToSandbox[keyspace] = s
 	return s
 }
 
 func getSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
-	return sandboxMap[keyspace]
+	return ksToSandbox[keyspace]
 }
 
 func addSandboxServedFrom(keyspace, servedFrom string) {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
-	sandboxMap[keyspace].KeyspaceServedFrom = servedFrom
-	sandboxMap[servedFrom] = sandboxMap[keyspace]
+	ksToSandbox[keyspace].KeyspaceServedFrom = servedFrom
+	ksToSandbox[servedFrom] = ksToSandbox[keyspace]
 }
 
 type sandbox struct {
@@ -156,7 +156,7 @@ func (s *sandbox) DeleteTestConn(shard string, conn tabletconn.TabletConn) {
 
 var DefaultShardSpec = "-20-40-60-80-a0-c0-e0-"
 
-func getAllShards(shardSpec string) (key.KeyRangeArray, error) {
+func getAllShards(shardSpec string) ([]*pbt.KeyRange, error) {
 	shardedKrArray, err := key.ParseShardingSpec(shardSpec)
 	if err != nil {
 		return nil, err
@@ -164,62 +164,69 @@ func getAllShards(shardSpec string) (key.KeyRangeArray, error) {
 	return shardedKrArray, nil
 }
 
-func getKeyRangeName(kr key.KeyRange) string {
-	return fmt.Sprintf("%v-%v", string(kr.Start.Hex()), string(kr.End.Hex()))
-}
-
-func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKeyspace, error) {
+func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*pbt.SrvKeyspace, error) {
 	shardKrArray, err := getAllShards(shardSpec)
 	if err != nil {
 		return nil, err
 	}
-	shards := make([]topo.ShardReference, 0, len(shardKrArray))
+	shards := make([]*pbt.ShardReference, 0, len(shardKrArray))
 	for i := 0; i < len(shardKrArray); i++ {
-		shard := topo.ShardReference{
-			Name:     getKeyRangeName(shardKrArray[i]),
+		shard := &pbt.ShardReference{
+			Name:     key.KeyRangeString(shardKrArray[i]),
 			KeyRange: shardKrArray[i],
 		}
 		shards = append(shards, shard)
 	}
-	shardedSrvKeyspace := &topo.SrvKeyspace{
+	shardedSrvKeyspace := &pbt.SrvKeyspace{
 		ShardingColumnName: "user_id", // exact value is ignored
-		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
-			topo.TYPE_MASTER: &topo.KeyspacePartition{
+		Partitions: []*pbt.SrvKeyspace_KeyspacePartition{
+			&pbt.SrvKeyspace_KeyspacePartition{
+				ServedType:      pbt.TabletType_MASTER,
 				ShardReferences: shards,
 			},
-			topo.TYPE_REPLICA: &topo.KeyspacePartition{
+			&pbt.SrvKeyspace_KeyspacePartition{
+				ServedType:      pbt.TabletType_REPLICA,
 				ShardReferences: shards,
 			},
-			topo.TYPE_RDONLY: &topo.KeyspacePartition{
+			&pbt.SrvKeyspace_KeyspacePartition{
+				ServedType:      pbt.TabletType_RDONLY,
 				ShardReferences: shards,
 			},
 		},
 	}
 	if servedFromKeyspace != "" {
-		shardedSrvKeyspace.ServedFrom = map[topo.TabletType]string{
-			topo.TYPE_RDONLY: servedFromKeyspace,
-			topo.TYPE_MASTER: servedFromKeyspace,
+		shardedSrvKeyspace.ServedFrom = []*pbt.SrvKeyspace_ServedFrom{
+			&pbt.SrvKeyspace_ServedFrom{
+				TabletType: pbt.TabletType_RDONLY,
+				Keyspace:   servedFromKeyspace,
+			},
+			&pbt.SrvKeyspace_ServedFrom{
+				TabletType: pbt.TabletType_MASTER,
+				Keyspace:   servedFromKeyspace,
+			},
 		}
 	}
 	return shardedSrvKeyspace, nil
 }
 
-func createUnshardedKeyspace() (*topo.SrvKeyspace, error) {
-	shard := topo.ShardReference{
-		Name:     "0",
-		KeyRange: key.KeyRange{Start: "", End: ""},
+func createUnshardedKeyspace() (*pbt.SrvKeyspace, error) {
+	shard := &pbt.ShardReference{
+		Name: "0",
 	}
 
-	unshardedSrvKeyspace := &topo.SrvKeyspace{
-		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
-			topo.TYPE_MASTER: &topo.KeyspacePartition{
-				ShardReferences: []topo.ShardReference{shard},
+	unshardedSrvKeyspace := &pbt.SrvKeyspace{
+		Partitions: []*pbt.SrvKeyspace_KeyspacePartition{
+			&pbt.SrvKeyspace_KeyspacePartition{
+				ServedType:      pbt.TabletType_MASTER,
+				ShardReferences: []*pbt.ShardReference{shard},
 			},
-			topo.TYPE_REPLICA: &topo.KeyspacePartition{
-				ShardReferences: []topo.ShardReference{shard},
+			&pbt.SrvKeyspace_KeyspacePartition{
+				ServedType:      pbt.TabletType_REPLICA,
+				ShardReferences: []*pbt.ShardReference{shard},
 			},
-			topo.TYPE_RDONLY: &topo.KeyspacePartition{
-				ShardReferences: []topo.ShardReference{shard},
+			&pbt.SrvKeyspace_KeyspacePartition{
+				ServedType:      pbt.TabletType_RDONLY,
+				ShardReferences: []*pbt.ShardReference{shard},
 			},
 		},
 	}
@@ -235,13 +242,13 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
 	keyspaces := make([]string, 0, 1)
-	for k := range sandboxMap {
+	for k := range ksToSandbox {
 		keyspaces = append(keyspaces, k)
 	}
 	return keyspaces, nil
 }
 
-func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pbt.SrvKeyspace, error) {
 	sand := getSandbox(keyspace)
 	if sand.SrvKeyspaceCallback != nil {
 		sand.SrvKeyspaceCallback()
@@ -257,9 +264,16 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 		if err != nil {
 			return nil, err
 		}
-		servedFromKeyspace.ServedFrom = map[topo.TabletType]string{
-			topo.TYPE_RDONLY: KsTestUnsharded,
-			topo.TYPE_MASTER: KsTestUnsharded}
+		servedFromKeyspace.ServedFrom = []*pbt.SrvKeyspace_ServedFrom{
+			&pbt.SrvKeyspace_ServedFrom{
+				TabletType: pbt.TabletType_RDONLY,
+				Keyspace:   KsTestUnsharded,
+			},
+			&pbt.SrvKeyspace_ServedFrom{
+				TabletType: pbt.TabletType_MASTER,
+				Keyspace:   KsTestUnsharded,
+			},
+		}
 		return servedFromKeyspace, nil
 	case KsTestUnsharded:
 		return createUnshardedKeyspace()
@@ -358,15 +372,27 @@ func (sbc *sandboxConn) getError() error {
 	}
 	if sbc.mustFailRetry > 0 {
 		sbc.mustFailRetry--
-		return &tabletconn.ServerError{Code: tabletconn.ERR_RETRY, Err: "retry: err"}
+		return &tabletconn.ServerError{
+			Code:       tabletconn.ERR_RETRY,
+			Err:        "retry: err",
+			ServerCode: vtrpc.ErrorCode_QUERY_NOT_SERVED,
+		}
 	}
 	if sbc.mustFailFatal > 0 {
 		sbc.mustFailFatal--
-		return &tabletconn.ServerError{Code: tabletconn.ERR_FATAL, Err: "fatal: err"}
+		return &tabletconn.ServerError{
+			Code:       tabletconn.ERR_FATAL,
+			Err:        "fatal: err",
+			ServerCode: vtrpc.ErrorCode_INTERNAL_ERROR,
+		}
 	}
 	if sbc.mustFailServer > 0 {
 		sbc.mustFailServer--
-		return &tabletconn.ServerError{Code: tabletconn.ERR_NORMAL, Err: "error: err"}
+		return &tabletconn.ServerError{
+			Code:       tabletconn.ERR_NORMAL,
+			Err:        "error: err",
+			ServerCode: vtrpc.ErrorCode_BAD_INPUT,
+		}
 	}
 	if sbc.mustFailConn > 0 {
 		sbc.mustFailConn--
@@ -374,11 +400,19 @@ func (sbc *sandboxConn) getError() error {
 	}
 	if sbc.mustFailTxPool > 0 {
 		sbc.mustFailTxPool--
-		return &tabletconn.ServerError{Code: tabletconn.ERR_TX_POOL_FULL, Err: "tx_pool_full: err"}
+		return &tabletconn.ServerError{
+			Code:       tabletconn.ERR_TX_POOL_FULL,
+			Err:        "tx_pool_full: err",
+			ServerCode: vtrpc.ErrorCode_RESOURCE_EXHAUSTED,
+		}
 	}
 	if sbc.mustFailNotTx > 0 {
 		sbc.mustFailNotTx--
-		return &tabletconn.ServerError{Code: tabletconn.ERR_NOT_IN_TX, Err: "not_in_tx: err"}
+		return &tabletconn.ServerError{
+			Code:       tabletconn.ERR_NOT_IN_TX,
+			Err:        "not_in_tx: err",
+			ServerCode: vtrpc.ErrorCode_NOT_IN_TX,
+		}
 	}
 	return nil
 }

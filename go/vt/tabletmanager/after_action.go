@@ -128,7 +128,7 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blac
 		}
 		blacklistRules.Add(qr)
 	}
-	// Push all three sets of QueryRules to SqlQueryRpcService
+	// Push all three sets of QueryRules to TabletServerRpcService
 	loadRuleErr := agent.QueryServiceControl.SetQueryRules(keyrangeQueryRules, keyrangeRules)
 	if loadRuleErr != nil {
 		log.Warningf("Fail to load query rule set %s: %s", keyrangeQueryRules, loadRuleErr)

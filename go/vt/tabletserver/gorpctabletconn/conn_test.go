@@ -11,7 +11,6 @@ import (
 
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconntest"
 
@@ -19,7 +18,7 @@ import (
 )
 
 // This test makes sure the go rpc service works
-func testGoRPCTabletConn(t *testing.T, rpcOnlyInReply bool) {
+func TestGoRPCTabletConn(t *testing.T) {
 	// fake service
 	service := tabletconntest.CreateFakeServer(t)
 
@@ -42,8 +41,6 @@ func testGoRPCTabletConn(t *testing.T, rpcOnlyInReply bool) {
 		Handler: handler,
 	}
 	go httpServer.Serve(listener)
-	// Handle errors appropriately
-	*tabletserver.RPCErrorOnlyInReply = rpcOnlyInReply
 
 	// run the test suite
 	tabletconntest.TestSuite(t, protocolName, &pb.EndPoint{
@@ -52,12 +49,12 @@ func testGoRPCTabletConn(t *testing.T, rpcOnlyInReply bool) {
 			"vt": int32(port),
 		},
 	}, service)
-}
 
-func TestGoRPCTabletConn(t *testing.T) {
-	testGoRPCTabletConn(t, false)
-}
-
-func TestGoRPCTabletConnWithErrorOnlyInRPCReply(t *testing.T) {
-	testGoRPCTabletConn(t, true)
+	// run the error test suite
+	tabletconntest.TestErrorSuite(t, protocolName, &pb.EndPoint{
+		Host: "localhost",
+		PortMap: map[string]int32{
+			"vt": int32(port),
+		},
+	}, service)
 }

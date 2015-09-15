@@ -9,6 +9,8 @@ import (
 	"flag"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/rpc"
@@ -17,7 +19,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
-	"golang.org/x/net/context"
+
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -484,7 +487,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *proto.SplitQueryRequ
 }
 
 // GetSrvKeyspace is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *proto.GetSrvKeyspaceRequest, reply *topo.SrvKeyspace) (err error) {
+func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *proto.GetSrvKeyspaceRequest, reply *pbt.SrvKeyspace) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()

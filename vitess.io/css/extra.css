@@ -239,6 +239,7 @@ footer {
 }
 
 @media screen and (min-width: 990px) {
+  .navbar,
   .app-bar,
   .navdrawer {
     position: fixed;

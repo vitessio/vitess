@@ -20,8 +20,8 @@ import (
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// streamHealthSQLQuery is a local QueryService implementation to support the tests
-type streamHealthSQLQuery struct {
+// streamHealthTabletServer is a local QueryService implementation to support the tests
+type streamHealthTabletServer struct {
 	queryservice.ErrorQueryService
 	t *testing.T
 
@@ -31,20 +31,20 @@ type streamHealthSQLQuery struct {
 	streamHealthMap   map[int]chan<- *pb.StreamHealthResponse
 }
 
-func newStreamHealthSQLQuery(t *testing.T) *streamHealthSQLQuery {
-	return &streamHealthSQLQuery{
+func newStreamHealthTabletServer(t *testing.T) *streamHealthTabletServer {
+	return &streamHealthTabletServer{
 		t:               t,
 		streamHealthMap: make(map[int]chan<- *pb.StreamHealthResponse),
 	}
 }
 
-func (s *streamHealthSQLQuery) count() int {
+func (s *streamHealthTabletServer) count() int {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 	return len(s.streamHealthMap)
 }
 
-func (s *streamHealthSQLQuery) StreamHealthRegister(c chan<- *pb.StreamHealthResponse) (int, error) {
+func (s *streamHealthTabletServer) StreamHealthRegister(c chan<- *pb.StreamHealthResponse) (int, error) {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 
@@ -54,7 +54,7 @@ func (s *streamHealthSQLQuery) StreamHealthRegister(c chan<- *pb.StreamHealthRes
 	return id, nil
 }
 
-func (s *streamHealthSQLQuery) StreamHealthUnregister(id int) error {
+func (s *streamHealthTabletServer) StreamHealthUnregister(id int) error {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 
@@ -63,7 +63,7 @@ func (s *streamHealthSQLQuery) StreamHealthUnregister(id int) error {
 }
 
 // BroadcastHealth will broadcast the current health to all listeners
-func (s *streamHealthSQLQuery) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
+func (s *streamHealthTabletServer) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
 	shr := &pb.StreamHealthResponse{
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
@@ -83,7 +83,7 @@ func TestTabletData(t *testing.T) {
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	tablet1.StartActionLoop(t, wr)
 	defer tablet1.StopActionLoop(t)
-	shsq := newStreamHealthSQLQuery(t)
+	shsq := newStreamHealthTabletServer(t)
 	grpcqueryservice.RegisterForTest(tablet1.RPCServer, shsq)
 
 	thc := newTabletHealthCache(ts)

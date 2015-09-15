@@ -226,7 +226,7 @@ func (axp *TxPool) SetTimeout(timeout time.Duration) {
 }
 
 // SetPoolTimeout sets the wait time for the tx pool.
-// TODO(sougou): move this to SqlQuery.
+// TODO(sougou): move this to TabletServer.
 func (axp *TxPool) SetPoolTimeout(timeout time.Duration) {
 	axp.poolTimeout.Set(timeout)
 }

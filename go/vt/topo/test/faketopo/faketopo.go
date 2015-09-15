@@ -22,7 +22,7 @@ func (ft FakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]stri
 }
 
 // GetSrvKeyspace implements topo.Server.
-func (ft FakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (ft FakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error) {
 	return nil, errNotImplemented
 }
 
@@ -180,7 +180,7 @@ func (ft FakeTopo) DeleteEndPoints(ctx context.Context, cell, keyspace, shard st
 }
 
 // WatchSrvKeyspace implements topo.Server.WatchSrvKeyspace
-func (ft FakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topo.SrvKeyspace, chan<- struct{}, error) {
+func (ft FakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *pb.SrvKeyspace, chan<- struct{}, error) {
 	return nil, nil, errNotImplemented
 }
 
@@ -200,7 +200,7 @@ func (ft FakeTopo) DeleteSrvShard(ctx context.Context, cell, keyspace, shard str
 }
 
 // UpdateSrvKeyspace implements topo.Server.
-func (ft FakeTopo) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
+func (ft FakeTopo) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *pb.SrvKeyspace) error {
 	return errNotImplemented
 }
 

@@ -27,15 +27,15 @@ import (
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// verticalDiffSqlQuery is a local QueryService implementation to
+// verticalDiffTabletServer is a local QueryService implementation to
 // support the tests
-type verticalDiffSqlQuery struct {
+type verticalDiffTabletServer struct {
 	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
 }
 
-func (sq *verticalDiffSqlQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Vertical Split Diff operation should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -44,7 +44,7 @@ func (sq *verticalDiffSqlQuery) StreamExecute(ctx context.Context, target *pb.Ta
 		sq.t.Errorf("Sql query for VerticalSplitDiff should never contain a keyspace_id WHERE clause; query received: %v", query.Sql)
 	}
 
-	sq.t.Logf("verticalDiffSqlQuery: got query: %v", *query)
+	sq.t.Logf("verticalDiffTabletServer: got query: %v", *query)
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
@@ -162,7 +162,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 				},
 			},
 		}
-		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffSqlQuery{t: t, excludedTable: excludedTable})
+		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffTabletServer{t: t, excludedTable: excludedTable})
 	}
 
 	err := wrk.Run(ctx)

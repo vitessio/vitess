@@ -419,7 +419,7 @@ func (stc *ScatterConn) Rollback(ctx context.Context, session *SafeSession) (err
 // splits received from a shard, it construct a KeyRange queries by
 // appending that shard's keyrange to the splits. Aggregates all splits across
 // all shards in no specific order and returns.
-func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, keyRangeByShard map[string]kproto.KeyRange, keyspace string) ([]proto.SplitQueryPart, error) {
+func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, keyRangeByShard map[string]*pb.KeyRange, keyspace string) ([]proto.SplitQueryPart, error) {
 	tabletType := pb.TabletType_RDONLY
 	actionFunc := func(shard string, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
@@ -428,7 +428,7 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 			return err
 		}
 		// Append the keyrange for this shard to all the splits received
-		keyranges := []kproto.KeyRange{keyRangeByShard[shard]}
+		keyranges := []kproto.KeyRange{kproto.ProtoToKeyRange(keyRangeByShard[shard])}
 		splits := []proto.SplitQueryPart{}
 		for _, query := range queries {
 			krq := &proto.KeyRangeQuery{

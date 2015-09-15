@@ -9,7 +9,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
@@ -86,7 +85,7 @@ func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []pro
 	return c.fallbackClient.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session, reply)
 }
 
-func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
 	if keyspace == "error" {
 		return nil, fmt.Errorf("vtgate test client, errorClient.GetSrvKeyspace returning error")
 	}

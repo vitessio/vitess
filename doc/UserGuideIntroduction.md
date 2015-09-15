@@ -1,20 +1,6 @@
 **Contents:**
 
-<ul class="table-of-contents">
-  <li><a href="#platform-support">Platform support</a></li>
-  <li><a href="#database-support">Database support</a>
-    <ul>
-      <li><a href="#data-types-and-sql-support">Data types and SQL support</a></li>
-      <li><a href="#schema-management">Schema management</a></li>
-    </ul>
-  </li>
-  <li><a href="#supported-clients">Supported clients</a>
-    <ul>
-      <li><a href="#client-libraries">Client libraries</a>
-    </ul>
-  </li>
-  <li><a href="#backups">Backups</a></li>
-</ul>
+<div id="toc"></div>
 
 ## Platform support
 
@@ -99,7 +85,7 @@ client libraries and other clients that Vitess supports.
 
 | Type | Options |
 | :-------- | :--------- |
-| Client library | [gRPC](http://www.grpc.io/)<br>C++<br>Go<br>Java<br>Python |
+| Client library | [gRPC](http://www.grpc.io/)<br class="bigbreak">C++<br class="bigbreak">Go<br class="bigbreak">Java<br class="bigbreak">Python |
 | MapReduce | [Hadoop input](https://hadoop.apache.org/docs/r2.7.0/api/org/apache/hadoop/mapreduce/InputFormat.html) |
 | Cloud Dataflow | **_coming soon_**
 
@@ -110,6 +96,6 @@ network-mounted drive as the backup repository. Vitess defines an
 interface that, in turn, defines methods for creating, listing,
 and removing backups.
 
-See the [Backup Up Data](/user-guide/backup-and-restore.html) section
+See the [Backing Up Data](/user-guide/backup-and-restore.html) section
 of this guide for more information about creating and restoring data
 backups with Vitess. 

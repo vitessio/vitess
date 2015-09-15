@@ -24,13 +24,13 @@ func TestKeyRangeFilterPass(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Sql:      "set1",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20 */"),
+				Sql:      "dml1 /* vtgate:: keyspace_id:20 */",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml2 /* vtgate:: keyspace_id:02 */"),
+				Sql:      "dml2 /* vtgate:: keyspace_id:02 */",
 			},
 		},
 		TransactionID: "MariaDB/0-41983-1",
@@ -52,10 +52,10 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Sql:      "set1",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20 */"),
+				Sql:      "dml1 /* vtgate:: keyspace_id:20 */",
 			},
 		},
 		TransactionID: "MariaDB/0-41983-1",
@@ -77,10 +77,10 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Sql:      "set1",
 			}, {
 				Category: proto.BL_DDL,
-				Sql:      []byte("ddl"),
+				Sql:      "ddl",
 			},
 		},
 		TransactionID: "MariaDB/0-41983-1",
@@ -102,16 +102,16 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Sql:      "set1",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("ddl"),
+				Sql:      "ddl",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20*/"),
+				Sql:      "dml1 /* vtgate:: keyspace_id:20*/",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* vtgate:: keyspace_id:2 */"), // Odd-length hex string.
+				Sql:      "dml1 /* vtgate:: keyspace_id:2 */", // Odd-length hex string.
 			},
 		},
 		TransactionID: "MariaDB/0-41983-1",

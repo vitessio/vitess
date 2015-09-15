@@ -6,7 +6,6 @@
 package gorpcvtgateconn
 
 import (
-	"errors"
 	"strings"
 	"time"
 
@@ -75,9 +74,6 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	if err := conn.rpcConn.Call(ctx, "VTGate.Execute", request, &result); err != nil {
 		return nil, session, err
 	}
-	if result.Error != "" {
-		return nil, result.Session, errors.New(result.Error)
-	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, result.Session, err
 	}
@@ -102,9 +98,6 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 	var result proto.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteShard", request, &result); err != nil {
 		return nil, session, err
-	}
-	if result.Error != "" {
-		return nil, result.Session, errors.New(result.Error)
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, result.Session, err
@@ -131,9 +124,6 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteKeyspaceIds", request, &result); err != nil {
 		return nil, session, err
 	}
-	if result.Error != "" {
-		return nil, result.Session, errors.New(result.Error)
-	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, result.Session, err
 	}
@@ -158,9 +148,6 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	var result proto.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteKeyRanges", request, &result); err != nil {
 		return nil, session, err
-	}
-	if result.Error != "" {
-		return nil, result.Session, errors.New(result.Error)
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, result.Session, err
@@ -188,9 +175,6 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteEntityIds", request, &result); err != nil {
 		return nil, session, err
 	}
-	if result.Error != "" {
-		return nil, result.Session, errors.New(result.Error)
-	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, result.Session, err
 	}
@@ -213,9 +197,6 @@ func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []proto.
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchShard", request, &result); err != nil {
 		return nil, session, err
 	}
-	if result.Error != "" {
-		return nil, result.Session, errors.New(result.Error)
-	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, result.Session, err
 	}
@@ -237,9 +218,6 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 	var result proto.QueryResultList
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchKeyspaceIds", request, &result); err != nil {
 		return nil, session, err
-	}
-	if result.Error != "" {
-		return nil, result.Session, errors.New(result.Error)
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, result.Session, err
@@ -474,11 +452,11 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query s
 	return result.Splits, nil
 }
 
-func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
 	request := &proto.GetSrvKeyspaceRequest{
 		Keyspace: keyspace,
 	}
-	result := &topo.SrvKeyspace{}
+	result := &pb.SrvKeyspace{}
 	if err := conn.rpcConn.Call(ctx, "VTGate.GetSrvKeyspace", request, result); err != nil {
 		return nil, err
 	}

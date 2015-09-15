@@ -30,13 +30,13 @@ import (
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// verticalSqlQuery is a local QueryService implementation to support the tests
-type verticalSqlQuery struct {
+// verticalTabletServer is a local QueryService implementation to support the tests
+type verticalTabletServer struct {
 	queryservice.ErrorQueryService
 	t *testing.T
 }
 
-func (sq *verticalSqlQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
@@ -52,7 +52,7 @@ func (sq *verticalSqlQuery) StreamExecute(ctx context.Context, target *pb.Target
 			max, err = strconv.Atoi(part[3:])
 		}
 	}
-	sq.t.Logf("verticalSqlQuery: got query: %v with min %v max %v", *query, min, max)
+	sq.t.Logf("verticalTabletServer: got query: %v with min %v max %v", *query, min, max)
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
@@ -308,7 +308,7 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 			"STOP SLAVE",
 			"START SLAVE",
 		}
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalSqlQuery{t: t})
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalTabletServer{t: t})
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so

@@ -26,14 +26,14 @@ import (
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// sqlDifferSqlQuery is a local QueryService implementation to support the tests
-type sqlDifferSqlQuery struct {
+// sqlDifferTabletServer is a local QueryService implementation to support the tests
+type sqlDifferTabletServer struct {
 	queryservice.ErrorQueryService
 	t *testing.T
 }
 
-func (sq *sqlDifferSqlQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
-	sq.t.Logf("SqlDifferSqlQuery: got query: %v", *query)
+func (sq *sqlDifferTabletServer) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+	sq.t.Logf("SqlDifferTabletServer: got query: %v", *query)
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
@@ -127,7 +127,7 @@ func TestSqlDiffer(t *testing.T) {
 				},
 			},
 		}
-		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &sqlDifferSqlQuery{t: t})
+		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &sqlDifferTabletServer{t: t})
 	}
 
 	err := wrk.Run(ctx)

@@ -8,6 +8,7 @@ package vterrors
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -23,6 +24,8 @@ func ConcatenateErrors(errors []error) error {
 	for _, e := range errors {
 		errStrs = append(errStrs, fmt.Sprintf("%v", e))
 	}
+	// sort the error strings so we always have deterministic ordering
+	sort.Strings(errStrs)
 	return fmt.Errorf("%v", strings.Join(errStrs, "\n"))
 }
 
@@ -151,7 +154,7 @@ func WithSuffix(in error, suffix string) error {
 // because there is currently no good way, in gRPC, to differentiate between an
 // error from a server vs the client.
 // See: https://github.com/grpc/grpc-go/issues/319
-const GRPCServerErrPrefix = "gRPCServerError: "
+const GRPCServerErrPrefix = "gRPCServerError:"
 
 // GRPCCodeToErrorCode maps a gRPC codes.Code to a vtrpc.ErrorCode
 func GRPCCodeToErrorCode(code codes.Code) vtrpc.ErrorCode {
@@ -239,4 +242,15 @@ func ToGRPCError(err error) error {
 		return nil
 	}
 	return grpc.Errorf(toGRPCCode(err), "%v %v", GRPCServerErrPrefix, err)
+}
+
+// FromGRPCError return a grpc error as a VitessError, translating between error codes
+func FromGRPCError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &VitessError{
+		Code: GRPCCodeToErrorCode(grpc.Code(err)),
+		err:  err,
+	}
 }

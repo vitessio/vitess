@@ -657,7 +657,7 @@ func (tee *Tee) DeleteSrvShard(ctx context.Context, cell, keyspace, shard string
 }
 
 // UpdateSrvKeyspace is part of the topo.Server interface
-func (tee *Tee) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
+func (tee *Tee) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *pb.SrvKeyspace) error {
 	if err := tee.primary.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
 		return err
 	}
@@ -684,7 +684,7 @@ func (tee *Tee) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) er
 }
 
 // GetSrvKeyspace is part of the topo.Server interface
-func (tee *Tee) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (tee *Tee) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error) {
 	return tee.readFrom.GetSrvKeyspace(ctx, cell, keyspace)
 }
 
@@ -695,7 +695,7 @@ func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string,
 
 // WatchSrvKeyspace is part of the topo.Server interface.
 // We only watch for changes on the primary.
-func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topo.SrvKeyspace, chan<- struct{}, error) {
+func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *pb.SrvKeyspace, chan<- struct{}, error) {
 	return tee.primary.WatchSrvKeyspace(ctx, cell, keyspace)
 }
 

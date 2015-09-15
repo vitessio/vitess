@@ -183,7 +183,7 @@ func (ev binlogEvent) Query(f blproto.BinlogFormat) (query blproto.Query, err er
 	// We've checked that the buffer is big enough for sql, so everything before
 	// it (db and vars) is in-bounds too.
 	query.Database = string(data[dbPos : dbPos+dbLen])
-	query.Sql = data[sqlPos:]
+	query.Sql = string(data[sqlPos:])
 
 	// Scan the status vars for ones we care about. This requires us to know the
 	// size of every var that comes before the ones we're interested in.
