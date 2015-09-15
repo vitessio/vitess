@@ -42,7 +42,7 @@ func enqueueClusterOperationAndCheckOutput(t *testing.T, taskName string, expect
 			"echo_text": expectedOutput,
 		},
 	}
-	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.TODO(), enqueueRequest)
+	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.Background(), enqueueRequest)
 	if err != nil {
 		t.Fatalf("Failed to start cluster operation. Request: %v Error: %v", enqueueRequest, err)
 	}
@@ -61,7 +61,7 @@ func waitForClusterOperation(t *testing.T, scheduler *Scheduler, id string, expe
 	}
 
 	for {
-		getDetailsResponse, err := scheduler.GetClusterOperationDetails(context.TODO(), getDetailsRequest)
+		getDetailsResponse, err := scheduler.GetClusterOperationDetails(context.Background(), getDetailsRequest)
 		if err != nil {
 			t.Fatalf("Failed to get details for cluster operation. Request: %v Error: %v", getDetailsRequest, err)
 		}
@@ -140,7 +140,7 @@ func TestEnqueueFailsDueToMissingParameter(t *testing.T) {
 			"unrelevant-parameter": "value",
 		},
 	}
-	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.TODO(), enqueueRequest)
+	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.Background(), enqueueRequest)
 
 	if err == nil {
 		t.Fatalf("Scheduler should have failed to start cluster operation because not all required parameters were provided. Request: %v Error: %v Response: %v", enqueueRequest, err, enqueueResponse)
@@ -163,7 +163,7 @@ func TestEnqueueFailsDueToUnregisteredClusterOperation(t *testing.T) {
 			"unrelevant-parameter": "value",
 		},
 	}
-	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.TODO(), enqueueRequest)
+	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.Background(), enqueueRequest)
 
 	if err == nil {
 		t.Fatalf("Scheduler should have failed to start cluster operation because it should not have been registered. Request: %v Error: %v Response: %v", enqueueRequest, err, enqueueResponse)
@@ -184,7 +184,7 @@ func TestGetDetailsFailsUnknownId(t *testing.T) {
 		Id: "-1", // There will never be a ClusterOperation with this id.
 	}
 
-	getDetailsResponse, err := scheduler.GetClusterOperationDetails(context.TODO(), getDetailsRequest)
+	getDetailsResponse, err := scheduler.GetClusterOperationDetails(context.Background(), getDetailsRequest)
 	if err == nil {
 		t.Fatalf("Did not fail to get details for invalid ClusterOperation id. Request: %v Response: %v Error: %v", getDetailsRequest, getDetailsResponse, err)
 	}
@@ -209,7 +209,7 @@ func TestEnqueueFailsBecauseTaskInstanceCannotBeCreated(t *testing.T) {
 			"unrelevant-parameter": "value",
 		},
 	}
-	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.TODO(), enqueueRequest)
+	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.Background(), enqueueRequest)
 
 	if err == nil {
 		t.Fatalf("Scheduler should have failed to start cluster operation because the task could not be instantiated. Request: %v Error: %v Response: %v", enqueueRequest, err, enqueueResponse)
@@ -242,7 +242,7 @@ func TestTaskEmitsTaskWhichCannotBeInstantiated(t *testing.T) {
 			"echo_text": "to be emitted task should fail to instantiate",
 		},
 	}
-	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.TODO(), enqueueRequest)
+	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.Background(), enqueueRequest)
 	if err != nil {
 		t.Fatalf("Failed to start cluster operation. Request: %v Error: %v", enqueueRequest, err)
 	}
