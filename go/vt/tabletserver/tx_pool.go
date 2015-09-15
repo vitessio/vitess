@@ -316,10 +316,8 @@ func (txc *TxConnection) discard(conclusion string) {
 	txc.Conclusion = conclusion
 	txc.EndTime = time.Now()
 
-	var username string
-	if tmp := callerid.GetPrincipal(txc.EffectiveCallerID); tmp != "" {
-		username = tmp
-	} else {
+	username := callerid.GetPrincipal(txc.EffectiveCallerID)
+	if username == "" {
 		username = callerid.GetUsername(txc.ImmediateCallerID)
 	}
 	duration := txc.EndTime.Sub(txc.StartTime)

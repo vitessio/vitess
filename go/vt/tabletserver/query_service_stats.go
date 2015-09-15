@@ -85,9 +85,9 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 		ErrorStats:	        stats.NewCounters(errorStatsName),
 		InternalErrors:         stats.NewCounters(internalErrorsName),
 		UserTableQueryCount:    stats.NewMultiCounters(
-			userTableQueryCountName, []string{"TableName", "CallerID"}),
+			userTableQueryCountName, []string{"TableName", "CallerID", "Type"}),
 		UserTableQueryTimesNs:  stats.NewMultiCounters(
-			userTableQueryTimesNsName, []string{"TableName", "CallerID"}),
+			userTableQueryTimesNsName, []string{"TableName", "CallerID", "Type"}),
 		UserTransactionCount:	stats.NewMultiCounters(
 			userTransactionCountName, []string{"CallerID", "Conclusion"}),
 		UserTransactionTimesNs: stats.NewMultiCounters(
