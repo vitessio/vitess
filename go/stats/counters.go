@@ -19,9 +19,14 @@ type Counters struct {
 	counts map[string]int64
 }
 
-// NewCounters create a new Counters instance. If name is set, all publishes it.
-func NewCounters(name string) *Counters {
+// NewCounters create a new Counters instance. If name is set, the variable
+// gets published. The functional also accepts an optional list of tags that
+// pre-creates them initialized to 0.
+func NewCounters(name string, tags ...string) *Counters {
 	c := &Counters{counts: make(map[string]int64)}
+	for _, tag := range tags {
+		c.counts[tag] = 0
+	}
 	if name != "" {
 		Publish(name, c)
 	}
@@ -122,6 +127,8 @@ func NewMultiCounters(name string, labels []string) *MultiCounters {
 	}
 	return t
 }
+
+// Labels returns the list of labels.
 func (mc *MultiCounters) Labels() []string {
 	return mc.labels
 }
@@ -155,6 +162,7 @@ type MultiCountersFunc struct {
 	labels []string
 }
 
+// Labels returns the list of labels.
 func (mcf *MultiCountersFunc) Labels() []string {
 	return mcf.labels
 }
