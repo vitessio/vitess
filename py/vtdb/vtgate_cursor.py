@@ -149,7 +149,7 @@ class BatchVTGateCursor(VTGateCursor):
     self.keyspace_ids_list.append(keyspace_ids)
 
   def flush(self, as_transaction=False):
-    self.rowsets = self._get_conn()._execute_batch(
+    self.rowsets = self.connection._execute_batch(
         self.query_list,
         self.bind_vars_list,
         self.keyspace_list,
@@ -190,7 +190,7 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
     if self._writable:
       raise dbexceptions.ProgrammingError('Streaming query cannot be writable')
     self._clear_stream_state()
-    self.generator, self.description = self._get_conn()._stream_execute(
+    self.generator, self.description = self.connection._stream_execute(
         sql,
         bind_variables,
         self.keyspace,
