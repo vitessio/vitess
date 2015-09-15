@@ -230,6 +230,12 @@ func (qre *QueryExecutor) checkPermissions() error {
 		qre.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
+
+	// empty table name, do not need a table ACL check.
+	if qre.plan.TableName == "" {
+		return nil
+	}
+
 	if qre.plan.Authorized == nil {
 		return NewTabletError(ErrFail, vtrpc.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
 	}
