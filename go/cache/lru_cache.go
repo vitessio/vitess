@@ -50,10 +50,10 @@ type Item struct {
 }
 
 type entry struct {
-	key           string
-	value         Value
-	size          int64
-	time_accessed time.Time
+	key          string
+	value        Value
+	size         int64
+	timeAccessed time.Time
 }
 
 // NewLRUCache creates a new empty cache with the given capacity.
@@ -76,6 +76,18 @@ func (lru *LRUCache) Get(key string) (v Value, ok bool) {
 		return nil, false
 	}
 	lru.moveToFront(element)
+	return element.Value.(*entry).value, true
+}
+
+// Peek returns a value from the cache without changing the LRU order.
+func (lru *LRUCache) Peek(key string) (v Value, ok bool) {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+
+	element := lru.table[key]
+	if element == nil {
+		return nil, false
+	}
 	return element.Value.(*entry).value, true
 }
 
@@ -146,7 +158,7 @@ func (lru *LRUCache) Stats() (length, size, capacity int64, oldest time.Time) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	if lastElem := lru.list.Back(); lastElem != nil {
-		oldest = lastElem.Value.(*entry).time_accessed
+		oldest = lastElem.Value.(*entry).timeAccessed
 	}
 	return int64(lru.list.Len()), lru.size, lru.capacity, oldest
 }
@@ -187,7 +199,7 @@ func (lru *LRUCache) Oldest() (oldest time.Time) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	if lastElem := lru.list.Back(); lastElem != nil {
-		oldest = lastElem.Value.(*entry).time_accessed
+		oldest = lastElem.Value.(*entry).timeAccessed
 	}
 	return
 }
@@ -231,7 +243,7 @@ func (lru *LRUCache) updateInplace(element *list.Element, value Value) {
 
 func (lru *LRUCache) moveToFront(element *list.Element) {
 	lru.list.MoveToFront(element)
-	element.Value.(*entry).time_accessed = time.Now()
+	element.Value.(*entry).timeAccessed = time.Now()
 }
 
 func (lru *LRUCache) addNew(key string, value Value) {

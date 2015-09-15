@@ -87,9 +87,6 @@ php_test:
 	godep go install ./go/cmd/vtgateclienttest
 	php $$PHP_FLAGS $$(which phpunit) php/tests
 
-v3_test:
-	cd test && ./vtgatev3_test.py
-
 bson:
 	go generate ./go/...
 

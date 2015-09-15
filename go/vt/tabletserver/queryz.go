@@ -126,7 +126,7 @@ func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	for _, v := range si.queries.Keys() {
-		plan := si.getQuery(v)
+		plan := si.peekQuery(v)
 		if plan == nil {
 			continue
 		}
