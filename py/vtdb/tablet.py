@@ -2,12 +2,11 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-from itertools import izip
 import logging
 import re
 
-from net import bsonrpc
 from net import gorpc
+from vtdb import bson_vtgate_client
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import vtdb_logger
@@ -47,20 +46,7 @@ def handle_app_error(exc_args):
   return dbexceptions.DatabaseError(exc_args)
 
 
-def convert_exception(exc, *args):
-  new_args = exc.args + args
-  if isinstance(exc, gorpc.TimeoutError):
-    return dbexceptions.TimeoutError(new_args)
-  elif isinstance(exc, gorpc.AppError):
-    return handle_app_error(new_args)
-  elif isinstance(exc, gorpc.ProgrammingError):
-    return dbexceptions.ProgrammingError(new_args)
-  elif isinstance(exc, gorpc.GoRpcError):
-    return dbexceptions.FatalError(new_args)
-  return exc
-
-
-class TabletConnection(object):
+class TabletConnection(bson_vtgate_client.BsonVtgateClient):
   """A simple, direct connection to the vttablet query server.
 
   This is shard-unaware and only handles the most basic communication.
@@ -71,36 +57,28 @@ class TabletConnection(object):
   def __init__(
       self, addr, tablet_type, keyspace, shard, timeout, user=None,
       password=None, keyfile=None, certfile=None, caller_id=None):
+    super(TabletConnection, self).__init__(
+        addr, timeout, user, password, keyfile, certfile)
     self.transaction_id = 0
     self.session_id = 0
-    self.addr = addr
     self.caller_id = caller_id
-    self.certfile = certfile
-    self.keyfile = keyfile
     self.keyspace = keyspace
-    self.password = password
     self.shard = shard
     self.tablet_type = tablet_type
-    self.timeout = timeout
-    self.user = user
     self.client = self._create_client()
     self.logger_object = vtdb_logger.get_logger()
 
-  def _create_client(self):
-    return bsonrpc.BsonRpcClient(
-        self.addr, self.timeout, self.user, self.password,
-        keyfile=self.keyfile, certfile=self.certfile)
-
-  def _get_client(self):
-    """Get current client or create a new one and connect."""
-    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
-    if not self.client:
-      self.client = self._create_client()
-      try:
-        self.client.dial()
-      except gorpc.GoRpcError as e:
-        raise convert_exception(e, str(self))
-    return self.client
+  def convert_gorpc_exception(self, exc, *args):
+    new_args = exc.args + (str(self),) + args
+    if isinstance(exc, gorpc.TimeoutError):
+      return dbexceptions.TimeoutError(new_args)
+    elif isinstance(exc, gorpc.AppError):
+      return handle_app_error(new_args)
+    elif isinstance(exc, gorpc.ProgrammingError):
+      return dbexceptions.ProgrammingError(new_args)
+    elif isinstance(exc, gorpc.GoRpcError):
+      return dbexceptions.FatalError(new_args)
+    return exc
 
   def __str__(self):
     return '<TabletConnection %s %s %s/%s>' % (
@@ -117,20 +95,41 @@ class TabletConnection(object):
         # raise dbexceptions.ProgrammingError(
         #     'attempting to reuse TabletConnection')
 
-      self._get_client().dial()
-      req = {
-          'Params': {
-              'Keyspace': self.keyspace,
-              'Shard': self.shard
-          },
-          'ImmediateCallerID': {'Username': self.caller_id}
-      }
-
-      response = self.rpc_call_and_extract_error(
-          'SqlQuery.GetSessionId2', req)
-      self.session_id = response.reply['SessionId']
+      self.session_id = self._dial_and_get_session_id(self._get_client())
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self))
+      raise self.convert_gorpc_exception(e)
+
+  def _dial_and_get_session_id(self, bson_client):
+    bson_client.dial()
+    req = {
+        'Params': {
+            'Keyspace': self.keyspace,
+            'Shard': self.shard
+        },
+        'ImmediateCallerID': {'Username': self.caller_id}
+    }
+    response = self.rpc_call_and_extract_error(
+        'SqlQuery.GetSessionId2', req)
+    return response.reply['SessionId']
+
+  def _get_client_for_streaming(self):
+    """Get a separate client for a streaming query.
+
+    Streaming queries may still be active while this object is doing
+    other queries, so they cannot share clients.
+
+    Returns:
+      A newly opened BsonRpcClient, its session ID.
+    """
+    streaming_client = self._create_client()
+    try:
+      session_id = self._dial_and_get_session_id(streaming_client)
+    except gorpc.GoRpcError as e:
+      raise self.convert_gorpc_exception(e)
+    return streaming_client, session_id
+
+  def in_transaction(self):
+    return bool(self.transaction_id)
 
   def close(self):
     # rollback if possible, but ignore failures
@@ -142,12 +141,9 @@ class TabletConnection(object):
     if self.client:
       self.client.close()
 
-  def is_closed(self):
-    return not self.client or self.client.is_closed()
-
   def begin(self, effective_caller_id=None):
     _ = effective_caller_id
-    if self.transaction_id:
+    if self.in_transaction():
       raise dbexceptions.NotSupportedError('Nested transactions not supported')
     req = {
         'ImmediateCallerID': {'Username': self.caller_id},
@@ -157,10 +153,10 @@ class TabletConnection(object):
       response = self.rpc_call_and_extract_error('SqlQuery.Begin2', req)
       self.transaction_id = response.reply['TransactionId']
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self))
+      raise self.convert_gorpc_exception(e)
 
   def commit(self):
-    if not self.transaction_id:
+    if not self.in_transaction():
       return
 
     req = {
@@ -180,10 +176,10 @@ class TabletConnection(object):
       response = self.rpc_call_and_extract_error('SqlQuery.Commit2', req)
       return response.reply
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self))
+      raise self.convert_gorpc_exception(e)
 
   def rollback(self):
-    if not self.transaction_id:
+    if not self.in_transaction():
       return
 
     req = {
@@ -202,7 +198,7 @@ class TabletConnection(object):
       response = self.rpc_call_and_extract_error('SqlQuery.Rollback2', req)
       return response.reply
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self))
+      raise self.convert_gorpc_exception(e)
 
   def rpc_call_and_extract_error(self, method_name, request):
     """Makes an RPC, extracts any app error that's embedded in the reply.
@@ -252,13 +248,13 @@ class TabletConnection(object):
         conversions.append(field_types.conversions.get(field['Type']))
 
       for row in reply['Rows']:
-        results.append(tuple(_make_row(row, conversions)))
+        results.append(tuple(self._make_row(row, conversions)))
 
       rowcount = reply['RowsAffected']
       lastrowid = reply['InsertId']
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql)
+      raise self.convert_gorpc_exception(e, sql)
     except Exception:
       logging.exception('gorpc low-level error')
       raise
@@ -297,14 +293,14 @@ class TabletConnection(object):
           conversions.append(field_types.conversions.get(field['Type']))
 
         for row in reply['Rows']:
-          results.append(tuple(_make_row(row, conversions)))
+          results.append(tuple(self._make_row(row, conversions)))
 
         rowcount = reply['RowsAffected']
         lastrowid = reply['InsertId']
         rowsets.append((results, rowcount, lastrowid, fields))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables_list)
-      raise convert_exception(e, str(self), sql_list)
+      raise self.convert_gorpc_exception(e, sql_list)
     except Exception:
       logging.exception('gorpc low-level error')
       raise
@@ -314,16 +310,16 @@ class TabletConnection(object):
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
   def _stream_execute(self, sql, bind_variables):
+    rpc_client, session_id = self._get_client_for_streaming()
     req = {
         'Query': {
             'Sql': sql,
             'BindVariables': field_types.convert_bind_vars(bind_variables),
-            'SessionId': self.session_id,
-            'TransactionId': self.transaction_id
+            'SessionId': session_id,
         },
         'ImmediateCallerID': {'Username': self.caller_id}
     }
-    rpc_client = self._get_client()
+
     stream_fields = []
     stream_conversions = []
 
@@ -364,15 +360,10 @@ class TabletConnection(object):
             field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql)
+      raise self.convert_gorpc_exception(e, sql)
     except Exception:
       logging.exception('gorpc low-level error')
       raise
-
-    # Take the BsonRpcClient from VTGateConnection. The row_generator
-    # will manage the BsonRpcClient. This VTGateConnection will connect
-    # to a new client if needed.
-    self.client = None
 
     def row_generator():
       try:
@@ -386,9 +377,9 @@ class TabletConnection(object):
               raise gorpc.AppError(stream_result.reply['Err'].get(
                   'Message', 'Missing error message'))
             for result_item in stream_result.reply['Rows']:
-              yield tuple(_make_row(result_item, stream_conversions))
+              yield tuple(self._make_row(result_item, stream_conversions))
           except gorpc.GoRpcError as e:
-            raise convert_exception(e, str(self))
+            raise self.convert_gorpc_exception(e)
           except Exception:
             logging.exception('gorpc low-level error')
             raise
@@ -396,19 +387,6 @@ class TabletConnection(object):
         rpc_client.close()
 
     return row_generator(), stream_fields
-
-
-def _make_row(row, conversions):
-  converted_row = []
-  for conversion_func, field_data in izip(conversions, row):
-    if field_data is None:
-      v = None
-    elif conversion_func:
-      v = conversion_func(field_data)
-    else:
-      v = field_data
-    converted_row.append(v)
-  return converted_row
 
 
 def connect(*pargs, **kargs):

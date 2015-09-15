@@ -22,7 +22,7 @@ class BaseCursor(base_cursor.BaseListCursor):
     if self._handle_transaction_sql(sql):
       return
     self.results, self.rowcount, self.lastrowid, self.description = (
-        self._get_conn()._execute(sql, bind_variables, **kargs))
+        self.connection._execute(sql, bind_variables, **kargs))
     return self.rowcount
 
 
@@ -47,7 +47,7 @@ class BatchCursor(BaseCursor):
     self.bind_vars_list.append(bind_variables)
 
   def flush(self, as_transaction=False):
-    self.rowsets = self._get_conn()._execute_batch(
+    self.rowsets = self.connection._execute_batch(
         self.query_list, self.bind_vars_list, as_transaction)
     self.query_list = []
     self.bind_vars_list = []
@@ -73,6 +73,6 @@ class StreamCursor(base_cursor.BaseStreamCursor):
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
     self._clear_stream_state()
-    self.generator, self.description = self._get_conn()._stream_execute(
+    self.generator, self.description = self.connection._stream_execute(
         sql, bind_variables, **kargs)
     return 0
