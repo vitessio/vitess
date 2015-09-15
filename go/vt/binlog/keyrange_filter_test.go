@@ -15,8 +15,8 @@ import (
 )
 
 var testKeyRange = &pb.KeyRange{
-	Start: key.Uint64Key(0).Bytes(),
-	End:   key.Uint64Key(10).Bytes(),
+	Start: []byte{},
+	End:   []byte{0x10},
 }
 
 func TestKeyRangeFilterPass(t *testing.T) {
@@ -27,10 +27,10 @@ func TestKeyRangeFilterPass(t *testing.T) {
 				Sql:      []byte("set1"),
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
+				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20 */"),
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml2 /* EMD keyspace_id:2 */"),
+				Sql:      []byte("dml2 /* vtgate:: keyspace_id:02 */"),
 			},
 		},
 		TransactionID: "MariaDB/0-41983-1",
@@ -41,7 +41,7 @@ func TestKeyRangeFilterPass(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml2 /* EMD keyspace_id:2 */"> transaction_id: "MariaDB/0-41983-1" `
+	want := `statement: <6, "set1"> statement: <4, "dml2 /* vtgate:: keyspace_id:02 */"> transaction_id: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -55,7 +55,7 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 				Sql:      []byte("set1"),
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
+				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20 */"),
 			},
 		},
 		TransactionID: "MariaDB/0-41983-1",
@@ -108,10 +108,10 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 				Sql:      []byte("ddl"),
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:20*/"),
+				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20*/"),
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:2a */"),
+				Sql:      []byte("dml1 /* vtgate:: keyspace_id:2 */"), // Odd-length hex string.
 			},
 		},
 		TransactionID: "MariaDB/0-41983-1",

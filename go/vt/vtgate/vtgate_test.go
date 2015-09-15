@@ -831,14 +831,14 @@ func TestIsErrorCausedByVTGate(t *testing.T) {
 }
 
 // Functions for testing
-// keyspace_id and 'filtered-replication-unfriendly'
+// keyspace_id and 'filtered_replication_unfriendly'
 // annotations.
 func TestAnnotatingExecuteKeyspaceIds(t *testing.T) {
 	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteKeyspaceIds")
 
 	err := rpcVTGate.ExecuteKeyspaceIds(
 		context.Background(),
-		"INSERT",
+		"INSERT INTO table () VALUES();",
 		nil,
 		keyspace,
 		[][]byte{[]byte{0x10}},
@@ -853,12 +853,34 @@ func TestAnnotatingExecuteKeyspaceIds(t *testing.T) {
 	verifyQueryAnnotatedWithKeyspaceId(t, []byte{0x10}, shards[0])
 }
 
+func TestAnnotatingExecuteKeyspaceIdsMultipleIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteKeyspaceIdsMultipleIds")
+
+	err := rpcVTGate.ExecuteKeyspaceIds(
+		context.Background(),
+		"INSERT INTO table () VALUES();",
+		nil,
+		keyspace,
+		[][]byte{[]byte{0x10}, []byte{0x15}},
+		pb.TabletType_MASTER,
+		nil,
+		false,
+		&proto.QueryResult{})
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	// Currently, there's logic in resolver.go for rejecting
+	// multiple-ids DML's so we expect 0 queries here.
+	verifyNumQueries(t, 0, shards[0].Queries)
+}
+
 func TestAnnotatingExecuteKeyRanges(t *testing.T) {
 	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteKeyRanges")
 
 	err := rpcVTGate.ExecuteKeyRanges(
 		context.Background(),
-		"UPDATE",
+		"UPDATE table SET col1=1 WHERE col2>3;",
 		nil,
 		keyspace,
 		[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x40}}},
@@ -880,7 +902,7 @@ func TestAnnotatingExecuteEntityIds(t *testing.T) {
 
 	err := rpcVTGate.ExecuteEntityIds(
 		context.Background(),
-		"INSERT",
+		"INSERT INTO table () VALUES();",
 		nil,
 		keyspace,
 		"entity_column_name",
@@ -912,7 +934,7 @@ func TestAnnotatingExecuteShards(t *testing.T) {
 	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteShards")
 	err := rpcVTGate.ExecuteShards(
 		context.Background(),
-		"INSERT",
+		"INSERT INTO table () VALUES();",
 		nil,
 		keyspace,
 		[]string{"20-40"},
@@ -933,17 +955,17 @@ func TestAnnotatingExecuteBatchKeyspaceIds(t *testing.T) {
 		context.Background(),
 		[]proto.BoundKeyspaceIdQuery{
 			proto.BoundKeyspaceIdQuery{
-				Sql:         "INSERT",
+				Sql:         "INSERT INTO table () VALUES();",
 				Keyspace:    keyspace,
 				KeyspaceIds: []key.KeyspaceId{key.KeyspaceId([]byte{0x10})},
 			},
 			proto.BoundKeyspaceIdQuery{
-				Sql:         "UPDATE",
+				Sql:         "UPDATE table SET col1=1 WHERE col2>3;",
 				Keyspace:    keyspace,
 				KeyspaceIds: []key.KeyspaceId{key.KeyspaceId([]byte{0x15})},
 			},
 			proto.BoundKeyspaceIdQuery{
-				Sql:         "DELETE",
+				Sql:         "DELETE FROM table WHERE col1==4;",
 				Keyspace:    keyspace,
 				KeyspaceIds: []key.KeyspaceId{key.KeyspaceId([]byte{0x25})},
 			},
@@ -966,6 +988,34 @@ func TestAnnotatingExecuteBatchKeyspaceIds(t *testing.T) {
 		shards[1])
 }
 
+func TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds")
+	err := rpcVTGate.ExecuteBatchKeyspaceIds(
+		context.Background(),
+		[]proto.BoundKeyspaceIdQuery{
+			proto.BoundKeyspaceIdQuery{
+				Sql:      "INSERT INTO table () VALUES();",
+				Keyspace: keyspace,
+				KeyspaceIds: []key.KeyspaceId{
+					key.KeyspaceId([]byte{0x10}),
+					key.KeyspaceId([]byte{0x15}),
+				},
+			},
+		},
+		pb.TabletType_MASTER,
+		false,
+		nil,
+		&proto.QueryResultList{})
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyBatchQueryAnnotatedAsUnfriendly(
+		t,
+		1, // expectedNumQueries
+		shards[0])
+}
+
 func TestAnnotatingExecuteBatchShards(t *testing.T) {
 	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteBatchShards")
 
@@ -973,22 +1023,22 @@ func TestAnnotatingExecuteBatchShards(t *testing.T) {
 		context.Background(),
 		[]proto.BoundShardQuery{
 			proto.BoundShardQuery{
-				Sql:      "INSERT",
+				Sql:      "INSERT INTO table () VALUES();",
 				Keyspace: keyspace,
 				Shards:   []string{"-20", "20-40"},
 			},
 			proto.BoundShardQuery{
-				Sql:      "UPDATE",
+				Sql:      "UPDATE table SET col1=1 WHERE col2>3;",
 				Keyspace: keyspace,
 				Shards:   []string{"-20"},
 			},
 			proto.BoundShardQuery{
-				Sql:      "UPDATE",
+				Sql:      "UPDATE table SET col1=1 WHERE col2>3;",
 				Keyspace: keyspace,
 				Shards:   []string{"20-40"},
 			},
 			proto.BoundShardQuery{
-				Sql:      "DELETE",
+				Sql:      "DELETE FROM table WHERE col1==4;",
 				Keyspace: keyspace,
 				Shards:   []string{"20-40"},
 			},
@@ -1074,14 +1124,14 @@ func verifyNumBatchQueries(t *testing.T, expectedNumQueries int, batchQueries []
 func verifyBoundQueryAnnotatedWithKeyspaceId(t *testing.T, expectedKeyspaceId []byte, query *tproto.BoundQuery) {
 	verifyBoundQueryAnnotatedWithComment(
 		t,
-		"/* vtgate:: keyspace_id: "+hex.EncodeToString(expectedKeyspaceId)+" */",
+		"/* vtgate:: keyspace_id:"+hex.EncodeToString(expectedKeyspaceId)+" */",
 		query)
 }
 
 func verifyBoundQueryAnnotatedAsUnfriendly(t *testing.T, query *tproto.BoundQuery) {
 	verifyBoundQueryAnnotatedWithComment(
 		t,
-		"/* vtgate:: filtered-replication-unfriendly */",
+		"/* vtgate:: filtered_replication_unfriendly */",
 		query)
 }
 

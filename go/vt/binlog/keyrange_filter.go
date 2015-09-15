@@ -5,18 +5,15 @@
 package binlog
 
 import (
-	"bytes"
-	"encoding/base64"
-	"strconv"
-
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
+	annotations "github.com/youtube/vitess/go/vt/sqlannotations"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
+var KEYSPACE_ID_COMMENT = []byte("/* vtgate:: keyspace_id:")
 var SPACE = []byte(" ")
 
 // KeyRangeFilterFunc returns a function that calls sendReply only if statements
@@ -24,11 +21,6 @@ var SPACE = []byte(" ")
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(sendTransaction))
 func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
-	isInteger := true
-	if kit == key.KIT_BYTES {
-		isInteger = false
-	}
-
 	return func(reply *proto.BinlogTransaction) error {
 		matched := false
 		filtered := make([]proto.Statement, 0, len(reply.Statements))
@@ -40,40 +32,23 @@ func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply
 				log.Warningf("Not forwarding DDL: %s", string(statement.Sql))
 				continue
 			case proto.BL_DML:
-				keyspaceIndex := bytes.LastIndex(statement.Sql, KEYSPACE_ID_COMMENT)
-				if keyspaceIndex == -1 {
+				keyspaceId, unfriendly, err := annotations.ParseSQLAnnotation(string(statement.Sql))
+				if err != nil {
 					updateStreamErrors.Add("KeyRangeStream", 1)
-					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
+					log.Errorf(
+						"Error parsing keyspace id annotation. Skipping statement: %s, (%s)",
+						string(statement.Sql), err)
 					continue
 				}
-				idstart := keyspaceIndex + len(KEYSPACE_ID_COMMENT)
-				idend := bytes.Index(statement.Sql[idstart:], SPACE)
-				if idend == -1 {
+				if unfriendly {
 					updateStreamErrors.Add("KeyRangeStream", 1)
-					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
+					log.Errorf(
+						"Skipping filtered-replication-unfriendly DML statement: %s",
+						string(statement.Sql))
 					continue
 				}
-				textId := string(statement.Sql[idstart : idstart+idend])
-				if isInteger {
-					id, err := strconv.ParseUint(textId, 10, 64)
-					if err != nil {
-						updateStreamErrors.Add("KeyRangeStream", 1)
-						log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
-						continue
-					}
-					if !key.KeyRangeContains(keyrange, key.Uint64Key(id).Bytes()) {
-						continue
-					}
-				} else {
-					data, err := base64.StdEncoding.DecodeString(textId)
-					if err != nil {
-						updateStreamErrors.Add("KeyRangeStream", 1)
-						log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
-						continue
-					}
-					if !key.KeyRangeContains(keyrange, data) {
-						continue
-					}
+				if !key.KeyRangeContains(keyrange, keyspaceId) {
+					continue
 				}
 				filtered = append(filtered, statement)
 				matched = true
