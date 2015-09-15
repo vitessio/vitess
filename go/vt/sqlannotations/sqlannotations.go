@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package sqlannoations provides functions
+// Package sqlannotations provides functions
 // for annotating DML statements with keyspace-id
 // comments and parsing them. These annotations
 // are used during filtered-replication to route
@@ -16,8 +16,8 @@ import (
 	"strings"
 )
 
-// Annotates 'sql' with the given keyspace id if it's a DML statement
-// otherwise, does nothing.
+// AnnotateKeyspaceIdIfDML annotates 'sql' with the given keyspace id
+// if 'sql' is a DML statement; otherwise, it does nothing.
 func AnnotateKeyspaceIdIfDML(keyspaceId []byte, sql *string) {
 	if isDml(*sql) {
 		*sql = fmt.Sprintf("%s /* vtgate:: keyspace_id:%s */",
@@ -25,9 +25,9 @@ func AnnotateKeyspaceIdIfDML(keyspaceId []byte, sql *string) {
 	}
 }
 
-// Annotates the given 'sql' query as filtered-replication-unfriendly
-// if its a DML statement (filtered-replication will log an error if
-// it encounters such a statement).
+// AnnotateAsFilteredReplicationUnfriendlyIfDML annotates the given 'sql'
+// query as filtered-replication-unfriendly if its a DML statement
+// (filtered-replication will log an error if it encounters such a annotation).
 // Does nothing if the statement is not a DML statement.
 func AnnotateAsFilteredReplicationUnfriendlyIfDML(sql *string) {
 	if isDml(*sql) {
@@ -62,7 +62,7 @@ var (
 	unfriendlyFilteredReplicationRegexp = regexp.MustCompile("/\\* vtgate:: filtered_replication_unfriendly \\*/")
 )
 
-// Parses the annotation from the given statement.
+// ParseSQLAnnotation the annotation from the given statement.
 // Returns:
 // If a keyspace-id comment exists
 //   'keyspaceId' is set to the parsed keyspace id, 'unfriendly' is set to 'false',
