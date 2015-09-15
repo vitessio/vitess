@@ -219,20 +219,14 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 		return nil, nil, vterrors.FromGRPCError(err)
 	}
 	sr := make(chan *mproto.QueryResult, 10)
-	// TODO(aaijazi): I'm pretty sure ther error handling going on down here is overkill now...
 	var finalError error
 	go func() {
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
-					finalError = err
+					finalError = vterrors.FromGRPCError(err)
 				}
-				close(sr)
-				return
-			}
-			if ser.Error != nil {
-				finalError = vterrors.FromVtRPCError(ser.Error)
 				close(sr)
 				return
 			}
@@ -267,13 +261,8 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 			ser, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
-					finalError = err
+					finalError = vterrors.FromGRPCError(err)
 				}
-				close(sr)
-				return
-			}
-			if ser.Error != nil {
-				finalError = vterrors.FromVtRPCError(ser.Error)
 				close(sr)
 				return
 			}
@@ -308,13 +297,8 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 			ser, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
-					finalError = err
+					finalError = vterrors.FromGRPCError(err)
 				}
-				close(sr)
-				return
-			}
-			if ser.Error != nil {
-				finalError = vterrors.FromVtRPCError(ser.Error)
 				close(sr)
 				return
 			}
@@ -349,13 +333,8 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 			ser, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
-					finalError = err
+					finalError = vterrors.FromGRPCError(err)
 				}
-				close(sr)
-				return
-			}
-			if ser.Error != nil {
-				finalError = vterrors.FromVtRPCError(ser.Error)
 				close(sr)
 				return
 			}

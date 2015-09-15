@@ -226,11 +226,19 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 }
 
 func handleError(err *error, logStats *LogStats, queryServiceStats *QueryServiceStats) {
+	var terr *TabletError
+	defer func() {
+		if logStats != nil {
+			logStats.Error = terr
+			logStats.Send()
+		}
+	}()
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
 			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-			*err = NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic", x)
+			terr = NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic", x)
+			*err = terr
 			queryServiceStats.InternalErrors.Add("Panic", 1)
 			return
 		}
@@ -251,10 +259,6 @@ func handleError(err *error, logStats *LogStats, queryServiceStats *QueryService
 				log.Errorf("%v", terr)
 			}
 		}
-	}
-	if logStats != nil {
-		logStats.Error = *err
-		logStats.Send()
 	}
 }
 
