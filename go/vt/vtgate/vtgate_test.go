@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/key"
-	kproto "github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -733,42 +732,37 @@ func TestVTGateSplitQuery(t *testing.T) {
 	}
 	sql := "select col1, col2 from table"
 	splitCount := 24
-	result := new(proto.SplitQueryResult)
-	err := rpcVTGate.SplitQuery(context.Background(),
+	splits, err := rpcVTGate.SplitQuery(context.Background(),
 		keyspace,
 		sql,
 		nil,
 		"",
-		splitCount,
-		result)
+		splitCount)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
 	_, err = getAllShards(DefaultShardSpec)
 	// Total number of splits should be number of shards * splitsPerShard
-	if splitCount != len(result.Splits) {
-		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", splitCount, len(result.Splits))
+	if splitCount != len(splits) {
+		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", splitCount, len(splits))
 	}
-	actualSqlsByKeyRange := map[kproto.KeyRange][]string{}
-	for _, split := range result.Splits {
+	actualSqlsByKeyRange := map[string][]string{}
+	for _, split := range splits {
 		if split.Size != sandboxSQRowCount {
 			t.Errorf("wrong split size, want \n%+v, got \n%+v", sandboxSQRowCount, split.Size)
 		}
-		if split.Query.Keyspace != keyspace {
-			t.Errorf("wrong split size, want \n%+v, got \n%+v", keyspace, split.Query.Keyspace)
+		if split.KeyRangePart.Keyspace != keyspace {
+			t.Errorf("wrong split size, want \n%+v, got \n%+v", keyspace, split.KeyRangePart.Keyspace)
 		}
-		if len(split.Query.KeyRanges) != 1 {
-			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.Query.KeyRanges))
+		if len(split.KeyRangePart.KeyRanges) != 1 {
+			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.KeyRangePart.KeyRanges))
 		}
-		if split.Query.TabletType != topo.TYPE_RDONLY {
-			t.Errorf("wrong tablet type, want \n%+v, got \n%+v", topo.TYPE_RDONLY, split.Query.TabletType)
-		}
-		kr := split.Query.KeyRanges[0]
+		kr := key.KeyRangeString(split.KeyRangePart.KeyRanges[0])
 		actualSqlsByKeyRange[kr] = append(actualSqlsByKeyRange[kr], split.Query.Sql)
 	}
-	expectedSqlsByKeyRange := map[kproto.KeyRange][]string{}
+	expectedSqlsByKeyRange := map[string][]string{}
 	for _, kr := range keyranges {
-		expectedSqlsByKeyRange[kproto.ProtoToKeyRange(kr)] = []string{
+		expectedSqlsByKeyRange[key.KeyRangeString(kr)] = []string{
 			"select col1, col2 from table /*split 0 */",
 			"select col1, col2 from table /*split 1 */",
 			"select col1, col2 from table /*split 2 */",
