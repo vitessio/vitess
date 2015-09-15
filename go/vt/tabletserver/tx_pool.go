@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
 )
@@ -156,7 +157,15 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 		panic(NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err))
 	}
 	transactionID := axp.lastID.Add(1)
-	axp.activePool.Register(transactionID, newTxConnection(conn, transactionID, axp))
+
+	username := "unknown"
+	if callerID := callerid.ImmediateCallerIDFromContext(ctx); callerID != nil {
+		username = callerID.Username
+	}
+	if callerID := callerid.EffectiveCallerIDFromContext(ctx); callerID != nil {
+		username = callerID.Principal
+	}
+	axp.activePool.Register(transactionID, newTxConnection(conn, transactionID, axp, username))
 	return transactionID
 }
 
@@ -251,9 +260,10 @@ type TxConnection struct {
 	Queries       []string
 	Conclusion    string
 	LogToFile     sync2.AtomicInt32
+	Username      string
 }
 
-func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool) *TxConnection {
+func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, username string) *TxConnection {
 	return &TxConnection{
 		DBConn:        conn,
 		TransactionID: transactionID,
@@ -261,6 +271,7 @@ func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool) *TxConnect
 		StartTime:     time.Now(),
 		dirtyTables:   make(map[string]DirtyKeys),
 		Queries:       make([]string, 0, 8),
+		Username:      username,
 	}
 }
 
@@ -306,6 +317,11 @@ func (txc *TxConnection) RecordQuery(query string) {
 func (txc *TxConnection) discard(conclusion string) {
 	txc.Conclusion = conclusion
 	txc.EndTime = time.Now()
+
+	duration := txc.EndTime.Sub(txc.StartTime)
+	txc.pool.queryServiceStats.UserTransactionCount.Add(txc.Username, 1)
+	txc.pool.queryServiceStats.UserTransactionTimesNs.Add(txc.Username, int64(duration))
+
 	txc.pool.activePool.Unregister(txc.TransactionID)
 	txc.DBConn.Recycle()
 	// Ensure PoolConnection won't be accessed after Recycle.

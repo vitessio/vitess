@@ -49,6 +49,18 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 		qre.qe.queryServiceStats.QueryStats.Add(planName, duration)
+
+		username := "unknown"
+		if callerID := callerid.ImmediateCallerIDFromContext(qre.ctx); callerID != nil {
+			username = callerID.Username
+		}
+		if callerID := callerid.EffectiveCallerIDFromContext(qre.ctx); callerID != nil {
+			username = callerID.Principal
+		}
+		tableName := qre.plan.TableName
+		qre.qe.queryServiceStats.UserTableQueryCount.Add([]string{tableName, username}, 1)
+    qre.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username}, int64(duration))
+
 		if reply == nil {
 			qre.plan.AddStats(1, duration, 0, 1)
 			return
@@ -131,7 +143,22 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) error {
 	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.PlanType = qre.plan.PlanId.String()
-	defer qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), time.Now())
+
+	defer func(start time.Time) {
+		qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), start)
+
+		duration := time.Now().Sub(start)
+		username := "unknown"
+		if callerID := callerid.ImmediateCallerIDFromContext(qre.ctx); callerID != nil {
+			username = callerID.Username
+		}
+		if callerID := callerid.EffectiveCallerIDFromContext(qre.ctx); callerID != nil {
+			username = callerID.Principal
+		}
+		tableName := qre.plan.TableName
+		qre.qe.queryServiceStats.UserTableQueryCount.Add([]string{tableName, username}, 1)
+    qre.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username}, int64(duration))
+	} (time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
 		return err

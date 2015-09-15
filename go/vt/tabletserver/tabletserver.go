@@ -17,6 +17,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -671,6 +672,21 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pb.Target, req 
 	if err != nil {
 		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %#v", err, req)
 	}
+
+	defer func(start time.Time) {
+		duration := time.Now().Sub(start)
+
+		username := "unknown"
+		if callerID := callerid.ImmediateCallerIDFromContext(ctx); callerID != nil {
+			username = callerID.Username
+		}
+		if callerID := callerid.EffectiveCallerIDFromContext(ctx); callerID != nil {
+			username = callerID.Principal
+		}
+		tableName := splitter.tableName
+		tsv.qe.queryServiceStats.UserTableQueryCount.Add([]string{tableName, username}, 1)
+    tsv.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username}, int64(duration))
+	}(time.Now())
 
 	qre := &QueryExecutor{
 		ctx:      ctx,
