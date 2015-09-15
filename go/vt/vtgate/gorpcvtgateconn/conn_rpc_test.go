@@ -18,7 +18,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-// This test makes sure the go rpc service works
+// TestGoRPCVTGateConn makes sure the gorpc (BsonRPC) service works
 func TestGoRPCVTGateConn(t *testing.T) {
 	// fake service
 	service := vtgateconntest.CreateFakeServer(t)
