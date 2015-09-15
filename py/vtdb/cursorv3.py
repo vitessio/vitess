@@ -17,7 +17,7 @@ class Cursor(base_cursor.BaseListCursor):
     if self._handle_transaction_sql(sql):
       return
     self.results, self.rowcount, self.lastrowid, self.description = (
-        self._get_conn()._execute(sql, bind_variables, self.tablet_type))
+        self.connection._execute(sql, bind_variables, self.tablet_type))
     return self.rowcount
 
 
@@ -30,6 +30,6 @@ class StreamCursor(base_cursor.BaseStreamCursor):
 
   def execute(self, sql, bind_variables, **kargs):
     self._clear_stream_state()
-    self.generator, self.description = self._get_conn()._stream_execute(
+    self.generator, self.description = self.connection._stream_execute(
         sql, bind_variables, self.tablet_type)
     return 0
