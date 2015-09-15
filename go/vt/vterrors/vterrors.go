@@ -7,6 +7,7 @@
 package vterrors
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -112,7 +113,7 @@ func FromRPCError(rpcErr *mproto.RPCError) error {
 
 // FromVtRPCError recovers a VitessError from a *vtrpc.RPCError (which is how VitessErrors
 // are transmitted across proto3 RPC boundaries).
-func FromVtRPCError(rpcErr *vtrpc.RPCError) *VitessError {
+func FromVtRPCError(rpcErr *vtrpc.RPCError) error {
 	if rpcErr == nil {
 		return nil
 	}
@@ -132,7 +133,7 @@ func WithPrefix(prefix string, in error) error {
 	return &VitessError{
 		Code:    vtErr.Code,
 		err:     vtErr.err,
-		Message: fmt.Sprintf("%s%s", prefix, vtErr.Message),
+		Message: fmt.Sprintf("%s%s", prefix, vtErr.Error()),
 	}
 }
 
@@ -146,7 +147,7 @@ func WithSuffix(in error, suffix string) error {
 	return &VitessError{
 		Code:    vtErr.Code,
 		err:     vtErr.err,
-		Message: fmt.Sprintf("%s%s", vtErr.Message, suffix),
+		Message: fmt.Sprintf("%s%s", vtErr.Error(), suffix),
 	}
 }
 
@@ -253,4 +254,55 @@ func FromGRPCError(err error) error {
 		Code: GRPCCodeToErrorCode(grpc.Code(err)),
 		err:  err,
 	}
+}
+
+// ToJSONError return an error as a JSON-encoded error string.
+// Specifically, it creates a vtrpc.RPCError and marshalls that into JSON.
+func ToJSONError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// We'll need to marshal a known type into JSON, so that we can unmarshal easily
+	// on the other side without worrying about matching field names. vtrpc.RPCError
+	// seems like a reasonable choice of type.
+	vtrpcErr := vtrpc.RPCError{
+		Code:    vtrpc.ErrorCode_UNKNOWN_ERROR,
+		Message: err.Error(),
+	}
+	if vtErr, ok := err.(VtError); ok {
+		vtrpcErr.Code = vtErr.VtErrorCode()
+	}
+	b, err := json.Marshal(vtrpcErr)
+	if err != nil {
+		// If we can't marshal the JSON, return the error directly. On the receiving side, this
+		// should be returned as an error with an Unknown code.
+		// We can't return an error with an explicit error code, because it's possible that
+		// the error here also can't be marshaled into JSON...
+		return err
+	}
+	return fmt.Errorf(string(b))
+}
+
+// FromJSONError return a JSON-encoded error string as a VitessError.
+func FromJSONError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// JSON with expected fields will overwrite this
+	vtrpcErr := &vtrpc.RPCError{
+		Code:    vtrpc.ErrorCode_INTERNAL_ERROR,
+		Message: fmt.Sprintf("unexpected fields in JSONError: %v", err),
+	}
+
+	b := []byte(err.Error())
+	jerr := json.Unmarshal(b, vtrpcErr)
+	if jerr != nil {
+		return WithPrefix(
+			"can't unmarshal JSON: ",
+			FromError(vtrpc.ErrorCode_UNKNOWN_ERROR, err),
+		)
+	}
+	return FromVtRPCError(vtrpcErr)
 }

@@ -61,13 +61,14 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 	resultBuckets := []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
 	queryStats := stats.NewTimings(queryStatsName)
 	return &QueryServiceStats{
-		MySQLStats:     stats.NewTimings(mysqlStatsName),
-		QueryStats:     queryStats,
-		WaitStats:      stats.NewTimings(waitStatsName),
-		KillStats:      stats.NewCounters(killStatsName),
-		InfoErrors:     stats.NewCounters(infoErrorsName),
-		ErrorStats:     stats.NewCounters(errorStatsName),
-		InternalErrors: stats.NewCounters(internalErrorsName),
+		MySQLStats: stats.NewTimings(mysqlStatsName),
+		QueryStats: queryStats,
+		WaitStats:  stats.NewTimings(waitStatsName),
+		KillStats:  stats.NewCounters(killStatsName, "Transactions", "Queries"),
+		InfoErrors: stats.NewCounters(infoErrorsName, "Retry", "Fatal", "DupKey"),
+		ErrorStats: stats.NewCounters(errorStatsName, "Fail", "TxPoolFull", "NotInTx", "Deadlock"),
+		InternalErrors: stats.NewCounters(internalErrorsName, "Task", "MemcacheStats",
+			"Mismatch", "StrayTransactions", "Invalidation", "Panic", "HungQuery"),
 		QPSRates:       stats.NewRates(qpsRateName, queryStats, 15, 60*time.Second),
 		ResultStats:    stats.NewHistogram(resultStatsName, resultBuckets),
 		SpotCheckCount: stats.NewInt(spotCheckCountName),
