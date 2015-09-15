@@ -31,9 +31,9 @@ type QueryServiceStats struct {
 	// UserTableQueryTimesNs shows total latency for each CallerID/table combination.
 	UserTableQueryTimesNs *stats.MultiCounters
 	// UserTransactionCount shows number of transactions received for each CallerID.
-	UserTransactionCount *stats.Counters
+	UserTransactionCount *stats.MultiCounters
 	// UserTransactionTimesNs shows total transaction latency for each CallerID.
-	UserTransactionTimesNs *stats.Counters
+	UserTransactionTimesNs *stats.MultiCounters
 	// QPSRates shows the qps.
 	QPSRates *stats.Rates
 	// ResultStats shows the histogram of number of rows returned.
@@ -84,10 +84,14 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 		InfoErrors:             stats.NewCounters(infoErrorsName),
 		ErrorStats:	        stats.NewCounters(errorStatsName),
 		InternalErrors:         stats.NewCounters(internalErrorsName),
-		UserTableQueryCount:    stats.NewMultiCounters(userTableQueryCountName, []string{"TableName", "CallerID"}),
-		UserTableQueryTimesNs:  stats.NewMultiCounters(userTableQueryTimesNsName, []string{"TableName", "CallerID"}),
-		UserTransactionCount:	stats.NewCounters(userTransactionCountName),
-		UserTransactionTimesNs: stats.NewCounters(userTransactionTimesNsName),
+		UserTableQueryCount:    stats.NewMultiCounters(
+			userTableQueryCountName, []string{"TableName", "CallerID"}),
+		UserTableQueryTimesNs:  stats.NewMultiCounters(
+			userTableQueryTimesNsName, []string{"TableName", "CallerID"}),
+		UserTransactionCount:	stats.NewMultiCounters(
+			userTransactionCountName, []string{"CallerID", "Conclusion"}),
+		UserTransactionTimesNs: stats.NewMultiCounters(
+			userTransactionTimesNsName, []string{"CallerID", "Conclusion"}),
 		QPSRates:               stats.NewRates(qpsRateName, queryStats, 15, 60*time.Second),
 		ResultStats:            stats.NewHistogram(resultStatsName, resultBuckets),
 		SpotCheckCount:         stats.NewInt(spotCheckCountName),

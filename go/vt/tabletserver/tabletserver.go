@@ -676,16 +676,15 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pb.Target, req 
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 
-		username := "unknown"
-		if callerID := callerid.ImmediateCallerIDFromContext(ctx); callerID != nil {
-			username = callerID.Username
-		}
-		if callerID := callerid.EffectiveCallerIDFromContext(ctx); callerID != nil {
-			username = callerID.Principal
+		var username string
+		if tmp := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx)); tmp != "" {
+			username = tmp
+		} else {
+			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(ctx))
 		}
 		tableName := splitter.tableName
 		tsv.qe.queryServiceStats.UserTableQueryCount.Add([]string{tableName, username}, 1)
-    tsv.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username}, int64(duration))
+		tsv.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username}, int64(duration))
 	}(time.Now())
 
 	qre := &QueryExecutor{

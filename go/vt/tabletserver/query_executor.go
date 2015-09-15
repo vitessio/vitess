@@ -50,16 +50,15 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 		duration := time.Now().Sub(start)
 		qre.qe.queryServiceStats.QueryStats.Add(planName, duration)
 
-		username := "unknown"
-		if callerID := callerid.ImmediateCallerIDFromContext(qre.ctx); callerID != nil {
-			username = callerID.Username
-		}
-		if callerID := callerid.EffectiveCallerIDFromContext(qre.ctx); callerID != nil {
-			username = callerID.Principal
+		var username string
+		if tmp := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx)); tmp != "" {
+			username = tmp
+		} else {
+			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
 		}
 		tableName := qre.plan.TableName
 		qre.qe.queryServiceStats.UserTableQueryCount.Add([]string{tableName, username}, 1)
-    qre.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username}, int64(duration))
+		qre.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username}, int64(duration))
 
 		if reply == nil {
 			qre.plan.AddStats(1, duration, 0, 1)
@@ -148,16 +147,15 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) erro
 		qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), start)
 
 		duration := time.Now().Sub(start)
-		username := "unknown"
-		if callerID := callerid.ImmediateCallerIDFromContext(qre.ctx); callerID != nil {
-			username = callerID.Username
-		}
-		if callerID := callerid.EffectiveCallerIDFromContext(qre.ctx); callerID != nil {
-			username = callerID.Principal
+		var username string
+		if tmp := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx)); tmp != "" {
+			username = tmp
+		} else {
+			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
 		}
 		tableName := qre.plan.TableName
 		qre.qe.queryServiceStats.UserTableQueryCount.Add([]string{tableName, username}, 1)
-    qre.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username}, int64(duration))
+		qre.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username}, int64(duration))
 	} (time.Now())
 
 	if err := qre.checkPermissions(); err != nil {

@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/callerid"
+	qrpb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
 )
@@ -158,14 +159,9 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 	}
 	transactionID := axp.lastID.Add(1)
 
-	username := "unknown"
-	if callerID := callerid.ImmediateCallerIDFromContext(ctx); callerID != nil {
-		username = callerID.Username
-	}
-	if callerID := callerid.EffectiveCallerIDFromContext(ctx); callerID != nil {
-		username = callerID.Principal
-	}
-	axp.activePool.Register(transactionID, newTxConnection(conn, transactionID, axp, username))
+	immediate := callerid.ImmediateCallerIDFromContext(ctx)
+	effective := callerid.EffectiveCallerIDFromContext(ctx)
+	axp.activePool.Register(transactionID, newTxConnection(conn, transactionID, axp, immediate, effective))
 	return transactionID
 }
 
@@ -251,27 +247,29 @@ func (axp *TxPool) PoolTimeout() time.Duration {
 // are failures.
 type TxConnection struct {
 	*DBConn
-	TransactionID int64
-	pool          *TxPool
-	inUse         bool
-	StartTime     time.Time
-	EndTime       time.Time
-	dirtyTables   map[string]DirtyKeys
-	Queries       []string
-	Conclusion    string
-	LogToFile     sync2.AtomicInt32
-	Username      string
+	TransactionID      int64
+	pool               *TxPool
+	inUse              bool
+	StartTime          time.Time
+	EndTime            time.Time
+	dirtyTables        map[string]DirtyKeys
+	Queries            []string
+	Conclusion         string
+	LogToFile	   sync2.AtomicInt32
+	ImmediateCallerID  *qrpb.VTGateCallerID
+	EffectiveCallerID  *vtrpc.CallerID
 }
 
-func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, username string) *TxConnection {
+func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate *qrpb.VTGateCallerID, effective *vtrpc.CallerID) *TxConnection {
 	return &TxConnection{
-		DBConn:        conn,
-		TransactionID: transactionID,
-		pool:          pool,
-		StartTime:     time.Now(),
-		dirtyTables:   make(map[string]DirtyKeys),
-		Queries:       make([]string, 0, 8),
-		Username:      username,
+		DBConn:            conn,
+		TransactionID:     transactionID,
+		pool:              pool,
+		StartTime:         time.Now(),
+		dirtyTables:       make(map[string]DirtyKeys),
+		Queries:           make([]string, 0, 8),
+		ImmediateCallerID: immediate,
+		EffectiveCallerID: effective,
 	}
 }
 
@@ -318,9 +316,15 @@ func (txc *TxConnection) discard(conclusion string) {
 	txc.Conclusion = conclusion
 	txc.EndTime = time.Now()
 
+	var username string
+	if tmp := callerid.GetPrincipal(txc.EffectiveCallerID); tmp != "" {
+		username = tmp
+	} else {
+		username = callerid.GetUsername(txc.ImmediateCallerID)
+	}
 	duration := txc.EndTime.Sub(txc.StartTime)
-	txc.pool.queryServiceStats.UserTransactionCount.Add(txc.Username, 1)
-	txc.pool.queryServiceStats.UserTransactionTimesNs.Add(txc.Username, int64(duration))
+	txc.pool.queryServiceStats.UserTransactionCount.Add([]string{username, conclusion}, 1)
+	txc.pool.queryServiceStats.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
 
 	txc.pool.activePool.Unregister(txc.TransactionID)
 	txc.DBConn.Recycle()
