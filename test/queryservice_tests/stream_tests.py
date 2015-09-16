@@ -133,7 +133,7 @@ class TestStream(framework.TestCase):
           'did not raise interruption error: %s' % str(cm.exception))
       cu.close()
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def _populate_vtocc_big_table(self, num_rows):
     self.env.conn.begin()

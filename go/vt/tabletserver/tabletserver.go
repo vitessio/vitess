@@ -17,7 +17,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -477,17 +476,23 @@ func (tsv *TabletServer) handleExecError(query *proto.Query, err *error, logStat
 		*err = tsv.handleExecErrorNoPanic(query, x, logStats)
 	}
 	if logStats != nil {
-		logStats.Error = *err
 		logStats.Send()
 	}
 }
 
 func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interface{}, logStats *LogStats) error {
+	var terr *TabletError
+	defer func() {
+		if logStats != nil {
+			logStats.Error = terr
+		}
+	}()
 	terr, ok := err.(*TabletError)
 	if !ok {
 		log.Errorf("Uncaught panic for %v:\n%v\n%s", query, err, tb.Stack(4))
 		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, query)
+		terr = NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, query)
+		return terr
 	}
 	var myError error
 	if tsv.config.TerseErrors && terr.SQLError != 0 && len(query.BindVariables) != 0 {
@@ -674,15 +679,7 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pb.Target, req 
 	}
 
 	defer func(start time.Time) {
-		duration := time.Now().Sub(start)
-
-		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
-		if username == "" {
-			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(ctx))
-		}
-		tableName := splitter.tableName
-		tsv.qe.queryServiceStats.UserTableQueryCount.Add([]string{tableName, username, "SplitQuery"}, 1)
-		tsv.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username, "SplitQuery"}, int64(duration))
+		addUserTableQueryStats(tsv.qe.queryServiceStats, ctx, splitter.tableName, "SplitQuery", int64(time.Now().Sub(start)))
 	}(time.Now())
 
 	qre := &QueryExecutor{

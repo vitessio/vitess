@@ -139,16 +139,25 @@ func TestComputeCellServedFrom(t *testing.T) {
 	}
 
 	m := ki.ComputeCellServedFrom("c3")
-	if !reflect.DeepEqual(m, map[TabletType]string{
-		TYPE_MASTER: "source",
+	if !reflect.DeepEqual(m, []*pb.SrvKeyspace_ServedFrom{
+		&pb.SrvKeyspace_ServedFrom{
+			TabletType: pb.TabletType_MASTER,
+			Keyspace:   "source",
+		},
 	}) {
 		t.Fatalf("c3 failed: %v", m)
 	}
 
 	m = ki.ComputeCellServedFrom("c2")
-	if !reflect.DeepEqual(m, map[TabletType]string{
-		TYPE_MASTER:  "source",
-		TYPE_REPLICA: "source",
+	if !reflect.DeepEqual(m, []*pb.SrvKeyspace_ServedFrom{
+		&pb.SrvKeyspace_ServedFrom{
+			TabletType: pb.TabletType_MASTER,
+			Keyspace:   "source",
+		},
+		&pb.SrvKeyspace_ServedFrom{
+			TabletType: pb.TabletType_REPLICA,
+			Keyspace:   "source",
+		},
 	}) {
 		t.Fatalf("c2 failed: %v", m)
 	}

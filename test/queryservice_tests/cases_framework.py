@@ -167,7 +167,7 @@ class Case(object):
     if self.is_testing_cache:
       tstart = self.table_stats(env)
     if self.sql in ('begin', 'commit', 'rollback'):
-      getattr(cursor.connection, self.sql)()
+      getattr(cursor._conn, self.sql)()
     else:
       cursor.execute(self.sql, self.bindings)
     if self.result is not None:
@@ -236,7 +236,7 @@ class MultiCase(object):
     for case in self.sqls_and_cases:
       if isinstance(case, basestring):
         if case in ('begin', 'commit', 'rollback'):
-          getattr(cursor.connection, case)()
+          getattr(cursor._conn, case)()
         else:
           cursor.execute(case)
         continue

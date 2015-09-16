@@ -5,15 +5,19 @@
 package wrangler
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // RebuildShardGraph rebuilds the serving and replication rollup data data while locking
@@ -38,16 +42,16 @@ func (wr *Wrangler) RebuildKeyspaceGraph(ctx context.Context, keyspace string, c
 
 // findCellsForRebuild will find all the cells in the given keyspace
 // and create an entry if the map for them
-func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardInfo, cells []string, srvKeyspaceMap map[string]*topo.SrvKeyspace) {
+func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardInfo, cells []string, srvKeyspaceMap map[string]*pb.SrvKeyspace) {
 	for _, si := range shardMap {
 		for _, cell := range si.Cells {
 			if !topo.InCellList(cell, cells) {
 				continue
 			}
 			if _, ok := srvKeyspaceMap[cell]; !ok {
-				srvKeyspaceMap[cell] = &topo.SrvKeyspace{
+				srvKeyspaceMap[cell] = &pb.SrvKeyspace{
 					ShardingColumnName: ki.ShardingColumnName,
-					ShardingColumnType: key.ProtoToKeyspaceIdType(ki.ShardingColumnType),
+					ShardingColumnType: ki.ShardingColumnType,
 					ServedFrom:         ki.ComputeCellServedFrom(cell),
 					SplitShardCount:    ki.SplitShardCount,
 				}
@@ -113,7 +117,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 	// srvKeyspaceMap is a map:
 	//   key: cell
 	//   value: topo.SrvKeyspace object being built
-	srvKeyspaceMap := make(map[string]*topo.SrvKeyspace)
+	srvKeyspaceMap := make(map[string]*pb.SrvKeyspace)
 	wr.findCellsForRebuild(ki, shardCache, cells, srvKeyspaceMap)
 
 	// Then we add the cells from the keyspaces we might be 'ServedFrom'.
@@ -132,21 +136,22 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
 	for cell, srvKeyspace := range srvKeyspaceMap {
-		srvKeyspace.Partitions = make(map[topo.TabletType]*topo.KeyspacePartition)
 		for _, si := range shardCache {
 			servedTypes := si.GetServedTypesPerCell(cell)
 
 			// for each type this shard is supposed to serve,
 			// add it to srvKeyspace.Partitions
 			for _, tabletType := range servedTypes {
-				if _, ok := srvKeyspace.Partitions[tabletType]; !ok {
-					srvKeyspace.Partitions[tabletType] = &topo.KeyspacePartition{
-						ShardReferences: make([]topo.ShardReference, 0),
+				partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)
+				if partition == nil {
+					partition = &pb.SrvKeyspace_KeyspacePartition{
+						ServedType: tabletType,
 					}
+					srvKeyspace.Partitions = append(srvKeyspace.Partitions, partition)
 				}
-				srvKeyspace.Partitions[tabletType].ShardReferences = append(srvKeyspace.Partitions[tabletType].ShardReferences, topo.ShardReference{
+				partition.ShardReferences = append(partition.ShardReferences, &pb.ShardReference{
 					Name:     si.ShardName(),
-					KeyRange: key.ProtoToKeyRange(si.KeyRange),
+					KeyRange: si.KeyRange,
 				})
 			}
 		}
@@ -168,23 +173,35 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 
 // orderAndCheckPartitions will re-order the partition list, and check
 // it's correct.
-func (wr *Wrangler) orderAndCheckPartitions(cell string, srvKeyspace *topo.SrvKeyspace) error {
+func (wr *Wrangler) orderAndCheckPartitions(cell string, srvKeyspace *pb.SrvKeyspace) error {
 
 	// now check them all
-	for tabletType, partition := range srvKeyspace.Partitions {
-		topo.ShardReferenceArray(partition.ShardReferences).Sort()
+	for _, partition := range srvKeyspace.Partitions {
+		tabletType := partition.ServedType
+		topoproto.ShardReferenceArray(partition.ShardReferences).Sort()
 
 		// check the first Start is MinKey, the last End is MaxKey,
 		// and the values in between match: End[i] == Start[i+1]
-		if partition.ShardReferences[0].KeyRange.Start != key.MinKey {
-			return fmt.Errorf("keyspace partition for %v in cell %v does not start with %v", tabletType, cell, key.MinKey)
+		first := partition.ShardReferences[0]
+		if first.KeyRange != nil && len(first.KeyRange.Start) != 0 {
+			return fmt.Errorf("keyspace partition for %v in cell %v does not start with min key", tabletType, cell)
 		}
-		if partition.ShardReferences[len(partition.ShardReferences)-1].KeyRange.End != key.MaxKey {
-			return fmt.Errorf("keyspace partition for %v in cell %v does not end with %v", tabletType, cell, key.MaxKey)
+		last := partition.ShardReferences[len(partition.ShardReferences)-1]
+		if last.KeyRange != nil && len(last.KeyRange.End) != 0 {
+			return fmt.Errorf("keyspace partition for %v in cell %v does not end with max key", tabletType, cell)
 		}
 		for i := range partition.ShardReferences[0 : len(partition.ShardReferences)-1] {
-			if partition.ShardReferences[i].KeyRange.End != partition.ShardReferences[i+1].KeyRange.Start {
-				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, partition.ShardReferences[i].KeyRange.End.Hex(), partition.ShardReferences[i+1].KeyRange.Start.Hex())
+			fn := partition.ShardReferences[i].KeyRange == nil
+			sn := partition.ShardReferences[i+1].KeyRange == nil
+			if fn != sn {
+				return fmt.Errorf("shards with unconsistent KeyRanges for %v in cell %v at shard %v", tabletType, cell, i)
+			}
+			if fn {
+				// this is the custom sharding case, all KeyRanges must be nil
+				continue
+			}
+			if bytes.Compare(partition.ShardReferences[i].KeyRange.End, partition.ShardReferences[i+1].KeyRange.Start) != 0 {
+				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, hex.EncodeToString(partition.ShardReferences[i].KeyRange.End), hex.EncodeToString(partition.ShardReferences[i+1].KeyRange.Start))
 			}
 		}
 	}

@@ -10,13 +10,6 @@ from zk import zkocc
 
 
 class VTConnParams(object):
-  keyspace = None
-  shard = None
-  db_type = None
-  addr = None
-  timeout = 0
-  user = None
-  password = None
 
   def __init__(self, keyspace_name, shard, db_type, addr, timeout,
                user, password):

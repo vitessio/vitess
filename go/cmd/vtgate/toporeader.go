@@ -44,7 +44,7 @@ func (tr *TopoReader) GetSrvKeyspaceNames(ctx context.Context, req *topo.GetSrvK
 
 // GetSrvKeyspace returns information about a keyspace
 // in a particular cell.
-func (tr *TopoReader) GetSrvKeyspace(ctx context.Context, req *topo.GetSrvKeyspaceArgs, reply *topo.SrvKeyspace) (err error) {
+func (tr *TopoReader) GetSrvKeyspace(ctx context.Context, req *topo.GetSrvKeyspaceArgs, reply *pb.SrvKeyspace) (err error) {
 	tr.queryCount.Add(req.Cell, 1)
 	keyspace, err := tr.ts.GetSrvKeyspace(ctx, req.Cell, req.Keyspace)
 	if err != nil {

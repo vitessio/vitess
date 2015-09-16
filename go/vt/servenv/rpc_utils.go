@@ -4,11 +4,15 @@
 
 package servenv
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/youtube/vitess/go/tb"
+)
 
 // HandlePanic should be called using 'defer' in the RPC code that executes the command.
 func HandlePanic(component string, err *error) {
 	if x := recover(); x != nil {
-		*err = fmt.Errorf("uncaught %v panic: %v", component, x)
+		*err = fmt.Errorf("uncaught %v panic: %v\n%s", component, x, tb.Stack(4))
 	}
 }

@@ -16,8 +16,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-// This test makes sure the go rpc service works
-func testGRPCVTGateConn(t *testing.T) {
+// TestGRPCVTGateConn makes sure the grpc service works
+func TestGRPCVTGateConn(t *testing.T) {
 	// fake service
 	service := vtgateconntest.CreateFakeServer(t)
 
@@ -38,14 +38,12 @@ func testGRPCVTGateConn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+	vtgateconntest.RegisterTestDialProtocol(client)
 
 	// run the test suite
 	vtgateconntest.TestSuite(t, client, service)
+	vtgateconntest.TestErrorSuite(t, service)
 
 	// and clean up
 	client.Close()
-}
-
-func TestGRPCVTGateConn(t *testing.T) {
-	testGRPCVTGateConn(t)
 }

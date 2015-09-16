@@ -140,8 +140,27 @@ func TestSetWithOldKeyUpdatesSize(t *testing.T) {
 func TestGetNonExistent(t *testing.T) {
 	cache := NewLRUCache(100)
 
-	if _, ok := cache.Get("crap"); ok {
-		t.Error("Cache returned a crap value after no inserts.")
+	if _, ok := cache.Get("notthere"); ok {
+		t.Error("Cache returned a notthere value after no inserts.")
+	}
+}
+
+func TestPeek(t *testing.T) {
+	cache := NewLRUCache(2)
+	val1 := &CacheValue{1}
+	cache.Set("key1", val1)
+	val2 := &CacheValue{1}
+	cache.Set("key2", val2)
+	// Make key1 the most recent.
+	cache.Get("key1")
+	// Peek key2.
+	if v, ok := cache.Peek("key2"); ok && v.(*CacheValue) != val2 {
+		t.Errorf("key2 received: %v, want %v", v, val2)
+	}
+	// Push key2 out
+	cache.Set("key3", &CacheValue{1})
+	if v, ok := cache.Peek("key2"); ok {
+		t.Errorf("key2 received: %v, want absent", v)
 	}
 }
 

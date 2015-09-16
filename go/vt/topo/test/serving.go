@@ -151,21 +151,27 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	// test cell/keyspace entries (SrvKeyspace)
-	srvKeyspace := topo.SrvKeyspace{
-		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
-			topo.TYPE_MASTER: &topo.KeyspacePartition{
-				ShardReferences: []topo.ShardReference{
-					topo.ShardReference{
-						Name:     "-80",
-						KeyRange: newKeyRange("-80"),
+	srvKeyspace := pb.SrvKeyspace{
+		Partitions: []*pb.SrvKeyspace_KeyspacePartition{
+			&pb.SrvKeyspace_KeyspacePartition{
+				ServedType: pb.TabletType_MASTER,
+				ShardReferences: []*pb.ShardReference{
+					&pb.ShardReference{
+						Name: "-80",
+						KeyRange: &pb.KeyRange{
+							End: []byte{0x80},
+						},
 					},
 				},
 			},
 		},
 		ShardingColumnName: "video_id",
-		ShardingColumnType: key.KIT_UINT64,
-		ServedFrom: map[topo.TabletType]string{
-			topo.TYPE_REPLICA: "other_keyspace",
+		ShardingColumnType: pb.KeyspaceIdType_UINT64,
+		ServedFrom: []*pb.SrvKeyspace_ServedFrom{
+			&pb.SrvKeyspace_ServedFrom{
+				TabletType: pb.TabletType_REPLICA,
+				Keyspace:   "other_keyspace",
+			},
 		},
 	}
 	if err := ts.UpdateSrvKeyspace(ctx, cell, "test_keyspace", &srvKeyspace); err != nil {
@@ -176,12 +182,15 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 	if k, err := ts.GetSrvKeyspace(ctx, cell, "test_keyspace"); err != nil ||
 		len(k.Partitions) != 1 ||
-		len(k.Partitions[topo.TYPE_MASTER].ShardReferences) != 1 ||
-		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].Name != "-80" ||
-		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].KeyRange != newKeyRange("-80") ||
+		k.Partitions[0].ServedType != pb.TabletType_MASTER ||
+		len(k.Partitions[0].ShardReferences) != 1 ||
+		k.Partitions[0].ShardReferences[0].Name != "-80" ||
+		key.KeyRangeString(k.Partitions[0].ShardReferences[0].KeyRange) != "-80" ||
 		k.ShardingColumnName != "video_id" ||
-		k.ShardingColumnType != key.KIT_UINT64 ||
-		k.ServedFrom[topo.TYPE_REPLICA] != "other_keyspace" {
+		k.ShardingColumnType != pb.KeyspaceIdType_UINT64 ||
+		len(k.ServedFrom) != 1 ||
+		k.ServedFrom[0].TabletType != pb.TabletType_REPLICA ||
+		k.ServedFrom[0].Keyspace != "other_keyspace" {
 		t.Errorf("GetSrvKeyspace(valid): %v %v", err, k)
 	}
 	if k, err := ts.GetSrvKeyspaceNames(ctx, cell); err != nil || len(k) != 1 || k[0] != "test_keyspace" {
@@ -194,12 +203,15 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 	if k, err := ts.GetSrvKeyspace(ctx, cell, "unknown_keyspace_so_far"); err != nil ||
 		len(k.Partitions) != 1 ||
-		len(k.Partitions[topo.TYPE_MASTER].ShardReferences) != 1 ||
-		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].Name != "-80" ||
-		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].KeyRange != newKeyRange("-80") ||
+		k.Partitions[0].ServedType != pb.TabletType_MASTER ||
+		len(k.Partitions[0].ShardReferences) != 1 ||
+		k.Partitions[0].ShardReferences[0].Name != "-80" ||
+		key.KeyRangeString(k.Partitions[0].ShardReferences[0].KeyRange) != "-80" ||
 		k.ShardingColumnName != "video_id" ||
-		k.ShardingColumnType != key.KIT_UINT64 ||
-		k.ServedFrom[topo.TYPE_REPLICA] != "other_keyspace" {
+		k.ShardingColumnType != pb.KeyspaceIdType_UINT64 ||
+		len(k.ServedFrom) != 1 ||
+		k.ServedFrom[0].TabletType != pb.TabletType_REPLICA ||
+		k.ServedFrom[0].Keyspace != "other_keyspace" {
 		t.Errorf("GetSrvKeyspace(out of the blue): %v %v", err, *k)
 	}
 
@@ -228,19 +240,23 @@ func CheckWatchSrvKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	// update the SrvKeyspace, should get a notification
-	srvKeyspace := &topo.SrvKeyspace{
+	srvKeyspace := &pb.SrvKeyspace{
 		ShardingColumnName: "test_column",
-		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
-			topo.TYPE_RDONLY: &topo.KeyspacePartition{
-				ShardReferences: []topo.ShardReference{
-					topo.ShardReference{
+		Partitions: []*pb.SrvKeyspace_KeyspacePartition{
+			&pb.SrvKeyspace_KeyspacePartition{
+				ServedType: pb.TabletType_RDONLY,
+				ShardReferences: []*pb.ShardReference{
+					&pb.ShardReference{
 						Name: "0",
 					},
 				},
 			},
 		},
-		ServedFrom: map[topo.TabletType]string{
-			topo.TYPE_MASTER: "other_keyspace",
+		ServedFrom: []*pb.SrvKeyspace_ServedFrom{
+			&pb.SrvKeyspace_ServedFrom{
+				TabletType: pb.TabletType_MASTER,
+				Keyspace:   "other_keyspace",
+			},
 		},
 	}
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {

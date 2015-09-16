@@ -18,7 +18,7 @@ import (
 )
 
 // This test makes sure the go rpc service works
-func testGoRPCTabletConn(t *testing.T) {
+func TestGoRPCTabletConn(t *testing.T) {
 	// fake service
 	service := tabletconntest.CreateFakeServer(t)
 
@@ -49,8 +49,12 @@ func testGoRPCTabletConn(t *testing.T) {
 			"vt": int32(port),
 		},
 	}, service)
-}
 
-func TestGoRPCTabletConn(t *testing.T) {
-	testGoRPCTabletConn(t)
+	// run the error test suite
+	tabletconntest.TestErrorSuite(t, protocolName, &pb.EndPoint{
+		Host: "localhost",
+		PortMap: map[string]int32{
+			"vt": int32(port),
+		},
+	}, service)
 }

@@ -39,6 +39,15 @@ type poolConn interface {
 	Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error)
 }
 
+func addUserTableQueryStats(queryServiceStats *QueryServiceStats, ctx context.Context, tableName string, queryType string, duration int64) {
+	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
+	if username == "" {
+		username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(ctx))
+	}
+	queryServiceStats.UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
+	queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, int64(duration))
+}
+
 // Execute performs a non-streaming query execution.
 func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 	qre.logStats.OriginalSQL = qre.query
@@ -49,14 +58,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 		qre.qe.queryServiceStats.QueryStats.Add(planName, duration)
-
-		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
-		if username == "" {
-			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
-		}
-		tableName := qre.plan.TableName
-		qre.qe.queryServiceStats.UserTableQueryCount.Add([]string{tableName, username, "Execute"}, 1)
-		qre.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username, "Execute"}, int64(duration))
+		addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Execute", int64(duration))
 
 		if reply == nil {
 			qre.plan.AddStats(1, duration, 0, 1)
@@ -143,16 +145,8 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) erro
 
 	defer func(start time.Time) {
 		qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), start)
-
-		duration := time.Now().Sub(start)
-		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
-		if username == "" {
-			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
-		}
-		tableName := qre.plan.TableName
-		qre.qe.queryServiceStats.UserTableQueryCount.Add([]string{tableName, username, "Stream"}, 1)
-		qre.qe.queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username, "Stream"}, int64(duration))
-	} (time.Now())
+		addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
+	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
 		return err
@@ -251,6 +245,12 @@ func (qre *QueryExecutor) checkPermissions() error {
 		qre.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
+
+	// empty table name, do not need a table ACL check.
+	if qre.plan.TableName == "" {
+		return nil
+	}
+
 	if qre.plan.Authorized == nil {
 		return NewTabletError(ErrFail, vtrpc.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
 	}

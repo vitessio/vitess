@@ -11,7 +11,6 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
@@ -27,21 +26,6 @@ const (
 var (
 	vtgateProtocol = flag.String("vtgate_protocol", GoRPCProtocol, "how to talk to vtgate")
 )
-
-// ServerError represents an error that was returned from
-// a vtgate server.
-type ServerError struct {
-	Code int
-	Err  string
-}
-
-func (e *ServerError) Error() string { return e.Err }
-
-// OperationalError represents an error due to a failure to
-// communicate with vtgate.
-type OperationalError string
-
-func (e OperationalError) Error() string { return string(e) }
 
 // VTGateConn is the client API object to talk to vtgate.
 // It is constructed using the Dial method.
@@ -204,7 +188,7 @@ func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query s
 }
 
 // GetSrvKeyspace returns a topo.SrvKeyspace object.
-func (conn *VTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (conn *VTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
 	return conn.impl.GetSrvKeyspace(ctx, keyspace)
 }
 
@@ -403,7 +387,7 @@ type Impl interface {
 	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error)
 
 	// GetSrvKeyspace returns a topo.SrvKeyspace.
-	GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error)
+	GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error)
 
 	// Close must be called for releasing resources.
 	Close()

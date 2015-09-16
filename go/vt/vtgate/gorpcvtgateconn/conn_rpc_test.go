@@ -12,13 +12,14 @@ import (
 
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateservice"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconntest"
 	"golang.org/x/net/context"
 )
 
-// This test makes sure the go rpc service works
-func testGoRPCVTGateConn(t *testing.T) {
+// TestGoRPCVTGateConn makes sure the gorpc (BsonRPC) service works
+func TestGoRPCVTGateConn(t *testing.T) {
 	// fake service
 	service := vtgateconntest.CreateFakeServer(t)
 
@@ -31,6 +32,8 @@ func testGoRPCVTGateConn(t *testing.T) {
 	// Create a Go Rpc server and listen on the port
 	server := rpcplus.NewServer()
 	server.Register(gorpcvtgateservice.New(service))
+	// TODO(aaijazi): remove this flag once all VtGate Gorpc clients properly support the new behavior
+	*vtgate.RPCErrorOnlyInReply = true
 
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
@@ -46,14 +49,12 @@ func testGoRPCVTGateConn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
+	vtgateconntest.RegisterTestDialProtocol(client)
 
 	// run the test suite
 	vtgateconntest.TestSuite(t, client, service)
+	vtgateconntest.TestErrorSuite(t, service)
 
 	// and clean up
 	client.Close()
-}
-
-func TestGoRPCVTGateConn(t *testing.T) {
-	testGoRPCVTGateConn(t)
 }
