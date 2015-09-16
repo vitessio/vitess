@@ -158,10 +158,14 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 		panic(NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err))
 	}
 	transactionID := axp.lastID.Add(1)
-
-	immediate := callerid.ImmediateCallerIDFromContext(ctx)
-	effective := callerid.EffectiveCallerIDFromContext(ctx)
-	axp.activePool.Register(transactionID, newTxConnection(conn, transactionID, axp, immediate, effective))
+	axp.activePool.Register(
+		transactionID,
+		newTxConnection(
+			conn,
+			transactionID,
+			axp,
+			callerid.ImmediateCallerIDFromContext(ctx),
+			callerid.EffectiveCallerIDFromContext(ctx)))
 	return transactionID
 }
 
