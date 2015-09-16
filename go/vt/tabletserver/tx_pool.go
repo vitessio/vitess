@@ -165,7 +165,9 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 			transactionID,
 			axp,
 			callerid.ImmediateCallerIDFromContext(ctx),
-			callerid.EffectiveCallerIDFromContext(ctx)))
+			callerid.EffectiveCallerIDFromContext(ctx),
+		),
+	)
 	return transactionID
 }
 
@@ -251,17 +253,17 @@ func (axp *TxPool) PoolTimeout() time.Duration {
 // are failures.
 type TxConnection struct {
 	*DBConn
-	TransactionID      int64
-	pool               *TxPool
-	inUse              bool
-	StartTime          time.Time
-	EndTime            time.Time
-	dirtyTables        map[string]DirtyKeys
-	Queries            []string
-	Conclusion         string
-	LogToFile	   sync2.AtomicInt32
-	ImmediateCallerID  *qrpb.VTGateCallerID
-	EffectiveCallerID  *vtrpc.CallerID
+	TransactionID     int64
+	pool              *TxPool
+	inUse             bool
+	StartTime         time.Time
+	EndTime           time.Time
+	dirtyTables       map[string]DirtyKeys
+	Queries           []string
+	Conclusion        string
+	LogToFile         sync2.AtomicInt32
+	ImmediateCallerID *qrpb.VTGateCallerID
+	EffectiveCallerID *vtrpc.CallerID
 }
 
 func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate *qrpb.VTGateCallerID, effective *vtrpc.CallerID) *TxConnection {
