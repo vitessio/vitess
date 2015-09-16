@@ -6,6 +6,7 @@
 """This test uses vtgateclienttest to test the vtdb python vtgate client.
 """
 
+import logging
 import struct
 import unittest
 
@@ -66,6 +67,9 @@ class TestPythonClient(unittest.TestCase):
     addr = 'localhost:%d' % vtgateclienttest_port
     protocol = protocols_flavor().vtgate_python_protocol()
     self.conn = vtgate_client.connect(protocol, addr, 30.0)
+    logging.info(
+        'Start: %s, protocol %s.',
+        '.'.join(self.id().split('.')[-2:]), protocol)
 
   def tearDown(self):
     self.conn.close()

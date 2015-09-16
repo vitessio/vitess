@@ -42,42 +42,6 @@ def handle_app_error(exc_args):
   return dbexceptions.DatabaseError(exc_args)
 
 
-def convert_exception(exc, *args, **kwargs):
-  """This parses the protocol exceptions to the api interface exceptions.
-
-  This also logs the exception and increments the appropriate error counters.
-
-  Args:
-    exc: raw protocol exception.
-    args: additional args from the raising site.
-    kwargs: additional keyword args from the raising site.
-
-  Returns:
-    Api interface exceptions - dbexceptions with new args.
-  """
-
-  new_args = exc.args + args
-  if kwargs:
-    new_args += tuple(kwargs.itervalues())
-  new_exc = exc
-
-  if isinstance(exc, gorpc.TimeoutError):
-    new_exc = dbexceptions.TimeoutError(new_args)
-  elif isinstance(exc, gorpc.AppError):
-    new_exc = handle_app_error(new_args)
-  elif isinstance(exc, gorpc.ProgrammingError):
-    new_exc = dbexceptions.ProgrammingError(new_args)
-  elif isinstance(exc, gorpc.GoRpcError):
-    new_exc = dbexceptions.FatalError(new_args)
-
-  keyspace_name = kwargs.get('keyspace', None)
-  tablet_type = kwargs.get('tablet_type', None)
-
-  vtgate_utils.log_exception(new_exc, keyspace=keyspace_name,
-                             tablet_type=tablet_type)
-  return new_exc
-
-
 def _create_req_with_keyspace_ids(
     sql, new_binds, keyspace, tablet_type, keyspace_ids, not_in_transaction):
   # keyspace_ids are Keyspace Ids packed to byte[]
@@ -142,7 +106,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       try:
         self.client.dial()
       except gorpc.GoRpcError as e:
-        raise convert_exception(e, str(self))
+        raise self._convert_exception(e)
     return self.client
 
   def __str__(self):
@@ -154,7 +118,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
         self.close()
       self._get_client().dial()
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self))
+      raise self._convert_exception(e)
 
   def close(self):
     if self.session:
@@ -178,7 +142,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self.session = None
       self._update_session(response)
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self))
+      raise self._convert_exception(e)
 
   def commit(self):
     try:
@@ -187,7 +151,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self._add_session(req)
       self._get_client().call('VTGate.Commit2', req)
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self))
+      raise self._convert_exception(e)
     finally:
       self.session = None
       self.effective_caller_id = None
@@ -199,7 +163,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self._add_session(req)
       self._get_client().call('VTGate.Rollback2', req)
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self))
+      raise self._convert_exception(e)
     finally:
       self.session = None
       self.effective_caller_id = None
@@ -271,8 +235,9 @@ class VTGateConnection(vtgate_client.VTGateClient):
         lastrowid = res['InsertId']
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql, keyspace_ids, keyranges,
-                              keyspace=keyspace, tablet_type=tablet_type)
+      raise self._convert_exception(
+          e, sql, keyspace_ids, keyranges,
+          keyspace=keyspace, tablet_type=tablet_type)
     except Exception:
       logging.exception('gorpc low-level error')
       raise
@@ -325,8 +290,9 @@ class VTGateConnection(vtgate_client.VTGateClient):
         lastrowid = res['InsertId']
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql, entity_keyspace_id_map,
-                              keyspace=keyspace, tablet_type=tablet_type)
+      raise self._convert_exception(
+          e, sql, entity_keyspace_id_map,
+          keyspace=keyspace, tablet_type=tablet_type)
     except Exception:
       logging.exception('gorpc low-level error')
       raise
@@ -380,8 +346,9 @@ class VTGateConnection(vtgate_client.VTGateClient):
         rowsets.append((results, rowcount, lastrowid, fields))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables_list)
-      raise convert_exception(e, str(self), sql_list, keyspace_ids_list,
-                              keyspace='', tablet_type=tablet_type)
+      raise self._convert_exception(
+          e, sql_list, keyspace_ids_list,
+          keyspace='', tablet_type=tablet_type)
     except Exception:
       logging.exception('gorpc low-level error')
       raise
@@ -429,11 +396,15 @@ class VTGateConnection(vtgate_client.VTGateClient):
           '_stream_execute called without specifying keyspace_ids or keyranges')
 
     self._add_caller_id(req, effective_caller_id)
-    self._add_session(req)
 
     stream_fields = []
     stream_conversions = []
-    rpc_client = self._get_client()
+    rpc_client = self._create_client()
+    try:
+      rpc_client.dial()
+    except gorpc.GoRpcError as e:
+      raise self._convert_exception(e)
+
     try:
       rpc_client.stream_call(exec_method, req)
       first_response = rpc_client.stream_next()
@@ -445,35 +416,27 @@ class VTGateConnection(vtgate_client.VTGateClient):
               field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql, keyspace_ids, keyranges,
-                              keyspace=keyspace, tablet_type=tablet_type)
+      raise self._convert_exception(
+          e, sql, keyspace_ids, keyranges,
+          keyspace=keyspace, tablet_type=tablet_type)
     except Exception:
       logging.exception('gorpc low-level error')
       raise
 
-    # Take the BsonRpcClient from VTGateConnection. The row_generator
-    # will manage the BsonRpcClient. This VTGateConnection will connect
-    # to a new client if needed.
-    self.client = None
-
     def row_generator():
       try:
         while True:
-          try:
-            stream_result = rpc_client.stream_next()
-            if stream_result is None:
-              break
-            # A session message, if any, comes separately with no rows
-            if stream_result.reply.get('Session'):
-              self.session = stream_result.reply['Session']
-            else:
-              for result_item in stream_result.reply['Result']['Rows']:
-                yield tuple(_make_row(result_item, stream_conversions))
-          except gorpc.GoRpcError as e:
-            raise convert_exception(e, str(self))
-          except Exception:
-            logging.exception('gorpc low-level error')
-            raise
+          stream_result = rpc_client.stream_next()
+          if stream_result is None:
+            break
+          if stream_result.reply.get('Result'):
+            for result_item in stream_result.reply['Result']['Rows']:
+              yield tuple(_make_row(result_item, stream_conversions))
+      except gorpc.GoRpcError as e:
+        raise self._convert_exception(e)
+      except Exception:
+        logging.exception('gorpc low-level error')
+        raise
       finally:
         rpc_client.close()
 
@@ -490,10 +453,48 @@ class VTGateConnection(vtgate_client.VTGateClient):
           name,
           keyrange_constants.srv_keyspace_proto3_to_old(response.reply))
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), keyspace=name)
+      raise self._convert_exception(e, keyspace=name)
     except:
       logging.exception('gorpc low-level error')
       raise
+
+  def _convert_exception(self, exc, *args, **kwargs):
+    """This parses the protocol exceptions to the api interface exceptions.
+
+    This also logs the exception and increments the appropriate error counters.
+
+    Args:
+      exc: raw protocol exception.
+      args: additional args from the raising site.
+      kwargs: additional keyword args from the raising site.
+
+    Returns:
+      Api interface exceptions - dbexceptions with new args.
+    """
+
+    new_args = exc.args + (str(self),) + args
+    if kwargs:
+      new_args += tuple(kwargs.itervalues())
+    new_exc = exc
+
+    if isinstance(exc, gorpc.TimeoutError):
+      new_exc = dbexceptions.TimeoutError(new_args)
+    elif isinstance(exc, gorpc.AppError):
+      new_exc = handle_app_error(new_args)
+    elif isinstance(exc, gorpc.ProgrammingError):
+      new_exc = dbexceptions.ProgrammingError(new_args)
+    elif isinstance(exc, gorpc.GoRpcError):
+      new_exc = dbexceptions.FatalError(new_args)
+
+    keyspace_name = kwargs.get('keyspace', None)
+    tablet_type = kwargs.get('tablet_type', None)
+
+    vtgate_utils.log_exception(new_exc, keyspace=keyspace_name,
+                               tablet_type=tablet_type)
+    return new_exc
+
+
+
 
 
 def _make_row(row, conversions):
