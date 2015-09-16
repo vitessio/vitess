@@ -679,7 +679,7 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pb.Target, req 
 	}
 
 	defer func(start time.Time) {
-		addUserTableQueryStats(tsv.qe.queryServiceStats, ctx, splitter.tableName, "SplitQuery", int64(time.Now().Sub(start)))
+		// addUserTableQueryStats(tsv.qe.queryServiceStats, ctx, splitter.tableName, "SplitQuery", int64(time.Now().Sub(start)))
 	}(time.Now())
 
 	qre := &QueryExecutor{
