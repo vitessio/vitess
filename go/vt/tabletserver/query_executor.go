@@ -58,7 +58,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 		qre.qe.queryServiceStats.QueryStats.Add(planName, duration)
-		// addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Execute", int64(duration))
+		addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Execute", int64(duration))
 
 		if reply == nil {
 			qre.plan.AddStats(1, duration, 0, 1)
@@ -145,7 +145,7 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) erro
 
 	defer func(start time.Time) {
 		qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), start)
-		// addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
+		addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
