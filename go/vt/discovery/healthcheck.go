@@ -3,6 +3,7 @@ package discovery
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,9 +30,21 @@ type EndPointStats struct {
 	Stats                               *pbq.RealtimeStats
 }
 
+// HealthCheck defines the interface of health checking module.
+type HealthCheck interface {
+	// AddEndPoint adds the endpoint, and starts health check.
+	AddEndPoint(cell string, endPoint *pbt.EndPoint)
+	// RemoveEndPoint removes the endpoint, and stops the health check.
+	RemoveEndPoint(endPoint *pbt.EndPoint)
+	// GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
+	GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats
+	// GetEndPointStatsFromTarget returns all EndPointStats for the given target.
+	GetEndPointStatsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*EndPointStats
+}
+
 // NewHealthCheck creates a new HealthCheck object.
-func NewHealthCheck(listener HealthCheckStatsListener, connTimeout time.Duration, retryDelay time.Duration) *HealthCheck {
-	return &HealthCheck{
+func NewHealthCheck(listener HealthCheckStatsListener, connTimeout time.Duration, retryDelay time.Duration) HealthCheck {
+	return &HealthCheckImpl{
 		addrToConns: make(map[string]*healthCheckConn),
 		targetToEPs: make(map[string]map[string]map[pbt.TabletType][]*pbt.EndPoint),
 		listener:    listener,
@@ -40,8 +53,8 @@ func NewHealthCheck(listener HealthCheckStatsListener, connTimeout time.Duration
 	}
 }
 
-// HealthCheck performs health checking and notifies downstream components about any changes.
-type HealthCheck struct {
+// HealthCheckImpl performs health checking and notifies downstream components about any changes.
+type HealthCheckImpl struct {
 	// set at construction time
 	listener    HealthCheckStatsListener
 	connTimeout time.Duration
@@ -70,7 +83,7 @@ type healthCheckConn struct {
 }
 
 // checkConn performs health checking on the given endpoint.
-func (hc *HealthCheck) checkConn(cell string, endPoint *pbt.EndPoint) {
+func (hc *HealthCheckImpl) checkConn(cell string, endPoint *pbt.EndPoint) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	hcc := &healthCheckConn{
 		cell:       cell,
@@ -111,7 +124,7 @@ func (hc *HealthCheck) checkConn(cell string, endPoint *pbt.EndPoint) {
 }
 
 // connect creates connection to the endpoint and starts streaming.
-func (hcc *healthCheckConn) connect(ctx context.Context, hc *HealthCheck, endPoint *pbt.EndPoint) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
+func (hcc *healthCheckConn) connect(ctx context.Context, hc *HealthCheckImpl, endPoint *pbt.EndPoint) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
 	conn, err := tabletconn.GetDialer()(ctx, endPoint, "" /*keyspace*/, "" /*shard*/, pbt.TabletType_RDONLY, hc.connTimeout)
 	if err != nil {
 		return nil, nil, err
@@ -128,7 +141,7 @@ func (hcc *healthCheckConn) connect(ctx context.Context, hc *HealthCheck, endPoi
 }
 
 // processResponse reads one health check response, and notifies HealthCheckStatsListener.
-func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck, endPoint *pbt.EndPoint, stream <-chan *pbq.StreamHealthResponse, errfunc tabletconn.ErrFunc) error {
+func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheckImpl, endPoint *pbt.EndPoint, stream <-chan *pbq.StreamHealthResponse, errfunc tabletconn.ErrFunc) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -176,12 +189,12 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 }
 
 // AddEndPoint adds the endpoint, and starts health check.
-func (hc *HealthCheck) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
+func (hc *HealthCheckImpl) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
 	go hc.checkConn(cell, endPoint)
 }
 
 // RemoveEndPoint removes the endpoint, and stops the health check.
-func (hc *HealthCheck) RemoveEndPoint(endPoint *pbt.EndPoint) {
+func (hc *HealthCheckImpl) RemoveEndPoint(endPoint *pbt.EndPoint) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
@@ -198,7 +211,7 @@ func (hc *HealthCheck) RemoveEndPoint(endPoint *pbt.EndPoint) {
 }
 
 // GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
-func (hc *HealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats {
+func (hc *HealthCheckImpl) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
 
@@ -234,7 +247,7 @@ func (hc *HealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string)
 }
 
 // GetEndPointStatsFromTarget returns all EndPointStats for the given target.
-func (hc *HealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*EndPointStats {
+func (hc *HealthCheckImpl) GetEndPointStatsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*EndPointStats {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
 
@@ -273,7 +286,7 @@ func (hc *HealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tablet
 
 // addEndPointToTargetProtected adds the endpoint to the given target.
 // LOCK_REQUIRED hc.mu
-func (hc *HealthCheck) addEndPointToTargetProtected(target *pbq.Target, endPoint *pbt.EndPoint) {
+func (hc *HealthCheckImpl) addEndPointToTargetProtected(target *pbq.Target, endPoint *pbt.EndPoint) {
 	shardMap, ok := hc.targetToEPs[target.Keyspace]
 	if !ok {
 		shardMap = make(map[string]map[pbt.TabletType][]*pbt.EndPoint)
@@ -299,7 +312,7 @@ func (hc *HealthCheck) addEndPointToTargetProtected(target *pbq.Target, endPoint
 
 // deleteEndPointFromTargetProtected deletes the endpoint for the given target.
 // LOCK_REQUIRED hc.mu
-func (hc *HealthCheck) deleteEndPointFromTargetProtected(target *pbq.Target, endPoint *pbt.EndPoint) {
+func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *pbq.Target, endPoint *pbt.EndPoint) {
 	shardMap, ok := hc.targetToEPs[target.Keyspace]
 	if !ok {
 		return
@@ -325,7 +338,7 @@ func (hc *HealthCheck) deleteEndPointFromTargetProtected(target *pbq.Target, end
 func endPointToMapKey(endPoint *pbt.EndPoint) string {
 	parts := make([]string, 0, 1)
 	for name, port := range endPoint.PortMap {
-		parts = append(parts, name+":"+string(port))
+		parts = append(parts, name+":"+strconv.FormatInt(int64(port), 10))
 	}
 	sort.Strings(parts)
 	parts = append([]string{endPoint.Host}, parts...)
