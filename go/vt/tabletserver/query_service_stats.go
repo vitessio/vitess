@@ -26,6 +26,14 @@ type QueryServiceStats struct {
 	ErrorStats *stats.Counters
 	// InternalErros shows number of errors from internal components.
 	InternalErrors *stats.Counters
+	// UserTableQueryCount shows number of queries received for each CallerID/table combination.
+	UserTableQueryCount *stats.MultiCounters
+	// UserTableQueryTimesNs shows total latency for each CallerID/table combination.
+	UserTableQueryTimesNs *stats.MultiCounters
+	// UserTransactionCount shows number of transactions received for each CallerID.
+	UserTransactionCount *stats.MultiCounters
+	// UserTransactionTimesNs shows total transaction latency for each CallerID.
+	UserTransactionTimesNs *stats.MultiCounters
 	// QPSRates shows the qps.
 	QPSRates *stats.Rates
 	// ResultStats shows the histogram of number of rows returned.
@@ -46,6 +54,10 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 	internalErrorsName := ""
 	resultStatsName := ""
 	spotCheckCountName := ""
+	userTableQueryCountName := ""
+	userTableQueryTimesNsName := ""
+	userTransactionCountName := ""
+	userTransactionTimesNsName := ""
 	if enablePublishStats {
 		mysqlStatsName = statsPrefix + "Mysql"
 		queryStatsName = statsPrefix + "Queries"
@@ -57,6 +69,10 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 		internalErrorsName = statsPrefix + "InternalErrors"
 		resultStatsName = statsPrefix + "Results"
 		spotCheckCountName = statsPrefix + "RowcacheSpotCheckCount"
+		userTableQueryCountName = statsPrefix + "UserTableQueryCount"
+		userTableQueryTimesNsName = statsPrefix + "UserTableQueryTimesNs"
+		userTransactionCountName = statsPrefix + "UserTransactionCount"
+		userTransactionTimesNsName = statsPrefix + "UserTransactionTimesNs"
 	}
 	resultBuckets := []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
 	queryStats := stats.NewTimings(queryStatsName)
@@ -69,6 +85,14 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 		ErrorStats: stats.NewCounters(errorStatsName, "Fail", "TxPoolFull", "NotInTx", "Deadlock"),
 		InternalErrors: stats.NewCounters(internalErrorsName, "Task", "MemcacheStats",
 			"Mismatch", "StrayTransactions", "Invalidation", "Panic", "HungQuery"),
+		UserTableQueryCount: stats.NewMultiCounters(
+			userTableQueryCountName, []string{"TableName", "CallerID", "Type"}),
+		UserTableQueryTimesNs: stats.NewMultiCounters(
+			userTableQueryTimesNsName, []string{"TableName", "CallerID", "Type"}),
+		UserTransactionCount: stats.NewMultiCounters(
+			userTransactionCountName, []string{"CallerID", "Conclusion"}),
+		UserTransactionTimesNs: stats.NewMultiCounters(
+			userTransactionTimesNsName, []string{"CallerID", "Conclusion"}),
 		QPSRates:       stats.NewRates(qpsRateName, queryStats, 15, 60*time.Second),
 		ResultStats:    stats.NewHistogram(resultStatsName, resultBuckets),
 		SpotCheckCount: stats.NewInt(spotCheckCountName),
