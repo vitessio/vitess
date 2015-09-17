@@ -31,7 +31,7 @@ type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.MultiCounters
 	gateway              Gateway
-	additionalGateway    Gateway
+	additionalGateway    Gateway // temporarily to enable health checking
 }
 
 // shardActionFunc defines the contract for a shard action. Every such function
@@ -61,7 +61,7 @@ func NewScatterConn(topoServer topo.Server, serv SrvTopoServer, statsName, cell 
 
 	// temporarily start other gateways for health checking
 	if additionalGateway != "" {
-		if gc, ok := gatewayCreators[additionalGateway]; ok {
+		if gc := GetGatewayCreatorByName(additionalGateway); gc != nil {
 			sc.additionalGateway = gc(topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
 		}
 	}

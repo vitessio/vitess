@@ -74,6 +74,17 @@ func GetGatewayCreator() GatewayCreator {
 	gc, ok := gatewayCreators[*GatewayImplementation]
 	if !ok {
 		log.Fatalf("No gateway registered as %s", *GatewayImplementation)
+		return nil
+	}
+	return gc
+}
+
+// GetGatewayCreatorByName returns the GatewayCreator specified by the given name.
+func GetGatewayCreatorByName(name string) GatewayCreator {
+	gc, ok := gatewayCreators[name]
+	if !ok {
+		log.Errorf("No gateway registered as %s", name)
+		return nil
 	}
 	return gc
 }
