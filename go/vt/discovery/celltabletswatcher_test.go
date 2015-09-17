@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -12,16 +11,16 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestEndPointWatcher(t *testing.T) {
+func TestCellTabletsWatcher(t *testing.T) {
 	ft := newFakeTopo()
 	fhc := newFakeHealthCheck()
 	t.Logf(`ft = FakeTopo(); fhc = FakeHealthCheck()`)
-	epw := NewEndPointWatcher(topo.Server{Impl: ft}, fhc, []string{"aa"}, 10*time.Millisecond)
-	t.Logf(`epw = EndPointWatcher(topo.Server{ft}, fhc, ["aa"], 10ms)`)
+	ctw := NewCellTabletsWatcher(topo.Server{Impl: ft}, fhc, "aa", 10*time.Minute, 5)
+	t.Logf(`ctw = CellTabletsWatcher(topo.Server{ft}, fhc, "aa", 10ms, 5)`)
 
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 123})
-	time.Sleep(100 * time.Millisecond)
-	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 123}); Sleep(100ms)`)
+	ctw.loadTablets()
+	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 123}); ctw.loadTablets()`)
 	want := &pbt.EndPoint{
 		Uid:     0,
 		Host:    "host1",
@@ -33,8 +32,8 @@ func TestEndPointWatcher(t *testing.T) {
 	}
 
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 456})
-	time.Sleep(100 * time.Millisecond)
-	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 456}); Sleep(100ms)`)
+	ctw.loadTablets()
+	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 456}); ctw.loadTablets()`)
 	want = &pbt.EndPoint{
 		Uid:     0,
 		Host:    "host1",
@@ -45,38 +44,7 @@ func TestEndPointWatcher(t *testing.T) {
 		t.Errorf("fhc.endPoints[key] = %+v; want %+v", ep, want)
 	}
 
-	epw.Stop()
-}
-
-func newFakeHealthCheck() *fakeHealthCheck {
-	return &fakeHealthCheck{endPoints: make(map[string]*pbt.EndPoint)}
-}
-
-type fakeHealthCheck struct {
-	endPoints map[string]*pbt.EndPoint
-}
-
-// AddEndPoint adds the endpoint, and starts health check.
-func (fhc *fakeHealthCheck) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
-	key := endPointToMapKey(endPoint)
-	fhc.endPoints[key] = endPoint
-	fmt.Println("AddEndPoint: ", endPoint)
-}
-
-// RemoveEndPoint removes the endpoint, and stops the health check.
-func (fhc *fakeHealthCheck) RemoveEndPoint(endPoint *pbt.EndPoint) {
-	key := endPointToMapKey(endPoint)
-	delete(fhc.endPoints, key)
-}
-
-// GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
-func (fhc *fakeHealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats {
-	return nil
-}
-
-// GetEndPointStatsFromTarget returns all EndPointStats for the given target.
-func (fhc *fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*EndPointStats {
-	return nil
+	ctw.Stop()
 }
 
 func newFakeTopo() *fakeTopo {

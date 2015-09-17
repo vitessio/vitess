@@ -3,7 +3,6 @@ package discovery
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -188,13 +187,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 	}
 }
 
-// AddEndPoint adds the endpoint, and starts health check.
-func (hc *HealthCheckImpl) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
-	go hc.checkConn(cell, endPoint)
-}
-
-// RemoveEndPoint removes the endpoint, and stops the health check.
-func (hc *HealthCheckImpl) RemoveEndPoint(endPoint *pbt.EndPoint) {
+func (hc *HealthCheckImpl) deleteConn(endPoint *pbt.EndPoint) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
@@ -208,6 +201,18 @@ func (hc *HealthCheckImpl) RemoveEndPoint(endPoint *pbt.EndPoint) {
 	if hcc.target != nil {
 		hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 	}
+}
+
+// AddEndPoint adds the endpoint, and starts health check.
+// It does not block.
+func (hc *HealthCheckImpl) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
+	go hc.checkConn(cell, endPoint)
+}
+
+// RemoveEndPoint removes the endpoint, and stops the health check.
+// It does not block.
+func (hc *HealthCheckImpl) RemoveEndPoint(endPoint *pbt.EndPoint) {
+	go hc.deleteConn(endPoint)
 }
 
 // GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
@@ -338,7 +343,7 @@ func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *pbq.Target,
 func endPointToMapKey(endPoint *pbt.EndPoint) string {
 	parts := make([]string, 0, 1)
 	for name, port := range endPoint.PortMap {
-		parts = append(parts, name+":"+strconv.FormatInt(int64(port), 10))
+		parts = append(parts, name+":"+fmt.Sprintf("%d", port))
 	}
 	sort.Strings(parts)
 	parts = append([]string{endPoint.Host}, parts...)
