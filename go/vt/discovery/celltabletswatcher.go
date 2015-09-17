@@ -114,6 +114,6 @@ func (ctw *CellTabletsWatcher) loadTablets() {
 }
 
 // Stop stops the watcher. It does not clean up the endpoints added to HealthCheck.
-func (epw *CellTabletsWatcher) Stop() {
-	epw.cancelFunc()
+func (ctw *CellTabletsWatcher) Stop() {
+	ctw.cancelFunc()
 }
