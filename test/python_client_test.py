@@ -64,6 +64,7 @@ class TestPythonClient(unittest.TestCase):
   CONNECT_TIMEOUT = 10.0
 
   def setUp(self):
+    super(TestPythonClient, self).setUp()
     addr = 'localhost:%d' % vtgateclienttest_port
     protocol = protocols_flavor().vtgate_python_protocol()
     self.conn = vtgate_client.connect(protocol, addr, 30.0)
@@ -123,8 +124,7 @@ class TestPythonClient(unittest.TestCase):
     return self.conn.cursor('keyspace', 'master', keyranges=[kr])
 
   def _open_batch_cursor(self):
-    return self.conn.cursor(
-        tablet_type='master', cursorclass=vtgate_cursor.BatchVTGateCursor)
+    return self.conn.cursor(keyspace=None, tablet_type='master')
 
   def _open_stream_keyranges_cursor(self):
     kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
@@ -171,12 +171,15 @@ class TestPythonClient(unittest.TestCase):
 
     # ExecuteBatchKeyspaceIds test
     cursor = self._open_batch_cursor()
-    cursor.execute(
-        sql=integrity_error_test_query, bind_variables={},
-        keyspace='keyspace',
-        keyspace_ids=[self.KEYSPACE_ID_0X80])
     with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.flush()
+      cursor.executemany(
+          sql=None,
+          params_list=[
+              dict(
+                  sql=integrity_error_test_query,
+                  bind_variables={},
+                  keyspace='keyspace',
+                  keyspace_ids=[self.KEYSPACE_ID_0X80])])
     cursor.close()
 
     # VTGate.StreamExecuteKeyspaceIds, VTGate.StreamExecuteKeyRanges:
@@ -238,11 +241,12 @@ class TestPythonClient(unittest.TestCase):
         cursor_execute_entity_ids_method)
 
     def cursor_execute_batch_keyspace_ids_method(cursor):
-      cursor.execute(
-          sql=effective_caller_id_test_query, bind_variables={},
-          keyspace='keyspace',
-          keyspace_ids=[self.KEYSPACE_ID_0X80])
-      cursor.flush()
+      cursor.executemany(
+          sql=None,
+          params_list=[dict(
+              sql=effective_caller_id_test_query, bind_variables={},
+              keyspace='keyspace',
+              keyspace_ids=[self.KEYSPACE_ID_0X80])])
 
     check_good_and_bad_effective_caller_ids(
         self._open_batch_cursor(), cursor_execute_batch_keyspace_ids_method)
