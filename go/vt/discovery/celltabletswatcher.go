@@ -82,7 +82,7 @@ func (ctw *CellTabletsWatcher) loadTablets() {
 					return
 				default:
 				}
-				log.Errorf("cannot get tablets for cell %v: %v", ctw.cell, err)
+				log.Errorf("cannot get tablet for alias %v: %v", alias, err)
 				return
 			}
 			endPoint, err := topo.TabletEndPoint(tablet.Tablet)
