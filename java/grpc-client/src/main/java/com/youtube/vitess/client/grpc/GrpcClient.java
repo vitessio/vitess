@@ -152,7 +152,6 @@ public class GrpcClient implements RpcClient {
           new GrpcStreamAdapter<StreamExecuteResponse, QueryResult>() {
             @Override
             QueryResult getResult(StreamExecuteResponse response) throws VitessException {
-              Proto.checkError(response.getError());
               return response.getResult();
             }
           };
@@ -171,7 +170,6 @@ public class GrpcClient implements RpcClient {
           new GrpcStreamAdapter<StreamExecuteShardsResponse, QueryResult>() {
             @Override
             QueryResult getResult(StreamExecuteShardsResponse response) throws VitessException {
-              Proto.checkError(response.getError());
               return response.getResult();
             }
           };
@@ -191,7 +189,6 @@ public class GrpcClient implements RpcClient {
             @Override
             QueryResult getResult(StreamExecuteKeyspaceIdsResponse response)
                 throws VitessException {
-              Proto.checkError(response.getError());
               return response.getResult();
             }
           };
@@ -210,7 +207,6 @@ public class GrpcClient implements RpcClient {
           new GrpcStreamAdapter<StreamExecuteKeyRangesResponse, QueryResult>() {
             @Override
             QueryResult getResult(StreamExecuteKeyRangesResponse response) throws VitessException {
-              Proto.checkError(response.getError());
               return response.getResult();
             }
           };
@@ -223,55 +219,50 @@ public class GrpcClient implements RpcClient {
 
   @Override
   public BeginResponse begin(Context ctx, BeginRequest request)
-      throws VitessException, VitessRpcException {
+      throws VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.begin(request);
     } catch (Exception e) {
-      checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
     }
   }
 
   @Override
   public CommitResponse commit(Context ctx, CommitRequest request)
-      throws VitessException, VitessRpcException {
+      throws VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.commit(request);
     } catch (Exception e) {
-      checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
     }
   }
 
   @Override
   public RollbackResponse rollback(Context ctx, RollbackRequest request)
-      throws VitessException, VitessRpcException {
+      throws VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.rollback(request);
     } catch (Exception e) {
-      checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
     }
   }
 
   @Override
   public SplitQueryResponse splitQuery(Context ctx, SplitQueryRequest request)
-      throws VitessException, VitessRpcException {
+      throws VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.splitQuery(request);
     } catch (Exception e) {
-      checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
     }
   }
 
   @Override
   public GetSrvKeyspaceResponse getSrvKeyspace(Context ctx, GetSrvKeyspaceRequest request)
-      throws VitessException, VitessRpcException {
+      throws VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.getSrvKeyspace(request);
     } catch (Exception e) {
-      checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
     }
   }
