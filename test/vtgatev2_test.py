@@ -244,13 +244,13 @@ def restart_vtgate(extra_args=None):
 class BaseTestCase(unittest.TestCase):
 
   def setUp(self):
-    logging.info('Starting %s.', self.id())
+    super(BaseTestCase, self).setUp()
+    logging.info('Start: %s.', '.'.join(self.id().split('.')[-2:]))
 
-
-class TestVTGateFunctions(BaseTestCase):
+class TestCoreVTGateFunctions(BaseTestCase):
 
   def setUp(self):
-    super(TestVTGateFunctions, self).setUp()
+    super(TestCoreVTGateFunctions, self).setUp()
     self.shard_index = 1
     self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
@@ -395,12 +395,21 @@ class TestVTGateFunctions(BaseTestCase):
     kid_list = [pack_kid(kid) for kid in kid_list]
     cursor = vtgate_conn.cursor(
         'master', cursorclass=vtgate_cursor.BatchVTGateCursor)
-    cursor.execute(
-        'select * from vt_insert_test', {}, KEYSPACE_NAME, kid_list)
-    cursor.execute('select * from vt_a', {}, KEYSPACE_NAME, kid_list)
-    cursor.flush()
-    self.assertEqual(cursor.rowsets[0][1], count)
-    self.assertEqual(cursor.rowsets[1][1], count)
+    params_list = [
+        dict(sql='select msg, keyspace_id from vt_insert_test',
+             bind_variables={},
+             keyspace=KEYSPACE_NAME, keyspace_ids=kid_list),
+        dict(sql='select eid, id, keyspace_id from vt_a',
+             bind_variables={},
+             keyspace=KEYSPACE_NAME, keyspace_ids=kid_list),
+    ]
+    cursor.executemany(sql=None, params_list=params_list)
+    self.assertEqual(cursor.rowcount, count)
+    self.assertEqual(sorted(cursor.fetchall())[0][0], 'test 0')
+    self.assertTrue(cursor.nextset())
+    self.assertEqual(cursor.rowcount, count)
+    self.assertEqual(sorted(cursor.fetchall())[0][0], 0)
+    self.assertFalse(cursor.nextset())
 
   def test_batch_write(self):
     vtgate_conn = get_connection()
@@ -419,14 +428,19 @@ class TestVTGateFunctions(BaseTestCase):
           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id},
           KEYSPACE_NAME, [pack_kid(keyspace_id)])
     cursor.execute('delete from vt_a', None, KEYSPACE_NAME, all_ids)
+    params_list = []
     for x in xrange(count):
       keyspace_id = kid_list[x%len(kid_list)]
-      cursor.execute(
+      sql = (
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
-          {'eid': x, 'id': x, 'keyspace_id': keyspace_id},
-          KEYSPACE_NAME, [pack_kid(keyspace_id)])
-    cursor.flush(True)
+          'values (%(eid)s, %(id)s, %(keyspace_id)s)')
+      bind_variables = {'eid': x, 'id': x, 'keyspace_id': keyspace_id}
+      keyspace = KEYSPACE_NAME
+      keyspace_ids = [pack_kid(keyspace_id)]
+      params_list.append(dict(
+          sql=sql, bind_variables=bind_variables, keyspace=keyspace,
+          keyspace_ids=keyspace_ids))
+    cursor.executemany(sql=None, params_list=params_list)
     _, rowcount, _, _ = vtgate_conn._execute(
         'select * from vt_insert_test', {},
         KEYSPACE_NAME, 'master',

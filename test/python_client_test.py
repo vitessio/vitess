@@ -64,6 +64,7 @@ class TestPythonClient(unittest.TestCase):
   CONNECT_TIMEOUT = 10.0
 
   def setUp(self):
+    super(TestPythonClient, self).setUp()
     addr = 'localhost:%d' % vtgateclienttest_port
     protocol = protocols_flavor().vtgate_python_protocol()
     self.conn = vtgate_client.connect(protocol, addr, 30.0)
@@ -171,12 +172,11 @@ class TestPythonClient(unittest.TestCase):
 
     # ExecuteBatchKeyspaceIds test
     cursor = self._open_batch_cursor()
-    cursor.execute(
-        sql=integrity_error_test_query, bind_variables={},
-        keyspace='keyspace',
-        keyspace_ids=[self.KEYSPACE_ID_0X80])
     with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.flush()
+      cursor.execute(
+          sql=integrity_error_test_query, bind_variables={},
+          keyspace='keyspace',
+          keyspace_ids=[self.KEYSPACE_ID_0X80])
     cursor.close()
 
     # VTGate.StreamExecuteKeyspaceIds, VTGate.StreamExecuteKeyRanges:
@@ -242,7 +242,6 @@ class TestPythonClient(unittest.TestCase):
           sql=effective_caller_id_test_query, bind_variables={},
           keyspace='keyspace',
           keyspace_ids=[self.KEYSPACE_ID_0X80])
-      cursor.flush()
 
     check_good_and_bad_effective_caller_ids(
         self._open_batch_cursor(), cursor_execute_batch_keyspace_ids_method)

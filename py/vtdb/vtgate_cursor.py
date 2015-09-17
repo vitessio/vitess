@@ -124,46 +124,96 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
 class BatchVTGateCursor(VTGateCursor):
   """Batch Cursor for VTGate.
 
-  This cursor allows 'n' queries to be executed against
-  'm' keyspace_ids. For writes though, it maybe preferable
-  to only execute against one keyspace_id.
-
-  This only supports keyspace_ids right now since that is what
-  the underlying vtgate server supports.
+  This cursor allows N queries to be executed in one roundtrip.
   """
 
-  def __init__(self, connection, tablet_type, writable=False):
-    # rowset is [(results, rowcount, lastrowid, fields),]
-    self.rowsets = None
-    self.query_list = []
-    self.bind_vars_list = []
-    self.keyspace_list = []
-    self.keyspace_ids_list = []
+  def __init__(
+      self, connection, tablet_type, writable=False, as_transaction=False):
+    """Init BatchVTGateCursor.
+
+    Args:
+      connection: Underlying PEP0249 connection object.
+      tablet_type: Str tablet type (master, replica, rdonly).
+      writable: Bool True if writing to master.
+      as_transaction: True if each executemany is a transaction.
+    """
     super(BatchVTGateCursor, self).__init__(
         connection, '', tablet_type, writable=writable)
+    self.as_transaction = as_transaction
+    self._clear_batch_state()
+
+  def _clear_batch_state(self):
+    """Clear state that allows traversal to next query's results."""
+    self.result_sets = []
+    self.result_set_index = None
+
+  def close(self):
+    super(BatchVTGateCursor, self).close()
+    self._clear_batch_state()
 
   def execute(self, sql, bind_variables, keyspace, keyspace_ids):
-    self.query_list.append(sql)
-    self.bind_vars_list.append(bind_variables)
-    self.keyspace_list.append(keyspace)
-    self.keyspace_ids_list.append(keyspace_ids)
+    """Send a batch with just one command, using executemany."""
+    self.executemany(
+        None,
+        [dict(sql=sql, bind_variables=bind_variables, keyspace=keyspace,
+              keyspace_ids=keyspace_ids)])
 
-  def flush(self, as_transaction=False):
-    self.rowsets = self.connection._execute_batch(
-        self.query_list,
-        self.bind_vars_list,
-        self.keyspace_list,
-        self.keyspace_ids_list,
-        self.tablet_type,
-        as_transaction,
-        self.effective_caller_id)
-    self.query_list = []
-    self.bind_vars_list = []
-    self.keyspace_list = []
-    self.keyspace_ids_list = []
+  def executemany(self, sql, params_list):
+    """Execute multiple statements in one batch.
+
+    This adds len(params_list) result_sets to self.result_sets.  Each
+    result_set is a (results, rowcount, lastrowid, fields) tuple.
+
+    Each call overwrites the old result_sets. After execution, nextset()
+    is called to move the fetch state to the start of the first
+    result set.
+
+    Args:
+      sql: The sql text, with %(format)s-style tokens. May be None.
+      params_list: A list of the keyword params that are normally sent
+        to execute. Either the sql arg or params['sql'] must be defined.
+
+    """
+    if sql:
+      sql_list = [sql] * len(params_list)
+    else:
+      sql_list = [params['sql'] for params in params_list]
+    bind_variables_list = [params['bind_variables'] for params in params_list]
+    keyspace_list = [params['keyspace'] for params in params_list]
+    keyspace_ids_list = [params['keyspace_ids'] for params in params_list]
+    self._clear_batch_state()
+    self.result_sets = self.connection._execute_batch(
+        sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
+        self.tablet_type, self.as_transaction, self.effective_caller_id)
+    self.nextset()
+
+  def nextset(self):
+    """Move the fetch state to the start of the next result set.
+
+    self.(results, rowcount, lastrowid, description) will be set to
+    the next result_set, and the fetch-commands will work on this
+    result set.
+
+    Returns:
+      True if another result set exists, False if not.
+    """
+    if self.result_set_index is None:
+      self.result_set_index = 0
+    else:
+      self.result_set_index += 1
+
+    self._clear_list_state()
+    if self.result_set_index < len(self.result_sets):
+      self.results, self.rowcount, self.lastrowid, self.description = (
+          self.result_sets[self.result_set_index])
+      return True
+    else:
+      self._clear_batch_state()
+      return None
 
 
 class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
+
   """A cursor for streaming statements to VTGate.
 
   Results are returned as a generator.
