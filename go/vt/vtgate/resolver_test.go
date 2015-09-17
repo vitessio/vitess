@@ -16,6 +16,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
@@ -27,7 +28,7 @@ import (
 
 func TestResolverExecuteKeyspaceIds(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+		res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		return res.ExecuteKeyspaceIds(context.Background(),
 			"query",
 			nil,
@@ -41,7 +42,7 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 
 func TestResolverExecuteKeyRanges(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteKeyRanges", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+		res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		return res.ExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
@@ -55,7 +56,7 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 
 func TestResolverExecuteEntityIds(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteEntityIds", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+		res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		return res.ExecuteEntityIds(context.Background(),
 			"query",
 			nil,
@@ -89,7 +90,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+		res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(),
 			[]proto.BoundKeyspaceIdQuery{{
 				Sql:           "query",
@@ -110,7 +111,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	createSandbox("TestResolverStreamExecuteKeyspaceIds")
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+		res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		qr := new(mproto.QueryResult)
 		err := res.StreamExecuteKeyspaceIds(context.Background(),
 			"query",
@@ -125,7 +126,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 		return qr, err
 	})
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+		res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		qr := new(mproto.QueryResult)
 		err := res.StreamExecuteKeyspaceIds(context.Background(),
 			"query",
@@ -145,7 +146,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	createSandbox("TestResolverStreamExecuteKeyRanges")
 	// streaming a single shard
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+		res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		qr := new(mproto.QueryResult)
 		err := res.StreamExecuteKeyRanges(context.Background(),
 			"query",
@@ -161,7 +162,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	})
 	// streaming multiple shards
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+		res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		qr := new(mproto.QueryResult)
 		err := res.StreamExecuteKeyRanges(context.Background(),
 			"query",
@@ -450,7 +451,7 @@ func TestResolverBuildEntityIds(t *testing.T) {
 }
 
 func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
-	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+	res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 
 	s := createSandbox("TestResolverDmlOnMultipleKeyspaceIds")
 	sbc0 := &sandboxConn{}
@@ -477,7 +478,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	sbc := &sandboxConn{mustFailRetry: 20}
 	s.MapTestConn("0", sbc)
 
-	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+	res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
@@ -510,7 +511,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	sbc := &sandboxConn{mustFailRetry: 20}
 	s.MapTestConn("0", sbc)
 
-	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
+	res := NewResolver(topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {

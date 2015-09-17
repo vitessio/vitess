@@ -31,6 +31,7 @@ type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.MultiCounters
 	gateway              Gateway
+	additionalGateway    Gateway
 }
 
 // shardActionFunc defines the contract for a shard action. Every such function
@@ -42,7 +43,7 @@ type shardActionFunc func(shard string, transactionID int64, sResults chan<- int
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate connections.
-func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration) *ScatterConn {
+func NewScatterConn(topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, additionalGateway string) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	tabletConnectStatsName := ""
 	if statsName != "" {
@@ -50,12 +51,22 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 		tabletConnectStatsName = statsName + "TabletConnect"
 	}
 	connTimings := stats.NewMultiTimings(tabletConnectStatsName, []string{"Keyspace", "ShardName", "DbType"})
-	gateway := GetGatewayCreator()(serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
-	return &ScatterConn{
+	gateway := GetGatewayCreator()(topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
+
+	sc := &ScatterConn{
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		gateway:              gateway,
 	}
+
+	// temporarily start other gateways for health checking
+	if additionalGateway != "" {
+		if gc, ok := gatewayCreators[additionalGateway]; ok {
+			sc.additionalGateway = gc(topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
+		}
+	}
+
+	return sc
 }
 
 // InitializeConnections pre-initializes connections for all shards.
@@ -63,6 +74,10 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 // It is not necessary to call this function before serving queries,
 // but it would reduce connection overhead when serving.
 func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
+	// temporarily start healthchecking regardless of gateway used
+	if stc.additionalGateway != nil {
+		stc.additionalGateway.InitializeConnections(ctx)
+	}
 	return stc.gateway.InitializeConnections(ctx)
 }
 

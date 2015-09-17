@@ -26,6 +26,7 @@ var (
 	connTimeoutPerConn = flag.Duration("conn-timeout-per-conn", 1500*time.Millisecond, "vttablet connection timeout (per connection)")
 	connLife           = flag.Duration("conn-life", 365*24*time.Hour, "average life of vttablet connections")
 	maxInFlight        = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
+	additionalGateway  = flag.String("additional-gateway", "", "additional gateway to enable tablet health check module")
 )
 
 var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
@@ -81,6 +82,6 @@ startServer:
 	topoReader = NewTopoReader(resilientSrvTopoServer)
 	servenv.Register("toporeader", topoReader)
 
-	vtgate.Init(resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, *maxInFlight)
+	vtgate.Init(ts, resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, *maxInFlight, *additionalGateway)
 	servenv.RunDefault()
 }
