@@ -74,7 +74,6 @@ func GetGatewayCreator() GatewayCreator {
 	gc, ok := gatewayCreators[*GatewayImplementation]
 	if !ok {
 		log.Fatalf("No gateway registered as %s", *GatewayImplementation)
-		return nil
 	}
 	return gc
 }
