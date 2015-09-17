@@ -16,8 +16,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-// This test makes sure the go rpc service works
-func testGRPCVTGateConn(t *testing.T) {
+// TestGRPCVTGateConn makes sure the grpc service works
+func TestGRPCVTGateConn(t *testing.T) {
 	// fake service
 	service := vtgateconntest.CreateFakeServer(t)
 
@@ -46,8 +46,4 @@ func testGRPCVTGateConn(t *testing.T) {
 
 	// and clean up
 	client.Close()
-}
-
-func TestGRPCVTGateConn(t *testing.T) {
-	testGRPCVTGateConn(t)
 }
