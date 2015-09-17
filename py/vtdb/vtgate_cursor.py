@@ -67,6 +67,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
     self._clear_list_state()
+    self._clear_batch_state()
     if self._handle_transaction_sql(sql):
       return
     write_query = bool(write_sql_pattern.match(sql))
@@ -91,6 +92,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
   def execute_entity_ids(
       self, sql, bind_variables, entity_keyspace_id_map, entity_column_name):
     self._clear_list_state()
+    self._clear_batch_state()
 
     # This is by definition a scatter query, so raise exception.
     write_query = bool(write_sql_pattern.match(sql))
