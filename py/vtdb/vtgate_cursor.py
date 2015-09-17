@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-"""VTGateCursor, BatchVTGateCursor, and StreamVTGateCursor."""
+"""VTGateCursor, and StreamVTGateCursor."""
 
 import itertools
 import operator
@@ -36,7 +36,17 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
 
   def __init__(
       self, connection, keyspace, tablet_type, keyspace_ids=None,
-      keyranges=None, writable=False):
+      keyranges=None, writable=False, as_transaction=False):
+    """Init VTGateCursor.
+
+    Args:
+      connection: A PEP0249 connection object.
+      keyspace: Str keyspace or None if batch API will be used.
+      tablet_type: Str tablet_type.
+      keyspace_ids: Struct('!Q').packed keyspace IDs.
+      keyranges: Str keyranges.
+      writable: True if writable.
+    """
     super(VTGateCursor, self).__init__()
     self._conn = connection
     self._writable = writable
@@ -50,6 +60,8 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     self.routing = None
     self.rowcount = 0
     self.tablet_type = tablet_type
+    self.as_transaction = as_transaction
+    self._clear_batch_state()
 
   # pass kargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
@@ -120,43 +132,14 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     neutered_rows = [row[len(order_by_columns):] for row in sorted_rows]
     return neutered_rows
 
-
-class BatchVTGateCursor(VTGateCursor):
-  """Batch Cursor for VTGate.
-
-  This cursor allows N queries to be executed in one roundtrip.
-  """
-
-  def __init__(
-      self, connection, tablet_type, writable=False, as_transaction=False):
-    """Init BatchVTGateCursor.
-
-    Args:
-      connection: Underlying PEP0249 connection object.
-      tablet_type: Str tablet type (master, replica, rdonly).
-      writable: Bool True if writing to master.
-      as_transaction: True if each executemany is a transaction.
-    """
-    super(BatchVTGateCursor, self).__init__(
-        connection, '', tablet_type, writable=writable)
-    self.as_transaction = as_transaction
-    self._clear_batch_state()
-
   def _clear_batch_state(self):
     """Clear state that allows traversal to next query's results."""
     self.result_sets = []
     self.result_set_index = None
 
   def close(self):
-    super(BatchVTGateCursor, self).close()
+    super(VTGateCursor, self).close()
     self._clear_batch_state()
-
-  def execute(self, sql, bind_variables, keyspace, keyspace_ids):
-    """Send a batch with just one command, using executemany."""
-    self.executemany(
-        None,
-        [dict(sql=sql, bind_variables=bind_variables, keyspace=keyspace,
-              keyspace_ids=keyspace_ids)])
 
   def executemany(self, sql, params_list):
     """Execute multiple statements in one batch.

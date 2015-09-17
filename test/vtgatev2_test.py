@@ -393,8 +393,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
           {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       cursor.commit()
     kid_list = [pack_kid(kid) for kid in kid_list]
-    cursor = vtgate_conn.cursor(
-        'master', cursorclass=vtgate_cursor.BatchVTGateCursor)
+    cursor = vtgate_conn.cursor(keyspace=None, tablet_type='master')
     params_list = [
         dict(sql='select msg, keyspace_id from vt_insert_test',
              bind_variables={},
@@ -413,21 +412,34 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def test_batch_write(self):
     vtgate_conn = get_connection()
-    cursor = vtgate_conn.cursor(
-        'master', cursorclass=vtgate_cursor.BatchVTGateCursor)
+    cursor = vtgate_conn.cursor(keyspace=None, tablet_type='master')
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
     all_ids = [pack_kid(kid) for kid in kid_list]
     count = 10
-    cursor.execute(
-        'delete from vt_insert_test', None, KEYSPACE_NAME, all_ids)
+    cursor.executemany(
+        sql=None,
+        params_list=[
+            dict(sql='delete from vt_insert_test', bind_variables=None,
+                 keyspace=KEYSPACE_NAME, keyspace_ids=all_ids)])
+
+    params_list = []
     for x in xrange(count):
       keyspace_id = kid_list[x%len(kid_list)]
-      cursor.execute(
-          'insert into vt_insert_test (msg, keyspace_id) '
-          'values (%(msg)s, %(keyspace_id)s)',
-          {'msg': 'test %s' % x, 'keyspace_id': keyspace_id},
-          KEYSPACE_NAME, [pack_kid(keyspace_id)])
-    cursor.execute('delete from vt_a', None, KEYSPACE_NAME, all_ids)
+      params_list.append(
+          dict(sql=None,
+               bind_variables=
+               {'msg': 'test %s' % x, 'keyspace_id': keyspace_id},
+               keyspace=KEYSPACE_NAME,
+               keyspace_ids=[pack_kid(keyspace_id)]))
+    cursor.executemany(
+        sql='insert into vt_insert_test (msg, keyspace_id) '
+        'values (%(msg)s, %(keyspace_id)s)',
+        params_list=params_list)
+    cursor.executemany(
+        sql=None,
+        params_list=[
+            dict(sql='delete from vt_a', bind_variables=None,
+                 keyspace=KEYSPACE_NAME, keyspace_ids=all_ids)])
     params_list = []
     for x in xrange(count):
       keyspace_id = kid_list[x%len(kid_list)]

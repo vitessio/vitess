@@ -122,27 +122,6 @@ def create_stream_cursor_from_cursor(original_cursor):
   return stream_cursor
 
 
-def create_batch_cursor_from_cursor(original_cursor, writable=False):
-  """
-  This method creates a batch cursor from a regular cursor.
-
-  Args:
-    original_cursor: Cursor of VTGateCursor type
-    writable: Bool flag.
-
-  Returns:
-    Returns BatchVTGateCursor that has same attributes as original_cursor.
-  """
-  if not isinstance(original_cursor, vtgate_cursor.VTGateCursor):
-    raise dbexceptions.ProgrammingError(
-        'Original cursor should be of VTGateCursor type.')
-  batch_cursor = vtgate_cursor.BatchVTGateCursor(
-      original_cursor._conn,
-      original_cursor.tablet_type,
-      writable=writable)
-  return batch_cursor
-
-
 def db_wrapper(method, **decorator_kwargs):
   """Decorator to call the database method with the appropriate cursor.
 
