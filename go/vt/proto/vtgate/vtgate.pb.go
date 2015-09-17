@@ -688,20 +688,12 @@ func (m *StreamExecuteRequest) GetQuery() *query.BoundQuery {
 
 // StreamExecuteResponse is the returned value from StreamExecute
 type StreamExecuteResponse struct {
-	Error  *vtrpc.RPCError    `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *query.QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
 func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteResponse) ProtoMessage()    {}
-
-func (m *StreamExecuteResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 func (m *StreamExecuteResponse) GetResult() *query.QueryResult {
 	if m != nil {
@@ -739,20 +731,12 @@ func (m *StreamExecuteShardsRequest) GetQuery() *query.BoundQuery {
 
 // StreamExecuteShardsResponse is the returned value from StreamExecuteShards
 type StreamExecuteShardsResponse struct {
-	Error  *vtrpc.RPCError    `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *query.QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *StreamExecuteShardsResponse) Reset()         { *m = StreamExecuteShardsResponse{} }
 func (m *StreamExecuteShardsResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteShardsResponse) ProtoMessage()    {}
-
-func (m *StreamExecuteShardsResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 func (m *StreamExecuteShardsResponse) GetResult() *query.QueryResult {
 	if m != nil {
@@ -790,20 +774,12 @@ func (m *StreamExecuteKeyspaceIdsRequest) GetQuery() *query.BoundQuery {
 
 // StreamExecuteKeyspaceIdsResponse is the returned value from StreamExecuteKeyspaceIds
 type StreamExecuteKeyspaceIdsResponse struct {
-	Error  *vtrpc.RPCError    `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *query.QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *StreamExecuteKeyspaceIdsResponse) Reset()         { *m = StreamExecuteKeyspaceIdsResponse{} }
 func (m *StreamExecuteKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteKeyspaceIdsResponse) ProtoMessage()    {}
-
-func (m *StreamExecuteKeyspaceIdsResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 func (m *StreamExecuteKeyspaceIdsResponse) GetResult() *query.QueryResult {
 	if m != nil {
@@ -848,20 +824,12 @@ func (m *StreamExecuteKeyRangesRequest) GetKeyRanges() []*topodata.KeyRange {
 
 // StreamExecuteKeyRangesResponse is the returned value from StreamExecuteKeyRanges
 type StreamExecuteKeyRangesResponse struct {
-	Error  *vtrpc.RPCError    `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *query.QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *StreamExecuteKeyRangesResponse) Reset()         { *m = StreamExecuteKeyRangesResponse{} }
 func (m *StreamExecuteKeyRangesResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteKeyRangesResponse) ProtoMessage()    {}
-
-func (m *StreamExecuteKeyRangesResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 func (m *StreamExecuteKeyRangesResponse) GetResult() *query.QueryResult {
 	if m != nil {
@@ -888,20 +856,12 @@ func (m *BeginRequest) GetCallerId() *vtrpc.CallerID {
 
 // BeginResponse is the returned value from Begin
 type BeginResponse struct {
-	Error   *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Session *Session        `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,1,opt,name=session" json:"session,omitempty"`
 }
 
 func (m *BeginResponse) Reset()         { *m = BeginResponse{} }
 func (m *BeginResponse) String() string { return proto.CompactTextString(m) }
 func (*BeginResponse) ProtoMessage()    {}
-
-func (m *BeginResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 func (m *BeginResponse) GetSession() *Session {
 	if m != nil {
@@ -936,19 +896,11 @@ func (m *CommitRequest) GetSession() *Session {
 
 // CommitResponse is the returned value from Commit
 type CommitResponse struct {
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
 }
 
 func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
 func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
 func (*CommitResponse) ProtoMessage()    {}
-
-func (m *CommitResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 // RollbackRequest is the payload to Rollback
 type RollbackRequest struct {
@@ -976,19 +928,11 @@ func (m *RollbackRequest) GetSession() *Session {
 
 // RollbackResponse is the returned value from Rollback
 type RollbackResponse struct {
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
 }
 
 func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
 func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
 func (*RollbackResponse) ProtoMessage()    {}
-
-func (m *RollbackResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 // SplitQueryRequest is the payload to SplitQuery
 type SplitQueryRequest struct {
