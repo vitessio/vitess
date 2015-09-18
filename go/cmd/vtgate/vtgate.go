@@ -10,6 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
@@ -26,11 +27,12 @@ var (
 	connTimeoutPerConn = flag.Duration("conn-timeout-per-conn", 1500*time.Millisecond, "vttablet connection timeout (per connection)")
 	connLife           = flag.Duration("conn-life", 365*24*time.Hour, "average life of vttablet connections")
 	maxInFlight        = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
-	additionalGateway  = flag.String("additional-gateway", "", "additional gateway to enable tablet health check module")
+	additionalGateway  = flag.String("additional_gateway", "", "additional gateway to enable tablet health check module")
 )
 
 var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
 var topoReader *TopoReader
+var healthCheck discovery.HealthCheck
 
 var initFakeZK func()
 
@@ -82,6 +84,8 @@ startServer:
 	topoReader = NewTopoReader(resilientSrvTopoServer)
 	servenv.Register("toporeader", topoReader)
 
-	vtgate.Init(ts, resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, *maxInFlight, *additionalGateway)
+	healthCheck = discovery.NewHealthCheck(*connTimeoutTotal, *retryDelay)
+
+	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, *maxInFlight, *additionalGateway)
 	servenv.RunDefault()
 }

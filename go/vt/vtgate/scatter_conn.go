@@ -15,6 +15,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/discovery"
 	kproto "github.com/youtube/vitess/go/vt/key"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -43,7 +44,7 @@ type shardActionFunc func(shard string, transactionID int64, sResults chan<- int
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate connections.
-func NewScatterConn(topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, additionalGateway string) *ScatterConn {
+func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, additionalGateway string) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	tabletConnectStatsName := ""
 	if statsName != "" {
@@ -51,7 +52,7 @@ func NewScatterConn(topoServer topo.Server, serv SrvTopoServer, statsName, cell 
 		tabletConnectStatsName = statsName + "TabletConnect"
 	}
 	connTimings := stats.NewMultiTimings(tabletConnectStatsName, []string{"Keyspace", "ShardName", "DbType"})
-	gateway := GetGatewayCreator()(topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
+	gateway := GetGatewayCreator()(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
 
 	sc := &ScatterConn{
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
@@ -62,7 +63,7 @@ func NewScatterConn(topoServer topo.Server, serv SrvTopoServer, statsName, cell 
 	// temporarily start other gateways for health checking
 	if additionalGateway != "" {
 		if gc := GetGatewayCreatorByName(additionalGateway); gc != nil {
-			sc.additionalGateway = gc(topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
+			sc.additionalGateway = gc(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
 		}
 	}
 

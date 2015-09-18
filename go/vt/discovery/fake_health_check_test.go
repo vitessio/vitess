@@ -10,6 +10,10 @@ type fakeHealthCheck struct {
 	endPoints map[string]*pbt.EndPoint
 }
 
+// SetListener sets the listener for healthcheck updates.
+func (fhc *fakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
+}
+
 // AddEndPoint adds the endpoint, and starts health check.
 func (fhc *fakeHealthCheck) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
 	key := endPointToMapKey(endPoint)

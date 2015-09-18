@@ -516,7 +516,7 @@ func TestSelectScatter(t *testing.T) {
 		s.MapTestConn(shard, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
+	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	_, err := routerExec(router, "select * from user", nil)
@@ -545,7 +545,7 @@ func TestStreamSelectScatter(t *testing.T) {
 		s.MapTestConn(shard, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
+	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	sql := "select * from user"
@@ -584,7 +584,7 @@ func TestSelectScatterFail(t *testing.T) {
 		s.MapTestConn(shard, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
+	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	_, err := routerExec(router, "select * from user", nil)

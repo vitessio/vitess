@@ -13,6 +13,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/discovery"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -57,7 +58,7 @@ type Gateway interface {
 }
 
 // GatewayCreator is the func which can create the actual gateway object.
-type GatewayCreator func(topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway
+type GatewayCreator func(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway
 
 var gatewayCreators = make(map[string]GatewayCreator)
 

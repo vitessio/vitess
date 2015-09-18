@@ -31,7 +31,8 @@ func TestHealthCheck(t *testing.T) {
 	createFakeConn(ep, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
-	hc := NewHealthCheck(l, 1*time.Millisecond, 1*time.Millisecond).(*HealthCheckImpl)
+	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond).(*HealthCheckImpl)
+	hc.SetListener(l)
 	hc.AddEndPoint("cell", ep)
 	t.Logf(`hc = HealthCheck(); hc.AddEndPoint("cell", {Host: "a", PortMap: {"vt": 1}})`)
 

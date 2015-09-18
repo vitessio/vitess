@@ -23,9 +23,9 @@ import (
 )
 
 var (
-	cellsToWatch        = flag.String("cells-to-watch", "", "comma-separated list of cells for watching endpoints")
-	refreshInterval     = flag.Duration("endpoint-refresh-interval", 1*time.Minute, "endpoint refresh interval")
-	topoReadConcurrency = flag.Int("topo-read-concurrency", 32, "concurrent topo reads")
+	cellsToWatch        = flag.String("cells_to_watch", "", "comma-separated list of cells for watching endpoints")
+	refreshInterval     = flag.Duration("endpoint_refresh_interval", 1*time.Minute, "endpoint refresh interval")
+	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
 )
 
 var errNotImplemented = errors.New("Not implemented")
@@ -38,30 +38,28 @@ func init() {
 	RegisterGatewayCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
-func createDiscoveryGateway(topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway {
 	return &discoveryGateway{
+		hc:              hc,
 		topoServer:      topoServer,
 		localCell:       cell,
-		retryDelay:      retryDelay,
-		connTimeout:     connTimeoutTotal,
 		tabletsWatchers: make([]*discovery.CellTabletsWatcher, 0, 1),
 	}
 }
 
 type discoveryGateway struct {
-	topoServer  topo.Server
-	localCell   string
-	retryDelay  time.Duration
-	connTimeout time.Duration
+	hc         discovery.HealthCheck
+	topoServer topo.Server
+	localCell  string
 
 	tabletsWatchers []*discovery.CellTabletsWatcher
 }
 
 // InitializeConnections creates connections to VTTablets.
 func (dg *discoveryGateway) InitializeConnections(ctx context.Context) error {
-	hc := discovery.NewHealthCheck(dg, dg.connTimeout, dg.retryDelay)
+	dg.hc.SetListener(dg)
 	for _, cell := range strings.Split(*cellsToWatch, ",") {
-		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, hc, cell, *refreshInterval, *topoReadConcurrency)
+		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, dg.hc, cell, *refreshInterval, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
 	return nil
