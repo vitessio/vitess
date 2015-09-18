@@ -82,21 +82,19 @@ public interface RpcClient extends Closeable {
       Context ctx, StreamExecuteKeyRangesRequest request) throws VitessRpcException;
 
   // begin starts a transaction.
-  BeginResponse begin(Context ctx, BeginRequest request) throws VitessException, VitessRpcException;
+  BeginResponse begin(Context ctx, BeginRequest request) throws VitessRpcException;
 
   // commit commits a transaction.
-  CommitResponse commit(Context ctx, CommitRequest request)
-      throws VitessException, VitessRpcException;
+  CommitResponse commit(Context ctx, CommitRequest request) throws VitessRpcException;
 
   // rollback rolls back a pending transaction.
-  RollbackResponse rollback(Context ctx, RollbackRequest request)
-      throws VitessException, VitessRpcException;
+  RollbackResponse rollback(Context ctx, RollbackRequest request) throws VitessRpcException;
 
   // splitQuery splits a query into smaller queries.
   SplitQueryResponse splitQuery(Context ctx, SplitQueryRequest request)
-      throws VitessException, VitessRpcException;
+      throws VitessRpcException;
 
   // getSrvKeyspace returns a list of serving keyspaces.
   GetSrvKeyspaceResponse getSrvKeyspace(Context ctx, GetSrvKeyspaceRequest request)
-      throws VitessException, VitessRpcException;
+      throws VitessRpcException;
 }
