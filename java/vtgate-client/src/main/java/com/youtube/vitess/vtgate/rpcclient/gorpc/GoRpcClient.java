@@ -59,7 +59,8 @@ public class GoRpcClient implements RpcClient {
 
   @Override
   public List<QueryResponse> executeBatchKeyspaceIds(
-      List<Query> queries, String tabletType, Object session, boolean asTransaction) {
+      List<Query> queries, String tabletType, Object session, boolean asTransaction)
+      throws ConnectionException {
     throw new UnsupportedOperationException();
   }
 

@@ -21,7 +21,8 @@ public interface RpcClient {
   public QueryResponse execute(Query query) throws ConnectionException;
 
   public List<QueryResponse> executeBatchKeyspaceIds(
-      List<Query> queries, String tabletType, Object session, boolean asTransaction);
+      List<Query> queries, String tabletType, Object session, boolean asTransaction)
+      throws ConnectionException;
 
   public QueryResult streamNext(List<Field> fields) throws ConnectionException;
 
