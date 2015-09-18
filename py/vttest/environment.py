@@ -28,7 +28,14 @@ mysql_db_class = None
 
 def get_test_directory():
   """Returns the toplevel directory for the tests. Might create it."""
-  directory = tempfile.mkdtemp(prefix='vt')
+  dataroot = os.environ['VTDATAROOT']
+  if dataroot:
+    directory = os.path.join(dataroot, "test")
+    os.mkdir(directory)
+  else:
+    directory = tempfile.mkdtemp(prefix='vt')
+  # Override VTDATAROOT to point to the newly created dir
+  os.environ['VTDATAROOT'] = directory
   os.mkdir(get_logs_directory(directory))
   return directory
 

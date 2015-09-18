@@ -79,6 +79,8 @@ class LocalDatabase(object):
   def load_schema(self):
     """Load schema SQL from data files."""
 
+    if not self.schema_dir:
+      return
     for keyspace in os.listdir(self.schema_dir):
       keyspace_dir = os.path.join(self.schema_dir, keyspace)
       if os.path.isdir(keyspace_dir):

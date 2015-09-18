@@ -25,6 +25,7 @@ import sys
 
 from vttest import environment
 from vttest import local_database
+from vttest import mysql_flavor
 from vttest import vt_processes
 
 shard_exp = re.compile(r'(.+)/(.+):(.+)')
@@ -73,5 +74,9 @@ if __name__ == '__main__':
   (options, args) = parser.parse_args()
   if options.verbose:
     logging.getLogger().setLevel(logging.DEBUG)
+
+  # This will set the flavor based on the MYSQL_FLAVOR env var,
+  # or default to MariaDB.
+  mysql_flavor.set_mysql_flavor(None)
 
   main(options.port, options.topology, options.schema_dir)
