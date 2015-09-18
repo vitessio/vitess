@@ -1,6 +1,5 @@
 package com.youtube.vitess.vtgate.rpcclient;
 
-import com.youtube.vitess.proto.Vtgate.Session;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Field;
 import com.youtube.vitess.vtgate.Query;
@@ -22,7 +21,7 @@ public interface RpcClient {
   public QueryResponse execute(Query query) throws ConnectionException;
 
   public List<QueryResponse> executeBatchKeyspaceIds(
-          List<Query> queries, String tabletType, Session session, boolean asTransaction);
+      List<Query> queries, String tabletType, Object session, boolean asTransaction);
 
   public QueryResult streamNext(List<Field> fields) throws ConnectionException;
 
