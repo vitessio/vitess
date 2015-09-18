@@ -25,12 +25,13 @@ import sys
 
 from vttest import environment
 from vttest import local_database
+from vttest import mysql_flavor
 from vttest import vt_processes
 
 shard_exp = re.compile(r'(.+)/(.+):(.+)')
 
 
-def main(port, topology, schema_dir):
+def main(port, topology, schema_dir, mysql_only):
   shards = []
 
   for shard in topology.split(','):
@@ -43,7 +44,7 @@ def main(port, topology, schema_dir):
       sys.exit(1)
 
   environment.base_port = port
-  with local_database.LocalDatabase(shards, schema_dir) as local_db:
+  with local_database.LocalDatabase(shards, schema_dir, mysql_only) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
     raw_input()
@@ -68,10 +69,20 @@ if __name__ == '__main__':
       ' each keyspace dir, each file is executed as SQL'
       ' after the database is created on each shard.')
   parser.add_option(
+      '-m', '--mysql_only', action='store_true',
+      help='If this flag is set only mysql is initialized.'
+      ' The rest of the vitess components are not started.'
+      ' Also, the output specifies the mysql unix socket'
+      ' instead of the vtgate port.')
+  parser.add_option(
       '-v', '--verbose', action='store_true',
       help='Display extra error messages.')
   (options, args) = parser.parse_args()
   if options.verbose:
     logging.getLogger().setLevel(logging.DEBUG)
 
-  main(options.port, options.topology, options.schema_dir)
+  # This will set the flavor based on the MYSQL_FLAVOR env var,
+  # or default to MariaDB.
+  mysql_flavor.set_mysql_flavor(None)
+
+  main(options.port, options.topology, options.schema_dir, options.mysql_only)
