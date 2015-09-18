@@ -298,60 +298,91 @@ class VTGateConnection(vtgate_client.VTGateClient):
       raise
     return results, rowcount, lastrowid, fields
 
+  # keyspace_ids and keyranges aod make two different batch calls if
+  # there are some params that use both.
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
   def _execute_batch(
       self, sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
-      tablet_type, as_transaction, effective_caller_id=None):
-    query_list = []
-    for sql, bind_vars, keyspace, keyspace_ids in zip(
-        sql_list, bind_variables_list, keyspace_list, keyspace_ids_list):
+      shards_list, tablet_type, as_transaction, effective_caller_id=None):
+    keyspace_ids_query_list = []
+    shards_query_list = []
+    is_keyspace_ids_list = []
+    for sql, bind_vars, keyspace, keyspace_ids, shards in zip(
+        sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
+        shards_list):
       sql, bind_vars = dbapi.prepare_query_bind_vars(sql, bind_vars)
       query = {}
       query['Sql'] = sql
       query['BindVariables'] = field_types.convert_bind_vars(bind_vars)
       query['Keyspace'] = keyspace
-      query['KeyspaceIds'] = keyspace_ids
-      query_list.append(query)
+      is_keyspace_ids = bool(keyspace_ids)
+      is_keyspace_ids_list.append(is_keyspace_ids)
+      if is_keyspace_ids:
+        if shards:
+          raise dbexceptions.ProgrammingError(
+              'Keyspace_ids and shards both defined in same params.')
+        query['KeyspaceIds'] = keyspace_ids
+        keyspace_ids_query_list.append(query)
+      else:
+        query['Shards'] = shards
+        shards_query_list.append(query)
 
+    def make_execute_batch_call(query_list, is_keyspace_ids):
+      rowsets = []
+      if not query_list:
+        return rowsets
+      try:
+        req = {
+            'Queries': query_list,
+            'TabletType': tablet_type,
+            'AsTransaction': as_transaction,
+        }
+        self._add_caller_id(req, effective_caller_id)
+        self._add_session(req)
+        if is_keyspace_ids:
+          exec_method = 'VTGate.ExecuteBatchKeyspaceIds'
+        else:
+          exec_method = 'VTGate.ExecuteBatchShard'
+        response = self._get_client().call(exec_method, req)
+        self._update_session(response)
+        if response.reply.get('Error'):
+          raise gorpc.AppError(response.reply['Error'], exec_method)
+        for reply in response.reply['List']:
+          fields = []
+          conversions = []
+          results = []
+          rowcount = 0
+          for field in reply['Fields']:
+            fields.append((field['Name'], field['Type']))
+            conversions.append(field_types.conversions.get(field['Type']))
+          for row in reply['Rows']:
+            results.append(tuple(_make_row(row, conversions)))
+          rowcount = reply['RowsAffected']
+          lastrowid = reply['InsertId']
+          rowsets.append((results, rowcount, lastrowid, fields))
+      except gorpc.GoRpcError as e:
+        self.logger_object.log_private_data(bind_variables_list)
+        raise self._convert_exception(
+            e, sql_list, exec_method,
+            keyspace='', tablet_type=tablet_type)
+      except Exception:
+        logging.exception('gorpc low-level error')
+        raise
+      return rowsets
+
+    # Return merged keyspace_ids and shards rowsets.
     rowsets = []
-
-    try:
-      req = {
-          'Queries': query_list,
-          'TabletType': tablet_type,
-          'AsTransaction': as_transaction,
-      }
-      self._add_caller_id(req, effective_caller_id)
-      self._add_session(req)
-      response = self._get_client().call('VTGate.ExecuteBatchKeyspaceIds', req)
-      self._update_session(response)
-      if response.reply.get('Error'):
-        raise gorpc.AppError(
-            response.reply['Error'], 'VTGate.ExecuteBatchKeyspaceIds')
-      for reply in response.reply['List']:
-        fields = []
-        conversions = []
-        results = []
-        rowcount = 0
-
-        for field in reply['Fields']:
-          fields.append((field['Name'], field['Type']))
-          conversions.append(field_types.conversions.get(field['Type']))
-
-        for row in reply['Rows']:
-          results.append(tuple(_make_row(row, conversions)))
-
-        rowcount = reply['RowsAffected']
-        lastrowid = reply['InsertId']
-        rowsets.append((results, rowcount, lastrowid, fields))
-    except gorpc.GoRpcError as e:
-      self.logger_object.log_private_data(bind_variables_list)
-      raise self._convert_exception(
-          e, sql_list, keyspace_ids_list,
-          keyspace='', tablet_type=tablet_type)
-    except Exception:
-      logging.exception('gorpc low-level error')
-      raise
+    keyspace_ids_rowsets = make_execute_batch_call(
+        keyspace_ids_query_list, is_keyspace_ids=True)
+    shards_rowsets = make_execute_batch_call(
+        shards_query_list, is_keyspace_ids=False)
+    keyspace_ids_iter = iter(keyspace_ids_rowsets)
+    shards_iter = iter(shards_rowsets)
+    for is_keyspace_ids in is_keyspace_ids_list:
+      if is_keyspace_ids:
+        rowsets.append(keyspace_ids_iter.next())
+      else:
+        rowsets.append(shards_iter.next())
     return rowsets
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))

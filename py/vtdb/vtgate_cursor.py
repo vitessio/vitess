@@ -162,13 +162,16 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     if sql:
       sql_list = [sql] * len(params_list)
     else:
-      sql_list = [params['sql'] for params in params_list]
+      sql_list = [params.get('sql') for params in params_list]
     bind_variables_list = [params['bind_variables'] for params in params_list]
     keyspace_list = [params['keyspace'] for params in params_list]
-    keyspace_ids_list = [params['keyspace_ids'] for params in params_list]
+    keyspace_ids_list = [params.get('keyspace_ids') for params in params_list]
+    shards_list = [params.get('shards') for params in params_list]
     self._clear_batch_state()
+    #  Find other _execute_batch calls in test code.
     self.result_sets = self.connection._execute_batch(
         sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
+        shards_list,
         self.tablet_type, self.as_transaction, self.effective_caller_id)
     self.nextset()
 
