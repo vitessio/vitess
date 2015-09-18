@@ -31,3 +31,8 @@ func (fhc *fakeHealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard st
 func (fhc *fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*EndPointStats {
 	return nil
 }
+
+// CacheStatus returns a displayable version of the cache.
+func (fhc *fakeHealthCheck) CacheStatus() EndPointsCacheStatusList {
+	return nil
+}
