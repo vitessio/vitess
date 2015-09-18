@@ -4,7 +4,6 @@ import com.youtube.vitess.gorpc.Client;
 import com.youtube.vitess.gorpc.Exceptions.ApplicationException;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
 import com.youtube.vitess.gorpc.Response;
-import com.youtube.vitess.proto.Vtgate.Session;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Field;
 import com.youtube.vitess.vtgate.Query;
@@ -60,7 +59,8 @@ public class GoRpcClient implements RpcClient {
 
   @Override
   public List<QueryResponse> executeBatchKeyspaceIds(
-          List<Query> queries, String tabletType, Session session, boolean asTransaction) {
+      List<Query> queries, String tabletType, Object session, boolean asTransaction)
+      throws ConnectionException {
     throw new UnsupportedOperationException();
   }
 
