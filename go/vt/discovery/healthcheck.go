@@ -362,6 +362,7 @@ func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *pbq.Target,
 }
 
 // EndPointsCacheStatus is the current endpoints for a cell/target.
+// TODO: change this to reflect the e2e information about the endpoints.
 type EndPointsCacheStatus struct {
 	Cell           string
 	Target         *pbq.Target
