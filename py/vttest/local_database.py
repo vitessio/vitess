@@ -10,9 +10,10 @@ from vttest import vt_processes
 class LocalDatabase(object):
   """Set up a local Vitess database."""
 
-  def __init__(self, shards, schema_dir):
+  def __init__(self, shards, schema_dir, mysql_only):
     self.shards = shards
     self.schema_dir = schema_dir
+    self.mysql_only = mysql_only
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
@@ -23,6 +24,8 @@ class LocalDatabase(object):
     self.mysql_db.setup()
     self.create_databases()
     self.load_schema()
+    if self.mysql_only:
+      return
 
     vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db)
 
@@ -31,8 +34,9 @@ class LocalDatabase(object):
 
     MySQLTestDB's wrapper script will take care of mysqld.
     """
-    self.kill()
-    self.wait()
+    if not self.mysql_only:
+      self.kill()
+      self.wait()
     self.mysql_db.teardown()
     environment.cleanup_test_directory(self.directory)
 
@@ -50,9 +54,14 @@ class LocalDatabase(object):
 
   def config(self):
     """Returns a dict with enough information to be able to connect."""
-    return {
-        'port': vt_processes.vtgate_process.port,
-        }
+    if self.mysql_only:
+      return {
+          'socket': self.mysql_db.unix_socket(),
+          }
+    else:
+      return {
+          'port': vt_processes.vtgate_process.port,
+          }
 
   def mysql_execute(self, queries, db_name=''):
     """Execute queries directly on MySQL."""
@@ -79,6 +88,8 @@ class LocalDatabase(object):
   def load_schema(self):
     """Load schema SQL from data files."""
 
+    if not self.schema_dir:
+      return
     for keyspace in os.listdir(self.schema_dir):
       keyspace_dir = os.path.join(self.schema_dir, keyspace)
       if os.path.isdir(keyspace_dir):
