@@ -1,4 +1,7 @@
-"""Define abstractions for various mysql flavors."""
+"""Define abstractions for various mysql flavors.
+
+This moduleis used by mysql_db_mysqlctl.py to handle differences
+between various flavors of mysql"""
 
 import environment
 import logging
