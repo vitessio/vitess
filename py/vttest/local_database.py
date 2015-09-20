@@ -56,6 +56,9 @@ class LocalDatabase(object):
     """Returns a dict with enough information to be able to connect."""
     if self.mysql_only:
       return {
+          'username': self.mysql_db.username(),
+          'password': self.mysql_db.password(),
+          'port': self.mysql_db.port(),
           'socket': self.mysql_db.unix_socket(),
           }
     else:

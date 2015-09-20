@@ -17,3 +17,7 @@ func launcherPath() (string, error) {
 	}
 	return path.Join(vttop, "py/vttest/run_local_database.py"), nil
 }
+
+func topoFlags(topo string) []string {
+	return []string{"--topology", topo}
+}

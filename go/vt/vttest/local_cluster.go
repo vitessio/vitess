@@ -18,6 +18,8 @@ import (
 	"path"
 	"strconv"
 	"time"
+
+	"github.com/youtube/vitess/go/sqldb"
 )
 
 // Handle allows you to interact with the processes launched by vttest.
@@ -26,6 +28,9 @@ type Handle struct {
 
 	cmd   *exec.Cmd
 	stdin io.WriteCloser
+
+	// dbname is valid only for LaunchMySQL.
+	dbname string
 }
 
 // LaunchVitess launches a vitess test cluster.
@@ -33,7 +38,6 @@ func LaunchVitess(topo, schemaDir string, verbose bool) (hdl *Handle, err error)
 	hdl = &Handle{}
 	err = hdl.run(randomPort(), topo, schemaDir, false, verbose)
 	if err != nil {
-		hdl.TearDown()
 		return nil, err
 	}
 	return hdl, nil
@@ -42,7 +46,9 @@ func LaunchVitess(topo, schemaDir string, verbose bool) (hdl *Handle, err error)
 // LauncMySQL launches just a MySQL instance with the specified db name. The schema
 // is specified as a string instead of a file.
 func LauncMySQL(dbName, schema string, verbose bool) (hdl *Handle, err error) {
-	hdl = &Handle{}
+	hdl = &Handle{
+		dbname: dbName,
+	}
 	var schemaDir string
 	if schema != "" {
 		schemaDir, err = ioutil.TempDir("", "vt")
@@ -74,7 +80,6 @@ func LauncMySQL(dbName, schema string, verbose bool) (hdl *Handle, err error) {
 	}
 	err = hdl.run(randomPort(), fmt.Sprintf("%s/0:%s", dbName, dbName), schemaDir, true, verbose)
 	if err != nil {
-		hdl.TearDown()
 		return nil, err
 	}
 	return hdl, nil
@@ -89,6 +94,49 @@ func (hdl *Handle) TearDown() error {
 	return hdl.cmd.Wait()
 }
 
+// MySQLConnParams builds the MySQL connection params.
+// It's valid only if you used LaunchMySQL.
+func (hdl *Handle) MySQLConnParams() (sqldb.ConnParams, error) {
+	params := sqldb.ConnParams{
+		Charset: "utf8",
+		DbName:  hdl.dbname,
+	}
+	if hdl.Data == nil {
+		return params, errors.New("no data")
+	}
+	iuser, ok := hdl.Data["username"]
+	if !ok {
+		return params, errors.New("no username")
+	}
+	user, ok := iuser.(string)
+	if !ok {
+		return params, fmt.Errorf("invalid user type: %T", iuser)
+	}
+	params.Uname = user
+	if ipassword, ok := hdl.Data["password"]; ok {
+		password, ok := ipassword.(string)
+		if !ok {
+			return params, fmt.Errorf("invalid password type: %T", ipassword)
+		}
+		params.Pass = password
+	}
+	if iport, ok := hdl.Data["port"]; ok {
+		port, ok := iport.(float64)
+		if !ok {
+			return params, fmt.Errorf("invalid port type: %T", iport)
+		}
+		params.Port = int(port)
+	}
+	if isocket, ok := hdl.Data["socket"]; ok {
+		socket, ok := isocket.(string)
+		if !ok {
+			return params, fmt.Errorf("invalid socket type: %T", isocket)
+		}
+		params.UnixSocket = socket
+	}
+	return params, nil
+}
+
 func (hdl *Handle) run(port int, topo, schemaDir string, mysqlOnly, verbose bool) error {
 	launcher, err := launcherPath()
 	if err != nil {
@@ -97,8 +145,8 @@ func (hdl *Handle) run(port int, topo, schemaDir string, mysqlOnly, verbose bool
 	hdl.cmd = exec.Command(
 		launcher,
 		"--port", strconv.Itoa(port),
-		"--topology", topo,
 	)
+	hdl.cmd.Args = append(hdl.cmd.Args, topoFlags(topo)...)
 	if schemaDir != "" {
 		hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", schemaDir)
 	}

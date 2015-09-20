@@ -12,7 +12,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
 	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -73,12 +72,9 @@ func TestMySQL(t *testing.T) {
 		t.Error("map is nil")
 		return
 	}
-	socket := hdl.Data["socket"].(string)
-	params := sqldb.ConnParams{
-		Uname:      "vt_dba",
-		DbName:     "test",
-		UnixSocket: socket,
-		Charset:    "utf8",
+	params, err := hdl.MySQLConnParams()
+	if err != nil {
+		t.Error(err)
 	}
 	conn, err := mysql.Connect(params)
 	if err != nil {
