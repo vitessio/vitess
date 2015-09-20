@@ -120,6 +120,13 @@ func (hdl *Handle) MySQLConnParams() (sqldb.ConnParams, error) {
 		}
 		params.Pass = password
 	}
+	if ihost, ok := hdl.Data["host"]; ok {
+		host, ok := ihost.(string)
+		if !ok {
+			return params, fmt.Errorf("invalid host type: %T", ihost)
+		}
+		params.Host = host
+	}
 	if iport, ok := hdl.Data["port"]; ok {
 		port, ok := iport.(float64)
 		if !ok {
