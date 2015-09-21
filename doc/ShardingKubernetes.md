@@ -1,9 +1,6 @@
 This guide walks you through the process of sharding an existing unsharded
 Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace) in Kubernetes.
 
-**Contents:**
-<div id="toc"></div>
-
 ## Prerequisites
 
 We begin by assuming you've completed the
