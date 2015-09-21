@@ -697,3 +697,17 @@ $ kubectl logs vttablet-100 mysql
 Post the logs somewhere and send a link to the [Vitess
 mailing list](https://groups.google.com/forum/#!forum/vitess)
 to get more help.
+
+### Root Certificates
+
+If you see in the logs a message like this:
+
+```
+x509: failed to load system roots and no roots provided
+```
+
+It usually means that your Kubernetes nodes are running a host OS
+that puts root certificates in a different place than our configuration
+expects by default (for example, Fedora). See the comments in the
+[etcd controller template](https://github.com/youtube/vitess/blob/master/examples/kubernetes/etcd-controller-template.yaml)
+for examples of how to set the right location for your host OS.
