@@ -101,12 +101,12 @@ var (
 )
 
 // Init initializes VTGate server.
-func Init(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, maxInFlight int, additionalGateway string) {
+func Init(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, maxInFlight int, testGateway string) {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
 	rpcVTGate = &VTGate{
-		resolver:     NewResolver(hc, topoServer, serv, "VttabletCall", cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, additionalGateway),
+		resolver:     NewResolver(hc, topoServer, serv, "VttabletCall", cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, testGateway),
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 

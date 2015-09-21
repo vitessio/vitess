@@ -32,7 +32,7 @@ type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.MultiCounters
 	gateway              Gateway
-	additionalGateway    Gateway // temporarily to enable health checking
+	testGateway          Gateway // test health checking module
 }
 
 // shardActionFunc defines the contract for a shard action. Every such function
@@ -44,7 +44,7 @@ type shardActionFunc func(shard string, transactionID int64, sResults chan<- int
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate connections.
-func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, additionalGateway string) *ScatterConn {
+func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, testGateway string) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	tabletConnectStatsName := ""
 	if statsName != "" {
@@ -60,10 +60,10 @@ func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTo
 		gateway:              gateway,
 	}
 
-	// temporarily start other gateways for health checking
-	if additionalGateway != "" {
-		if gc := GetGatewayCreatorByName(additionalGateway); gc != nil {
-			sc.additionalGateway = gc(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
+	// this is to test health checking module when using existing gateway
+	if testGateway != "" {
+		if gc := GetGatewayCreatorByName(testGateway); gc != nil {
+			sc.testGateway = gc(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
 		}
 	}
 
@@ -76,8 +76,8 @@ func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTo
 // but it would reduce connection overhead when serving.
 func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
 	// temporarily start healthchecking regardless of gateway used
-	if stc.additionalGateway != nil {
-		stc.additionalGateway.InitializeConnections(ctx)
+	if stc.testGateway != nil {
+		stc.testGateway.InitializeConnections(ctx)
 	}
 	return stc.gateway.InitializeConnections(ctx)
 }
