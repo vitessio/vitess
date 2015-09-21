@@ -1,9 +1,3 @@
-**Contents:**
-
-<div id="toc"></div>
-
-## Overview
-
 You can access your Vitess cluster using a variety of clients and
 programming languages. Vitess client libraries help your client
 application to more easily talk to your storage system to query data.
