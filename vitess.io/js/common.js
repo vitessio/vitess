@@ -30,11 +30,38 @@ $(document).ready(function() {
     return this.href == url;
   }).parent('li').addClass('active-item');
   //$('#left-nav').fixLeftNav();
+
+  $('#sidebar').affix({
+    offset: {
+      top: 110
+    }
+  });
+  $('#tocSidebar').affix({
+    offset: {
+      top: 110
+    }
+  });
+
+  var $body = $(document.body);
+  var navHeight = $('.navbar').outerHeight(true) + 20;
+
+  $body.scrollspy({
+    target: '#rightCol',
+    offset: navHeight
+  });
+
 });
+
+
 
 // Prettyprint
 $('pre').addClass("prettyprint");
 $.getScript("https://cdn.rawgit.com/google/code-prettify/master/loader/run_prettify.js", function(){
+});
+
+$.getScript("/js/jquery.collapsible.js", function() {
+  highlightActive();
+  $('.submenu').collapsible();
 });
 
   var previous = -1;
@@ -46,18 +73,24 @@ $.getScript("https://cdn.rawgit.com/google/code-prettify/master/loader/run_prett
       document.body.className = document.body.className.replace(' scrolled', '');
     }
     previous = current;
-    console.log('new scroll is ' + previous);
+    var activeTocLinks = $('.active');
+    if (activeTocLinks.length > 1) {
+      for (var i = 0; i < (activeTocLinks.length - 1); i++) {
+        activeTocLinks[i].className = '';
+      }
+    }
   }
 
 // TOC script
 // https://github.com/ghiculescu/jekyll-table-of-contents
 (function($){
   $.fn.toc = function(options) {
+    var tocDepth = $('#toc-depth').attr('data-toc-depth') || ''
     var defaults = {
       noBackToTopLinks: false,
-      title: '',
+      title: '<b>Contents</b>',
       minimumHeaders: 3,
-      headers: 'h1, h2, h3, h4, h5, h6',
+      headers: tocDepth || 'h1, h2, h3, h4, h5, h6',
       listType: 'ol', // values: [ol|ul]
       showEffect: 'show', // values: [show|slideDown|fadeIn|none]
       showSpeed: 'slow' // set to 0 to deactivate effect
@@ -72,9 +105,9 @@ $.getScript("https://cdn.rawgit.com/google/code-prettify/master/loader/run_prett
 
     var headers = $(settings.headers).filter(function() {
       // get all headers with an ID
-      var previousSiblingName = $(this).prev().attr( "name" );
+      var previousSiblingName = $(this).prev().attr( 'name' );
       if (!this.id && previousSiblingName) {
-        this.id = $(this).attr( "id", previousSiblingName.replace(/\./g, "-") );
+        this.id = $(this).attr( 'id', previousSiblingName.replace(/\./g, '-') );
       }
       return this.id;
     }), output = $(this);
@@ -93,13 +126,14 @@ $.getScript("https://cdn.rawgit.com/google/code-prettify/master/loader/run_prett
       none: function() { output.html(html); }
     };
 
-    var get_level = function(ele) { return parseInt(ele.nodeName.replace("H", ""), 10); }
+    var get_level = function(ele) { return parseInt(ele.nodeName.replace('H', ''), 10); }
     var highest_level = headers.map(function(_, ele) { return get_level(ele); }).get().sort()[0];
     var return_to_top = '<i class="icon-arrow-up back-to-top"> </i>';
 
     var level = get_level(headers[0]),
       this_level,
-      html = settings.title + " <"+settings.listType+">";
+      html = ('<a href="#top_of_page" id="toc-contents-header" data-title="' +
+              settings.title + '">' + settings.title + '</a><'+settings.listType+'>');
     headers.on('click', function() {
       if (!settings.noBackToTopLinks) {
         window.location.hash = this.id;
