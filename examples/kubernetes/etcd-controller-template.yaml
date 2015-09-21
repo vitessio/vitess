@@ -18,14 +18,22 @@ spec:
     spec:
       volumes:
         - name: certs
-          hostPath: {path: /etc/ssl/certs}
+          # Uncomment one of the following lines to configure the location
+          # of the root certificates file on your host OS. We need this so
+          # we can import it into the container OS.
+          # If your host OS is Fedora/RHEL:
+          #hostPath: {path: /etc/pki/tls/certs/ca-bundle.crt}
+          # If your host OS is Debian/Ubuntu/Gentoo:
+          hostPath: {path: /etc/ssl/certs/ca-certificates.crt}
       containers:
         - name: etcd
           image: vitess/etcd:v2.0.13-lite
           volumeMounts:
             - name: certs
               readOnly: true
-              mountPath: /etc/ssl/certs
+              # Mount root certs from the host OS into the location
+              # expected for our container OS (Debian):
+              mountPath: /etc/ssl/certs/ca-certificates.crt
           command:
             - bash
             - "-c"
