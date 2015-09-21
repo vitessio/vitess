@@ -65,7 +65,7 @@ type querySplitQuery struct {
 
 type splitQueryResponse struct {
 	splitQuery *querySplitQuery
-	reply      []proto.SplitQueryPart
+	reply      []*pbg.SplitQueryResponse_Part
 	err        error
 }
 
@@ -141,8 +141,8 @@ func (conn *FakeVTGateConn) AddSplitQuery(
 	bindVariables map[string]interface{},
 	splitColumn string,
 	splitCount int,
-	expectedResult []proto.SplitQueryPart) {
-	reply := make([]proto.SplitQueryPart, splitCount)
+	expectedResult []*pbg.SplitQueryResponse_Part) {
+	reply := make([]*pbg.SplitQueryResponse_Part, splitCount)
 	copy(reply, expectedResult)
 	key := getSplitQueryKey(keyspace, sql, splitColumn, splitCount)
 	conn.splitQueryMap[key] = &splitQueryResponse{
@@ -352,14 +352,14 @@ func (conn *FakeVTGateConn) Rollback2(ctx context.Context, session interface{}) 
 }
 
 // SplitQuery please see vtgateconn.Impl.SplitQuery
-func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
+func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
 	response, ok := conn.splitQueryMap[getSplitQueryKey(keyspace, query, splitColumn, splitCount)]
 	if !ok {
 		return nil, fmt.Errorf(
 			"no match for keyspace: %s, query: %v, split column: %v, split count: %d",
 			keyspace, query, splitColumn, splitCount)
 	}
-	reply := make([]proto.SplitQueryPart, splitCount, splitCount)
+	reply := make([]*pbg.SplitQueryResponse_Part, splitCount, splitCount)
 	copy(reply, response.reply)
 	return reply, nil
 }

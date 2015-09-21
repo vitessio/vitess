@@ -7,10 +7,6 @@ If you already have Kubernetes v0.19+ running in one of the other
 you can skip the <code>gcloud</code> steps.
 The <code>kubectl</code> steps will apply to any Kubernetes cluster.
 
-**Contents:**
-
-<div id="toc"></div>
-
 ## Prerequisites
 
 To complete the exercise in this guide, you must locally install Go 1.3+,

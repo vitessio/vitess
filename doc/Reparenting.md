@@ -1,9 +1,3 @@
-**Contents:**
-
-<div id="toc"></div>
-
-## Overview
-
 **Reparenting** is the process of changing a shard's master tablet
 from one host to another or changing a slave tablet to have a
 different master. Reparenting can be initiated manually

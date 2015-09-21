@@ -1,7 +1,3 @@
-**Contents:**
-
-<div id="toc"></div>
-
 ## Platform support
 
 Vitess runs on either Ubuntu 14.04 (Trusty) or Debian 7.0 (Wheezy).

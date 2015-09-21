@@ -198,20 +198,6 @@ type SplitQueryRequest struct {
 	SplitCount  int
 }
 
-// SplitQueryPart is a sub query of SplitQueryRequest.Query
-// Only one of Query or QueryShard will be set.
-type SplitQueryPart struct {
-	Query      *KeyRangeQuery
-	QueryShard *QueryShard
-	Size       int64
-}
-
-// SplitQueryResult is the result for SplitQueryRequest
-type SplitQueryResult struct {
-	Splits []SplitQueryPart
-	Err    *mproto.RPCError
-}
-
 // BeginRequest is the BSON implementation of the proto3 query.BeginRequest
 type BeginRequest struct {
 	CallerID *tproto.CallerID // only used by BSON

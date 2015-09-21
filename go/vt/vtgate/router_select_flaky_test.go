@@ -13,6 +13,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -515,7 +516,7 @@ func TestSelectScatter(t *testing.T) {
 		s.MapTestConn(shard, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	_, err := routerExec(router, "select * from user", nil)
@@ -544,7 +545,7 @@ func TestStreamSelectScatter(t *testing.T) {
 		s.MapTestConn(shard, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	sql := "select * from user"
@@ -583,7 +584,7 @@ func TestSelectScatterFail(t *testing.T) {
 		s.MapTestConn(shard, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	_, err := routerExec(router, "select * from user", nil)

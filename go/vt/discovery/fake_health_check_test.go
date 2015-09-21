@@ -10,6 +10,10 @@ type fakeHealthCheck struct {
 	endPoints map[string]*pbt.EndPoint
 }
 
+// SetListener sets the listener for healthcheck updates.
+func (fhc *fakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
+}
+
 // AddEndPoint adds the endpoint, and starts health check.
 func (fhc *fakeHealthCheck) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
 	key := endPointToMapKey(endPoint)
@@ -29,5 +33,10 @@ func (fhc *fakeHealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard st
 
 // GetEndPointStatsFromTarget returns all EndPointStats for the given target.
 func (fhc *fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*EndPointStats {
+	return nil
+}
+
+// CacheStatus returns a displayable version of the cache.
+func (fhc *fakeHealthCheck) CacheStatus() EndPointsCacheStatusList {
 	return nil
 }
