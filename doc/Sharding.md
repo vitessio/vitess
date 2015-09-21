@@ -2,10 +2,6 @@ Sharding is a method of horizontally partitioning a database to store
 data across two or more database servers. This document explains how
 sharding works in Vitess and the types of sharding that Vitess supports.
 
-**Contents:**
-
-<div id="toc"></div>
-
 ## Overview
 
 In Vitess, a shard is a partition of a keyspace. In turn, the keyspace
