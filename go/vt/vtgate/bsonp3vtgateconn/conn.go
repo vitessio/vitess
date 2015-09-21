@@ -370,7 +370,7 @@ func (conn *vtgateConn) Rollback2(ctx context.Context, session interface{}) erro
 	return nil
 }
 
-func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
+func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*pb.SplitQueryResponse_Part, error) {
 	request := &pb.SplitQueryRequest{
 		CallerId:    callerid.EffectiveCallerIDFromContext(ctx),
 		Keyspace:    keyspace,
@@ -382,7 +382,7 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query s
 	if err := conn.rpcConn.Call(ctx, "VTGateP3.SplitQuery", request, response); err != nil {
 		return nil, vterrors.FromJSONError(err)
 	}
-	return proto.ProtoToSplitQueryParts(response), nil
+	return response.Splits, nil
 }
 
 func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topopb.SrvKeyspace, error) {

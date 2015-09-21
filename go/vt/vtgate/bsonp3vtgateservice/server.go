@@ -331,18 +331,16 @@ func (vtg *VTGateP3) SplitQuery(ctx context.Context, request *pb.SplitQueryReque
 	ctx = callerid.NewContext(ctx,
 		request.CallerId,
 		callerid.NewImmediateCallerID("bsonp3 client"))
-	reply := &proto.SplitQueryResult{}
-	vtgErr := vtg.server.SplitQuery(ctx,
+	splits, vtgErr := vtg.server.SplitQuery(ctx,
 		request.Keyspace,
 		string(request.Query.Sql),
 		tproto.Proto3ToBindVariables(request.Query.BindVariables),
 		request.SplitColumn,
-		int(request.SplitCount),
-		reply)
+		int(request.SplitCount))
 	if vtgErr != nil {
 		return vterrors.ToJSONError(vtgErr)
 	}
-	*response = *proto.SplitQueryPartsToProto(reply.Splits)
+	response.Splits = splits
 	return nil
 }
 

@@ -38,7 +38,7 @@ type VTGateService interface {
 	Rollback(ctx context.Context, inSession *proto.Session) error
 
 	// Map Reduce support
-	SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error
+	SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error)
 
 	// Topology support
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error)

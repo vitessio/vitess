@@ -337,18 +337,18 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	reply := new(proto.SplitQueryResult)
-	vtgErr := vtg.server.SplitQuery(ctx,
+	splits, vtgErr := vtg.server.SplitQuery(ctx,
 		request.Keyspace,
 		string(request.Query.Sql),
 		tproto.Proto3ToBindVariables(request.Query.BindVariables),
 		request.SplitColumn,
-		int(request.SplitCount),
-		reply)
+		int(request.SplitCount))
 	if vtgErr != nil {
 		return nil, vterrors.ToGRPCError(vtgErr)
 	}
-	return proto.SplitQueryPartsToProto(reply.Splits), nil
+	return &pb.SplitQueryResponse{
+		Splits: splits,
+	}, nil
 }
 
 // GetSrvKeyspace is the RPC version of vtgateservice.VTGateService method
