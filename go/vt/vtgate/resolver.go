@@ -15,8 +15,10 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/discovery"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
@@ -50,9 +52,9 @@ type Resolver struct {
 
 // NewResolver creates a new Resolver. All input parameters are passed through
 // for creating ScatterConn.
-func NewResolver(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration) *Resolver {
+func NewResolver(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, testGateway string) *Resolver {
 	return &Resolver{
-		scatterConn: NewScatterConn(serv, statsName, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife),
+		scatterConn: NewScatterConn(hc, topoServer, serv, statsName, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, testGateway),
 		toposerv:    serv,
 		cell:        cell,
 	}

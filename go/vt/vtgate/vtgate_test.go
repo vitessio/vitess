@@ -36,7 +36,7 @@ func init() {
   }
 }
 `)
-	Init(new(sandboxTopo), schema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, 0)
+	Init(nil, topo.Server{}, new(sandboxTopo), schema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, 0, "")
 }
 
 func TestVTGateExecute(t *testing.T) {
