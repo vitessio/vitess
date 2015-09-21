@@ -2,10 +2,6 @@ This step-by-step guide explains how to split an unsharded keyspace into two sha
 
 You can use the same general instructions to reshard a sharded keyspace.
 
-**Contents:**
-
-<div id="toc"></div>
-
 ## Prerequisites
 
 To complete these steps, you must have:

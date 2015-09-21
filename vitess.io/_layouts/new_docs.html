@@ -3,37 +3,20 @@ layout: new_default
 bodyclass: docs
 ---
 
-<div class="row">
-  <div class="col-sm-3">
-    <div id="left-nav">
-    <ul class="list-unstyled docs-side-nav">
-      <li><h4 class="no-top-margin">Overview</h4></li>
-      <li><a href="/overview/">What is Vitess</a></li>
-      <li><a href="/overview/concepts.html">Key Concepts</a></li>
-      <li><h4>Getting Started</h4></li>
-      <li><a href="/getting-started/">Run Vitess on Kubernetes</a></li>
-      <li><a href="/getting-started/local-instance.html">Run Vitess Locally</a></li>
-      <li><h4>User Guide</h4></li>
-      <li><a href="/user-guide/introduction.html">Introduction</a>
-      <li><a href="/user-guide/client-libraries.html">Client Libraries</a>
-      <li><a href="/user-guide/backup-and-restore.html">Backing Up Data</a>
-      <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
-      <li><a href="/user-guide/schema-management.html">Schema Management</a></li>
-      <li><a href="/user-guide/sharding.html">Sharding</a>
-        <ul style="list-style-type: none">
-          <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-          <li><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
-        </ul>
-      </li>
-      <li><h4>Reference Guides</h4></li>
-      <li><a href="/reference/vitess-api.html">Vitess API</a>
-      <li><a href="/reference/vtctl.html">vtctl Commands</a>
-      <li><h4>Other Resources</h4></li>
-      <li><a href="/resources/presentations.html">Presentations</a>
-    </ul>
+  <div class="row scroll-margin" id="toc-content-row">
+    <div class="col-md-3" id="leftCol">
+      <ul class="nav nav-stacked mobile-left-nav-menu" id="sidebar">
+        {% include left-nav-menu.html %}
+      </ul>
+    </div>
+    <div class="col-md-2" id="rightCol">
+      <div class="nav nav-stacked" id="tocSidebar">
+        <div id="toc"></div>
+      </div>
+    </div>
+    <div class="col-md-7" id="centerCol">
+      <div id="centerTextCol">
+        {{ content }}
+      </div>
+    </div>
   </div>
-  </div>
-  <div class="col-sm-9">
-      {{ content }}
-  </div>
-</div>
