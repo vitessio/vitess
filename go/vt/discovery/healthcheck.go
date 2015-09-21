@@ -31,6 +31,8 @@ type EndPointStats struct {
 
 // HealthCheck defines the interface of health checking module.
 type HealthCheck interface {
+	// SetListener sets the listener for healthcheck updates. It should not block.
+	SetListener(listener HealthCheckStatsListener)
 	// AddEndPoint adds the endpoint, and starts health check.
 	AddEndPoint(cell string, endPoint *pbt.EndPoint)
 	// RemoveEndPoint removes the endpoint, and stops the health check.
@@ -42,11 +44,10 @@ type HealthCheck interface {
 }
 
 // NewHealthCheck creates a new HealthCheck object.
-func NewHealthCheck(listener HealthCheckStatsListener, connTimeout time.Duration, retryDelay time.Duration) HealthCheck {
+func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration) HealthCheck {
 	return &HealthCheckImpl{
 		addrToConns: make(map[string]*healthCheckConn),
 		targetToEPs: make(map[string]map[string]map[pbt.TabletType][]*pbt.EndPoint),
-		listener:    listener,
 		connTimeout: connTimeout,
 		retryDelay:  retryDelay,
 	}
@@ -182,7 +183,9 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hcc.mu.Unlock()
 		}
 		// notify downstream for tablettype and realtimestats change
-		hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.target, hcc.tabletExternallyReparentedTimestamp, hcc.stats)
+		if hc.listener != nil {
+			hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.target, hcc.tabletExternallyReparentedTimestamp, hcc.stats)
+		}
 		return nil
 	}
 }
@@ -201,6 +204,11 @@ func (hc *HealthCheckImpl) deleteConn(endPoint *pbt.EndPoint) {
 	if hcc.target != nil {
 		hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 	}
+}
+
+// SetListener sets the listener for healthcheck updates. It should not block.
+func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener) {
+	hc.listener = listener
 }
 
 // AddEndPoint adds the endpoint, and starts health check.
