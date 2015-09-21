@@ -7,101 +7,185 @@
 package vttest
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
-	"strings"
+	"path"
+	"strconv"
+	"time"
+
+	"github.com/youtube/vitess/go/sqldb"
 )
 
-var (
-	curShardNames []string
-	curReplicas   int
-	curRdonly     int
-	curKeyspace   string
-	curSchema     string
-	curVSchema    string
-	curVtGatePort int
-)
+// Handle allows you to interact with the processes launched by vttest.
+type Handle struct {
+	Data map[string]interface{}
 
-func run(shardNames []string, replicas, rdonly int, keyspace, schema, vschema, op string) error {
-	curShardNames = shardNames
-	curReplicas = replicas
-	curRdonly = rdonly
-	curKeyspace = keyspace
-	curSchema = schema
-	curVSchema = vschema
-	vttop := os.Getenv("VTTOP")
-	if vttop == "" {
-		return errors.New("VTTOP not set")
+	cmd   *exec.Cmd
+	stdin io.WriteCloser
+
+	// dbname is valid only for LaunchMySQL.
+	dbname string
+}
+
+// LaunchVitess launches a vitess test cluster.
+func LaunchVitess(topo, schemaDir string, verbose bool) (hdl *Handle, err error) {
+	hdl = &Handle{}
+	err = hdl.run(randomPort(), topo, schemaDir, false, verbose)
+	if err != nil {
+		return nil, err
 	}
-	cfg, err := json.Marshal(map[string]int{
-		"replica": replicas,
-		"rdonly":  rdonly,
-	})
+	return hdl, nil
+}
+
+// LauncMySQL launches just a MySQL instance with the specified db name. The schema
+// is specified as a string instead of a file.
+func LauncMySQL(dbName, schema string, verbose bool) (hdl *Handle, err error) {
+	hdl = &Handle{
+		dbname: dbName,
+	}
+	var schemaDir string
+	if schema != "" {
+		schemaDir, err = ioutil.TempDir("", "vt")
+		if err != nil {
+			return nil, err
+		}
+		defer os.RemoveAll(schemaDir)
+		ksDir := path.Join(schemaDir, dbName)
+		err = os.Mkdir(ksDir, os.ModeDir|0775)
+		if err != nil {
+			return nil, err
+		}
+		fileName := path.Join(ksDir, "schema.sql")
+		f, err := os.Create(fileName)
+		if err != nil {
+			return nil, err
+		}
+		n, err := f.WriteString(schema)
+		if n != len(schema) {
+			return nil, errors.New("short write")
+		}
+		if err != nil {
+			return nil, err
+		}
+		err = f.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = hdl.run(randomPort(), fmt.Sprintf("%s/0:%s", dbName, dbName), schemaDir, true, verbose)
+	if err != nil {
+		return nil, err
+	}
+	return hdl, nil
+}
+
+// TearDown tears down the launched processes.
+func (hdl *Handle) TearDown() error {
+	_, err := hdl.stdin.Write([]byte("\n"))
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(
-		"python",
-		vttop+"/test/java_vtgate_test_helper.py",
-		"--shards",
-		strings.Join(shardNames, ","),
-		"--tablet-config",
-		string(cfg),
-		"--keyspace",
-		keyspace,
-	)
-	if schema != "" {
-		cmd.Args = append(cmd.Args, "--schema", schema)
+	return hdl.cmd.Wait()
+}
+
+// MySQLConnParams builds the MySQL connection params.
+// It's valid only if you used LaunchMySQL.
+func (hdl *Handle) MySQLConnParams() (sqldb.ConnParams, error) {
+	params := sqldb.ConnParams{
+		Charset: "utf8",
+		DbName:  hdl.dbname,
 	}
-	if vschema != "" {
-		cmd.Args = append(cmd.Args, "--vschema", vschema)
+	if hdl.Data == nil {
+		return params, errors.New("no data")
 	}
-	cmd.Args = append(cmd.Args, op)
-	cmd.Stderr = os.Stderr
-	var stdout io.ReadCloser
-	var output []byte
-	stdout, err = cmd.StdoutPipe()
-	cmd.Start()
-	r := bufio.NewReader(stdout)
-	output, err = r.ReadBytes('\n')
-	if err == nil {
-		var data map[string]interface{}
-		if err := json.Unmarshal(output, &data); err == nil {
-			curVtGatePortFloat64, ok := data["port"].(float64)
-			if ok {
-				curVtGatePort = int(curVtGatePortFloat64)
-				fmt.Printf("VtGate Port = %d\n", curVtGatePort)
-			}
+	iuser, ok := hdl.Data["username"]
+	if !ok {
+		return params, errors.New("no username")
+	}
+	user, ok := iuser.(string)
+	if !ok {
+		return params, fmt.Errorf("invalid user type: %T", iuser)
+	}
+	params.Uname = user
+	if ipassword, ok := hdl.Data["password"]; ok {
+		password, ok := ipassword.(string)
+		if !ok {
+			return params, fmt.Errorf("invalid password type: %T", ipassword)
 		}
+		params.Pass = password
 	}
-	return err
+	if ihost, ok := hdl.Data["host"]; ok {
+		host, ok := ihost.(string)
+		if !ok {
+			return params, fmt.Errorf("invalid host type: %T", ihost)
+		}
+		params.Host = host
+	}
+	if iport, ok := hdl.Data["port"]; ok {
+		port, ok := iport.(float64)
+		if !ok {
+			return params, fmt.Errorf("invalid port type: %T", iport)
+		}
+		params.Port = int(port)
+	}
+	if isocket, ok := hdl.Data["socket"]; ok {
+		socket, ok := isocket.(string)
+		if !ok {
+			return params, fmt.Errorf("invalid socket type: %T", isocket)
+		}
+		params.UnixSocket = socket
+	}
+	return params, nil
 }
 
-// LocalLaunch launches the cluster. Only one cluster can be active at a time.
-func LocalLaunch(shardNames []string, replicas, rdonly int, keyspace, schema, vschema string) error {
-	err := run(shardNames, replicas, rdonly, keyspace, schema, vschema, "setup")
+func (hdl *Handle) run(port int, topo, schemaDir string, mysqlOnly, verbose bool) error {
+	launcher, err := launcherPath()
 	if err != nil {
-		LocalTeardown()
+		return err
 	}
-	return err
+	hdl.cmd = exec.Command(
+		launcher,
+		"--port", strconv.Itoa(port),
+	)
+	hdl.cmd.Args = append(hdl.cmd.Args, topoFlags(topo)...)
+	if schemaDir != "" {
+		hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", schemaDir)
+	}
+	if mysqlOnly {
+		hdl.cmd.Args = append(hdl.cmd.Args, "--mysql_only")
+	}
+	if verbose {
+		hdl.cmd.Args = append(hdl.cmd.Args, "--verbose")
+	}
+	hdl.cmd.Stderr = os.Stderr
+	stdout, err := hdl.cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(stdout)
+	hdl.stdin, err = hdl.cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	err = hdl.cmd.Start()
+	if err != nil {
+		return err
+	}
+	return decoder.Decode(&hdl.Data)
 }
 
-// LocalTeardown shuts down the previously launched cluster.
-func LocalTeardown() error {
-	if curShardNames == nil {
-		return nil
-	}
-	err := run(curShardNames, curReplicas, curRdonly, curKeyspace, curSchema, curVSchema, "teardown")
-	curShardNames = nil
-	return err
+// randomPort returns a random number between 10k & 90k.
+func randomPort() int {
+	v := rand.Int31n(80000)
+	return int(v + 10000)
 }
 
-// VtGatePort returns current VtGate port
-func VtGatePort() int {
-	return curVtGatePort
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
