@@ -60,6 +60,7 @@ class LocalDatabase(object):
       return {
           'username': self.mysql_db.username(),
           'password': self.mysql_db.password(),
+          'host': '127.0.0.1',
           'port': self.mysql_db.port(),
           'socket': self.mysql_db.unix_socket(),
           }
