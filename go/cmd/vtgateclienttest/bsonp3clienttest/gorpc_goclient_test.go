@@ -16,8 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/bsonp3vtgateservice"
 )
 
-// TestGoRPCGoClient tests the go client using goRPC
-func TestGoRPCGoClient(t *testing.T) {
+func TestBSONRPCP3GoClient(t *testing.T) {
 	service := services.CreateServices()
 
 	// listen on a random port

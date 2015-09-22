@@ -168,6 +168,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals("true", echo.get("asTransaction"));
 
     echo = getEcho(
         conn.executeBatchKeyspaceIds(ctx, Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE,
@@ -179,6 +180,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(KEYSPACE_IDS_ECHO_OLD, echo.get("keyspaceIds"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals("true", echo.get("asTransaction"));
   }
 
   @Test
@@ -292,6 +294,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+    Assert.assertEquals("true", echo.get("asTransaction"));
 
     echo =
         getEcho(tx.executeBatchKeyspaceIds(ctx, Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE,
@@ -304,6 +307,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+    Assert.assertEquals("true", echo.get("asTransaction"));
 
     tx.commit(ctx);
   }
