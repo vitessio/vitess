@@ -23,8 +23,8 @@ var (
 )
 
 func init() {
-	hcConnCounters = stats.NewMultiCounters("HealthcheckConnections", []string{"keyspace", "shard", "tablettype"})
-	hcErrorCounters = stats.NewMultiCounters("HealthcheckErrors", []string{"keyspace", "shard", "tablettype"})
+	hcConnCounters = stats.NewMultiCounters("HealthcheckConnections", []string{"keyspace", "shardname", "tablettype"})
+	hcErrorCounters = stats.NewMultiCounters("HealthcheckErrors", []string{"keyspace", "shardname", "tablettype"})
 }
 
 // HealthCheckStatsListener is the listener to receive health check stats update.
