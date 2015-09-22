@@ -47,12 +47,20 @@ class VtProcess(object):
     for _ in xrange(0, self.START_RETRIES):
       self.port = environment.get_port(self.port_name,
                                        instance=self.port_instance)
+      if environment.get_protocol() == 'grpc':
+        self.grpc_port = environment.get_port(self.port_name,
+                                              instance=self.port_instance,
+                                              protocol='grpc')
+      else:
+        self.grpc_port = None
       logs_subdirectory = environment.get_logs_directory(self.directory)
       cmd = [
           self.binary,
           '-port', '%u' % self.port,
           '-log_dir', logs_subdirectory,
           ]
+      if environment.get_protocol() == 'grpc':
+        cmd.extend(['-grpc_port', '%u' % self.grpc_port])
       cmd.extend(self.extraparams)
       logging.info('Starting process: %s', cmd)
       stdout = os.path.join(logs_subdirectory, '%s.%d.log' %
@@ -83,6 +91,12 @@ class VtProcess(object):
   def addr(self):
     """Return the host:port of the process."""
     return '%s:%u' % (socket.getfqdn(), self.port)
+
+  def grpc_addr(self):
+    """Return the grpc host:port of the process.
+
+    Only call this is environment.get_protocol() == 'grpc'."""
+    return '%s:%u' % (socket.getfqdn(), self.grpc_port)
 
   def get_vars(self):
     """Return the debug vars."""
@@ -138,7 +152,7 @@ class VtoccProcess(VtProcess):
 
   def add_shard(self, config):
     """Add the shard of this process to the given config."""
-    config.add_shard(self.keyspace, self.shard, self.port)
+    config.add_shard(self.keyspace, self.shard, self.port, self.grpc_port)
 
   def wait_for_state(self, state_to_wait='SERVING', timeout=60.0):
     if not state_to_wait:

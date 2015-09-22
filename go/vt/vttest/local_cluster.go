@@ -180,9 +180,9 @@ func (hdl *Handle) run(port int, topo, schemaDir string, mysqlOnly, verbose bool
 	return decoder.Decode(&hdl.Data)
 }
 
-// randomPort returns a random number between 10k & 90k.
+// randomPort returns a random number between 10k & 30k.
 func randomPort() int {
-	v := rand.Int31n(80000)
+	v := rand.Int31n(20000)
 	return int(v + 10000)
 }
 

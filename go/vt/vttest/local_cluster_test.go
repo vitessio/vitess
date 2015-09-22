@@ -18,8 +18,6 @@ import (
 )
 
 func TestVitess(t *testing.T) {
-	// TODO(sougou/alainjobart): Fix this test.
-	t.Skip()
 	hdl, err := LaunchVitess("test_keyspace/0:test_keyspace", "", false)
 	if err != nil {
 		t.Error(err)
@@ -36,19 +34,23 @@ func TestVitess(t *testing.T) {
 		t.Error("map is nil")
 		return
 	}
-	fport, ok := hdl.Data["port"]
+	portName := "port"
+	if vtgateProtocol() == "grpc" {
+		portName = "grpc_port"
+	}
+	fport, ok := hdl.Data[portName]
 	if !ok {
-		t.Error("port not found in map")
+		t.Errorf("port %v not found in map", portName)
 		return
 	}
 	port := int(fport.(float64))
 	ctx := context.Background()
-	conn, err := vtgateconn.DialProtocol(ctx, "grpc", fmt.Sprintf("localhost:%d", port), 5*time.Second)
+	conn, err := vtgateconn.DialProtocol(ctx, vtgateProtocol(), fmt.Sprintf("localhost:%d", port), 5*time.Second)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	_, err = conn.ExecuteShards(ctx, "select * from test_table", "test_keyspace", []string{"0"}, nil, topodata.TabletType_MASTER)
+	_, err = conn.ExecuteShards(ctx, "select 1 from dual", "test_keyspace", []string{"0"}, nil, topodata.TabletType_MASTER)
 	if err != nil {
 		t.Error(err)
 		return
