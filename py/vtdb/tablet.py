@@ -11,48 +11,73 @@ from net import gorpc
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import vtdb_logger
+from vtproto import vtrpc_pb2
 
 
-_errno_pattern = re.compile(r'\(errno (\d+)\)')
+class TabletError(Exception):
+  """TabletError is raised by an RPC call with a server-side application error.
 
+  TabletErrors have an error code and message.
+  """
 
-def handle_app_error(exc_args):
-  msg = str(exc_args[0]).lower()
+  _errno_pattern = re.compile(r'\(errno (\d+)\)')
 
-  # Operational Error
-  if msg.startswith('retry'):
-    return dbexceptions.RetryError(exc_args)
+  def __init__(self, method_name, error=None):
+    """Initializes a TabletError with appropriate defaults from an error dict.
 
-  if msg.startswith('fatal'):
-    return dbexceptions.FatalError(exc_args)
+    Args:
+      method_name: RPC method name, as a string, that was called.
+      error: error dict returned by an RPC call.
+    """
+    if error is None or not isinstance(error, dict):
+      error = {}
+    self.method_name = method_name
+    self.code = error.get('Code', vtrpc_pb2.UNKNOWN_ERROR)
+    self.message = error.get('Message', 'Missing error message')
+    # Make self.args reflect the error components
+    super(TabletError, self).__init__(self.message, method_name, self.code)
 
-  if msg.startswith('tx_pool_full'):
-    return dbexceptions.TxPoolFull(exc_args)
+  def __str__(self):
+    """Print the error nicely, converting the proto error enum to its name"""
+    return '%s returned %s with message: %s' % (self.method_name, 
+      vtrpc_pb2.ErrorCode.Name(self.code), self.message)
 
-  # Integrity and Database Error
-  match = _errno_pattern.search(msg)
-  if match:
-    # Prune the error message to truncate after the mysql errno, since
-    # the error message may contain the query string with bind variables.
-    mysql_errno = int(match.group(1))
-    if mysql_errno == 1062:
-      parts = _errno_pattern.split(msg)
+  def convert_to_dbexception(self, args):
+    """Converts from a TabletError to the appropriate dbexceptions class.
+
+    Args:
+      args: argument tuple to use to create the new exception.
+
+    Returns:
+      An exception from dbexceptions.
+    """
+    if self.code == vtrpc_pb2.QUERY_NOT_SERVED:
+      return dbexceptions.RetryError(args)
+
+    if self.code == vtrpc_pb2.INTERNAL_ERROR:
+      return dbexceptions.FatalError(args)
+
+    if self.code == vtrpc_pb2.RESOURCE_EXHAUSTED:
+      return dbexceptions.TxPoolFull(args)
+
+    if self.code == vtrpc_pb2.INTEGRITY_ERROR:
+      # Prune the error message to truncate after the mysql errno, since
+      # the error message may contain the query string with bind variables.
+      msg = self.message.lower()
+      parts = self._errno_pattern.split(msg)
       pruned_msg = msg[:msg.find(parts[2])]
-      new_args = (pruned_msg,) + tuple(exc_args[1:])
+      new_args = (pruned_msg,) + tuple(args[1:])
       return dbexceptions.IntegrityError(new_args)
-    # TODO(sougou/liguo): remove this case once servers are deployed
-    elif mysql_errno == 1290 and 'read-only' in msg:
-      return dbexceptions.RetryError(exc_args)
 
-  return dbexceptions.DatabaseError(exc_args)
+    return dbexceptions.DatabaseError(args)
 
 
 def convert_exception(exc, *args):
   new_args = exc.args + args
   if isinstance(exc, gorpc.TimeoutError):
     return dbexceptions.TimeoutError(new_args)
-  elif isinstance(exc, gorpc.AppError):
-    return handle_app_error(new_args)
+  elif isinstance(exc, TabletError):
+    return exc.convert_to_dbexception(new_args)
   elif isinstance(exc, gorpc.ProgrammingError):
     return dbexceptions.ProgrammingError(new_args)
   elif isinstance(exc, gorpc.GoRpcError):
@@ -98,7 +123,7 @@ class TabletConnection(object):
       self.client = self._create_client()
       try:
         self.client.dial()
-      except gorpc.GoRpcError as e:
+      except (gorpc.GoRpcError, TabletError) as e:
         raise convert_exception(e, str(self))
     return self.client
 
@@ -129,7 +154,7 @@ class TabletConnection(object):
       response = self.rpc_call_and_extract_error(
           'SqlQuery.GetSessionId2', req)
       self.session_id = response.reply['SessionId']
-    except gorpc.GoRpcError as e:
+    except (gorpc.GoRpcError, TabletError) as e:
       raise convert_exception(e, str(self))
 
   def close(self):
@@ -156,7 +181,7 @@ class TabletConnection(object):
     try:
       response = self.rpc_call_and_extract_error('SqlQuery.Begin2', req)
       self.transaction_id = response.reply['TransactionId']
-    except gorpc.GoRpcError as e:
+    except (gorpc.GoRpcError, TabletError) as e:
       raise convert_exception(e, str(self))
 
   def commit(self):
@@ -179,7 +204,7 @@ class TabletConnection(object):
     try:
       response = self.rpc_call_and_extract_error('SqlQuery.Commit2', req)
       return response.reply
-    except gorpc.GoRpcError as e:
+    except (gorpc.GoRpcError, TabletError) as e:
       raise convert_exception(e, str(self))
 
   def rollback(self):
@@ -201,7 +226,7 @@ class TabletConnection(object):
     try:
       response = self.rpc_call_and_extract_error('SqlQuery.Rollback2', req)
       return response.reply
-    except gorpc.GoRpcError as e:
+    except (gorpc.GoRpcError, TabletError) as e:
       raise convert_exception(e, str(self))
 
   def rpc_call_and_extract_error(self, method_name, request):
@@ -215,7 +240,7 @@ class TabletConnection(object):
       Response from RPC.
 
     Raises:
-      gorpc.AppError if there is an app error embedded in the reply
+      TabletError if there is an app error embedded in the reply
     """
     response = self._get_client().call(method_name, request)
     reply = response.reply
@@ -224,9 +249,7 @@ class TabletConnection(object):
     # Handle the case of new client => old server
     err = reply.get('Err', None)
     if err:
-      if not isinstance(reply, dict) or 'Message' not in err:
-        raise gorpc.AppError('Missing error message', method_name)
-      raise gorpc.AppError(reply['Err']['Message'], method_name)
+      raise TabletError(method_name, err)
     return response
 
   def _execute(self, sql, bind_variables):
@@ -256,7 +279,7 @@ class TabletConnection(object):
 
       rowcount = reply['RowsAffected']
       lastrowid = reply['InsertId']
-    except gorpc.GoRpcError as e:
+    except (gorpc.GoRpcError, TabletError) as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql)
     except Exception:
@@ -302,7 +325,7 @@ class TabletConnection(object):
         rowcount = reply['RowsAffected']
         lastrowid = reply['InsertId']
         rowsets.append((results, rowcount, lastrowid, fields))
-    except gorpc.GoRpcError as e:
+    except (gorpc.GoRpcError, TabletError) as e:
       self.logger_object.log_private_data(bind_variables_list)
       raise convert_exception(e, str(self), sql_list)
     except Exception:
@@ -355,14 +378,13 @@ class TabletConnection(object):
       reply = first_response.reply
       if reply.get('Err'):
         drain_conn_after_streaming_app_error()
-        raise gorpc.AppError(reply['Err'].get(
-            'Message', 'Missing error message'))
+        raise TabletError('SqlQuery.StreamExecute2', reply['Err'])
 
       for field in reply['Fields']:
         stream_fields.append((field['Name'], field['Type']))
         stream_conversions.append(
             field_types.conversions.get(field['Type']))
-    except gorpc.GoRpcError as e:
+    except (gorpc.GoRpcError, TabletError) as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql)
     except Exception:
@@ -383,11 +405,10 @@ class TabletConnection(object):
               break
             if stream_result.reply.get('Err'):
               drain_conn_after_streaming_app_error()
-              raise gorpc.AppError(stream_result.reply['Err'].get(
-                  'Message', 'Missing error message'))
+              raise TabletError('SqlQuery.StreamExecute2', reply['Err'])
             for result_item in stream_result.reply['Rows']:
               yield tuple(_make_row(result_item, stream_conversions))
-          except gorpc.GoRpcError as e:
+          except (gorpc.GoRpcError, TabletError) as e:
             raise convert_exception(e, str(self))
           except Exception:
             logging.exception('gorpc low-level error')
