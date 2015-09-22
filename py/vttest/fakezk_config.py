@@ -19,7 +19,7 @@ class FakeZkConfig(object):
     self.cell = cell
     self.mysql_port = mysql_port
 
-  def add_shard(self, keyspace, shard, vt_port):
+  def add_shard(self, keyspace, shard, vt_port, grpc_port=None):
     """Add a shard to the config."""
 
     # compute the start and end
@@ -36,6 +36,7 @@ class FakeZkConfig(object):
     self.keyspaces[keyspace].append({
         'shard': shard,
         'vt_port': vt_port,
+        'grpc_port': grpc_port,
         'start': start,
         'end': end,
     })
@@ -71,15 +72,18 @@ class FakeZkConfig(object):
         for dbtype in tablet_types_str:
           path = '/zk/%s/vt/ns/%s/%s/%s' % (self.cell, keyspace,
                                             shard['shard'], dbtype)
+          port_map = {
+              'mysql': self.mysql_port,
+              'vt': shard['vt_port'],
+              }
+          if shard['grpc_port']:
+            port_map['grpc'] = shard['grpc_port']
           result[path] = {
               'entries': [
                   {
                       'uid': 0,
                       'host': self.host,
-                      'port_map': {
-                          'mysql': self.mysql_port,
-                          'vt': shard['vt_port'],
-                      },
+                      'port_map': port_map,
                   },
               ],
           }

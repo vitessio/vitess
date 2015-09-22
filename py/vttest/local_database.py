@@ -62,9 +62,12 @@ class LocalDatabase(object):
           'socket': self.mysql_db.unix_socket(),
           }
     else:
-      return {
+      result = {
           'port': vt_processes.vtgate_process.port,
           }
+      if environment.get_protocol() == 'grpc':
+        result['grpc_port'] = vt_processes.vtgate_process.grpc_port
+      return result
 
   def mysql_execute(self, queries, db_name=''):
     """Execute queries directly on MySQL."""

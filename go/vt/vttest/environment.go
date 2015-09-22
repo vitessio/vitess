@@ -21,3 +21,7 @@ func launcherPath() (string, error) {
 func topoFlags(topo string) []string {
 	return []string{"--topology", topo}
 }
+
+func vtgateProtocol() string {
+	return "grpc"
+}
