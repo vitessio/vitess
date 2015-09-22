@@ -50,7 +50,7 @@ def cleanup_test_directory(directory):
   Parameters:
     directory: the value returned by get_test_directory().
   """
-#  shutil.rmtree(directory)
+  shutil.rmtree(directory)
 
 
 def extra_vtgate_parameters():
