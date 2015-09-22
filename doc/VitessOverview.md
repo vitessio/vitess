@@ -1,24 +1,14 @@
-**Contents:**
-
-<div id="toc"></div>
-
-## Overview
-
 Vitess is a database solution for scaling MySQL. It's architected to run as
 effectively in a public or private cloud architecture as it does on dedicated
 hardware. It combines and extends many important MySQL features with the
 scalability of a NoSQL database. Vitess has been serving all YouTube database
 traffic since 2011.
 
-### Vitess on Kubernetes
+## Vitess on Kubernetes
 
 Kubernetes is an open-source orchestration system for Docker containers, and Vitess is the logical storage engine choice for Kubernetes users.
 
 Kubernetes handles scheduling onto nodes in a compute cluster, actively manages workloads on those nodes, and groups containers comprising an application for easy management and discovery. Using Kubernetes, you can easily create and manage a Vitess cluster, out of the box.
-
-<!--
-### Vitess on Local Hardware
--->
 
 ## Comparisons to other storage options
 
@@ -131,7 +121,9 @@ Vitess tools and servers are designed to help you whether you start with a compl
 
 The diagram below illustrates Vitess' components:
 
-![Diagram showing Vitess implementation](https://raw.githubusercontent.com/youtube/vitess/master/doc/VitessOverview.png)
+<div style="overflow-x: scroll">
+<img src="https://raw.githubusercontent.com/youtube/vitess/master/doc/VitessOverview.png" alt="Diagram showing Vitess implementation" width="509" height="322"/>
+</div>
 
 ### Topology
 
@@ -150,10 +142,6 @@ To route queries, vtgate considers the sharding scheme, required latency, and th
 **vttablet** is a proxy server that sits in front of a MySQL database. A Vitess implementation has one vttablet for each MySQL instance.
 
 vttablet performs tasks that attempt to maximize throughput as well as protect MySQL from harmful queries. Its features include connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates, and it provides streaming services that are used for [filtered replication](/user-guide/sharding.html#filtered-replication) and data exports.
-
-<!--
-It is a newer version of and provides all of the same benefits as vtocc, including connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates. It also provides streaming services that are used for [filtered replication](http://vitess.io/user-guide/sharding.html#resharding) and data export.
--->
 
 A lightweight Vitess implementation uses vttablet as a smart connection proxy that serves queries for a single MySQL database. By running vttablet in front of your MySQL database and changing your app to use the Vitess client instead of your MySQL driver, your app benefits from vttablet's connection pooling, query rewriting, and query de-duping features.
 

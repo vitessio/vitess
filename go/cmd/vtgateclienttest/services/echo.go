@@ -15,10 +15,12 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -268,16 +270,19 @@ func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
 }
 
-func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
+func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		reply.Splits = append(reply.Splits, proto.SplitQueryPart{
-			Query: &proto.KeyRangeQuery{
-				Sql:           fmt.Sprintf("%v:%v:%v", sql, splitColumn, splitCount),
-				BindVariables: bindVariables,
-				Keyspace:      keyspace,
+		return []*pbg.SplitQueryResponse_Part{
+			&pbg.SplitQueryResponse_Part{
+				Query: &pbq.BoundQuery{
+					Sql:           fmt.Sprintf("%v:%v:%v", sql, splitColumn, splitCount),
+					BindVariables: tproto.BindVariablesToProto3(bindVariables),
+				},
+				KeyRangePart: &pbg.SplitQueryResponse_KeyRangePart{
+					Keyspace: keyspace,
+				},
 			},
-		})
-		return nil
+		}, nil
 	}
-	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount, reply)
+	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
 }

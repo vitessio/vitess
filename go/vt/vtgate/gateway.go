@@ -13,9 +13,11 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/discovery"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
@@ -56,7 +58,7 @@ type Gateway interface {
 }
 
 // GatewayCreator is the func which can create the actual gateway object.
-type GatewayCreator func(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway
+type GatewayCreator func(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway
 
 var gatewayCreators = make(map[string]GatewayCreator)
 
@@ -73,6 +75,16 @@ func GetGatewayCreator() GatewayCreator {
 	gc, ok := gatewayCreators[*GatewayImplementation]
 	if !ok {
 		log.Fatalf("No gateway registered as %s", *GatewayImplementation)
+	}
+	return gc
+}
+
+// GetGatewayCreatorByName returns the GatewayCreator specified by the given name.
+func GetGatewayCreatorByName(name string) GatewayCreator {
+	gc, ok := gatewayCreators[name]
+	if !ok {
+		log.Errorf("No gateway registered as %s", name)
+		return nil
 	}
 	return gc
 }

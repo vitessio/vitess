@@ -15,14 +15,17 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	kproto "github.com/youtube/vitess/go/vt/key"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/discovery"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
+
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // ScatterConn is used for executing queries across
@@ -31,6 +34,7 @@ type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.MultiCounters
 	gateway              Gateway
+	testGateway          Gateway // test health checking module
 }
 
 // shardActionFunc defines the contract for a shard action. Every such function
@@ -42,7 +46,7 @@ type shardActionFunc func(shard string, transactionID int64, sResults chan<- int
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate connections.
-func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration) *ScatterConn {
+func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, testGateway string) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	tabletConnectStatsName := ""
 	if statsName != "" {
@@ -50,12 +54,22 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 		tabletConnectStatsName = statsName + "TabletConnect"
 	}
 	connTimings := stats.NewMultiTimings(tabletConnectStatsName, []string{"Keyspace", "ShardName", "DbType"})
-	gateway := GetGatewayCreator()(serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
-	return &ScatterConn{
+	gateway := GetGatewayCreator()(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
+
+	sc := &ScatterConn{
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		gateway:              gateway,
 	}
+
+	// this is to test health checking module when using existing gateway
+	if testGateway != "" {
+		if gc := GetGatewayCreatorByName(testGateway); gc != nil {
+			sc.testGateway = gc(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
+		}
+	}
+
+	return sc
 }
 
 // InitializeConnections pre-initializes connections for all shards.
@@ -63,6 +77,10 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 // It is not necessary to call this function before serving queries,
 // but it would reduce connection overhead when serving.
 func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
+	// temporarily start healthchecking regardless of gateway used
+	if stc.testGateway != nil {
+		stc.testGateway.InitializeConnections(ctx)
+	}
 	return stc.gateway.InitializeConnections(ctx)
 }
 
@@ -419,7 +437,7 @@ func (stc *ScatterConn) Rollback(ctx context.Context, session *SafeSession) (err
 // splits received from a shard, it construct a KeyRange queries by
 // appending that shard's keyrange to the splits. Aggregates all splits across
 // all shards in no specific order and returns.
-func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, keyRangeByShard map[string]*pb.KeyRange, keyspace string) ([]proto.SplitQueryPart, error) {
+func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, keyRangeByShard map[string]*pb.KeyRange, keyspace string) ([]*pbg.SplitQueryResponse_Part, error) {
 	tabletType := pb.TabletType_RDONLY
 	actionFunc := func(shard string, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
@@ -428,21 +446,20 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 			return err
 		}
 		// Append the keyrange for this shard to all the splits received
-		keyranges := []kproto.KeyRange{kproto.ProtoToKeyRange(keyRangeByShard[shard])}
-		splits := []proto.SplitQueryPart{}
-		for _, query := range queries {
-			krq := &proto.KeyRangeQuery{
-				Sql:           query.Query.Sql,
-				BindVariables: query.Query.BindVariables,
-				Keyspace:      keyspace,
-				KeyRanges:     keyranges,
-				TabletType:    topo.TYPE_RDONLY,
+		keyranges := []*pb.KeyRange{keyRangeByShard[shard]}
+		splits := make([]*pbg.SplitQueryResponse_Part, len(queries))
+		for i, query := range queries {
+			splits[i] = &pbg.SplitQueryResponse_Part{
+				Query: &pbq.BoundQuery{
+					Sql:           query.Query.Sql,
+					BindVariables: tproto.BindVariablesToProto3(query.Query.BindVariables),
+				},
+				KeyRangePart: &pbg.SplitQueryResponse_KeyRangePart{
+					Keyspace:  keyspace,
+					KeyRanges: keyranges,
+				},
+				Size: query.RowCount,
 			}
-			split := proto.SplitQueryPart{
-				Query: krq,
-				Size:  query.RowCount,
-			}
-			splits = append(splits, split)
 		}
 		// Push all the splits from this shard to results channel
 		results <- splits
@@ -454,9 +471,9 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 		shards = append(shards, shard)
 	}
 	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&proto.Session{}), false, actionFunc)
-	splits := []proto.SplitQueryPart{}
+	splits := []*pbg.SplitQueryResponse_Part{}
 	for s := range allSplits {
-		splits = append(splits, s.([]proto.SplitQueryPart)...)
+		splits = append(splits, s.([]*pbg.SplitQueryResponse_Part)...)
 	}
 	if allErrors.HasErrors() {
 		err := allErrors.AggrError(stc.aggregateErrors)
@@ -470,7 +487,7 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 // KeyRange queries by appending that shard's name to the
 // splits. Aggregates all splits across all shards in no specific
 // order and returns.
-func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, shards []string, keyspace string) ([]proto.SplitQueryPart, error) {
+func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, shards []string, keyspace string) ([]*pbg.SplitQueryResponse_Part, error) {
 	tabletType := pb.TabletType_RDONLY
 	actionFunc := func(shard string, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
@@ -478,21 +495,21 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 		if err != nil {
 			return err
 		}
-		// Append the keyrange for this shard to all the splits received
-		splits := []proto.SplitQueryPart{}
-		for _, query := range queries {
-			qs := &proto.QueryShard{
-				Sql:           query.Query.Sql,
-				BindVariables: query.Query.BindVariables,
-				Keyspace:      keyspace,
-				Shards:        []string{shard},
-				TabletType:    topo.TYPE_RDONLY,
+		// Use the shards list for all the splits received
+		shards := []string{shard}
+		splits := make([]*pbg.SplitQueryResponse_Part, len(queries))
+		for i, query := range queries {
+			splits[i] = &pbg.SplitQueryResponse_Part{
+				Query: &pbq.BoundQuery{
+					Sql:           query.Query.Sql,
+					BindVariables: tproto.BindVariablesToProto3(query.Query.BindVariables),
+				},
+				ShardPart: &pbg.SplitQueryResponse_ShardPart{
+					Keyspace: keyspace,
+					Shards:   shards,
+				},
+				Size: query.RowCount,
 			}
-			split := proto.SplitQueryPart{
-				QueryShard: qs,
-				Size:       query.RowCount,
-			}
-			splits = append(splits, split)
 		}
 		// Push all the splits from this shard to results channel
 		results <- splits
@@ -500,9 +517,9 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 	}
 
 	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&proto.Session{}), false, actionFunc)
-	splits := []proto.SplitQueryPart{}
+	splits := []*pbg.SplitQueryResponse_Part{}
 	for s := range allSplits {
-		splits = append(splits, s.([]proto.SplitQueryPart)...)
+		splits = append(splits, s.([]*pbg.SplitQueryResponse_Part)...)
 	}
 	if allErrors.HasErrors() {
 		err := allErrors.AggrError(stc.aggregateErrors)

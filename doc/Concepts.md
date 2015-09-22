@@ -1,6 +1,4 @@
-Vitess uses the following concepts and terms:
-
-<div id="toc"></div>
+This document defines common Vitess concepts and terminology.
 
 ## Keyspace
 
@@ -40,9 +38,9 @@ A keyspace ID can be an unsigned number or a binary character column
 (<code>unsigned bigint</code> or <code>varbinary</code> in MySQL tables).
 Other data types are not allowed due to ambiguous equality or inequality rules.
 
-<!--
+<div style="display:none">
 TODO: keyspace ID rules must be solidified once VTGate features are finalized.
--->
+</div>
 
 ## Shard
 
@@ -79,9 +77,9 @@ There are several other tablet types that each serve a specific purpose, includi
 
 Only <code>master</code>, <code>replica</code>, and <code>rdonly</code> tablets are included in the [serving graph](#serving-graph).
 
-<!--
+<div style="display:none">
 TODO: Add pointer to complete list of types and explain how to update type?
--->
+</div>
 
 ## Shard graph
 
@@ -132,11 +130,11 @@ A Vitess implementation has one global instance of the topology service and one 
   Each local instance contains information about information specific to the cell where it is located. Specifically, it contains data about tablets in the cell, the serving graph for that cell, and the master-slave map for MySQL instances in that cell.<br><br>
   The local topology server must be available for Vitess to serve data.
 
-<!--
+<div style="display:none">
   To ensure reliability, the topology service has multiple server processes running on different servers. Those servers elect a master and perform chorum writes. In ZooKeeper, for a write to succeed, more than half of the servers must acknowledge it. Thus, a typical ZooKeeper configuration consists of either three or five servers, where two (out of three) or three (out of five) servers must agree for a write operation to succeed.
 The instance is the set of servers providing topology services. So, in a Vitess implementation using ZooKeeper, the global and local instances likely consist of three or five servers apiece.
   To be reliable, the global instance needs to have server processes spread across all regions and cells. Read-only replicas of the global instance can be maintained in each data center (cell).
--->
+</div>
 
 ## Cell (Data Center)
 

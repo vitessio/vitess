@@ -55,12 +55,17 @@ def cleanup_test_directory(directory):
 
 def extra_vtgate_parameters():
   """Returns extra parameters to send to vtgate."""
-  return []
+  return [
+    '-service_map', 'grpc-vtgateservice',
+    '-tablet_protocol', 'grpc',
+  ]
 
 
 def extra_vtocc_parameters():
   """Returns extra parameters to send to vtocc."""
-  return []
+  return [
+    '-service_map', 'grpc-queryservice',
+  ]
 
 
 def process_is_healthy(name, addr):
@@ -68,14 +73,24 @@ def process_is_healthy(name, addr):
   return True
 
 
-def get_port(name, instance=0):
+def get_protocol():
+  """Returns the protocol used between client, vtgate and vtocc."""
+  return 'grpc'
+
+
+def get_port(name, instance=0, protocol=None):
   """Returns the port to use for a given process.
 
-  This is only called once per process.
+  This is only called once per process, so picking an unused port will also work.
   """
   if name == 'vtgate':
-    return base_port
+    port = base_port
   elif name == 'mysql':
-    return base_port + 1
+    port = base_port + 2
   else:
-    return base_port + 2 + instance
+    port = base_port + 3 + 2*instance
+
+  if protocol == 'grpc':
+    port += 1
+
+  return port
