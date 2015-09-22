@@ -35,3 +35,7 @@ class MySqlDB(object):
 
   def unix_socket(self):
     raise NotImplementedError('MySqlDB is the base class.')
+
+  def config(self):
+    """Returns the json config to output."""
+    raise NotImplementedError('MySqlDB is the base class.')
