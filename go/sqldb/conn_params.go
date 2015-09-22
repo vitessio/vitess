@@ -7,6 +7,7 @@ package sqldb
 
 // ConnParams contains all the parameters to use to connect to mysql
 type ConnParams struct {
+	Engine     string `json:"engine"`
 	Host       string `json:"host"`
 	Port       int    `json:"port"`
 	Uname      string `json:"uname"`

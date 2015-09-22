@@ -18,12 +18,11 @@ import (
 type NewConnFunc func(params ConnParams) (Conn, error)
 
 // conns stores all supported db connection.
-var conns = make(map[string]NewConnFunc)
-
-var mu sync.Mutex
-
-// DefaultDB decides the default db connection.
-var DefaultDB string
+var (
+	mu          sync.Mutex
+	conns       = make(map[string]NewConnFunc)
+	defaultConn NewConnFunc
+)
 
 // Conn defines the behavior for the low level db connection
 type Conn interface {
@@ -61,7 +60,16 @@ type Conn interface {
 	SetCharset(cs proto.Charset) error
 }
 
-// Register a db connection.
+// RegisterDefault registers the default connection function.
+// Only one default can be registered.
+func RegisterDefault(fn NewConnFunc) {
+	if defaultConn != nil {
+		panic("default connection initialized more than once")
+	}
+	defaultConn = fn
+}
+
+// Register registers a db connection.
 func Register(name string, fn NewConnFunc) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -73,20 +81,15 @@ func Register(name string, fn NewConnFunc) {
 
 // Connect returns a sqldb.Conn using the default connection creation function.
 func Connect(params ConnParams) (Conn, error) {
+	// Use a lock-free fast path for default.
+	if params.Engine == "" {
+		return defaultConn(params)
+	}
 	mu.Lock()
 	defer mu.Unlock()
-	if DefaultDB == "" {
-		if len(conns) == 1 {
-			for _, fn := range conns {
-				return fn(params)
-			}
-		}
-		panic("there are more than one conn func " +
-			"registered but no default db has been given.")
-	}
-	fn, ok := conns[DefaultDB]
+	fn, ok := conns[params.Engine]
 	if !ok {
-		panic(fmt.Sprintf("connection function for given default db: %s is not found.", DefaultDB))
+		panic(fmt.Sprintf("connection function not found for engine: %s", params.Engine))
 	}
 	return fn(params)
 }

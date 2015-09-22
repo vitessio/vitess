@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 )
 
 type fakeCallInfo struct {
@@ -101,9 +102,9 @@ func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) mysqlctl.MysqlD
 	)
 }
 
-func (util *testUtils) newDBConfigs() dbconfigs.DBConfigs {
+func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
 	appDBConfig := dbconfigs.DBConfig{
-		ConnParams:        sqldb.ConnParams{},
+		ConnParams:        sqldb.ConnParams{Engine: db.Name},
 		Keyspace:          "test_keyspace",
 		Shard:             "0",
 		EnableRowcache:    false,
