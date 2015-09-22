@@ -57,12 +57,7 @@ class LocalDatabase(object):
   def config(self):
     """Returns a dict with enough information to be able to connect."""
     if self.mysql_only:
-      return {
-          'username': self.mysql_db.username(),
-          'password': self.mysql_db.password(),
-          'port': self.mysql_db.port(),
-          'socket': self.mysql_db.unix_socket(),
-          }
+      return self.mysql_db.config()
     else:
       result = {
           'port': vt_processes.vtgate_process.port,

@@ -8,6 +8,9 @@ import (
 	"errors"
 	"os"
 	"path"
+
+	// we use gRPC everywhere, so import the vtgate client.
+	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
 func launcherPath() (string, error) {
@@ -16,10 +19,6 @@ func launcherPath() (string, error) {
 		return "", errors.New("VTTOP not set")
 	}
 	return path.Join(vttop, "py/vttest/run_local_database.py"), nil
-}
-
-func topoFlags(topo string) []string {
-	return []string{"--topology", topo}
 }
 
 func vtgateProtocol() string {

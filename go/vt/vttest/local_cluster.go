@@ -152,8 +152,8 @@ func (hdl *Handle) run(port int, topo, schemaDir string, mysqlOnly, verbose bool
 	hdl.cmd = exec.Command(
 		launcher,
 		"--port", strconv.Itoa(port),
+		"--topology", topo,
 	)
-	hdl.cmd.Args = append(hdl.cmd.Args, topoFlags(topo)...)
 	if schemaDir != "" {
 		hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", schemaDir)
 	}

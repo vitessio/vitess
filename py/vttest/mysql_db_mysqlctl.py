@@ -71,3 +71,10 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
 
   def unix_socket(self):
     return os.path.join(self._directory, 'vt_0000000001', 'mysql.sock')
+
+  def config(self):
+    return {
+        'username': self.username(),
+        'password': self.password(),
+        'socket': self.unix_socket(),
+    }
