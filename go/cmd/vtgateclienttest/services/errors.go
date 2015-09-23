@@ -5,27 +5,28 @@
 package services
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // errorClient implements vtgateservice.VTGateService
 // and returns specific errors. It is meant to test all possible error cases,
 // and make sure all clients handle the errors correctly.
-//
-// So far, we understand:
-// - "return integrity error": Execute* will return an integrity error.
-// - "error": GetSrvKeyspace will return an error.
-//
-// TODO(alainjobart) Add throttling error.
-// TODO(alainjobart) Add all errors the client may care about.
+
+// ErrorPrefix is the prefix to send with queries so they go through this service handler.
+const ErrorPrefix = "error://"
+
 type errorClient struct {
 	fallbackClient
 }
@@ -36,9 +37,42 @@ func newErrorClient(fallback vtgateservice.VTGateService) *errorClient {
 	}
 }
 
+// requestToError returns an error for the given request, by looking at the
+// request's prefix and requested error type. If the request doesn't match an
+// error request, return nil.
+func requestToError(received string) error {
+	if !strings.HasPrefix(received, ErrorPrefix) {
+		return nil
+	}
+	s := strings.TrimPrefix(received, ErrorPrefix)
+	switch s {
+	case "integrity error":
+		return vterrors.FromError(
+			vtrpc.ErrorCode_INTEGRITY_ERROR,
+			errors.New("vtgate test client forced error: integrity error (errno 1062)"),
+		)
+	// request backlog and general throttling type errors
+	case "transient error":
+		return vterrors.FromError(
+			vtrpc.ErrorCode_TRANSIENT_ERROR,
+			errors.New("request_backlog: too many requests in flight: vtgate test client forced error"),
+		)
+	case "unknown error":
+		return vterrors.FromError(
+			vtrpc.ErrorCode_UNKNOWN_ERROR,
+			errors.New("vtgate test client forced error: unknown error"),
+		)
+	default:
+		return vterrors.FromError(
+			vtrpc.ErrorCode_UNKNOWN_ERROR,
+			fmt.Errorf("vtgate test client error request unrecognized: %v", received),
+		)
+	}
+}
+
 func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.Execute returning integrity error (errno 1062)")
+	if err := requestToError(sql); err != nil {
+		return err
 	}
 	return c.fallbackClient.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
 }
@@ -51,43 +85,49 @@ func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariabl
 }
 
 func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteKeyspaceIds returning integrity error (errno 1062)")
+	if err := requestToError(sql); err != nil {
+		return err
 	}
 	return c.fallbackClient.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction, reply)
 }
 
 func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteKeyRanges returning integrity error (errno 1062)")
+	if err := requestToError(sql); err != nil {
+		return err
 	}
 	return c.fallbackClient.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction, reply)
 }
 
 func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteEntityIds returning integrity error (errno 1062)")
+	if err := requestToError(sql); err != nil {
+		return err
 	}
 	return c.fallbackClient.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, reply)
 }
 
 func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
-	if len(queries) == 1 && queries[0].Sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteBatchShards returning integrity error (errno 1062)")
+	if len(queries) == 1 {
+		if err := requestToError(queries[0].Sql); err != nil {
+			return err
+		}
 	}
 	return c.fallbackClient.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, session, reply)
 }
 
 func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
-	if len(queries) == 1 && queries[0].Sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteBatchKeyspaceIds returning integrity error (errno 1062)")
+	if len(queries) == 1 {
+		if err := requestToError(queries[0].Sql); err != nil {
+			return err
+		}
 	}
 	return c.fallbackClient.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session, reply)
 }
 
+// TODO(aaijazi): add StreamExecute* calls
+
 func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
-	if keyspace == "error" {
-		return nil, fmt.Errorf("vtgate test client, errorClient.GetSrvKeyspace returning error")
+	if err := requestToError(keyspace); err != nil {
+		return nil, err
 	}
 	return c.fallbackClient.GetSrvKeyspace(ctx, keyspace)
 }

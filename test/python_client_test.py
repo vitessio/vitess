@@ -142,7 +142,7 @@ class TestPythonClient(unittest.TestCase):
     """
 
     # Special query that makes vtgateclienttest raise an IntegrityError.
-    integrity_error_test_query = 'return integrity error'
+    integrity_error_test_query = 'error://integrity error'
 
     # FIXME(alainjobart) add test for Execute once factory supports it
 
@@ -203,8 +203,8 @@ class TestPythonClient(unittest.TestCase):
     """
 
     # GetSrvKeyspace test
-    with self.assertRaises(dbexceptions.DatabaseError):
-      self.conn.get_srv_keyspace('error')
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+      self.conn.get_srv_keyspace('error://unknown error')
 
   def test_effective_caller_id(self):
     """Test that the passed in effective_caller_id is parsed correctly.

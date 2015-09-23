@@ -147,23 +147,3 @@ func RPCErrorToVtRPCError(rpcErr *mproto.RPCError) *vtrpc.RPCError {
 		Message: rpcErr.Message,
 	}
 }
-
-// VtGateErrorToVtRPCError converts a vtgate error into a vtrpc error.
-// TODO(aaijazi): rename this guy, and correct the usage of it everywhere. As it's currently used,
-// it will almost never return the correct error code, as it's only getting executeErr and reply.Error.
-// It should actually just use reply.Err.
-func VtGateErrorToVtRPCError(err error, errString string) *vtrpc.RPCError {
-	if err == nil && errString == "" {
-		return nil
-	}
-	message := ""
-	if err != nil {
-		message = err.Error()
-	} else {
-		message = errString
-	}
-	return &vtrpc.RPCError{
-		Code:    vterrors.RecoverVtErrorCode(err),
-		Message: message,
-	}
-}
