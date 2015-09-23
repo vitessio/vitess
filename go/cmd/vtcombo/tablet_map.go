@@ -205,7 +205,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 		})
 
 		// the client will only access finalErr after the
-		// channel is closed, and b then it's already set.
+		// channel is closed, and then it's already set.
 		close(result)
 	}()
 

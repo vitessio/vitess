@@ -10,10 +10,11 @@ from vttest import vt_processes
 class LocalDatabase(object):
   """Set up a local Vitess database."""
 
-  def __init__(self, shards, schema_dir, mysql_only):
+  def __init__(self, shards, schema_dir, mysql_only, use_vtcombo):
     self.shards = shards
     self.schema_dir = schema_dir
     self.mysql_only = mysql_only
+    self.use_vtcombo = use_vtcombo
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
@@ -27,7 +28,8 @@ class LocalDatabase(object):
     if self.mysql_only:
       return
 
-    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db)
+    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db,
+                                    use_vtcombo=self.use_vtcombo)
 
   def teardown(self):
     """Kill all Vitess processes and wait for them to end.
@@ -58,6 +60,13 @@ class LocalDatabase(object):
     """Returns a dict with enough information to be able to connect."""
     if self.mysql_only:
       return self.mysql_db.config()
+    elif self.use_vtcombo:
+      result = {
+          'port': vt_processes.vtcombo_process.port,
+          }
+      if environment.get_protocol() == 'grpc':
+        result['grpc_port'] = vt_processes.vtcombo_process.grpc_port
+      return result
     else:
       result = {
           'port': vt_processes.vtgate_process.port,

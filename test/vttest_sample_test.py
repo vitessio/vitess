@@ -67,9 +67,16 @@ class TestMysqlctl(unittest.TestCase):
         parsed_data['/zk/test_cell/vt/ns/ingestion']['served_from'][0]
         ['keyspace'])
 
-  def test_standalone(self):
-    """Sample test for run_local_database.py as a standalone process.
-    """
+  def test_standalone_vtgate(self):
+    """Sample test for run_local_database.py(vtgate) as a standalone process."""
+    self._test_standalone(use_vtcombo=False)
+
+  def test_standalone_vtcombo(self):
+    """Sample test for run_local_database.py(vtcombo) as a standalone process."""
+    self._test_standalone(use_vtcombo=True)
+
+  def _test_standalone(self, use_vtcombo):
+    """Sample test for run_local_database.py as a standalone process."""
 
     # launch a backend database based on the provided topology and schema
     port = environment.reserve_ports(1)
@@ -79,7 +86,10 @@ class TestMysqlctl(unittest.TestCase):
             'test_keyspace/-80:test_keyspace_0,'
             'test_keyspace/80-:test_keyspace_1',
             '--schema_dir', os.path.join(environment.vttop, 'test',
-                                         'vttest_schema')]
+                                         'vttest_schema'),
+    ]
+    if use_vtcombo:
+      args.append('--use_vtcombo')
     sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     config = json.loads(sp.stdout.readline())
 
@@ -89,13 +99,19 @@ class TestMysqlctl(unittest.TestCase):
     data = f.read()
     f.close()
     json_vars = json.loads(data)
-    self.assertIn('vtgate', json_vars['cmdline'][0])
+    process_name = 'vtgate'
+    if use_vtcombo:
+      process_name = 'vtcombo'
+    self.assertIn(process_name, json_vars['cmdline'][0])
 
     # to test vtcombo:
     # ./vttest_sample_test.py -v -d
     # go install && vtcombo -port 15010 -grpc_port 15011 -service_map grpc-vtgateservice -topology test_keyspace/-80:test_keyspace_0,test_keyspace/80-:test_keyspace_1 -mycnf_server_id 1 -mycnf_socket_file $VTDATAROOT/vttest*/vt_0000000001/mysql.sock -db-config-dba-uname vt_dba -db-config-dba-charset utf8 -db-config-app-uname vt_app -db-config-app-charset utf8 -alsologtostderr
     # vtctl -vtgate_protocol grpc VtGateExecuteShard -server localhost:15011 -keyspace test_keyspace -shards -80 -tablet_type master "select 1 from dual"
-    utils.pause('aaaa')
+    if use_vtcombo:
+      utils.pause('good time to test vtcombo with database running')
+    else:
+      utils.pause('good time to test vtgate with database running')
 
     # and we're done, clean-up
     sp.stdin.write('\n')
