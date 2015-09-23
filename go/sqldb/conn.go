@@ -17,11 +17,12 @@ import (
 // using given ConnParams.
 type NewConnFunc func(params ConnParams) (Conn, error)
 
-// conns stores all supported db connection.
 var (
-	mu          sync.Mutex
-	conns       = make(map[string]NewConnFunc)
 	defaultConn NewConnFunc
+
+	// mu protects conns.
+	mu    sync.Mutex
+	conns = make(map[string]NewConnFunc)
 )
 
 // Conn defines the behavior for the low level db connection
