@@ -39,10 +39,12 @@
 			"File": "",
 			"Args": [],
 			"Command": [
-				"travis/goveralls.sh"
+				"travis/goveralls.sh",
+				"--full"
 			],
 			"Manual": true,
-			"Shard": 0
+			"Shard": 0,
+			"RetryMax": 1
 		},
 		"initial_sharding": {
 			"File": "initial_sharding.py",
