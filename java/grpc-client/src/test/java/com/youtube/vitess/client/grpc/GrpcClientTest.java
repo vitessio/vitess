@@ -20,6 +20,11 @@ public class GrpcClientTest extends RpcClientTest {
 
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
+    String vtRoot = System.getenv("VTROOT");
+    if (vtRoot == null) {
+      throw new RuntimeException("cannot find env variable VTROOT; make sure to source dev.env");
+    }
+
     ServerSocket socket = new ServerSocket(0);
     port = socket.getLocalPort();
     socket.close();
