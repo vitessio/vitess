@@ -1125,7 +1125,7 @@ class Vtctld(object):
 def uint64_to_hex(integer):
   """Returns the hexadecimal representation of integer treated as a 64-bit unsigned integer.
 
-  The result is padded by zeros if necessary to fill an 16 character string. Useful for converting
+  The result is padded by zeros if necessary to fill a 16 character string. Useful for converting
   keyspace ids integers.
   Example:
   uint64_to_hex(1) == "0000000000000001"
