@@ -17,7 +17,8 @@ import (
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
-func KeyRangeFilterFunc(keyrange *pb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+// TODO(erez): Remove 'KeyspaceIdType' from here.
+func KeyRangeFilterFunc(unused key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
 	return func(reply *proto.BinlogTransaction) error {
 		matched := false
 		filtered := make([]proto.Statement, 0, len(reply.Statements))
@@ -31,7 +32,7 @@ func KeyRangeFilterFunc(keyrange *pb.KeyRange, sendReply sendTransactionFunc) se
 			case proto.BL_DML:
 				keyspaceID, err := sqlannotation.ExtractKeySpaceID(string(statement.Sql))
 				if err != nil {
-					if handleExtractKeySpaceIdError(err) {
+					if handleExtractKeySpaceIDError(err) {
 						continue
 					} else {
 						// TODO(erez): Stop filtered-replication here, and alert.

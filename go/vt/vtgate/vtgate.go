@@ -398,7 +398,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.
 		return errTooManyInFlight
 	}
 
-	annotateBoundKeyspaceIdQueries(queries)
+	annotateBoundKeyspaceIDQueries(queries)
 
 	qrs, err := vtg.resolver.ExecuteBatchKeyspaceIds(
 		ctx,
