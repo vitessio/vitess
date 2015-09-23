@@ -195,8 +195,19 @@ class TestPythonClient(unittest.TestCase):
                   shards=[keyrange_constants.SHARD_ZERO])])
     cursor.close()
 
-    # VTGate.StreamExecuteKeyspaceIds, VTGate.StreamExecuteKeyRanges:
-    # not handled in vtgateclienttest/services/errors.go.
+    # Streaming calls
+
+    # StreamExecuteKeyspaceIds test
+    cursor = self._open_stream_keyspace_ids_cursor()
+    with self.assertRaises(dbexceptions.IntegrityError):
+      cursor.execute(integrity_error_test_query, {})
+    cursor.close()
+
+    # StreamExecuteKeyRanges test
+    cursor = self._open_stream_keyranges_cursor()
+    with self.assertRaises(dbexceptions.IntegrityError):
+      cursor.execute(integrity_error_test_query, {})
+    cursor.close()
 
   def test_error(self):
     """Test a regular server error raises the right exception.
