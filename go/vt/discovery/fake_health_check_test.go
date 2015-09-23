@@ -16,13 +16,13 @@ func (fhc *fakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
 
 // AddEndPoint adds the endpoint, and starts health check.
 func (fhc *fakeHealthCheck) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
-	key := endPointToMapKey(endPoint)
+	key := EndPointToMapKey(endPoint)
 	fhc.endPoints[key] = endPoint
 }
 
 // RemoveEndPoint removes the endpoint, and stops the health check.
 func (fhc *fakeHealthCheck) RemoveEndPoint(endPoint *pbt.EndPoint) {
-	key := endPointToMapKey(endPoint)
+	key := EndPointToMapKey(endPoint)
 	delete(fhc.endPoints, key)
 }
 

@@ -138,14 +138,14 @@ func (l *listener) StatsUpdate(endPoint *pbt.EndPoint, cell string, target *pbq.
 }
 
 func createFakeConn(endPoint *pbt.EndPoint, c chan *pbq.StreamHealthResponse) *fakeConn {
-	key := endPointToMapKey(endPoint)
+	key := EndPointToMapKey(endPoint)
 	conn := &fakeConn{endPoint: endPoint, hcChan: c}
 	connMap[key] = conn
 	return conn
 }
 
 func discoveryDialer(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
-	key := endPointToMapKey(endPoint)
+	key := EndPointToMapKey(endPoint)
 	return connMap[key], nil
 }
 

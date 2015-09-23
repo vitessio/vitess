@@ -26,7 +26,7 @@ func TestCellTabletsWatcher(t *testing.T) {
 		Host:    "host1",
 		PortMap: map[string]int32{"vt": 123},
 	}
-	key := endPointToMapKey(want)
+	key := EndPointToMapKey(want)
 	if ep, ok := fhc.endPoints[key]; !ok || len(fhc.endPoints) != 1 {
 		t.Errorf("fhc.endPoints[key] = %+v; want %+v", ep, want)
 	}
@@ -39,7 +39,7 @@ func TestCellTabletsWatcher(t *testing.T) {
 		Host:    "host1",
 		PortMap: map[string]int32{"vt": 456},
 	}
-	key = endPointToMapKey(want)
+	key = EndPointToMapKey(want)
 	if ep, ok := fhc.endPoints[key]; !ok || len(fhc.endPoints) != 1 {
 		t.Errorf("fhc.endPoints[key] = %+v; want %+v", ep, want)
 	}
