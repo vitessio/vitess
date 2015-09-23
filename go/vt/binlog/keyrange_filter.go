@@ -17,7 +17,7 @@ import (
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
-// TODO(erez): Remove 'KeyspaceIdType' from here.
+// TODO(erez): Remove 'KeyspaceIdType' from here: it's no longer used.
 func KeyRangeFilterFunc(unused key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
 	return func(reply *proto.BinlogTransaction) error {
 		matched := false
