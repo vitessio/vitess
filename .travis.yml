@@ -33,7 +33,7 @@ cache:
   - $MYSQL_ROOT
   # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
   - $HOME/gopath/dist/grpc/.build_finished
-  - $HOME/gopath/dist/grpc/lib/python2.7/site-packages
+  - $HOME/gopath/dist/grpc/lib
   - $HOME/gopath/dist/protobuf/.build_finished
   - $HOME/gopath/dist/protobuf/lib
   - $HOME/gopath/dist/py-cbson/lib/python2.7/site-packages
