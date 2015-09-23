@@ -142,8 +142,8 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *proto.Sessi
 }
 
 // SplitQuery is part of the VTGateService interface
-func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
-	return nil
+func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
+	return nil, nil
 }
 
 // GetSrvKeyspace is part of the VTGateService interface

@@ -25,238 +25,245 @@ func TargetToProto3(target *Target) *pb.Target {
 
 // BoundQueryToProto3 converts internal types to proto3 BoundQuery
 func BoundQueryToProto3(sql string, bindVars map[string]interface{}) *pb.BoundQuery {
-	result := &pb.BoundQuery{
-		Sql: sql,
+	return &pb.BoundQuery{
+		Sql:           sql,
+		BindVariables: BindVariablesToProto3(bindVars),
 	}
-	if len(bindVars) > 0 {
-		result.BindVariables = make(map[string]*pb.BindVariable)
-		for k, v := range bindVars {
-			bv := new(pb.BindVariable)
-			switch v := v.(type) {
-			case []interface{}:
-				// This is how the list variables will normally appear.
-				if len(v) == 0 {
-					continue
-				}
+}
 
-				// This assumes homogenous types, but that is what we support.
-				val := v[0]
-				switch val.(type) {
-				// string and []byte are TYPE_BYTES_LIST
-				case string:
-					bv.Type = pb.BindVariable_TYPE_BYTES_LIST
-					listArg := make([][]byte, len(v))
-					for i, lv := range v {
-						listArg[i] = []byte(lv.(string))
-					}
-					bv.ValueBytesList = listArg
-				case []byte:
-					bv.Type = pb.BindVariable_TYPE_BYTES_LIST
-					listArg := make([][]byte, len(v))
-					for i, lv := range v {
-						listArg[i] = lv.([]byte)
-					}
-					bv.ValueBytesList = listArg
+// BindVariablesToProto3 converts internal type to proto3 BindVariable array
+func BindVariablesToProto3(bindVars map[string]interface{}) map[string]*pb.BindVariable {
+	if len(bindVars) == 0 {
+		return nil
+	}
 
-				// int, int16, int32, int64 are TYPE_INT_LIST
-				case int:
-					bv.Type = pb.BindVariable_TYPE_INT_LIST
-					listArg := make([]int64, len(v))
-					for i, lv := range v {
-						listArg[i] = int64(lv.(int))
-					}
-					bv.ValueIntList = listArg
-				case int16:
-					bv.Type = pb.BindVariable_TYPE_INT_LIST
-					listArg := make([]int64, len(v))
-					for i, lv := range v {
-						listArg[i] = int64(lv.(int16))
-					}
-					bv.ValueIntList = listArg
-				case int32:
-					bv.Type = pb.BindVariable_TYPE_INT_LIST
-					listArg := make([]int64, len(v))
-					for i, lv := range v {
-						listArg[i] = int64(lv.(int32))
-					}
-					bv.ValueIntList = listArg
-				case int64:
-					bv.Type = pb.BindVariable_TYPE_INT_LIST
-					listArg := make([]int64, len(v))
-					for i, lv := range v {
-						listArg[i] = lv.(int64)
-					}
-					bv.ValueIntList = listArg
+	result := make(map[string]*pb.BindVariable)
+	for k, v := range bindVars {
+		bv := new(pb.BindVariable)
+		switch v := v.(type) {
+		case []interface{}:
+			// This is how the list variables will normally appear.
+			if len(v) == 0 {
+				continue
+			}
 
-				// uint, uint16, uint32, uint64 are TYPE_UINT_LIST
-				case uint:
-					bv.Type = pb.BindVariable_TYPE_UINT_LIST
-					listArg := make([]uint64, len(v))
-					for i, lv := range v {
-						listArg[i] = uint64(lv.(uint))
-					}
-					bv.ValueUintList = listArg
-				case uint16:
-					bv.Type = pb.BindVariable_TYPE_UINT_LIST
-					listArg := make([]uint64, len(v))
-					for i, lv := range v {
-						listArg[i] = uint64(lv.(uint16))
-					}
-					bv.ValueUintList = listArg
-				case uint32:
-					bv.Type = pb.BindVariable_TYPE_UINT_LIST
-					listArg := make([]uint64, len(v))
-					for i, lv := range v {
-						listArg[i] = uint64(lv.(uint32))
-					}
-					bv.ValueUintList = listArg
-				case uint64:
-					bv.Type = pb.BindVariable_TYPE_UINT_LIST
-					listArg := make([]uint64, len(v))
-					for i, lv := range v {
-						listArg[i] = lv.(uint64)
-					}
-					bv.ValueUintList = listArg
-
-				// float32, float64 are TYPE_FLOAT_LIST
-				case float32:
-					bv.Type = pb.BindVariable_TYPE_FLOAT_LIST
-					listArg := make([]float64, len(v))
-					for i, lv := range v {
-						listArg[i] = float64(lv.(float32))
-					}
-					bv.ValueFloatList = listArg
-				case float64:
-					bv.Type = pb.BindVariable_TYPE_FLOAT_LIST
-					listArg := make([]float64, len(v))
-					for i, lv := range v {
-						listArg[i] = lv.(float64)
-					}
-					bv.ValueFloatList = listArg
-				}
+			// This assumes homogenous types, but that is what we support.
+			val := v[0]
+			switch val.(type) {
+			// string and []byte are TYPE_BYTES_LIST
 			case string:
-				bv.Type = pb.BindVariable_TYPE_BYTES
-				bv.ValueBytes = []byte(v)
-			case []string:
 				bv.Type = pb.BindVariable_TYPE_BYTES_LIST
 				listArg := make([][]byte, len(v))
 				for i, lv := range v {
-					listArg[i] = []byte(lv)
+					listArg[i] = []byte(lv.(string))
 				}
 				bv.ValueBytesList = listArg
 			case []byte:
-				bv.Type = pb.BindVariable_TYPE_BYTES
-				bv.ValueBytes = v
-			case [][]byte:
 				bv.Type = pb.BindVariable_TYPE_BYTES_LIST
 				listArg := make([][]byte, len(v))
 				for i, lv := range v {
-					listArg[i] = lv
+					listArg[i] = lv.([]byte)
 				}
 				bv.ValueBytesList = listArg
+
+			// int, int16, int32, int64 are TYPE_INT_LIST
 			case int:
-				bv.Type = pb.BindVariable_TYPE_INT
-				bv.ValueInt = int64(v)
+				bv.Type = pb.BindVariable_TYPE_INT_LIST
+				listArg := make([]int64, len(v))
+				for i, lv := range v {
+					listArg[i] = int64(lv.(int))
+				}
+				bv.ValueIntList = listArg
 			case int16:
-				bv.Type = pb.BindVariable_TYPE_INT
-				bv.ValueInt = int64(v)
+				bv.Type = pb.BindVariable_TYPE_INT_LIST
+				listArg := make([]int64, len(v))
+				for i, lv := range v {
+					listArg[i] = int64(lv.(int16))
+				}
+				bv.ValueIntList = listArg
 			case int32:
-				bv.Type = pb.BindVariable_TYPE_INT
-				bv.ValueInt = int64(v)
+				bv.Type = pb.BindVariable_TYPE_INT_LIST
+				listArg := make([]int64, len(v))
+				for i, lv := range v {
+					listArg[i] = int64(lv.(int32))
+				}
+				bv.ValueIntList = listArg
 			case int64:
-				bv.Type = pb.BindVariable_TYPE_INT
-				bv.ValueInt = v
-			case []int:
 				bv.Type = pb.BindVariable_TYPE_INT_LIST
 				listArg := make([]int64, len(v))
 				for i, lv := range v {
-					listArg[i] = int64(lv)
+					listArg[i] = lv.(int64)
 				}
 				bv.ValueIntList = listArg
-			case []int16:
-				bv.Type = pb.BindVariable_TYPE_INT_LIST
-				listArg := make([]int64, len(v))
-				for i, lv := range v {
-					listArg[i] = int64(lv)
-				}
-				bv.ValueIntList = listArg
-			case []int32:
-				bv.Type = pb.BindVariable_TYPE_INT_LIST
-				listArg := make([]int64, len(v))
-				for i, lv := range v {
-					listArg[i] = int64(lv)
-				}
-				bv.ValueIntList = listArg
-			case []int64:
-				bv.Type = pb.BindVariable_TYPE_INT_LIST
-				listArg := make([]int64, len(v))
-				for i, lv := range v {
-					listArg[i] = lv
-				}
-				bv.ValueIntList = listArg
+
+			// uint, uint16, uint32, uint64 are TYPE_UINT_LIST
 			case uint:
-				bv.Type = pb.BindVariable_TYPE_UINT
-				bv.ValueUint = uint64(v)
+				bv.Type = pb.BindVariable_TYPE_UINT_LIST
+				listArg := make([]uint64, len(v))
+				for i, lv := range v {
+					listArg[i] = uint64(lv.(uint))
+				}
+				bv.ValueUintList = listArg
 			case uint16:
-				bv.Type = pb.BindVariable_TYPE_UINT
-				bv.ValueUint = uint64(v)
+				bv.Type = pb.BindVariable_TYPE_UINT_LIST
+				listArg := make([]uint64, len(v))
+				for i, lv := range v {
+					listArg[i] = uint64(lv.(uint16))
+				}
+				bv.ValueUintList = listArg
 			case uint32:
-				bv.Type = pb.BindVariable_TYPE_UINT
-				bv.ValueUint = uint64(v)
+				bv.Type = pb.BindVariable_TYPE_UINT_LIST
+				listArg := make([]uint64, len(v))
+				for i, lv := range v {
+					listArg[i] = uint64(lv.(uint32))
+				}
+				bv.ValueUintList = listArg
 			case uint64:
-				bv.Type = pb.BindVariable_TYPE_UINT
-				bv.ValueUint = v
-			case []uint:
 				bv.Type = pb.BindVariable_TYPE_UINT_LIST
 				listArg := make([]uint64, len(v))
 				for i, lv := range v {
-					listArg[i] = uint64(lv)
+					listArg[i] = lv.(uint64)
 				}
 				bv.ValueUintList = listArg
-			case []uint16:
-				bv.Type = pb.BindVariable_TYPE_UINT_LIST
-				listArg := make([]uint64, len(v))
-				for i, lv := range v {
-					listArg[i] = uint64(lv)
-				}
-				bv.ValueUintList = listArg
-			case []uint32:
-				bv.Type = pb.BindVariable_TYPE_UINT_LIST
-				listArg := make([]uint64, len(v))
-				for i, lv := range v {
-					listArg[i] = uint64(lv)
-				}
-				bv.ValueUintList = listArg
-			case []uint64:
-				bv.Type = pb.BindVariable_TYPE_UINT_LIST
-				listArg := make([]uint64, len(v))
-				for i, lv := range v {
-					listArg[i] = lv
-				}
-				bv.ValueUintList = listArg
+
+			// float32, float64 are TYPE_FLOAT_LIST
 			case float32:
-				bv.Type = pb.BindVariable_TYPE_FLOAT
-				bv.ValueFloat = float64(v)
-			case float64:
-				bv.Type = pb.BindVariable_TYPE_FLOAT
-				bv.ValueFloat = float64(v)
-			case []float32:
 				bv.Type = pb.BindVariable_TYPE_FLOAT_LIST
 				listArg := make([]float64, len(v))
 				for i, lv := range v {
-					listArg[i] = float64(lv)
+					listArg[i] = float64(lv.(float32))
 				}
 				bv.ValueFloatList = listArg
-			case []float64:
+			case float64:
 				bv.Type = pb.BindVariable_TYPE_FLOAT_LIST
 				listArg := make([]float64, len(v))
 				for i, lv := range v {
-					listArg[i] = lv
+					listArg[i] = lv.(float64)
 				}
 				bv.ValueFloatList = listArg
 			}
-			result.BindVariables[k] = bv
+		case string:
+			bv.Type = pb.BindVariable_TYPE_BYTES
+			bv.ValueBytes = []byte(v)
+		case []string:
+			bv.Type = pb.BindVariable_TYPE_BYTES_LIST
+			listArg := make([][]byte, len(v))
+			for i, lv := range v {
+				listArg[i] = []byte(lv)
+			}
+			bv.ValueBytesList = listArg
+		case []byte:
+			bv.Type = pb.BindVariable_TYPE_BYTES
+			bv.ValueBytes = v
+		case [][]byte:
+			bv.Type = pb.BindVariable_TYPE_BYTES_LIST
+			listArg := make([][]byte, len(v))
+			for i, lv := range v {
+				listArg[i] = lv
+			}
+			bv.ValueBytesList = listArg
+		case int:
+			bv.Type = pb.BindVariable_TYPE_INT
+			bv.ValueInt = int64(v)
+		case int16:
+			bv.Type = pb.BindVariable_TYPE_INT
+			bv.ValueInt = int64(v)
+		case int32:
+			bv.Type = pb.BindVariable_TYPE_INT
+			bv.ValueInt = int64(v)
+		case int64:
+			bv.Type = pb.BindVariable_TYPE_INT
+			bv.ValueInt = v
+		case []int:
+			bv.Type = pb.BindVariable_TYPE_INT_LIST
+			listArg := make([]int64, len(v))
+			for i, lv := range v {
+				listArg[i] = int64(lv)
+			}
+			bv.ValueIntList = listArg
+		case []int16:
+			bv.Type = pb.BindVariable_TYPE_INT_LIST
+			listArg := make([]int64, len(v))
+			for i, lv := range v {
+				listArg[i] = int64(lv)
+			}
+			bv.ValueIntList = listArg
+		case []int32:
+			bv.Type = pb.BindVariable_TYPE_INT_LIST
+			listArg := make([]int64, len(v))
+			for i, lv := range v {
+				listArg[i] = int64(lv)
+			}
+			bv.ValueIntList = listArg
+		case []int64:
+			bv.Type = pb.BindVariable_TYPE_INT_LIST
+			listArg := make([]int64, len(v))
+			for i, lv := range v {
+				listArg[i] = lv
+			}
+			bv.ValueIntList = listArg
+		case uint:
+			bv.Type = pb.BindVariable_TYPE_UINT
+			bv.ValueUint = uint64(v)
+		case uint16:
+			bv.Type = pb.BindVariable_TYPE_UINT
+			bv.ValueUint = uint64(v)
+		case uint32:
+			bv.Type = pb.BindVariable_TYPE_UINT
+			bv.ValueUint = uint64(v)
+		case uint64:
+			bv.Type = pb.BindVariable_TYPE_UINT
+			bv.ValueUint = v
+		case []uint:
+			bv.Type = pb.BindVariable_TYPE_UINT_LIST
+			listArg := make([]uint64, len(v))
+			for i, lv := range v {
+				listArg[i] = uint64(lv)
+			}
+			bv.ValueUintList = listArg
+		case []uint16:
+			bv.Type = pb.BindVariable_TYPE_UINT_LIST
+			listArg := make([]uint64, len(v))
+			for i, lv := range v {
+				listArg[i] = uint64(lv)
+			}
+			bv.ValueUintList = listArg
+		case []uint32:
+			bv.Type = pb.BindVariable_TYPE_UINT_LIST
+			listArg := make([]uint64, len(v))
+			for i, lv := range v {
+				listArg[i] = uint64(lv)
+			}
+			bv.ValueUintList = listArg
+		case []uint64:
+			bv.Type = pb.BindVariable_TYPE_UINT_LIST
+			listArg := make([]uint64, len(v))
+			for i, lv := range v {
+				listArg[i] = lv
+			}
+			bv.ValueUintList = listArg
+		case float32:
+			bv.Type = pb.BindVariable_TYPE_FLOAT
+			bv.ValueFloat = float64(v)
+		case float64:
+			bv.Type = pb.BindVariable_TYPE_FLOAT
+			bv.ValueFloat = float64(v)
+		case []float32:
+			bv.Type = pb.BindVariable_TYPE_FLOAT_LIST
+			listArg := make([]float64, len(v))
+			for i, lv := range v {
+				listArg[i] = float64(lv)
+			}
+			bv.ValueFloatList = listArg
+		case []float64:
+			bv.Type = pb.BindVariable_TYPE_FLOAT_LIST
+			listArg := make([]float64, len(v))
+			for i, lv := range v {
+				listArg[i] = lv
+			}
+			bv.ValueFloatList = listArg
 		}
+		result[k] = bv
 	}
 	return result
 }

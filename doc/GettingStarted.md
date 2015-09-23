@@ -4,8 +4,6 @@ You can build Vitess using either [Docker](#docker-build) or a
 If you run into issues or have questions, please post on our
 [forum](https://groups.google.com/forum/#!forum/vitess).
 
-<div id="toc"></div>
-
 ## Docker Build
 
 To run Vitess in Docker, use an
@@ -247,7 +245,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
     step since the environment variables will already be set.
 
     Navigate to the directory where you built Vitess
-    (**$WORKSPACE/src/github.com/youtube/vitess**) and run the
+    (**$WORKSPACE/src/<wbr>github.com/<wbr>youtube/vitess**) and run the
     following command:
 
     ``` sh

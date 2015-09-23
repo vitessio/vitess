@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -606,9 +607,9 @@ type querySplitQuery struct {
 }
 
 // SplitQuery is part of the VTGateService interface
-func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
+func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
 	if f.hasError {
-		return errTestVtGateError
+		return nil, errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
@@ -624,8 +625,7 @@ func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql
 	if !reflect.DeepEqual(query, splitQueryRequest) {
 		f.t.Errorf("SplitQuery has wrong input: got %#v wanted %#v", query, splitQueryRequest)
 	}
-	*reply = *splitQueryResult
-	return nil
+	return splitQueryResult, nil
 }
 
 // GetSrvKeyspace is part of the VTGateService interface
@@ -2210,9 +2210,26 @@ func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
-	if !reflect.DeepEqual(qsl, splitQueryResult.Splits) {
-		t.Errorf("SplitQuery returned wrong result: got %+v wanted %+v", qsl, splitQueryResult.Splits)
-		t.Errorf("SplitQuery returned wrong result: got %+v wanted %+v", qsl[0].Query, splitQueryResult.Splits[0].Query)
+	if len(qsl) == 1 && len(qsl[0].Query.BindVariables) == 1 {
+		bv := qsl[0].Query.BindVariables["bind1"]
+		if len(bv.ValueBytes) == 0 {
+			bv.ValueBytes = nil
+		}
+		if len(bv.ValueBytesList) == 0 {
+			bv.ValueBytesList = nil
+		}
+		if len(bv.ValueIntList) == 0 {
+			bv.ValueIntList = nil
+		}
+		if len(bv.ValueUintList) == 0 {
+			bv.ValueUintList = nil
+		}
+		if len(bv.ValueFloatList) == 0 {
+			bv.ValueFloatList = nil
+		}
+	}
+	if !reflect.DeepEqual(qsl, splitQueryResult) {
+		t.Errorf("SplitQuery returned wrong result: got %#v wanted %#v", qsl, splitQueryResult)
 	}
 }
 
@@ -2751,24 +2768,27 @@ var splitQueryRequest = &querySplitQuery{
 	SplitCount:  13,
 }
 
-var splitQueryResult = &proto.SplitQueryResult{
-	Splits: []proto.SplitQueryPart{
-		proto.SplitQueryPart{
-			Query: &proto.KeyRangeQuery{
-				Sql: "out for SplitQuery",
-				BindVariables: map[string]interface{}{
-					"bind1": int64(1114444),
-				},
-				Keyspace: "ksout",
-				KeyRanges: []key.KeyRange{
-					key.KeyRange{
-						Start: key.KeyspaceId("s"),
-						End:   key.KeyspaceId("e"),
-					},
+var splitQueryResult = []*pbg.SplitQueryResponse_Part{
+	&pbg.SplitQueryResponse_Part{
+		Query: &pbq.BoundQuery{
+			Sql: "out for SplitQuery",
+			BindVariables: map[string]*pbq.BindVariable{
+				"bind1": &pbq.BindVariable{
+					Type:     pbq.BindVariable_TYPE_INT,
+					ValueInt: 1114444,
 				},
 			},
-			Size: 12344,
 		},
+		KeyRangePart: &pbg.SplitQueryResponse_KeyRangePart{
+			Keyspace: "ksout",
+			KeyRanges: []*pb.KeyRange{
+				&pb.KeyRange{
+					Start: []byte{'s'},
+					End:   []byte{'e'},
+				},
+			},
+		},
+		Size: 12344,
 	},
 }
 

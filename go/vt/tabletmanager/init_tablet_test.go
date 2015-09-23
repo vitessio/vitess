@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
@@ -24,6 +25,7 @@ import (
 // so this has to be in one test.
 func TestInitTablet(t *testing.T) {
 	ctx := context.Background()
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	tabletAlias := &pb.TabletAlias{
 		Cell: "cell1",
@@ -33,7 +35,7 @@ func TestInitTablet(t *testing.T) {
 	// start with idle, and a tablet record that doesn't exist
 	port := int32(1234)
 	gRPCPort := int32(3456)
-	mysqlDaemon := mysqlctl.NewFakeMysqlDaemon()
+	mysqlDaemon := mysqlctl.NewFakeMysqlDaemon(db)
 	agent := &ActionAgent{
 		TopoServer:         ts,
 		TabletAlias:        tabletAlias,

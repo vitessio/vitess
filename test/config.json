@@ -5,35 +5,40 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"backup": {
 			"File": "backup.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"binlog": {
 			"File": "binlog.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 3,
+			"RetryMax": 0
 		},
 		"client": {
 			"File": "client_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"custom_sharding": {
 			"File": "custom_sharding.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"goveralls": {
 			"File": "",
@@ -42,21 +47,24 @@
 				"travis/goveralls.sh"
 			],
 			"Manual": true,
-			"Shard": 0
+			"Shard": 1,
+			"RetryMax": 0
 		},
 		"initial_sharding": {
 			"File": "initial_sharding.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1
+			"Shard": 3,
+			"RetryMax": 0
 		},
 		"initial_sharding_bytes": {
 			"File": "initial_sharding_bytes.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3
+			"Shard": 3,
+			"RetryMax": 0
 		},
 		"java": {
 			"File": "",
@@ -66,28 +74,32 @@
 				"java_test"
 			],
 			"Manual": false,
-			"Shard": 2
+			"Shard": 2,
+			"RetryMax": 0
 		},
 		"keyrange": {
 			"File": "keyrange_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 1,
+			"RetryMax": 0
 		},
 		"keyspace": {
 			"File": "keyspace_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 1,
+			"RetryMax": 0
 		},
 		"mysqlctl": {
 			"File": "mysqlctl.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"php": {
 			"File": "",
@@ -97,14 +109,16 @@
 				"php_test"
 			],
 			"Manual": false,
-			"Shard": 1
+			"Shard": 2,
+			"RetryMax": 0
 		},
 		"python_client": {
 			"File": "python_client_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 3,
+			"RetryMax": 0
 		},
 		"queryservice_vtocc": {
 			"File": "queryservice_test.py",
@@ -115,7 +129,8 @@
 			],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"queryservice_vttablet": {
 			"File": "queryservice_test.py",
@@ -126,77 +141,88 @@
 			],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3
+			"Shard": 3,
+			"RetryMax": 0
 		},
 		"reparent": {
 			"File": "reparent.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"resharding": {
 			"File": "resharding.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1
+			"Shard": 0,
+			"RetryMax": 0
 		},
 		"resharding_bytes": {
 			"File": "resharding_bytes.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2
+			"Shard": 1,
+			"RetryMax": 0
 		},
 		"rowcache_invalidator": {
 			"File": "rowcache_invalidator.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"schema": {
 			"File": "schema.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"secure": {
 			"File": "secure.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 0,
+			"RetryMax": 0
 		},
 		"sharded": {
 			"File": "sharded.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2
+			"Shard": 4,
+			"RetryMax": 0
 		},
-		"sql_builder_test": {
+		"sql_builder": {
 			"File": "sql_builder_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1
+			"Shard": 3,
+			"RetryMax": 0
 		},
 		"tablet": {
 			"File": "tablet_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 1,
+			"RetryMax": 0
 		},
 		"tabletmanager": {
 			"File": "tabletmanager.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3
+			"Shard": 2,
+			"RetryMax": 0
 		},
 		"unit": {
 			"File": "",
@@ -205,7 +231,7 @@
 				"tools/unit_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 3,
 			"RetryMax": 1
 		},
 		"unit_race": {
@@ -216,63 +242,72 @@
 				"unit_test_race"
 			],
 			"Manual": false,
-			"Shard": 3
+			"Shard": 2,
+			"RetryMax": 0
 		},
 		"update_stream": {
 			"File": "update_stream.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"vertical_split": {
 			"File": "vertical_split.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 4,
+			"RetryMax": 0
 		},
 		"vtdb": {
 			"File": "vtdb_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3
+			"Shard": 3,
+			"RetryMax": 0
 		},
 		"vtgate_utils": {
 			"File": "vtgate_utils_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 1,
+			"RetryMax": 0
 		},
 		"vtgatev2": {
 			"File": "vtgatev2_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1
+			"Shard": 0,
+			"RetryMax": 0
 		},
 		"vtgatev3": {
 			"File": "vtgatev3_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1
+			"Shard": 4,
+			"RetryMax": 0
 		},
-		"vttest_sample_test": {
+		"vttest_sample": {
 			"File": "vttest_sample_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1
+			"Shard": 2,
+			"RetryMax": 0
 		},
 		"worker": {
 			"File": "worker.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 3,
+			"RetryMax": 0
 		}
 	}
 }

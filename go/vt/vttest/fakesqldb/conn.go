@@ -29,6 +29,7 @@ type Conn struct {
 
 // DB is a fake database and all its methods are thread safe.
 type DB struct {
+	Name         string
 	isConnFail   bool
 	data         map[string]*proto.QueryResult
 	rejectedData map[string]error
@@ -112,8 +113,8 @@ func (db *DB) IsConnFail() bool {
 	return db.isConnFail
 }
 
-// NewFakeSqlDBConn creates a new FakeSqlDBConn instance
-func NewFakeSqlDBConn(db *DB) *Conn {
+// NewFakeSQLDBConn creates a new FakeSqlDBConn instance
+func NewFakeSQLDBConn(db *DB) *Conn {
 	return &Conn{
 		db:       db,
 		isClosed: false,
@@ -271,6 +272,7 @@ func (conn *Conn) SetCharset(cs proto.Charset) error {
 func Register() *DB {
 	name := fmt.Sprintf("fake-%d", rand.Int63())
 	db := &DB{
+		Name:         name,
 		data:         make(map[string]*proto.QueryResult),
 		rejectedData: make(map[string]error),
 		queryCalled:  make(map[string]int),
@@ -279,9 +281,8 @@ func Register() *DB {
 		if db.IsConnFail() {
 			return nil, newConnError()
 		}
-		return NewFakeSqlDBConn(db), nil
+		return NewFakeSQLDBConn(db), nil
 	})
-	sqldb.DefaultDB = name
 	return db
 }
 

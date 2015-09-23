@@ -212,31 +212,35 @@ public class Bsonify {
       List<BindVariable> bindVariables = new LinkedList<>();
       for (String key : bindVars.keySet()) {
         BindVariable bv = null;
-        Object val = bindVars.get(key);
+        BSONObject val = (BasicBSONObject) bindVars.get(key);
+
         if (val == null) {
           bv = BindVariable.forNull(key);
         }
-        if (val instanceof UnsignedLong) {
-          bv = BindVariable.forULong(key, (UnsignedLong) val);
+
+        int type = (int)val.get("Type");
+
+        if (type == 3 /*unsigned long*/) {
+          bv = BindVariable.forULong(key, (UnsignedLong) val.get("ValueUint"));
         }
-        if (val instanceof Long) {
-          bv = BindVariable.forLong(key, (Long) val);
+        if (type == 2 /*long*/) {
+          bv = BindVariable.forLong(key, (Long) val.get("ValueInt"));
         }
-        if (val instanceof Double) {
-          bv = BindVariable.forDouble(key, (Double) val);
+        if (type == 4 /*double*/) {
+          bv = BindVariable.forDouble(key, (Double) val.get("ValueFloat"));
         }
-        if (val instanceof byte[]) {
-          bv = BindVariable.forBytes(key, (byte[]) val);
+        if (type == 1 /*byte[]*/) {
+          bv = BindVariable.forBytes(key, (byte[]) val.get("ValueBytes"));
         }
         if (bv == null) {
           throw new RuntimeException("invalid bind variable type: " + val.getClass());
         }
         bindVariables.add(bv);
       }
-      String keyspace = new String((byte[]) query.get("Keyspace"));
-      String tabletType = new String((byte[]) query.get("TabletType"));
+      BSONObject keyrangePart = (BasicBSONObject)splitObj.get("KeyRangePart");
+      String keyspace = new String((byte[]) keyrangePart.get("Keyspace"));
       List<KeyRange> keyranges = new ArrayList<>();
-      for (Object o : (List<?>) query.get("KeyRanges")) {
+      for (Object o : (List<?>) keyrangePart.get("KeyRanges")) {
         BSONObject keyrange = (BasicBSONObject) o;
         String start = Hex.encodeHexString((byte[]) keyrange.get("Start"));
         String end = Hex.encodeHexString((byte[]) keyrange.get("End"));
@@ -244,7 +248,7 @@ public class Bsonify {
         keyranges.add(kr);
       }
 
-      Query q = new QueryBuilder(sql, keyspace, tabletType).setKeyRanges(keyranges)
+      Query q = new QueryBuilder(sql, keyspace, "rdonly").setKeyRanges(keyranges)
           .setBindVars(bindVariables).setStreaming(true).build();
       long size = (long) splitObj.get("Size");
       queries.put(q, size);

@@ -7,10 +7,6 @@ This document describes the <code>[vtctl](/reference/vtctl.html)</code>
 commands that you can use to [review](#reviewing-your-schema) or
 [update](#changing-your-schema) your schema in Vitess. 
 
-**Contents:**
-
-<div id="toc"></div>
-
 ## Reviewing your schema
 
 This section describes the following <code>vtctl</code> commands, which let you look at the schema and validate its consistency across tablets or shards:

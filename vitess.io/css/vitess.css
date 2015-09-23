@@ -5,6 +5,10 @@
 
 @import url("https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.css");
 
+body {
+  padding-top: 50px;
+}
+
 p {
   margin: 0 0 1em;
 }
@@ -17,6 +21,7 @@ table {
   border-spacing:0;
   text-align:left;
   width:100%;
+  margin-bottom: 2.125em;
 }
 
 table thead {
@@ -89,11 +94,26 @@ br.bigbreak {
 div.indent-details {
   padding-left: 1.6250em;
 }
+#toc {
+  border-left: solid 3px #4E5A92;
+  padding-left: 12px;
+}
 #toc ol, #toc ul {
+  font-size: 13px;
+  list-style: none;
   margin: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+#toc ol ol, #toc ol ul, #toc ul ol, #toc ul ul {
+  padding-left: 25px;
+  list-style: circle;
 }
 #toc li {
   margin-bottom: 0;
+}
+#toc-contents-header {
+  font-size: 13px;
 }
 ol ol, ol ul, ul ol, ul ul {
   margin: 0.8em 0em;
@@ -101,45 +121,155 @@ ol ol, ol ul, ul ol, ul ul {
 ol ol li, ol ul li, ul ol li, ul ul li {
   margin: 0;
 }
-li, .docs-side-nav ol li, .docs-side-nav ul li {
+li {
   margin-bottom: 0.5em;
 }
 /*
  * Left nav
  */
-.docs-side-nav {
-  margin-top: 0;
+#left-nav {
+  overflow-x: hidden;
+  overflow-y: auto;
 }
-.docs-side-nav ol, .docs-side-nav ul {
-  padding-left: 1.625em;
+
+#masthead {
+  background-color: #E8F4FF;
+  margin-bottom: 40px;
+  min-height: 105px;
 }
-.docs-side-nav li h4 {
-  margin-top: 1.2em;
+
+#masthead h1 {
+  color: #4E5A92;
+  font-size: 36px;
+  padding: 18px;
 }
-.docs-side-nav li h4.no-top-margin {
-  margin-top: 0;
+.icon-bar {
+  background-color:#fff;
 }
-.docs-side-nav li a {
-  padding-left: 8px;
+
+@media screen and (min-width: 768px) {
+  #masthead h1 {
+    font-size: 36px;
+  }
 }
-.docs-side-nav li.active-item {
-  border-left: solid 3px #4E5A92;
+
+.navbar-brand {
+  padding: 7px 15px;
+}
+
+.nav > li {
+  margin-bottom: 0;
+}
+.nav li.active-item {
   font-weight: bold;
-  margin-left: -3px;
   text-decoration: none;
 }
-.docs-side-nav li.active-item ul, .docs-side-nav li.active-item ol {
-  border-left: solid 3px #fff;
-  font-weight: normal;
-  margin-left: -3px;
+#sidebar > li > h4 {
+  font-size: 16px;
+  margin-top: 0.8em;
+}
+.nav > li > h4.no-top-margin {
   margin-top: 0;
+}
+#sidebar > li > a {
+  padding: 6px 15px 6px 0px;
+}
+#sidebar li a {
+  font-size: 13px;
+}
+#sidebar li ul li, #sidebar li ol li {
+  padding-bottom: 5px;
+}
+.nav li.active-item ul, .nav li.active-item ol {
+  font-weight: normal;
   padding-top: 0.8em;
+}
+.nav-stacked > li+li {
+  margin-top: 0;
+}
+.nav ol, .nav ul {
+  list-style: none;
+  padding-left: 1.5em;
+}
+#rightCol li.active > a {
+  color: #730073;
+  font-weight: bold;
+}
+#centerTextCol h2, #centerTextCol h3, #centerTextCol h4,
+                   #centerTextCol h5, #centerTextCol h6 {
+  padding-top: 50px;
+  margin-top: -50px;
+}
+
+.affix-top,.affix{
+  position: static;
+}
+#sidebar.affix-top,#sidebar.affix{
+  max-width: 170px;
+}
+
+@media (min-width: 1200px) {
+  #tocSidebar.affix, #tocSidebar.affix-top {
+    min-width: 170px;
+  }
+  #rightCol #tocSidebar.affix, #rightCol #tocSidebar.affix-top {
+    max-width: 210px;
+  }
+  #toc > ul > li > a {
+    display: inline-block;
+    padding-left: 10px;
+    text-indent: -10px;
+  }
+
+  #sidebar.affix, #tocSidebar.affix {
+    position: fixed;
+    top: 70px;
+    bottom: 0px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
+@media (min-width: 992px) {
+  #sidebar.affix, #sidebar.affix-top {
+    width: 228px;
+  }
+
+  #tocSidebar.affix, #tocSidebar.affix-top {
+  }
+
+  #sidebar.affix-top, #tocSidebar.affix-top {
+    position: static;
+  }
+  
+  #sidebar.affix, #tocSidebar.affix {
+    position: fixed;
+    top: 70px;
+    bottom: 0px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
+@media (min-width: 768px) {
+  #sidebar.affix {
+    position: fixed;
+    top: 70px;
+    bottom: 0px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
+
+/*
+ * Left nav highlighting title of selected document
+ */
+
+.main-site-content {
+  max-width: 1512px;
+  padding: 0 80px;
 }
 
 /*
  * Responsive tables
-  background: rgba(255, 255, 255, .95);
-  background: rgba(255, 255, 255, .87);
  */
 table.responsive tr:not(.alt) td td:first-child,
 table.responsive td tr:not(.alt) td:first-child {
@@ -167,29 +297,7 @@ table.responsive td td:first-child {
 table.responsive th:not(:first-child) {
   display: none;
 }
-@media screen and (max-width: 1000px) {
-  /*
-   * Force responsive tables to lay out completely vertically. The "responsive"
-   * class should only be applied to tables that are composed like a definition
-   * list, with a "term" (say, a property name) in the first column and any
-   * "definitions" (say, type, description, and a sample value) stacked on top
-   * of each other in the second column. This makes it possible to lay out the
-   * table vertically and keep it readable on smaller screens without horizontal
-   * scrolling. This structure and behavior is documented.
-   */
-  table.responsive,
-  table.responsive thead,
-  table.responsive tbody,
-  table.responsive tr,
-  table.responsive th,
-  table.responsive td {
-    display: block;
-  }
-}
 
-/*
- * App bar changing color when scrolled
- */
 /*** main layout ***/
 
 #home-page-logo {
@@ -199,7 +307,9 @@ table.responsive th:not(:first-child) {
   height: 228px;
 }
 .page-title-bar {
-  margin: 60px 0px;
+  margin: 50px 0px 0px;
+  padding-bottom: 10px;
+  padding-top: 15px;
 }
 
 .app-bar {
@@ -255,6 +365,25 @@ table.responsive th:not(:first-child) {
   background-size: 24px 24px;
 }
 
+#leftCol {
+  float: left;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+#rightCol {
+  float: right;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 0px;
+  position: static;
+  z-index: 10000;
+}
+
+.scrolled {
+  margin-bottom: 80px;
+  z-index: 20000;
+}
+
 .scrolled .app-bar {
   color: #000000;
   background: #FFFFFF;
@@ -291,54 +420,90 @@ main .fa {
   padding-left: 0;
   padding-right: 0;
 }
+#mobile-left-nav-menu-button {
+  display: none;
+  background-color: transparent;
+  background-image: url('/images/left-nav-menu-expander.svg');
+  border: 0;
+  height: 24px;
+  margin-left: 10px;
+  min-width: 24px;
+}
+#collapsed-left-menu {
+  display: none;
+}
+#collapsed-left-menu h4 {
+  color: #E8F4FF;
+}
 
-@media screen and (min-width: 768px) {
-  .navbar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 60px;
-    -webkit-transition: background-color 0.2s ease-out;
-            transition: background-color 0.2s ease-out;
+@media screen and (max-width: 1199px) {
+  #rightCol {
+    margin: 0;
   }
-  .navbar-brand {
-    padding: 13px 0px;
+  #centerCol {
+    z-index: 1;
   }
-
-  .navbar .container,
-  .navdrawer-container ul {
-    float: right;
-    display: inline;
+  #toc-content-row {
+    position: relative;
+    z-index: 1;
   }
-  .navbar .container,
-  .navdrawer-container ul li {
-    display: inline;
+}
+@media screen and (max-width: 991px) {
+  #rightCol {
+    float: none;
+    margin: 12px 0 30px calc(25% + 15px);
+    max-width: 255px;
   }
-  .navbar .container,
-  .navdrawer-container ul li a {
-    display: inline-block;
-    padding: 0 20px;
-    font-size: 17px;
-    line-height: 60px;
-    font-weight: 300;
-    text-transform: uppercase;
+  #centerCol {
+    margin-left: calc(25% + 15px);
+    z-index: 1;
   }
-
-  .scrolled .navdrawer-container ul li a {
-    color: #000000;
-  }
-  .scrolled .navdrawer-container ul li a:hover {
-    background-color: rgba(78,90,146, 0.2);
-  }
-  .scrolled .navdrawer-container ul li a:focus {
-    background-color: rgba(78,90,146, 0.3);
-  }
-  .scrolled .navdrawer-container ul li a:active {
-    background-color: rgba(78,90,146, 0.4);
+  #leftCol {
+    max-width: 200px;
   }
 
-  #nav .index {
+  /*
+   * Force responsive tables to lay out completely vertically. The "responsive"
+   * class should only be applied to tables that are composed like a definition
+   * list, with a "term" (say, a property name) in the first column and any
+   * "definitions" (say, type, description, and a sample value) stacked on top
+   * of each other in the second column. This makes it possible to lay out the
+   * table vertically and keep it readable on smaller screens without horizontal
+   * scrolling. This structure and behavior is documented.
+   */
+  table.responsive,
+  table.responsive thead,
+  table.responsive tbody,
+  table.responsive tr,
+  table.responsive th,
+  table.responsive td {
+    display: block;
+  }
+
+  .main-site-content {
+    padding: 0 24px;
+  }
+}
+@media screen and (max-width: 767px) {
+  #mobile-left-nav-menu-button {
+    display: block;
+  }
+  #rightCol {
+    margin: 12px 0 30px;
+  }
+  #leftCol {
+    display: none;
+  }
+  #centerCol {
+    margin-left: 0;
+  }
+  .main-site-content {
+    padding: 0 16px;
+  }
+  #collapsed-left-menu {
+    display: block;
+  }
+  #standard-menu-links {
     display: none;
   }
 }

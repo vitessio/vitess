@@ -87,8 +87,8 @@ func (c *terminalClient) Rollback(ctx context.Context, inSession *proto.Session)
 	return errTerminal
 }
 
-func (c *terminalClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
-	return errTerminal
+func (c *terminalClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
+	return nil, errTerminal
 }
 
 func (c *terminalClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {

@@ -37,11 +37,10 @@ func newCallerIDClient(fallback vtgateservice.VTGateService) *callerIDClient {
 	}
 }
 
-// checkCallerID will see if this module is handling the request,
-// and if it is, check the callerID from the context.
-// Returns false if the query is not for this module.
-// Returns true and the the error to return with the call
-// if this module is handling the request.
+// checkCallerID will see if this module is handling the request, and
+// if it is, check the callerID from the context.  Returns false if
+// the query is not for this module.  Returns true and the error to
+// return with the call if this module is handling the request.
 func (c *callerIDClient) checkCallerID(ctx context.Context, received string) (bool, error) {
 	if !strings.HasPrefix(received, CallerIDPrefix) {
 		return false, nil
@@ -62,7 +61,7 @@ func (c *callerIDClient) checkCallerID(ctx context.Context, received string) (bo
 		return true, fmt.Errorf("callerid mismatch, got %v expected %v", receivedCallerID, expectedCallerID)
 	}
 
-	return true, nil
+	return true, fmt.Errorf("SUCCESS: callerid matches")
 }
 
 func (c *callerIDClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
@@ -146,9 +145,9 @@ func (c *callerIDClient) StreamExecuteKeyRanges(ctx context.Context, sql string,
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
 }
 
-func (c *callerIDClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
+func (c *callerIDClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
 	if ok, err := c.checkCallerID(ctx, sql); ok {
-		return err
+		return nil, err
 	}
-	return c.fallbackClient.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount, reply)
+	return c.fallbackClient.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
 }

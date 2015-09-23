@@ -49,7 +49,7 @@ func TestBsonP3VTGateConn(t *testing.T) {
 	vtgateconntest.RegisterTestDialProtocol(client)
 
 	// run the test suite
-	// vtgateconntest.TestSuite(t, client, service)
+	vtgateconntest.TestSuite(t, client, service)
 	vtgateconntest.TestErrorSuite(t, service)
 
 	// and clean up
