@@ -182,6 +182,19 @@ class TestPythonClient(unittest.TestCase):
                   keyspace_ids=[self.KEYSPACE_ID_0X80])])
     cursor.close()
 
+    # ExecuteBatchShard test
+    cursor = self._open_batch_cursor()
+    with self.assertRaises(dbexceptions.IntegrityError):
+      cursor.executemany(
+          sql=None,
+          params_list=[
+              dict(
+                  sql=integrity_error_test_query,
+                  bind_variables={},
+                  keyspace='keyspace',
+                  shards=[keyrange_constants.SHARD_ZERO])])
+    cursor.close()
+
     # VTGate.StreamExecuteKeyspaceIds, VTGate.StreamExecuteKeyRanges:
     # not handled in vtgateclienttest/services/errors.go.
 
@@ -212,11 +225,14 @@ class TestPythonClient(unittest.TestCase):
 
     def check_good_and_bad_effective_caller_ids(cursor, cursor_execute_method):
       cursor.set_effective_caller_id(good_effective_caller_id)
-      cursor_execute_method(cursor)
-      cursor.set_effective_caller_id(bad_effective_caller_id)
-      with self.assertRaises(dbexceptions.DatabaseError):
+      with self.assertRaises(dbexceptions.DatabaseError) as cm:
         cursor_execute_method(cursor)
-      cursor.close()
+      self.assertIn('SUCCESS:', str(cm.exception))
+
+      cursor.set_effective_caller_id(bad_effective_caller_id)
+      with self.assertRaises(dbexceptions.DatabaseError) as cm:
+        cursor_execute_method(cursor)
+      self.assertNotIn('SUCCESS:', str(cm.exception))
 
     def cursor_execute_keyspace_ids_method(cursor):
       cursor.execute(effective_caller_id_test_query, {})
@@ -250,6 +266,17 @@ class TestPythonClient(unittest.TestCase):
 
     check_good_and_bad_effective_caller_ids(
         self._open_batch_cursor(), cursor_execute_batch_keyspace_ids_method)
+
+    def cursor_execute_batch_shard_method(cursor):
+      cursor.executemany(
+          sql=None,
+          params_list=[dict(
+              sql=effective_caller_id_test_query, bind_variables={},
+              keyspace='keyspace',
+              shards=[keyrange_constants.SHARD_ZERO])])
+
+    check_good_and_bad_effective_caller_ids(
+        self._open_batch_cursor(), cursor_execute_batch_shard_method)
 
     def cursor_stream_execute_keyspace_ids_method(cursor):
       cursor.execute(sql=effective_caller_id_test_query, bind_variables={})

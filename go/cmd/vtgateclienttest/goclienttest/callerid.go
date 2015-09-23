@@ -6,6 +6,7 @@ package goclienttest
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/cmd/vtgateclienttest/services"
@@ -33,7 +34,9 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	// test Execute forwards the callerID
 	if _, err := conn.Execute(ctx, query, nil, pb.TabletType_MASTER); err != nil {
-		t.Errorf("failed to pass callerid: %v", err)
+		if !strings.Contains(err.Error(), "SUCCESS: ") {
+			t.Errorf("failed to pass callerid: %v", err)
+		}
 	}
 
 	// FIXME(alainjobart) add all function calls
