@@ -126,12 +126,12 @@ func (rsnl rangeShardNodesList) Swap(i, j int) {
 // KeyspaceNodes represents all tablet nodes in a keyspace.
 type KeyspaceNodes struct {
 	ShardNodes []*ShardNodes // sorted by shard name
-	ServedFrom map[topo.TabletType]string
+	ServedFrom map[string]string
 }
 
 func newKeyspaceNodes() *KeyspaceNodes {
 	return &KeyspaceNodes{
-		ServedFrom: make(map[topo.TabletType]string),
+		ServedFrom: make(map[string]string),
 	}
 }
 
@@ -266,7 +266,7 @@ func DbServingGraph(ctx context.Context, ts topo.Server, cell string) (servingGr
 		return
 	}
 	wg := sync.WaitGroup{}
-	servingTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
+	servingTypes := []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY}
 	for _, keyspace := range keyspaces {
 		kn := newKeyspaceNodes()
 		servingGraph.Keyspaces[keyspace] = kn
@@ -279,16 +279,13 @@ func DbServingGraph(ctx context.Context, ts topo.Server, cell string) (servingGr
 				rec.RecordError(fmt.Errorf("GetSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err))
 				return
 			}
-			if len(ks.ServedFrom) > 0 {
-				kn.ServedFrom = make(map[topo.TabletType]string)
-				for _, sf := range ks.ServedFrom {
-					kn.ServedFrom[topo.ProtoToTabletType(sf.TabletType)] = sf.Keyspace
-				}
+			for _, sf := range ks.ServedFrom {
+				kn.ServedFrom[strings.ToLower(sf.TabletType.String())] = sf.Keyspace
 			}
 
 			displayedShards := make(map[string]bool)
 			for _, partitionTabletType := range servingTypes {
-				kp := topoproto.SrvKeyspaceGetPartition(ks, topo.TabletTypeToProto(partitionTabletType))
+				kp := topoproto.SrvKeyspaceGetPartition(ks, partitionTabletType)
 				if kp == nil {
 					continue
 				}
