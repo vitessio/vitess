@@ -179,6 +179,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) chan bool {
 	}
 	done := make(chan bool)
 	go func() {
+		startTime := time.Now()
 		select {
 		case <-ctx.Done():
 			// There is a possibility that the query returned very fast,
@@ -192,9 +193,11 @@ func (dbc *DBConn) setDeadline(ctx context.Context) chan bool {
 		case <-done:
 			return
 		}
+		elapsed := time.Now().Sub(startTime)
 
-		// Verify the query got killed.
-		tmr2 := time.NewTimer(15 * time.Second)
+		// Give 2x the elapsed time and some buffer as grace period
+		// for the query to get killed.
+		tmr2 := time.NewTimer(2*elapsed + 5*time.Second)
 		defer tmr2.Stop()
 		select {
 		case <-tmr2.C:

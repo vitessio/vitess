@@ -186,8 +186,7 @@ message StreamExecuteRequest {
 
 // StreamExecuteResponse is the returned value from StreamExecute
 message StreamExecuteResponse {
-  vtrpc.RPCError error = 1;
-  query.QueryResult result = 2;
+  query.QueryResult result = 1;
 }
 
 // StreamExecuteShardsRequest is the payload to StreamExecuteShards
@@ -201,8 +200,7 @@ message StreamExecuteShardsRequest {
 
 // StreamExecuteShardsResponse is the returned value from StreamExecuteShards
 message StreamExecuteShardsResponse {
-  vtrpc.RPCError error = 1;
-  query.QueryResult result = 2;
+  query.QueryResult result = 1;
 }
 
 // StreamExecuteKeyspaceIdsRequest is the payload to StreamExecuteKeyspaceIds
@@ -216,8 +214,7 @@ message StreamExecuteKeyspaceIdsRequest {
 
 // StreamExecuteKeyspaceIdsResponse is the returned value from StreamExecuteKeyspaceIds
 message StreamExecuteKeyspaceIdsResponse {
-  vtrpc.RPCError error = 1;
-  query.QueryResult result = 2;
+  query.QueryResult result = 1;
 }
 
 // StreamExecuteKeyRangesRequest is the payload to StreamExecuteKeyRanges
@@ -231,8 +228,7 @@ message StreamExecuteKeyRangesRequest {
 
 // StreamExecuteKeyRangesResponse is the returned value from StreamExecuteKeyRanges
 message StreamExecuteKeyRangesResponse {
-  vtrpc.RPCError error = 1;
-  query.QueryResult result = 2;
+  query.QueryResult result = 1;
 }
 
 // BeginRequest is the payload to Begin
@@ -242,8 +238,7 @@ message BeginRequest {
 
 // BeginResponse is the returned value from Begin
 message BeginResponse {
-  vtrpc.RPCError error = 1;
-  Session session = 2;
+  Session session = 1;
 }
 
 // CommitRequest is the payload to Commit
@@ -254,7 +249,6 @@ message CommitRequest {
 
 // CommitResponse is the returned value from Commit
 message CommitResponse {
-  vtrpc.RPCError error = 1;
 }
 
 // RollbackRequest is the payload to Rollback
@@ -265,7 +259,6 @@ message RollbackRequest {
 
 // RollbackResponse is the returned value from Rollback
 message RollbackResponse {
-  vtrpc.RPCError error = 1;
 }
 
 // SplitQueryRequest is the payload to SplitQuery

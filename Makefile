@@ -48,21 +48,22 @@ clean:
 clean_pkg:
 	rm -rf ../../../../pkg Godeps/_workspace/pkg
 
-unit_test:
+unit_test: build
+	echo $$(date): Running unit tests
 	godep go test $(VT_GO_PARALLEL) ./go/...
 
 # Run the code coverage tools, compute aggregate.
 # If you want to improve in a directory, run:
 #   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
-unit_test_cover:
+unit_test_cover: build
 	godep go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
-unit_test_race:
+unit_test_race: build
 	godep go test $(VT_GO_PARALLEL) -race ./go/...
 
 # Run coverage and upload to coveralls.io.
 # Requires the secret COVERALLS_TOKEN env variable to be set.
-unit_test_goveralls:
+unit_test_goveralls: build
 	travis/goveralls.sh
 
 queryservice_test:
@@ -86,9 +87,6 @@ java_test:
 php_test:
 	godep go install ./go/cmd/vtgateclienttest
 	php $$PHP_FLAGS $$(which phpunit) php/tests
-
-v3_test:
-	cd test && ./vtgatev3_test.py
 
 bson:
 	go generate ./go/...

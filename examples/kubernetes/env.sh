@@ -11,7 +11,7 @@ VTCTLD_PORT=${VTCTLD_PORT:-30000}
 
 # Get the ExternalIP of any node.
 get_node_ip() {
-  $KUBECTL get -o template -t '{{range (index .items 0).status.addresses}}{{if eq .type "ExternalIP"}}{{.address}}{{end}}{{end}}' nodes
+  $KUBECTL get -o template -t '{{range (index .items 0).status.addresses}}{{if eq .type "ExternalIP" "LegacyHostIP"}}{{.address}}{{end}}{{end}}' nodes
 }
 
 # Try to find vtctld address if not provided.

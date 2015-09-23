@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/key"
-	kproto "github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -39,7 +38,7 @@ func init() {
   }
 }
 `)
-	Init(new(sandboxTopo), schema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, 0)
+	Init(nil, topo.Server{}, new(sandboxTopo), schema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, 0, "")
 }
 
 func TestVTGateExecute(t *testing.T) {
@@ -736,42 +735,37 @@ func TestVTGateSplitQuery(t *testing.T) {
 	}
 	sql := "select col1, col2 from table"
 	splitCount := 24
-	result := new(proto.SplitQueryResult)
-	err := rpcVTGate.SplitQuery(context.Background(),
+	splits, err := rpcVTGate.SplitQuery(context.Background(),
 		keyspace,
 		sql,
 		nil,
 		"",
-		splitCount,
-		result)
+		splitCount)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
 	_, err = getAllShards(DefaultShardSpec)
 	// Total number of splits should be number of shards * splitsPerShard
-	if splitCount != len(result.Splits) {
-		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", splitCount, len(result.Splits))
+	if splitCount != len(splits) {
+		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", splitCount, len(splits))
 	}
-	actualSqlsByKeyRange := map[kproto.KeyRange][]string{}
-	for _, split := range result.Splits {
+	actualSqlsByKeyRange := map[string][]string{}
+	for _, split := range splits {
 		if split.Size != sandboxSQRowCount {
 			t.Errorf("wrong split size, want \n%+v, got \n%+v", sandboxSQRowCount, split.Size)
 		}
-		if split.Query.Keyspace != keyspace {
-			t.Errorf("wrong split size, want \n%+v, got \n%+v", keyspace, split.Query.Keyspace)
+		if split.KeyRangePart.Keyspace != keyspace {
+			t.Errorf("wrong split size, want \n%+v, got \n%+v", keyspace, split.KeyRangePart.Keyspace)
 		}
-		if len(split.Query.KeyRanges) != 1 {
-			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.Query.KeyRanges))
+		if len(split.KeyRangePart.KeyRanges) != 1 {
+			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.KeyRangePart.KeyRanges))
 		}
-		if split.Query.TabletType != topo.TYPE_RDONLY {
-			t.Errorf("wrong tablet type, want \n%+v, got \n%+v", topo.TYPE_RDONLY, split.Query.TabletType)
-		}
-		kr := split.Query.KeyRanges[0]
+		kr := key.KeyRangeString(split.KeyRangePart.KeyRanges[0])
 		actualSqlsByKeyRange[kr] = append(actualSqlsByKeyRange[kr], split.Query.Sql)
 	}
-	expectedSqlsByKeyRange := map[kproto.KeyRange][]string{}
+	expectedSqlsByKeyRange := map[string][]string{}
 	for _, kr := range keyranges {
-		expectedSqlsByKeyRange[kproto.ProtoToKeyRange(kr)] = []string{
+		expectedSqlsByKeyRange[key.KeyRangeString(kr)] = []string{
 			"select col1, col2 from table /*split 0 */",
 			"select col1, col2 from table /*split 1 */",
 			"select col1, col2 from table /*split 2 */",
@@ -850,7 +844,7 @@ func TestAnnotatingExecuteKeyspaceIds(t *testing.T) {
 		t.Fatalf("want nil, got %v", err)
 	}
 
-	verifyQueryAnnotatedWithKeyspaceId(t, []byte{0x10}, shards[0])
+	verifyQueryAnnotatedWithKeyspaceID(t, []byte{0x10}, shards[0])
 }
 
 func TestAnnotatingExecuteKeyspaceIdsMultipleIds(t *testing.T) {
@@ -1082,12 +1076,12 @@ func setUpSandboxWithTwoShards(keyspace string) (string, []*sandboxConn) {
 }
 
 // Verifies that 'shard' was sent exactly one query and that it
-// was annotated with 'expectedKeyspaceId'
-func verifyQueryAnnotatedWithKeyspaceId(t *testing.T, expectedKeyspaceId []byte, shard *sandboxConn) {
+// was annotated with 'expectedKeyspaceID'
+func verifyQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte, shard *sandboxConn) {
 	if !verifyNumQueries(t, 1, shard.Queries) {
 		return
 	}
-	verifyBoundQueryAnnotatedWithKeyspaceId(t, expectedKeyspaceId, &shard.Queries[0])
+	verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceID, &shard.Queries[0])
 }
 
 // Verifies that 'shard' was sent exactly one query and that it
@@ -1121,10 +1115,10 @@ func verifyNumBatchQueries(t *testing.T, expectedNumQueries int, batchQueries []
 	return true
 }
 
-func verifyBoundQueryAnnotatedWithKeyspaceId(t *testing.T, expectedKeyspaceId []byte, query *tproto.BoundQuery) {
+func verifyBoundQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte, query *tproto.BoundQuery) {
 	verifyBoundQueryAnnotatedWithComment(
 		t,
-		"/* vtgate:: keyspace_id:"+hex.EncodeToString(expectedKeyspaceId)+" */",
+		"/* vtgate:: keyspace_id:"+hex.EncodeToString(expectedKeyspaceID)+" */",
 		query)
 }
 
@@ -1142,13 +1136,13 @@ func verifyBoundQueryAnnotatedWithComment(t *testing.T, expectedComment string, 
 }
 
 // Verifies that 'shard' was sent exactly one batch-query and that its
-// (single) queries are annotated with the elements of expectedKeyspaceIds
+// (single) queries are annotated with the elements of expectedKeyspaceIDs
 // in order.
-func verifyBatchQueryAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIds [][]byte, shard *sandboxConn) {
+func verifyBatchQueryAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIDs [][]byte, shard *sandboxConn) {
 	if !verifyNumBatchQueries(t, 1, shard.BatchQueries) {
 		return
 	}
-	verifyBoundQueriesAnnotatedWithKeyspaceIds(t, expectedKeyspaceIds, shard.BatchQueries[0])
+	verifyBoundQueriesAnnotatedWithKeyspaceIds(t, expectedKeyspaceIDs, shard.BatchQueries[0])
 }
 
 // Verifies that 'shard' was sent exactly one batch-query and that its
@@ -1160,12 +1154,12 @@ func verifyBatchQueryAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int,
 	verifyBoundQueriesAnnotatedAsUnfriendly(t, expectedNumQueries, shard.BatchQueries[0])
 }
 
-func verifyBoundQueriesAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIds [][]byte, queries []tproto.BoundQuery) {
-	if !verifyNumQueries(t, len(expectedKeyspaceIds), queries) {
+func verifyBoundQueriesAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIDs [][]byte, queries []tproto.BoundQuery) {
+	if !verifyNumQueries(t, len(expectedKeyspaceIDs), queries) {
 		return
 	}
 	for i := range queries {
-		verifyBoundQueryAnnotatedWithKeyspaceId(t, expectedKeyspaceIds[i], &queries[i])
+		verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceIDs[i], &queries[i])
 	}
 }
 

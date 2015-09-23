@@ -4,10 +4,6 @@ Vitess. Vitess uses backups for two purposes:
 * Provide a point-in-time backup of the data on a tablet
 * Bootstrap new tablets in an existing shard
 
-**Contents:**
-
-<div id="toc"></div>
-
 ## Prerequisites
 
 Vitess stores data backups on a Backup Storage service. Currently,

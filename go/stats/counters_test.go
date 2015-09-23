@@ -6,6 +6,7 @@ package stats
 
 import (
 	"expvar"
+	"reflect"
 	"testing"
 )
 
@@ -35,6 +36,23 @@ func TestCounters(t *testing.T) {
 	})
 	if s := f.String(); s != want1 && s != want2 {
 		t.Errorf("want %s or %s, got %s", want1, want2, s)
+	}
+}
+
+func TestCountersTags(t *testing.T) {
+	clear()
+	c := NewCounters("counterTag1")
+	want := map[string]int64{}
+	got := c.Counts()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("want %v, got %v", want, got)
+	}
+
+	c = NewCounters("counterTag2", "tag1", "tag2")
+	want = map[string]int64{"tag1": 0, "tag2": 0}
+	got = c.Counts()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("want %v, got %v", want, got)
 	}
 }
 

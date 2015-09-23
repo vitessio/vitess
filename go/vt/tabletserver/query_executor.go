@@ -39,6 +39,15 @@ type poolConn interface {
 	Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error)
 }
 
+func addUserTableQueryStats(queryServiceStats *QueryServiceStats, ctx context.Context, tableName string, queryType string, duration int64) {
+	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
+	if username == "" {
+		username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(ctx))
+	}
+	queryServiceStats.UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
+	queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, int64(duration))
+}
+
 // Execute performs a non-streaming query execution.
 func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 	qre.logStats.OriginalSQL = qre.query
@@ -49,6 +58,8 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 		qre.qe.queryServiceStats.QueryStats.Add(planName, duration)
+		addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Execute", int64(duration))
+
 		if reply == nil {
 			qre.plan.AddStats(1, duration, 0, 1)
 			return
@@ -131,7 +142,11 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) error {
 	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.PlanType = qre.plan.PlanId.String()
-	defer qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), time.Now())
+
+	defer func(start time.Time) {
+		qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), start)
+		addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
+	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
 		return err

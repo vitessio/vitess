@@ -21,10 +21,12 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -101,12 +103,12 @@ var (
 )
 
 // Init initializes VTGate server.
-func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, maxInFlight int) {
+func Init(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, maxInFlight int, testGateway string) {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
 	rpcVTGate = &VTGate{
-		resolver:     NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife),
+		resolver:     NewResolver(hc, topoServer, serv, "VttabletCall", cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, testGateway),
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
@@ -633,10 +635,10 @@ func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session) error
 // original query. Number of sub queries will be a multiple of N that is
 // greater than or equal to SplitQueryRequest.SplitCount, where N is the
 // number of shards.
-func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
+func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
 	keyspace, srvKeyspace, shards, err := getKeyspaceShards(ctx, vtg.resolver.toposerv, vtg.resolver.cell, keyspace, pb.TabletType_RDONLY)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	perShardSplitCount := int(math.Ceil(float64(splitCount) / float64(len(shards))))
 	if srvKeyspace.ShardingColumnName != "" {
@@ -646,12 +648,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, 
 		for _, shard := range shards {
 			keyRangeByShard[shard.Name] = shard.KeyRange
 		}
-		splits, err := vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, sql, bindVariables, splitColumn, perShardSplitCount, keyRangeByShard, keyspace)
-		if err != nil {
-			return err
-		}
-		reply.Splits = splits
-		return nil
+		return vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, sql, bindVariables, splitColumn, perShardSplitCount, keyRangeByShard, keyspace)
 	}
 
 	// we are using custom sharding, so the result
@@ -660,12 +657,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, 
 	for i, shard := range shards {
 		shardNames[i] = shard.Name
 	}
-	splits, err := vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, sql, bindVariables, splitColumn, perShardSplitCount, shardNames, keyspace)
-	if err != nil {
-		return err
-	}
-	reply.Splits = splits
-	return nil
+	return vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, sql, bindVariables, splitColumn, perShardSplitCount, shardNames, keyspace)
 }
 
 // GetSrvKeyspace is part of the vtgate service API.

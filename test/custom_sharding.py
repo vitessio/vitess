@@ -59,6 +59,10 @@ def tearDownModule():
 
 
 class TestCustomSharding(unittest.TestCase):
+  """
+  Warning: this test only works with BSON RPC, only area where the
+  SplitQuery client is implemented.
+  """
 
   def _insert_data(self, shard, start, count, table='data'):
     sql = 'insert into %s(id, name) values (:id, :name)' % table
@@ -186,9 +190,9 @@ primary key (id)
     shard0count = 0
     shard1count = 0
     for q in s:
-      if q['QueryShard']['Shards'][0] == '0':
+      if q['shard_part']['shards'][0] == '0':
         shard0count += 1
-      if q['QueryShard']['Shards'][0] == '1':
+      if q['shard_part']['shards'][0] == '1':
         shard1count += 1
     self.assertEqual(shard0count, 2)
     self.assertEqual(shard1count, 2)
@@ -196,10 +200,13 @@ primary key (id)
     # run the queries, aggregate the results, make sure we have all rows
     rows = {}
     for q in s:
+      bindvars = {}
+      for name, value in q['query']['bind_variables'].iteritems():
+        bindvars[name] = value['value_int']
       qr = utils.vtgate.execute_shard(
-          q['QueryShard']['Sql'],
-          'test_keyspace', ','.join(q['QueryShard']['Shards']),
-          tablet_type='master', bindvars=q['QueryShard']['BindVariables'])
+          q['query']['sql'],
+          'test_keyspace', ','.join(q['shard_part']['shards']),
+          tablet_type='master', bindvars=bindvars)
       for r in qr['Rows']:
         id = int(r[0])
         rows[id] = r[1]

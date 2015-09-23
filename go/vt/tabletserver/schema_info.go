@@ -500,8 +500,17 @@ func (si *SchemaInfo) GetSchema() []*schema.Table {
 	return tables
 }
 
+// getQuery fetches the plan and makes it the most recent.
 func (si *SchemaInfo) getQuery(sql string) *ExecPlan {
 	if cacheResult, ok := si.queries.Get(sql); ok {
+		return cacheResult.(*ExecPlan)
+	}
+	return nil
+}
+
+// peekQuery fetches the plan without changing the LRU order.
+func (si *SchemaInfo) peekQuery(sql string) *ExecPlan {
+	if cacheResult, ok := si.queries.Peek(sql); ok {
 		return cacheResult.(*ExecPlan)
 	}
 	return nil
@@ -638,7 +647,7 @@ func (si *SchemaInfo) getQueryStats(f queryStatsFunc) map[string]int64 {
 	keys := si.queries.Keys()
 	qstats := make(map[string]int64)
 	for _, v := range keys {
-		if plan := si.getQuery(v); plan != nil {
+		if plan := si.peekQuery(v); plan != nil {
 			table := plan.TableName
 			if table == "" {
 				table = "Join"
@@ -685,7 +694,7 @@ func (si *SchemaInfo) handleHTTPQueryPlans(response http.ResponseWriter, request
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 	for _, v := range keys {
 		response.Write([]byte(fmt.Sprintf("%#v\n", v)))
-		if plan := si.getQuery(v); plan != nil {
+		if plan := si.peekQuery(v); plan != nil {
 			if b, err := json.MarshalIndent(plan.ExecPlan, "", "  "); err != nil {
 				response.Write([]byte(err.Error()))
 			} else {
@@ -701,7 +710,7 @@ func (si *SchemaInfo) handleHTTPQueryStats(response http.ResponseWriter, request
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	qstats := make([]perQueryStats, 0, len(keys))
 	for _, v := range keys {
-		if plan := si.getQuery(v); plan != nil {
+		if plan := si.peekQuery(v); plan != nil {
 			var pqstats perQueryStats
 			pqstats.Query = unicoded(v)
 			pqstats.Table = plan.TableName
