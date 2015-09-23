@@ -49,17 +49,6 @@ var errorPriorities = map[vtrpc.ErrorCode]int{
 	vtrpc.ErrorCode_UNAUTHENTICATED:    PriorityUnauthenticated,
 }
 
-// rpcErrFromTabletError translate an error from VTGate to an *mproto.RPCError
-func rpcErrFromVtGateError(err error) *mproto.RPCError {
-	if err == nil {
-		return nil
-	}
-	return &mproto.RPCError{
-		Code:    int64(vterrors.RecoverVtErrorCode(err)),
-		Message: err.Error(),
-	}
-}
-
 // aggregateVtGateErrorCodes aggregates a list of errors into a single error code.
 // It does so by finding the highest priority error code in the list.
 func aggregateVtGateErrorCodes(errors []error) vtrpc.ErrorCode {
@@ -89,7 +78,7 @@ func AddVtGateErrorToQueryResult(err error, reply *proto.QueryResult) {
 	if err == nil {
 		return
 	}
-	reply.Err = rpcErrFromVtGateError(err)
+	reply.Err = vterrors.RPCErrFromVtError(err)
 }
 
 // AddVtGateErrorToQueryResultList will mutate a QueryResultList struct to fill in the Err
@@ -98,7 +87,7 @@ func AddVtGateErrorToQueryResultList(err error, reply *proto.QueryResultList) {
 	if err == nil {
 		return
 	}
-	reply.Err = rpcErrFromVtGateError(err)
+	reply.Err = vterrors.RPCErrFromVtError(err)
 }
 
 // AddVtGateErrorToSplitQueryResult will mutate a SplitQueryResult struct to fill in the Err
@@ -107,7 +96,7 @@ func AddVtGateErrorToSplitQueryResult(err error, reply *proto.SplitQueryResult) 
 	if err == nil {
 		return
 	}
-	reply.Err = rpcErrFromVtGateError(err)
+	reply.Err = vterrors.RPCErrFromVtError(err)
 }
 
 // AddVtGateErrorToBeginResponse will mutate a BeginResponse struct to fill in the Err
@@ -116,7 +105,7 @@ func AddVtGateErrorToBeginResponse(err error, reply *proto.BeginResponse) {
 	if err == nil {
 		return
 	}
-	reply.Err = rpcErrFromVtGateError(err)
+	reply.Err = vterrors.RPCErrFromVtError(err)
 }
 
 // AddVtGateErrorToCommitResponse will mutate a CommitResponse struct to fill in the Err
@@ -125,7 +114,7 @@ func AddVtGateErrorToCommitResponse(err error, reply *proto.CommitResponse) {
 	if err == nil {
 		return
 	}
-	reply.Err = rpcErrFromVtGateError(err)
+	reply.Err = vterrors.RPCErrFromVtError(err)
 }
 
 // AddVtGateErrorToRollbackResponse will mutate a RollbackResponse struct to fill in the Err
@@ -134,7 +123,7 @@ func AddVtGateErrorToRollbackResponse(err error, reply *proto.RollbackResponse) 
 	if err == nil {
 		return
 	}
-	reply.Err = rpcErrFromVtGateError(err)
+	reply.Err = vterrors.RPCErrFromVtError(err)
 }
 
 // RPCErrorToVtRPCError converts a VTGate error into a vtrpc error.
