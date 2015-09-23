@@ -16,7 +16,6 @@ import com.youtube.vitess.proto.Vtrpc.CallerID;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -33,18 +32,9 @@ import java.util.Map;
  */
 public abstract class RpcClientTest {
   protected static RpcClient client;
-  protected static String vtRoot;
 
   private Context ctx;
   private VTGateConn conn;
-
-  @BeforeClass
-  public static void setUpBeforeSubclass() {
-    vtRoot = System.getenv("VTROOT");
-    if (vtRoot == null) {
-      throw new RuntimeException("cannot find env variable VTROOT; make sure to source dev.env");
-    }
-  }
 
   @Before
   public void setUp() {
