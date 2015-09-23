@@ -8,7 +8,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	annotations "github.com/youtube/vitess/go/vt/sqlannotations"
+	"github.com/youtube/vitess/go/vt/sqlannotation"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -16,9 +16,8 @@ import (
 // KeyRangeFilterFunc returns a function that calls sendReply only if statements
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
-// bls.Stream(file, pos, KeyRangeFilterFunc(sendTransaction))
-// TODO(erez): The kit parameter is no longer used. Remove it.
-func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+// bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
+func KeyRangeFilterFunc(keyrange *pb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
 	return func(reply *proto.BinlogTransaction) error {
 		matched := false
 		filtered := make([]proto.Statement, 0, len(reply.Statements))
@@ -30,22 +29,18 @@ func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
 			case proto.BL_DML:
-				keyspaceId, unfriendly, err := annotations.ParseSQLAnnotation(string(statement.Sql))
+				keyspaceID, err := sqlannotation.ExtractKeySpaceID(string(statement.Sql))
 				if err != nil {
-					updateStreamErrors.Add("KeyRangeStream", 1)
-					log.Errorf(
-						"Error parsing keyspace id annotation. Skipping statement: %s, (%s)",
-						string(statement.Sql), err)
-					continue
+					if handleExtractKeySpaceIdError(err) {
+						continue
+					} else {
+						// TODO(erez): Stop filtered-replication here, and alert.
+						// Currently we skip.
+						continue
+					}
 				}
-				if unfriendly {
-					updateStreamErrors.Add("KeyRangeStream", 1)
-					log.Errorf(
-						"Skipping filtered-replication-unfriendly DML statement: %s",
-						string(statement.Sql))
-					continue
-				}
-				if !key.KeyRangeContains(keyrange, keyspaceId) {
+				if !key.KeyRangeContains(keyrange, keyspaceID) {
+					// Skip keyspace ids that don't belong to the destination shard.
 					continue
 				}
 				filtered = append(filtered, statement)
@@ -63,4 +58,35 @@ func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply
 		}
 		return sendReply(reply)
 	}
+}
+
+// Handles the error in sqlannotation.ExtractKeySpaceIDError.
+// Returns 'true' iff filtered replication should continue (and skip the current SQL
+// statement).
+// TODO(erez): Currently, always returns true. So filtered-replication-unfriendly
+// statemetns also get skipped. We need to abort filtered-replication in a
+// graceful manner.
+func handleExtractKeySpaceIDError(err error) bool {
+	extractErr, ok := err.(*sqlannotation.ExtractKeySpaceIDError)
+	if !ok {
+		log.Fatalf("Expected sqlannotation.ExtractKeySpaceIDError. Got: %v", err)
+	}
+	switch extractErr.Kind {
+	case sqlannotation.ExtractKeySpaceIDParseError:
+		log.Errorf(
+			"Error parsing keyspace id annotation. Skipping statement. (%s)", extractErr.Message)
+		updateStreamErrors.Add("ExtractKeySpaceIDParseError", 1)
+		return true
+	case sqlannotation.ExtractKeySpaceIDReplicationUnfriendlyError:
+		log.Errorf(
+			"Found replication unfriendly statement. (%s). "+
+				"Filtered replication should abort, but we're currenty just skipping the statement.",
+			extractErr.Message)
+		updateStreamErrors.Add("ExtractKeySpaceIDReplicationUnfriendlyError", 1)
+		return true
+	default:
+		log.Fatalf("Unexpected extractErr.Kind. (%v)", extractErr)
+		return true // Unreachable.
+	}
+
 }

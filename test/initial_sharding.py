@@ -163,15 +163,12 @@ index by_msg (msg)
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
   def _insert_value(self, tablet, table, id, msg, keyspace_id):
-    if keyspace_id_type == keyrange_constants.KIT_BYTES:
-      k = base64.b64encode(pack_keyspace_id(keyspace_id))
-    else:
-      k = '%d' % keyspace_id
+    k = utils.uint64_to_hex(keyspace_id)
     tablet.mquery(
         'vt_test_keyspace',
         ['begin',
          'insert into %s(id, msg, keyspace_id) '
-         'values(%d, "%s", 0x%x) /* EMD keyspace_id:%s user_id:%d */' %
+         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
          (table, id, msg, keyspace_id, k, id),
          'commit'],
         write=True)

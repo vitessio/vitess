@@ -12,6 +12,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
@@ -20,8 +21,7 @@ import (
 )
 
 const (
-	ksidName   = "keyspace_id"
-	dmlPostfix = " /* _routing keyspace_id:%v */"
+	ksidName = "keyspace_id"
 )
 
 // Router is the layer to route queries to the correct shards
@@ -244,7 +244,7 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Pl
 		return &mproto.QueryResult{}, nil
 	}
 	vcursor.bindVariables[ksidName] = string(ksid)
-	rewritten := plan.Rewritten + fmt.Sprintf(dmlPostfix, hex.EncodeToString(ksid))
+	rewritten := sqlannotation.AddKeyspaceID(plan.Rewritten, ksid)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -275,7 +275,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Pl
 		}
 	}
 	vcursor.bindVariables[ksidName] = string(ksid)
-	rewritten := plan.Rewritten + fmt.Sprintf(dmlPostfix, hex.EncodeToString(ksid))
+	rewritten := sqlannotation.AddKeyspaceID(plan.Rewritten, ksid)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -314,7 +314,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 		}
 	}
 	vcursor.bindVariables[ksidName] = string(ksid)
-	rewritten := plan.Rewritten + fmt.Sprintf(dmlPostfix, hex.EncodeToString(ksid))
+	rewritten := sqlannotation.AddKeyspaceID(plan.Rewritten, ksid)
 	result, err := rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,

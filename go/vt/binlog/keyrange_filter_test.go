@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -36,7 +35,7 @@ func TestKeyRangeFilterPass(t *testing.T) {
 		TransactionID: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -61,7 +60,7 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 		TransactionID: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -86,7 +85,7 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 		TransactionID: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -117,7 +116,7 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 		TransactionID: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
