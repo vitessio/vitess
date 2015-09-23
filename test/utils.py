@@ -1132,6 +1132,6 @@ def uint64_to_hex(integer):
   uint64_to_hex(0xDEADBEAF) == "00000000DEADBEEF"
   uint64_to_hex(0xDEADBEAFDEADBEAFDEADBEAF) raises an out of range exception.
   """
-  if integer > (1<<64)-1 || integer < 0:
-    raise Exception('Integer out of range: %d' %d integer)
-  return "%08X" % integer
+  if integer > (1<<64)-1 or integer < 0:
+    raise Exception('Integer out of range: %d' % integer)
+  return "%016X" % integer
