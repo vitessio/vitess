@@ -24,11 +24,13 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
+
 	// import vindexes implementations
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -203,6 +205,8 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		return errTooManyInFlight
 	}
 
+	sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(sql)
+
 	qr, err := vtg.resolver.Execute(
 		ctx,
 		sql,
@@ -247,6 +251,8 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 		return errTooManyInFlight
 	}
 
+	sql = sqlannotation.AddIfDML(sql, keyspaceIds)
+
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction)
 	if err == nil {
 		reply.Result = qr
@@ -279,6 +285,8 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
 		return errTooManyInFlight
 	}
+
+	sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(sql)
 
 	qr, err := vtg.resolver.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction)
 	if err == nil {
@@ -313,6 +321,8 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 		return errTooManyInFlight
 	}
 
+	sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(sql)
+
 	qr, err := vtg.resolver.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction)
 	if err == nil {
 		reply.Result = qr
@@ -346,6 +356,8 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []proto.Bound
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
 		return errTooManyInFlight
 	}
+
+	annotateBoundShardQueriesAsUnfriendly(queries)
 
 	qrs, err := vtg.resolver.ExecuteBatch(
 		ctx,
@@ -387,6 +399,8 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
 		return errTooManyInFlight
 	}
+
+	annotateBoundKeyspaceIDQueries(queries)
 
 	qrs, err := vtg.resolver.ExecuteBatchKeyspaceIds(
 		ctx,
@@ -732,5 +746,24 @@ func (vtg *VTGate) HandlePanic(err *error) {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
 		internalErrors.Add("Panic", 1)
+	}
+}
+
+// Helper function used in ExecuteBatchKeyspaceIds
+func annotateBoundKeyspaceIDQueries(queries []proto.BoundKeyspaceIdQuery) {
+	for i := range queries {
+		if len(queries[i].KeyspaceIds) == 1 {
+			queries[i].Sql = sqlannotation.AddKeyspaceIDIfDML(queries[i].Sql, []byte(queries[i].KeyspaceIds[0]))
+		} else {
+			queries[i].Sql = sqlannotation.AddFilteredReplicationUnfriendlyIfDML(queries[i].Sql)
+		}
+	}
+}
+
+// Helper function used in ExecuteBatchShards
+func annotateBoundShardQueriesAsUnfriendly(queries []proto.BoundShardQuery) {
+	for i := range queries {
+		queries[i].Sql =
+			sqlannotation.AddFilteredReplicationUnfriendlyIfDML(queries[i].Sql)
 	}
 }

@@ -66,6 +66,7 @@ class LoggingStream(object):
     pass
 
 
+
 def add_options(parser):
   environment.add_options(parser)
   parser.add_option('-d', '--debug', action='store_true',
@@ -1120,3 +1121,17 @@ class Vtctld(object):
          '-stderrthreshold', log_level] + args,
         trap_output=True)
     return out
+
+def uint64_to_hex(integer):
+  """Returns the hexadecimal representation of integer treated as a 64-bit unsigned integer.
+
+  The result is padded by zeros if necessary to fill a 16 character string. Useful for converting
+  keyspace ids integers.
+  Example:
+  uint64_to_hex(1) == "0000000000000001"
+  uint64_to_hex(0xDEADBEAF) == "00000000DEADBEEF"
+  uint64_to_hex(0xDEADBEAFDEADBEAFDEADBEAF) raises an out of range exception.
+  """
+  if integer > (1<<64)-1 or integer < 0:
+    raise Exception('Integer out of range: %d' % integer)
+  return "%016X" % integer

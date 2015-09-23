@@ -5,12 +5,15 @@
 package vtgate
 
 import (
+	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/key"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -818,5 +821,353 @@ func TestIsErrorCausedByVTGate(t *testing.T) {
 			t.Errorf("isErrorCausedByVTGate(%v) => %v, want %v",
 				input, got, want)
 		}
+	}
+}
+
+// Functions for testing
+// keyspace_id and 'filtered_replication_unfriendly'
+// annotations.
+func TestAnnotatingExecuteKeyspaceIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteKeyspaceIds")
+
+	err := rpcVTGate.ExecuteKeyspaceIds(
+		context.Background(),
+		"INSERT INTO table () VALUES();",
+		nil,
+		keyspace,
+		[][]byte{[]byte{0x10}},
+		pb.TabletType_MASTER,
+		nil,
+		false,
+		&proto.QueryResult{})
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyQueryAnnotatedWithKeyspaceID(t, []byte{0x10}, shards[0])
+}
+
+func TestAnnotatingExecuteKeyspaceIdsMultipleIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteKeyspaceIdsMultipleIds")
+
+	err := rpcVTGate.ExecuteKeyspaceIds(
+		context.Background(),
+		"INSERT INTO table () VALUES();",
+		nil,
+		keyspace,
+		[][]byte{[]byte{0x10}, []byte{0x15}},
+		pb.TabletType_MASTER,
+		nil,
+		false,
+		&proto.QueryResult{})
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	// Currently, there's logic in resolver.go for rejecting
+	// multiple-ids DML's so we expect 0 queries here.
+	verifyNumQueries(t, 0, shards[0].Queries)
+}
+
+func TestAnnotatingExecuteKeyRanges(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteKeyRanges")
+
+	err := rpcVTGate.ExecuteKeyRanges(
+		context.Background(),
+		"UPDATE table SET col1=1 WHERE col2>3;",
+		nil,
+		keyspace,
+		[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x40}}},
+		pb.TabletType_MASTER,
+		nil,
+		false,
+		&proto.QueryResult{})
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	// Keyrange spans both shards.
+	verifyQueryAnnotatedAsUnfriendly(t, shards[0])
+	verifyQueryAnnotatedAsUnfriendly(t, shards[1])
+}
+
+func TestAnnotatingExecuteEntityIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteEntityIds")
+
+	err := rpcVTGate.ExecuteEntityIds(
+		context.Background(),
+		"INSERT INTO table () VALUES();",
+		nil,
+		keyspace,
+		"entity_column_name",
+		[]*pbg.ExecuteEntityIdsRequest_EntityId{
+			&pbg.ExecuteEntityIdsRequest_EntityId{
+				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
+				XidInt:     0,
+				KeyspaceId: []byte{0x10}, // First shard.
+			},
+			&pbg.ExecuteEntityIdsRequest_EntityId{
+				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
+				XidInt:     1,
+				KeyspaceId: []byte{0x25}, // Second shard.
+			},
+		},
+		pb.TabletType_MASTER,
+		nil,
+		false,
+		&proto.QueryResult{})
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyQueryAnnotatedAsUnfriendly(t, shards[0])
+	verifyQueryAnnotatedAsUnfriendly(t, shards[1])
+}
+
+func TestAnnotatingExecuteShards(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteShards")
+	err := rpcVTGate.ExecuteShards(
+		context.Background(),
+		"INSERT INTO table () VALUES();",
+		nil,
+		keyspace,
+		[]string{"20-40"},
+		pb.TabletType_MASTER,
+		nil,
+		false,
+		&proto.QueryResult{})
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyQueryAnnotatedAsUnfriendly(t, shards[1])
+}
+
+func TestAnnotatingExecuteBatchKeyspaceIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteBatchKeyspaceIds")
+	err := rpcVTGate.ExecuteBatchKeyspaceIds(
+		context.Background(),
+		[]proto.BoundKeyspaceIdQuery{
+			proto.BoundKeyspaceIdQuery{
+				Sql:         "INSERT INTO table () VALUES();",
+				Keyspace:    keyspace,
+				KeyspaceIds: []key.KeyspaceId{key.KeyspaceId([]byte{0x10})},
+			},
+			proto.BoundKeyspaceIdQuery{
+				Sql:         "UPDATE table SET col1=1 WHERE col2>3;",
+				Keyspace:    keyspace,
+				KeyspaceIds: []key.KeyspaceId{key.KeyspaceId([]byte{0x15})},
+			},
+			proto.BoundKeyspaceIdQuery{
+				Sql:         "DELETE FROM table WHERE col1==4;",
+				Keyspace:    keyspace,
+				KeyspaceIds: []key.KeyspaceId{key.KeyspaceId([]byte{0x25})},
+			},
+		},
+		pb.TabletType_MASTER,
+		false,
+		nil,
+		&proto.QueryResultList{})
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyBatchQueryAnnotatedWithKeyspaceIds(
+		t,
+		[][]byte{[]byte{0x10}, []byte{0x15}},
+		shards[0])
+	verifyBatchQueryAnnotatedWithKeyspaceIds(
+		t,
+		[][]byte{[]byte{0x25}},
+		shards[1])
+}
+
+func TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds")
+	err := rpcVTGate.ExecuteBatchKeyspaceIds(
+		context.Background(),
+		[]proto.BoundKeyspaceIdQuery{
+			proto.BoundKeyspaceIdQuery{
+				Sql:      "INSERT INTO table () VALUES();",
+				Keyspace: keyspace,
+				KeyspaceIds: []key.KeyspaceId{
+					key.KeyspaceId([]byte{0x10}),
+					key.KeyspaceId([]byte{0x15}),
+				},
+			},
+		},
+		pb.TabletType_MASTER,
+		false,
+		nil,
+		&proto.QueryResultList{})
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyBatchQueryAnnotatedAsUnfriendly(
+		t,
+		1, // expectedNumQueries
+		shards[0])
+}
+
+func TestAnnotatingExecuteBatchShards(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteBatchShards")
+
+	err := rpcVTGate.ExecuteBatchShards(
+		context.Background(),
+		[]proto.BoundShardQuery{
+			proto.BoundShardQuery{
+				Sql:      "INSERT INTO table () VALUES();",
+				Keyspace: keyspace,
+				Shards:   []string{"-20", "20-40"},
+			},
+			proto.BoundShardQuery{
+				Sql:      "UPDATE table SET col1=1 WHERE col2>3;",
+				Keyspace: keyspace,
+				Shards:   []string{"-20"},
+			},
+			proto.BoundShardQuery{
+				Sql:      "UPDATE table SET col1=1 WHERE col2>3;",
+				Keyspace: keyspace,
+				Shards:   []string{"20-40"},
+			},
+			proto.BoundShardQuery{
+				Sql:      "DELETE FROM table WHERE col1==4;",
+				Keyspace: keyspace,
+				Shards:   []string{"20-40"},
+			},
+		},
+		pb.TabletType_MASTER,
+		false,
+		nil,
+		&proto.QueryResultList{})
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyBatchQueryAnnotatedAsUnfriendly(
+		t,
+		2, // expectedNumQueries
+		shards[0])
+	verifyBatchQueryAnnotatedAsUnfriendly(
+		t,
+		3, // expectedNumQueries
+		shards[1])
+}
+
+// TODO(erez): Add testing annotations of vtgate.Execute (V3)
+
+// Sets up a sandbox with two shards:
+//   the first named "-20" for the -20 keyrange, and
+//   the second named "20-40" for the 20-40 keyrange.
+// It returns the created shards and as a convenience the given
+// keyspace.
+//
+// NOTE: You should not call this method multiple times with
+// the same 'keyspace' parameter: "shardGateway" caches connections
+// for a keyspace, and may re-send queries to the shards created in
+// a previous call to this method.
+func setUpSandboxWithTwoShards(keyspace string) (string, []*sandboxConn) {
+	shards := []*sandboxConn{&sandboxConn{}, &sandboxConn{}}
+	aSandbox := createSandbox(keyspace)
+	aSandbox.MapTestConn("-20", shards[0])
+	aSandbox.MapTestConn("20-40", shards[1])
+	return keyspace, shards
+}
+
+// Verifies that 'shard' was sent exactly one query and that it
+// was annotated with 'expectedKeyspaceID'
+func verifyQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte, shard *sandboxConn) {
+	if !verifyNumQueries(t, 1, shard.Queries) {
+		return
+	}
+	verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceID, &shard.Queries[0])
+}
+
+// Verifies that 'shard' was sent exactly one query and that it
+// was annotated as unfriendly.
+func verifyQueryAnnotatedAsUnfriendly(t *testing.T, shard *sandboxConn) {
+	if !verifyNumQueries(t, 1, shard.Queries) {
+		return
+	}
+	verifyBoundQueryAnnotatedAsUnfriendly(t, &shard.Queries[0])
+}
+
+// Verifies 'queries' has exactly 'expectedNumQueries' elements.
+// Returns true if verification succeeds.
+func verifyNumQueries(t *testing.T, expectedNumQueries int, queries []tproto.BoundQuery) bool {
+	numElements := len(queries)
+	if numElements != expectedNumQueries {
+		t.Errorf("want %v queries, got: %v (queries: %v)", expectedNumQueries, numElements, queries)
+		return false
+	}
+	return true
+}
+
+// Verifies 'batchQueries' has exactly 'expectedNumQueries' elements.
+// Returns true if verification succeeds.
+func verifyNumBatchQueries(t *testing.T, expectedNumQueries int, batchQueries [][]tproto.BoundQuery) bool {
+	numElements := len(batchQueries)
+	if numElements != expectedNumQueries {
+		t.Errorf("want %v batch queries, got: %v (batch queries: %v)", expectedNumQueries, numElements, batchQueries)
+		return false
+	}
+	return true
+}
+
+func verifyBoundQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte, query *tproto.BoundQuery) {
+	verifyBoundQueryAnnotatedWithComment(
+		t,
+		"/* vtgate:: keyspace_id:"+hex.EncodeToString(expectedKeyspaceID)+" */",
+		query)
+}
+
+func verifyBoundQueryAnnotatedAsUnfriendly(t *testing.T, query *tproto.BoundQuery) {
+	verifyBoundQueryAnnotatedWithComment(
+		t,
+		"/* vtgate:: filtered_replication_unfriendly */",
+		query)
+}
+
+func verifyBoundQueryAnnotatedWithComment(t *testing.T, expectedComment string, query *tproto.BoundQuery) {
+	if !strings.Contains(query.Sql, expectedComment) {
+		t.Errorf("want query '%v' to be annotated with '%v'", query.Sql, expectedComment)
+	}
+}
+
+// Verifies that 'shard' was sent exactly one batch-query and that its
+// (single) queries are annotated with the elements of expectedKeyspaceIDs
+// in order.
+func verifyBatchQueryAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIDs [][]byte, shard *sandboxConn) {
+	if !verifyNumBatchQueries(t, 1, shard.BatchQueries) {
+		return
+	}
+	verifyBoundQueriesAnnotatedWithKeyspaceIds(t, expectedKeyspaceIDs, shard.BatchQueries[0])
+}
+
+// Verifies that 'shard' was sent exactly one batch-query and that its
+// (single) queries are annotated as unfriendly.
+func verifyBatchQueryAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int, shard *sandboxConn) {
+	if !verifyNumBatchQueries(t, 1, shard.BatchQueries) {
+		return
+	}
+	verifyBoundQueriesAnnotatedAsUnfriendly(t, expectedNumQueries, shard.BatchQueries[0])
+}
+
+func verifyBoundQueriesAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIDs [][]byte, queries []tproto.BoundQuery) {
+	if !verifyNumQueries(t, len(expectedKeyspaceIDs), queries) {
+		return
+	}
+	for i := range queries {
+		verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceIDs[i], &queries[i])
+	}
+}
+
+func verifyBoundQueriesAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int, queries []tproto.BoundQuery) {
+	if !verifyNumQueries(t, expectedNumQueries, queries) {
+		return
+	}
+	for i := range queries {
+		verifyBoundQueryAnnotatedAsUnfriendly(t, &queries[i])
 	}
 }

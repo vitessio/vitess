@@ -23,7 +23,7 @@ func TestUpdateEqual(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []tproto.BoundQuery{{
-		Sql: "update user set a = 2 where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */",
+		Sql: "update user set a = 2 where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
 		},
@@ -41,7 +41,7 @@ func TestUpdateEqual(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []tproto.BoundQuery{{
-		Sql: "update user set a = 2 where id = 3 /* _routing keyspace_id:4eb190c9a2fa169c */",
+		Sql: "update user set a = 2 where id = 3 /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
 		},
@@ -138,7 +138,7 @@ func TestDeleteEqual(t *testing.T) {
 		Sql:           "select id, name from user where id = 1 for update",
 		BindVariables: map[string]interface{}{},
 	}, {
-		Sql: "delete from user where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */",
+		Sql: "delete from user where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
 		},
@@ -174,7 +174,7 @@ func TestDeleteEqual(t *testing.T) {
 		Sql:           "select id, name from user where id = 1 for update",
 		BindVariables: map[string]interface{}{},
 	}, {
-		Sql: "delete from user where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */",
+		Sql: "delete from user where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
 		},
@@ -296,7 +296,7 @@ func TestInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []tproto.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_id, 2, :_name) /* _routing keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(id, v, name) values (:_id, 2, :_name) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
 			"_id":         int64(1),
@@ -332,7 +332,7 @@ func TestInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []tproto.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_id, 2, :_name) /* _routing keyspace_id:4eb190c9a2fa169c */",
+		Sql: "insert into user(id, v, name) values (:_id, 2, :_name) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
 			"_id":         int64(3),
@@ -371,7 +371,7 @@ func TestInsertGenerator(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []tproto.BoundQuery{{
-		Sql: "insert into user(v, name, id) values (2, :_name, :_id) /* _routing keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(v, name, id) values (2, :_name, :_id) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
 			"_id":         int64(1),
@@ -411,7 +411,7 @@ func TestInsertLookupOwned(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []tproto.BoundQuery{{
-		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* _routing keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
 			"_user_id":    int64(2),
@@ -442,7 +442,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []tproto.BoundQuery{{
-		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* _routing keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
 			"_user_id":    int64(2),
@@ -477,7 +477,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []tproto.BoundQuery{{
-		Sql: "insert into music_extra(user_id, music_id) values (:_user_id, :_music_id) /* _routing keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music_extra(user_id, music_id) values (:_user_id, :_music_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
 			"_user_id":    int64(2),
@@ -507,7 +507,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []tproto.BoundQuery{{
-		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id, :_user_id) /* _routing keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id, :_user_id) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
 			"_user_id":    int64(1),

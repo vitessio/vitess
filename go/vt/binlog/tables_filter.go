@@ -11,7 +11,10 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 )
 
-var STREAM_COMMENT = "/* _stream "
+var (
+	STREAM_COMMENT = "/* _stream "
+	SPACE          = " "
+)
 
 // TablesFilterFunc returns a function that calls sendReply only if statements
 // in the transaction match the specified tables. The resulting function can be
