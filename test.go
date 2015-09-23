@@ -616,7 +616,12 @@ firstPass:
 	// Update config and print results.
 	for i, tests := range shards {
 		for _, t := range tests {
-			config.Tests[t.name].Shard = i
+			ct, ok := config.Tests[t.name]
+			if !ok {
+				log.Printf("WARNING: skipping unknown test: %v", t.name)
+				continue
+			}
+			ct.Shard = i
 			log.Printf("% 32v:\t%v\n", t.name, t.PassTime)
 		}
 		log.Printf("Shard %v total: %v\n", i, time.Duration(sums[i]))
