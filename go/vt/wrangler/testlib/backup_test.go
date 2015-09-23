@@ -19,6 +19,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
@@ -29,6 +30,7 @@ import (
 func TestBackupRestore(t *testing.T) {
 	// Initialize our environment
 	ctx := context.Background()
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 	vp := NewVtctlPipe(t, ts)
@@ -67,10 +69,10 @@ func TestBackupRestore(t *testing.T) {
 	}
 
 	// create a master tablet, not started, just for shard health
-	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
+	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
 
 	// create a single tablet, set it up so we can do backups
-	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
+	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
 	sourceTablet.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
@@ -109,7 +111,7 @@ func TestBackupRestore(t *testing.T) {
 	}
 
 	// create a destination tablet, set it up so we can do restores
-	destTablet := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
+	destTablet := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
 	destTablet.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{

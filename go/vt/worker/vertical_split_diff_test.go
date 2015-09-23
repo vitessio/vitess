@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -81,6 +82,7 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *p
 // TODO(aaijazi): Create a test in which source and destination data does not match
 
 func TestVerticalSplitDiff(t *testing.T) {
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	// We need to use FakeTabletManagerClient because we don't have a good way to fake the binlog player yet,
 	// which is necessary for synchronizing replication.
@@ -88,11 +90,11 @@ func TestVerticalSplitDiff(t *testing.T) {
 	ctx := context.Background()
 
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
-		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
 	// Create the destination keyspace with the appropriate ServedFromMap
 	ki := &pbt.Keyspace{
@@ -114,11 +116,11 @@ func TestVerticalSplitDiff(t *testing.T) {
 	wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
 	destMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
-		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	destRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	destRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 12,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, destMaster, destRdonly1, destRdonly2} {
 		ft.StartActionLoop(t, wr)

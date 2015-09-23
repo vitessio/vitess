@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
@@ -77,16 +78,17 @@ func TestWaitForFilteredReplication_unhealthy(t *testing.T) {
 }
 
 func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *pbq.RealtimeStats, broadcastStatsFunc func() *pbq.RealtimeStats) {
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// source of the filtered replication. We don't start its loop because we don't connect to it.
-	source := NewFakeTablet(t, wr, "cell1", 0, pbt.TabletType_MASTER,
+	source := NewFakeTablet(t, wr, "cell1", 0, pbt.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, keyspace, "0"))
 	// dest is the master of the dest shard which receives filtered replication events.
-	dest := NewFakeTablet(t, wr, "cell1", 1, pbt.TabletType_MASTER,
+	dest := NewFakeTablet(t, wr, "cell1", 1, pbt.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, keyspace, destShard))
 	dest.StartActionLoop(t, wr)
 	defer dest.StopActionLoop(t)

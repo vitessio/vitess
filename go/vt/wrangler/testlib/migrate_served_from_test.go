@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
@@ -23,17 +24,18 @@ import (
 
 func TestMigrateServedFrom(t *testing.T) {
 	ctx := context.Background()
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// create the source keyspace tablets
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER,
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "source", "0"))
-	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, pb.TabletType_REPLICA,
+	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, pb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "source", "0"))
-	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, pb.TabletType_RDONLY,
+	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, pb.TabletType_RDONLY, db,
 		TabletKeyspaceShard(t, "source", "0"))
 
 	// create the destination keyspace, served form source
@@ -50,11 +52,11 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// create the destination keyspace tablets
-	destMaster := NewFakeTablet(t, wr, "cell1", 20, pb.TabletType_MASTER,
+	destMaster := NewFakeTablet(t, wr, "cell1", 20, pb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "dest", "0"))
-	destReplica := NewFakeTablet(t, wr, "cell1", 21, pb.TabletType_REPLICA,
+	destReplica := NewFakeTablet(t, wr, "cell1", 21, pb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "dest", "0"))
-	destRdonly := NewFakeTablet(t, wr, "cell1", 22, pb.TabletType_RDONLY,
+	destRdonly := NewFakeTablet(t, wr, "cell1", 22, pb.TabletType_RDONLY, db,
 		TabletKeyspaceShard(t, "dest", "0"))
 
 	// sourceRdonly will see the refresh

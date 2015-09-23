@@ -28,8 +28,8 @@ func TestDBConnExec(t *testing.T) {
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := testUtils.newConnPool()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
+	appParams := &sqldb.ConnParams{Engine: db.Name}
+	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
@@ -57,8 +57,8 @@ func TestDBConnKill(t *testing.T) {
 	db := fakesqldb.Register()
 	testUtils := newTestUtils()
 	connPool := testUtils.newConnPool()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
+	appParams := &sqldb.ConnParams{Engine: db.Name}
+	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
 	queryServiceStats := NewQueryServiceStats("", false)
@@ -102,8 +102,8 @@ func TestDBConnStream(t *testing.T) {
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := testUtils.newConnPool()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
+	appParams := &sqldb.ConnParams{Engine: db.Name}
+	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
