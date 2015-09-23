@@ -91,6 +91,12 @@ class TestMysqlctl(unittest.TestCase):
     json_vars = json.loads(data)
     self.assertIn('vtgate', json_vars['cmdline'][0])
 
+    # to test vtcombo:
+    # ./vttest_sample_test.py -v -d
+    # go install && vtcombo -port 15010 -grpc_port 15011 -service_map grpc-vtgateservice -topology test_keyspace/-80:test_keyspace_0,test_keyspace/80-:test_keyspace_1 -mycnf_server_id 1 -mycnf_socket_file $VTDATAROOT/vttest*/vt_0000000001/mysql.sock -db-config-dba-uname vt_dba -db-config-dba-charset utf8 -db-config-app-uname vt_app -db-config-app-charset utf8 -alsologtostderr
+    # vtctl -vtgate_protocol grpc VtGateExecuteShard -server localhost:15011 -keyspace test_keyspace -shards -80 -tablet_type master "select 1 from dual"
+    utils.pause('aaaa')
+
     # and we're done, clean-up
     sp.stdin.write('\n')
     sp.wait()

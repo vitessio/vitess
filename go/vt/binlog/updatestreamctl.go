@@ -120,7 +120,7 @@ func RegisterUpdateStreamService(mycnf *mysqlctl.Mycnf) {
 
 func logError() {
 	if x := recover(); x != nil {
-		log.Errorf("%s", x.(error).Error())
+		log.Errorf("%s at\n%s", x.(error).Error(), tb.Stack(4))
 	}
 }
 

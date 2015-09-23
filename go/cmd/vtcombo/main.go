@@ -10,13 +10,17 @@ package main
 
 import (
 	"flag"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk/fakezk"
 )
@@ -37,6 +41,7 @@ func init() {
 func main() {
 	defer exit.Recover()
 
+	// flag parsing
 	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(flags)
@@ -48,27 +53,35 @@ func main() {
 		exit.Return(1)
 	}
 
+	// register topo server
 	topo.RegisterServer("fakezk", zktopo.NewServer(fakezk.NewConn()))
 	ts := topo.GetServerByName("fakezk")
 
 	servenv.Init()
 
+	// database configs
 	mycnf, err := mysqlctl.NewMycnfFromFlags(0)
 	if err != nil {
 		log.Errorf("mycnf read failed: %v", err)
 		exit.Return(1)
 	}
-
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
 	if err != nil {
 		log.Warning(err)
 	}
-
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 
+	// tablets configuration and init
+	binlog.RegisterUpdateStreamService(mycnf)
 	initTabletMap(ts, *topology, mysqld, dbcfgs, mycnf)
 
+	// vtgate configuration and init
+	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
+	healthCheck := discovery.NewHealthCheck(30*time.Second /*connTimeoutTotal*/, 1*time.Millisecond /*retryDelay*/)
+	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, nil /*schema*/, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, 0 /*maxInFlight*/, "" /*testGateway*/)
+
 	servenv.OnTerm(func() {
+		// FIXME(alainjobart) stop vtgate, all tablets
 		//		qsc.DisallowQueries()
 		//		agent.Stop()
 	})
