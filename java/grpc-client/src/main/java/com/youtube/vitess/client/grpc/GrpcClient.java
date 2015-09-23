@@ -1,7 +1,6 @@
 package com.youtube.vitess.client.grpc;
 
 import com.youtube.vitess.client.Context;
-import com.youtube.vitess.client.Proto;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.StreamIterator;
 import com.youtube.vitess.client.VitessException;
@@ -218,8 +217,7 @@ public class GrpcClient implements RpcClient {
   }
 
   @Override
-  public BeginResponse begin(Context ctx, BeginRequest request)
-      throws VitessRpcException {
+  public BeginResponse begin(Context ctx, BeginRequest request) throws VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.begin(request);
     } catch (Exception e) {
@@ -228,8 +226,7 @@ public class GrpcClient implements RpcClient {
   }
 
   @Override
-  public CommitResponse commit(Context ctx, CommitRequest request)
-      throws VitessRpcException {
+  public CommitResponse commit(Context ctx, CommitRequest request) throws VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.commit(request);
     } catch (Exception e) {
@@ -238,8 +235,7 @@ public class GrpcClient implements RpcClient {
   }
 
   @Override
-  public RollbackResponse rollback(Context ctx, RollbackRequest request)
-      throws VitessRpcException {
+  public RollbackResponse rollback(Context ctx, RollbackRequest request) throws VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.rollback(request);
     } catch (Exception e) {

@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -243,25 +244,26 @@ func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
 }
 
 func testSplitClone(t *testing.T, strategy string) {
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
-		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
 	leftMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
-		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	rightMaster := testlib.NewFakeTablet(t, wr, "cell1", 20,
-		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
+		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 	rightRdonly := testlib.NewFakeTablet(t, wr, "cell1", 21,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
+		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, rightMaster, rightRdonly} {
 		ft.StartActionLoop(t, wr)

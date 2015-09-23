@@ -57,7 +57,7 @@ func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	checkTabletServerState(t, tsv, StateNotConnected)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
 		t.Fatalf("TabletServer.StartService should fail")
@@ -66,14 +66,14 @@ func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
 }
 
 func TestTabletServerAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T) {
-	setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	// disable strict mode
 	config.StrictMode = false
 	tsv := NewTabletServer(config)
 	checkTabletServerState(t, tsv, StateNotConnected)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	// enable rowcache
 	dbconfigs.App.EnableRowcache = true
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
@@ -84,12 +84,12 @@ func TestTabletServerAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T
 }
 
 func TestTabletServerAllowQueries(t *testing.T) {
-	setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	checkTabletServerState(t, tsv, StateNotConnected)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	tsv.setState(StateServing)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	tsv.StopService()
@@ -106,7 +106,7 @@ func TestTabletServerAllowQueries(t *testing.T) {
 }
 
 func TestTabletServerInitDBConfig(t *testing.T) {
-	setUpTabletServerTest()
+	_ = setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -124,7 +124,7 @@ func TestTabletServerInitDBConfig(t *testing.T) {
 }
 
 func TestDecideAction(t *testing.T) {
-	setUpTabletServerTest()
+	_ = setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -227,11 +227,11 @@ func TestDecideAction(t *testing.T) {
 }
 
 func TestSetServingType(t *testing.T) {
-	setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 
 	err := tsv.InitDBConfig(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
@@ -279,11 +279,11 @@ func TestSetServingType(t *testing.T) {
 }
 
 func TestTabletServerCheckMysql(t *testing.T) {
-	setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	target := &pb.Target{}
 	err := tsv.StartService(target, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
@@ -308,7 +308,7 @@ func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	if err != nil {
@@ -322,11 +322,11 @@ func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
 }
 
 func TestTabletServerCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
-	setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	// this causes QueryEngine not being initialized properly
 	tsv.setState(StateServing)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
@@ -342,7 +342,7 @@ func TestTabletServerCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
 }
 
 func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
-	setUpTabletServerTest()
+	_ = setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.EnablePublishStats = true
@@ -367,7 +367,7 @@ func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
 }
 
 func TestTabletServerGetSessionId(t *testing.T) {
-	setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -376,7 +376,7 @@ func TestTabletServerGetSessionId(t *testing.T) {
 	}
 	keyspace := "test_keyspace"
 	shard := "0"
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -412,11 +412,11 @@ func TestTabletServerGetSessionId(t *testing.T) {
 }
 
 func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
-	setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -515,7 +515,7 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 	db.AddQuery(executeSQL, executeSQLResult)
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -560,7 +560,7 @@ func TestTabletServerRollback(t *testing.T) {
 	db.AddQuery(executeSQL, executeSQLResult)
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -606,7 +606,7 @@ func TestTabletServerStreamExecute(t *testing.T) {
 
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -653,7 +653,7 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	db.AddQuery(expanedSQL, sqlResult)
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -685,11 +685,11 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
-	setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -709,11 +709,11 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
-	setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -746,7 +746,7 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 	db.AddRejectedQuery("begin", errRejected)
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -780,7 +780,7 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 	db.AddRejectedQuery("commit", errRejected)
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -828,7 +828,7 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -883,7 +883,7 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.EnableAutoCommit = true
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -911,11 +911,11 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
-	setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -953,7 +953,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	db.AddQuery(expanedSQL, sqlResult)
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -1029,7 +1029,7 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -1090,7 +1090,7 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -1155,7 +1155,7 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs()
+	dbconfigs := testUtils.newDBConfigs(db)
 	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
@@ -1299,7 +1299,8 @@ func TestTerseErrors3(t *testing.T) {
 
 func TestNeedInvalidator(t *testing.T) {
 	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs()
+	db := setUpTabletServerTest()
+	dbconfigs := testUtils.newDBConfigs(db)
 
 	// EnableRowCache is false
 	if needInvalidator(nil, &dbconfigs) {

@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -101,7 +102,7 @@ func StartHTTPServer() TabletOption {
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
 // Use TabletOption implementations if you need to change values at creation.
-func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType pb.TabletType, options ...TabletOption) *FakeTablet {
+func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType pb.TabletType, db *fakesqldb.DB, options ...TabletOption) *FakeTablet {
 	if uid < 0 || uid > 99 {
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
@@ -130,7 +131,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	}
 
 	// create a FakeMysqlDaemon with the right information by default
-	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon()
+	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon(db)
 	fakeMysqlDaemon.MysqlPort = 3300 + int32(uid)
 
 	return &FakeTablet{

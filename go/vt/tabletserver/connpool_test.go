@@ -14,10 +14,10 @@ import (
 )
 
 func TestConnPoolGet(t *testing.T) {
-	fakesqldb.Register()
+	db := fakesqldb.Register()
 	testUtils := newTestUtils()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
+	appParams := &sqldb.ConnParams{Engine: db.Name}
+	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool := testUtils.newConnPool()
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
@@ -44,10 +44,10 @@ func TestConnPoolPutWhilePoolIsClosed(t *testing.T) {
 }
 
 func TestConnPoolSetCapacity(t *testing.T) {
-	fakesqldb.Register()
+	db := fakesqldb.Register()
 	testUtils := newTestUtils()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
+	appParams := &sqldb.ConnParams{Engine: db.Name}
+	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool := testUtils.newConnPool()
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
@@ -65,14 +65,14 @@ func TestConnPoolSetCapacity(t *testing.T) {
 }
 
 func TestConnPoolStatJSON(t *testing.T) {
-	fakesqldb.Register()
+	db := fakesqldb.Register()
 	testUtils := newTestUtils()
 	connPool := testUtils.newConnPool()
 	if connPool.StatsJSON() != "{}" {
 		t.Fatalf("pool is closed, stats json should be empty: {}")
 	}
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
+	appParams := &sqldb.ConnParams{Engine: db.Name}
+	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
 	statsJSON := connPool.StatsJSON()
@@ -106,10 +106,10 @@ func TestConnPoolStateWhilePoolIsClosed(t *testing.T) {
 }
 
 func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
-	fakesqldb.Register()
+	db := fakesqldb.Register()
 	testUtils := newTestUtils()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
+	appParams := &sqldb.ConnParams{Engine: db.Name}
+	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	idleTimeout := 10 * time.Second
 	connPool := testUtils.newConnPool()
 	connPool.Open(appParams, dbaParams)
