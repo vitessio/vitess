@@ -1,6 +1,6 @@
 # Copyright 2015 Google Inc. All Rights Reserved.
 
-"""Starts the vtgate and vtocc processes."""
+"""Starts the vtcombo or (vtgate and vtocc) processes."""
 
 import json
 import logging
@@ -28,7 +28,7 @@ class ShardInfo(object):
 
 
 class VtProcess(object):
-  """Base class for a vt process, vtgate or vtocc."""
+  """Base class for a vt process, vtcombo, vtgate or vtocc."""
 
   START_RETRIES = 5
 
@@ -226,23 +226,60 @@ class AllVtoccProcesses(object):
       vtocc.wait()
 
 
+class VtcomboProcess(VtProcess):
+  """Represents a vtcombo subprocess."""
+
+  def __init__(self, directory, shards, mysql_db, charset):
+    VtProcess.__init__(self, 'vtcombo-%s' % os.environ['USER'], directory,
+                       environment.vtcombo_binary, port_name='vtcombo')
+    topology = ",".join(["%s/%s:%s" % (shard.keyspace, shard.name, shard.db_name) for shard in shards])
+    self.extraparams = [
+        '-db-config-app-charset', charset,
+        '-db-config-app-host', mysql_db.hostname(),
+        '-db-config-app-port', str(mysql_db.port()),
+        '-db-config-app-uname', mysql_db.username(),
+        '-db-config-app-pass', mysql_db.password(),
+        '-db-config-app-unixsocket', mysql_db.unix_socket(),
+        '-queryserver-config-transaction-timeout', '300',
+        '-queryserver-config-schema-reload-time', '60',
+        '-topology', topology,
+        '-mycnf_server_id', '1',
+        '-mycnf_socket_file', mysql_db.unix_socket(),
+    ] + environment.extra_vtcombo_parameters()
+
+    logging.info("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA %s", str(self.extraparams))
+
 all_vtocc_processes = None
 vtgate_process = None
-
+vtcombo_process = None
 
 def start_vt_processes(directory, shards, mysql_db,
                        cell='test_cell',
-                       charset='utf8'):
+                       charset='utf8',
+                       use_vtcombo=False):
   """Start the vt processes.
 
   Parameters:
+    directory: the toplevel directory for the processes (logs, ...)
     shards: an array of ShardInfo objects.
     mysql_db: an instance of the mysql_db.MySqlDB class.
+    cell: the cell name to use (unused if use_vtcombo).
+    charset: the character set for the database connections.
+    use_vtcombo: if set, launch a single vtcombo, instead of vtgate+vttablet.
   """
   global all_vtocc_processes
   global vtgate_process
+  global vtcombo_process
 
-  # find the binary paths
+  if use_vtcombo:
+    # eventually, this will be the default
+    logging.info('start_vtocc_processes(directory=%s,vtcombo_binary=%s)',
+               directory, environment.vtcombo_binary)
+    vtcombo_process = VtcomboProcess(directory, shards, mysql_db, charset)
+    vtcombo_process.wait_start()
+    return
+
+  # display the binary paths
   logging.info('start_vtocc_processes(directory=%s,vtocc_binary=%s'
                ',vtgate_binary=%s)',
                directory, environment.vtocc_binary, environment.vtgate_binary)
@@ -271,6 +308,8 @@ def kill_vt_processes():
     all_vtocc_processes.kill()
   if vtgate_process:
     vtgate_process.kill()
+  if vtcombo_process:
+    vtcombo_process.kill()
 
 
 def wait_vt_processes():
@@ -279,6 +318,8 @@ def wait_vt_processes():
     all_vtocc_processes.wait()
   if vtgate_process:
     vtgate_process.wait()
+  if vtcombo_process:
+    vtcombo_process.wait()
 
 
 def kill_and_wait_vt_processes():

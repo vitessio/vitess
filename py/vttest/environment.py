@@ -16,6 +16,9 @@ vtocc_binary = os.path.join(os.environ['VTROOT'], 'bin', 'vtocc')
 # this is the location of the vtgate binary
 vtgate_binary = os.path.join(os.environ['VTROOT'], 'bin', 'vtgate')
 
+# this is the location of the vtcombo binary
+vtcombo_binary = os.path.join(os.environ['VTROOT'], 'bin', 'vtcombo')
+
 # this is the location of the mysqlctl binary, if mysql_db_mysqlctl is used.
 mysqlctl_binary = os.path.join(os.environ['VTROOT'], 'bin', 'mysqlctl')
 
@@ -68,6 +71,13 @@ def extra_vtocc_parameters():
   ]
 
 
+def extra_vtcombo_parameters():
+  """Returns extra parameters to send to vtcombo."""
+  return [
+    '-service_map', 'grpc-vtgateservice',
+  ]
+
+
 def process_is_healthy(name, addr):
   """Double-checks a process is healthy and ready for RPCs."""
   return True
@@ -83,7 +93,7 @@ def get_port(name, instance=0, protocol=None):
 
   This is only called once per process, so picking an unused port will also work.
   """
-  if name == 'vtgate':
+  if name == 'vtgate' or name == 'vtcombo':
     port = base_port
   elif name == 'mysql':
     port = base_port + 2

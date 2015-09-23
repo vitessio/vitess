@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -56,11 +55,6 @@ var stateName = []string{
 	"NOT_SERVING",
 	"SHUTTING_DOWN",
 }
-
-var (
-	// RPCErrorOnlyInReply is the flag to control how errors will be sent over RPCs for all queryservice implementations.
-	RPCErrorOnlyInReply = flag.Bool("rpc-error-only-in-reply", true, "if true, supported RPC calls will only return errors as part of the RPC server response")
-)
 
 // TabletServer implements the RPC interface for the query service.
 type TabletServer struct {
