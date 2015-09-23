@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
@@ -30,17 +31,18 @@ func TestTabletExternallyReparented(t *testing.T) {
 	tabletmanager.SetReparentFlags(time.Minute /* finalizeTimeout */)
 
 	ctx := context.Background()
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, pb.TabletType_REPLICA)
-	badSlave := NewFakeTablet(t, wr, "cell1", 4, pb.TabletType_REPLICA)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
+	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
+	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, pb.TabletType_REPLICA, db)
+	badSlave := NewFakeTablet(t, wr, "cell1", 4, pb.TabletType_REPLICA, db)
 
 	// Add a new Cell to the Shard, that doesn't map to any read topo cell,
 	// to simulate a data center being unreachable.
@@ -165,13 +167,14 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	tabletmanager.SetReparentFlags(time.Minute /* finalizeTimeout */)
 
 	ctx := context.Background()
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
-	goodSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
 
 	// Now we're restarting mysql on a different port, 3301->3303
 	// but without updating the Tablet record in topology.
@@ -211,13 +214,14 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	tabletmanager.SetReparentFlags(time.Minute /* finalizeTimeout */)
 
 	ctx := context.Background()
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
-	goodSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
 
 	// On the elected master, we will respond to
 	// TabletActionSlaveWasPromoted, so we need a MysqlDaemon
@@ -251,13 +255,14 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 	tabletmanager.SetReparentFlags(time.Minute /* finalizeTimeout */)
 
 	ctx := context.Background()
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// Create an old master, a new master, and a good slave.
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
-	goodSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
 
 	// Reparent to a replica, and pretend the old master is not responding.
 

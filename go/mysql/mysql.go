@@ -34,7 +34,7 @@ const (
 func init() {
 	// This needs to be called before threads begin to spawn.
 	C.vt_library_init()
-	sqldb.Register("mysql", Connect)
+	sqldb.RegisterDefault(Connect)
 }
 
 const (

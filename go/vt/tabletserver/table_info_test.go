@@ -30,7 +30,7 @@ func TestTableInfoNew(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}
@@ -53,7 +53,7 @@ func TestTableInfoFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	_, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	_, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err == nil {
 		t.Fatalf("table info creation should fail because it is unable to get test_table index")
 	}
@@ -68,7 +68,7 @@ func TestTableInfoWithoutRowCacheViaComment(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "vtocc_nocache")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "vtocc_nocache", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}
@@ -89,7 +89,7 @@ func TestTableInfoWithoutRowCacheViaTableType(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "VIEW", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "VIEW", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}
@@ -119,7 +119,7 @@ func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}
@@ -162,7 +162,7 @@ func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}
@@ -180,7 +180,7 @@ func TestTableInfoReplacePKColumn(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a table info")
 	}
@@ -219,7 +219,7 @@ func TestTableInfoSetPKColumn(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a table info")
 	}
@@ -258,7 +258,7 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a table info")
 	}
@@ -267,10 +267,10 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	}
 }
 
-func newTestTableInfo(cachePool *CachePool, tableType string, comment string) (*TableInfo, error) {
+func newTestTableInfo(cachePool *CachePool, tableType string, comment string, db *fakesqldb.DB) (*TableInfo, error) {
 	ctx := context.Background()
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	queryServiceStats := NewQueryServiceStats("", false)
 	connPoolIdleTimeout := 10 * time.Second
 	connPool := NewConnPool("", 2, connPoolIdleTimeout, false, queryServiceStats)

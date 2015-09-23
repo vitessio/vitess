@@ -14,6 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
@@ -49,16 +50,17 @@ func TestVersion(t *testing.T) {
 	wrangler.ResetDebugVarsGetVersion()
 
 	// Initialize our environment
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// couple tablets is enough
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER,
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "source", "0"),
 		StartHTTPServer())
-	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, pb.TabletType_REPLICA,
+	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, pb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "source", "0"),
 		StartHTTPServer())
 

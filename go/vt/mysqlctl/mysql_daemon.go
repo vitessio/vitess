@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 )
 
@@ -87,6 +88,8 @@ type MysqlDaemon interface {
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
+	db *fakesqldb.DB
+
 	// Mycnf will be returned by Cnf()
 	Mycnf *Mycnf
 
@@ -185,8 +188,9 @@ type FakeMysqlDaemon struct {
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
 // to be running
-func NewFakeMysqlDaemon() *FakeMysqlDaemon {
+func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	return &FakeMysqlDaemon{
+		db:      db,
 		Running: true,
 	}
 }
@@ -417,5 +421,5 @@ func (fmd *FakeMysqlDaemon) GetAppConnection() (dbconnpool.PoolConnection, error
 
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&sqldb.ConnParams{}, stats.NewTimings(""))
+	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
 }
