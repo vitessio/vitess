@@ -8,7 +8,9 @@ import mock
 
 from net import gorpc
 import utils
+from vtdb import dbexceptions
 from vtdb import tablet
+from vtproto import vtrpc_pb2
 
 
 class TestRPCCallAndExtract(unittest.TestCase):
@@ -51,9 +53,9 @@ class TestRPCCallAndExtract(unittest.TestCase):
     with mock.patch.object(
         self.tablet_conn, 'client', autospec=True) as mock_client:
       response = gorpc.GoRpcResponse()
-      response.reply = {'Err': 'foo'}
+      response.reply = {'Err': 1}
       mock_client.call.return_value = response
-      with self.assertRaisesRegexp(gorpc.AppError, 'Missing error message'):
+      with self.assertRaisesRegexp(tablet.TabletError, 'UNKNOWN_ERROR'):
         self.tablet_conn.rpc_call_and_extract_error('method', 'req')
 
   def test_reply_has_missing_err_message(self):
@@ -62,7 +64,7 @@ class TestRPCCallAndExtract(unittest.TestCase):
       response = gorpc.GoRpcResponse()
       response.reply = {'Err': {'foo': 'bar'}}
       mock_client.call.return_value = response
-      with self.assertRaisesRegexp(gorpc.AppError, 'Missing error message'):
+      with self.assertRaisesRegexp(tablet.TabletError, 'Missing error message'):
         self.tablet_conn.rpc_call_and_extract_error('method', 'req')
 
   def test_reply_has_err_message(self):
@@ -71,7 +73,16 @@ class TestRPCCallAndExtract(unittest.TestCase):
       response = gorpc.GoRpcResponse()
       response.reply = {'Err': {'Message': 'bar'}}
       mock_client.call.return_value = response
-      with self.assertRaisesRegexp(gorpc.AppError, "'bar', 'method'"):
+      with self.assertRaisesRegexp(tablet.TabletError, 'UNKNOWN_ERROR.+bar'):
+        self.tablet_conn.rpc_call_and_extract_error('method', 'req')
+
+  def test_reply_has_err_code(self):
+    with mock.patch.object(
+        self.tablet_conn, 'client', autospec=True) as mock_client:
+      response = gorpc.GoRpcResponse()
+      response.reply = {'Err': {'Code': vtrpc_pb2.TRANSIENT_ERROR}}
+      mock_client.call.return_value = response
+      with self.assertRaisesRegexp(tablet.TabletError, 'TRANSIENT_ERROR'):
         self.tablet_conn.rpc_call_and_extract_error('method', 'req')
 
 if __name__ == '__main__':

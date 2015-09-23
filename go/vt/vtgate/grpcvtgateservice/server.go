@@ -293,7 +293,6 @@ func (vtg *VTGate) Begin(ctx context.Context, request *pb.BeginRequest) (respons
 		callerid.NewImmediateCallerID("grpc client"))
 	outSession := new(proto.Session)
 	vtgErr := vtg.server.Begin(ctx, outSession)
-	// TODO(aaijazi): remove Error field from vtgateservice's non-Execute* methods
 	response = &pb.BeginResponse{}
 	if vtgErr == nil {
 		response.Session = proto.SessionToProto(outSession)
