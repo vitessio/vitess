@@ -77,16 +77,16 @@ public abstract class Cursor implements AutoCloseable {
     return convertFieldValue(getFields().get(columnIndex), row.getValues(columnIndex));
   }
 
-  public Integer getInt(String columnLabel) throws SQLException {
-    return (Integer) getAndCheckType(columnLabel, Integer.class);
+  public int getInt(String columnLabel) throws SQLException {
+    return getInt(findColumn(columnLabel));
   }
 
-  public Integer getInt(int columnIndex) throws SQLException {
+  public int getInt(int columnIndex) throws SQLException {
     return (Integer) getAndCheckType(columnIndex, Integer.class);
   }
 
   public UnsignedLong getULong(String columnLabel) throws SQLException {
-    return (UnsignedLong) getAndCheckType(columnLabel, UnsignedLong.class);
+    return getULong(findColumn(columnLabel));
   }
 
   public UnsignedLong getULong(int columnIndex) throws SQLException {
@@ -94,39 +94,39 @@ public abstract class Cursor implements AutoCloseable {
   }
 
   public String getString(String columnLabel) throws SQLException {
-    return (String) getAndCheckType(columnLabel, String.class);
+    return getString(findColumn(columnLabel));
   }
 
   public String getString(int columnIndex) throws SQLException {
     return (String) getAndCheckType(columnIndex, String.class);
   }
 
-  public Long getLong(String columnLabel) throws SQLException {
-    return (Long) getAndCheckType(columnLabel, Long.class);
+  public long getLong(String columnLabel) throws SQLException {
+    return getLong(findColumn(columnLabel));
   }
 
-  public Long getLong(int columnIndex) throws SQLException {
+  public long getLong(int columnIndex) throws SQLException {
     return (Long) getAndCheckType(columnIndex, Long.class);
   }
 
-  public Double getDouble(String columnLabel) throws SQLException {
-    return (Double) getAndCheckType(columnLabel, Double.class);
+  public double getDouble(String columnLabel) throws SQLException {
+    return getDouble(findColumn(columnLabel));
   }
 
-  public Double getDouble(int columnIndex) throws SQLException {
+  public double getDouble(int columnIndex) throws SQLException {
     return (Double) getAndCheckType(columnIndex, Double.class);
   }
 
-  public Float getFloat(String columnLabel) throws SQLException {
-    return (Float) getAndCheckType(columnLabel, Float.class);
+  public float getFloat(String columnLabel) throws SQLException {
+    return getFloat(findColumn(columnLabel));
   }
 
-  public Float getFloat(int columnIndex) throws SQLException {
+  public float getFloat(int columnIndex) throws SQLException {
     return (Float) getAndCheckType(columnIndex, Float.class);
   }
 
   public DateTime getDateTime(String columnLabel) throws SQLException {
-    return (DateTime) getAndCheckType(columnLabel, DateTime.class);
+    return getDateTime(findColumn(columnLabel));
   }
 
   public DateTime getDateTime(int columnIndex) throws SQLException {
@@ -134,7 +134,7 @@ public abstract class Cursor implements AutoCloseable {
   }
 
   public byte[] getBytes(String columnLabel) throws SQLException {
-    return (byte[]) getAndCheckType(columnLabel, byte[].class);
+    return getBytes(findColumn(columnLabel));
   }
 
   public byte[] getBytes(int columnIndex) throws SQLException {
@@ -142,32 +142,28 @@ public abstract class Cursor implements AutoCloseable {
   }
 
   public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
-    return (BigDecimal) getAndCheckType(columnLabel, BigDecimal.class);
+    return getBigDecimal(findColumn(columnLabel));
   }
 
   public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
     return (BigDecimal) getAndCheckType(columnIndex, BigDecimal.class);
   }
 
-  public Short getShort(String columnLabel) throws SQLException {
-    return (Short) getAndCheckType(columnLabel, Short.class);
+  public short getShort(String columnLabel) throws SQLException {
+    return getShort(findColumn(columnLabel));
   }
 
-  public Short getShort(int columnIndex) throws SQLException {
+  public short getShort(int columnIndex) throws SQLException {
     return (Short) getAndCheckType(columnIndex, Short.class);
   }
 
   protected abstract Row getCurrentRow() throws SQLException;
 
-  private Object getAndCheckType(String columnLabel, Class<?> cls) throws SQLException {
-    return getAndCheckType(findColumn(columnLabel), cls);
-  }
-
   private Object getAndCheckType(int columnIndex, Class<?> cls) throws SQLException {
     Object o = getObject(columnIndex);
     if (o != null && !cls.isInstance(o)) {
       throw new SQLDataException(
-          "type mismatch expected:" + cls.getName() + " actual: " + o.getClass().getName());
+          "type mismatch, expected:" + cls.getName() + ", actual: " + o.getClass().getName());
     }
     return o;
   }
