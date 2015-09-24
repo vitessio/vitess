@@ -52,6 +52,11 @@ class LocalDatabase(object):
 
   def vtgate_addr(self):
     """Get the host:port for vtgate."""
+    if self.use_vtcombo:
+      if environment.get_protocol() == 'grpc':
+        return vt_processes.vtcombo_process.grpc_addr()
+      return vt_processes.vtcombo_process.addr()
+
     if environment.get_protocol() == 'grpc':
       return vt_processes.vtgate_process.grpc_addr()
     return vt_processes.vtgate_process.addr()
