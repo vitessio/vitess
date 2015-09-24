@@ -2,7 +2,9 @@ package com.youtube.vitess.client;
 
 import com.google.common.collect.Iterables;
 
-import com.youtube.vitess.proto.Query.QueryResult;
+import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.client.cursor.SimpleCursor;
+import com.youtube.vitess.client.cursor.StreamCursor;
 import com.youtube.vitess.proto.Topodata.KeyRange;
 import com.youtube.vitess.proto.Topodata.SrvKeyspace;
 import com.youtube.vitess.proto.Topodata.TabletType;
@@ -35,6 +37,7 @@ import com.youtube.vitess.proto.Vtgate.StreamExecuteShardsRequest;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
@@ -67,9 +70,7 @@ import java.util.Map;
  *     for (Row row : result.getRowsList()) {
  *       // process each row.
  *     }
- *   } catch (VitessException e) {
- *     // ...
- *   } catch (VitessRpcException e) {
+ *   } catch (SQLException e) {
  *     // ...
  *   }
  * </pre>
@@ -81,8 +82,8 @@ public class VTGateConn implements Closeable {
     this.client = client;
   }
 
-  public QueryResult execute(Context ctx, String query, Map<String, ?> bindVars,
-      TabletType tabletType) throws VitessException, VitessRpcException {
+  public Cursor execute(Context ctx, String query, Map<String, ?> bindVars, TabletType tabletType)
+      throws SQLException {
     ExecuteRequest.Builder requestBuilder =
         ExecuteRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
@@ -92,12 +93,11 @@ public class VTGateConn implements Closeable {
     }
     ExecuteResponse response = client.execute(ctx, requestBuilder.build());
     Proto.checkError(response.getError());
-    return response.getResult();
+    return new SimpleCursor(response.getResult());
   }
 
-  public QueryResult executeShards(Context ctx, String query, String keyspace,
-      Iterable<String> shards, Map<String, ?> bindVars, TabletType tabletType)
-      throws VitessException, VitessRpcException {
+  public Cursor executeShards(Context ctx, String query, String keyspace, Iterable<String> shards,
+      Map<String, ?> bindVars, TabletType tabletType) throws SQLException {
     ExecuteShardsRequest.Builder requestBuilder =
         ExecuteShardsRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
@@ -109,12 +109,12 @@ public class VTGateConn implements Closeable {
     }
     ExecuteShardsResponse response = client.executeShards(ctx, requestBuilder.build());
     Proto.checkError(response.getError());
-    return response.getResult();
+    return new SimpleCursor(response.getResult());
   }
 
-  public QueryResult executeKeyspaceIds(Context ctx, String query, String keyspace,
+  public Cursor executeKeyspaceIds(Context ctx, String query, String keyspace,
       Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType)
-      throws VitessException, VitessRpcException {
+      throws SQLException {
     ExecuteKeyspaceIdsRequest.Builder requestBuilder =
         ExecuteKeyspaceIdsRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
@@ -126,12 +126,12 @@ public class VTGateConn implements Closeable {
     }
     ExecuteKeyspaceIdsResponse response = client.executeKeyspaceIds(ctx, requestBuilder.build());
     Proto.checkError(response.getError());
-    return response.getResult();
+    return new SimpleCursor(response.getResult());
   }
 
-  public QueryResult executeKeyRanges(Context ctx, String query, String keyspace,
+  public Cursor executeKeyRanges(Context ctx, String query, String keyspace,
       Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType)
-      throws VitessException, VitessRpcException {
+      throws SQLException {
     ExecuteKeyRangesRequest.Builder requestBuilder =
         ExecuteKeyRangesRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
@@ -143,12 +143,12 @@ public class VTGateConn implements Closeable {
     }
     ExecuteKeyRangesResponse response = client.executeKeyRanges(ctx, requestBuilder.build());
     Proto.checkError(response.getError());
-    return response.getResult();
+    return new SimpleCursor(response.getResult());
   }
 
-  public QueryResult executeEntityIds(Context ctx, String query, String keyspace,
+  public Cursor executeEntityIds(Context ctx, String query, String keyspace,
       String entityColumnName, Map<byte[], ?> entityKeyspaceIds, Map<String, ?> bindVars,
-      TabletType tabletType) throws VitessException, VitessRpcException {
+      TabletType tabletType) throws SQLException {
     ExecuteEntityIdsRequest.Builder requestBuilder =
         ExecuteEntityIdsRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
@@ -162,12 +162,11 @@ public class VTGateConn implements Closeable {
     }
     ExecuteEntityIdsResponse response = client.executeEntityIds(ctx, requestBuilder.build());
     Proto.checkError(response.getError());
-    return response.getResult();
+    return new SimpleCursor(response.getResult());
   }
 
-  public List<QueryResult> executeBatchShards(Context ctx,
-      Iterable<? extends BoundShardQuery> queries, TabletType tabletType, boolean asTransaction)
-      throws VitessException, VitessRpcException {
+  public List<Cursor> executeBatchShards(Context ctx, Iterable<? extends BoundShardQuery> queries,
+      TabletType tabletType, boolean asTransaction) throws SQLException {
     ExecuteBatchShardsRequest.Builder requestBuilder =
         ExecuteBatchShardsRequest.newBuilder()
             .addAllQueries(queries)
@@ -178,12 +177,12 @@ public class VTGateConn implements Closeable {
     }
     ExecuteBatchShardsResponse response = client.executeBatchShards(ctx, requestBuilder.build());
     Proto.checkError(response.getError());
-    return response.getResultsList();
+    return Proto.toCursorList(response.getResultsList());
   }
 
-  public List<QueryResult> executeBatchKeyspaceIds(Context ctx,
+  public List<Cursor> executeBatchKeyspaceIds(Context ctx,
       Iterable<? extends BoundKeyspaceIdQuery> queries, TabletType tabletType,
-      boolean asTransaction) throws VitessException, VitessRpcException {
+      boolean asTransaction) throws SQLException {
     ExecuteBatchKeyspaceIdsRequest.Builder requestBuilder =
         ExecuteBatchKeyspaceIdsRequest.newBuilder()
             .addAllQueries(queries)
@@ -195,11 +194,11 @@ public class VTGateConn implements Closeable {
     ExecuteBatchKeyspaceIdsResponse response =
         client.executeBatchKeyspaceIds(ctx, requestBuilder.build());
     Proto.checkError(response.getError());
-    return response.getResultsList();
+    return Proto.toCursorList(response.getResultsList());
   }
 
-  public StreamIterator<QueryResult> streamExecute(Context ctx, String query,
-      Map<String, ?> bindVars, TabletType tabletType) throws VitessRpcException {
+  public Cursor streamExecute(Context ctx, String query, Map<String, ?> bindVars,
+      TabletType tabletType) throws SQLException {
     StreamExecuteRequest.Builder requestBuilder =
         StreamExecuteRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
@@ -207,12 +206,11 @@ public class VTGateConn implements Closeable {
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
-    return client.streamExecute(ctx, requestBuilder.build());
+    return new StreamCursor(client.streamExecute(ctx, requestBuilder.build()));
   }
 
-  public StreamIterator<QueryResult> streamExecuteShards(Context ctx, String query, String keyspace,
-      Iterable<String> shards, Map<String, ?> bindVars, TabletType tabletType)
-      throws VitessRpcException {
+  public Cursor streamExecuteShards(Context ctx, String query, String keyspace,
+      Iterable<String> shards, Map<String, ?> bindVars, TabletType tabletType) throws SQLException {
     StreamExecuteShardsRequest.Builder requestBuilder =
         StreamExecuteShardsRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
@@ -222,12 +220,12 @@ public class VTGateConn implements Closeable {
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
-    return client.streamExecuteShards(ctx, requestBuilder.build());
+    return new StreamCursor(client.streamExecuteShards(ctx, requestBuilder.build()));
   }
 
-  public StreamIterator<QueryResult> streamExecuteKeyspaceIds(Context ctx, String query,
-      String keyspace, Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType)
-      throws VitessRpcException {
+  public Cursor streamExecuteKeyspaceIds(Context ctx, String query, String keyspace,
+      Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType)
+      throws SQLException {
     StreamExecuteKeyspaceIdsRequest.Builder requestBuilder =
         StreamExecuteKeyspaceIdsRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
@@ -237,12 +235,12 @@ public class VTGateConn implements Closeable {
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
-    return client.streamExecuteKeyspaceIds(ctx, requestBuilder.build());
+    return new StreamCursor(client.streamExecuteKeyspaceIds(ctx, requestBuilder.build()));
   }
 
-  public StreamIterator<QueryResult> streamExecuteKeyRanges(Context ctx, String query,
-      String keyspace, Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars,
-      TabletType tabletType) throws VitessRpcException {
+  public Cursor streamExecuteKeyRanges(Context ctx, String query, String keyspace,
+      Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType)
+      throws SQLException {
     StreamExecuteKeyRangesRequest.Builder requestBuilder =
         StreamExecuteKeyRangesRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
@@ -252,10 +250,10 @@ public class VTGateConn implements Closeable {
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
-    return client.streamExecuteKeyRanges(ctx, requestBuilder.build());
+    return new StreamCursor(client.streamExecuteKeyRanges(ctx, requestBuilder.build()));
   }
 
-  public VTGateTx begin(Context ctx) throws VitessException, VitessRpcException {
+  public VTGateTx begin(Context ctx) throws SQLException {
     BeginRequest.Builder requestBuilder = BeginRequest.newBuilder();
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -265,8 +263,7 @@ public class VTGateConn implements Closeable {
   }
 
   public List<SplitQueryResponse.Part> splitQuery(Context ctx, String keyspace, String query,
-      Map<String, ?> bindVars, String splitColumn, long splitCount)
-      throws VitessException, VitessRpcException {
+      Map<String, ?> bindVars, String splitColumn, long splitCount) throws SQLException {
     SplitQueryRequest.Builder requestBuilder =
         SplitQueryRequest.newBuilder()
             .setKeyspace(keyspace)
@@ -280,8 +277,7 @@ public class VTGateConn implements Closeable {
     return response.getSplitsList();
   }
 
-  public SrvKeyspace getSrvKeyspace(Context ctx, String keyspace)
-      throws VitessException, VitessRpcException {
+  public SrvKeyspace getSrvKeyspace(Context ctx, String keyspace) throws SQLException {
     GetSrvKeyspaceRequest.Builder requestBuilder =
         GetSrvKeyspaceRequest.newBuilder().setKeyspace(keyspace);
     GetSrvKeyspaceResponse response = client.getSrvKeyspace(ctx, requestBuilder.build());

@@ -3,7 +3,8 @@ package com.youtube.vitess.client;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
 
-import com.youtube.vitess.proto.Query.QueryResult;
+import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Topodata.KeyRange;
 import com.youtube.vitess.proto.Topodata.KeyspaceIdType;
 import com.youtube.vitess.proto.Topodata.ShardReference;
@@ -18,6 +19,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -94,12 +96,19 @@ public abstract class RpcClientTest {
   private static final String CALLER_ID_ECHO =
       "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\" ";
 
-  private static Map<String, String> getEcho(QueryResult result) {
-    Map<String, String> fields = new HashMap<String, String>();
-    for (int i = 0; i < result.getFieldsCount(); i++) {
-      fields.put(result.getFields(i).getName(), result.getRows(0).getValues(i).toStringUtf8());
+  private static Map<String, String> getEcho(Cursor cursor) throws Exception {
+    Map<String, String> values = new HashMap<String, String>();
+
+    if (cursor.next()) {
+      // Echo values are stored as columns in the first row of the result.
+      List<Field> fields = cursor.getFields();
+      for (int i = 0; i < fields.size(); i++) {
+        values.put(fields.get(i).getName(), new String(cursor.getBytes(i), StandardCharsets.UTF_8));
+      }
     }
-    return fields;
+    cursor.close();
+
+    return values;
   }
 
   @Test
@@ -177,15 +186,14 @@ public abstract class RpcClientTest {
   public void testEchoStreamExecute() throws Exception {
     Map<String, String> echo;
 
-    echo = getEcho(conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE).next());
+    echo = getEcho(conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
-    echo = getEcho(
-        conn.streamExecuteShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE)
-            .next());
+    echo = getEcho(conn.streamExecuteShards(
+        ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -193,8 +201,8 @@ public abstract class RpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
-    echo = getEcho(conn.streamExecuteKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
-                           BIND_VARS, TABLET_TYPE).next());
+    echo = getEcho(conn.streamExecuteKeyspaceIds(
+        ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -202,8 +210,8 @@ public abstract class RpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
-    echo = getEcho(conn.streamExecuteKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES,
-                           BIND_VARS, TABLET_TYPE).next());
+    echo = getEcho(conn.streamExecuteKeyRanges(
+        ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));

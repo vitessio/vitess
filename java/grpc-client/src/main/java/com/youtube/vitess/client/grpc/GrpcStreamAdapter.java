@@ -1,40 +1,48 @@
 package com.youtube.vitess.client.grpc;
 
 import com.youtube.vitess.client.StreamIterator;
-import com.youtube.vitess.client.VitessException;
-import com.youtube.vitess.client.VitessRpcException;
 
 import io.grpc.stub.StreamObserver;
 
+import java.sql.SQLDataException;
+import java.sql.SQLException;
 import java.util.NoSuchElementException;
 
 /**
- * GrpcStreamAdapter is an implementation of StreamIterator that allows
- * iteration (with checked exceptions) over results obtained through the
- * gRPC StreamObserver interface.
+ * A {@link StreamIterator} that returns results provided by a gRPC {@link StreamObserver}
  *
- * <p>This class is abstract because it needs to be told how to extract the
- * result (e.g. QueryResult) from a given RPC response (e.g. StreamExecuteResponse).
- * Callers must therefore implement getResult() when instantiating this class.
+ * <p>This adapter allows iteration (with checked exceptions) over results obtained through the
+ * gRPC {@code StreamObserver} interface.
  *
- * @param <V> The type of value sent through the StreamObserver interface.
- * @param <E> The type of value to return through the StreamIterator interface.
+ * <p>This class is abstract because it needs to be told how to extract the result
+ * (e.g. {@link com.youtube.vitess.proto.Query.QueryResult QueryResult}) from a given RPC response
+ * (e.g. {@link com.youtube.vitess.proto.Vtgate.StreamExecuteResponse StreamExecuteResponse}).
+ * Callers must therefore implement {@link #getResult(Object)} when instantiating this class.
+ *
+ * <p>The {@code StreamObserver} side will block until the result has been returned to the consumer
+ * by the {@code StreamIterator} side. Therefore, the {@link #close()} method must be called when
+ * done, to unblock the {@code StreamObserver} side.
+ *
+ * @param <V> The type of value sent through the {@link StreamObserver} interface.
+ * @param <E> The type of value to return through the {@link StreamIterator} interface.
  */
-abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamIterator<E> {
+abstract class GrpcStreamAdapter<V, E>
+    implements StreamObserver<V>, StreamIterator<E>, AutoCloseable {
   /**
    * getResult must be implemented to tell the adapter how to convert from
    * the StreamObserver value type (V) to the StreamIterator value type (E).
    * Before converting, getResult() should check for application-level errors
-   * in the RPC response and throw VitessException.
+   * in the RPC response and throw the appropriate SQLException.
    * @param value The RPC response object.
    * @return The result object to pass to the iterator consumer.
-   * @throws VitessException For errors originating within the Vitess server.
+   * @throws SQLException For errors originating within the Vitess server.
    */
-  abstract E getResult(V value) throws VitessException;
+  abstract E getResult(V value) throws SQLException;
 
   private E nextValue;
   private Throwable error;
   private boolean completed = false;
+  private boolean closed = false;
 
   @Override
   public void onValue(V value) {
@@ -42,8 +50,9 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
       try {
         // Wait until the previous value has been consumed.
         while (nextValue != null) {
-          // If there's been an error, drain the rest of the stream without blocking.
-          if (error != null) {
+          // If there's been an error, or the iterator was closed, drain the rest of the stream
+          // without blocking.
+          if (closed || error != null) {
             return;
           }
 
@@ -54,7 +63,7 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
         notifyAll();
       } catch (InterruptedException e) {
         onError(e);
-      } catch (VitessException e) {
+      } catch (SQLException e) {
         onError(e);
       }
     }
@@ -71,13 +80,13 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
   @Override
   public void onError(Throwable error) {
     synchronized (this) {
-      error = error;
+      this.error = error;
       notifyAll();
     }
   }
 
   @Override
-  public boolean hasNext() throws VitessException, VitessRpcException {
+  public boolean hasNext() throws SQLException {
     synchronized (this) {
       try {
         // Wait for a new value to show up.
@@ -86,10 +95,13 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
             return false;
           }
           if (error != null) {
-            if (error instanceof VitessException) {
-              throw (VitessException) error;
+            // We got an error from the gRPC layer.
+            if (error instanceof SQLException) {
+              // If it's a type we can throw, just pass it through.
+              throw (SQLException) error;
             } else {
-              throw new VitessRpcException("error in gRPC StreamIterator", error);
+              // Otherwise wrap it in a type we can throw.
+              throw new SQLException("error in gRPC StreamIterator", error);
             }
           }
 
@@ -99,13 +111,13 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
         return true;
       } catch (InterruptedException e) {
         onError(e);
-        throw new VitessRpcException("error in gRPC StreamIterator", e);
+        throw new SQLDataException("gRPC StreamIterator interrupted while waiting for value", e);
       }
     }
   }
 
   @Override
-  public E next() throws NoSuchElementException, VitessException, VitessRpcException {
+  public E next() throws NoSuchElementException, SQLException {
     synchronized (this) {
       if (hasNext()) {
         E value = nextValue;
@@ -115,6 +127,13 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
       } else {
         throw new NoSuchElementException("stream completed");
       }
+    }
+  }
+
+  @Override
+  public void close() throws Exception {
+    synchronized (this) {
+      closed = true;
     }
   }
 }

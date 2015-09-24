@@ -2,7 +2,8 @@ package com.youtube.vitess.client;
 
 import com.google.common.collect.Iterables;
 
-import com.youtube.vitess.proto.Query.QueryResult;
+import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.client.cursor.SimpleCursor;
 import com.youtube.vitess.proto.Topodata.KeyRange;
 import com.youtube.vitess.proto.Topodata.TabletType;
 import com.youtube.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
@@ -25,6 +26,8 @@ import com.youtube.vitess.proto.Vtgate.ExecuteShardsResponse;
 import com.youtube.vitess.proto.Vtgate.RollbackRequest;
 import com.youtube.vitess.proto.Vtgate.Session;
 
+import java.sql.SQLDataException;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
@@ -44,11 +47,10 @@ public class VTGateTx {
     return new VTGateTx(client, session);
   }
 
-  public QueryResult execute(Context ctx, String query, Map<String, ?> bindVars,
-      TabletType tabletType, boolean notInTransaction)
-      throws VitessException, VitessRpcException, VitessNotInTransactionException {
+  public Cursor execute(Context ctx, String query, Map<String, ?> bindVars, TabletType tabletType,
+      boolean notInTransaction) throws SQLException {
     if (session == null) {
-      throw new VitessNotInTransactionException("execute: not in transaction");
+      throw new SQLDataException("execute: not in transaction");
     }
     ExecuteRequest.Builder requestBuilder =
         ExecuteRequest.newBuilder()
@@ -62,15 +64,14 @@ public class VTGateTx {
     ExecuteResponse response = client.execute(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
-    return response.getResult();
+    return new SimpleCursor(response.getResult());
   }
 
-  public QueryResult executeShards(Context ctx, String query, String keyspace,
-      Iterable<String> shards, Map<String, ?> bindVars, TabletType tabletType,
-      boolean notInTransaction)
-      throws VitessException, VitessRpcException, VitessNotInTransactionException {
+  public Cursor executeShards(Context ctx, String query, String keyspace, Iterable<String> shards,
+      Map<String, ?> bindVars, TabletType tabletType, boolean notInTransaction)
+      throws SQLException {
     if (session == null) {
-      throw new VitessNotInTransactionException("executeShards: not in transaction");
+      throw new SQLDataException("executeShards: not in transaction");
     }
     ExecuteShardsRequest.Builder requestBuilder =
         ExecuteShardsRequest.newBuilder()
@@ -86,15 +87,14 @@ public class VTGateTx {
     ExecuteShardsResponse response = client.executeShards(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
-    return response.getResult();
+    return new SimpleCursor(response.getResult());
   }
 
-  public QueryResult executeKeyspaceIds(Context ctx, String query, String keyspace,
+  public Cursor executeKeyspaceIds(Context ctx, String query, String keyspace,
       Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType,
-      boolean notInTransaction)
-      throws VitessException, VitessRpcException, VitessNotInTransactionException {
+      boolean notInTransaction) throws SQLException {
     if (session == null) {
-      throw new VitessNotInTransactionException("executeKeyspaceIds: not in transaction");
+      throw new SQLDataException("executeKeyspaceIds: not in transaction");
     }
     ExecuteKeyspaceIdsRequest.Builder requestBuilder =
         ExecuteKeyspaceIdsRequest.newBuilder()
@@ -110,15 +110,14 @@ public class VTGateTx {
     ExecuteKeyspaceIdsResponse response = client.executeKeyspaceIds(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
-    return response.getResult();
+    return new SimpleCursor(response.getResult());
   }
 
-  public QueryResult executeKeyRanges(Context ctx, String query, String keyspace,
+  public Cursor executeKeyRanges(Context ctx, String query, String keyspace,
       Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType,
-      boolean notInTransaction)
-      throws VitessException, VitessRpcException, VitessNotInTransactionException {
+      boolean notInTransaction) throws SQLException {
     if (session == null) {
-      throw new VitessNotInTransactionException("executeKeyRanges: not in transaction");
+      throw new SQLDataException("executeKeyRanges: not in transaction");
     }
     ExecuteKeyRangesRequest.Builder requestBuilder =
         ExecuteKeyRangesRequest.newBuilder()
@@ -134,15 +133,14 @@ public class VTGateTx {
     ExecuteKeyRangesResponse response = client.executeKeyRanges(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
-    return response.getResult();
+    return new SimpleCursor(response.getResult());
   }
 
-  public QueryResult executeEntityIds(Context ctx, String query, String keyspace,
+  public Cursor executeEntityIds(Context ctx, String query, String keyspace,
       String entityColumnName, Map<byte[], ?> entityKeyspaceIds, Map<String, ?> bindVars,
-      TabletType tabletType, boolean notInTransaction)
-      throws VitessException, VitessRpcException, VitessNotInTransactionException {
+      TabletType tabletType, boolean notInTransaction) throws SQLException {
     if (session == null) {
-      throw new VitessNotInTransactionException("executeEntityIds: not in transaction");
+      throw new SQLDataException("executeEntityIds: not in transaction");
     }
     ExecuteEntityIdsRequest.Builder requestBuilder =
         ExecuteEntityIdsRequest.newBuilder()
@@ -160,14 +158,13 @@ public class VTGateTx {
     ExecuteEntityIdsResponse response = client.executeEntityIds(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
-    return response.getResult();
+    return new SimpleCursor(response.getResult());
   }
 
-  public List<QueryResult> executeBatchShards(Context ctx,
-      Iterable<? extends BoundShardQuery> queries, TabletType tabletType, boolean asTransaction)
-      throws VitessException, VitessRpcException, VitessNotInTransactionException {
+  public List<Cursor> executeBatchShards(Context ctx, Iterable<? extends BoundShardQuery> queries,
+      TabletType tabletType, boolean asTransaction) throws SQLException {
     if (session == null) {
-      throw new VitessNotInTransactionException("executeBatchShards: not in transaction");
+      throw new SQLDataException("executeBatchShards: not in transaction");
     }
     ExecuteBatchShardsRequest.Builder requestBuilder =
         ExecuteBatchShardsRequest.newBuilder()
@@ -181,15 +178,14 @@ public class VTGateTx {
     ExecuteBatchShardsResponse response = client.executeBatchShards(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
-    return response.getResultsList();
+    return Proto.toCursorList(response.getResultsList());
   }
 
-  public List<QueryResult> executeBatchKeyspaceIds(Context ctx,
+  public List<Cursor> executeBatchKeyspaceIds(Context ctx,
       Iterable<? extends BoundKeyspaceIdQuery> queries, TabletType tabletType,
-      boolean asTransaction)
-      throws VitessException, VitessRpcException, VitessNotInTransactionException {
+      boolean asTransaction) throws SQLException {
     if (session == null) {
-      throw new VitessNotInTransactionException("executeBatchKeyspaceIds: not in transaction");
+      throw new SQLDataException("executeBatchKeyspaceIds: not in transaction");
     }
     ExecuteBatchKeyspaceIdsRequest.Builder requestBuilder =
         ExecuteBatchKeyspaceIdsRequest.newBuilder()
@@ -204,13 +200,12 @@ public class VTGateTx {
         client.executeBatchKeyspaceIds(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
-    return response.getResultsList();
+    return Proto.toCursorList(response.getResultsList());
   }
 
-  public void commit(Context ctx)
-      throws VitessException, VitessRpcException, VitessNotInTransactionException {
+  public void commit(Context ctx) throws SQLException {
     if (session == null) {
-      throw new VitessNotInTransactionException("commit: not in transaction");
+      throw new SQLDataException("commit: not in transaction");
     }
     CommitRequest.Builder requestBuilder = CommitRequest.newBuilder().setSession(session);
     if (ctx.getCallerId() != null) {
@@ -220,10 +215,9 @@ public class VTGateTx {
     session = null;
   }
 
-  public void rollback(Context ctx)
-      throws VitessException, VitessRpcException, VitessNotInTransactionException {
+  public void rollback(Context ctx) throws SQLException {
     if (session == null) {
-      throw new VitessNotInTransactionException("rollback: not in transaction");
+      throw new SQLDataException("rollback: not in transaction");
     }
     RollbackRequest.Builder requestBuilder = RollbackRequest.newBuilder().setSession(session);
     if (ctx.getCallerId() != null) {

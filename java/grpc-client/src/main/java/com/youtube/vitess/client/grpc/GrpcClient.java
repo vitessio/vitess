@@ -3,8 +3,6 @@ package com.youtube.vitess.client.grpc;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.StreamIterator;
-import com.youtube.vitess.client.VitessException;
-import com.youtube.vitess.client.VitessRpcException;
 import com.youtube.vitess.proto.Query.QueryResult;
 import com.youtube.vitess.proto.Vtgate.BeginRequest;
 import com.youtube.vitess.proto.Vtgate.BeginResponse;
@@ -45,6 +43,7 @@ import com.youtube.vitess.proto.grpc.VitessGrpc.VitessStub;
 import io.grpc.ChannelImpl;
 
 import java.io.IOException;
+import java.sql.SQLException;
 
 /**
  * GrpcClient is a gRPC-based implementation of Vitess Rpcclient.
@@ -66,210 +65,197 @@ public class GrpcClient implements RpcClient {
   }
 
   @Override
-  public ExecuteResponse execute(Context ctx, ExecuteRequest request)
-      throws VitessException, VitessRpcException {
+  public ExecuteResponse execute(Context ctx, ExecuteRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.execute(request);
     } catch (Exception e) {
-      checkGrpcError(e);
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public ExecuteShardsResponse executeShards(Context ctx, ExecuteShardsRequest request)
-      throws VitessException, VitessRpcException {
+      throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.executeShards(request);
     } catch (Exception e) {
-      checkGrpcError(e);
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public ExecuteKeyspaceIdsResponse executeKeyspaceIds(
-      Context ctx, ExecuteKeyspaceIdsRequest request) throws VitessException, VitessRpcException {
+      Context ctx, ExecuteKeyspaceIdsRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.executeKeyspaceIds(request);
     } catch (Exception e) {
-      checkGrpcError(e);
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public ExecuteKeyRangesResponse executeKeyRanges(Context ctx, ExecuteKeyRangesRequest request)
-      throws VitessException, VitessRpcException {
+      throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.executeKeyRanges(request);
     } catch (Exception e) {
-      checkGrpcError(e);
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public ExecuteEntityIdsResponse executeEntityIds(Context ctx, ExecuteEntityIdsRequest request)
-      throws VitessException, VitessRpcException {
+      throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.executeEntityIds(request);
     } catch (Exception e) {
-      checkGrpcError(e);
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public ExecuteBatchShardsResponse executeBatchShards(
-      Context ctx, ExecuteBatchShardsRequest request) throws VitessException, VitessRpcException {
+      Context ctx, ExecuteBatchShardsRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.executeBatchShards(request);
     } catch (Exception e) {
-      checkGrpcError(e);
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public ExecuteBatchKeyspaceIdsResponse executeBatchKeyspaceIds(
-      Context ctx, ExecuteBatchKeyspaceIdsRequest request)
-      throws VitessException, VitessRpcException {
+      Context ctx, ExecuteBatchKeyspaceIdsRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.executeBatchKeyspaceIds(request);
     } catch (Exception e) {
-      checkGrpcError(e);
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public StreamIterator<QueryResult> streamExecute(Context ctx, StreamExecuteRequest request)
-      throws VitessRpcException {
+      throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       GrpcStreamAdapter<StreamExecuteResponse, QueryResult> adapter =
           new GrpcStreamAdapter<StreamExecuteResponse, QueryResult>() {
             @Override
-            QueryResult getResult(StreamExecuteResponse response) throws VitessException {
+            QueryResult getResult(StreamExecuteResponse response) throws SQLException {
               return response.getResult();
             }
           };
       asyncStub.streamExecute(request, adapter);
       return adapter;
     } catch (Exception e) {
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public StreamIterator<QueryResult> streamExecuteShards(
-      Context ctx, StreamExecuteShardsRequest request) throws VitessRpcException {
+      Context ctx, StreamExecuteShardsRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       GrpcStreamAdapter<StreamExecuteShardsResponse, QueryResult> adapter =
           new GrpcStreamAdapter<StreamExecuteShardsResponse, QueryResult>() {
             @Override
-            QueryResult getResult(StreamExecuteShardsResponse response) throws VitessException {
+            QueryResult getResult(StreamExecuteShardsResponse response) throws SQLException {
               return response.getResult();
             }
           };
       asyncStub.streamExecuteShards(request, adapter);
       return adapter;
     } catch (Exception e) {
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public StreamIterator<QueryResult> streamExecuteKeyspaceIds(
-      Context ctx, StreamExecuteKeyspaceIdsRequest request) throws VitessRpcException {
+      Context ctx, StreamExecuteKeyspaceIdsRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       GrpcStreamAdapter<StreamExecuteKeyspaceIdsResponse, QueryResult> adapter =
           new GrpcStreamAdapter<StreamExecuteKeyspaceIdsResponse, QueryResult>() {
             @Override
-            QueryResult getResult(StreamExecuteKeyspaceIdsResponse response)
-                throws VitessException {
+            QueryResult getResult(StreamExecuteKeyspaceIdsResponse response) throws SQLException {
               return response.getResult();
             }
           };
       asyncStub.streamExecuteKeyspaceIds(request, adapter);
       return adapter;
     } catch (Exception e) {
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public StreamIterator<QueryResult> streamExecuteKeyRanges(
-      Context ctx, StreamExecuteKeyRangesRequest request) throws VitessRpcException {
+      Context ctx, StreamExecuteKeyRangesRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       GrpcStreamAdapter<StreamExecuteKeyRangesResponse, QueryResult> adapter =
           new GrpcStreamAdapter<StreamExecuteKeyRangesResponse, QueryResult>() {
             @Override
-            QueryResult getResult(StreamExecuteKeyRangesResponse response) throws VitessException {
+            QueryResult getResult(StreamExecuteKeyRangesResponse response) throws SQLException {
               return response.getResult();
             }
           };
       asyncStub.streamExecuteKeyRanges(request, adapter);
       return adapter;
     } catch (Exception e) {
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
-  public BeginResponse begin(Context ctx, BeginRequest request) throws VitessRpcException {
+  public BeginResponse begin(Context ctx, BeginRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.begin(request);
     } catch (Exception e) {
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
-  public CommitResponse commit(Context ctx, CommitRequest request) throws VitessRpcException {
+  public CommitResponse commit(Context ctx, CommitRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.commit(request);
     } catch (Exception e) {
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
-  public RollbackResponse rollback(Context ctx, RollbackRequest request) throws VitessRpcException {
+  public RollbackResponse rollback(Context ctx, RollbackRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.rollback(request);
     } catch (Exception e) {
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
-  public SplitQueryResponse splitQuery(Context ctx, SplitQueryRequest request)
-      throws VitessRpcException {
+  public SplitQueryResponse splitQuery(Context ctx, SplitQueryRequest request) throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.splitQuery(request);
     } catch (Exception e) {
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   @Override
   public GetSrvKeyspaceResponse getSrvKeyspace(Context ctx, GetSrvKeyspaceRequest request)
-      throws VitessRpcException {
+      throws SQLException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
       return blockingStub.getSrvKeyspace(request);
     } catch (Exception e) {
-      throw new VitessRpcException("grpc error", e);
+      throw convertGrpcError(e);
     }
   }
 
   /**
-   * checkGrpcError converts an exception from the gRPC framework into
-   * a VitessException if it represents an app-level Vitess error.
-   * @param e
-   * @throws VitessException
+   * Converts an exception from the gRPC framework into the appropriate {@link SQLException}
    */
-  private void checkGrpcError(Exception e) throws VitessException {
-    // TODO(enisoc): Implement checkGrpcError.
+  private SQLException convertGrpcError(Exception e) {
+    // TODO(enisoc): Implement convertGrpcError.
+    return (SQLException) e;
   }
 }
