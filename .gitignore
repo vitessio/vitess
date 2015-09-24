@@ -12,9 +12,14 @@
 tags
 
 # Eclipse files
+.classpath
 .project
 .pydevproject
 .settings/
+
+# Godeps files
+/Godeps/_workspace/pkg
+/Godeps/_workspace/bin
 
 # cbson & other C build dirs
 **/build
@@ -23,9 +28,8 @@ tags
 third_party/mysql
 
 # java target files
-java/vtocc-client/target
-java/vtocc-jdbc-driver/target
-third_party/acolyte
+/java/*/target/
+/java/*/bin/
 
 # intellij files
 *.iml
@@ -36,3 +40,4 @@ preview-vitess.io/
 
 # test.go output files
 _test/
+/test/stats.json
