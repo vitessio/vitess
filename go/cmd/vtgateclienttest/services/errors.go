@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -207,6 +208,36 @@ func (c *errorClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bi
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
 }
 
+func (c *errorClient) Begin(ctx context.Context, outSession *proto.Session) error {
+	// The client sends the error request through the callerid, as there are no other parameters
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return err
+	}
+	return c.fallbackClient.Begin(ctx, outSession)
+}
+
+func (c *errorClient) Commit(ctx context.Context, inSession *proto.Session) error {
+	// The client sends the error request through the callerid, as there are no other parameters
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return err
+	}
+	return c.fallbackClient.Commit(ctx, inSession)
+}
+
+func (c *errorClient) Rollback(ctx context.Context, inSession *proto.Session) error {
+	// The client sends the error request through the callerid, as there are no other parameters
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return err
+	}
+	return c.fallbackClient.Rollback(ctx, inSession)
+}
+
 func (c *errorClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
 	if err := requestToError(sql); err != nil {
 		return nil, err
@@ -219,4 +250,11 @@ func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.
 		return nil, err
 	}
 	return c.fallbackClient.GetSrvKeyspace(ctx, keyspace)
+}
+
+func (c *errorClient) GetSrvShard(ctx context.Context, keyspace, shard string) (*pb.SrvShard, error) {
+	if err := requestToError(keyspace); err != nil {
+		return nil, err
+	}
+	return c.fallbackClient.GetSrvShard(ctx, keyspace, shard)
 }

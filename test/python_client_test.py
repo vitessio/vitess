@@ -220,8 +220,20 @@ class TestPythonClient(unittest.TestCase):
     cursor.close()
 
   def test_error(self):
-    """Test a regular server error raises the right exception.
-    """
+    """Test a regular server error raises the right exception."""
+    error_caller_id = vtgate_client.CallerID(principal='error://unknown error')
+
+    # Begin test
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+      self.conn.begin(error_caller_id)
+
+    # Commit test
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+      self.conn.begin(error_caller_id)
+
+    # Rollback test
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+      self.conn.begin(error_caller_id)
 
     # GetSrvKeyspace test
     with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
