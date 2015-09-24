@@ -487,7 +487,7 @@ Validates that all nodes reachable from the specified keyspace are consistent.
 ## Queries
 
 * [VtGateExecute](#vtgateexecute)
-* [VtGateExecuteShard](#vtgateexecuteshard)
+* [VtGateExecuteShards](#vtgateexecuteshards)
 * [VtGateSplitQuery](#vtgatesplitquery)
 * [VtTabletBegin](#vttabletbegin)
 * [VtTabletCommit](#vttabletcommit)
@@ -524,13 +524,13 @@ Executes the given SQL query with the provided bound variables against the vtgat
 * Execute failed: %v
 
 
-### VtGateExecuteShard
+### VtGateExecuteShards
 
 Executes the given SQL query with the provided bound variables against the vtgate server.
 
 #### Example
 
-<pre class="command-example">VtGateExecuteShard -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -shards &lt;shard0&gt;,&lt;shard1&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecuteShards -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -shards &lt;shard0&gt;,&lt;shard1&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] &lt;sql&gt;</pre>
 
 #### Flags
 
@@ -552,7 +552,7 @@ Executes the given SQL query with the provided bound variables against the vtgat
 
 #### Errors
 
-* the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateExecuteShard&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateExecuteShards&gt;</code> command This error occurs if the command is not called with exactly one argument.
 * error connecting to vtgate '%v': %v
 * Execute failed: %v
 
