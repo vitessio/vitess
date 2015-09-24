@@ -5,28 +5,33 @@
 /*
 Package exit provides an alternative to os.Exit(int).
 
-Unlike os.Exit(int), it won't exit the binary immediately
-and instead run deferred functions first.
+Unlike os.Exit(int), exit.Return(int) will run deferred functions before
+terminating. It's effectively like a return from main(), except you can specify
+the exit code.
 
 Defer a call to exit.Recover() or exit.RecoverAll() at the beginning of main().
 Use exit.Return(int) to initiate an exit.
 
 	func main() {
 		defer exit.Recover()
+		defer cleanup()
 		...
-		f()
-	}
-
-	func f() {
-		exit.Return(123)
+		if err != nil {
+			// Return from main() with a non-zero exit code,
+			// making sure to run deferred cleanup.
+			exit.Return(1)
+		}
+		...
 	}
 
 All functions deferred *after* defer exit.Recover()/RecoverAll() will be
-executed before the exit.
+executed before the exit. This is why the defer for this package should
+be the first statement in main().
 
-This mechanism only works within the *same* Go routine because it is based on
-the Go builtins panic() and recover(). Therefore, it is advised to use this
-package only in the main goroutine.
+NOTE: This mechanism only works if exit.Return() is called from the same
+goroutine that deferred exit.Recover(). Usually this means Return() should
+only be used from within main(), or within functions that are only ever
+called from main(). See Recover() and Return() for more details.
 */
 package exit
 
