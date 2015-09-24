@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -24,8 +25,12 @@ import (
 // and returns specific errors. It is meant to test all possible error cases,
 // and make sure all clients handle the errors correctly.
 
-// ErrorPrefix is the prefix to send with queries so they go through this service handler.
-const ErrorPrefix = "error://"
+const (
+	// ErrorPrefix is the prefix to send with queries so they go through this service handler.
+	ErrorPrefix = "error://"
+	// PartialErrorPrefix is the prefix to send with queries so the RPC call returns a partial error.
+	PartialErrorPrefix = "partialerror://"
+)
 
 type errorClient struct {
 	fallbackClient
@@ -40,12 +45,28 @@ func newErrorClient(fallback vtgateservice.VTGateService) *errorClient {
 // requestToError returns an error for the given request, by looking at the
 // request's prefix and requested error type. If the request doesn't match an
 // error request, return nil.
-func requestToError(received string) error {
-	if !strings.HasPrefix(received, ErrorPrefix) {
+func requestToError(request string) error {
+	if !strings.HasPrefix(request, ErrorPrefix) {
 		return nil
 	}
-	s := strings.TrimPrefix(received, ErrorPrefix)
-	switch s {
+	return trimmedRequestToError(strings.TrimPrefix(request, ErrorPrefix))
+}
+
+// requestToPartialError attempts to return a partial error for a given request.
+// This partial error should only be returned by Execute* calls.
+func requestToPartialError(request string) *mproto.RPCError {
+	if !strings.HasPrefix(request, PartialErrorPrefix) {
+		return nil
+	}
+	err := trimmedRequestToError(strings.TrimPrefix(request, PartialErrorPrefix))
+	return vterrors.RPCErrFromVtError(err)
+}
+
+// trimmedRequestToError returns an error for trimmed request by looking at the
+// requested error type. It assumes that prefix checking has already been done.
+// If the received string doesn't match a known error, returns an unknown error.
+func trimmedRequestToError(received string) error {
+	switch received {
 	case "integrity error":
 		return vterrors.FromError(
 			vtrpc.ErrorCode_INTEGRITY_ERROR,
@@ -71,6 +92,11 @@ func requestToError(received string) error {
 }
 
 func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	if rpcErr := requestToPartialError(sql); rpcErr != nil {
+		reply.Err = rpcErr
+		reply.Error = rpcErr.Message
+		return nil
+	}
 	if err := requestToError(sql); err != nil {
 		return err
 	}
@@ -78,13 +104,23 @@ func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map
 }
 
 func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteShard returning integrity error (errno 1062)")
+	if rpcErr := requestToPartialError(sql); rpcErr != nil {
+		reply.Err = rpcErr
+		reply.Error = rpcErr.Message
+		return nil
+	}
+	if err := requestToError(sql); err != nil {
+		return err
 	}
 	return c.fallbackClient.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction, reply)
 }
 
 func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	if rpcErr := requestToPartialError(sql); rpcErr != nil {
+		reply.Err = rpcErr
+		reply.Error = rpcErr.Message
+		return nil
+	}
 	if err := requestToError(sql); err != nil {
 		return err
 	}
@@ -92,6 +128,11 @@ func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVa
 }
 
 func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	if rpcErr := requestToPartialError(sql); rpcErr != nil {
+		reply.Err = rpcErr
+		reply.Error = rpcErr.Message
+		return nil
+	}
 	if err := requestToError(sql); err != nil {
 		return err
 	}
@@ -99,6 +140,11 @@ func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVari
 }
 
 func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	if rpcErr := requestToPartialError(sql); rpcErr != nil {
+		reply.Err = rpcErr
+		reply.Error = rpcErr.Message
+		return nil
+	}
 	if err := requestToError(sql); err != nil {
 		return err
 	}
@@ -107,6 +153,11 @@ func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVari
 
 func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	if len(queries) == 1 {
+		if rpcErr := requestToPartialError(queries[0].Sql); rpcErr != nil {
+			reply.Err = rpcErr
+			reply.Error = rpcErr.Message
+			return nil
+		}
 		if err := requestToError(queries[0].Sql); err != nil {
 			return err
 		}
@@ -116,6 +167,11 @@ func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []proto.Bo
 
 func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	if len(queries) == 1 {
+		if rpcErr := requestToPartialError(queries[0].Sql); rpcErr != nil {
+			reply.Err = rpcErr
+			reply.Error = rpcErr.Message
+			return nil
+		}
 		if err := requestToError(queries[0].Sql); err != nil {
 			return err
 		}
