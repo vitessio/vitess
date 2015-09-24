@@ -247,11 +247,11 @@ class VtcomboProcess(VtProcess):
         '-mycnf_socket_file', mysql_db.unix_socket(),
     ] + environment.extra_vtcombo_parameters()
 
-    logging.info("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA %s", str(self.extraparams))
 
 all_vtocc_processes = None
 vtgate_process = None
 vtcombo_process = None
+
 
 def start_vt_processes(directory, shards, mysql_db,
                        cell='test_cell',

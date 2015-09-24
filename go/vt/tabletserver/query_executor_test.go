@@ -1197,22 +1197,23 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	rules := NewQueryRules()
 	rules.Add(alterRule)
 
-	QueryRuleSources.UnRegisterQueryRuleSource(rulesName)
-	QueryRuleSources.RegisterQueryRuleSource(rulesName)
-	defer QueryRuleSources.UnRegisterQueryRuleSource(rulesName)
-
-	if err := QueryRuleSources.SetRules(rulesName, rules); err != nil {
-		t.Fatalf("failed to set rule, error: %v", err)
-	}
-
 	callInfo := &fakeCallInfo{
 		remoteAddr: bannedAddr,
 		username:   bannedUser,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.schemaInfo.queryRuleSources.RegisterQueryRuleSource(rulesName)
+	defer tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+
+	if err := tsv.qe.schemaInfo.queryRuleSources.SetRules(rulesName, rules); err != nil {
+		t.Fatalf("failed to set rule, error: %v", err)
+	}
+
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
+
 	checkPlanID(t, planbuilder.PLAN_SELECT_SUBQUERY, qre.plan.PlanId)
 	// execute should fail because query has been blacklisted
 	_, err := qre.Execute()
@@ -1256,22 +1257,23 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	rules := NewQueryRules()
 	rules.Add(alterRule)
 
-	QueryRuleSources.UnRegisterQueryRuleSource(rulesName)
-	QueryRuleSources.RegisterQueryRuleSource(rulesName)
-	defer QueryRuleSources.UnRegisterQueryRuleSource(rulesName)
-
-	if err := QueryRuleSources.SetRules(rulesName, rules); err != nil {
-		t.Fatalf("failed to set rule, error: %v", err)
-	}
-
 	callInfo := &fakeCallInfo{
 		remoteAddr: bannedAddr,
 		username:   bannedUser,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
+	tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.schemaInfo.queryRuleSources.RegisterQueryRuleSource(rulesName)
+	defer tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+
+	if err := tsv.qe.schemaInfo.queryRuleSources.SetRules(rulesName, rules); err != nil {
+		t.Fatalf("failed to set rule, error: %v", err)
+	}
+
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
+
 	checkPlanID(t, planbuilder.PLAN_SELECT_SUBQUERY, qre.plan.PlanId)
 	_, err := qre.Execute()
 	if err == nil {

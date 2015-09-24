@@ -112,6 +112,7 @@ type SchemaInfo struct {
 	cachePool         *CachePool
 	ticks             *timer.Timer
 	endpoints         map[string]string
+	queryRuleSources  *QueryRuleInfo
 	queryServiceStats *QueryServiceStats
 }
 
@@ -132,6 +133,7 @@ func NewSchemaInfo(
 		ticks:             timer.NewTimer(reloadTime),
 		endpoints:         endpoints,
 		reloadTime:        reloadTime,
+		queryRuleSources:  NewQueryRuleInfo(),
 		queryServiceStats: queryServiceStats,
 	}
 	if enablePublishStats {
@@ -435,7 +437,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = QueryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
+	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
 	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	if plan.PlanId.IsSelect() {
 		if plan.FieldQuery == nil {
@@ -477,7 +479,7 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = QueryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
+	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
 	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	return plan
 }

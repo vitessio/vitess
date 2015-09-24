@@ -75,7 +75,7 @@ func (fcr *FileCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int
 // ActivateFileCustomRules activates this static file based custom rule mechanism
 func ActivateFileCustomRules(qsc tabletserver.QueryServiceControl) {
 	if *fileRulePath != "" {
-		tabletserver.QueryRuleSources.RegisterQueryRuleSource(FileCustomRuleSource)
+		qsc.RegisterQueryRuleSource(FileCustomRuleSource)
 		fileCustomRule.Open(qsc, *fileRulePath)
 	}
 }

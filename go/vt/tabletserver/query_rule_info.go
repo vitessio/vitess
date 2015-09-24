@@ -12,9 +12,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
-// Global variable to keep track of every registered query rule source
-var QueryRuleSources = NewQueryRuleInfo()
-
 // QueryRuleInfo is the maintainer of QueryRules from multiple sources
 type QueryRuleInfo struct {
 	// mutex to protect following queryRulesMap
