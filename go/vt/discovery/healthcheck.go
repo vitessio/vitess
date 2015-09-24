@@ -181,7 +181,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hcc.stats = shr.RealtimeStats
 			hcc.mu.Unlock()
 			hc.mu.Lock()
-			key := endPointToMapKey(endPoint)
+			key := EndPointToMapKey(endPoint)
 			hc.addrToConns[key] = hcc
 			hc.addEndPointToTargetProtected(hcc.target, endPoint)
 			hc.mu.Unlock()
@@ -214,7 +214,7 @@ func (hc *HealthCheckImpl) deleteConn(endPoint *pbt.EndPoint) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	key := endPointToMapKey(endPoint)
+	key := EndPointToMapKey(endPoint)
 	hcc, ok := hc.addrToConns[key]
 	if !ok {
 		return
@@ -259,7 +259,7 @@ func (hc *HealthCheckImpl) GetEndPointStatsFromKeyspaceShard(keyspace, shard str
 	res := make([]*EndPointStats, 0, 1)
 	for _, epList := range ttMap {
 		for _, ep := range epList {
-			key := endPointToMapKey(ep)
+			key := EndPointToMapKey(ep)
 			hcc, ok := hc.addrToConns[key]
 			if !ok {
 				continue
@@ -298,7 +298,7 @@ func (hc *HealthCheckImpl) GetEndPointStatsFromTarget(keyspace, shard string, ta
 	}
 	res := make([]*EndPointStats, 0, 1)
 	for _, ep := range epList {
-		key := endPointToMapKey(ep)
+		key := EndPointToMapKey(ep)
 		hcc, ok := hc.addrToConns[key]
 		if !ok {
 			continue
@@ -415,7 +415,7 @@ func (hc *HealthCheckImpl) CacheStatus() EndPointsCacheStatusList {
 			for _, epList := range ttMap {
 				var epcs *EndPointsCacheStatus
 				for _, ep := range epList {
-					key := endPointToMapKey(ep)
+					key := EndPointToMapKey(ep)
 					hcc, ok := hc.addrToConns[key]
 					if !ok {
 						continue
@@ -447,8 +447,9 @@ func (hc *HealthCheckImpl) CacheStatus() EndPointsCacheStatusList {
 	return epcsl
 }
 
-// endPointToMapKey creates a key to the map from endpoint's host and ports.
-func endPointToMapKey(endPoint *pbt.EndPoint) string {
+// EndPointToMapKey creates a key to the map from endpoint's host and ports.
+// It should only be used in discovery and related module.
+func EndPointToMapKey(endPoint *pbt.EndPoint) string {
 	parts := make([]string, 0, 1)
 	for name, port := range endPoint.PortMap {
 		parts = append(parts, name+":"+fmt.Sprintf("%d", port))

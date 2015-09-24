@@ -90,7 +90,7 @@ func (ctw *CellTabletsWatcher) loadTablets() {
 				log.Errorf("cannot get endpoint from tablet %v: %v", tablet, err)
 				return
 			}
-			key := endPointToMapKey(endPoint)
+			key := EndPointToMapKey(endPoint)
 			ctw.mu.Lock()
 			newEndPoints[key] = endPoint
 			ctw.mu.Unlock()
