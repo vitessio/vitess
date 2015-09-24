@@ -1,12 +1,159 @@
-/*
- * CSS used on vitess.io that deviates from default CSS for Bootstrap and Less.
- * More generally, these styles could be used in any site.
- */
+---
+---
 
 @import url("https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.css");
 
+// Colors
+$mainBrandColor: #4E5A92;
+$secondBrandColor: #264270;
+$thirdBrandColor: #E8F4FF;
+$inverseBrandColor: #FFF;
+
+$linkColor: $mainBrandColor;
+$linkHoverColor: darken($linkColor, 10%);
+$linkDisabledColor: #CCC;
+$codeColor: darken($linkColor, 20%);
+$codeBkColor: $thirdBrandColor;
+$wellColor: #F9F9F9;
+$textColor: #6A7476;
+$headingsColor: rgb(81, 91, 93);
+
+$fontFamily: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+// Override Bootstrap defaults
 body {
+  color: $textColor;
+  font-family: $fontFamily;
   padding-top: 50px;
+}
+
+a {
+  color: $mainBrandColor;
+}
+a:hover,
+a:focus {
+  color: $linkHoverColor;
+}
+a.disabled {
+  color: $linkDisabledColor;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: $headingsColor;
+}
+
+p, li {line-height: 22px;}
+
+code {
+  color: $codeColor;
+  background-color: transparent;
+  font-size: 14px;
+  padding: 0;
+}
+
+pre, pre.prettyprint {
+  background-color: $codeBkColor;
+  color: #000;
+  border: none !important;
+  font-size: 14px !important;
+  padding: 9.5px !important;
+}
+
+//tabs
+.ui-widget-content {
+  font-size:14px !important;
+  font-family: $fontFamily !important;
+  color: $textColor !important;
+}
+
+.ui-widget-content a {
+  color: $mainBrandColor !important;
+}
+
+.ui-widget-content a:hover, a:focus {
+  color: $linkHoverColor !important;
+}
+
+// Fix Bootstrap mobile menu colors on inverse navbar.
+.navbar-toggle .icon-bar {
+  background-color: $inverseBrandColor;
+}
+
+// Shared
+.inverse {
+  background-color: $mainBrandColor;
+  color: white;
+
+  a {
+    color: $inverseBrandColor;
+  }
+  a:hover,
+  a:focus {
+    color: $linkHoverColor;
+  }
+}
+
+.inverse .inverse-light {
+  background-color: $thirdBrandColor;
+}
+
+/* Home page styles */
+.home-full-width {
+  width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+}
+.jumbotron {
+  background: $secondBrandColor;
+  color: $thirdBrandColor;
+  text-align: center;
+  width: 100%;
+}
+.page-title-bar{
+  background-color: $thirdBrandColor;
+  margin: 50px 0px 0px;
+  padding-bottom: 10px;
+  padding-top: 15px;
+
+  h1, h2, h3, h4, h5, h6 {
+    color: $mainBrandColor;
+  }
+}
+.page-spacer {
+  height: 100px;
+}
+
+// Used in top nav bar
+#common-nav{
+  margin-bottom: 0px;
+  background-color: $secondBrandColor;
+
+  .logo {
+    width: 60px;
+  }
+}
+
+// Docs layout specific
+.docs-side-nav {
+  margin-top: 40px;
+}
+
+// collapsible menus
+h4.arrow-d, h4.arrow-r {
+  cursor: pointer;
+}
+
+// Expandy nav items
+h4.arrow-r::before {
+  content: "+ ";
+  font-family: monospace;
+  font-weight: bold;
+}
+
+h4.arrow-d::before {
+  content: "- ";
+  font-family: monospace;
+  font-weight: bold;
 }
 
 p {
@@ -14,7 +161,7 @@ p {
 }
 
 table {
-  background:none repeat scroll 0 0 #fff;
+  background:none repeat scroll 0 0 #FFF;
   border:1px solid #D0D0D0;
   border-bottom:1px solid #D0D0D0;
   border-collapse:collapse;
@@ -25,7 +172,7 @@ table {
 }
 
 table thead {
-  background-color: #4E5A92;
+  background-color: $mainBrandColor;
 }
 
 table tr th {
@@ -40,10 +187,10 @@ table.comparison th {
 }
 
 table.comparison td {
-  background: #fff;
+  background: #FFF;
   vertical-align: top;
   width: 47%;
-  border-bottom: solid 1px #e0e0e0;
+  border-bottom: solid 1px #E0E0E0;
   padding: 16px;
 }
 
@@ -58,35 +205,26 @@ table tbody td {
 table tr td, table tr th {
   padding:0.625em;
 }
-table tfoot, table thead {
-  background:none repeat scroll 0 0 #f6f6f6;
+table tfoot, table thead, table tr:nth-of-type(2n) {
+  background:none repeat scroll 0 0 #F6F6F6;
 }
 table tbody {
-  background:none repeat scroll 0 0 #fff;
-}
-table tr:nth-of-type(2n) {
-  background:none repeat scroll 0 0 #f6f6f6;
+  background:none repeat scroll 0 0 #FFF;
 }
 #api-method-summary tr td.api-method-summary-group {
-  background:#f6f6f6;
+  background:#F6F6F6;
 }
 #api-method-summary tr {
-  background:#fff;
+  background:#FFF;
 }
 th, td {
-  border-right:1px solid #e0e0e0;
+  border-right:1px solid #E0E0E0;
 }
-
 h2, h3, h4, h5 {
   margin-bottom: 0.8em;
 }
 pre {
   margin: 0 0 1.2em;
-}
-
-code {
-  background-color: transparent;
-  padding: 0;
 }
 br.bigbreak {
   line-height: 2em;
@@ -95,7 +233,7 @@ div.indent-details {
   padding-left: 1.6250em;
 }
 #toc {
-  border-left: solid 3px #4E5A92;
+  border-left: solid 3px $mainBrandColor;
   padding-left: 12px;
 }
 #toc ol, #toc ul {
@@ -132,24 +270,22 @@ li {
   overflow-y: auto;
 }
 
+.icon-bar {
+  background-color:#FFF;
+}
+
 #masthead {
-  background-color: #E8F4FF;
+  background-color: $thirdBrandColor;
   margin-bottom: 40px;
   min-height: 105px;
-}
 
-#masthead h1 {
-  color: #4E5A92;
-  font-size: 36px;
-  padding: 18px;
-}
-.icon-bar {
-  background-color:#fff;
-}
-
-@media screen and (min-width: 768px) {
-  #masthead h1 {
+  h1 {
+    color: $mainBrandColor;
     font-size: 36px;
+    padding: 18px;
+    @media (min-width: 768px) {
+      font-size: 48px;
+    }
   }
 }
 
@@ -163,6 +299,9 @@ li {
 .nav li.active-item {
   font-weight: bold;
   text-decoration: none;
+  ul, ol {
+    font-weight: normal;
+  }
 }
 #sidebar > li > h4 {
   font-size: 16px;
@@ -180,10 +319,7 @@ li {
 #sidebar li ul li, #sidebar li ol li {
   padding-bottom: 5px;
 }
-.nav li.active-item ul, .nav li.active-item ol {
-  font-weight: normal;
-  padding-top: 0.8em;
-}
+
 .nav-stacked > li+li {
   margin-top: 0;
 }
@@ -191,62 +327,51 @@ li {
   list-style: none;
   padding-left: 1.5em;
 }
-#rightCol li.active > a {
-  color: #730073;
-  font-weight: bold;
-}
-#centerTextCol h2, #centerTextCol h3, #centerTextCol h4,
-                   #centerTextCol h5, #centerTextCol h6 {
-  padding-top: 50px;
-  margin-top: -50px;
+#centerTextCol {
+  h2, h3, h4, h5, h6 {
+    padding-top: 50px;
+    margin-top: -50px;
+  }
 }
 
 .affix-top,.affix{
   position: static;
 }
-#sidebar.affix-top,#sidebar.affix{
+#sidebar.affix,#sidebar.affix-top{
   max-width: 170px;
+  @media (min-width: 992px) {
+    width: 228px;
+  }
 }
-
+#sidebar.affix, #tocSidebar.affix {
+  @media (min-width: 1200px) {
+    position: fixed;
+    top: 70px;
+    bottom: 0px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  @media (min-width: 992px) {
+    position: fixed;
+    top: 70px;
+    bottom: 0px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
 @media (min-width: 1200px) {
   #tocSidebar.affix, #tocSidebar.affix-top {
     min-width: 170px;
-  }
-  #rightCol #tocSidebar.affix, #rightCol #tocSidebar.affix-top {
-    max-width: 210px;
   }
   #toc > ul > li > a {
     display: inline-block;
     padding-left: 10px;
     text-indent: -10px;
   }
-
-  #sidebar.affix, #tocSidebar.affix {
-    position: fixed;
-    top: 70px;
-    bottom: 0px;
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
 }
 @media (min-width: 992px) {
-  #sidebar.affix, #sidebar.affix-top {
-    width: 228px;
-  }
-
-  #tocSidebar.affix, #tocSidebar.affix-top {
-  }
-
   #sidebar.affix-top, #tocSidebar.affix-top {
     position: static;
-  }
-  
-  #sidebar.affix, #tocSidebar.affix {
-    position: fixed;
-    top: 70px;
-    bottom: 0px;
-    overflow-x: hidden;
-    overflow-y: auto;
   }
 }
 @media (min-width: 768px) {
@@ -262,11 +387,6 @@ li {
 /*
  * Left nav highlighting title of selected document
  */
-
-.main-site-content {
-  max-width: 1512px;
-  padding: 0 80px;
-}
 
 /*
  * Responsive tables
@@ -306,14 +426,9 @@ table.responsive th:not(:first-child) {
   width: 402px;
   height: 228px;
 }
-.page-title-bar {
-  margin: 50px 0px 0px;
-  padding-bottom: 10px;
-  padding-top: 15px;
-}
 
 .app-bar {
-  background: #4E5A92 url(/images/bg-990x320.jpg) no-repeat top center;
+  background: $mainBrandColor url(/images/bg-990x320.jpg) no-repeat top center;
   background-size: cover;
   box-shadow: none;
   z-index: 1;
@@ -331,16 +446,17 @@ table.responsive th:not(:first-child) {
   height: 60px;
   justify-content: space-between;  /* change the flex layout */
 }
+// Might not need navdrawer-container, app-bar-container, combine scrolled
 .navdrawer-container {
   background: #3f4254;
 }
 .navdrawer-container h4 {
   height: 60px;
-  color: #3f4254;
+  color: #3F4254;
 }
 .navdrawer-container a,
 .app-bar .logo {
-  font-family: 'Roboto', 'Roboto Condensed', 'Helvetica', 'Arial', sans-serif;
+  font-family: $fontFamily;
   text-transform: uppercase;
 }
 .navdrawer-container a {
@@ -349,7 +465,7 @@ table.responsive th:not(:first-child) {
 .app-bar .logo {
   font-size: 23px;
   line-height: 60px;
-  color: #FFFFFF;
+  color: $inverseBrandColor;
   flex: inherit;  /* reset the flex box to center */
 }
 .app-bar .logo a {
@@ -365,10 +481,29 @@ table.responsive th:not(:first-child) {
   background-size: 24px 24px;
 }
 
+/* Three-column layout */
 #leftCol {
   float: left;
   overflow-x: hidden;
   overflow-y: auto;
+  @media screen and (max-width: 991px) {
+    max-width: 200px;
+  }
+  @media screen and (max-width: 767px) {
+    display: none;
+  }
+}
+#centerCol {
+  @media screen and (max-width: 1199px) {
+    z-index: 1;
+  }
+  @media screen and (max-width: 991px) {
+    margin-left: calc(25% + 15px);
+    z-index: 1;
+  }
+  @media screen and (max-width: 767px) {
+    margin-left: 0;
+  }
 }
 #rightCol {
   float: right;
@@ -377,48 +512,54 @@ table.responsive th:not(:first-child) {
   padding-right: 0px;
   position: static;
   z-index: 10000;
+
+  li.active > a {
+    color: #730073;
+    font-weight: bold;
+  }
+  @media (min-width: 1200px) {
+    #tocSidebar.affix, #tocSidebar.affix-top {
+      max-width: 210px;
+    }
+  }
+  @media screen and (max-width: 1199px) {
+    margin: 0;
+  }
+  @media screen and (max-width: 991px) {
+    float: none;
+    margin: 12px 0 30px calc(25% + 15px);
+    max-width: 255px;
+  }
+  @media screen and (max-width: 767px) {
+    margin: 12px 0 30px;
+  }
 }
 
 .scrolled {
   margin-bottom: 80px;
   z-index: 20000;
+
+  .app-bar {
+    color: #000000;
+    background: $inverseBrandColor;
+    box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+    .logo {
+      color: #000000;
+    }
+    button:hover {
+      background-color: rgba(78,90,146, 0.1);
+    }
+    button:focus {
+      background-color: rgba(78,90,146, 0.2);
+    }
+    button:active {
+      background-color: rgba(78,90,146, 0.4);
+    }
+  }
 }
 
-.scrolled .app-bar {
-  color: #000000;
-  background: #FFFFFF;
-  box-shadow: 0 5px 10px rgba(0,0,0,0.2);
-}
-.scrolled .app-bar .logo {
-  color: #000000;
-}
-.scrolled .app-bar button:hover {
-  background-color: rgba(78,90,146, 0.1);
-}
-.scrolled .app-bar button:focus {
-  background-color: rgba(78,90,146, 0.2);
-}
-.scrolled .app-bar button:active {
-  background-color: rgba(78,90,146, 0.4);
-}
-.scrolled .app-bar {
-  color: #000000;
-  background: #FFFFFF;
-  box-shadow: 0 5px 10px rgba(0,0,0,0.2);
-}
 main .fa {
-  color: #4E5A92;
-}
-.jumbotron {
-  background: #264270;
-  color: #E8F4FF;
-  text-align: center;
-  width: 100%;
-}
-.home-full-width {
-  width: 100%;
-  padding-left: 0;
-  padding-right: 0;
+  color: $mainBrandColor;
 }
 #mobile-left-nav-menu-button {
   display: none;
@@ -428,40 +569,34 @@ main .fa {
   height: 24px;
   margin-left: 10px;
   min-width: 24px;
+  @media screen and (max-width: 767px) {
+    display: block;
+  }
 }
 #collapsed-left-menu {
   display: none;
+  h4 {
+    color: $thirdBrandColor;
+  }
+  @media screen and (max-width: 767px) {
+    display: block;
+  }
 }
-#collapsed-left-menu h4 {
-  color: #E8F4FF;
+.main-site-content {
+  @media screen and (max-width: 991px) {
+    padding: 0 24px;
+  }
+  @media screen and (max-width: 767px) {
+    padding: 0 16px;
+  }
 }
-
 @media screen and (max-width: 1199px) {
-  #rightCol {
-    margin: 0;
-  }
-  #centerCol {
-    z-index: 1;
-  }
   #toc-content-row {
     position: relative;
     z-index: 1;
   }
 }
 @media screen and (max-width: 991px) {
-  #rightCol {
-    float: none;
-    margin: 12px 0 30px calc(25% + 15px);
-    max-width: 255px;
-  }
-  #centerCol {
-    margin-left: calc(25% + 15px);
-    z-index: 1;
-  }
-  #leftCol {
-    max-width: 200px;
-  }
-
   /*
    * Force responsive tables to lay out completely vertically. The "responsive"
    * class should only be applied to tables that are composed like a definition
@@ -479,30 +614,8 @@ main .fa {
   table.responsive td {
     display: block;
   }
-
-  .main-site-content {
-    padding: 0 24px;
-  }
 }
 @media screen and (max-width: 767px) {
-  #mobile-left-nav-menu-button {
-    display: block;
-  }
-  #rightCol {
-    margin: 12px 0 30px;
-  }
-  #leftCol {
-    display: none;
-  }
-  #centerCol {
-    margin-left: 0;
-  }
-  .main-site-content {
-    padding: 0 16px;
-  }
-  #collapsed-left-menu {
-    display: block;
-  }
   #standard-menu-links {
     display: none;
   }
