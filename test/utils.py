@@ -605,10 +605,10 @@ class VtGate(object):
     args.append(sql)
     return run_vtctl_json(args)
 
-  def execute_shard(self, sql, keyspace, shards, tablet_type='master',
-                    bindvars=None):
-    """Uses 'vtctl VtGateExecuteShard' to execute a command."""
-    args = ['VtGateExecuteShard',
+  def execute_shards(self, sql, keyspace, shards, tablet_type='master',
+                     bindvars=None):
+    """Uses 'vtctl VtGateExecuteShards' to execute a command."""
+    args = ['VtGateExecuteShards',
             '-server', self.rpc_endpoint(),
             '-keyspace', keyspace,
             '-shards', shards,

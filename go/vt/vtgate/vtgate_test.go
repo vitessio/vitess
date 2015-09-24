@@ -699,7 +699,7 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 	}
 }
 
-func TestVTGateStreamExecuteShard(t *testing.T) {
+func TestVTGateStreamExecuteShards(t *testing.T) {
 	s := createSandbox("TestVTGateStreamExecuteShards")
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)

@@ -71,8 +71,8 @@ class TestCustomSharding(unittest.TestCase):
           'id': start+x,
           'name': 'row %d' % (start+x),
       }
-      utils.vtgate.execute_shard(sql, 'test_keyspace', shard,
-                                 bindvars=bindvars)
+      utils.vtgate.execute_shards(sql, 'test_keyspace', shard,
+                                  bindvars=bindvars)
 
   def _check_data(self, shard, start, count, table='data'):
     sql = 'select name from %s where id=:id' % table
@@ -80,8 +80,8 @@ class TestCustomSharding(unittest.TestCase):
       bindvars = {
           'id': start+x,
       }
-      qr = utils.vtgate.execute_shard(sql, 'test_keyspace', shard,
-                                      bindvars=bindvars)
+      qr = utils.vtgate.execute_shards(sql, 'test_keyspace', shard,
+                                       bindvars=bindvars)
       self.assertEqual(len(qr['Rows']), 1)
       v = qr['Rows'][0][0]
       self.assertEqual(v, 'row %d' % (start+x))
@@ -203,7 +203,7 @@ primary key (id)
       bindvars = {}
       for name, value in q['query']['bind_variables'].iteritems():
         bindvars[name] = value['value_int']
-      qr = utils.vtgate.execute_shard(
+      qr = utils.vtgate.execute_shards(
           q['query']['sql'],
           'test_keyspace', ','.join(q['shard_part']['shards']),
           tablet_type='master', bindvars=bindvars)

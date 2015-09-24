@@ -5,6 +5,7 @@
 package vtctl
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -36,10 +37,15 @@ func init() {
 		"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] <sql>",
 		"Executes the given SQL query with the provided bound variables against the vtgate server."})
 	addCommand(queriesGroupName, command{
-		"VtGateExecuteShard",
-		commandVtGateExecuteShard,
+		"VtGateExecuteShards",
+		commandVtGateExecuteShards,
 		"-server <vtgate> -keyspace <keyspace> -shards <shard0>,<shard1>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] <sql>",
-		"Executes the given SQL query with the provided bound variables against the vtgate server."})
+		"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the provided shards."})
+	addCommand(queriesGroupName, command{
+		"VtGateExecuteKeyspaceIds",
+		commandVtGateExecuteKeyspaceIds,
+		"-server <vtgate> -keyspace <keyspace> -keyspace_ids <ks1 in hex>,<k2 in hex>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] <sql>",
+		"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the shards that contain the provided keyspace ids."})
 	addCommand(queriesGroupName, command{
 		"VtGateSplitQuery",
 		commandVtGateSplitQuery,
@@ -142,7 +148,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	return printJSON(wr, qr)
 }
 
-func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	server := subFlags.String("server", "", "VtGate server to connect to")
 	bindVariables := newBindvars(subFlags)
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vtgate client")
@@ -153,7 +159,7 @@ func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <sql> argument is required for the VtGateExecuteShard command")
+		return fmt.Errorf("the <sql> argument is required for the VtGateExecuteShards command")
 	}
 	t, err := parseTabletType(*tabletType, []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY})
 	if err != nil {
@@ -170,6 +176,47 @@ func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFl
 	}
 	defer vtgateConn.Close()
 	qr, err := vtgateConn.ExecuteShards(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, t)
+	if err != nil {
+		return fmt.Errorf("Execute failed: %v", err)
+	}
+	return printJSON(wr, qr)
+}
+
+func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	server := subFlags.String("server", "", "VtGate server to connect to")
+	bindVariables := newBindvars(subFlags)
+	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vtgate client")
+	tabletType := subFlags.String("tablet_type", "master", "tablet type to query")
+	keyspace := subFlags.String("keyspace", "", "keyspace to send query to")
+	keyspaceIDsStr := subFlags.String("keyspace_ids", "", "comma-separated list of keyspace ids (in hex) that will map into shards to send query to")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <sql> argument is required for the VtGateExecuteKeyspaceIds command")
+	}
+	t, err := parseTabletType(*tabletType, []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY})
+	if err != nil {
+		return err
+	}
+	var keyspaceIDs [][]byte
+	if *keyspaceIDsStr != "" {
+		keyspaceIDHexs := strings.Split(*keyspaceIDsStr, ",")
+		keyspaceIDs = make([][]byte, len(keyspaceIDHexs))
+		for i, keyspaceIDHex := range keyspaceIDHexs {
+			keyspaceIDs[i], err = hex.DecodeString(keyspaceIDHex)
+			if err != nil {
+				return fmt.Errorf("cannot hex-decode value %v '%v': %v", i, keyspaceIDHex, err)
+			}
+		}
+	}
+
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
+	if err != nil {
+		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
+	}
+	defer vtgateConn.Close()
+	qr, err := vtgateConn.ExecuteKeyspaceIds(ctx, subFlags.Arg(0), *keyspace, keyspaceIDs, *bindVariables, t)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}

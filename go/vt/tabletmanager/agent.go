@@ -161,6 +161,7 @@ func NewActionAgent(
 		lastHealthMapCount:  stats.NewInt("LastHealthMapCount"),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
+	agent.registerQueryRuleSources()
 
 	// try to initialize the tablet if we have to
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
@@ -259,6 +260,7 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 		lastHealthMapCount:  new(stats.Int),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
+	agent.registerQueryRuleSources()
 
 	// initialize the tablet
 	*initDbNameOverride = dbname
@@ -274,6 +276,12 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 	return agent
+}
+
+// registerQueryRuleSources registers query rule sources under control of agent
+func (agent *ActionAgent) registerQueryRuleSources() {
+	agent.QueryServiceControl.RegisterQueryRuleSource(keyrangeQueryRules)
+	agent.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
 }
 
 func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pb.Tablet, reason string) error {

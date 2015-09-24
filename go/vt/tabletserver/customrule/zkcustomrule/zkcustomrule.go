@@ -149,7 +149,7 @@ func (zkcr *ZkCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int6
 // ActivateZkCustomRules activates zookeeper dynamic custom rule mechanism
 func ActivateZkCustomRules(qsc tabletserver.QueryServiceControl) {
 	if *zkRulePath != "" {
-		tabletserver.QueryRuleSources.RegisterQueryRuleSource(ZkCustomRuleSource)
+		qsc.RegisterQueryRuleSource(ZkCustomRuleSource)
 		zkCustomRule.Open(qsc, *zkRulePath)
 	}
 }

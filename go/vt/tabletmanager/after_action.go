@@ -260,9 +260,3 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	}
 	return nil
 }
-
-func init() {
-	// Register query rule sources under control of agent
-	tabletserver.QueryRuleSources.RegisterQueryRuleSource(keyrangeQueryRules)
-	tabletserver.QueryRuleSources.RegisterQueryRuleSource(blacklistQueryRules)
-}

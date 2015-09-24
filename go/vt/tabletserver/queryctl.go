@@ -198,6 +198,16 @@ type QueryServiceControl interface {
 	// ReloadSchema makes the quey service reload its schema cache
 	ReloadSchema()
 
+	//
+	// The following three methods expose the Query Rules
+	//
+
+	// RegisterQueryRuleSource adds a query rule source
+	RegisterQueryRuleSource(ruleSource string)
+
+	// RegisterQueryRuleSource removes a query rule source
+	UnRegisterQueryRuleSource(ruleSource string)
+
 	// SetQueryRules sets the query rules for this QueryService
 	SetQueryRules(ruleSource string, qrs *QueryRules) error
 
@@ -286,6 +296,14 @@ func (tqsc *TestQueryServiceControl) IsHealthy() error {
 // ReloadSchema is part of the QueryServiceControl interface
 func (tqsc *TestQueryServiceControl) ReloadSchema() {
 	tqsc.ReloadSchemaCount++
+}
+
+// RegisterQueryRuleSource is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) RegisterQueryRuleSource(ruleSource string) {
+}
+
+// UnRegisterQueryRuleSource is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) UnRegisterQueryRuleSource(ruleSource string) {
 }
 
 // SetQueryRules is part of the QueryServiceControl interface
@@ -396,9 +414,19 @@ func (rqsc *realQueryServiceControl) registerCheckMySQL() {
 	}
 }
 
+// RegisterQueryRuleSource is part of the QueryServiceControl interface
+func (rqsc *realQueryServiceControl) RegisterQueryRuleSource(ruleSource string) {
+	rqsc.tabletServerRPCService.qe.schemaInfo.queryRuleSources.RegisterQueryRuleSource(ruleSource)
+}
+
+// UnRegisterQueryRuleSource is part of the QueryServiceControl interface
+func (rqsc *realQueryServiceControl) UnRegisterQueryRuleSource(ruleSource string) {
+	rqsc.tabletServerRPCService.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(ruleSource)
+}
+
 // SetQueryRules is the tabletserver level API to write current query rules
 func (rqsc *realQueryServiceControl) SetQueryRules(ruleSource string, qrs *QueryRules) error {
-	err := QueryRuleSources.SetRules(ruleSource, qrs)
+	err := rqsc.tabletServerRPCService.qe.schemaInfo.queryRuleSources.SetRules(ruleSource, qrs)
 	if err != nil {
 		return err
 	}

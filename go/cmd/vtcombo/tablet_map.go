@@ -11,6 +11,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -18,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/wrangler"
 
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -50,6 +52,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 	flag.Lookup("queryserver-config-enable-publish-stats").Value.Set("false")
 
 	var uid uint32 = 1
+	keyspaceMap := make(map[string]bool)
 	for _, entry := range strings.Split(topology, ",") {
 		slash := strings.IndexByte(entry, '/')
 		column := strings.IndexByte(entry, ':')
@@ -60,6 +63,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		keyspace := entry[:slash]
 		shard := entry[slash+1 : column]
 		dbname := entry[column+1:]
+		keyspaceMap[keyspace] = true
 
 		localDBConfigs := &(*dbcfgs)
 		localDBConfigs.App.DbName = dbname
@@ -124,6 +128,15 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 			agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), rdonlyQueryServiceControl, localDBConfigs, mysqld, keyspace, shard, dbname, "rdonly"),
 		}
 		uid++
+	}
+
+	// Rebuild the SrvKeyspace objects, we we can support range-based
+	// sharding queries.
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil, 30*time.Second /*lockTimeout*/)
+	for keyspace := range keyspaceMap {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, true); err != nil {
+			log.Fatalf("cannot rebuild %v: %v", keyspace, err)
+		}
 	}
 
 	// Register the tablet dialer
@@ -221,7 +234,7 @@ func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, 
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, nil, result); err != nil {
+	}, &tproto.Session{}, result); err != nil {
 		return 0, err
 	}
 	return result.TransactionId, nil
