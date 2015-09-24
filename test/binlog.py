@@ -165,7 +165,7 @@ class TestBinlog(unittest.TestCase):
     src_master.mquery(
         'vt_test_keyspace',
         "INSERT INTO test_table (id, keyspace_id, msg) "
-        "VALUES (41523, 1, 'Šṛ́rỏé') /* EMD keyspace_id:1 */",
+        "VALUES (41523, 1, 'Šṛ́rỏé') /* vtgate:: keyspace_id:00000001 */",
         conn_params={'charset': 'latin1'}, write=True)
 
     # Wait for it to replicate.
@@ -198,7 +198,7 @@ class TestBinlog(unittest.TestCase):
     # Insert something and make sure it comes through intact.
     sql = (
         "INSERT INTO test_table (id, keyspace_id, msg) "
-        "VALUES (19283, 1, 'testing checksum enabled') /* EMD keyspace_id:1 */")
+        "VALUES (19283, 1, 'testing checksum enabled') /* vtgate:: keyspace_id:00000001 */")
     src_master.mquery('vt_test_keyspace', sql, write=True)
 
     # Look for it using update stream to see if binlog streamer can talk to
@@ -227,7 +227,7 @@ class TestBinlog(unittest.TestCase):
     sql = (
         "INSERT INTO test_table (id, keyspace_id, msg) "
         "VALUES (58812, 1, 'testing checksum disabled') "
-        "/* EMD keyspace_id:1 */")
+        "/* vtgate:: keyspace_id:00000001 */")
     src_master.mquery(
         'vt_test_keyspace', sql, write=True)
 

@@ -367,10 +367,7 @@ func (conn *vtgateConn) Commit(ctx context.Context, session interface{}) error {
 		Session:  session.(*pb.Session),
 	}
 	_, err := conn.c.Commit(ctx, request)
-	if err != nil {
-		return vterrors.FromGRPCError(err)
-	}
-	return nil
+	return vterrors.FromGRPCError(err)
 }
 
 func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error {
@@ -379,10 +376,7 @@ func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error
 		Session:  session.(*pb.Session),
 	}
 	_, err := conn.c.Rollback(ctx, request)
-	if err != nil {
-		return vterrors.FromGRPCError(err)
-	}
-	return nil
+	return vterrors.FromGRPCError(err)
 }
 
 func (conn *vtgateConn) Begin2(ctx context.Context) (interface{}, error) {

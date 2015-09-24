@@ -73,8 +73,7 @@ def add_entry(page, value):
   cursor.begin()
   cursor.execute(
       'INSERT INTO messages (page, time_created_ns, keyspace_id, message)'
-      ' VALUES (%(page)s, %(time_created_ns)s, %(keyspace_id)s, %(message)s)'
-      ' /* EMD keyspace_id:'+str(keyspace_id_int)+' */',
+      ' VALUES (%(page)s, %(time_created_ns)s, %(keyspace_id)s, %(message)s)',
       {
         'page': page,
         'time_created_ns': int(time.time() * 1e9),

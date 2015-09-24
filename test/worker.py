@@ -241,7 +241,6 @@ class TestBaseSplitClone(unittest.TestCase):
       msg: the value of `msg` column.
       keyspace_id: the value of `keyspace_id` column.
     """
-    k = '%d' % keyspace_id
 
     # For maximum performance, multiple values are inserted in one statement.
     # However, when the statements are too long, queries will timeout and
@@ -252,6 +251,7 @@ class TestBaseSplitClone(unittest.TestCase):
         yield full_list[i:i+n]
 
     max_chunk_size = 100*1000
+    k = utils.uint64_to_hex(keyspace_id)
     for chunk in chunks(range(1, num_values+1), max_chunk_size):
       logging.debug('Inserting values for range [%d, %d].', chunk[0], chunk[-1])
       values_str = ''
@@ -263,7 +263,7 @@ class TestBaseSplitClone(unittest.TestCase):
           'vt_test_keyspace', [
               'begin',
               'insert into worker_test(id, msg, keyspace_id) values%s '
-              '/* EMD keyspace_id:%s*/' % (values_str, k),
+              '/* vtgate:: keyspace_id:%s */' % (values_str, k),
               'commit'],
           write=True)
 

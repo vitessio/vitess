@@ -124,17 +124,14 @@ class InsertThread(threading.Thread):
     self.object_name = object_name
     self.user_id = user_id
     self.keyspace_id = keyspace_id
-    if keyspace_id_type == keyrange_constants.KIT_BYTES:
-      self.str_keyspace_id = base64.b64encode(pack_keyspace_id(keyspace_id))
-    else:
-      self.str_keyspace_id = '%d' % keyspace_id
+    self.str_keyspace_id = utils.uint64_to_hex(keyspace_id)
     self.done = False
 
     self.tablet.mquery(
         'vt_test_keyspace',
         ['begin',
          'insert into timestamps(name, time_milli, keyspace_id) '
-         "values('%s', %d, 0x%x) /* EMD keyspace_id:%s user_id:%d */" %
+         "values('%s', %d, 0x%x) /* vtgate:: keyspace_id:%s */ /* user_id:%d */" %
          (self.object_name, long(time.time() * 1000), self.keyspace_id,
           self.str_keyspace_id, self.user_id),
          'commit'],
@@ -148,7 +145,7 @@ class InsertThread(threading.Thread):
             'vt_test_keyspace',
             ['begin',
              'update timestamps set time_milli=%d '
-             'where name="%s" /* EMD keyspace_id:%s user_id:%d */' %
+             'where name="%s" /* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
              (long(time.time() * 1000), self.object_name,
               self.str_keyspace_id, self.user_id),
              'commit'],
@@ -244,15 +241,12 @@ primary key (name)
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
   def _insert_value(self, tablet, table, id, msg, keyspace_id):
-    if keyspace_id_type == keyrange_constants.KIT_BYTES:
-      k = base64.b64encode(pack_keyspace_id(keyspace_id))
-    else:
-      k = '%d' % keyspace_id
+    k = utils.uint64_to_hex(keyspace_id)
     tablet.mquery(
         'vt_test_keyspace',
         ['begin',
          'insert into %s(id, msg, keyspace_id) '
-         'values(%d, "%s", 0x%x) /* EMD keyspace_id:%s user_id:%d */' %
+         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
          (table, id, msg, keyspace_id, k, id),
          'commit'],
         write=True)
