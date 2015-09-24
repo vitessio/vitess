@@ -10,13 +10,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/streamlog"
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -30,8 +27,6 @@ import (
 var (
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
-
-	checkMySLQThrottler = sync2.NewSemaphore(1, 0)
 )
 
 func init() {
@@ -345,7 +340,6 @@ var QueryServiceControlRegisterFunctions []QueryServiceControlRegisterFunction
 
 // Register is part of the QueryServiceControl interface
 func (rqsc *realQueryServiceControl) Register() {
-	rqsc.registerCheckMySQL()
 	for _, f := range QueryServiceControlRegisterFunctions {
 		f(rqsc)
 	}
@@ -387,31 +381,6 @@ func (rqsc *realQueryServiceControl) IsServing() bool {
 func (rqsc *realQueryServiceControl) ReloadSchema() {
 	defer logError(rqsc.tabletServerRPCService.qe.queryServiceStats)
 	rqsc.tabletServerRPCService.qe.schemaInfo.triggerReload()
-}
-
-// checkMySQL verifies that MySQL is still reachable by connecting to it.
-// If it's not reachable, it shuts down the query service.
-// This function rate-limits the check to no more than once per second.
-// FIXME(alainjobart) this global variable is accessed from many parts
-// of this library, this needs refactoring, probably using an interface.
-var checkMySQL = func() {}
-
-func (rqsc *realQueryServiceControl) registerCheckMySQL() {
-	checkMySQL = func() {
-		if !checkMySLQThrottler.TryAcquire() {
-			return
-		}
-		defer func() {
-			time.Sleep(1 * time.Second)
-			checkMySLQThrottler.Release()
-		}()
-		defer logError(rqsc.tabletServerRPCService.qe.queryServiceStats)
-		if rqsc.tabletServerRPCService.CheckMySQL() {
-			return
-		}
-		log.Infof("Check MySQL failed. Shutting down query service")
-		rqsc.DisallowQueries()
-	}
 }
 
 // RegisterQueryRuleSource is part of the QueryServiceControl interface

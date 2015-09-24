@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -85,6 +86,10 @@ type TabletServer struct {
 	invalidator *RowcacheInvalidator
 	sessionID   int64
 
+	// checkMySQLThrottler is used to throttle the number of
+	// requests sent to CheckMySQL.
+	checkMySQLThrottler *sync2.Semaphore
+
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
 	streamHealthIndex        int
@@ -92,16 +97,23 @@ type TabletServer struct {
 	lastStreamHealthResponse *pb.StreamHealthResponse
 }
 
+// MySQLChecker defines the CheckMySQL interface that lower
+// level objects can use to call back into TabletServer.
+type MySQLChecker interface {
+	CheckMySQL()
+}
+
 // NewTabletServer creates an instance of TabletServer. Only one instance
 // of TabletServer can be created per process.
 func NewTabletServer(config Config) *TabletServer {
 	tsv := &TabletServer{
-		config:          config,
-		streamHealthMap: make(map[int]chan<- *pb.StreamHealthResponse),
-		sessionID:       Rand(),
+		config:              config,
+		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
+		streamHealthMap:     make(map[int]chan<- *pb.StreamHealthResponse),
+		sessionID:           Rand(),
 	}
-	tsv.qe = NewQueryEngine(config)
-	tsv.invalidator = NewRowcacheInvalidator(config.StatsPrefix, tsv.qe, config.EnablePublishStats)
+	tsv.qe = NewQueryEngine(tsv, config)
+	tsv.invalidator = NewRowcacheInvalidator(config.StatsPrefix, tsv, tsv.qe, config.EnablePublishStats)
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
 			tsv.mu.Lock()
@@ -349,10 +361,31 @@ func (tsv *TabletServer) setTimeBomb() chan struct{} {
 	return done
 }
 
-// CheckMySQL returns true if we can connect to MySQL.
+// CheckMySQL initiates a check to see if MySQL is reachable.
+// If not, it shuts down the query service. The check is rate-limited
+// to no more than once per second.
+func (tsv *TabletServer) CheckMySQL() {
+	if !tsv.checkMySQLThrottler.TryAcquire() {
+		return
+	}
+	go func() {
+		defer func() {
+			logError(tsv.qe.queryServiceStats)
+			time.Sleep(1 * time.Second)
+			tsv.checkMySQLThrottler.Release()
+		}()
+		if tsv.isMySQLReachable() {
+			return
+		}
+		log.Info("Check MySQL failed. Shutting down query service")
+		tsv.StopService()
+	}()
+}
+
+// isMySQLReachable returns true if we can connect to MySQL.
 // The function returns false only if the query service is
 // in StateServing or StateNotServing.
-func (tsv *TabletServer) CheckMySQL() bool {
+func (tsv *TabletServer) isMySQLReachable() bool {
 	tsv.mu.Lock()
 	switch tsv.state {
 	case StateServing:
@@ -374,13 +407,7 @@ func (tsv *TabletServer) CheckMySQL() bool {
 		return true
 	}
 	tsv.mu.Unlock()
-
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("Checking MySQL, unexpected error: %v", x)
-		}
-	}()
-	return tsv.qe.CheckMySQL()
+	return tsv.qe.IsMySQLReachable()
 }
 
 // GetSessionId returns a sessionInfo response if the state is StateServing.

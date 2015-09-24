@@ -27,9 +27,10 @@ import (
 // RowcacheInvalidator runs the service to invalidate
 // the rowcache based on binlog events.
 type RowcacheInvalidator struct {
-	qe     *QueryEngine
-	dbname string
-	mysqld mysqlctl.MysqlDaemon
+	qe      *QueryEngine
+	checker MySQLChecker
+	dbname  string
+	mysqld  mysqlctl.MysqlDaemon
 
 	svm sync2.ServiceManager
 
@@ -68,8 +69,8 @@ func (rci *RowcacheInvalidator) PositionString() string {
 // NewRowcacheInvalidator creates a new RowcacheInvalidator.
 // Just like QueryEngine, this is a singleton class.
 // You must call this only once.
-func NewRowcacheInvalidator(statsPrefix string, qe *QueryEngine, enablePublishStats bool) *RowcacheInvalidator {
-	rci := &RowcacheInvalidator{qe: qe}
+func NewRowcacheInvalidator(statsPrefix string, checker MySQLChecker, qe *QueryEngine, enablePublishStats bool) *RowcacheInvalidator {
+	rci := &RowcacheInvalidator{checker: checker, qe: qe}
 	if enablePublishStats {
 		stats.Publish(statsPrefix+"RowcacheInvalidatorState", stats.StringFunc(rci.svm.StateName))
 		stats.Publish(statsPrefix+"RowcacheInvalidatorPosition", stats.StringFunc(rci.PositionString))
@@ -132,7 +133,7 @@ func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 			break
 		}
 		if IsConnErr(err) {
-			go checkMySQL()
+			rci.checker.CheckMySQL()
 		}
 		log.Errorf("binlog.ServeUpdateStream returned err '%v', retrying in 1 second.", err.Error())
 		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)

@@ -39,7 +39,7 @@ func NewDBConn(
 	qStats *QueryServiceStats) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(appParams, qStats.MySQLStats)
 	if err != nil {
-		go checkMySQL()
+		cp.checker.CheckMySQL()
 		return nil, err
 	}
 	return &DBConn{
@@ -69,7 +69,7 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		}
 		err2 := dbc.reconnect()
 		if err2 != nil {
-			go checkMySQL()
+			dbc.pool.checker.CheckMySQL()
 			return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 		}
 	}
