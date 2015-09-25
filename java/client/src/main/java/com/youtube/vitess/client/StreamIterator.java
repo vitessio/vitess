@@ -1,16 +1,24 @@
 package com.youtube.vitess.client;
 
+import java.sql.SQLException;
 import java.util.NoSuchElementException;
 
 /**
- * StreamIterator is used to access the results of a streaming call.
+ * An {@link java.util.Iterator Iterator}-like interface for accessing the results of a
+ * Vitess streaming call.
  *
- * It is similar to java.util.Iterator, but the hasNext() method is
+ * <p>It is similar to {@link java.util.Iterator}, but the hasNext() method is
  * understood to block until either a result is ready, an error occurs,
  * or there are no more results. Also, unlike Iterator, these methods
- * can throw VitessException or VitessRpcException.
+ * can throw SQLException.
+ *
+ * <p>The {@link #close()} method should be called when done to free up threads that may be blocking
+ * on the streaming connection.
+ *
+ * @param <E> the type of result returned by the iterator,
+ *     e.g. {@link com.youtube.vitess.proto.Query.QueryResult QueryResult}
  */
-public interface StreamIterator<E> {
+public interface StreamIterator<E> extends AutoCloseable {
   /**
    * hasNext returns true if next() would return a value.
    *
@@ -21,7 +29,7 @@ public interface StreamIterator<E> {
    *   <li>An error occurs (throws exception).
    * </ul>
    */
-  boolean hasNext() throws VitessException, VitessRpcException;
+  boolean hasNext() throws SQLException;
 
   /**
    * next returns the next value if one is available.
@@ -33,5 +41,5 @@ public interface StreamIterator<E> {
    *   <li>An error occurs (throws other exception).
    * </ul>
    */
-  E next() throws NoSuchElementException, VitessException, VitessRpcException;
+  E next() throws NoSuchElementException, SQLException;
 }

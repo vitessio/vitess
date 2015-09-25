@@ -1,18 +1,24 @@
 package com.youtube.vitess.client;
 
 import com.google.common.base.Function;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 
+import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.client.cursor.SimpleCursor;
 import com.youtube.vitess.proto.Query.BindVariable;
 import com.youtube.vitess.proto.Query.BoundQuery;
+import com.youtube.vitess.proto.Query.QueryResult;
 import com.youtube.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
 import com.youtube.vitess.proto.Vtgate.BoundShardQuery;
 import com.youtube.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import com.youtube.vitess.proto.Vtrpc.RPCError;
 
+import java.sql.SQLException;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -20,11 +26,11 @@ import java.util.Map;
  */
 public class Proto {
   /**
-   * checkError raises the proper VitessException for an error returned by VTGate.
+   * checkError raises the proper SQLException for an error returned by VTGate.
    *
    * @param error
    */
-  public static void checkError(RPCError error) throws VitessException {
+  public static void checkError(RPCError error) throws SQLException {
     // TODO(enisoc): Implement checkError.
   }
 
@@ -157,8 +163,7 @@ public class Proto {
    * bindQuery creates a BoundQuery from query and vars.
    */
   public static BoundQuery bindQuery(String query, Map<String, ?> vars) {
-    BoundQuery.Builder boundQueryBuilder =
-        BoundQuery.newBuilder().setSql(query);
+    BoundQuery.Builder boundQueryBuilder = BoundQuery.newBuilder().setSql(query);
     if (vars != null) {
       Map<String, BindVariable> bindVars = boundQueryBuilder.getMutableBindVariables();
       for (Map.Entry<String, ?> entry : vars.entrySet()) {
@@ -206,6 +211,14 @@ public class Proto {
   public static BoundKeyspaceIdQuery bindKeyspaceIdQuery(
       String keyspace, Iterable<byte[]> keyspaceIds, String query, Map<String, ?> vars) {
     return bindKeyspaceIdQuery(keyspace, keyspaceIds, bindQuery(query, vars));
+  }
+
+  public static List<Cursor> toCursorList(List<QueryResult> queryResults) {
+    ImmutableList.Builder<Cursor> builder = new ImmutableList.Builder<Cursor>();
+    for (QueryResult queryResult : queryResults) {
+      builder.add(new SimpleCursor(queryResult));
+    }
+    return builder.build();
   }
 
   public static final Function<byte[], ByteString> BYTE_ARRAY_TO_BYTE_STRING =
