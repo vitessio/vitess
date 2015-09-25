@@ -29,7 +29,7 @@ type SqlQuery struct {
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) (err error) {
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.GetSessionId(sessionParams, sessionInfo)
-	tabletserver.AddTabletErrorToSessionInfo(tErr, sessionInfo)
+	tabletserver.AddTabletError(tErr, &sessionInfo.Err)
 	return nil
 }
 
@@ -39,7 +39,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 func (sq *SqlQuery) GetSessionId2(sessionIdReq *proto.GetSessionIdRequest, sessionInfo *proto.SessionInfo) (err error) {
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.GetSessionId(&sessionIdReq.Params, sessionInfo)
-	tabletserver.AddTabletErrorToSessionInfo(tErr, sessionInfo)
+	tabletserver.AddTabletError(tErr, &sessionInfo.Err)
 	return nil
 }
 
@@ -47,7 +47,7 @@ func (sq *SqlQuery) GetSessionId2(sessionIdReq *proto.GetSessionIdRequest, sessi
 func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.Begin(callinfo.RPCWrapCallInfo(ctx), nil, session, txInfo)
-	tabletserver.AddTabletErrorToTransactionInfo(tErr, txInfo)
+	tabletserver.AddTabletError(tErr, &txInfo.Err)
 	return nil
 }
 
@@ -67,7 +67,7 @@ func (sq *SqlQuery) Begin2(ctx context.Context, beginRequest *proto.BeginRequest
 	tErr := sq.server.Begin(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(beginRequest.Target), session, txInfo)
 	// Convert from TxInfo => beginResponse for the output
 	beginResponse.TransactionId = txInfo.TransactionId
-	tabletserver.AddTabletErrorToBeginResponse(tErr, beginResponse)
+	tabletserver.AddTabletError(tErr, &beginResponse.Err)
 	return nil
 }
 
@@ -91,7 +91,7 @@ func (sq *SqlQuery) Commit2(ctx context.Context, commitRequest *proto.CommitRequ
 		callerid.GoRPCImmediateCallerID(commitRequest.ImmediateCallerID),
 	)
 	tErr := sq.server.Commit(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(commitRequest.Target), session)
-	tabletserver.AddTabletErrorToCommitResponse(tErr, commitResponse)
+	tabletserver.AddTabletError(tErr, &commitResponse.Err)
 	return nil
 }
 
@@ -115,7 +115,7 @@ func (sq *SqlQuery) Rollback2(ctx context.Context, rollbackRequest *proto.Rollba
 		callerid.GoRPCImmediateCallerID(rollbackRequest.ImmediateCallerID),
 	)
 	tErr := sq.server.Rollback(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(rollbackRequest.Target), session)
-	tabletserver.AddTabletErrorToRollbackResponse(tErr, rollbackResponse)
+	tabletserver.AddTabletError(tErr, &rollbackResponse.Err)
 	return nil
 }
 
@@ -123,7 +123,7 @@ func (sq *SqlQuery) Rollback2(ctx context.Context, rollbackRequest *proto.Rollba
 func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), nil, query, reply)
-	tabletserver.AddTabletErrorToQueryResult(tErr, reply)
+	tabletserver.AddTabletError(tErr, &reply.Err)
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (sq *SqlQuery) Execute2(ctx context.Context, executeRequest *proto.ExecuteR
 		callerid.GoRPCImmediateCallerID(executeRequest.ImmediateCallerID),
 	)
 	tErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(executeRequest.Target), &executeRequest.QueryRequest, reply)
-	tabletserver.AddTabletErrorToQueryResult(tErr, reply)
+	tabletserver.AddTabletError(tErr, &reply.Err)
 	return nil
 }
 
@@ -169,7 +169,7 @@ func (sq *SqlQuery) StreamExecute2(ctx context.Context, req *proto.StreamExecute
 	}
 	// If there was an app error, send a QueryResult back with it.
 	qr := new(mproto.QueryResult)
-	tabletserver.AddTabletErrorToQueryResult(tErr, qr)
+	tabletserver.AddTabletError(tErr, &qr.Err)
 	return sendReply(qr)
 }
 
@@ -177,7 +177,7 @@ func (sq *SqlQuery) StreamExecute2(ctx context.Context, req *proto.StreamExecute
 func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), nil, queryList, reply)
-	tabletserver.AddTabletErrorToQueryResultList(tErr, reply)
+	tabletserver.AddTabletError(tErr, &reply.Err)
 	return nil
 }
 
@@ -194,7 +194,7 @@ func (sq *SqlQuery) ExecuteBatch2(ctx context.Context, req *proto.ExecuteBatchRe
 		callerid.GoRPCImmediateCallerID(req.ImmediateCallerID),
 	)
 	tErr := sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(req.Target), &req.QueryBatch, reply)
-	tabletserver.AddTabletErrorToQueryResultList(tErr, reply)
+	tabletserver.AddTabletError(tErr, &reply.Err)
 	return nil
 }
 
@@ -206,7 +206,7 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 		callerid.GoRPCImmediateCallerID(req.ImmediateCallerID),
 	)
 	tErr := sq.server.SplitQuery(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(req.Target), req, reply)
-	tabletserver.AddTabletErrorToSplitQueryResult(tErr, reply)
+	tabletserver.AddTabletError(tErr, &reply.Err)
 	return nil
 }
 
