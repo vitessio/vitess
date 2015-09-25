@@ -7,6 +7,7 @@
 $mainBrandColor: #4E5A92;
 $secondBrandColor: #264270;
 $thirdBrandColor: #E8F4FF;
+$activeTocColor: #730073;
 $inverseBrandColor: #FFF;
 
 $linkColor: $mainBrandColor;
@@ -143,7 +144,6 @@ h4.arrow-d, h4.arrow-r {
   cursor: pointer;
 }
 
-// Expandy nav items
 h4.arrow-r::before {
   content: "+ ";
   font-family: monospace;
@@ -514,7 +514,7 @@ table.responsive th:not(:first-child) {
   z-index: 10000;
 
   li.active > a {
-    color: #730073;
+    color: $activeTocColor;
     font-weight: bold;
   }
   @media (min-width: 1200px) {

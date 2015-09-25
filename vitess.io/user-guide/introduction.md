@@ -1,5 +1,5 @@
 ---
-layout: new_docs
+layout: doc
 title: "Vitess User Guide - Introduction"
 description:
 modified:
