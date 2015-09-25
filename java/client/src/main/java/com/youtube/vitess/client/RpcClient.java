@@ -31,70 +31,68 @@ import com.youtube.vitess.proto.Vtgate.StreamExecuteRequest;
 import com.youtube.vitess.proto.Vtgate.StreamExecuteShardsRequest;
 
 import java.io.Closeable;
+import java.sql.SQLException;
 
 /**
  * RpcClient defines a set of methods to communicate with VTGates.
  */
 public interface RpcClient extends Closeable {
   // execute sends a single query using the VTGate V3 API.
-  ExecuteResponse execute(Context ctx, ExecuteRequest request)
-      throws VitessException, VitessRpcException;
+  ExecuteResponse execute(Context ctx, ExecuteRequest request) throws SQLException;
 
   // executeShards sends a single query to a set of shards.
   ExecuteShardsResponse executeShards(Context ctx, ExecuteShardsRequest request)
-      throws VitessException, VitessRpcException;
+      throws SQLException;
 
   // executeKeyspaceIds sends a query with a set of keyspace IDs.
   ExecuteKeyspaceIdsResponse executeKeyspaceIds(Context ctx, ExecuteKeyspaceIdsRequest request)
-      throws VitessException, VitessRpcException;
+      throws SQLException;
 
   // executeKeyRanges sends a query with a set of key ranges.
   ExecuteKeyRangesResponse executeKeyRanges(Context ctx, ExecuteKeyRangesRequest request)
-      throws VitessException, VitessRpcException;
+      throws SQLException;
 
   // executeEntityIds sends a query with a set of entity IDs.
   ExecuteEntityIdsResponse executeEntityIds(Context ctx, ExecuteEntityIdsRequest request)
-      throws VitessException, VitessRpcException;
+      throws SQLException;
 
   // executeBatchShards sends a list of queries to a set of shards.
   ExecuteBatchShardsResponse executeBatchShards(Context ctx, ExecuteBatchShardsRequest request)
-      throws VitessException, VitessRpcException;
+      throws SQLException;
 
   // executeBatchKeyspaceIds sends a list of queries with keyspace ids as bind variables.
   ExecuteBatchKeyspaceIdsResponse executeBatchKeyspaceIds(
-      Context ctx, ExecuteBatchKeyspaceIdsRequest request)
-      throws VitessException, VitessRpcException;
+      Context ctx, ExecuteBatchKeyspaceIdsRequest request) throws SQLException;
 
   // streamExecute starts stream queries with the VTGate V3 API.
   StreamIterator<QueryResult> streamExecute(Context ctx, StreamExecuteRequest request)
-      throws VitessRpcException;
+      throws SQLException;
 
   // streamExecuteShard starts stream queries with multiple shards.
   StreamIterator<QueryResult> streamExecuteShards(Context ctx, StreamExecuteShardsRequest request)
-      throws VitessRpcException;
+      throws SQLException;
 
   // streamExecuteKeyspaceIds starts a list of stream queries with keyspace ids as bind variables.
   StreamIterator<QueryResult> streamExecuteKeyspaceIds(
-      Context ctx, StreamExecuteKeyspaceIdsRequest request) throws VitessRpcException;
+      Context ctx, StreamExecuteKeyspaceIdsRequest request) throws SQLException;
 
   // streamExecuteKeyRanges starts stream query with a set of key ranges.
   StreamIterator<QueryResult> streamExecuteKeyRanges(
-      Context ctx, StreamExecuteKeyRangesRequest request) throws VitessRpcException;
+      Context ctx, StreamExecuteKeyRangesRequest request) throws SQLException;
 
   // begin starts a transaction.
-  BeginResponse begin(Context ctx, BeginRequest request) throws VitessRpcException;
+  BeginResponse begin(Context ctx, BeginRequest request) throws SQLException;
 
   // commit commits a transaction.
-  CommitResponse commit(Context ctx, CommitRequest request) throws VitessRpcException;
+  CommitResponse commit(Context ctx, CommitRequest request) throws SQLException;
 
   // rollback rolls back a pending transaction.
-  RollbackResponse rollback(Context ctx, RollbackRequest request) throws VitessRpcException;
+  RollbackResponse rollback(Context ctx, RollbackRequest request) throws SQLException;
 
   // splitQuery splits a query into smaller queries.
-  SplitQueryResponse splitQuery(Context ctx, SplitQueryRequest request)
-      throws VitessRpcException;
+  SplitQueryResponse splitQuery(Context ctx, SplitQueryRequest request) throws SQLException;
 
   // getSrvKeyspace returns a list of serving keyspaces.
   GetSrvKeyspaceResponse getSrvKeyspace(Context ctx, GetSrvKeyspaceRequest request)
-      throws VitessRpcException;
+      throws SQLException;
 }
