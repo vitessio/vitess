@@ -7,18 +7,13 @@ package tabletserver
 import (
 	"flag"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strconv"
 
-	"github.com/youtube/vitess/go/acl"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
-	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
@@ -178,11 +173,11 @@ type QueryServiceControl interface {
 	// SetServingType transitions the query service to the required serving type.
 	SetServingType(tabletType topodata.TabletType, serving bool) error
 
-	// AllowQueries enables queries.
-	AllowQueries(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
+	// StartService enables queries.
+	StartService(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
 
-	// DisallowQueries shuts down the query service.
-	DisallowQueries()
+	// StopService shuts down the query service.
+	StopService()
 
 	// IsServing returns true if the query service is running
 	IsServing() bool
@@ -192,10 +187,6 @@ type QueryServiceControl interface {
 
 	// ReloadSchema makes the quey service reload its schema cache
 	ReloadSchema()
-
-	//
-	// The following three methods expose the Query Rules
-	//
 
 	// RegisterQueryRuleSource adds a query rule source
 	RegisterQueryRuleSource(ruleSource string)
@@ -214,254 +205,9 @@ type QueryServiceControl interface {
 	BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats)
 }
 
-// TestQueryServiceControl is a fake version of QueryServiceControl
-type TestQueryServiceControl struct {
-	// QueryServiceEnabled is a state variable
-	QueryServiceEnabled bool
-
-	// InitDBConfigError is the return value for InitDBConfig
-	InitDBConfigError error
-
-	// SetServingTypeError is the return value for SetServingType
-	SetServingTypeError error
-
-	// AllowQueriesError is the return value for AllowQueries
-	AllowQueriesError error
-
-	// IsHealthy is the return value for IsHealthy
-	IsHealthyError error
-
-	// ReloadSchemaCount counts how many times ReloadSchema was called
-	ReloadSchemaCount int
-}
-
-// NewTestQueryServiceControl returns an implementation of QueryServiceControl
-// that is entirely fake
-func NewTestQueryServiceControl() *TestQueryServiceControl {
-	return &TestQueryServiceControl{
-		QueryServiceEnabled: false,
-		InitDBConfigError:   nil,
-		AllowQueriesError:   nil,
-		IsHealthyError:      nil,
-		ReloadSchemaCount:   0,
-	}
-}
-
-// Register is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) Register() {
-}
-
-// AddStatusPart is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) AddStatusPart() {
-}
-
-// InitDBConfig is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) InitDBConfig(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error {
-	tqsc.QueryServiceEnabled = tqsc.InitDBConfigError == nil
-	return tqsc.InitDBConfigError
-}
-
-// SetServingType is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) SetServingType(topodata.TabletType, bool) error {
-	tqsc.QueryServiceEnabled = tqsc.SetServingTypeError == nil
-	return tqsc.SetServingTypeError
-}
-
-// AllowQueries is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) AllowQueries(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error {
-	tqsc.QueryServiceEnabled = tqsc.AllowQueriesError == nil
-	return tqsc.AllowQueriesError
-}
-
-// DisallowQueries is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) DisallowQueries() {
-	tqsc.QueryServiceEnabled = false
-}
-
-// IsServing is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) IsServing() bool {
-	return tqsc.QueryServiceEnabled
-}
-
-// IsHealthy is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) IsHealthy() error {
-	return tqsc.IsHealthyError
-}
-
-// ReloadSchema is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) ReloadSchema() {
-	tqsc.ReloadSchemaCount++
-}
-
-// RegisterQueryRuleSource is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) RegisterQueryRuleSource(ruleSource string) {
-}
-
-// UnRegisterQueryRuleSource is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) UnRegisterQueryRuleSource(ruleSource string) {
-}
-
-// SetQueryRules is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) SetQueryRules(ruleSource string, qrs *QueryRules) error {
-	return nil
-}
-
-// QueryService is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) QueryService() queryservice.QueryService {
-	return nil
-}
-
-// BroadcastHealth is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
-}
-
-// realQueryServiceControl implements QueryServiceControl for real
-type realQueryServiceControl struct {
-	tabletServerRPCService *TabletServer
-}
-
 // NewQueryServiceControl returns a real implementation of QueryServiceControl
 func NewQueryServiceControl() QueryServiceControl {
-	return &realQueryServiceControl{
-		tabletServerRPCService: NewTabletServer(qsConfig),
-	}
-}
-
-// registration service for all server protocols
-
-// QueryServiceControlRegisterFunction is a callback type to be called when we
-// Register() a QueryServiceControl
-type QueryServiceControlRegisterFunction func(QueryServiceControl)
-
-// QueryServiceControlRegisterFunctions is an array of all the
-// QueryServiceControlRegisterFunction that will be called upon
-// Register() on a QueryServiceControl
-var QueryServiceControlRegisterFunctions []QueryServiceControlRegisterFunction
-
-// Register is part of the QueryServiceControl interface
-func (rqsc *realQueryServiceControl) Register() {
-	for _, f := range QueryServiceControlRegisterFunctions {
-		f(rqsc)
-	}
-	rqsc.registerDebugHealthHandler()
-	rqsc.registerQueryzHandler()
-	rqsc.registerSchemazHandler()
-	rqsc.registerStreamQueryzHandlers()
-}
-
-// InitDBConfig sets up the db config vars.
-func (rqsc *realQueryServiceControl) InitDBConfig(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
-	return rqsc.tabletServerRPCService.InitDBConfig(target, dbconfigs, schemaOverrides, mysqld)
-}
-
-// SetServingType transitions the serving type to the required state.
-func (rqsc *realQueryServiceControl) SetServingType(tabletType topodata.TabletType, serving bool) error {
-	return rqsc.tabletServerRPCService.SetServingType(tabletType, serving)
-}
-
-// AllowQueries starts the query service.
-func (rqsc *realQueryServiceControl) AllowQueries(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
-	return rqsc.tabletServerRPCService.StartService(target, dbconfigs, schemaOverrides, mysqld)
-}
-
-// DisallowQueries can take a long time to return (not indefinite) because
-// it has to wait for queries & transactions to be completed or killed,
-// and also for house keeping goroutines to be terminated.
-func (rqsc *realQueryServiceControl) DisallowQueries() {
-	defer logError(rqsc.tabletServerRPCService.qe.queryServiceStats)
-	rqsc.tabletServerRPCService.StopService()
-}
-
-// IsServing is part of the QueryServiceControl interface
-func (rqsc *realQueryServiceControl) IsServing() bool {
-	return rqsc.tabletServerRPCService.GetState() == "SERVING"
-}
-
-// Reload the schema. If the query service is not running, nothing will happen
-func (rqsc *realQueryServiceControl) ReloadSchema() {
-	defer logError(rqsc.tabletServerRPCService.qe.queryServiceStats)
-	rqsc.tabletServerRPCService.qe.schemaInfo.triggerReload()
-}
-
-// RegisterQueryRuleSource is part of the QueryServiceControl interface
-func (rqsc *realQueryServiceControl) RegisterQueryRuleSource(ruleSource string) {
-	rqsc.tabletServerRPCService.qe.schemaInfo.queryRuleSources.RegisterQueryRuleSource(ruleSource)
-}
-
-// UnRegisterQueryRuleSource is part of the QueryServiceControl interface
-func (rqsc *realQueryServiceControl) UnRegisterQueryRuleSource(ruleSource string) {
-	rqsc.tabletServerRPCService.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(ruleSource)
-}
-
-// SetQueryRules is the tabletserver level API to write current query rules
-func (rqsc *realQueryServiceControl) SetQueryRules(ruleSource string, qrs *QueryRules) error {
-	err := rqsc.tabletServerRPCService.qe.schemaInfo.queryRuleSources.SetRules(ruleSource, qrs)
-	if err != nil {
-		return err
-	}
-	rqsc.tabletServerRPCService.qe.schemaInfo.ClearQueryPlanCache()
-	return nil
-}
-
-// QueryService is part of the QueryServiceControl interface
-func (rqsc *realQueryServiceControl) QueryService() queryservice.QueryService {
-	return rqsc.tabletServerRPCService
-}
-
-// BroadcastHealth is part of the QueryServiceControl interface
-func (rqsc *realQueryServiceControl) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
-	rqsc.tabletServerRPCService.BroadcastHealth(terTimestamp, stats)
-}
-
-// IsHealthy returns nil if the query service is healthy (able to
-// connect to the database and serving traffic) or an error explaining
-// the unhealthiness otherwise.
-func (rqsc *realQueryServiceControl) IsHealthy() error {
-	return rqsc.tabletServerRPCService.Execute(
-		context.Background(),
-		nil,
-		&proto.Query{
-			Sql:       "select 1 from dual",
-			SessionId: rqsc.tabletServerRPCService.sessionID,
-		},
-		new(mproto.QueryResult),
-	)
-}
-
-func (rqsc *realQueryServiceControl) registerDebugHealthHandler() {
-	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
-		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
-			acl.SendError(w, err)
-			return
-		}
-		w.Header().Set("Content-Type", "text/plain")
-		if err := rqsc.IsHealthy(); err != nil {
-			w.Write([]byte("not ok"))
-			return
-		}
-		w.Write([]byte("ok"))
-	})
-}
-
-func (rqsc *realQueryServiceControl) registerQueryzHandler() {
-	http.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
-		queryzHandler(rqsc.tabletServerRPCService.qe.schemaInfo, w, r)
-	})
-}
-
-func (rqsc *realQueryServiceControl) registerStreamQueryzHandlers() {
-	http.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
-		streamQueryzHandler(rqsc.tabletServerRPCService.qe.streamQList, w, r)
-	})
-	http.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
-		streamQueryzTerminateHandler(rqsc.tabletServerRPCService.qe.streamQList, w, r)
-	})
-}
-
-func (rqsc *realQueryServiceControl) registerSchemazHandler() {
-	http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
-		schemazHandler(rqsc.tabletServerRPCService.qe.schemaInfo.GetSchema(), w, r)
-	})
+	return NewTabletServer(qsConfig)
 }
 
 func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {

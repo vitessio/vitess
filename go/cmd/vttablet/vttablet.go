@@ -116,7 +116,7 @@ func main() {
 		addStatusParts(qsc)
 	})
 	servenv.OnTerm(func() {
-		qsc.DisallowQueries()
+		qsc.StopService()
 		binlog.DisableUpdateStreamService()
 		agent.Stop()
 	})

@@ -87,7 +87,7 @@ func main() {
 	// back up if it went down.
 	go func() {
 		for {
-			_ = qsc.AllowQueries(nil, dbConfigs, schemaOverrides, mysqld)
+			_ = qsc.StartService(nil, dbConfigs, schemaOverrides, mysqld)
 			time.Sleep(30 * time.Second)
 		}
 	}()
@@ -97,7 +97,7 @@ func main() {
 		addStatusParts(qsc)
 	})
 	servenv.OnTerm(func() {
-		qsc.DisallowQueries()
+		qsc.StopService()
 		mysqld.Close()
 	})
 	servenv.RunDefault()

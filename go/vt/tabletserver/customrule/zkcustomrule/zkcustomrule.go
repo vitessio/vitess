@@ -155,6 +155,6 @@ func ActivateZkCustomRules(qsc tabletserver.QueryServiceControl) {
 }
 
 func init() {
-	tabletserver.QueryServiceControlRegisterFunctions = append(tabletserver.QueryServiceControlRegisterFunctions, ActivateZkCustomRules)
+	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, ActivateZkCustomRules)
 	servenv.OnTerm(zkCustomRule.Close)
 }

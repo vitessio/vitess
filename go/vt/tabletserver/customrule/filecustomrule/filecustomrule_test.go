@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/mock"
 )
 
 var customRule1 = `[
@@ -26,7 +27,7 @@ var customRule1 = `[
 			]`
 
 func TestFileCustomRule(t *testing.T) {
-	tqsc := tabletserver.NewTestQueryServiceControl()
+	tqsc := mock.NewTestQueryServiceControl()
 
 	var qrs *tabletserver.QueryRules
 	rulepath := path.Join(os.TempDir(), ".customrule.json")

@@ -244,7 +244,7 @@ func New(server queryservice.QueryService) *SqlQuery {
 }
 
 func init() {
-	tabletserver.QueryServiceControlRegisterFunctions = append(tabletserver.QueryServiceControlRegisterFunctions, func(qsc tabletserver.QueryServiceControl) {
+	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.QueryServiceControl) {
 		servenv.Register("queryservice", New(qsc.QueryService()))
 	})
 }

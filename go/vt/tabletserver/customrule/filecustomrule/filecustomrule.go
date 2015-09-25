@@ -81,5 +81,5 @@ func ActivateFileCustomRules(qsc tabletserver.QueryServiceControl) {
 }
 
 func init() {
-	tabletserver.QueryServiceControlRegisterFunctions = append(tabletserver.QueryServiceControlRegisterFunctions, ActivateFileCustomRules)
+	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, ActivateFileCustomRules)
 }
