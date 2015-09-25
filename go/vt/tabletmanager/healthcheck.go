@@ -202,7 +202,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 		if isQueryServiceRunning {
 			// we are not healthy or should not be running the
 			// query service, shut it down.
-			agent.disallowQueries()
+			agent.stopQueryService()
 		}
 	}
 

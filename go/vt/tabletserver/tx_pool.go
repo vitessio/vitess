@@ -56,6 +56,7 @@ type TxPool struct {
 	ticks             *timer.Timer
 	txStats           *stats.Timings
 	queryServiceStats *QueryServiceStats
+	checker           MySQLChecker
 	// Tracking culprits that cause tx pool full errors.
 	logMu   sync.Mutex
 	lastLog time.Time
@@ -70,7 +71,8 @@ func NewTxPool(
 	poolTimeout time.Duration,
 	idleTimeout time.Duration,
 	enablePublishStats bool,
-	qStats *QueryServiceStats) *TxPool {
+	qStats *QueryServiceStats,
+	checker MySQLChecker) *TxPool {
 
 	txStatsName := ""
 	if enablePublishStats {
@@ -78,13 +80,14 @@ func NewTxPool(
 	}
 
 	axp := &TxPool{
-		pool:              NewConnPool(name, capacity, idleTimeout, enablePublishStats, qStats),
+		pool:              NewConnPool(name, capacity, idleTimeout, enablePublishStats, qStats, checker),
 		activePool:        pools.NewNumbered(),
 		lastID:            sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:           sync2.NewAtomicDuration(timeout),
 		poolTimeout:       sync2.NewAtomicDuration(poolTimeout),
 		ticks:             timer.NewTimer(timeout / 10),
 		txStats:           stats.NewTimings(txStatsName),
+		checker:           checker,
 		queryServiceStats: qStats,
 	}
 	// Careful: pool also exports name+"xxx" vars,
@@ -295,7 +298,7 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 	r, err := txc.DBConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
 		if IsConnErr(err) {
-			go checkMySQL()
+			txc.pool.checker.CheckMySQL()
 			return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 		}
 		return nil, NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)

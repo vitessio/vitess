@@ -73,7 +73,7 @@ func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet, blacklistedTables []s
 		return err
 	}
 
-	return agent.QueryServiceControl.AllowQueries(&pb.Target{
+	return agent.QueryServiceControl.StartService(&pb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
@@ -141,8 +141,8 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blac
 	return nil
 }
 
-func (agent *ActionAgent) disallowQueries() {
-	agent.QueryServiceControl.DisallowQueries()
+func (agent *ActionAgent) stopQueryService() {
+	agent.QueryServiceControl.StopService()
 }
 
 // changeCallback is run after every action that might
@@ -202,12 +202,12 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		// anything to start working until either InitMaster or InitSlave.
 		case agent.initReplication:
 			agent.initReplication = false
-			agent.disallowQueries()
+			agent.stopQueryService()
 
 		// Transitioning from replica to master, so clients that were already
 		// connected don't keep on using the master as replica or rdonly.
 		case newTablet.Type == pbt.TabletType_MASTER && oldTablet.Type != pbt.TabletType_MASTER:
-			agent.disallowQueries()
+			agent.stopQueryService()
 
 		// Having different parameters for the query service.
 		// It needs to stop and restart with the new parameters.
@@ -216,14 +216,14 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		//   - changing the BlacklistedTables list
 		case (newTablet.KeyRange != oldTablet.KeyRange),
 			!reflect.DeepEqual(blacklistedTables, agent.BlacklistedTables()):
-			agent.disallowQueries()
+			agent.stopQueryService()
 		}
 
 		if err := agent.allowQueries(newTablet, blacklistedTables); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
-		agent.disallowQueries()
+		agent.stopQueryService()
 	}
 
 	// save the tabletControl we've been using, so the background

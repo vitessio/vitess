@@ -273,7 +273,7 @@ func newTestTableInfo(cachePool *CachePool, tableType string, comment string, db
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	queryServiceStats := NewQueryServiceStats("", false)
 	connPoolIdleTimeout := 10 * time.Second
-	connPool := NewConnPool("", 2, connPoolIdleTimeout, false, queryServiceStats)
+	connPool := NewConnPool("", 2, connPoolIdleTimeout, false, queryServiceStats, DummyChecker)
 	connPool.Open(&appParams, &dbaParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {

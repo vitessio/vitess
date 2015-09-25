@@ -28,6 +28,7 @@ type ConnPool struct {
 	idleTimeout       time.Duration
 	dbaPool           *dbconnpool.ConnectionPool
 	queryServiceStats *QueryServiceStats
+	checker           MySQLChecker
 }
 
 // NewConnPool creates a new ConnPool. The name is used
@@ -37,12 +38,14 @@ func NewConnPool(
 	capacity int,
 	idleTimeout time.Duration,
 	enablePublishStats bool,
-	queryServiceStats *QueryServiceStats) *ConnPool {
+	queryServiceStats *QueryServiceStats,
+	checker MySQLChecker) *ConnPool {
 	cp := &ConnPool{
 		capacity:          capacity,
 		idleTimeout:       idleTimeout,
 		dbaPool:           dbconnpool.NewConnectionPool("", 1, idleTimeout),
 		queryServiceStats: queryServiceStats,
+		checker:           checker,
 	}
 	if name == "" {
 		return cp

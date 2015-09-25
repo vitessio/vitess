@@ -84,12 +84,12 @@ type queryserviceStatus struct {
 }
 
 // AddStatusPart registers the status part for the status page.
-func (rqsc *realQueryServiceControl) AddStatusPart() {
+func (tsv *TabletServer) AddStatusPart() {
 	servenv.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
 		status := queryserviceStatus{
-			State: rqsc.tabletServerRPCService.GetState(),
+			State: tsv.GetState(),
 		}
-		rates := rqsc.tabletServerRPCService.qe.queryServiceStats.QPSRates.Get()
+		rates := tsv.qe.queryServiceStats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
 

@@ -290,15 +290,15 @@ func TestTabletServerCheckMysql(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !tsv.CheckMySQL() {
-		t.Error("CheckMySQL should return true")
+	if !tsv.isMySQLReachable() {
+		t.Error("isMySQLReachable should return true")
 	}
 	err = tsv.SetServingType(topodata.TabletType_SPARE, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !tsv.CheckMySQL() {
-		t.Error("CheckMySQL should return true")
+	if !tsv.isMySQLReachable() {
+		t.Error("isMySQLReachable should return true")
 	}
 	checkTabletServerState(t, tsv, StateNotServing)
 }
@@ -316,28 +316,8 @@ func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
 	}
 	// make mysql conn fail
 	db.EnableConnFail()
-	if tsv.CheckMySQL() {
-		t.Fatalf("CheckMySQL should return false")
-	}
-}
-
-func TestTabletServerCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
-	db := setUpTabletServerTest()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	// this causes QueryEngine not being initialized properly
-	tsv.setState(StateServing)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	defer tsv.StopService()
-	want := "cannot start tabletserver"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Fatalf("TabletServer.StartService: %v, must contain %s", err, want)
-	}
-	// QueryEngine.CheckMySQL shoudl panic and CheckMySQL should return false
-	if tsv.CheckMySQL() {
-		t.Fatalf("CheckMySQL should return false")
+	if tsv.isMySQLReachable() {
+		t.Fatalf("isMySQLReachable should return false")
 	}
 }
 
@@ -348,10 +328,10 @@ func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
 	config.EnablePublishStats = true
 	tsv := NewTabletServer(config)
 	// TabletServer start request fail because we are in StateNotConnected;
-	// however, CheckMySQL should return true. Here, we always assume
+	// however, isMySQLReachable should return true. Here, we always assume
 	// MySQL is healthy unless we've verified it is not.
-	if !tsv.CheckMySQL() {
-		t.Fatalf("CheckMySQL should return true")
+	if !tsv.isMySQLReachable() {
+		t.Fatalf("isMySQLReachable should return true")
 	}
 	tabletState := expvar.Get(config.StatsPrefix + "TabletState")
 	if tabletState == nil {

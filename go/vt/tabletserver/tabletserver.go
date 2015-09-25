@@ -7,19 +7,23 @@ package tabletserver
 import (
 	"fmt"
 	"math/rand"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
@@ -85,6 +89,10 @@ type TabletServer struct {
 	invalidator *RowcacheInvalidator
 	sessionID   int64
 
+	// checkMySQLThrottler is used to throttle the number of
+	// requests sent to CheckMySQL.
+	checkMySQLThrottler *sync2.Semaphore
+
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
 	streamHealthIndex        int
@@ -92,16 +100,32 @@ type TabletServer struct {
 	lastStreamHealthResponse *pb.StreamHealthResponse
 }
 
+// RegisterFunction is a callback type to be called when we
+// Register() a TabletServer
+type RegisterFunction func(Controller)
+
+// RegisterFunctions is a list of all the
+// RegisterFunction that will be called upon
+// Register() on a TabletServer
+var RegisterFunctions []RegisterFunction
+
+// MySQLChecker defines the CheckMySQL interface that lower
+// level objects can use to call back into TabletServer.
+type MySQLChecker interface {
+	CheckMySQL()
+}
+
 // NewTabletServer creates an instance of TabletServer. Only one instance
 // of TabletServer can be created per process.
 func NewTabletServer(config Config) *TabletServer {
 	tsv := &TabletServer{
-		config:          config,
-		streamHealthMap: make(map[int]chan<- *pb.StreamHealthResponse),
-		sessionID:       Rand(),
+		config:              config,
+		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
+		streamHealthMap:     make(map[int]chan<- *pb.StreamHealthResponse),
+		sessionID:           Rand(),
 	}
-	tsv.qe = NewQueryEngine(config)
-	tsv.invalidator = NewRowcacheInvalidator(config.StatsPrefix, tsv.qe, config.EnablePublishStats)
+	tsv.qe = NewQueryEngine(tsv, config)
+	tsv.invalidator = NewRowcacheInvalidator(config.StatsPrefix, tsv, tsv.qe, config.EnablePublishStats)
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
 			tsv.mu.Lock()
@@ -112,6 +136,38 @@ func NewTabletServer(config Config) *TabletServer {
 		stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(tsv.GetState))
 	}
 	return tsv
+}
+
+// Register prepares TabletServer for serving by calling
+// all the registrations functions.
+func (tsv *TabletServer) Register() {
+	for _, f := range RegisterFunctions {
+		f(tsv)
+	}
+	tsv.registerDebugHealthHandler()
+	tsv.registerQueryzHandler()
+	tsv.registerSchemazHandler()
+	tsv.registerStreamQueryzHandlers()
+}
+
+// RegisterQueryRuleSource registers ruleSource for setting query rules.
+func (tsv *TabletServer) RegisterQueryRuleSource(ruleSource string) {
+	tsv.qe.schemaInfo.queryRuleSources.RegisterQueryRuleSource(ruleSource)
+}
+
+// UnRegisterQueryRuleSource unregisters ruleSource from query rules.
+func (tsv *TabletServer) UnRegisterQueryRuleSource(ruleSource string) {
+	tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(ruleSource)
+}
+
+// SetQueryRules sets the query rules for a registered ruleSource.
+func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *QueryRules) error {
+	err := tsv.qe.schemaInfo.queryRuleSources.SetRules(ruleSource, qrs)
+	if err != nil {
+		return err
+	}
+	tsv.qe.schemaInfo.ClearQueryPlanCache()
+	return nil
 }
 
 // GetState returns the name of the current TabletServer state.
@@ -127,6 +183,11 @@ func (tsv *TabletServer) GetState() string {
 func (tsv *TabletServer) setState(state int64) {
 	log.Infof("TabletServer state: %v -> %v", stateName[tsv.state], stateName[state])
 	tsv.state = state
+}
+
+// IsServing returns true if TabletServer is in SERVING state.
+func (tsv *TabletServer) IsServing() bool {
+	return tsv.GetState() == "SERVING"
 }
 
 // InitDBConfig inititalizes the db config variables for TabletServer. You must call this function before
@@ -304,6 +365,7 @@ func (tsv *TabletServer) gracefulStop() {
 // down the rest of the services nad transitions to StateNotConnected.
 func (tsv *TabletServer) StopService() {
 	defer close(tsv.setTimeBomb())
+	defer logError(tsv.qe.queryServiceStats)
 
 	tsv.mu.Lock()
 	if tsv.state != StateServing && tsv.state != StateNotServing {
@@ -349,10 +411,46 @@ func (tsv *TabletServer) setTimeBomb() chan struct{} {
 	return done
 }
 
-// CheckMySQL returns true if we can connect to MySQL.
+// IsHealthy returns nil if the query service is healthy (able to
+// connect to the database and serving traffic) or an error explaining
+// the unhealthiness otherwise.
+func (tsv *TabletServer) IsHealthy() error {
+	return tsv.Execute(
+		context.Background(),
+		nil,
+		&proto.Query{
+			Sql:       "select 1 from dual",
+			SessionId: tsv.sessionID,
+		},
+		new(mproto.QueryResult),
+	)
+}
+
+// CheckMySQL initiates a check to see if MySQL is reachable.
+// If not, it shuts down the query service. The check is rate-limited
+// to no more than once per second.
+func (tsv *TabletServer) CheckMySQL() {
+	if !tsv.checkMySQLThrottler.TryAcquire() {
+		return
+	}
+	go func() {
+		defer func() {
+			logError(tsv.qe.queryServiceStats)
+			time.Sleep(1 * time.Second)
+			tsv.checkMySQLThrottler.Release()
+		}()
+		if tsv.isMySQLReachable() {
+			return
+		}
+		log.Info("Check MySQL failed. Shutting down query service")
+		tsv.StopService()
+	}()
+}
+
+// isMySQLReachable returns true if we can connect to MySQL.
 // The function returns false only if the query service is
 // in StateServing or StateNotServing.
-func (tsv *TabletServer) CheckMySQL() bool {
+func (tsv *TabletServer) isMySQLReachable() bool {
 	tsv.mu.Lock()
 	switch tsv.state {
 	case StateServing:
@@ -374,13 +472,19 @@ func (tsv *TabletServer) CheckMySQL() bool {
 		return true
 	}
 	tsv.mu.Unlock()
+	return tsv.qe.IsMySQLReachable()
+}
 
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("Checking MySQL, unexpected error: %v", x)
-		}
-	}()
-	return tsv.qe.CheckMySQL()
+// ReloadSchema reloads the schema.
+// If the query service is not running, it's a no-op.
+func (tsv *TabletServer) ReloadSchema() {
+	defer logError(tsv.qe.queryServiceStats)
+	tsv.qe.schemaInfo.triggerReload()
+}
+
+// QueryService returns the QueryService part of TabletServer.
+func (tsv *TabletServer) QueryService() queryservice.QueryService {
+	return tsv
 }
 
 // GetSessionId returns a sessionInfo response if the state is StateServing.
@@ -792,6 +896,42 @@ ok:
 // endRequest unregisters the current request (a waitgroup) as done.
 func (tsv *TabletServer) endRequest() {
 	tsv.requests.Done()
+}
+
+func (tsv *TabletServer) registerDebugHealthHandler() {
+	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
+			acl.SendError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		if err := tsv.IsHealthy(); err != nil {
+			w.Write([]byte("not ok"))
+			return
+		}
+		w.Write([]byte("ok"))
+	})
+}
+
+func (tsv *TabletServer) registerQueryzHandler() {
+	http.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
+		queryzHandler(tsv.qe.schemaInfo, w, r)
+	})
+}
+
+func (tsv *TabletServer) registerStreamQueryzHandlers() {
+	http.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
+		streamQueryzHandler(tsv.qe.streamQList, w, r)
+	})
+	http.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
+		streamQueryzTerminateHandler(tsv.qe.streamQList, w, r)
+	})
+}
+
+func (tsv *TabletServer) registerSchemazHandler() {
+	http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
+		schemazHandler(tsv.qe.schemaInfo.GetSchema(), w, r)
+	})
 }
 
 func init() {

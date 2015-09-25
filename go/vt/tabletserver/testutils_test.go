@@ -19,6 +19,13 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 )
 
+type dummyChecker struct {
+}
+
+func (dummyChecker) CheckMySQL() {}
+
+var DummyChecker = dummyChecker{}
+
 type fakeCallInfo struct {
 	remoteAddr string
 	username   string
@@ -136,6 +143,7 @@ func (util *testUtils) newConnPool() *ConnPool {
 		10*time.Second,
 		false,
 		NewQueryServiceStats("", false),
+		DummyChecker,
 	)
 }
 
@@ -149,6 +157,7 @@ func newTestSchemaInfo(
 	queryServiceStats := NewQueryServiceStats(name, enablePublishStats)
 	return NewSchemaInfo(
 		name,
+		DummyChecker,
 		queryCacheSize,
 		reloadTime,
 		idleTimeout,

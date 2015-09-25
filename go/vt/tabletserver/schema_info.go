@@ -119,6 +119,7 @@ type SchemaInfo struct {
 // NewSchemaInfo creates a new SchemaInfo.
 func NewSchemaInfo(
 	statsPrefix string,
+	checker MySQLChecker,
 	queryCacheSize int,
 	reloadTime time.Duration,
 	idleTimeout time.Duration,
@@ -128,7 +129,7 @@ func NewSchemaInfo(
 	queryServiceStats *QueryServiceStats) *SchemaInfo {
 	si := &SchemaInfo{
 		queries:           cache.NewLRUCache(int64(queryCacheSize)),
-		connPool:          NewConnPool("", 2, idleTimeout, enablePublishStats, queryServiceStats),
+		connPool:          NewConnPool("", 2, idleTimeout, enablePublishStats, queryServiceStats, checker),
 		cachePool:         cachePool,
 		ticks:             timer.NewTimer(reloadTime),
 		endpoints:         endpoints,

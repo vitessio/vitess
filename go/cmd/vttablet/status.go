@@ -169,7 +169,7 @@ func healthHTMLName() template.HTML {
 // For use by plugins which wish to avoid racing when registering status page parts.
 var onStatusRegistered func()
 
-func addStatusParts(qsc tabletserver.QueryServiceControl) {
+func addStatusParts(qsc tabletserver.Controller) {
 	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
 		return map[string]interface{}{
 			"Tablet":              agent.Tablet(),

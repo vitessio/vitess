@@ -69,10 +69,6 @@ func TestMySQL(t *testing.T) {
 			return
 		}
 	}()
-	if hdl.Data == nil {
-		t.Error("map is nil")
-		return
-	}
 	params, err := hdl.MySQLConnParams()
 	if err != nil {
 		t.Error(err)

@@ -287,5 +287,6 @@ func newTxPool(enablePublishStats bool) *TxPool {
 		idleTimeout,
 		enablePublishStats,
 		queryServiceStats,
+		DummyChecker,
 	)
 }

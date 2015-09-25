@@ -110,7 +110,7 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(config Config) *QueryEngine {
+func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 	qe := &QueryEngine{enableAutoCommit: config.EnableAutoCommit}
 	qe.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
 
@@ -124,6 +124,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	)
 	qe.schemaInfo = NewSchemaInfo(
 		config.StatsPrefix,
+		checker,
 		config.QueryCacheSize,
 		time.Duration(config.SchemaReloadTime*1e9),
 		time.Duration(config.IdleTimeout*1e9),
@@ -144,6 +145,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
 		qe.queryServiceStats,
+		checker,
 	)
 	qe.streamConnPool = NewConnPool(
 		config.PoolNamePrefix+"StreamConnPool",
@@ -151,6 +153,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
 		qe.queryServiceStats,
+		checker,
 	)
 
 	qe.txPool = NewTxPool(
@@ -162,6 +165,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
 		qe.queryServiceStats,
+		checker,
 	)
 	qe.consolidator = sync2.NewConsolidator()
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
@@ -261,8 +265,8 @@ func (qe *QueryEngine) Launch(f func()) {
 	}()
 }
 
-// CheckMySQL returns true if we can connect to MySQL.
-func (qe *QueryEngine) CheckMySQL() bool {
+// IsMySQLReachable returns true if we can connect to MySQL.
+func (qe *QueryEngine) IsMySQLReachable() bool {
 	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnParams, qe.queryServiceStats.MySQLStats)
 	if err != nil {
 		if IsConnErr(err) {
