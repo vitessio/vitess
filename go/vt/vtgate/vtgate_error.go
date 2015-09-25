@@ -8,7 +8,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // A list of all vtrpc.ErrorCodes, ordered by priority. These priorities are
@@ -72,58 +71,12 @@ func aggregateVtGateErrors(errors []error) error {
 	)
 }
 
-// AddVtGateErrorToQueryResult will mutate a QueryResult struct to fill in the Err
-// field with details from the VTGate error.
-func AddVtGateErrorToQueryResult(err error, reply *proto.QueryResult) {
+// AddVtGateError will update a mproto.RPCError with details from a VTGate error.
+func AddVtGateError(err error, replyErr **mproto.RPCError) {
 	if err == nil {
 		return
 	}
-	reply.Err = vterrors.RPCErrFromVtError(err)
-}
-
-// AddVtGateErrorToQueryResultList will mutate a QueryResultList struct to fill in the Err
-// field with details from the VTGate error.
-func AddVtGateErrorToQueryResultList(err error, reply *proto.QueryResultList) {
-	if err == nil {
-		return
-	}
-	reply.Err = vterrors.RPCErrFromVtError(err)
-}
-
-// AddVtGateErrorToSplitQueryResult will mutate a SplitQueryResult struct to fill in the Err
-// field with details from the VTGate error.
-func AddVtGateErrorToSplitQueryResult(err error, reply *proto.SplitQueryResult) {
-	if err == nil {
-		return
-	}
-	reply.Err = vterrors.RPCErrFromVtError(err)
-}
-
-// AddVtGateErrorToBeginResponse will mutate a BeginResponse struct to fill in the Err
-// field with details from the VTGate error.
-func AddVtGateErrorToBeginResponse(err error, reply *proto.BeginResponse) {
-	if err == nil {
-		return
-	}
-	reply.Err = vterrors.RPCErrFromVtError(err)
-}
-
-// AddVtGateErrorToCommitResponse will mutate a CommitResponse struct to fill in the Err
-// field with details from the VTGate error.
-func AddVtGateErrorToCommitResponse(err error, reply *proto.CommitResponse) {
-	if err == nil {
-		return
-	}
-	reply.Err = vterrors.RPCErrFromVtError(err)
-}
-
-// AddVtGateErrorToRollbackResponse will mutate a RollbackResponse struct to fill in the Err
-// field with details from the VTGate error.
-func AddVtGateErrorToRollbackResponse(err error, reply *proto.RollbackResponse) {
-	if err == nil {
-		return
-	}
-	reply.Err = vterrors.RPCErrFromVtError(err)
+	*replyErr = vterrors.RPCErrFromVtError(err)
 }
 
 // RPCErrorToVtRPCError converts a VTGate error into a vtrpc error.
