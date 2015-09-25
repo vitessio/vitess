@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package mock provides mock interfaces for tabletserver.
-package mock
+// Package tabletservermock provides mock interfaces for tabletserver.
+package tabletservermock
 
 import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 )
 
-// Controller is a fake version of tabletserver.Controller
+// Controller is a mock tabletserver.Controller
 type Controller struct {
 	// QueryServiceEnabled is a state variable
 	QueryServiceEnabled bool
@@ -35,8 +35,7 @@ type Controller struct {
 	ReloadSchemaCount int
 }
 
-// NewController returns an implementation of tabletserver.Controller
-// that is entirely fake
+// NewController returns a mock of tabletserver.Controller
 func NewController() *Controller {
 	return &Controller{
 		QueryServiceEnabled: false,

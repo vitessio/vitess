@@ -10,7 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletserver/mock"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
@@ -200,7 +200,7 @@ func TestQueryServiceNotStarting(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t)
 	targetTabletType := pb.TabletType_REPLICA
-	agent.QueryServiceControl.(*mock.Controller).StartServiceError = fmt.Errorf("test cannot start query service")
+	agent.QueryServiceControl.(*tabletservermock.Controller).StartServiceError = fmt.Errorf("test cannot start query service")
 
 	before := time.Now()
 	agent.runHealthCheck(targetTabletType)
@@ -245,7 +245,7 @@ func TestQueryServiceStopped(t *testing.T) {
 
 	// shut down query service and prevent it from starting again
 	agent.QueryServiceControl.StopService()
-	agent.QueryServiceControl.(*mock.Controller).StartServiceError = fmt.Errorf("test cannot start query service")
+	agent.QueryServiceControl.(*tabletservermock.Controller).StartServiceError = fmt.Errorf("test cannot start query service")
 
 	// health check should now fail
 	before = time.Now()

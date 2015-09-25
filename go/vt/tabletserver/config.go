@@ -58,6 +58,12 @@ func init() {
 	flag.BoolVar(&qsConfig.EnableAutoCommit, "enable-autocommit", DefaultQsConfig.EnableAutoCommit, "if the flag is on, a DML outsides a transaction will be auto committed.")
 }
 
+// Init must be called after flag.Parse, and before doing any other operations.
+func Init() {
+	StatsLogger.ServeLogs(*queryLogHandler, buildFmter(StatsLogger))
+	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
+}
+
 // RowCacheConfig encapsulates the configuration for RowCache
 type RowCacheConfig struct {
 	Binary      string
@@ -158,8 +164,26 @@ var DefaultQsConfig = Config{
 
 var qsConfig Config
 
-// Controller is the interface implemented by the controller
-// for the query service.
+func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
+	type formatter interface {
+		Format(url.Values) string
+	}
+
+	return func(params url.Values, val interface{}) string {
+		fmter, ok := val.(formatter)
+		if !ok {
+			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name())
+		}
+		return fmter.Format(params)
+	}
+}
+
+// NewServer creates a new TabletServer based on the command line flags.
+func NewServer() *TabletServer {
+	return NewTabletServer(qsConfig)
+}
+
+// Controller defines the control interface for TabletServer.
 type Controller interface {
 	// Register registers this query service with the RPC layer.
 	Register()
@@ -206,28 +230,3 @@ type Controller interface {
 
 // Ensure TabletServer satisfies Controller interface.
 var _ Controller = (*TabletServer)(nil)
-
-// NewServer creates a new TabletServer based on the command line flags.
-func NewServer() *TabletServer {
-	return NewTabletServer(qsConfig)
-}
-
-func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
-	type formatter interface {
-		Format(url.Values) string
-	}
-
-	return func(params url.Values, val interface{}) string {
-		fmter, ok := val.(formatter)
-		if !ok {
-			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name())
-		}
-		return fmter.Format(params)
-	}
-}
-
-// Init must be called after flag.Parse, and before doing any other operations.
-func Init() {
-	StatsLogger.ServeLogs(*queryLogHandler, buildFmter(StatsLogger))
-	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
-}

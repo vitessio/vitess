@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/mock"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
 	"launchpad.net/gozk/zookeeper"
@@ -48,7 +48,7 @@ func setUpFakeZk(t *testing.T) {
 }
 
 func TestZkCustomRule(t *testing.T) {
-	tqsc := mock.NewController()
+	tqsc := tabletservermock.NewController()
 
 	setUpFakeZk(t)
 	zkcr := NewZkCustomRule(conn)
