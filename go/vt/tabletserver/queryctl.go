@@ -158,9 +158,9 @@ var DefaultQsConfig = Config{
 
 var qsConfig Config
 
-// QueryServiceControl is the interface implemented by the controller
+// Controller is the interface implemented by the controller
 // for the query service.
-type QueryServiceControl interface {
+type Controller interface {
 	// Register registers this query service with the RPC layer.
 	Register()
 
@@ -197,16 +197,18 @@ type QueryServiceControl interface {
 	// SetQueryRules sets the query rules for this QueryService
 	SetQueryRules(ruleSource string, qrs *QueryRules) error
 
-	// QueryService returns the QueryService object used by this
-	// QueryServiceControl
+	// QueryService returns the QueryService object used by this Controller
 	QueryService() queryservice.QueryService
 
 	// BroadcastHealth sends the current health to all listeners
 	BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats)
 }
 
-// NewQueryServiceControl returns a real implementation of QueryServiceControl
-func NewQueryServiceControl() QueryServiceControl {
+// Ensure TabletServer satisfies Controller interface.
+var _ Controller = (*TabletServer)(nil)
+
+// NewServer creates a new TabletServer based on the command line flags.
+func NewServer() *TabletServer {
 	return NewTabletServer(qsConfig)
 }
 
@@ -224,10 +226,8 @@ func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) st
 	}
 }
 
-// InitQueryService registers the query service, after loading any
-// necessary config files. It also starts any relevant streaming logs.
-func InitQueryService(qsc QueryServiceControl) {
+// Init must be called after flag.Parse, and before doing any other operations.
+func Init() {
 	StatsLogger.ServeLogs(*queryLogHandler, buildFmter(StatsLogger))
 	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
-	qsc.Register()
 }

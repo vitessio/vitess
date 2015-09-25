@@ -51,7 +51,7 @@ func NewZkCustomRule(zkconn zk.Conn) *ZkCustomRule {
 }
 
 // Open Registers Zookeeper watch, gets inital QueryRules and starts polling routine
-func (zkcr *ZkCustomRule) Open(qsc tabletserver.QueryServiceControl, rulePath string) (err error) {
+func (zkcr *ZkCustomRule) Open(qsc tabletserver.Controller, rulePath string) (err error) {
 	zkcr.path = rulePath
 	err = zkcr.refreshWatch()
 	if err != nil {
@@ -79,7 +79,7 @@ func (zkcr *ZkCustomRule) refreshWatch() error {
 
 // refreshData gets query rules from Zookeeper and refresh internal QueryRules cache
 // this function will also call TabletServer.SetQueryRules to propagate rule changes to query service
-func (zkcr *ZkCustomRule) refreshData(qsc tabletserver.QueryServiceControl, nodeRemoval bool) error {
+func (zkcr *ZkCustomRule) refreshData(qsc tabletserver.Controller, nodeRemoval bool) error {
 	data, stat, err := zkcr.zconn.Get(zkcr.path)
 	zkcr.mu.Lock()
 	defer zkcr.mu.Unlock()
@@ -108,7 +108,7 @@ const sleepDuringZkFailure time.Duration = 30
 
 // poll polls the Zookeeper watch channel for data changes and refresh watch channel if watch channel is closed
 // by Zookeeper Go library on error conditions such as connection reset
-func (zkcr *ZkCustomRule) poll(qsc tabletserver.QueryServiceControl) {
+func (zkcr *ZkCustomRule) poll(qsc tabletserver.Controller) {
 	for {
 		select {
 		case <-zkcr.finish:
@@ -147,7 +147,7 @@ func (zkcr *ZkCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int6
 }
 
 // ActivateZkCustomRules activates zookeeper dynamic custom rule mechanism
-func ActivateZkCustomRules(qsc tabletserver.QueryServiceControl) {
+func ActivateZkCustomRules(qsc tabletserver.Controller) {
 	if *zkRulePath != "" {
 		qsc.RegisterQueryRuleSource(ZkCustomRuleSource)
 		zkCustomRule.Open(qsc, *zkRulePath)

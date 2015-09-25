@@ -58,7 +58,7 @@ var (
 // ActionAgent is the main class for the agent.
 type ActionAgent struct {
 	// The following fields are set during creation
-	QueryServiceControl tabletserver.QueryServiceControl
+	QueryServiceControl tabletserver.Controller
 	HealthReporter      health.Reporter
 	TopoServer          topo.Server
 	TabletAlias         *pb.TabletAlias
@@ -136,7 +136,7 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 func NewActionAgent(
 	batchCtx context.Context,
 	mysqld mysqlctl.MysqlDaemon,
-	queryServiceControl tabletserver.QueryServiceControl,
+	queryServiceControl tabletserver.Controller,
 	tabletAlias *pb.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
@@ -224,7 +224,7 @@ func NewActionAgent(
 // subset of features are supported now, but we'll add more over time.
 func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
 	agent := &ActionAgent{
-		QueryServiceControl: mock.NewTestQueryServiceControl(),
+		QueryServiceControl: mock.NewController(),
 		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
@@ -246,7 +246,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *p
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.QueryServiceControl, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		HealthReporter:      health.DefaultAggregator,

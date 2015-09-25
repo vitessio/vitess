@@ -209,7 +209,7 @@ func (q *query) StreamHealth(request *pb.StreamHealthRequest, stream pbs.Query_S
 }
 
 func init() {
-	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.QueryServiceControl) {
+	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
 		if servenv.GRPCCheckServiceMap("queryservice") {
 			pbs.RegisterQueryServer(servenv.GRPCServer, &query{qsc.QueryService()})
 		}

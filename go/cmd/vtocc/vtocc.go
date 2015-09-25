@@ -47,6 +47,7 @@ func main() {
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
+	tabletserver.Init()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
 		log.Errorf("vtocc doesn't take any positional arguments")
@@ -79,8 +80,8 @@ func main() {
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 		tableacl.Init(*tableAclConfig)
 	}
-	qsc := tabletserver.NewQueryServiceControl()
-	tabletserver.InitQueryService(qsc)
+	qsc := tabletserver.NewServer()
+	qsc.Register()
 
 	// Query service can go into NOT_SERVING state if mysql goes down.
 	// So, continuously retry starting the service. So, it tries to come

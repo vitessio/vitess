@@ -48,7 +48,7 @@ func setUpFakeZk(t *testing.T) {
 }
 
 func TestZkCustomRule(t *testing.T) {
-	tqsc := mock.NewTestQueryServiceControl()
+	tqsc := mock.NewController()
 
 	setUpFakeZk(t)
 	zkcr := NewZkCustomRule(conn)

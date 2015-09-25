@@ -102,7 +102,7 @@ type TabletServer struct {
 
 // RegisterFunction is a callback type to be called when we
 // Register() a TabletServer
-type RegisterFunction func(QueryServiceControl)
+type RegisterFunction func(Controller)
 
 // RegisterFunctions is a list of all the
 // RegisterFunction that will be called upon
@@ -185,7 +185,7 @@ func (tsv *TabletServer) setState(state int64) {
 	tsv.state = state
 }
 
-// IsServing is part of the QueryServiceControl interface
+// IsServing returns true if TabletServer is in SERVING state.
 func (tsv *TabletServer) IsServing() bool {
 	return tsv.GetState() == "SERVING"
 }

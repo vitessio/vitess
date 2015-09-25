@@ -41,7 +41,7 @@ func NewFileCustomRule() (fcr *FileCustomRule) {
 }
 
 // Open try to build query rules from local file and push the rules to vttablet
-func (fcr *FileCustomRule) Open(qsc tabletserver.QueryServiceControl, rulePath string) error {
+func (fcr *FileCustomRule) Open(qsc tabletserver.Controller, rulePath string) error {
 	fcr.path = rulePath
 	if fcr.path == "" {
 		// Don't go further if path is empty
@@ -73,7 +73,7 @@ func (fcr *FileCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int
 }
 
 // ActivateFileCustomRules activates this static file based custom rule mechanism
-func ActivateFileCustomRules(qsc tabletserver.QueryServiceControl) {
+func ActivateFileCustomRules(qsc tabletserver.Controller) {
 	if *fileRulePath != "" {
 		qsc.RegisterQueryRuleSource(FileCustomRuleSource)
 		fileCustomRule.Open(qsc, *fileRulePath)

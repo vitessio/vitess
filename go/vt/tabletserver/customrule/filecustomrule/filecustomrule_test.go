@@ -27,7 +27,7 @@ var customRule1 = `[
 			]`
 
 func TestFileCustomRule(t *testing.T) {
-	tqsc := mock.NewTestQueryServiceControl()
+	tqsc := mock.NewController()
 
 	var qrs *tabletserver.QueryRules
 	rulepath := path.Join(os.TempDir(), ".customrule.json")

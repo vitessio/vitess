@@ -71,7 +71,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*mock.TestQueryServiceControl).QueryServiceEnabled = true
+	oldMaster.Agent.QueryServiceControl.(*mock.Controller).QueryServiceEnabled = true
 
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
@@ -127,7 +127,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	if !goodSlave2.FakeMysqlDaemon.ReadOnly {
 		t.Errorf("goodSlave2.FakeMysqlDaemon.ReadOnly not set")
 	}
-	if oldMaster.Agent.QueryServiceControl.(*mock.TestQueryServiceControl).QueryServiceEnabled {
+	if oldMaster.Agent.QueryServiceControl.(*mock.Controller).QueryServiceEnabled {
 		t.Errorf("oldMaster...QueryServiceEnabled set")
 	}
 

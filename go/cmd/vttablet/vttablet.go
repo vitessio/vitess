@@ -52,6 +52,7 @@ func main() {
 	dbconfigs.RegisterFlags(flags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
+	tabletserver.Init()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
 		log.Errorf("vttablet doesn't take any positional arguments")
@@ -91,8 +92,8 @@ func main() {
 	}
 
 	// creates and registers the query service
-	qsc := tabletserver.NewQueryServiceControl()
-	tabletserver.InitQueryService(qsc)
+	qsc := tabletserver.NewServer()
+	qsc.Register()
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Create mysqld and register the health reporter (needs to be done
