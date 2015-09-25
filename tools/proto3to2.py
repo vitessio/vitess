@@ -7,8 +7,6 @@ import string
 syntax = re.compile(r'^\s*syntax\s*=\s*"proto3";')
 missing_optional = re.compile(r'^(\s+)(\S+)(\s+\S+\s*=\s*\S+;)')
 map_type = re.compile(r'^(\s*)map\s*<(\S+),\s*(\S+)>\s+(\S+)\s*=\s*(\S+);')
-rpc_arg_name = re.compile(
-    r'^(\s*)rpc\s+(.+?)\s*returns\s*\((\S+)\s+(\S+)\)(.*)$')
 
 for line in sys.stdin:
   # syntax = "proto3";
@@ -34,12 +32,5 @@ for line in sys.stdin:
     if type != 'option':
       print indent + 'optional %s%s' % (type, rest)
       continue
-
-  # rpc ... returns (name type) {};
-  m = rpc_arg_name.match(line)
-  if m:
-    (indent, method, arg, type, rest) = m.groups()
-    print indent + 'rpc %s returns (%s)' % (method, type) + rest
-    continue
 
   print line,

@@ -6,7 +6,7 @@
 # Dependencies:
 #   - PHP 5.3+
 #   - PEAR
-#   - protoc-gen-php: https://github.com/drslump/Protobuf-PHP#installation
+#   - protoc-gen-php: http://www.grpc.io/docs/installation/php.html
 
 set -e
 
