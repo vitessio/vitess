@@ -1,5 +1,5 @@
 ---
-layout: new_docs
+layout: doc
 title: "Presentations and Videos"
 description: Slides and videos from presentations about Vitess.
 modified:

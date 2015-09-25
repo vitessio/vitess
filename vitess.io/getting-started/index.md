@@ -1,5 +1,5 @@
 ---
-layout: new_docs
+layout: doc
 title: "Running Vitess on Kubernetes"
 description: Vitess runs best in a containerized environment like Kubernetes,
              which manages a cluster of Linux containers as a single system.

@@ -29,7 +29,6 @@ $(document).ready(function() {
   $('a').filter(function() {
     return this.href == url;
   }).parent('li').addClass('active-item');
-  //$('#left-nav').fixLeftNav();
 
   $('#sidebar').affix({
     offset: {
@@ -171,17 +170,5 @@ $.getScript("/js/jquery.collapsible.js", function() {
 
     render[settings.showEffect]();
   };
-  $.fn.fixLeftNav = function() {
-    console.log('doing this');
-    if ($(window).width() > 500) {
-      $('#left-nav').css('position', 'fixed');
-      console.log('doing this fixed');
-    } else {
-      $('#left-nav').css('position', 'static');
-      console.log('doing this static');
-    }
-  };
-
-
 
 })(jQuery);
