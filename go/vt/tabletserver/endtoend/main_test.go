@@ -179,7 +179,7 @@ func TestMain(m *testing.M) {
 		}
 
 		tsConfig = tabletserver.DefaultQsConfig
-		tsConfig.RowCache.Binary = "memcached"
+		tsConfig.RowCache.Binary = vttest.MemcachedPath()
 		tsConfig.RowCache.Socket = path.Join(os.TempDir(), "memcache.sock")
 
 		mysqld := mysqlctl.NewMysqld(
