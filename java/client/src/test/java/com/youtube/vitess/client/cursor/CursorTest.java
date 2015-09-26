@@ -10,12 +10,15 @@ import com.youtube.vitess.proto.Query.Row;
 import org.joda.time.DateTime;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.List;
 
+@RunWith(JUnit4.class)
 public class CursorTest {
   @Test
   public void testFindColumn() throws Exception {

@@ -6,6 +6,8 @@ import com.youtube.vitess.client.RpcClientTest;
 import org.joda.time.Duration;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -14,6 +16,7 @@ import java.util.Arrays;
 /**
  * This tests GrpcClient with a mock vtgate server (go/cmd/vtgateclienttest).
  */
+@RunWith(JUnit4.class)
 public class GrpcClientTest extends RpcClientTest {
   private static Process vtgateclienttest;
   private static int port;
