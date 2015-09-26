@@ -2,13 +2,13 @@ kind: ReplicationController
 apiVersion: v1
 metadata:
   name: vtgate
-  labels: {name: vtgate}
 spec:
   replicas: {{replicas}}
-  selector: {name: vtgate}
   template:
     metadata:
-      labels: {name: vtgate}
+      labels:
+        component: vtgate
+        app: vitess
     spec:
       containers:
         - name: vtgate
@@ -18,6 +18,10 @@ spec:
               mountPath: /dev/log
             - name: vtdataroot
               mountPath: /vt/vtdataroot
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
           command:
             - sh
             - "-c"

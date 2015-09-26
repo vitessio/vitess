@@ -7,8 +7,8 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-echo "Deleting vtctld pod..."
-$KUBECTL delete pod vtctld
+echo "Stopping vtctld replicationcontroller..."
+$KUBECTL stop replicationcontroller vtctld
 
 echo "Deleting vtctld service..."
 $KUBECTL delete service vtctld

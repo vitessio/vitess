@@ -2,10 +2,15 @@ kind: Service
 apiVersion: v1
 metadata:
   name: guestbook
+  labels:
+    component: frontend
+    app: guestbook
 spec:
   ports:
     - port: 80
       targetPort: http-server
-  selector: {name: guestbook}
+  selector:
+    component: frontend
+    app: guestbook
   type: LoadBalancer
 

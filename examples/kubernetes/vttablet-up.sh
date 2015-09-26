@@ -21,7 +21,7 @@ RDONLY_COUNT=${RDONLY_COUNT:-2}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
-  vtdataroot_volume="hostDir: {path: ${VTDATAROOT_VOLUME}}"
+  vtdataroot_volume="hostPath: {path: ${VTDATAROOT_VOLUME}}"
 fi
 
 uid_base=$UID_BASE
