@@ -14,7 +14,7 @@ import (
 )
 
 func TestCharaterSet(t *testing.T) {
-	qr, err := newQueryClient().Execute("select * from vtocc_test limit 2", nil)
+	qr, err := newClient(defaultServer).Execute("select * from vtocc_test where intval=1", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -39,19 +39,13 @@ func TestCharaterSet(t *testing.T) {
 				Flags: mysql.FlagBinary,
 			},
 		},
-		RowsAffected: 2,
+		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
 				sqltypes.Value{Inner: sqltypes.Numeric("1")},
 				sqltypes.Value{Inner: sqltypes.Fractional("1.12345")},
 				sqltypes.Value{Inner: sqltypes.String("\xc2\xa2")},
 				sqltypes.Value{Inner: sqltypes.String("\x00\xff")},
-			},
-			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("2")},
-				sqltypes.Value{},
-				sqltypes.Value{Inner: sqltypes.String("")},
-				sqltypes.Value{},
 			},
 		},
 	}
@@ -61,7 +55,7 @@ func TestCharaterSet(t *testing.T) {
 }
 
 func TestInts(t *testing.T) {
-	client := newQueryClient()
+	client := newClient(defaultServer)
 	_, err := client.Execute(
 		"insert into vtocc_ints values(:tiny, :tinyu, :small, "+
 			":smallu, :medium, :mediumu, :normal, :normalu, :big, :bigu, :year)",
@@ -159,7 +153,7 @@ func TestInts(t *testing.T) {
 }
 
 func TestFractionals(t *testing.T) {
-	client := newQueryClient()
+	client := newClient(defaultServer)
 	_, err := client.Execute(
 		"insert into vtocc_fracts values(:id, :deci, :num, :f, :d)",
 		map[string]interface{}{
@@ -220,7 +214,7 @@ func TestFractionals(t *testing.T) {
 }
 
 func TestStrings(t *testing.T) {
-	client := newQueryClient()
+	client := newClient(defaultServer)
 	_, err := client.Execute(
 		"insert into vtocc_strings values "+
 			"(:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)",
@@ -312,7 +306,7 @@ func TestStrings(t *testing.T) {
 }
 
 func TestMiscTypes(t *testing.T) {
-	client := newQueryClient()
+	client := newClient(defaultServer)
 	_, err := client.Execute(
 		"insert into vtocc_misc values(:id, :b, :d, :dt, :t)",
 		map[string]interface{}{
@@ -373,7 +367,7 @@ func TestMiscTypes(t *testing.T) {
 }
 
 func TestNull(t *testing.T) {
-	client := newQueryClient()
+	client := newClient(defaultServer)
 	qr, err := client.Execute("select null from dual", nil)
 	if err != nil {
 		t.Error(err)

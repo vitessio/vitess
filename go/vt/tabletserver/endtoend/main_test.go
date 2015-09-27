@@ -5,12 +5,17 @@
 package endtoend
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"path"
+	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -31,12 +36,164 @@ import (
 )
 
 var (
-	connParams sqldb.ConnParams
-	dbcfgs     dbconfigs.DBConfigs
-	tsConfig   tabletserver.Config
-	target     query.Target
-	server     *tabletserver.TabletServer
+	connParams    sqldb.ConnParams
+	baseConfig    tabletserver.Config
+	target        query.Target
+	defaultServer *tabletserver.TabletServer
+	serverAddress string
 )
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	tabletserver.Init()
+
+	exitCode := func() int {
+		hdl, err := vttest.LauncMySQL("vttest", schema, testing.Verbose())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
+			return 1
+		}
+		defer hdl.TearDown()
+		connParams, err = hdl.MySQLConnParams()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
+			return 1
+		}
+		dbcfgs := dbconfigs.DBConfigs{
+			App: dbconfigs.DBConfig{
+				ConnParams:        connParams,
+				Keyspace:          "vttest",
+				Shard:             "0",
+				EnableRowcache:    true,
+				EnableInvalidator: false,
+			},
+		}
+
+		mysqld := mysqlctl.NewMysqld(
+			"Dba",
+			"App",
+			&mysqlctl.Mycnf{},
+			&dbcfgs.Dba,
+			&dbcfgs.App.ConnParams,
+			&dbcfgs.Repl)
+
+		baseConfig = tabletserver.DefaultQsConfig
+		baseConfig.RowCache.Binary = vttest.MemcachedPath()
+		baseConfig.RowCache.Socket = path.Join(os.TempDir(), "memcache.sock")
+		baseConfig.EnableAutoCommit = true
+
+		target = query.Target{
+			Keyspace:   "vttest",
+			Shard:      "0",
+			TabletType: topodata.TabletType_MASTER,
+		}
+
+		defaultServer = tabletserver.NewTabletServer(baseConfig)
+		defaultServer.Register()
+		err = defaultServer.StartService(&target, &dbcfgs, nil, mysqld)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not start service: %v\n", err)
+			return 1
+		}
+		defer defaultServer.StopService()
+
+		// Start http service.
+		ln, err := net.Listen("tcp", ":0")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not start listener: %v\n", err)
+			return 1
+		}
+		serverAddress = fmt.Sprintf("http://%s", ln.Addr().String())
+		go http.Serve(ln, nil)
+		for {
+			time.Sleep(10 * time.Millisecond)
+			response, err := http.Get(fmt.Sprintf("%s/debug/vars", serverAddress))
+			if err == nil {
+				response.Body.Close()
+				break
+			}
+		}
+
+		return m.Run()
+	}()
+	os.Exit(exitCode)
+}
+
+// debugVars parses /debug/vars and returns a map. The function returns
+// an empty map on error.
+func debugVars() map[string]interface{} {
+	out := map[string]interface{}{}
+	response, err := http.Get(fmt.Sprintf("%s/debug/vars", serverAddress))
+	if err != nil {
+		return out
+	}
+	defer response.Body.Close()
+	_ = json.NewDecoder(response.Body).Decode(&out)
+	return out
+}
+
+// fetchInt fetches the specified dot-separated tag and returns the
+// value as an int. It returns 0 on error, or if not found.
+func fetchInt(vars map[string]interface{}, tags string) int {
+	val, _ := fetchVal(vars, tags).(float64)
+	return int(val)
+}
+
+// fetchVal fetches the specified dot-separated tag and returns the
+// value as an interface. It returns nil on error, or if not found.
+func fetchVal(vars map[string]interface{}, tags string) interface{} {
+	splitTags := strings.Split(tags, ".")
+	if len(tags) == 0 {
+		return nil
+	}
+	current := vars
+	for _, tag := range splitTags[:len(splitTags)-1] {
+		icur, ok := current[tag]
+		if !ok {
+			return nil
+		}
+		current, ok = icur.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+	}
+	return current[splitTags[len(splitTags)-1]]
+}
+
+// newServer starts a new unregistered tabletserver.
+// You have to end it with StopService once testing is done.
+func newServer(config tabletserver.Config, enableRowcache bool) (*tabletserver.TabletServer, error) {
+	dbcfgs := dbconfigs.DBConfigs{
+		App: dbconfigs.DBConfig{
+			ConnParams:        connParams,
+			Keyspace:          "vttest",
+			Shard:             "0",
+			EnableRowcache:    enableRowcache,
+			EnableInvalidator: false,
+		},
+	}
+
+	mysqld := mysqlctl.NewMysqld(
+		"Dba",
+		"App",
+		&mysqlctl.Mycnf{},
+		&dbcfgs.Dba,
+		&dbcfgs.App.ConnParams,
+		&dbcfgs.Repl)
+
+	target = query.Target{
+		Keyspace:   "vttest",
+		Shard:      "0",
+		TabletType: topodata.TabletType_MASTER,
+	}
+
+	server := tabletserver.NewTabletServer(config)
+	err := server.StartService(&target, &dbcfgs, nil, mysqld)
+	if err != nil {
+		return nil, err
+	}
+	return server, nil
+}
 
 // queryClient provides a convenient wrapper for TabletServer's query service.
 // It's not thread safe, but you can create multiple clients that point to the
@@ -47,8 +204,8 @@ type queryClient struct {
 	transactionID int64
 }
 
-// newQueryClient creates a new client.
-func newQueryClient() *queryClient {
+// newClient creates a new client for the specified server.
+func newClient(server *tabletserver.TabletServer) *queryClient {
 	return &queryClient{
 		target: target,
 		server: server,
@@ -60,7 +217,7 @@ func (client *queryClient) Begin() error {
 		return errors.New("already in transaction")
 	}
 	var txinfo proto.TransactionInfo
-	err := server.Begin(context.Background(), &client.target, nil, &txinfo)
+	err := client.server.Begin(context.Background(), &client.target, nil, &txinfo)
 	if err != nil {
 		return err
 	}
@@ -70,17 +227,17 @@ func (client *queryClient) Begin() error {
 
 func (client *queryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
-	return server.Commit(context.Background(), &client.target, nil)
+	return client.server.Commit(context.Background(), &client.target, nil)
 }
 
 func (client *queryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
-	return server.Rollback(context.Background(), &client.target, nil)
+	return client.server.Rollback(context.Background(), &client.target, nil)
 }
 
 func (client *queryClient) Execute(query string, bindvars map[string]interface{}) (*mproto.QueryResult, error) {
 	var qr = &mproto.QueryResult{}
-	err := server.Execute(
+	err := client.server.Execute(
 		context.Background(),
 		&client.target,
 		&proto.Query{
@@ -154,60 +311,3 @@ create table vtocc_acl_read_write(key1 bigint, key2 bigint, primary key(key1));
 create table vtocc_acl_admin(key1 bigint, key2 bigint, primary key(key1));
 create table vtocc_acl_unmatched(key1 bigint, key2 bigint, primary key(key1));
 create table vtocc_acl_all_user_read_only(key1 bigint, key2 bigint, primary key(key1));`
-
-func TestMain(m *testing.M) {
-	flag.Parse()
-	tabletserver.Init()
-
-	exitCode := func() int {
-		hdl, err := vttest.LauncMySQL("vttest", schema, testing.Verbose())
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
-			return 1
-		}
-		defer hdl.TearDown()
-		connParams, err = hdl.MySQLConnParams()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
-			return 1
-		}
-		dbcfgs.App = dbconfigs.DBConfig{
-			ConnParams:        connParams,
-			Keyspace:          "vttest",
-			Shard:             "0",
-			EnableRowcache:    true,
-			EnableInvalidator: false,
-		}
-
-		tsConfig = tabletserver.DefaultQsConfig
-		tsConfig.RowCache.Binary = vttest.MemcachedPath()
-		tsConfig.RowCache.Socket = path.Join(os.TempDir(), "memcache.sock")
-		tsConfig.EnableAutoCommit = true
-
-		mysqld := mysqlctl.NewMysqld(
-			"Dba",
-			"App",
-			&mysqlctl.Mycnf{},
-			&dbcfgs.Dba,
-			&dbcfgs.App.ConnParams,
-			&dbcfgs.Repl)
-
-		target = query.Target{
-			Keyspace:   "vttest",
-			Shard:      "0",
-			TabletType: topodata.TabletType_MASTER,
-		}
-
-		server = tabletserver.NewTabletServer(tsConfig)
-		server.Register()
-		err = server.StartService(&target, &dbcfgs, nil, mysqld)
-		defer server.StopService()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
-			return 1
-		}
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
-}
