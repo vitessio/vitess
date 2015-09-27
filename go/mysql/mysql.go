@@ -38,6 +38,99 @@ func init() {
 }
 
 const (
+	// TypeDecimal specifies a DECIMAL type.
+	// Value is 0.
+	TypeDecimal = C.FIELD_TYPE_DECIMAL
+	// TypeTiny specifies a TINY type.
+	// Value is 1.
+	TypeTiny = C.FIELD_TYPE_TINY
+	// TypeShort specifies a SHORT type.
+	// Value is 2.
+	TypeShort = C.FIELD_TYPE_SHORT
+	// TypeLong specifies a LONG type.
+	// Value is 3.
+	TypeLong = C.FIELD_TYPE_LONG
+	// TypeFloat specifies a FLOAT type.
+	// Value is 4.
+	TypeFloat = C.FIELD_TYPE_FLOAT
+	// TypeDouble specifies a DOUBLE type.
+	// Value is 5.
+	TypeDouble = C.FIELD_TYPE_DOUBLE
+	// TypeNull specifies a NULL type.
+	// Value is 6.
+	TypeNull = C.FIELD_TYPE_NULL
+	// TypeTimestamp specifies a TIMESTAMP type.
+	// Value is 7.
+	TypeTimestamp = C.FIELD_TYPE_TIMESTAMP
+	// TypeLonglong specifies a LONGLONG type.
+	// Value is 8.
+	TypeLonglong = C.FIELD_TYPE_LONGLONG
+	// TypeInt24 specifies an INT24 type.
+	// Value is 9.
+	TypeInt24 = C.FIELD_TYPE_INT24
+	// TypeDate specifies a DATE type.
+	// Value is 10.
+	TypeDate = C.FIELD_TYPE_DATE
+	// TypeTime specifies a TIME type.
+	// Value is 11.
+	TypeTime = C.FIELD_TYPE_TIME
+	// TypeDatetime specifies a DATETIME type.
+	// Value is 12.
+	TypeDatetime = C.FIELD_TYPE_DATETIME
+	// TypeYear specifies a YEAR type.
+	// Value is 13.
+	TypeYear = C.FIELD_TYPE_YEAR
+	// TypeNewdate specifies a NEWDATE type.
+	// Value is 14.
+	TypeNewdate = C.FIELD_TYPE_NEWDATE
+	// TypeEnum specifies an ENUM type.
+	// Value is 247.
+	TypeEnum = C.FIELD_TYPE_ENUM
+	// TypeSet specifies a SET type.
+	// Value is 248.
+	TypeSet = C.FIELD_TYPE_SET
+	// TypeTinyBlob specifies a TINY BLOB type.
+	// Value is 249.
+	TypeTinyBlob = C.FIELD_TYPE_TINY_BLOB
+	// TypeMediumBlob specifies a MEDIUM BLOB type.
+	// Value is 250.
+	TypeMediumBlob = C.FIELD_TYPE_MEDIUM_BLOB
+	// TypeLongBlob specifies a LONG BLOB type.
+	// Value is 251.
+	TypeLongBlob = C.FIELD_TYPE_LONG_BLOB
+	// TypeBlob specifies a BLOB type.
+	// Value is 252.
+	TypeBlob = C.FIELD_TYPE_BLOB
+	// TypeVarString specifies a VARCHAR or VARBINARY type.
+	// Value is 253.
+	TypeVarString = C.FIELD_TYPE_VAR_STRING
+	// TypeString specifies a CHAR or BINARY type.
+	// Value is 254.
+	TypeString = C.FIELD_TYPE_STRING
+)
+
+const (
+	// FlagUnsigned specifies if the value is an unsigned.
+	// Value is 32 (0x20).
+	FlagUnsigned = C.UNSIGNED_FLAG
+	// FlagBinary specifies if the data is binary.
+	// Value is 128 (0x80).
+	FlagBinary = C.BINARY_FLAG
+	// FlagEnum specifies if the value is an enum.
+	// Value is 256 (0x100).
+	FlagEnum = C.ENUM_FLAG
+	// FlagSet specifies if the value is a set.
+	// Value is 2048 (0x800).
+	FlagSet = C.SET_FLAG
+
+	// RelevantFlags is used to mask out irrelevant flags.
+	RelevantFlags = FlagUnsigned |
+		FlagBinary |
+		FlagEnum |
+		FlagSet
+)
+
+const (
 	// ErrDupEntry is C.ER_DUP_ENTRY
 	ErrDupEntry = C.ER_DUP_ENTRY
 
@@ -206,7 +299,7 @@ func (conn *Connection) Fields() (fields []proto.Field) {
 		fname := (*[maxSize]byte)(unsafe.Pointer(cfields[i].name))[:length]
 		fields[i].Name = string(fname)
 		fields[i].Type = int64(cfields[i]._type)
-		fields[i].Flags = int64(cfields[i].flags)
+		fields[i].Flags = int64(cfields[i].flags) & RelevantFlags
 	}
 	return fields
 }
