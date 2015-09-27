@@ -38,22 +38,22 @@ func init() {
 }
 
 const (
-	// TypeDecimal specifies a DECIMAL type.
+	// TypeDecimal specifies a DECIMAL or NUMERIC type.
 	// Value is 0.
 	TypeDecimal = C.FIELD_TYPE_DECIMAL
-	// TypeTiny specifies a TINY type.
+	// TypeTiny specifies a TINYINT type.
 	// Value is 1.
 	TypeTiny = C.FIELD_TYPE_TINY
-	// TypeShort specifies a SHORT type.
+	// TypeShort specifies a SMALLINT type.
 	// Value is 2.
 	TypeShort = C.FIELD_TYPE_SHORT
-	// TypeLong specifies a LONG type.
+	// TypeLong specifies a INTEGER type.
 	// Value is 3.
 	TypeLong = C.FIELD_TYPE_LONG
 	// TypeFloat specifies a FLOAT type.
 	// Value is 4.
 	TypeFloat = C.FIELD_TYPE_FLOAT
-	// TypeDouble specifies a DOUBLE type.
+	// TypeDouble specifies a DOUBLE or REAL type.
 	// Value is 5.
 	TypeDouble = C.FIELD_TYPE_DOUBLE
 	// TypeNull specifies a NULL type.
@@ -62,10 +62,10 @@ const (
 	// TypeTimestamp specifies a TIMESTAMP type.
 	// Value is 7.
 	TypeTimestamp = C.FIELD_TYPE_TIMESTAMP
-	// TypeLonglong specifies a LONGLONG type.
+	// TypeLonglong specifies a BIGINT type.
 	// Value is 8.
 	TypeLonglong = C.FIELD_TYPE_LONGLONG
-	// TypeInt24 specifies an INT24 type.
+	// TypeInt24 specifies a MEDIUMINT type.
 	// Value is 9.
 	TypeInt24 = C.FIELD_TYPE_INT24
 	// TypeDate specifies a DATE type.
@@ -80,9 +80,12 @@ const (
 	// TypeYear specifies a YEAR type.
 	// Value is 13.
 	TypeYear = C.FIELD_TYPE_YEAR
-	// TypeNewdate specifies a NEWDATE type.
-	// Value is 14.
-	TypeNewdate = C.FIELD_TYPE_NEWDATE
+	// TypeBit specifies a BIT type.
+	// Value is 16.
+	TypeBit = C.MYSQL_TYPE_BIT
+	// TypeNewDecimal specifies a precision math DECIMAL or NUMERIC type.
+	// Value is 246.
+	TypeNewDecimal = C.MYSQL_TYPE_NEWDECIMAL
 	// TypeEnum specifies an ENUM type.
 	// Value is 247.
 	TypeEnum = C.FIELD_TYPE_ENUM
@@ -98,7 +101,7 @@ const (
 	// TypeLongBlob specifies a LONG BLOB type.
 	// Value is 251.
 	TypeLongBlob = C.FIELD_TYPE_LONG_BLOB
-	// TypeBlob specifies a BLOB type.
+	// TypeBlob specifies a BLOB or TEXT type.
 	// Value is 252.
 	TypeBlob = C.FIELD_TYPE_BLOB
 	// TypeVarString specifies a VARCHAR or VARBINARY type.
@@ -107,6 +110,9 @@ const (
 	// TypeString specifies a CHAR or BINARY type.
 	// Value is 254.
 	TypeString = C.FIELD_TYPE_STRING
+	// TypeGeometry specifies a Spatial field.
+	// Value is 255.
+	TypeGeometry = C.MYSQL_TYPE_GEOMETRY
 )
 
 const (
