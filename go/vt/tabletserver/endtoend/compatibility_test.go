@@ -62,7 +62,7 @@ func TestCharaterSet(t *testing.T) {
 
 func TestInts(t *testing.T) {
 	client := newQueryClient()
-	qr, err := client.Execute(
+	_, err := client.Execute(
 		"insert into vtocc_ints values(:tiny, :tinyu, :small, "+
 			":smallu, :medium, :mediumu, :normal, :normalu, :big, :bigu, :year)",
 		map[string]interface{}{
@@ -83,7 +83,7 @@ func TestInts(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	qr, err = client.Execute("select * from vtocc_ints where tiny = -128", nil)
+	qr, err := client.Execute("select * from vtocc_ints where tiny = -128", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -160,7 +160,7 @@ func TestInts(t *testing.T) {
 
 func TestFractionals(t *testing.T) {
 	client := newQueryClient()
-	qr, err := client.Execute(
+	_, err := client.Execute(
 		"insert into vtocc_fracts values(:id, :deci, :num, :f, :d)",
 		map[string]interface{}{
 			"id":   1,
@@ -174,7 +174,7 @@ func TestFractionals(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	qr, err = client.Execute("select * from vtocc_fracts where id = 1", nil)
+	qr, err := client.Execute("select * from vtocc_fracts where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -221,7 +221,7 @@ func TestFractionals(t *testing.T) {
 
 func TestStrings(t *testing.T) {
 	client := newQueryClient()
-	qr, err := client.Execute(
+	_, err := client.Execute(
 		"insert into vtocc_strings values "+
 			"(:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)",
 		map[string]interface{}{
@@ -241,7 +241,7 @@ func TestStrings(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	qr, err = client.Execute("select * from vtocc_strings where vb = 'a'", nil)
+	qr, err := client.Execute("select * from vtocc_strings where vb = 'a'", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -313,7 +313,7 @@ func TestStrings(t *testing.T) {
 
 func TestMiscTypes(t *testing.T) {
 	client := newQueryClient()
-	qr, err := client.Execute(
+	_, err := client.Execute(
 		"insert into vtocc_misc values(:id, :b, :d, :dt, :t)",
 		map[string]interface{}{
 			"id": 1,
@@ -327,7 +327,7 @@ func TestMiscTypes(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	qr, err = client.Execute("select * from vtocc_misc where id = 1", nil)
+	qr, err := client.Execute("select * from vtocc_misc where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -364,6 +364,33 @@ func TestMiscTypes(t *testing.T) {
 				sqltypes.Value{Inner: sqltypes.String("2012-01-01")},
 				sqltypes.Value{Inner: sqltypes.String("2012-01-01 15:45:45")},
 				sqltypes.Value{Inner: sqltypes.String("15:45:45")},
+			},
+		},
+	}
+	if !reflect.DeepEqual(*qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+	}
+}
+
+func TestNull(t *testing.T) {
+	client := newQueryClient()
+	qr, err := client.Execute("select null from dual", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want := mproto.QueryResult{
+		Fields: []mproto.Field{
+			{
+				Name:  "NULL",
+				Type:  mysql.TypeNull,
+				Flags: mysql.FlagBinary,
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.Value{},
 			},
 		},
 	}
