@@ -38,9 +38,6 @@ func init() {
 }
 
 const (
-	// TypeDecimal specifies a DECIMAL or NUMERIC type.
-	// Value is 0.
-	TypeDecimal = C.FIELD_TYPE_DECIMAL
 	// TypeTiny specifies a TINYINT type.
 	// Value is 1.
 	TypeTiny = C.FIELD_TYPE_TINY
@@ -60,7 +57,7 @@ const (
 	// Value is 6.
 	TypeNull = C.FIELD_TYPE_NULL
 	// TypeTimestamp specifies a TIMESTAMP type.
-	// Value is 7.
+	// Value is 7. NOT SUPPORTED.
 	TypeTimestamp = C.FIELD_TYPE_TIMESTAMP
 	// TypeLonglong specifies a BIGINT type.
 	// Value is 8.
@@ -83,24 +80,9 @@ const (
 	// TypeBit specifies a BIT type.
 	// Value is 16.
 	TypeBit = C.MYSQL_TYPE_BIT
-	// TypeNewDecimal specifies a precision math DECIMAL or NUMERIC type.
+	// TypeNewDecimal specifies a DECIMAL or NUMERIC type.
 	// Value is 246.
 	TypeNewDecimal = C.MYSQL_TYPE_NEWDECIMAL
-	// TypeEnum specifies an ENUM type.
-	// Value is 247.
-	TypeEnum = C.FIELD_TYPE_ENUM
-	// TypeSet specifies a SET type.
-	// Value is 248.
-	TypeSet = C.FIELD_TYPE_SET
-	// TypeTinyBlob specifies a TINY BLOB type.
-	// Value is 249.
-	TypeTinyBlob = C.FIELD_TYPE_TINY_BLOB
-	// TypeMediumBlob specifies a MEDIUM BLOB type.
-	// Value is 250.
-	TypeMediumBlob = C.FIELD_TYPE_MEDIUM_BLOB
-	// TypeLongBlob specifies a LONG BLOB type.
-	// Value is 251.
-	TypeLongBlob = C.FIELD_TYPE_LONG_BLOB
 	// TypeBlob specifies a BLOB or TEXT type.
 	// Value is 252.
 	TypeBlob = C.FIELD_TYPE_BLOB
@@ -111,7 +93,7 @@ const (
 	// Value is 254.
 	TypeString = C.FIELD_TYPE_STRING
 	// TypeGeometry specifies a Spatial field.
-	// Value is 255.
+	// Value is 255. NOT SUPPORTED.
 	TypeGeometry = C.MYSQL_TYPE_GEOMETRY
 )
 
