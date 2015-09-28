@@ -1,95 +1,56 @@
+// Copyright 2015, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package endtoend
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"path"
-	"reflect"
 	"testing"
 
-	"golang.org/x/net/context"
-
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/vttest"
 
 	// import mysql to register mysql connection function
-	_ "github.com/youtube/vitess/go/mysql"
+
 	// import memcache to register memcache connection function
 	_ "github.com/youtube/vitess/go/memcache"
 )
 
 var (
 	connParams sqldb.ConnParams
-	dbcfgs     dbconfigs.DBConfigs
-	tsConfig   tabletserver.Config
-	target     query.Target
-	server     *tabletserver.TabletServer
-	client     *queryClient
 )
 
-// queryClient provides a convenient wrapper for TabletServer's query service.
-// It's not thread safe, but you can create multiple clients that point to the
-// same server.
-type queryClient struct {
-	target        query.Target
-	server        *tabletserver.TabletServer
-	transactionID int64
-}
+func TestMain(m *testing.M) {
+	flag.Parse()
+	tabletserver.Init()
 
-// newQueryClient creates a new client.
-func newQueryClient() *queryClient {
-	return &queryClient{
-		target: target,
-		server: server,
-	}
-}
+	exitCode := func() int {
+		hdl, err := vttest.LaunchMySQL("vttest", schema, testing.Verbose())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
+			return 1
+		}
+		defer hdl.TearDown()
+		connParams, err = hdl.MySQLConnParams()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
+			return 1
+		}
+		err = framework.StartDefaultServer(connParams)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+		defer framework.StopDefaultServer()
 
-func (client *queryClient) Begin() error {
-	if client.transactionID != 0 {
-		return errors.New("already in transaction")
-	}
-	var txinfo proto.TransactionInfo
-	err := server.Begin(context.Background(), &client.target, nil, &txinfo)
-	if err != nil {
-		return err
-	}
-	client.transactionID = txinfo.TransactionId
-	return nil
-}
-
-func (client *queryClient) Commit() error {
-	defer func() { client.transactionID = 0 }()
-	return server.Commit(context.Background(), &client.target, nil)
-}
-
-func (client *queryClient) Rollback() error {
-	defer func() { client.transactionID = 0 }()
-	return server.Rollback(context.Background(), &client.target, nil)
-}
-
-func (client *queryClient) Execute(query string, bindvars map[string]interface{}) (*mproto.QueryResult, error) {
-	var qr = &mproto.QueryResult{}
-	err := server.Execute(
-		context.Background(),
-		&client.target,
-		&proto.Query{
-			Sql:           query,
-			BindVariables: bindvars,
-			TransactionId: client.transactionID,
-		},
-		qr,
-	)
-	return qr, err
+		return m.Run()
+	}()
+	os.Exit(exitCode)
 }
 
 var schema = `create table vtocc_test(intval int, floatval float, charval varchar(256), binval varbinary(256), primary key(intval)) comment 'vtocc_nocache';
@@ -153,105 +114,3 @@ create table vtocc_acl_read_write(key1 bigint, key2 bigint, primary key(key1));
 create table vtocc_acl_admin(key1 bigint, key2 bigint, primary key(key1));
 create table vtocc_acl_unmatched(key1 bigint, key2 bigint, primary key(key1));
 create table vtocc_acl_all_user_read_only(key1 bigint, key2 bigint, primary key(key1));`
-
-func TestMain(m *testing.M) {
-	flag.Parse()
-	tabletserver.Init()
-
-	exitCode := func() int {
-		hdl, err := vttest.LauncMySQL("vttest", schema, testing.Verbose())
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
-			return 1
-		}
-		defer hdl.TearDown()
-		connParams, err = hdl.MySQLConnParams()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
-			return 1
-		}
-		dbcfgs.App = dbconfigs.DBConfig{
-			ConnParams:        connParams,
-			Keyspace:          "vttest",
-			Shard:             "0",
-			EnableRowcache:    true,
-			EnableInvalidator: false,
-		}
-
-		tsConfig = tabletserver.DefaultQsConfig
-		tsConfig.RowCache.Binary = vttest.MemcachedPath()
-		tsConfig.RowCache.Socket = path.Join(os.TempDir(), "memcache.sock")
-
-		mysqld := mysqlctl.NewMysqld(
-			"Dba",
-			"App",
-			&mysqlctl.Mycnf{},
-			&dbcfgs.Dba,
-			&dbcfgs.App.ConnParams,
-			&dbcfgs.Repl)
-
-		target = query.Target{
-			Keyspace:   "vttest",
-			Shard:      "0",
-			TabletType: topodata.TabletType_MASTER,
-		}
-
-		server = tabletserver.NewTabletServer(tsConfig)
-		server.Register()
-		err = server.StartService(&target, &dbcfgs, nil, mysqld)
-		defer server.StopService()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
-			return 1
-		}
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
-}
-
-func TestSimpleRead(t *testing.T) {
-	qr, err := newQueryClient().Execute("select * from vtocc_test limit 2", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	want := mproto.QueryResult{
-		Fields: []mproto.Field{
-			{
-				Name:  "intval",
-				Type:  3,
-				Flags: 49155,
-			}, {
-				Name:  "floatval",
-				Type:  4,
-				Flags: 32768,
-			}, {
-				Name:  "charval",
-				Type:  253,
-				Flags: 0,
-			}, {
-				Name:  "binval",
-				Type:  253,
-				Flags: 128,
-			},
-		},
-		RowsAffected: 2,
-		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("1")},
-				sqltypes.Value{Inner: sqltypes.Fractional("1.12345")},
-				sqltypes.Value{Inner: sqltypes.String("\xc2\xa2")},
-				sqltypes.Value{Inner: sqltypes.String("\x00\xff")},
-			},
-			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("2")},
-				sqltypes.Value{},
-				sqltypes.Value{Inner: sqltypes.String("")},
-				sqltypes.Value{},
-			},
-		},
-	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("SimpleRead resut: \n%#v, want \n%#v", *qr, want)
-	}
-}

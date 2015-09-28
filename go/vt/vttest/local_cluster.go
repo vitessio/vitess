@@ -43,9 +43,9 @@ func LaunchVitess(topo, schemaDir string, verbose bool) (hdl *Handle, err error)
 	return hdl, nil
 }
 
-// LauncMySQL launches just a MySQL instance with the specified db name. The schema
+// LaunchMySQL launches just a MySQL instance with the specified db name. The schema
 // is specified as a string instead of a file.
-func LauncMySQL(dbName, schema string, verbose bool) (hdl *Handle, err error) {
+func LaunchMySQL(dbName, schema string, verbose bool) (hdl *Handle, err error) {
 	hdl = &Handle{
 		dbname: dbName,
 	}
