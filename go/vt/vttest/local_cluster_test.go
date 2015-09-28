@@ -57,7 +57,7 @@ func TestVitess(t *testing.T) {
 }
 
 func TestMySQL(t *testing.T) {
-	hdl, err := LauncMySQL("vttest", "create table a(id int, name varchar(128), primary key(id))", false)
+	hdl, err := LaunchMySQL("vttest", "create table a(id int, name varchar(128), primary key(id))", false)
 	if err != nil {
 		t.Error(err)
 		return

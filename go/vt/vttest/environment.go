@@ -21,6 +21,11 @@ func launcherPath() (string, error) {
 	return path.Join(vttop, "py/vttest/run_local_database.py"), nil
 }
 
+// MemcachedPath returns the path to the memcached binary.
+func MemcachedPath() string {
+	return "memcached"
+}
+
 func vtgateProtocol() string {
 	return "grpc"
 }

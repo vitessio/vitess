@@ -98,7 +98,7 @@ for uid_index in $uids; do
     -file_backup_storage_root $VTDATAROOT/backups \
     -restore_from_backup \
     -grpc_port $grpc_port \
-    -service_map 'grpc-queryservice' \
+    -service_map 'grpc-queryservice,grpc-tabletmanager' \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
   echo "Access tablet $alias at http://$hostname:$port/debug/status"
