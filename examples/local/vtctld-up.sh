@@ -21,6 +21,8 @@ echo "Starting vtctld..."
 $VTROOT/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates \
   -web_dir $VTTOP/web/vtctld \
   -tablet_protocol grpc \
+  -tablet_manager_protocol grpc \
+  -service_map 'bsonrpc-vt-vtctl' \
   -log_dir $VTDATAROOT/tmp -port $port > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 disown -a
 
