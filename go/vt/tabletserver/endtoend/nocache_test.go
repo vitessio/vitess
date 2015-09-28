@@ -90,3 +90,63 @@ func TestBinary(t *testing.T) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
 }
+
+func TestNocacheListArgs(t *testing.T) {
+	client := newClient(defaultServer)
+	query := "select * from vtocc_test where intval in ::list"
+
+	qr, err := client.Execute(
+		query,
+		map[string]interface{}{
+			"list": []interface{}{2, 3, 4},
+		},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 2 {
+		t.Errorf("rows affected: %d, want 2", qr.RowsAffected)
+	}
+
+	qr, err = client.Execute(
+		query,
+		map[string]interface{}{
+			"list": []interface{}{3, 4},
+		},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 1 {
+		t.Errorf("rows affected: %d, want 1", qr.RowsAffected)
+	}
+
+	qr, err = client.Execute(
+		query,
+		map[string]interface{}{
+			"list": []interface{}{3},
+		},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 1 {
+		t.Errorf("rows affected: %d, want 1", qr.RowsAffected)
+	}
+
+	// Error case
+	_, err = client.Execute(
+		query,
+		map[string]interface{}{
+			"list": []interface{}{},
+		},
+	)
+	want := "error: empty list supplied for list"
+	if err == nil || err.Error() != want {
+		t.Errorf("error returned: %v, want %s", err, want)
+		return
+	}
+}

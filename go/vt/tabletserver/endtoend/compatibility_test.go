@@ -56,6 +56,8 @@ func TestCharaterSet(t *testing.T) {
 
 func TestInts(t *testing.T) {
 	client := newClient(defaultServer)
+	defer client.Execute("delete from vtocc_ints", nil)
+
 	_, err := client.Execute(
 		"insert into vtocc_ints values(:tiny, :tinyu, :small, "+
 			":smallu, :medium, :mediumu, :normal, :normalu, :big, :bigu, :year)",
@@ -154,6 +156,8 @@ func TestInts(t *testing.T) {
 
 func TestFractionals(t *testing.T) {
 	client := newClient(defaultServer)
+	defer client.Execute("delete from vtocc_fracts", nil)
+
 	_, err := client.Execute(
 		"insert into vtocc_fracts values(:id, :deci, :num, :f, :d)",
 		map[string]interface{}{
@@ -215,6 +219,8 @@ func TestFractionals(t *testing.T) {
 
 func TestStrings(t *testing.T) {
 	client := newClient(defaultServer)
+	defer client.Execute("delete from vtocc_strings", nil)
+
 	_, err := client.Execute(
 		"insert into vtocc_strings values "+
 			"(:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)",
@@ -307,6 +313,8 @@ func TestStrings(t *testing.T) {
 
 func TestMiscTypes(t *testing.T) {
 	client := newClient(defaultServer)
+	defer client.Execute("delete from vtocc_misc", nil)
+
 	_, err := client.Execute(
 		"insert into vtocc_misc values(:id, :b, :d, :dt, :t)",
 		map[string]interface{}{
