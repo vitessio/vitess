@@ -5,28 +5,14 @@
 package endtoend
 
 import (
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
-	"path"
-	"strings"
 	"testing"
-	"time"
 
-	"golang.org/x/net/context"
-
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/vttest"
 
 	// import mysql to register mysql connection function
@@ -36,11 +22,7 @@ import (
 )
 
 var (
-	connParams    sqldb.ConnParams
-	baseConfig    tabletserver.Config
-	target        query.Target
-	defaultServer *tabletserver.TabletServer
-	serverAddress string
+	connParams sqldb.ConnParams
 )
 
 func TestMain(m *testing.M) {
@@ -59,195 +41,16 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
 			return 1
 		}
-		dbcfgs := dbconfigs.DBConfigs{
-			App: dbconfigs.DBConfig{
-				ConnParams:        connParams,
-				Keyspace:          "vttest",
-				Shard:             "0",
-				EnableRowcache:    true,
-				EnableInvalidator: false,
-			},
-		}
-
-		mysqld := mysqlctl.NewMysqld(
-			"Dba",
-			"App",
-			&mysqlctl.Mycnf{},
-			&dbcfgs.Dba,
-			&dbcfgs.App.ConnParams,
-			&dbcfgs.Repl)
-
-		baseConfig = tabletserver.DefaultQsConfig
-		baseConfig.RowCache.Binary = vttest.MemcachedPath()
-		baseConfig.RowCache.Socket = path.Join(os.TempDir(), "memcache.sock")
-		baseConfig.EnableAutoCommit = true
-
-		target = query.Target{
-			Keyspace:   "vttest",
-			Shard:      "0",
-			TabletType: topodata.TabletType_MASTER,
-		}
-
-		defaultServer = tabletserver.NewTabletServer(baseConfig)
-		defaultServer.Register()
-		err = defaultServer.StartService(&target, &dbcfgs, nil, mysqld)
+		err = framework.StartDefaultServer(connParams)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not start service: %v\n", err)
+			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
-		defer defaultServer.StopService()
-
-		// Start http service.
-		ln, err := net.Listen("tcp", ":0")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not start listener: %v\n", err)
-			return 1
-		}
-		serverAddress = fmt.Sprintf("http://%s", ln.Addr().String())
-		go http.Serve(ln, nil)
-		for {
-			time.Sleep(10 * time.Millisecond)
-			response, err := http.Get(fmt.Sprintf("%s/debug/vars", serverAddress))
-			if err == nil {
-				response.Body.Close()
-				break
-			}
-		}
+		defer framework.StopDefaultServer()
 
 		return m.Run()
 	}()
 	os.Exit(exitCode)
-}
-
-// debugVars parses /debug/vars and returns a map. The function returns
-// an empty map on error.
-func debugVars() map[string]interface{} {
-	out := map[string]interface{}{}
-	response, err := http.Get(fmt.Sprintf("%s/debug/vars", serverAddress))
-	if err != nil {
-		return out
-	}
-	defer response.Body.Close()
-	_ = json.NewDecoder(response.Body).Decode(&out)
-	return out
-}
-
-// fetchInt fetches the specified dot-separated tag and returns the
-// value as an int. It returns 0 on error, or if not found.
-func fetchInt(vars map[string]interface{}, tags string) int {
-	val, _ := fetchVal(vars, tags).(float64)
-	return int(val)
-}
-
-// fetchVal fetches the specified dot-separated tag and returns the
-// value as an interface. It returns nil on error, or if not found.
-func fetchVal(vars map[string]interface{}, tags string) interface{} {
-	splitTags := strings.Split(tags, ".")
-	if len(tags) == 0 {
-		return nil
-	}
-	current := vars
-	for _, tag := range splitTags[:len(splitTags)-1] {
-		icur, ok := current[tag]
-		if !ok {
-			return nil
-		}
-		current, ok = icur.(map[string]interface{})
-		if !ok {
-			return nil
-		}
-	}
-	return current[splitTags[len(splitTags)-1]]
-}
-
-// newServer starts a new unregistered tabletserver.
-// You have to end it with StopService once testing is done.
-func newServer(config tabletserver.Config, enableRowcache bool) (*tabletserver.TabletServer, error) {
-	dbcfgs := dbconfigs.DBConfigs{
-		App: dbconfigs.DBConfig{
-			ConnParams:        connParams,
-			Keyspace:          "vttest",
-			Shard:             "0",
-			EnableRowcache:    enableRowcache,
-			EnableInvalidator: false,
-		},
-	}
-
-	mysqld := mysqlctl.NewMysqld(
-		"Dba",
-		"App",
-		&mysqlctl.Mycnf{},
-		&dbcfgs.Dba,
-		&dbcfgs.App.ConnParams,
-		&dbcfgs.Repl)
-
-	target = query.Target{
-		Keyspace:   "vttest",
-		Shard:      "0",
-		TabletType: topodata.TabletType_MASTER,
-	}
-
-	server := tabletserver.NewTabletServer(config)
-	err := server.StartService(&target, &dbcfgs, nil, mysqld)
-	if err != nil {
-		return nil, err
-	}
-	return server, nil
-}
-
-// queryClient provides a convenient wrapper for TabletServer's query service.
-// It's not thread safe, but you can create multiple clients that point to the
-// same server.
-type queryClient struct {
-	target        query.Target
-	server        *tabletserver.TabletServer
-	transactionID int64
-}
-
-// newClient creates a new client for the specified server.
-func newClient(server *tabletserver.TabletServer) *queryClient {
-	return &queryClient{
-		target: target,
-		server: server,
-	}
-}
-
-func (client *queryClient) Begin() error {
-	if client.transactionID != 0 {
-		return errors.New("already in transaction")
-	}
-	var txinfo proto.TransactionInfo
-	err := client.server.Begin(context.Background(), &client.target, nil, &txinfo)
-	if err != nil {
-		return err
-	}
-	client.transactionID = txinfo.TransactionId
-	return nil
-}
-
-func (client *queryClient) Commit() error {
-	defer func() { client.transactionID = 0 }()
-	return client.server.Commit(context.Background(), &client.target, nil)
-}
-
-func (client *queryClient) Rollback() error {
-	defer func() { client.transactionID = 0 }()
-	return client.server.Rollback(context.Background(), &client.target, nil)
-}
-
-func (client *queryClient) Execute(query string, bindvars map[string]interface{}) (*mproto.QueryResult, error) {
-	var qr = &mproto.QueryResult{}
-	err := client.server.Execute(
-		context.Background(),
-		&client.target,
-		&proto.Query{
-			Sql:           query,
-			BindVariables: bindvars,
-			TransactionId: client.transactionID,
-		},
-		qr,
-	)
-	return qr, err
 }
 
 var schema = `create table vtocc_test(intval int, floatval float, charval varchar(256), binval varbinary(256), primary key(intval)) comment 'vtocc_nocache';

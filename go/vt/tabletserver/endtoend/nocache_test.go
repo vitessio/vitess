@@ -11,30 +11,31 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 )
 
 func TestSimpleRead(t *testing.T) {
-	vstart := debugVars()
-	_, err := newClient(defaultServer).Execute("select * from vtocc_test where intval=1", nil)
+	vstart := framework.DebugVars()
+	_, err := framework.NewDefaultClient().Execute("select * from vtocc_test where intval=1", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	vend := debugVars()
-	v1 := fetchInt(vstart, "Queries.TotalCount")
-	v2 := fetchInt(vend, "Queries.TotalCount")
+	vend := framework.DebugVars()
+	v1 := framework.FetchInt(vstart, "Queries.TotalCount")
+	v2 := framework.FetchInt(vend, "Queries.TotalCount")
 	if v1+1 != v2 {
 		t.Errorf("Queries.TotalCount: %d, want %d", v1+1, v2)
 	}
-	v1 = fetchInt(vstart, "Queries.Histograms.PASS_SELECT.Count")
-	v2 = fetchInt(vend, "Queries.Histograms.PASS_SELECT.Count")
+	v1 = framework.FetchInt(vstart, "Queries.Histograms.PASS_SELECT.Count")
+	v2 = framework.FetchInt(vend, "Queries.Histograms.PASS_SELECT.Count")
 	if v1+1 != v2 {
 		t.Errorf("Queries...Count: %d, want %d", v1+1, v2)
 	}
 }
 
 func TestBinary(t *testing.T) {
-	client := newClient(defaultServer)
+	client := framework.NewDefaultClient()
 	defer client.Execute("delete from vtocc_test where intval in (4,5)", nil)
 
 	binaryData := "\x00'\"\b\n\r\t\x1a\\\x00\x0f\xf0\xff"
@@ -92,7 +93,7 @@ func TestBinary(t *testing.T) {
 }
 
 func TestNocacheListArgs(t *testing.T) {
-	client := newClient(defaultServer)
+	client := framework.NewDefaultClient()
 	query := "select * from vtocc_test where intval in ::list"
 
 	qr, err := client.Execute(
