@@ -172,6 +172,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 			health[topo.ReplicationLag] = topo.ReplicationLagHigh
 		}
 	}
+	agent.lastHealthMapCount.Set(int64(len(health)))
 
 	// Figure out if we should be running QueryService, see if we are,
 	// and reconcile.
@@ -307,7 +308,6 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 
 		// we need to update our state
 		log.Infof("Updating tablet record as healthy type %v -> %v with health details %v -> %v", tablet.Type, newTabletType, tablet.HealthMap, health)
-		agent.lastHealthMapCount.Set(int64(len(health)))
 	}
 
 	// Change the Type, update the health. Note we pass in a map
