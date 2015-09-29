@@ -29,7 +29,12 @@ import (
 const (
 	// ErrorPrefix is the prefix to send with queries so they go through this service handler.
 	ErrorPrefix = "error://"
-	// PartialErrorPrefix is the prefix to send with queries so the RPC call returns a partial error.
+	// PartialErrorPrefix is the prefix to send with queries so the RPC returns a partial error.
+	// A partial error is when we return an error as part of the RPC response instead of via
+	// the regular error channels. This occurs if an RPC partially succeeds, and therefore
+	// requires some kind of response, but still needs to return an error.
+	// VTGate Execute* calls do this: they always return a new session ID, but might also
+	// return an error in the response.
 	PartialErrorPrefix = "partialerror://"
 )
 
@@ -63,7 +68,7 @@ func requestToPartialError(request string) *mproto.RPCError {
 	return vterrors.RPCErrFromVtError(err)
 }
 
-// trimmedRequestToError returns an error for trimmed request by looking at the
+// trimmedRequestToError returns an error for a trimmed request by looking at the
 // requested error type. It assumes that prefix checking has already been done.
 // If the received string doesn't match a known error, returns an unknown error.
 func trimmedRequestToError(received string) error {
