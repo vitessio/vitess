@@ -28,7 +28,7 @@ _errno_pattern = re.compile(r'\(errno (\d+)\)')
 def handle_app_error(exc_args):
   msg = str(exc_args[0]).lower()
   if msg.startswith('request_backlog'):
-    return dbexceptions.RequestBacklog(exc_args)
+    return dbexceptions.TransientError(exc_args)
   match = _errno_pattern.search(msg)
   if match:
     mysql_errno = int(match.group(1))
@@ -202,7 +202,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     lastrowid = query_result['InsertId']
     return results, rowcount, lastrowid, fields
 
-  @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _execute(
       self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None,
       keyranges=None, not_in_transaction=False, effective_caller_id=None):
@@ -240,7 +240,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       logging.exception('gorpc low-level error')
       raise
 
-  @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _execute_entity_ids(
       self, sql, bind_variables, keyspace, tablet_type,
       entity_keyspace_id_map, entity_column_name, not_in_transaction=False,
@@ -330,7 +330,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     def query_uses_keyspace_ids(query):
       return bool(query.get('KeyspaceIds'))
 
-    @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
+    @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
     def make_execute_batch_call(self, query_list, uses_keyspace_ids):
       """Make an ExecuteBatch call for KeyspaceIds or Shards queries."""
       filtered_query_list = [
@@ -383,7 +383,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     shards_rowsets = make_execute_batch_call(self, query_list, False)
     return merge_rowsets(query_list, keyspace_ids_rowsets, shards_rowsets)
 
-  @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _stream_execute(
       self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None,
       keyranges=None, not_in_transaction=False, effective_caller_id=None):
