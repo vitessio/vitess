@@ -522,6 +522,8 @@ class VtGate(object):
     if extra_args:
       args.extend(extra_args)
 
+    args.extend(['-rpc-error-only-in-reply=true'])
+
     self.proc = run_bg(args)
     if self.secure_port:
       wait_for_vars('vtgate', self.port, 'SecureConnections')

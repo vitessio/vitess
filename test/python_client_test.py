@@ -45,6 +45,7 @@ def setUpModule():
       args.extend(['-grpc_port', str(vtgateclienttest_grpc_port)])
     if protocols_flavor().service_map():
       args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
+    args.extend(['-rpc-error-only-in-reply=true'])
 
     vtgateclienttest_process = utils.run_bg(args)
     utils.wait_for_vars('vtgateclienttest', vtgateclienttest_port)
@@ -55,7 +56,8 @@ def setUpModule():
 
 def tearDownModule():
   utils.kill_sub_process(vtgateclienttest_process, soft=True)
-  vtgateclienttest_process.wait()
+  if vtgateclienttest_process:
+    vtgateclienttest_process.wait()
 
   environment.topo_server().teardown()
 
