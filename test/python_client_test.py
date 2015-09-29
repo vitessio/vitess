@@ -105,39 +105,45 @@ class TestPythonClientBase(unittest.TestCase):
 class TestPythonClientErrors(TestPythonClientBase):
   """Test cases to verify that the Python client can handle errors correctly"""
 
-  def test_integrity_error(self):
+  def test_execute_integrity_errors(self):
     """Test we raise dbexceptions.IntegrityError for Execute calls."""
     # Special query that makes vtgateclienttest return an IntegrityError.
-    self._test_integrity_error_for_execute('error://integrity error')
+    self._verify_exception_for_execute('error://integrity error',
+      dbexceptions.IntegrityError)
 
-  def test_partial_integrity_error(self):
+  def test_partial_integrity_errors(self):
     """Test we raise dbexceptions.IntegrityError when Execute calls
     return a partial error."""
     # Special query that makes vtgateclienttest return a partial error.
-    self._test_integrity_error_for_execute('partialerror://integrity error')
+    self._verify_exception_for_execute('partialerror://integrity error',
+      dbexceptions.IntegrityError)
 
-  def _test_integrity_error_for_execute(self, query):
-    """Helper for testing that we raise dbexceptions.IntegrityError if an
-    Execute call returns an integrity error."""
+  def _verify_exception_for_execute(self, query, exception):
+    """Verify that we raise a specific exception for all Execute calls.
+
+    Args:
+      query: query string to use for execute calls.
+      exception: exception class that we expect the execute call to raise
+    """
     # FIXME(alainjobart) add test for Execute once factory supports it
 
     # FIXME(alainjobart) add test for ExecuteShards once factory supports it
 
     # ExecuteKeyspaceIds test
     cursor = self._open_keyspace_ids_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
+    with self.assertRaises(exception):
       cursor.execute(query, {})
     cursor.close()
 
     # ExecuteKeyRanges test
     cursor = self._open_keyranges_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
+    with self.assertRaises(exception):
       cursor.execute(query, {})
     cursor.close()
 
     # ExecuteEntityIds test
     cursor = self.conn.cursor('keyspace', 'master')
-    with self.assertRaises(dbexceptions.IntegrityError):
+    with self.assertRaises(exception):
       cursor.execute_entity_ids(
           query, {},
           entity_keyspace_id_map={1: self.KEYSPACE_ID_0X80},
@@ -146,7 +152,7 @@ class TestPythonClientErrors(TestPythonClientBase):
 
     # ExecuteBatchKeyspaceIds test
     cursor = self._open_batch_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
+    with self.assertRaises(exception):
       cursor.executemany(
           sql=None,
           params_list=[
@@ -159,7 +165,7 @@ class TestPythonClientErrors(TestPythonClientBase):
 
     # ExecuteBatchShard test
     cursor = self._open_batch_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
+    with self.assertRaises(exception):
       cursor.executemany(
           sql=None,
           params_list=[
@@ -170,22 +176,40 @@ class TestPythonClientErrors(TestPythonClientBase):
                   shards=[keyrange_constants.SHARD_ZERO])])
     cursor.close()
 
-  def test_streaming_integrity_error(self):
-    """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
-    # Special query that makes vtgateclienttest return an IntegrityError.
-    integrity_error_test_query = 'error://integrity error'
+  def _verify_exception_for_stream_execute(self, query, exception):
+    """Verify that we raise a specific exception for all StreamExecute calls.
 
+    Args:
+      query: query string to use for StreamExecute calls.
+      exception: exception class that we expect StreamExecute to raise
+    """
     # StreamExecuteKeyspaceIds test
     cursor = self._open_stream_keyspace_ids_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.execute(integrity_error_test_query, {})
+    with self.assertRaises(exception):
+      cursor.execute(query, {})
     cursor.close()
 
     # StreamExecuteKeyRanges test
     cursor = self._open_stream_keyranges_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.execute(integrity_error_test_query, {})
+    with self.assertRaises(exception):
+      cursor.execute(query, {})
     cursor.close()
+
+  def test_streaming_integrity_error(self):
+    """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
+    self._verify_exception_for_stream_execute('error://integrity error',
+      dbexceptions.IntegrityError)
+
+  def test_transient_error(self):
+    """Test we raise dbexceptions.TransientError for Execute calls."""
+    # Special query that makes vtgateclienttest return a TransientError.
+    self._verify_exception_for_execute('error://transient error',
+      dbexceptions.TransientError)
+
+  def test_streaming_transient_error(self):
+    """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
+    self._verify_exception_for_stream_execute('error://transient error',
+      dbexceptions.TransientError)
 
   def test_error(self):
     """Test a regular server error raises the right exception."""
