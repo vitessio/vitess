@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
@@ -301,74 +300,10 @@ func rpcErrFromTabletError(err error) *mproto.RPCError {
 	}
 }
 
-// AddTabletErrorToQueryResult will mutate a QueryResult struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToQueryResult(err error, reply *mproto.QueryResult) {
+// AddTabletError will update a mproto.RPCError with details from a TabletError.
+func AddTabletError(err error, replyErr **mproto.RPCError) {
 	if err == nil {
 		return
 	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToSessionInfo will mutate a SessionInfo struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToSessionInfo(err error, reply *proto.SessionInfo) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToTransactionInfo will mutate a TransactionInfo struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToTransactionInfo(err error, reply *proto.TransactionInfo) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToQueryResultList will mutate a QueryResultList struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToQueryResultList(err error, reply *proto.QueryResultList) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToSplitQueryResult will mutate a SplitQueryResult struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToSplitQueryResult(err error, reply *proto.SplitQueryResult) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToBeginResponse will mutate a BeginResponse struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToBeginResponse(err error, reply *proto.BeginResponse) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToCommitResponse will mutate a CommitResponse struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToCommitResponse(err error, reply *proto.CommitResponse) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToRollbackResponse will mutate a RollbackResponse struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToRollbackResponse(err error, reply *proto.RollbackResponse) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
+	*replyErr = rpcErrFromTabletError(err)
 }

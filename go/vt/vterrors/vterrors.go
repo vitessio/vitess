@@ -111,6 +111,17 @@ func FromRPCError(rpcErr *mproto.RPCError) error {
 	}
 }
 
+// RPCErrFromVtError convert from a VtError to an *mproto.RPCError
+func RPCErrFromVtError(err error) *mproto.RPCError {
+	if err == nil {
+		return nil
+	}
+	return &mproto.RPCError{
+		Code:    int64(RecoverVtErrorCode(err)),
+		Message: err.Error(),
+	}
+}
+
 // FromVtRPCError recovers a VitessError from a *vtrpc.RPCError (which is how VitessErrors
 // are transmitted across proto3 RPC boundaries).
 func FromVtRPCError(rpcErr *vtrpc.RPCError) error {
