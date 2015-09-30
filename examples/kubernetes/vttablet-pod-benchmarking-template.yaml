@@ -3,10 +3,11 @@ apiVersion: v1
 metadata:
   name: vttablet-{{uid}}
   labels:
-    name: vttablet
+    component: vttablet
     keyspace: "{{keyspace}}"
     shard: "{{shard_label}}"
     tablet: "{{alias}}"
+    app: vitess
 spec:
   containers:
     - name: vttablet

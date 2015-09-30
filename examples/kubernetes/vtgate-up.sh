@@ -13,7 +13,7 @@ VTGATE_TEMPLATE=${VTGATE_TEMPLATE:-'vtgate-controller-template.yaml'}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
-  vtdataroot_volume="hostDir: {path: ${VTDATAROOT_VOLUME}}"
+  vtdataroot_volume="hostPath: {path: ${VTDATAROOT_VOLUME}}"
 fi
 
 replicas=$VTGATE_REPLICAS

@@ -2,19 +2,14 @@ apiVersion: v1
 kind: ReplicationController
 metadata:
   name: etcd-{{cell}}
-  labels:
-    name: etcd
-    cell: {{cell}}
 spec:
   replicas: {{replicas}}
-  selector:
-    name: etcd
-    cell: {{cell}}
   template:
     metadata:
       labels:
-        name: etcd
+        component: etcd
         cell: {{cell}}
+        app: vitess
     spec:
       volumes:
         - name: certs
@@ -34,6 +29,10 @@ spec:
               # Mount root certs from the host OS into the location
               # expected for our container OS (Debian):
               mountPath: /etc/ssl/certs/ca-certificates.crt
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
           command:
             - bash
             - "-c"

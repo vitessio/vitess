@@ -10,8 +10,8 @@ source $script_root/env.sh
 echo "Creating vtctld service..."
 $KUBECTL create -f vtctld-service.yaml
 
-echo "Creating vtctld pod..."
-$KUBECTL create -f vtctld-pod.yaml
+echo "Creating vtctld replicationcontroller..."
+$KUBECTL create -f vtctld-controller.yaml
 
 server=$(get_vtctld_addr)
 echo

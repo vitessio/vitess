@@ -3,12 +3,15 @@ apiVersion: v1
 metadata:
   name: vtctld
   labels:
-    name: vtctld
+    component: vtctld
+    app: vitess
 spec:
   ports:
     - port: 15000
       targetPort: 15000
       nodePort: 30000
-  selector: {name: vtctld}
+  selector:
+    component: vtctld
+    app: vitess
   type: NodePort
 

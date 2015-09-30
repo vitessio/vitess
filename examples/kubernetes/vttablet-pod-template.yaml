@@ -3,10 +3,11 @@ apiVersion: v1
 metadata:
   name: vttablet-{{uid}}
   labels:
-    name: vttablet
+    component: vttablet
     keyspace: "{{keyspace}}"
     shard: "{{shard_label}}"
     tablet: "{{alias}}"
+    app: vitess
 spec:
   containers:
     - name: vttablet
@@ -16,6 +17,10 @@ spec:
           mountPath: /dev/log
         - name: vtdataroot
           mountPath: /vt/vtdataroot
+      resources:
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
       command:
         - bash
         - "-c"
@@ -72,6 +77,10 @@ spec:
           mountPath: /dev/log
         - name: vtdataroot
           mountPath: /vt/vtdataroot
+      resources:
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
       command:
         - sh
         - "-c"
