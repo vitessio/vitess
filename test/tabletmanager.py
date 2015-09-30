@@ -488,6 +488,9 @@ class TestTabletManager(unittest.TestCase):
         ti['type'], tablet.Tablet.tablet_type_value['SPARE'],
         "tablet didn't go to spare while in lameduck mode: %s" % str(ti))
 
+    # Also the replica should be gone from the serving graph.
+    utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_keyspace/0', 'replica'], expect_fail=True)
+
   def test_health_check_worker_state_does_not_shutdown_query_service(self):
     # This test is similar to test_health_check, but has the following
     # differences:
