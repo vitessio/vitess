@@ -79,7 +79,7 @@ def exponential_backoff_retry(
   return decorator
 
 class VitessError(Exception):
-  """VitessError is raised by an RPC  with a server-side application error.
+  """VitessError is raised by an RPC with a server-side application error.
 
   VitessErrors have an error code and message.
   """

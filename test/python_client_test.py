@@ -105,7 +105,7 @@ class TestPythonClientBase(unittest.TestCase):
 
 
 class TestPythonClientErrors(TestPythonClientBase):
-  """Test cases to verify that the Python client can handle errors correctly"""
+  """Test cases to verify that the Python client can handle errors correctly."""
 
   def test_execute_integrity_errors(self):
     """Test we raise dbexceptions.IntegrityError for Execute calls."""
@@ -125,7 +125,7 @@ class TestPythonClientErrors(TestPythonClientBase):
 
     Args:
       query: query string to use for execute calls.
-      exception: exception class that we expect the execute call to raise
+      exception: exception class that we expect the execute call to raise.
     """
     # FIXME(alainjobart) add test for Execute once factory supports it
 
@@ -183,7 +183,7 @@ class TestPythonClientErrors(TestPythonClientBase):
 
     Args:
       query: query string to use for StreamExecute calls.
-      exception: exception class that we expect StreamExecute to raise
+      exception: exception class that we expect StreamExecute to raise.
     """
     # StreamExecuteKeyspaceIds test
     cursor = self._open_stream_keyspace_ids_cursor()
@@ -200,13 +200,13 @@ class TestPythonClientErrors(TestPythonClientBase):
   def test_streaming_integrity_error(self):
     """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
     self._verify_exception_for_stream_execute('error://integrity error',
-      dbexceptions.IntegrityError)
+        dbexceptions.IntegrityError)
 
   def test_transient_error(self):
     """Test we raise dbexceptions.TransientError for Execute calls."""
     # Special query that makes vtgateclienttest return a TransientError.
     self._verify_exception_for_execute('error://transient error',
-      dbexceptions.TransientError)
+        dbexceptions.TransientError)
 
   def test_streaming_transient_error(self):
     """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
