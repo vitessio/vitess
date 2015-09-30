@@ -94,7 +94,10 @@ class TestEnv(object):
           utils.run_vtctl(['ApplyVSchema', '-vschema', self.vschema])
         else:
           utils.run_vtctl(['ApplyVSchema', '-vschema_file', self.vschema])
-      utils.VtGate(port=self.vtgate_port).start(cache_ttl='500s')
+      utils.VtGate(port=self.vtgate_port).start(
+        cache_ttl='500s',
+        rpc_error_only_in_reply=False
+      )
     except:
       self.shutdown()
       raise

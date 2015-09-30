@@ -493,7 +493,7 @@ class VtGate(object):
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
             timeout_total='4s', timeout_per_conn='2s',
-            extra_args=None):
+            extra_args=None, rpc_error_only_in_reply=True):
     """Starts the process for this vtgate instance.
 
     If no other instance has been started, saves it into the global
@@ -519,10 +519,10 @@ class VtGate(object):
       args.extend(['-topo_implementation', topo_impl])
     else:
       args.extend(environment.topo_server().flags())
+    if rpc_error_only_in_reply:
+      args.extend(['-rpc-error-only-in-reply=true'])
     if extra_args:
       args.extend(extra_args)
-
-    args.extend(['-rpc-error-only-in-reply=true'])
 
     self.proc = run_bg(args)
     if self.secure_port:
