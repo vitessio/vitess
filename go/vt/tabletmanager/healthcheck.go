@@ -353,6 +353,12 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType pbt.TabletType)
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
+	// The change above succeeded, so update our local copy.
+	tablet, err := agent.readTablet(agent.batchCtx)
+	if err != nil {
+		log.Infof("Error re-reading tablet record: %v", err)
+		return
+	}
 
 	// Update the serving graph in our cell, only if we're dealing with
 	// a serving type
