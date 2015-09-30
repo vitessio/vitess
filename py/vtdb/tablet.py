@@ -39,7 +39,7 @@ class TabletError(Exception):
 
   def __str__(self):
     """Print the error nicely, converting the proto error enum to its name"""
-    return '%s returned %s with message: %s' % (self.method_name, 
+    return '%s returned %s with message: %s' % (self.method_name,
       vtrpc_pb2.ErrorCode.Name(self.code), self.message)
 
   def convert_to_dbexception(self, args):

@@ -45,6 +45,7 @@ def setUpModule():
       args.extend(['-grpc_port', str(vtgateclienttest_grpc_port)])
     if protocols_flavor().service_map():
       args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
+    args.extend(['-rpc-error-only-in-reply=true'])
 
     vtgateclienttest_process = utils.run_bg(args)
     utils.wait_for_vars('vtgateclienttest', vtgateclienttest_port)
@@ -55,16 +56,21 @@ def setUpModule():
 
 def tearDownModule():
   utils.kill_sub_process(vtgateclienttest_process, soft=True)
-  vtgateclienttest_process.wait()
+  if vtgateclienttest_process:
+    vtgateclienttest_process.wait()
 
   environment.topo_server().teardown()
 
 
-class TestPythonClient(unittest.TestCase):
+class TestPythonClientBase(unittest.TestCase):
+  """Base class for Python client tests"""
   CONNECT_TIMEOUT = 10.0
 
+  # A packed keyspace_id from the middle of the full keyrange.
+  KEYSPACE_ID_0X80 = struct.Struct('!Q').pack(0x80 << 56)
+
   def setUp(self):
-    super(TestPythonClient, self).setUp()
+    super(TestPythonClientBase, self).setUp()
     addr = 'localhost:%d' % vtgateclienttest_port
     protocol = protocols_flavor().vtgate_python_protocol()
     self.conn = vtgate_client.connect(protocol, addr, 30.0)
@@ -74,6 +80,163 @@ class TestPythonClient(unittest.TestCase):
 
   def tearDown(self):
     self.conn.close()
+
+  def _open_keyspace_ids_cursor(self):
+    return self.conn.cursor(
+        'keyspace', 'master', keyspace_ids=[self.KEYSPACE_ID_0X80])
+
+  def _open_keyranges_cursor(self):
+    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
+    return self.conn.cursor('keyspace', 'master', keyranges=[kr])
+
+  def _open_batch_cursor(self):
+    return self.conn.cursor(keyspace=None, tablet_type='master')
+
+  def _open_stream_keyranges_cursor(self):
+    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
+    return self.conn.cursor(
+        'keyspace', 'master', keyranges=[kr],
+        cursorclass=vtgate_cursor.StreamVTGateCursor)
+
+  def _open_stream_keyspace_ids_cursor(self):
+    return self.conn.cursor(
+        'keyspace', 'master', keyspace_ids=[self.KEYSPACE_ID_0X80],
+        cursorclass=vtgate_cursor.StreamVTGateCursor)
+
+
+class TestPythonClientErrors(TestPythonClientBase):
+  """Test cases to verify that the Python client can handle errors correctly."""
+
+  def test_execute_integrity_errors(self):
+    """Test we raise dbexceptions.IntegrityError for Execute calls."""
+    # Special query that makes vtgateclienttest return an IntegrityError.
+    self._verify_exception_for_execute('error://integrity error',
+      dbexceptions.IntegrityError)
+
+  def test_partial_integrity_errors(self):
+    """Test we raise dbexceptions.IntegrityError when Execute calls
+    return a partial error."""
+    # Special query that makes vtgateclienttest return a partial error.
+    self._verify_exception_for_execute('partialerror://integrity error',
+      dbexceptions.IntegrityError)
+
+  def _verify_exception_for_execute(self, query, exception):
+    """Verify that we raise a specific exception for all Execute calls.
+
+    Args:
+      query: query string to use for execute calls.
+      exception: exception class that we expect the execute call to raise.
+    """
+    # FIXME(alainjobart) add test for Execute once factory supports it
+
+    # FIXME(alainjobart) add test for ExecuteShards once factory supports it
+
+    # ExecuteKeyspaceIds test
+    cursor = self._open_keyspace_ids_cursor()
+    with self.assertRaises(exception):
+      cursor.execute(query, {})
+    cursor.close()
+
+    # ExecuteKeyRanges test
+    cursor = self._open_keyranges_cursor()
+    with self.assertRaises(exception):
+      cursor.execute(query, {})
+    cursor.close()
+
+    # ExecuteEntityIds test
+    cursor = self.conn.cursor('keyspace', 'master')
+    with self.assertRaises(exception):
+      cursor.execute_entity_ids(
+          query, {},
+          entity_keyspace_id_map={1: self.KEYSPACE_ID_0X80},
+          entity_column_name='user_id')
+    cursor.close()
+
+    # ExecuteBatchKeyspaceIds test
+    cursor = self._open_batch_cursor()
+    with self.assertRaises(exception):
+      cursor.executemany(
+          sql=None,
+          params_list=[
+              dict(
+                  sql=query,
+                  bind_variables={},
+                  keyspace='keyspace',
+                  keyspace_ids=[self.KEYSPACE_ID_0X80])])
+    cursor.close()
+
+    # ExecuteBatchShard test
+    cursor = self._open_batch_cursor()
+    with self.assertRaises(exception):
+      cursor.executemany(
+          sql=None,
+          params_list=[
+              dict(
+                  sql=query,
+                  bind_variables={},
+                  keyspace='keyspace',
+                  shards=[keyrange_constants.SHARD_ZERO])])
+    cursor.close()
+
+  def _verify_exception_for_stream_execute(self, query, exception):
+    """Verify that we raise a specific exception for all StreamExecute calls.
+
+    Args:
+      query: query string to use for StreamExecute calls.
+      exception: exception class that we expect StreamExecute to raise.
+    """
+    # StreamExecuteKeyspaceIds test
+    cursor = self._open_stream_keyspace_ids_cursor()
+    with self.assertRaises(exception):
+      cursor.execute(query, {})
+    cursor.close()
+
+    # StreamExecuteKeyRanges test
+    cursor = self._open_stream_keyranges_cursor()
+    with self.assertRaises(exception):
+      cursor.execute(query, {})
+    cursor.close()
+
+  def test_streaming_integrity_error(self):
+    """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
+    self._verify_exception_for_stream_execute('error://integrity error',
+        dbexceptions.IntegrityError)
+
+  def test_transient_error(self):
+    """Test we raise dbexceptions.TransientError for Execute calls."""
+    # Special query that makes vtgateclienttest return a TransientError.
+    self._verify_exception_for_execute('error://transient error',
+        dbexceptions.TransientError)
+
+  def test_streaming_transient_error(self):
+    """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
+    self._verify_exception_for_stream_execute('error://transient error',
+      dbexceptions.TransientError)
+
+  def test_error(self):
+    """Test a regular server error raises the right exception."""
+    error_request = 'error://unknown error'
+    error_caller_id = vtgate_client.CallerID(principal=error_request)
+
+    # Begin test
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+      self.conn.begin(error_caller_id)
+
+    # Commit test
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+      self.conn.begin(error_caller_id)
+
+    # Rollback test
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+      self.conn.begin(error_caller_id)
+
+    # GetSrvKeyspace test
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+      self.conn.get_srv_keyspace(error_request)
+
+
+class TestPythonClient(TestPythonClientBase):
+  """Non-error test cases for the Python client."""
 
   def test_success_get_srv_keyspace(self):
     """Test we get the right results from get_srv_keyspace.
@@ -111,133 +274,6 @@ class TestPythonClient(unittest.TestCase):
     self.assertEquals(small.get_shard_count('replica'), 0)
     with self.assertRaises(ValueError):
       small.keyspace_id_to_shard_name_for_db_type(0x6000000000000000, 'replica')
-
-  # A packed keyspace_id from the middle of the full keyrange.
-  KEYSPACE_ID_0X80 = struct.Struct('!Q').pack(0x80 << 56)
-
-  def _open_keyspace_ids_cursor(self):
-    return self.conn.cursor(
-        'keyspace', 'master', keyspace_ids=[self.KEYSPACE_ID_0X80])
-
-  def _open_keyranges_cursor(self):
-    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
-    return self.conn.cursor('keyspace', 'master', keyranges=[kr])
-
-  def _open_batch_cursor(self):
-    return self.conn.cursor(keyspace=None, tablet_type='master')
-
-  def _open_stream_keyranges_cursor(self):
-    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
-    return self.conn.cursor(
-        'keyspace', 'master', keyranges=[kr],
-        cursorclass=vtgate_cursor.StreamVTGateCursor)
-
-  def _open_stream_keyspace_ids_cursor(self):
-    return self.conn.cursor(
-        'keyspace', 'master', keyspace_ids=[self.KEYSPACE_ID_0X80],
-        cursorclass=vtgate_cursor.StreamVTGateCursor)
-
-  def _test_integrity_error_for_execute(self, query):
-    """Helper for testing that we raise dbexceptions.IntegrityError if an
-    Execute call returns an integrity error."""
-    # FIXME(alainjobart) add test for Execute once factory supports it
-
-    # FIXME(alainjobart) add test for ExecuteShards once factory supports it
-
-    # ExecuteKeyspaceIds test
-    cursor = self._open_keyspace_ids_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.execute(query, {})
-    cursor.close()
-
-    # ExecuteKeyRanges test
-    cursor = self._open_keyranges_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.execute(query, {})
-    cursor.close()
-
-    # ExecuteEntityIds test
-    cursor = self.conn.cursor('keyspace', 'master')
-    with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.execute_entity_ids(
-          query, {},
-          entity_keyspace_id_map={1: self.KEYSPACE_ID_0X80},
-          entity_column_name='user_id')
-    cursor.close()
-
-    # ExecuteBatchKeyspaceIds test
-    cursor = self._open_batch_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.executemany(
-          sql=None,
-          params_list=[
-              dict(
-                  sql=query,
-                  bind_variables={},
-                  keyspace='keyspace',
-                  keyspace_ids=[self.KEYSPACE_ID_0X80])])
-    cursor.close()
-
-    # ExecuteBatchShard test
-    cursor = self._open_batch_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.executemany(
-          sql=None,
-          params_list=[
-              dict(
-                  sql=query,
-                  bind_variables={},
-                  keyspace='keyspace',
-                  shards=[keyrange_constants.SHARD_ZERO])])
-    cursor.close()
-
-  def test_integrity_error(self):
-    """Test we raise dbexceptions.IntegrityError for Execute calls."""
-    # Special query that makes vtgateclienttest return an IntegrityError.
-    self._test_integrity_error_for_execute('error://integrity error')
-
-  def test_partial_integrity_error(self):
-    """Test we raise dbexceptions.IntegrityError when Execute calls
-    return a partial error."""
-    # Special query that makes vtgateclienttest return a partial error.
-    self._test_integrity_error_for_execute('partialerror://integrity error')
-
-  def test_streaming_integrity_error(self):
-    """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
-    # Special query that makes vtgateclienttest return an IntegrityError.
-    integrity_error_test_query = 'error://integrity error'
-
-    # StreamExecuteKeyspaceIds test
-    cursor = self._open_stream_keyspace_ids_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.execute(integrity_error_test_query, {})
-    cursor.close()
-
-    # StreamExecuteKeyRanges test
-    cursor = self._open_stream_keyranges_cursor()
-    with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.execute(integrity_error_test_query, {})
-    cursor.close()
-
-  def test_error(self):
-    """Test a regular server error raises the right exception."""
-    error_caller_id = vtgate_client.CallerID(principal='error://unknown error')
-
-    # Begin test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
-      self.conn.begin(error_caller_id)
-
-    # Commit test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
-      self.conn.begin(error_caller_id)
-
-    # Rollback test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
-      self.conn.begin(error_caller_id)
-
-    # GetSrvKeyspace test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
-      self.conn.get_srv_keyspace('error://unknown error')
 
   def test_effective_caller_id(self):
     """Test that the passed in effective_caller_id is parsed correctly.
@@ -324,6 +360,7 @@ class TestPythonClient(unittest.TestCase):
     check_good_and_bad_effective_caller_ids(
         self._open_stream_keyranges_cursor(),
         cursor_stream_execute_keyranges_method)
+
 
 if __name__ == '__main__':
   utils.main()

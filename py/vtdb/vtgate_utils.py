@@ -1,8 +1,10 @@
 import logging
+import re
 import time
 
 from vtdb import dbexceptions
 from vtdb import vtdb_logger
+from vtproto import vtrpc_pb2
 
 INITIAL_DELAY_MS = 5
 NUM_RETRIES = 3
@@ -75,3 +77,71 @@ def exponential_backoff_retry(
           delay = min(max_delay_ms, delay)
     return wrapper
   return decorator
+
+class VitessError(Exception):
+  """VitessError is raised by an RPC with a server-side application error.
+
+  VitessErrors have an error code and message.
+  """
+
+  _errno_pattern = re.compile(r'\(errno (\d+)\)')
+
+  def __init__(self, method_name, error=None):
+    """Initializes a VitessError with appropriate defaults from an error dict.
+
+    Args:
+      method_name: RPC method name, as a string, that was called.
+      error: error dict returned by an RPC call.
+    """
+    if error is None or not isinstance(error, dict):
+      error = {}
+    self.method_name = method_name
+    self.code = error.get('Code', vtrpc_pb2.UNKNOWN_ERROR)
+    self.message = error.get('Message', 'Missing error message')
+    # Make self.args reflect the error components
+    super(VitessError, self).__init__(self.message, method_name, self.code)
+
+  def __str__(self):
+    """Print the error nicely, converting the proto error enum to its name"""
+    return '%s returned %s with message: %s' % (self.method_name,
+      vtrpc_pb2.ErrorCode.Name(self.code), self.message)
+
+  def convert_to_dbexception(self, args):
+    """Converts from a VitessError to the appropriate dbexceptions class.
+
+    Args:
+      args: argument tuple to use to create the new exception.
+
+    Returns:
+      An exception from dbexceptions.
+    """
+    if self.code == vtrpc_pb2.TRANSIENT_ERROR:
+      return dbexceptions.TransientError(args)
+    if self.code == vtrpc_pb2.INTEGRITY_ERROR:
+      # Prune the error message to truncate after the mysql errno, since
+      # the error message may contain the query string with bind variables.
+      msg = self.message.lower()
+      parts = self._errno_pattern.split(msg)
+      pruned_msg = msg[:msg.find(parts[2])]
+      new_args = (pruned_msg,) + tuple(args[1:])
+      return dbexceptions.IntegrityError(new_args)
+
+    return dbexceptions.DatabaseError(args)
+
+def extract_rpc_error(method_name, response):
+  """Extracts any app error that's embedded in an RPC response.
+
+  Args:
+    method_name: RPC name, as a string.
+    response: response from an RPC.
+
+  Raises:
+    VitessError if there is an app error embedded in the reply
+  """
+  reply = response.reply
+  if not reply or not isinstance(reply, dict):
+    return response
+  # Handle the case of new client => old server
+  err = reply.get('Err', None)
+  if err:
+    raise VitessError(method_name, err)

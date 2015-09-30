@@ -125,7 +125,7 @@ class VTGateClient(object):
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -142,7 +142,7 @@ class VTGateClient(object):
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -159,7 +159,7 @@ class VTGateClient(object):
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -217,7 +217,7 @@ class VTGateClient(object):
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -261,7 +261,7 @@ class VTGateClient(object):
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -303,7 +303,7 @@ class VTGateClient(object):
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
