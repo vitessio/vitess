@@ -183,6 +183,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err er
 	}()
 	conn := qre.qe.txPool.Get(transactionID)
 	defer conn.Recycle()
+	conn.RecordQuery(qre.query)
 	var invalidator CacheInvalidator
 	if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CACHE_NONE {
 		invalidator = conn.DirtyKeys(qre.plan.TableName)
