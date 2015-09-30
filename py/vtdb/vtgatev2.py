@@ -8,7 +8,6 @@
 from itertools import izip
 import logging
 import random
-import re
 
 from net import bsonrpc
 from net import gorpc
@@ -529,9 +528,6 @@ class VTGateConnection(vtgate_client.VTGateClient):
     vtgate_utils.log_exception(new_exc, keyspace=keyspace_name,
                                tablet_type=tablet_type)
     return new_exc
-
-
-
 
 
 def _make_row(row, conversions):

@@ -12,9 +12,8 @@ from vtdb import cursorv3
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import vtdb_logger
+from vtdb import vtgate_utils
 
-
-_errno_pattern = re.compile(r'\(errno (\d+)\)')
 
 
 def log_exception(method):
@@ -44,30 +43,13 @@ def log_exception(method):
   return _log_exception
 
 
-def handle_app_error(exc_args):
-  msg = str(exc_args[0]).lower()
-  if msg.startswith('request_backlog'):
-    return dbexceptions.RequestBacklog(exc_args)
-  match = _errno_pattern.search(msg)
-  if match:
-    mysql_errno = int(match.group(1))
-    # Prune the error message to truncate the query string
-    # returned by mysql as it contains bind variables.
-    if mysql_errno == 1062:
-      parts = _errno_pattern.split(msg)
-      pruned_msg = msg[:msg.find(parts[2])]
-      new_args = (pruned_msg,) + tuple(exc_args[1:])
-      return dbexceptions.IntegrityError(new_args)
-  return dbexceptions.DatabaseError(exc_args)
-
-
 @log_exception
 def convert_exception(exc, *args):
   new_args = exc.args + args
   if isinstance(exc, gorpc.TimeoutError):
     return dbexceptions.TimeoutError(new_args)
-  elif isinstance(exc, gorpc.AppError):
-    return handle_app_error(new_args)
+  elif isinstance(exc, vtgate_utils.VitessError):
+    return exc.convert_to_dbexception(new_args)
   elif isinstance(exc, gorpc.ProgrammingError):
     return dbexceptions.ProgrammingError(new_args)
   elif isinstance(exc, gorpc.GoRpcError):
@@ -147,28 +129,53 @@ class VTGateConnection(object):
     return cursorclass(self, *pargs, **kwargs)
 
   def begin(self, effective_caller_id=None):
-    _ = effective_caller_id  # TODO: Pass effective_caller_id through.
     try:
-      response = self._get_client().call('VTGate.Begin', None)
-      self.session = response.reply
-    except gorpc.GoRpcError as e:
+      req = {}
+      self._add_caller_id(req, effective_caller_id)
+      response = self._get_client().call('VTGate.Begin2', req)
+      vtgate_utils.extract_rpc_error('VTGate.Begin2', response)
+      self.effective_caller_id = effective_caller_id
+      self.session = None
+      self._update_session(response)
+    except (gorpc.GoRpcError, vtgate_utils.VitessError) as e:
       raise convert_exception(e, str(self))
 
   def commit(self):
     try:
-      session = self.session
-      self.session = None
-      self._get_client().call('VTGate.Commit', session)
-    except gorpc.GoRpcError as e:
+      req = {}
+      self._add_caller_id(req, self.effective_caller_id)
+      self._add_session(req)
+      response = self._get_client().call('VTGate.Commit2', req)
+      vtgate_utils.extract_rpc_error('VTGate.Commit2', response)
+    except (gorpc.GoRpcError, vtgate_utils.VitessError) as e:
       raise convert_exception(e, str(self))
+    finally:
+      self.session = None
+      self.effective_caller_id = None
 
   def rollback(self):
     try:
-      session = self.session
-      self.session = None
-      self._get_client().call('VTGate.Rollback', session)
-    except gorpc.GoRpcError as e:
+      req = {}
+      self._add_caller_id(req, self.effective_caller_id)
+      self._add_session(req)
+      response = self._get_client().call('VTGate.Rollback2', req)
+      vtgate_utils.extract_rpc_error('VTGate.Rollback2', response)
+    except (gorpc.GoRpcError, vtgate_utils.VitessError) as e:
       raise convert_exception(e, str(self))
+    finally:
+      self.session = None
+      self.effective_caller_id = None
+
+  def _add_caller_id(self, req, caller_id):
+    if caller_id:
+      caller_id_dict = {}
+      if caller_id.principal:
+        caller_id_dict['Principal'] = caller_id.principal
+      if caller_id.component:
+        caller_id_dict['Component'] = caller_id.component
+      if caller_id.subcomponent:
+        caller_id_dict['Subcomponent'] = caller_id.subcomponent
+      req['CallerID'] = caller_id_dict
 
   def _add_session(self, req):
     if self.session:
@@ -191,9 +198,8 @@ class VTGateConnection(object):
     try:
       response = self._get_client().call('VTGate.Execute', req)
       self._update_session(response)
+      vtgate_utils.extract_rpc_error('VTGate.Execute', response)
       reply = response.reply
-      if response.reply.get('Error'):
-        raise gorpc.AppError(response.reply['Error'], 'VTGate.Execute')
 
       if reply.get('Result'):
         res = reply['Result']
@@ -206,7 +212,7 @@ class VTGateConnection(object):
 
         rowcount = res['RowsAffected']
         lastrowid = res['InsertId']
-    except gorpc.GoRpcError as e:
+    except (gorpc.GoRpcError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql)
     except Exception:
@@ -234,8 +240,7 @@ class VTGateConnection(object):
       self._add_session(req)
       response = self._get_client().call('VTGate.ExecuteBatch', req)
       self._update_session(response)
-      if response.reply.get('Error'):
-        raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteBatch')
+      vtgate_utils.extract_rpc_error('VTGate.ExecuteBatch', response)
       for reply in response.reply['List']:
         fields = []
         conversions = []
@@ -252,7 +257,7 @@ class VTGateConnection(object):
         rowcount = reply['RowsAffected']
         lastrowid = reply['InsertId']
         rowsets.append((results, rowcount, lastrowid, fields))
-    except gorpc.GoRpcError as e:
+    except (gorpc.GoRpcError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables_list)
       raise convert_exception(e, str(self), sql_list)
     except Exception:
@@ -269,16 +274,43 @@ class VTGateConnection(object):
 
     stream_fields = []
     stream_conversions = []
+
+    def drain_conn_after_streaming_app_error():
+      """Drain connection of all incoming streaming packets (ignoring them).
+
+      This is necessary for streaming calls which return application
+      errors inside the RPC response (instead of through the usual GoRPC
+      error return).  This is because GoRPC always expects the last
+      packet to be an error; either the usual GoRPC application error
+      return, or a special "end-of-stream" error.
+
+      If an application error is returned with the RPC response, there
+      will still be at least one more packet coming, as GoRPC has not
+      seen anything that it considers to be an error. If the connection
+      is not drained of this last packet, future reads from the wire
+      will be off by one and will return errors.
+      """
+      next_result = rpc_client.stream_next()
+      if next_result is not None:
+        rpc_client.close()
+        raise gorpc.GoRpcError(
+            'Connection should only have one packet remaining'
+            ' after streaming app error in RPC response.')
+
     try:
-      rpc_client.stream_call('VTGate.StreamExecute', req)
+      rpc_client.stream_call('VTGate.StreamExecute2', req)
       first_response = rpc_client.stream_next()
+      if first_response.reply.get('Err'):
+        drain_conn_after_streaming_app_error()
+        raise vtgate_utils.VitessError(exec_method,
+          first_response.reply['Err'])
       reply = first_response.reply['Result']
 
       for field in reply['Fields']:
         stream_fields.append((field['Name'], field['Type']))
         stream_conversions.append(
             field_types.conversions.get(field['Type']))
-    except gorpc.GoRpcError as e:
+    except (gorpc.GoRpcError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql)
     except Exception:
