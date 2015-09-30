@@ -52,7 +52,6 @@ type TxPool struct {
 	activePool        *pools.Numbered
 	lastID            sync2.AtomicInt64
 	timeout           sync2.AtomicDuration
-	poolTimeout       sync2.AtomicDuration
 	ticks             *timer.Timer
 	txStats           *stats.Timings
 	queryServiceStats *QueryServiceStats
@@ -68,7 +67,6 @@ func NewTxPool(
 	txStatsPrefix string,
 	capacity int,
 	timeout time.Duration,
-	poolTimeout time.Duration,
 	idleTimeout time.Duration,
 	enablePublishStats bool,
 	qStats *QueryServiceStats,
@@ -84,7 +82,6 @@ func NewTxPool(
 		activePool:        pools.NewNumbered(),
 		lastID:            sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:           sync2.NewAtomicDuration(timeout),
-		poolTimeout:       sync2.NewAtomicDuration(poolTimeout),
 		ticks:             timer.NewTimer(timeout / 10),
 		txStats:           stats.NewTimings(txStatsName),
 		checker:           checker,
@@ -94,7 +91,6 @@ func NewTxPool(
 	// but we know it doesn't export Timeout.
 	if enablePublishStats {
 		stats.Publish(name+"Timeout", stats.DurationFunc(axp.timeout.Get))
-		stats.Publish(name+"PoolTimeout", stats.DurationFunc(axp.poolTimeout.Get))
 	}
 	return axp
 }
@@ -237,17 +233,6 @@ func (axp *TxPool) Timeout() time.Duration {
 func (axp *TxPool) SetTimeout(timeout time.Duration) {
 	axp.timeout.Set(timeout)
 	axp.ticks.SetInterval(timeout / 10)
-}
-
-// SetPoolTimeout sets the wait time for the tx pool.
-// TODO(sougou): move this to TabletServer.
-func (axp *TxPool) SetPoolTimeout(timeout time.Duration) {
-	axp.poolTimeout.Set(timeout)
-}
-
-// PoolTimeout returns the wait time for the tx pool.
-func (axp *TxPool) PoolTimeout() time.Duration {
-	return axp.poolTimeout.Get()
 }
 
 // TxConnection is meant for executing transactions. It keeps track

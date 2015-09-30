@@ -25,7 +25,6 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 
 	txPool := newTxPool(true)
 	txPool.SetTimeout(1 * time.Second)
-	txPool.SetPoolTimeout(1 * time.Second)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
@@ -120,26 +119,6 @@ func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
 			t.Fatalf("get error: %v, but expect: %v", err, ErrConnPoolClosed)
 		}
 	}()
-	txPool.Begin(ctx)
-}
-
-func TestTxPoolBeginWithPoolTimeout(t *testing.T) {
-	db := fakesqldb.Register()
-	db.AddQuery("begin", &proto.QueryResult{})
-
-	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{Engine: db.Name}
-	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	txPool.Open(&appParams, &dbaParams)
-	// set pool capacity to 1
-	txPool.pool.SetCapacity(1)
-	defer txPool.Close()
-	// start the first transaction
-	txPool.Begin(context.Background())
-	// start the second transaction, which should fail due to
-	// ErrTxPoolFull error
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer handleAndVerifyTabletError(t, "expect to get an error", ErrTxPoolFull)
 	txPool.Begin(ctx)
 }
 
@@ -275,7 +254,6 @@ func newTxPool(enablePublishStats bool) *TxPool {
 	txStatsPrefix := fmt.Sprintf("TxStats-%d-", randID)
 	transactionCap := 300
 	transactionTimeout := time.Duration(30 * time.Second)
-	txPoolTimeout := time.Duration(30 * time.Second)
 	idleTimeout := time.Duration(30 * time.Second)
 	queryServiceStats := NewQueryServiceStats("", enablePublishStats)
 	return NewTxPool(
@@ -283,7 +261,6 @@ func newTxPool(enablePublishStats bool) *TxPool {
 		txStatsPrefix,
 		transactionCap,
 		transactionTimeout,
-		txPoolTimeout,
 		idleTimeout,
 		enablePublishStats,
 		queryServiceStats,

@@ -62,7 +62,14 @@ var stateName = []string{
 
 // TabletServer implements the RPC interface for the query service.
 type TabletServer struct {
-	config Config
+	// config contains the original config values. TabletServer
+	// contains variables that are derived from the original config
+	// that can be subsequently changed. So, they may not always
+	// correspond to the original values.
+	config       Config
+	queryTimeout sync2.AtomicDuration
+	beginTimeout sync2.AtomicDuration
+
 	// mu is used to access state. The lock should only be held
 	// for short periods. For longer periods, you have to transition
 	// the state to a transient value and release the lock.
@@ -120,6 +127,8 @@ type MySQLChecker interface {
 func NewTabletServer(config Config) *TabletServer {
 	tsv := &TabletServer{
 		config:              config,
+		queryTimeout:        sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
+		beginTimeout:        sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
 		streamHealthMap:     make(map[int]chan<- *pb.StreamHealthResponse),
 		sessionID:           Rand(),
@@ -133,6 +142,8 @@ func NewTabletServer(config Config) *TabletServer {
 			tsv.mu.Unlock()
 			return state
 		}))
+		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(tsv.queryTimeout.Get))
+		stats.Publish(config.StatsPrefix+"BeginTimeout", stats.DurationFunc(tsv.beginTimeout.Get))
 		stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(tsv.GetState))
 	}
 	return tsv
@@ -396,7 +407,7 @@ func (tsv *TabletServer) StopService() {
 func (tsv *TabletServer) setTimeBomb() chan struct{} {
 	done := make(chan struct{})
 	go func() {
-		qt := tsv.qe.queryTimeout.Get()
+		qt := tsv.queryTimeout.Get()
 		if qt == 0 {
 			return
 		}
@@ -513,7 +524,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *pb.Target, session *
 	if err = tsv.startRequest(target, session.SessionId, false); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, tsv.qe.txPool.PoolTimeout())
+	ctx, cancel := withTimeout(ctx, tsv.beginTimeout.Get())
 	defer func() {
 		tsv.qe.queryServiceStats.QueryStats.Record("BEGIN", time.Now())
 		cancel()
@@ -535,7 +546,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *pb.Target, session 
 	if err = tsv.startRequest(target, session.SessionId, true); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, tsv.qe.queryTimeout.Get())
+	ctx, cancel := withTimeout(ctx, tsv.queryTimeout.Get())
 	defer func() {
 		tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", time.Now())
 		cancel()
@@ -556,7 +567,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *pb.Target, sessio
 	if err = tsv.startRequest(target, session.SessionId, true); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, tsv.qe.queryTimeout.Get())
+	ctx, cancel := withTimeout(ctx, tsv.queryTimeout.Get())
 	defer func() {
 		tsv.qe.queryServiceStats.QueryStats.Record("ROLLBACK", time.Now())
 		cancel()
@@ -632,7 +643,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *pb.Target, query *
 	if err = tsv.startRequest(target, query.SessionId, allowShutdown); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, tsv.qe.queryTimeout.Get())
+	ctx, cancel := withTimeout(ctx, tsv.queryTimeout.Get())
 	defer func() {
 		cancel()
 		tsv.endRequest()
@@ -650,6 +661,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *pb.Target, query *
 		ctx:           ctx,
 		logStats:      logStats,
 		qe:            tsv.qe,
+		tsv:           tsv,
 	}
 	result, err := qre.Execute()
 	if err != nil {
@@ -688,6 +700,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *pb.Target, q
 		ctx:           ctx,
 		logStats:      logStats,
 		qe:            tsv.qe,
+		tsv:           tsv,
 	}
 	err = qre.Stream(sendReply)
 	if err != nil {
@@ -764,7 +777,7 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pb.Target, req 
 	if err = tsv.startRequest(target, req.SessionID, false); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, tsv.qe.queryTimeout.Get())
+	ctx, cancel := withTimeout(ctx, tsv.queryTimeout.Get())
 	defer func() {
 		cancel()
 		tsv.endRequest()
@@ -784,6 +797,7 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pb.Target, req 
 		ctx:      ctx,
 		logStats: logStats,
 		qe:       tsv.qe,
+		tsv:      tsv,
 	}
 	columnType, err := getColumnType(qre, splitter.splitColumn, splitter.tableName)
 	if err != nil {

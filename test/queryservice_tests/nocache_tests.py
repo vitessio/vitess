@@ -286,7 +286,7 @@ class TestNocache(framework.TestCase):
     self.env.execute("set vt_transaction_cap=1")
     self.env.execute("set vt_txpool_timeout=0.5")
     vstart = self.env.debug_vars()
-    self.assertEqual(vstart.TransactionPoolPoolTimeout, 5e8)
+    self.assertEqual(vstart.BeginTimeout, 5e8)
     co2 = self.env.connect()
     self.env.conn.begin()
     try:
@@ -308,7 +308,7 @@ class TestNocache(framework.TestCase):
     self.env.execute("set vt_txpool_timeout=1")
     vend = self.env.debug_vars()
     self.assertEqual(vend.TransactionPoolCapacity, 20)
-    self.assertEqual(vend.TransactionPoolPoolTimeout, 1e9)
+    self.assertEqual(vend.BeginTimeout, 1e9)
     self.assertEqual(
         vstart.mget("Errors.TxPoolFull", 0) + 1, vend.Errors.TxPoolFull)
 
