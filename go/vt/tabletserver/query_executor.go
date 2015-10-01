@@ -32,6 +32,9 @@ type QueryExecutor struct {
 	ctx           context.Context
 	logStats      *LogStats
 	qe            *QueryEngine
+
+	// TODO(sougou): Remove this after custom set functions are removed.
+	tsv *TabletServer
 }
 
 // poolConn is the interface implemented by users of this specialized pool.
@@ -183,6 +186,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err er
 	}()
 	conn := qre.qe.txPool.Get(transactionID)
 	defer conn.Recycle()
+	conn.RecordQuery(qre.query)
 	var invalidator CacheInvalidator
 	if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CACHE_NONE {
 		invalidator = conn.DirtyKeys(qre.plan.TableName)
@@ -672,7 +676,7 @@ func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
 		if err != nil {
 			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_query_timeout = %v, want int64 or float64", err)
 		}
-		qre.qe.queryTimeout.Set(val)
+		qre.tsv.QueryTimeout.Set(val)
 	case "vt_idle_timeout":
 		val, err := parseDuration(qre.plan.SetValue)
 		if err != nil {
@@ -698,7 +702,7 @@ func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
 		if err != nil {
 			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_txpool_timeout = %v, want int64 or float64", err)
 		}
-		qre.qe.txPool.SetPoolTimeout(val)
+		qre.tsv.BeginTimeout.Set(val)
 	default:
 		conn, err := qre.getConn(qre.qe.connPool)
 		if err != nil {

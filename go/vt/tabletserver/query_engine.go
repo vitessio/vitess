@@ -55,7 +55,6 @@ type QueryEngine struct {
 	tasks        sync.WaitGroup
 
 	// Vars
-	queryTimeout     sync2.AtomicDuration
 	spotCheckFreq    sync2.AtomicInt64
 	strictMode       sync2.AtomicInt64
 	maxResultSize    sync2.AtomicInt64
@@ -161,7 +160,6 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 		config.StatsPrefix,
 		config.TransactionCap,
 		time.Duration(config.TransactionTimeout*1e9),
-		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
 		qe.queryServiceStats,
@@ -171,7 +169,6 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
 	qe.streamQList = NewQueryList()
 
-	qe.queryTimeout.Set(time.Duration(config.QueryTimeout * 1e9))
 	qe.spotCheckFreq = sync2.NewAtomicInt64(int64(config.SpotCheckRatio * spotCheckMultiplier))
 	if config.StrictMode {
 		qe.strictMode.Set(1)
@@ -192,7 +189,6 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
 		stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
 		stats.Publish(config.StatsPrefix+"StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
-		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
 		stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
 			return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
 		}))

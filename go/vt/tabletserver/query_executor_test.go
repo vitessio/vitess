@@ -697,8 +697,8 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
 	vtQueryTimeoutInMillis := time.Duration(vtQueryTimeout) * time.Second
-	if qre.qe.queryTimeout.Get() != vtQueryTimeoutInMillis {
-		t.Fatalf("set query failed, expected to have vt_query_timeout: %d, but got: %d", vtQueryTimeoutInMillis, qre.qe.queryTimeout.Get())
+	if qre.tsv.QueryTimeout.Get() != vtQueryTimeoutInMillis {
+		t.Fatalf("set query failed, expected to have vt_query_timeout: %d, but got: %d", vtQueryTimeoutInMillis, qre.tsv.QueryTimeout.Get())
 	}
 	// set vt_idle_timeout
 	vtIdleTimeout := int64(67)
@@ -774,8 +774,8 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
 	vtTxPoolTimeoutInMillis := time.Duration(vtTxPoolTimeout) * time.Second
-	if qre.qe.txPool.PoolTimeout() != vtTxPoolTimeoutInMillis {
-		t.Fatalf("set query failed, expected to have vt_txpool_timeout: %d, but got: %d", vtTxPoolTimeoutInMillis, qre.qe.txPool.PoolTimeout())
+	if qre.tsv.BeginTimeout.Get() != vtTxPoolTimeoutInMillis {
+		t.Fatalf("set query failed, expected to have vt_txpool_timeout: %d, but got: %d", vtTxPoolTimeoutInMillis, qre.tsv.BeginTimeout.Get())
 	}
 }
 
@@ -1365,6 +1365,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 		plan:          tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql),
 		logStats:      logStats,
 		qe:            tsv.qe,
+		tsv:           tsv,
 	}
 }
 

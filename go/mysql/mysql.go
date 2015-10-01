@@ -38,45 +38,48 @@ func init() {
 }
 
 const (
+	// typeDecimal is a deprecated type.
+	// Value is 0.
+	typeDecimal = C.MYSQL_TYPE_DECIMAL
 	// TypeTiny specifies a TINYINT type.
 	// Value is 1.
-	TypeTiny = C.FIELD_TYPE_TINY
+	TypeTiny = C.MYSQL_TYPE_TINY
 	// TypeShort specifies a SMALLINT type.
 	// Value is 2.
-	TypeShort = C.FIELD_TYPE_SHORT
+	TypeShort = C.MYSQL_TYPE_SHORT
 	// TypeLong specifies a INTEGER type.
 	// Value is 3.
-	TypeLong = C.FIELD_TYPE_LONG
+	TypeLong = C.MYSQL_TYPE_LONG
 	// TypeFloat specifies a FLOAT type.
 	// Value is 4.
-	TypeFloat = C.FIELD_TYPE_FLOAT
+	TypeFloat = C.MYSQL_TYPE_FLOAT
 	// TypeDouble specifies a DOUBLE or REAL type.
 	// Value is 5.
-	TypeDouble = C.FIELD_TYPE_DOUBLE
+	TypeDouble = C.MYSQL_TYPE_DOUBLE
 	// TypeNull specifies a NULL type.
 	// Value is 6.
-	TypeNull = C.FIELD_TYPE_NULL
+	TypeNull = C.MYSQL_TYPE_NULL
 	// TypeTimestamp specifies a TIMESTAMP type.
 	// Value is 7. NOT SUPPORTED.
-	TypeTimestamp = C.FIELD_TYPE_TIMESTAMP
+	TypeTimestamp = C.MYSQL_TYPE_TIMESTAMP
 	// TypeLonglong specifies a BIGINT type.
 	// Value is 8.
-	TypeLonglong = C.FIELD_TYPE_LONGLONG
+	TypeLonglong = C.MYSQL_TYPE_LONGLONG
 	// TypeInt24 specifies a MEDIUMINT type.
 	// Value is 9.
-	TypeInt24 = C.FIELD_TYPE_INT24
+	TypeInt24 = C.MYSQL_TYPE_INT24
 	// TypeDate specifies a DATE type.
 	// Value is 10.
-	TypeDate = C.FIELD_TYPE_DATE
+	TypeDate = C.MYSQL_TYPE_DATE
 	// TypeTime specifies a TIME type.
 	// Value is 11.
-	TypeTime = C.FIELD_TYPE_TIME
+	TypeTime = C.MYSQL_TYPE_TIME
 	// TypeDatetime specifies a DATETIME type.
 	// Value is 12.
-	TypeDatetime = C.FIELD_TYPE_DATETIME
+	TypeDatetime = C.MYSQL_TYPE_DATETIME
 	// TypeYear specifies a YEAR type.
 	// Value is 13.
-	TypeYear = C.FIELD_TYPE_YEAR
+	TypeYear = C.MYSQL_TYPE_YEAR
 	// TypeBit specifies a BIT type.
 	// Value is 16.
 	TypeBit = C.MYSQL_TYPE_BIT
@@ -85,13 +88,13 @@ const (
 	TypeNewDecimal = C.MYSQL_TYPE_NEWDECIMAL
 	// TypeBlob specifies a BLOB or TEXT type.
 	// Value is 252.
-	TypeBlob = C.FIELD_TYPE_BLOB
+	TypeBlob = C.MYSQL_TYPE_BLOB
 	// TypeVarString specifies a VARCHAR or VARBINARY type.
 	// Value is 253.
-	TypeVarString = C.FIELD_TYPE_VAR_STRING
+	TypeVarString = C.MYSQL_TYPE_VAR_STRING
 	// TypeString specifies a CHAR or BINARY type.
 	// Value is 254.
-	TypeString = C.FIELD_TYPE_STRING
+	TypeString = C.MYSQL_TYPE_STRING
 	// TypeGeometry specifies a Spatial field.
 	// Value is 255. NOT SUPPORTED.
 	TypeGeometry = C.MYSQL_TYPE_GEOMETRY
@@ -458,14 +461,14 @@ func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {
 		return sqltypes.NULL
 	}
 	switch fieldType {
-	case C.MYSQL_TYPE_DECIMAL, C.MYSQL_TYPE_FLOAT, C.MYSQL_TYPE_DOUBLE, C.MYSQL_TYPE_NEWDECIMAL:
+	case typeDecimal, TypeFloat, TypeDouble, TypeNewDecimal:
 		return sqltypes.MakeFractional(bytes)
-	case C.MYSQL_TYPE_TIMESTAMP:
+	case TypeTimestamp:
 		return sqltypes.MakeString(bytes)
 	}
 	// The below condition represents the following list of values:
-	// C.MYSQL_TYPE_TINY, C.MYSQL_TYPE_SHORT, C.MYSQL_TYPE_LONG, C.MYSQL_TYPE_LONGLONG, C.MYSQL_TYPE_INT24, C.MYSQL_TYPE_YEAR:
-	if fieldType <= C.MYSQL_TYPE_INT24 || fieldType == C.MYSQL_TYPE_YEAR {
+	// TypeTiny, TypeShort, TypeLong, TypeLonglong, TypeInt24, TypeYear:
+	if fieldType <= TypeInt24 || fieldType == TypeYear {
 		return sqltypes.MakeNumeric(bytes)
 	}
 	return sqltypes.MakeString(bytes)

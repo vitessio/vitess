@@ -6,6 +6,7 @@ package endtoend
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
@@ -25,12 +26,12 @@ func TestSimpleRead(t *testing.T) {
 	v1 := framework.FetchInt(vstart, "Queries.TotalCount")
 	v2 := framework.FetchInt(vend, "Queries.TotalCount")
 	if v1+1 != v2 {
-		t.Errorf("Queries.TotalCount: %d, want %d", v1+1, v2)
+		t.Errorf("Queries.TotalCount: %d, want %d", v2, v1+1)
 	}
 	v1 = framework.FetchInt(vstart, "Queries.Histograms.PASS_SELECT.Count")
 	v2 = framework.FetchInt(vend, "Queries.Histograms.PASS_SELECT.Count")
 	if v1+1 != v2 {
-		t.Errorf("Queries...Count: %d, want %d", v1+1, v2)
+		t.Errorf("Queries...Count: %d, want %d", v2, v1+1)
 	}
 }
 
@@ -149,5 +150,21 @@ func TestNocacheListArgs(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("error returned: %v, want %s", err, want)
 		return
+	}
+}
+
+func TestIntegrityError(t *testing.T) {
+	client := framework.NewDefaultClient()
+	vstart := framework.DebugVars()
+	_, err := client.Execute("insert into vtocc_test values(1, null, null, null)", nil)
+	want := "error: Duplicate entry '1'"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want prefix %s", err, want)
+	}
+	vend := framework.DebugVars()
+	v1 := framework.FetchInt(vstart, "InfoErrors.DupKey")
+	v2 := framework.FetchInt(vend, "InfoErrors.DupKey")
+	if v1+1 != v2 {
+		t.Errorf("InfoErrors.DupKey: %d, want %d", v2, v1+1)
 	}
 }
