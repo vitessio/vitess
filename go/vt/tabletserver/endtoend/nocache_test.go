@@ -5,6 +5,7 @@
 package endtoend
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,6 +16,105 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 )
 
+// compareIntDiff returns an error if end[tag] != start[tag]+diff.
+func compareIntDiff(end map[string]interface{}, tag string, start map[string]interface{}, diff int) error {
+	return verifyIntValue(end, tag, framework.FetchInt(start, tag)+diff)
+}
+
+// verifyIntValue retuns an error if values[tag] != want.
+func verifyIntValue(values map[string]interface{}, tag string, want int) error {
+	got := framework.FetchInt(values, tag)
+	if got != want {
+		return fmt.Errorf("%s: %d, want %d", tag, got, want)
+	}
+	return nil
+}
+
+func TestConfigVars(t *testing.T) {
+	vstart := framework.DebugVars()
+	cases := []struct {
+		tag string
+		val int
+	}{{
+		tag: "BeginTimeout",
+		val: int(framework.BaseConfig.TxPoolTimeout * 1e9),
+	}, {
+		tag: "ConnPoolAvailable",
+		val: framework.BaseConfig.PoolSize,
+	}, {
+		tag: "ConnPoolCapacity",
+		val: framework.BaseConfig.PoolSize,
+	}, {
+		tag: "ConnPoolIdleTimeout",
+		val: int(framework.BaseConfig.IdleTimeout * 1e9),
+	}, {
+		tag: "ConnPoolMaxCap",
+		val: framework.BaseConfig.PoolSize,
+	}, {
+		tag: "MaxDMLRows",
+		val: framework.BaseConfig.MaxDMLRows,
+	}, {
+		tag: "MaxResultSize",
+		val: framework.BaseConfig.MaxResultSize,
+	}, {
+		tag: "QueryCacheCapacity",
+		val: framework.BaseConfig.QueryCacheSize,
+	}, {
+		tag: "QueryTimeout",
+		val: int(framework.BaseConfig.QueryTimeout * 1e9),
+	}, {
+		tag: "RowcacheConnPoolAvailable",
+		val: framework.BaseConfig.RowCache.Connections - 50,
+	}, {
+		tag: "RowcacheConnPoolCapacity",
+		val: framework.BaseConfig.RowCache.Connections - 50,
+	}, {
+		tag: "RowcacheConnPoolIdleTimeout",
+		val: int(framework.BaseConfig.IdleTimeout * 1e9),
+	}, {
+		tag: "RowcacheConnPoolMaxCap",
+		val: framework.BaseConfig.RowCache.Connections - 50,
+	}, {
+		tag: "SchemaReloadTime",
+		val: int(framework.BaseConfig.SchemaReloadTime * 1e9),
+	}, {
+		tag: "StreamBufferSize",
+		val: framework.BaseConfig.StreamBufferSize,
+	}, {
+		tag: "StreamConnPoolAvailable",
+		val: framework.BaseConfig.StreamPoolSize,
+	}, {
+		tag: "StreamConnPoolCapacity",
+		val: framework.BaseConfig.StreamPoolSize,
+	}, {
+		tag: "StreamConnPoolIdleTimeout",
+		val: int(framework.BaseConfig.IdleTimeout * 1e9),
+	}, {
+		tag: "StreamConnPoolMaxCap",
+		val: framework.BaseConfig.StreamPoolSize,
+	}, {
+		tag: "TransactionPoolAvailable",
+		val: framework.BaseConfig.TransactionCap,
+	}, {
+		tag: "TransactionPoolCapacity",
+		val: framework.BaseConfig.TransactionCap,
+	}, {
+		tag: "TransactionPoolIdleTimeout",
+		val: int(framework.BaseConfig.IdleTimeout * 1e9),
+	}, {
+		tag: "TransactionPoolMaxCap",
+		val: framework.BaseConfig.TransactionCap,
+	}, {
+		tag: "TransactionPoolTimeout",
+		val: int(framework.BaseConfig.TransactionTimeout * 1e9),
+	}}
+	for _, tcase := range cases {
+		if err := verifyIntValue(vstart, tcase.tag, tcase.val); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
 func TestSimpleRead(t *testing.T) {
 	vstart := framework.DebugVars()
 	_, err := framework.NewDefaultClient().Execute("select * from vtocc_test where intval=1", nil)
@@ -23,15 +123,11 @@ func TestSimpleRead(t *testing.T) {
 		return
 	}
 	vend := framework.DebugVars()
-	v1 := framework.FetchInt(vstart, "Queries.TotalCount")
-	v2 := framework.FetchInt(vend, "Queries.TotalCount")
-	if v1+1 != v2 {
-		t.Errorf("Queries.TotalCount: %d, want %d", v2, v1+1)
+	if err := compareIntDiff(vend, "Queries.TotalCount", vstart, 1); err != nil {
+		t.Error(err)
 	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.PASS_SELECT.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.PASS_SELECT.Count")
-	if v1+1 != v2 {
-		t.Errorf("Queries...Count: %d, want %d", v2, v1+1)
+	if err := compareIntDiff(vend, "Queries.Histograms.PASS_SELECT.Count", vstart, 1); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -154,17 +250,117 @@ func TestNocacheListArgs(t *testing.T) {
 }
 
 func TestIntegrityError(t *testing.T) {
-	client := framework.NewDefaultClient()
 	vstart := framework.DebugVars()
+	client := framework.NewDefaultClient()
 	_, err := client.Execute("insert into vtocc_test values(1, null, null, null)", nil)
 	want := "error: Duplicate entry '1'"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
-	vend := framework.DebugVars()
-	v1 := framework.FetchInt(vstart, "InfoErrors.DupKey")
-	v2 := framework.FetchInt(vend, "InfoErrors.DupKey")
-	if v1+1 != v2 {
-		t.Errorf("InfoErrors.DupKey: %d, want %d", v2, v1+1)
+	if err := compareIntDiff(framework.DebugVars(), "InfoErrors.DupKey", vstart, 1); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestTrailingComment(t *testing.T) {
+	vstart := framework.DebugVars()
+	v1 := framework.FetchInt(vstart, "QueryCacheLength")
+
+	bindVars := map[string]interface{}{"ival": 1}
+	client := framework.NewDefaultClient()
+
+	for _, query := range []string{
+		"select * from vtocc_test where intval=:ival",
+		"select * from vtocc_test where intval=:ival /* comment */",
+		"select * from vtocc_test where intval=:ival /* comment1 */ /* comment2 */",
+	} {
+		_, err := client.Execute(query, bindVars)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		v2 := framework.FetchInt(framework.DebugVars(), "QueryCacheLength")
+		if v2 != v1+1 {
+			t.Errorf("QueryCacheLength(%s): %d, want %d", query, v2, v1+1)
+		}
+	}
+}
+
+func TestStrictMode(t *testing.T) {
+	queries := []string{
+		"insert into vtocc_a(eid, id, name, foo) values (7, 1+1, '', '')",
+		"insert into vtocc_d(eid, id) values (1, 1)",
+		"update vtocc_a set eid = 1+1 where eid = 1 and id = 1",
+		"insert into vtocc_d(eid, id) values (1, 1)",
+		"insert into upsert_test(id1, id2) values " +
+			"(1, 1), (2, 2) on duplicate key update id1 = 1",
+		"insert into upsert_test(id1, id2) select eid, id " +
+			"from vtocc_a limit 1 on duplicate key update id2 = id1",
+		"insert into upsert_test(id1, id2) values " +
+			"(1, 1) on duplicate key update id1 = 2+1",
+	}
+
+	// Strict mode on.
+	func() {
+		client := framework.NewDefaultClient()
+		err := client.Begin()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer client.Rollback()
+
+		want := "error: DML too complex"
+		for _, query := range queries {
+			_, err = client.Execute(query, nil)
+			if err == nil || err.Error() != want {
+				t.Errorf("Execute(%s): %v, want %s", query, err, want)
+			}
+		}
+	}()
+
+	// Strict mode off.
+	func() {
+		framework.DefaultServer.SetStrictMode(false)
+		defer framework.DefaultServer.SetStrictMode(true)
+
+		for _, query := range queries {
+			client := framework.NewDefaultClient()
+			err := client.Begin()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			_, err = client.Execute(query, nil)
+			if err != nil {
+				t.Error(err)
+			}
+			client.Rollback()
+		}
+	}()
+}
+
+func TestUpsertNonPKHit(t *testing.T) {
+	client := framework.NewDefaultClient()
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer client.Rollback()
+
+	_, err = client.Execute("insert into upsert_test(id1, id2) values (1, 1)", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute(
+		"insert into upsert_test(id1, id2) values "+
+			"(2, 1) on duplicate key update id2 = 2",
+		nil,
+	)
+	want := "error: Duplicate entry '1' for key 'id2_idx'"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Execute: %v, must start with %s", err, want)
 	}
 }

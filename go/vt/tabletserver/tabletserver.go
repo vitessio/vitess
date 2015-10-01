@@ -968,6 +968,15 @@ func (tsv *TabletServer) TxTimeout() time.Duration {
 	return tsv.qe.txPool.Timeout()
 }
 
+// SetStrictMode sets strict mode on or off.
+func (tsv *TabletServer) SetStrictMode(strict bool) {
+	if strict {
+		tsv.qe.strictMode.Set(1)
+	} else {
+		tsv.qe.strictMode.Set(0)
+	}
+}
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }

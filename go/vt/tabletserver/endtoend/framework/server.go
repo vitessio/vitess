@@ -57,6 +57,7 @@ func StartDefaultServer(connParams sqldb.ConnParams) error {
 	BaseConfig = tabletserver.DefaultQsConfig
 	BaseConfig.RowCache.Binary = vttest.MemcachedPath()
 	BaseConfig.RowCache.Socket = path.Join(os.TempDir(), "memcache.sock")
+	BaseConfig.RowCache.Connections = 100
 	BaseConfig.EnableAutoCommit = true
 
 	Target = query.Target{
