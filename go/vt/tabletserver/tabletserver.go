@@ -67,8 +67,8 @@ type TabletServer struct {
 	// that can be subsequently changed. So, they may not always
 	// correspond to the original values.
 	config       Config
-	queryTimeout sync2.AtomicDuration
-	beginTimeout sync2.AtomicDuration
+	QueryTimeout sync2.AtomicDuration
+	BeginTimeout sync2.AtomicDuration
 
 	// mu is used to access state. The lock should only be held
 	// for short periods. For longer periods, you have to transition
@@ -127,8 +127,8 @@ type MySQLChecker interface {
 func NewTabletServer(config Config) *TabletServer {
 	tsv := &TabletServer{
 		config:              config,
-		queryTimeout:        sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
-		beginTimeout:        sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
+		QueryTimeout:        sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
+		BeginTimeout:        sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
 		streamHealthMap:     make(map[int]chan<- *pb.StreamHealthResponse),
 		sessionID:           Rand(),
@@ -142,8 +142,8 @@ func NewTabletServer(config Config) *TabletServer {
 			tsv.mu.Unlock()
 			return state
 		}))
-		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(tsv.queryTimeout.Get))
-		stats.Publish(config.StatsPrefix+"BeginTimeout", stats.DurationFunc(tsv.beginTimeout.Get))
+		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(tsv.QueryTimeout.Get))
+		stats.Publish(config.StatsPrefix+"BeginTimeout", stats.DurationFunc(tsv.BeginTimeout.Get))
 		stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(tsv.GetState))
 	}
 	return tsv
@@ -407,7 +407,7 @@ func (tsv *TabletServer) StopService() {
 func (tsv *TabletServer) setTimeBomb() chan struct{} {
 	done := make(chan struct{})
 	go func() {
-		qt := tsv.queryTimeout.Get()
+		qt := tsv.QueryTimeout.Get()
 		if qt == 0 {
 			return
 		}
@@ -524,7 +524,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *pb.Target, session *
 	if err = tsv.startRequest(target, session.SessionId, false); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, tsv.beginTimeout.Get())
+	ctx, cancel := withTimeout(ctx, tsv.BeginTimeout.Get())
 	defer func() {
 		tsv.qe.queryServiceStats.QueryStats.Record("BEGIN", time.Now())
 		cancel()
@@ -546,7 +546,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *pb.Target, session 
 	if err = tsv.startRequest(target, session.SessionId, true); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, tsv.queryTimeout.Get())
+	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
 		tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", time.Now())
 		cancel()
@@ -567,7 +567,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *pb.Target, sessio
 	if err = tsv.startRequest(target, session.SessionId, true); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, tsv.queryTimeout.Get())
+	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
 		tsv.qe.queryServiceStats.QueryStats.Record("ROLLBACK", time.Now())
 		cancel()
@@ -643,7 +643,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *pb.Target, query *
 	if err = tsv.startRequest(target, query.SessionId, allowShutdown); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, tsv.queryTimeout.Get())
+	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
 		cancel()
 		tsv.endRequest()
@@ -777,7 +777,7 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pb.Target, req 
 	if err = tsv.startRequest(target, req.SessionID, false); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, tsv.queryTimeout.Get())
+	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
 		cancel()
 		tsv.endRequest()
@@ -946,6 +946,26 @@ func (tsv *TabletServer) registerSchemazHandler() {
 	http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
 		schemazHandler(tsv.qe.schemaInfo.GetSchema(), w, r)
 	})
+}
+
+// SetTxPoolSize changes the tx pool size to the specified value.
+func (tsv *TabletServer) SetTxPoolSize(val int) {
+	tsv.qe.txPool.pool.SetCapacity(val)
+}
+
+// TxPoolSize returns the tx pool size.
+func (tsv *TabletServer) TxPoolSize() int {
+	return int(tsv.qe.txPool.pool.Capacity())
+}
+
+// SetTxTimeout changes the transaction timeout to the specified value.
+func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
+	tsv.qe.txPool.SetTimeout(val)
+}
+
+// TxTimeout returns the transaction timeout.
+func (tsv *TabletServer) TxTimeout() time.Duration {
+	return tsv.qe.txPool.Timeout()
 }
 
 func init() {

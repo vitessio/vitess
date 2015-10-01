@@ -5,8 +5,11 @@
 package endtoend
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 )
@@ -266,5 +269,130 @@ func TestAutoCommit(t *testing.T) {
 	v2 = framework.FetchInt(vend, "Queries.Histograms.PASS_SELECT.Count")
 	if v1+2 != v2 {
 		t.Errorf("Queries.Histograms.PASS_SELECT.Count: %d, want %d", v2, v1+2)
+	}
+}
+
+func TestTxPoolSize(t *testing.T) {
+	vstart := framework.DebugVars()
+	v1 := framework.FetchInt(vstart, "TransactionPoolCapacity")
+	if v1 != framework.BaseConfig.TransactionCap {
+		t.Errorf("TransactionPoolCapacity: %d, want %d", v1, framework.BaseConfig.TransactionCap)
+	}
+	v1 = framework.FetchInt(vstart, "TransactionPoolAvailable")
+	if v1 != framework.BaseConfig.TransactionCap {
+		t.Errorf("TransactionPoolAvailable: %d, want %d", v1, framework.BaseConfig.TransactionCap)
+	}
+
+	client1 := framework.NewDefaultClient()
+	err := client1.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer client1.Rollback()
+	vend := framework.DebugVars()
+	v2 := framework.FetchInt(vend, "TransactionPoolAvailable")
+	if v2 != framework.BaseConfig.TransactionCap-1 {
+		t.Errorf("TransactionPoolAvailable: %d, want %d", v2, framework.BaseConfig.TransactionCap-1)
+	}
+
+	defer framework.DefaultServer.SetTxPoolSize(framework.DefaultServer.TxPoolSize())
+	framework.DefaultServer.SetTxPoolSize(1)
+	defer framework.DefaultServer.BeginTimeout.Set(framework.DefaultServer.BeginTimeout.Get())
+	timeout := 1 * time.Millisecond
+	framework.DefaultServer.BeginTimeout.Set(timeout)
+	vend = framework.DebugVars()
+	v2 = framework.FetchInt(vend, "TransactionPoolCapacity")
+	if v2 != 1 {
+		t.Errorf("TransactionPoolCapacity: %d, want 1", v2)
+	}
+	v2 = framework.FetchInt(vend, "BeginTimeout")
+	if v2 != int(timeout) {
+		t.Errorf("BeginTimeout: %d, want %d", v2, int(timeout))
+	}
+
+	client2 := framework.NewDefaultClient()
+	err = client2.Begin()
+	want := "tx_pool_full"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Error: %v, must contain %s", err, want)
+	}
+
+	vend = framework.DebugVars()
+	v1 = framework.FetchInt(vstart, "Errors.TxPoolFull")
+	v2 = framework.FetchInt(vend, "Errors.TxPoolFull")
+	if v2 != v1+1 {
+		t.Errorf("Errors.TxPoolFull: %d, want %d", v2, v1+1)
+	}
+}
+
+func TestTxTimeout(t *testing.T) {
+	vstart := framework.DebugVars()
+	v1 := framework.FetchInt(vstart, "TransactionPoolTimeout")
+	timeout := int(framework.BaseConfig.TransactionTimeout * 1e9)
+	if v1 != timeout {
+		t.Errorf("Timeout: %d, want %d", v1, timeout)
+	}
+
+	defer framework.DefaultServer.SetTxTimeout(framework.DefaultServer.TxTimeout())
+	framework.DefaultServer.SetTxTimeout(1 * time.Millisecond)
+	vend := framework.DebugVars()
+	v2 := framework.FetchInt(vend, "TransactionPoolTimeout")
+	timeout = int(1 * time.Millisecond)
+	if v2 != timeout {
+		t.Errorf("Timeout: %d, want %d", v2, timeout)
+	}
+
+	fetcher := framework.NewTxFetcher()
+	client := framework.NewDefaultClient()
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	time.Sleep(5 * time.Millisecond)
+	err = client.Commit()
+	want := "not_in_tx: Transaction"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, must contain %s", err, want)
+	}
+	tx := fetcher.Fetch()
+	if tx.Conclusion != "kill" {
+		t.Errorf("Conclusion: %s, want kill", tx.Conclusion)
+	}
+	vend = framework.DebugVars()
+	v1 = framework.FetchInt(vstart, "Kills.Transactions")
+	v2 = framework.FetchInt(vend, "Kills.Transactions")
+	if v2 != v1+1 {
+		t.Errorf("Kills.Transactions: %d, want %d", v2, v1+1)
+	}
+}
+
+func TestForUpdate(t *testing.T) {
+	for _, mode := range []string{"for update", "lock in share mode"} {
+		client := framework.NewDefaultClient()
+		query := fmt.Sprintf("select * from vtocc_test where intval=2 %s", mode)
+		_, err := client.Execute(query, nil)
+		want := "error: Disallowed"
+		if err == nil || !strings.HasPrefix(err.Error(), want) {
+			t.Errorf("Error: %v, must have prefix %s", err, want)
+		}
+
+		// We should not get errors here
+		err = client.Begin()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		_, err = client.Execute(query, nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		err = client.Commit()
+		if err != nil {
+			t.Error(err)
+			return
+		}
 	}
 }

@@ -676,7 +676,7 @@ func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
 		if err != nil {
 			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_query_timeout = %v, want int64 or float64", err)
 		}
-		qre.tsv.queryTimeout.Set(val)
+		qre.tsv.QueryTimeout.Set(val)
 	case "vt_idle_timeout":
 		val, err := parseDuration(qre.plan.SetValue)
 		if err != nil {
@@ -702,7 +702,7 @@ func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
 		if err != nil {
 			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_txpool_timeout = %v, want int64 or float64", err)
 		}
-		qre.tsv.beginTimeout.Set(val)
+		qre.tsv.BeginTimeout.Set(val)
 	default:
 		conn, err := qre.getConn(qre.qe.connPool)
 		if err != nil {
