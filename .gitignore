@@ -21,7 +21,7 @@ tags
 /Godeps/_workspace/pkg
 /Godeps/_workspace/bin
 
-# cbson & other C build dirs
+# C build dirs
 **/build
 
 # mysql build dirs

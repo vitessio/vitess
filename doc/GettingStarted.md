@@ -142,7 +142,6 @@ export VT_MYSQL_ROOT=/usr/local/mysql
 # go install golang.org/x/tools/cmd/cover ...
 # Found MariaDB installation in ...
 # skipping bson python build
-# skipping cbson python build
 # creating git pre-commit hooks
 #
 # source dev.env in your shell before building

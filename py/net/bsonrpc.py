@@ -8,13 +8,6 @@ import hmac
 import struct
 
 import bson
-try:
-  # use optimized cbson which has slightly different API
-  import cbson
-  decode_document = cbson.decode_next
-except ImportError:
-  from bson import codec
-  decode_document = codec.decode_document
 
 from net import gorpc
 
@@ -91,17 +84,14 @@ class BsonRpcClient(gorpc.GoRpcClient):
 
     # we have enough data, decode it all
     try:
-      offset, response.header = decode_document(data, 0)
-      offset, response.reply = decode_document(data, offset)
+      offset, response.header = bson.codec.decode_document(data, 0)
+      offset, response.reply = bson.codec.decode_document(data, offset)
       # unpack primitive values
       # FIXME(msolomon) remove this hack
       response.reply = response.reply.get(WRAPPED_FIELD, response.reply)
 
-      # the pure-python bson library returns the offset in the buffer
-      # the cbson library returns -1 if everything was read
-      # so we cannot use the 'offset' variable. Instead use
-      # header_len + body_len for the complete length read
-
+      # Return header_len + body_len instead of the offsets returned
+      # by the library, should be the same.
       return header_len + body_len, None
     except Exception as e:
       raise gorpc.GoRpcError('decode error', e)
