@@ -205,15 +205,6 @@ else
     rm -r mock-1.0.1
 fi
 
-# install cbson
-cbson_dist=$VTROOT/dist/py-cbson
-if [ -f $cbson_dist/lib/python2.7/site-packages/cbson.so ]; then
-  echo "skipping cbson python build"
-else
-  cd $VTTOP/py/cbson && \
-    python ./setup.py install --prefix=$cbson_dist
-fi
-
 # create pre-commit hooks
 echo "creating git pre-commit hooks"
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
