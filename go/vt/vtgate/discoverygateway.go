@@ -102,7 +102,7 @@ func (dg *discoveryGateway) SplitQuery(ctx context.Context, keyspace, shard stri
 }
 
 // Close shuts down underlying connections.
-func (dg *discoveryGateway) Close() error {
+func (dg *discoveryGateway) Close(ctx context.Context) error {
 	for _, ctw := range dg.tabletsWatchers {
 		ctw.Stop()
 	}

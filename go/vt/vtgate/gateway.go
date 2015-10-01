@@ -54,7 +54,7 @@ type Gateway interface {
 	SplitQuery(ctx context.Context, keyspace, shard string, tabletType pb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]tproto.QuerySplit, error)
 
 	// Close shuts down underlying connections.
-	Close() error
+	Close(ctx context.Context) error
 }
 
 // GatewayCreator is the func which can create the actual gateway object.
