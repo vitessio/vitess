@@ -141,7 +141,7 @@ func (sg *shardGateway) SplitQuery(ctx context.Context, keyspace string, shard s
 }
 
 // Close shuts down the underlying connections.
-func (sg *shardGateway) Close() error {
+func (sg *shardGateway) Close(ctx context.Context) error {
 	sg.mu.Lock()
 	defer sg.mu.Unlock()
 	for _, v := range sg.shardConns {

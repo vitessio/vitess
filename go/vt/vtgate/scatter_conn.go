@@ -530,7 +530,7 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 
 // Close closes the underlying Gateway.
 func (stc *ScatterConn) Close() error {
-	return stc.gateway.Close()
+	return stc.gateway.Close(context.Background())
 }
 
 // ScatterConnError is the ScatterConn specific error.
