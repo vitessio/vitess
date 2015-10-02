@@ -48,7 +48,7 @@ spec:
           -alsologtostderr
           -port {{port}}
           -grpc_port {{grpc_port}}
-          -service_map 'grpc-queryservice'
+          -service_map 'grpc-queryservice,grpc-tabletmanager'
           -tablet-path {{alias}}
           -tablet_hostname $(hostname -i)
           -init_keyspace {{keyspace}}
