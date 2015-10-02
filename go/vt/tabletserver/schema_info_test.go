@@ -400,7 +400,7 @@ func TestSchemaInfoQueryCacheFailDueToInvalidCacheSize(t *testing.T) {
 		"schema info SetQueryCacheSize should use a positive size",
 		ErrFail,
 	)
-	schemaInfo.SetQueryCacheSize(0)
+	schemaInfo.SetQueryCacheCap(0)
 }
 
 func TestSchemaInfoQueryCache(t *testing.T) {
@@ -427,7 +427,7 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := newLogStats("GetPlanStats", ctx)
-	schemaInfo.SetQueryCacheSize(1)
+	schemaInfo.SetQueryCacheCap(1)
 	firstPlan := schemaInfo.GetPlan(ctx, logStats, firstQuery)
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
