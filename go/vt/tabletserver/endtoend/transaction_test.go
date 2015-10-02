@@ -38,7 +38,11 @@ func TestCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	tx := fetcher.Fetch()
+	tx, err := fetcher.Fetch()
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	want := []string{query}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
@@ -129,7 +133,11 @@ func TestRollback(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	tx := fetcher.Fetch()
+	tx, err := fetcher.Fetch()
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	want := []string{query}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
@@ -188,7 +196,11 @@ func TestAutoCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	tx := fetcher.Fetch()
+	tx, err := fetcher.Fetch()
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	want := []string{query}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
@@ -320,7 +332,11 @@ func TestTxTimeout(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must contain %s", err, want)
 	}
-	tx := fetcher.Fetch()
+	tx, err := fetcher.Fetch()
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	if tx.Conclusion != "kill" {
 		t.Errorf("Conclusion: %s, want kill", tx.Conclusion)
 	}

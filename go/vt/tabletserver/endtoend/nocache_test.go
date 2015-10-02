@@ -489,3 +489,105 @@ func TestMexResultSize(t *testing.T) {
 		return
 	}
 }
+
+func TestMaxDMLRows(t *testing.T) {
+	client := framework.NewDefaultClient()
+	_, err := client.Execute(
+		"insert into vtocc_a(eid, id, name, foo) values "+
+			"(3, 1, '', ''), (3, 2, '', ''), (3, 3, '', '')",
+		nil,
+	)
+	fetcher := framework.NewQueryFetcher()
+	defer fetcher.Close()
+
+	// Verify all three rows are updated in a single DML.
+	_, err = client.Execute("update vtocc_a set foo='fghi' where eid = 3", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	queryInfo, err := fetcher.Next()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want := "begin; " +
+		"select eid, id from vtocc_a where eid = 3 limit 10001 for update; " +
+		"update vtocc_a set foo = 'fghi' where " +
+		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3) " +
+		"/* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (3 3 ); */; " +
+		"commit"
+	if queryInfo.RewrittenSQL() != want {
+		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
+	}
+
+	// Verify that rows get split, and if pk changes, those values are also
+	// split correctly.
+	defer framework.DefaultServer.SetMaxDMLRows(framework.DefaultServer.MaxDMLRows())
+	framework.DefaultServer.SetMaxDMLRows(2)
+	_, err = client.Execute("update vtocc_a set eid=2 where eid = 3", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	queryInfo, err = fetcher.Next()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want = "begin; " +
+		"select eid, id from vtocc_a where eid = 3 limit 10001 for update; " +
+		"update vtocc_a set eid = 2 where " +
+		"(eid = 3 and id = 1) or (eid = 3 and id = 2) " +
+		"/* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 ); */; " +
+		"update vtocc_a set eid = 2 where (eid = 3 and id = 3) " +
+		"/* _stream vtocc_a (eid id ) (3 3 ) (2 3 ); */; " +
+		"commit"
+	if queryInfo.RewrittenSQL() != want {
+		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
+	}
+
+	// Verify that a normal update is split correctly.
+	_, err = client.Execute("update vtocc_a set foo='fghi' where eid = 2", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	queryInfo, err = fetcher.Next()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want = "begin; " +
+		"select eid, id from vtocc_a where eid = 2 limit 10001 for update; " +
+		"update vtocc_a set foo = 'fghi' where (eid = 2 and id = 1) or " +
+		"(eid = 2 and id = 2) /* _stream vtocc_a (eid id ) (2 1 ) (2 2 ); */; " +
+		"update vtocc_a set foo = 'fghi' where (eid = 2 and id = 3) " +
+		"/* _stream vtocc_a (eid id ) (2 3 ); */; " +
+		"commit"
+	if queryInfo.RewrittenSQL() != want {
+		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
+	}
+
+	// Verufy that a delete is split correctly.
+	_, err = client.Execute("delete from vtocc_a where eid = 2", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	queryInfo, err = fetcher.Next()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want = "begin; " +
+		"select eid, id from vtocc_a where eid = 2 limit 10001 for update; " +
+		"delete from vtocc_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) " +
+		"/* _stream vtocc_a (eid id ) (2 1 ) (2 2 ); */; " +
+		"delete from vtocc_a where (eid = 2 and id = 3) " +
+		"/* _stream vtocc_a (eid id ) (2 3 ); */; " +
+		"commit"
+	if queryInfo.RewrittenSQL() != want {
+		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
+	}
+}
