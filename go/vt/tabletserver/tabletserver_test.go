@@ -346,6 +346,56 @@ func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
 	}
 }
 
+func TestTabletServerReconnect(t *testing.T) {
+	db := setUpTabletServerTest()
+	query := "select addr from test_table where pk = 1 limit 1000"
+	want := &mproto.QueryResult{}
+	db.AddQuery(query, want)
+	db.AddQuery("select addr from test_table where 1 != 1", &mproto.QueryResult{})
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	defer tsv.StopService()
+
+	if tsv.GetState() != "SERVING" {
+		t.Errorf("GetState: %s, must be SERVING", tsv.GetState())
+	}
+	if err != nil {
+		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
+	}
+	request := &proto.Query{Sql: query, SessionId: tsv.sessionID}
+	reply := &mproto.QueryResult{}
+	err = tsv.Execute(context.Background(), nil, request, reply)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// make mysql conn fail
+	db.EnableConnFail()
+	err = tsv.Execute(context.Background(), nil, request, reply)
+	if err == nil {
+		t.Error("Execute: want error, got nil")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if tsv.GetState() == "SERVING" {
+		t.Error("GetState is still SERVING, must be NOT_SERVING")
+	}
+
+	// make mysql conn work
+	db.DisableConnFail()
+	err = tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Error(err)
+	}
+	request.SessionId = tsv.sessionID
+	err = tsv.Execute(context.Background(), nil, request, reply)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestTabletServerGetSessionId(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
