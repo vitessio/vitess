@@ -223,7 +223,10 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 	}()
 
 	return result, func() error {
-		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
+		if finalErr != nil {
+			return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
+		}
+		return nil
 	}, nil
 }
 
@@ -349,6 +352,9 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *pbq.St
 	}()
 
 	return result, func() error {
-		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
+		if finalErr != nil {
+			return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
+		}
+		return nil
 	}, nil
 }
