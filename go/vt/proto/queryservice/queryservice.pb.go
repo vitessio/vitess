@@ -234,9 +234,9 @@ func RegisterQueryServer(s *grpc.Server, srv QueryServer) {
 	s.RegisterService(&_Query_serviceDesc, srv)
 }
 
-func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.GetSessionIdRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).GetSessionId(ctx, in)
@@ -246,9 +246,9 @@ func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, codec grp
 	return out, nil
 }
 
-func _Query_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.ExecuteRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).Execute(ctx, in)
@@ -258,9 +258,9 @@ func _Query_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Cod
 	return out, nil
 }
 
-func _Query_ExecuteBatch_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_ExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.ExecuteBatchRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).ExecuteBatch(ctx, in)
@@ -291,9 +291,9 @@ func (x *queryStreamExecuteServer) Send(m *query.StreamExecuteResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.BeginRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).Begin(ctx, in)
@@ -303,9 +303,9 @@ func _Query_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec
 	return out, nil
 }
 
-func _Query_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.CommitRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).Commit(ctx, in)
@@ -315,9 +315,9 @@ func _Query_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Code
 	return out, nil
 }
 
-func _Query_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.RollbackRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).Rollback(ctx, in)
@@ -327,9 +327,9 @@ func _Query_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Co
 	return out, nil
 }
 
-func _Query_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_SplitQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.SplitQueryRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).SplitQuery(ctx, in)

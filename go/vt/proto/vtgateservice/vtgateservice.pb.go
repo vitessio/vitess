@@ -413,9 +413,9 @@ func RegisterVitessServer(s *grpc.Server, srv VitessServer) {
 	s.RegisterService(&_Vitess_serviceDesc, srv)
 }
 
-func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).Execute(ctx, in)
@@ -425,9 +425,9 @@ func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Co
 	return out, nil
 }
 
-func _Vitess_ExecuteShards_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteShardsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteShards(ctx, in)
@@ -437,9 +437,9 @@ func _Vitess_ExecuteShards_Handler(srv interface{}, ctx context.Context, codec g
 	return out, nil
 }
 
-func _Vitess_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteKeyspaceIdsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteKeyspaceIds(ctx, in)
@@ -449,9 +449,9 @@ func _Vitess_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, co
 	return out, nil
 }
 
-func _Vitess_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteKeyRangesRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteKeyRanges(ctx, in)
@@ -461,9 +461,9 @@ func _Vitess_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, code
 	return out, nil
 }
 
-func _Vitess_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteEntityIdsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteEntityIds(ctx, in)
@@ -473,9 +473,9 @@ func _Vitess_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, code
 	return out, nil
 }
 
-func _Vitess_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteBatchShardsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteBatchShards(ctx, in)
@@ -485,9 +485,9 @@ func _Vitess_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, co
 	return out, nil
 }
 
-func _Vitess_ExecuteBatchKeyspaceIds_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteBatchKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteBatchKeyspaceIdsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteBatchKeyspaceIds(ctx, in)
@@ -581,9 +581,9 @@ func (x *vitessStreamExecuteKeyRangesServer) Send(m *vtgate.StreamExecuteKeyRang
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Vitess_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.BeginRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).Begin(ctx, in)
@@ -593,9 +593,9 @@ func _Vitess_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Code
 	return out, nil
 }
 
-func _Vitess_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.CommitRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).Commit(ctx, in)
@@ -605,9 +605,9 @@ func _Vitess_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Cod
 	return out, nil
 }
 
-func _Vitess_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.RollbackRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).Rollback(ctx, in)
@@ -617,9 +617,9 @@ func _Vitess_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.C
 	return out, nil
 }
 
-func _Vitess_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_SplitQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.SplitQueryRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).SplitQuery(ctx, in)
@@ -629,9 +629,9 @@ func _Vitess_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc
 	return out, nil
 }
 
-func _Vitess_GetSrvKeyspace_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_GetSrvKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.GetSrvKeyspaceRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).GetSrvKeyspace(ctx, in)
