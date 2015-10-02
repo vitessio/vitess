@@ -21,8 +21,8 @@ $ sudo pecl install mongo
 To run the tests, first install PHPUnit:
 
 ``` sh
-$ wget https://phar.phpunit.de/phpunit.phar
-$ mv phpunit.phar $VTROOT/bin/phpunit
+$ wget https://phar.phpunit.de/phpunit-4.8.9.phar
+$ mv phpunit-4.8.9.phar $VTROOT/bin/phpunit
 $ chmod +x $VTROOT/bin/phpunit
 ```
 

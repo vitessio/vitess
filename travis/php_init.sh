@@ -7,7 +7,7 @@ mkdir -p $HOME/php
 if [ -f $HOME/php/phpunit ]; then
 	echo "Using cached phpunit"
 else
-	curl -sL https://phar.phpunit.de/phpunit.phar > $HOME/php/phpunit
+	curl -sL https://phar.phpunit.de/phpunit-4.8.9.phar > $HOME/php/phpunit
 	chmod +x $HOME/php/phpunit
 fi
 
