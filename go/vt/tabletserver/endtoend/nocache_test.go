@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -31,7 +33,7 @@ func verifyIntValue(values map[string]interface{}, tag string, want int) error {
 }
 
 func TestConfigVars(t *testing.T) {
-	vstart := framework.DebugVars()
+	vars := framework.DebugVars()
 	cases := []struct {
 		tag string
 		val int
@@ -109,7 +111,7 @@ func TestConfigVars(t *testing.T) {
 		val: int(framework.BaseConfig.TransactionTimeout * 1e9),
 	}}
 	for _, tcase := range cases {
-		if err := verifyIntValue(vstart, tcase.tag, tcase.val); err != nil {
+		if err := verifyIntValue(vars, tcase.tag, tcase.val); err != nil {
 			t.Error(err)
 		}
 	}
@@ -362,5 +364,128 @@ func TestUpsertNonPKHit(t *testing.T) {
 	want := "error: Duplicate entry '1' for key 'id2_idx'"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Execute: %v, must start with %s", err, want)
+	}
+}
+
+func TestPoolSize(t *testing.T) {
+	vstart := framework.DebugVars()
+	defer framework.DefaultServer.SetPoolSize(framework.DefaultServer.PoolSize())
+	framework.DefaultServer.SetPoolSize(1)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		framework.NewDefaultClient().Execute("select sleep(1) from dual", nil)
+		wg.Done()
+	}()
+	// The queries have to be different so consolidator doesn't kick in.
+	go func() {
+		framework.NewDefaultClient().Execute("select sleep(0.5) from dual", nil)
+		wg.Done()
+	}()
+	wg.Wait()
+
+	vend := framework.DebugVars()
+	if err := verifyIntValue(vend, "ConnPoolCapacity", 1); err != nil {
+		t.Error(err)
+	}
+	if err := compareIntDiff(vend, "ConnPoolWaitCount", vstart, 1); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestQueryCache(t *testing.T) {
+	defer framework.DefaultServer.SetQueryCacheCap(framework.DefaultServer.QueryCacheCap())
+	framework.DefaultServer.SetQueryCacheCap(1)
+
+	bindVars := map[string]interface{}{"ival1": 1, "ival2": 1}
+	client := framework.NewDefaultClient()
+	_, _ = client.Execute("select * from vtocc_test where intval=:ival1", bindVars)
+	_, _ = client.Execute("select * from vtocc_test where intval=:ival2", bindVars)
+	vend := framework.DebugVars()
+	if err := verifyIntValue(vend, "QueryCacheLength", 1); err != nil {
+		t.Error(err)
+	}
+	if err := verifyIntValue(vend, "QueryCacheSize", 1); err != nil {
+		t.Error(err)
+	}
+	if err := verifyIntValue(vend, "QueryCacheCapacity", 1); err != nil {
+		t.Error(err)
+	}
+
+	framework.DefaultServer.SetQueryCacheCap(10)
+	_, _ = client.Execute("select * from vtocc_test where intval=:ival1", bindVars)
+	vend = framework.DebugVars()
+	if err := verifyIntValue(vend, "QueryCacheLength", 2); err != nil {
+		t.Error(err)
+	}
+	if err := verifyIntValue(vend, "QueryCacheSize", 2); err != nil {
+		t.Error(err)
+	}
+
+	_, _ = client.Execute("select * from vtocc_test where intval=1", bindVars)
+	vend = framework.DebugVars()
+	if err := verifyIntValue(vend, "QueryCacheLength", 3); err != nil {
+		t.Error(err)
+	}
+	if err := verifyIntValue(vend, "QueryCacheSize", 3); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestSchemaReload(t *testing.T) {
+	conn, err := mysql.Connect(connParams)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = conn.ExecuteFetch("create table vtocc_temp(intval int)", 10, false)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		_, _ = conn.ExecuteFetch("drop table vtocc_temp", 10, false)
+		conn.Close()
+	}()
+	framework.DefaultServer.ReloadSchema()
+	client := framework.NewDefaultClient()
+	waitTime := 50 * time.Millisecond
+	for i := 0; i < 10; i++ {
+		time.Sleep(waitTime)
+		waitTime += 50 * time.Millisecond
+		_, err = client.Execute("select * from vtocc_temp", nil)
+		if err == nil {
+			return
+		}
+		want := "error: table vtocc_temp not found in schema"
+		if err.Error() != want {
+			t.Errorf("Error: %v, want %s", err, want)
+			return
+		}
+	}
+	t.Error("schema did not reload")
+}
+
+func TestMexResultSize(t *testing.T) {
+	defer framework.DefaultServer.SetMaxResultSize(framework.DefaultServer.MaxResultSize())
+	framework.DefaultServer.SetMaxResultSize(2)
+
+	client := framework.NewDefaultClient()
+	query := "select * from vtocc_test"
+	_, err := client.Execute(query, nil)
+	want := "error: Row count exceeded"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, must start with %s", err, want)
+	}
+	if err := verifyIntValue(framework.DebugVars(), "MaxResultSize", 2); err != nil {
+		t.Error(err)
+	}
+
+	framework.DefaultServer.SetMaxResultSize(10)
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+		return
 	}
 }

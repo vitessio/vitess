@@ -519,12 +519,17 @@ func (si *SchemaInfo) peekQuery(sql string) *ExecPlan {
 	return nil
 }
 
-// SetQueryCacheSize sets the query cache size.
-func (si *SchemaInfo) SetQueryCacheSize(size int) {
+// SetQueryCacheCap sets the query cache capacity.
+func (si *SchemaInfo) SetQueryCacheCap(size int) {
 	if size <= 0 {
 		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "cache size %v out of range", size))
 	}
 	si.queries.SetCapacity(int64(size))
+}
+
+// QueryCacheCap returns the capacity of the query cache.
+func (si *SchemaInfo) QueryCacheCap() int {
+	return int(si.queries.Capacity())
 }
 
 // SetReloadTime changes how often the schema is reloaded. This
