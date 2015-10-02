@@ -36,6 +36,8 @@ cache:
   - $HOME/gopath/dist/grpc/lib
   - $HOME/gopath/dist/protobuf/.build_finished
   - $HOME/gopath/dist/protobuf/lib
+  # Required by make proto and subsequently check_make_proto.sh.
+  - $HOME/gopath/dist/protobuf/bin/protoc
   - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
   - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
   - $HOME/gopath/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages
