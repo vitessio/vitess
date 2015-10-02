@@ -80,7 +80,7 @@ func (fetcher *QueryFetcher) Close() {
 // Next fetches the next captured query.
 // If the wait is longer than one second, it returns an error.
 func (fetcher *QueryFetcher) Next() (*tabletserver.LogStats, error) {
-	tmr := time.NewTimer(1 * time.Second)
+	tmr := time.NewTimer(5 * time.Second)
 	defer tmr.Stop()
 	for {
 		select {
