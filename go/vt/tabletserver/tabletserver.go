@@ -958,6 +958,16 @@ func (tsv *TabletServer) PoolSize() int {
 	return int(tsv.qe.connPool.Capacity())
 }
 
+// SetStreamPoolSize changes the pool size to the specified value.
+func (tsv *TabletServer) SetStreamPoolSize(val int) {
+	tsv.qe.streamConnPool.SetCapacity(val)
+}
+
+// StreamPoolSize returns the pool size.
+func (tsv *TabletServer) StreamPoolSize() int {
+	return int(tsv.qe.streamConnPool.Capacity())
+}
+
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
 	tsv.qe.txPool.pool.SetCapacity(val)
@@ -1015,6 +1025,16 @@ func (tsv *TabletServer) SetMaxDMLRows(val int) {
 // MaxDMLRows returns the max result size.
 func (tsv *TabletServer) MaxDMLRows() int {
 	return int(tsv.qe.maxDMLRows.Get())
+}
+
+// SetSpotCheckRatio sets the spot check ration.
+func (tsv *TabletServer) SetSpotCheckRatio(val float64) {
+	tsv.qe.spotCheckFreq.Set(int64(val * spotCheckMultiplier))
+}
+
+// SpotCheckRatio returns the spot check ratio.
+func (tsv *TabletServer) SpotCheckRatio() float64 {
+	return float64(tsv.qe.spotCheckFreq.Get()) / spotCheckMultiplier
 }
 
 func init() {
