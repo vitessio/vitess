@@ -607,102 +607,18 @@ func (qre *QueryExecutor) execDMLPKRows(conn poolConn, query *sqlparser.ParsedQu
 
 func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
 	switch qre.plan.SetKey {
-	case "vt_pool_size":
-		val, err := parseInt64(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_pool_size = %v, want int64", err)
-		}
-		qre.qe.connPool.SetCapacity(int(val))
-	case "vt_stream_pool_size":
-		val, err := parseInt64(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_stream_pool_size = %v, want int64", err)
-		}
-		qre.qe.streamConnPool.SetCapacity(int(val))
-	case "vt_transaction_cap":
-		val, err := parseInt64(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_transaction_cap = %v, want int64", err)
-		}
-		qre.qe.txPool.pool.SetCapacity(int(val))
-	case "vt_transaction_timeout":
-		val, err := parseDuration(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_transaction_timeout = %v, want int64 or float64", err)
-		}
-		qre.qe.txPool.SetTimeout(val)
-	case "vt_schema_reload_time":
-		val, err := parseDuration(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_schema_reload_time = %v, want int64 or float64", err)
-		}
-		qre.qe.schemaInfo.SetReloadTime(val)
-	case "vt_query_cache_size":
-		val, err := parseInt64(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_query_cache_size = %v, want int64", err)
-		}
-		qre.qe.schemaInfo.SetQueryCacheCap(int(val))
-	case "vt_max_result_size":
-		val, err := parseInt64(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_max_result_size = %v, want int64", err)
-		}
-		if val < 1 {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "vt_max_result_size out of range %v", val)
-		}
-		qre.qe.maxResultSize.Set(val)
-	case "vt_max_dml_rows":
-		val, err := parseInt64(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_max_dml_rows = %v, want int64", err)
-		}
-		if val < 1 {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "vt_max_dml_rows out of range %v", val)
-		}
-		qre.qe.maxDMLRows.Set(val)
-	case "vt_stream_buffer_size":
-		val, err := parseInt64(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_stream_buffer_size = %v, want int64", err)
-		}
-
-		if val < 1024 {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "vt_stream_buffer_size out of range %v", val)
-		}
-		qre.qe.streamBufferSize.Set(val)
 	case "vt_query_timeout":
 		val, err := parseDuration(qre.plan.SetValue)
 		if err != nil {
 			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_query_timeout = %v, want int64 or float64", err)
 		}
 		qre.tsv.QueryTimeout.Set(val)
-	case "vt_idle_timeout":
-		val, err := parseDuration(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_idle_timeout = %v, want int64 or float64", err)
-		}
-		qre.qe.connPool.SetIdleTimeout(val)
-		qre.qe.streamConnPool.SetIdleTimeout(val)
-		qre.qe.txPool.pool.SetIdleTimeout(val)
 	case "vt_spot_check_ratio":
 		val, err := parseFloat64(qre.plan.SetValue)
 		if err != nil {
 			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_spot_check_ratio = %v, want float64", err)
 		}
 		qre.qe.spotCheckFreq.Set(int64(val * spotCheckMultiplier))
-	case "vt_strict_mode":
-		val, err := parseInt64(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_strict_mode = %v, want to int64", err)
-		}
-		qre.qe.strictMode.Set(val)
-	case "vt_txpool_timeout":
-		val, err := parseDuration(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_txpool_timeout = %v, want int64 or float64", err)
-		}
-		qre.tsv.BeginTimeout.Set(val)
 	default:
 		conn, err := qre.getConn(qre.qe.connPool)
 		if err != nil {
