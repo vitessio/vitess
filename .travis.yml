@@ -87,7 +87,7 @@ before_script:
   # Travis only tests. Run only on the first shard.
   # Part of "before_script" because in "script" the job would not fail immediately if a command fails.
   - |
-    if [[ "$TEST_MATRIX" = "-shard 0" ]]; then
+    if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
       travis/check_make_proto.sh
     fi
 script:
