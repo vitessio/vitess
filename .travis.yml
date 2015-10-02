@@ -36,6 +36,8 @@ cache:
   - $HOME/gopath/dist/grpc/lib
   - $HOME/gopath/dist/protobuf/.build_finished
   - $HOME/gopath/dist/protobuf/lib
+  # Required by make proto and subsequently check_make_proto.sh.
+  - $HOME/gopath/dist/protobuf/bin/protoc
   - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
   - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
   - $HOME/gopath/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages
@@ -81,8 +83,15 @@ before_install:
   - travis/php_init.sh
 install:
   - ./bootstrap.sh
-script:
+before_script:
   - source dev.env
+  # Travis only tests. Run only on the first shard.
+  # Part of "before_script" because in "script" the job would not fail immediately if a command fails.
+  - |
+    if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
+      travis/check_make_proto.sh
+    fi
+script:
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
   - go run test.go $TEST_FLAGS $TEST_MATRIX
