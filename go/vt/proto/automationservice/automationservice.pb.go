@@ -81,9 +81,9 @@ func RegisterAutomationServer(s *grpc.Server, srv AutomationServer) {
 	s.RegisterService(&_Automation_serviceDesc, srv)
 }
 
-func _Automation_EnqueueClusterOperation_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Automation_EnqueueClusterOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(automation.EnqueueClusterOperationRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(AutomationServer).EnqueueClusterOperation(ctx, in)
@@ -93,9 +93,9 @@ func _Automation_EnqueueClusterOperation_Handler(srv interface{}, ctx context.Co
 	return out, nil
 }
 
-func _Automation_GetClusterOperationDetails_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Automation_GetClusterOperationDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(automation.GetClusterOperationDetailsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(AutomationServer).GetClusterOperationDetails(ctx, in)

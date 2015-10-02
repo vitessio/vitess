@@ -134,9 +134,9 @@ func RegisterMysqlCtlServer(s *grpc.Server, srv MysqlCtlServer) {
 	s.RegisterService(&_MysqlCtl_serviceDesc, srv)
 }
 
-func _MysqlCtl_Start_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _MysqlCtl_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(StartRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(MysqlCtlServer).Start(ctx, in)
@@ -146,9 +146,9 @@ func _MysqlCtl_Start_Handler(srv interface{}, ctx context.Context, codec grpc.Co
 	return out, nil
 }
 
-func _MysqlCtl_Shutdown_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _MysqlCtl_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(ShutdownRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(MysqlCtlServer).Shutdown(ctx, in)
@@ -158,9 +158,9 @@ func _MysqlCtl_Shutdown_Handler(srv interface{}, ctx context.Context, codec grpc
 	return out, nil
 }
 
-func _MysqlCtl_RunMysqlUpgrade_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _MysqlCtl_RunMysqlUpgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(RunMysqlUpgradeRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(MysqlCtlServer).RunMysqlUpgrade(ctx, in)

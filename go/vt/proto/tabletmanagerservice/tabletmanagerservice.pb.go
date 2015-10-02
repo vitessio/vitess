@@ -630,9 +630,9 @@ func RegisterTabletManagerServer(s *grpc.Server, srv TabletManagerServer) {
 	s.RegisterService(&_TabletManager_serviceDesc, srv)
 }
 
-func _TabletManager_Ping_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.PingRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).Ping(ctx, in)
@@ -642,9 +642,9 @@ func _TabletManager_Ping_Handler(srv interface{}, ctx context.Context, codec grp
 	return out, nil
 }
 
-func _TabletManager_Sleep_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_Sleep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.SleepRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).Sleep(ctx, in)
@@ -654,9 +654,9 @@ func _TabletManager_Sleep_Handler(srv interface{}, ctx context.Context, codec gr
 	return out, nil
 }
 
-func _TabletManager_ExecuteHook_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_ExecuteHook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.ExecuteHookRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).ExecuteHook(ctx, in)
@@ -666,9 +666,9 @@ func _TabletManager_ExecuteHook_Handler(srv interface{}, ctx context.Context, co
 	return out, nil
 }
 
-func _TabletManager_GetSchema_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_GetSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.GetSchemaRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).GetSchema(ctx, in)
@@ -678,9 +678,9 @@ func _TabletManager_GetSchema_Handler(srv interface{}, ctx context.Context, code
 	return out, nil
 }
 
-func _TabletManager_GetPermissions_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_GetPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.GetPermissionsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).GetPermissions(ctx, in)
@@ -690,9 +690,9 @@ func _TabletManager_GetPermissions_Handler(srv interface{}, ctx context.Context,
 	return out, nil
 }
 
-func _TabletManager_SetReadOnly_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_SetReadOnly_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.SetReadOnlyRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).SetReadOnly(ctx, in)
@@ -702,9 +702,9 @@ func _TabletManager_SetReadOnly_Handler(srv interface{}, ctx context.Context, co
 	return out, nil
 }
 
-func _TabletManager_SetReadWrite_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_SetReadWrite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.SetReadWriteRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).SetReadWrite(ctx, in)
@@ -714,9 +714,9 @@ func _TabletManager_SetReadWrite_Handler(srv interface{}, ctx context.Context, c
 	return out, nil
 }
 
-func _TabletManager_ChangeType_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_ChangeType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.ChangeTypeRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).ChangeType(ctx, in)
@@ -726,9 +726,9 @@ func _TabletManager_ChangeType_Handler(srv interface{}, ctx context.Context, cod
 	return out, nil
 }
 
-func _TabletManager_Scrap_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_Scrap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.ScrapRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).Scrap(ctx, in)
@@ -738,9 +738,9 @@ func _TabletManager_Scrap_Handler(srv interface{}, ctx context.Context, codec gr
 	return out, nil
 }
 
-func _TabletManager_RefreshState_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_RefreshState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.RefreshStateRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).RefreshState(ctx, in)
@@ -750,9 +750,9 @@ func _TabletManager_RefreshState_Handler(srv interface{}, ctx context.Context, c
 	return out, nil
 }
 
-func _TabletManager_RunHealthCheck_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.RunHealthCheckRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).RunHealthCheck(ctx, in)
@@ -762,9 +762,9 @@ func _TabletManager_RunHealthCheck_Handler(srv interface{}, ctx context.Context,
 	return out, nil
 }
 
-func _TabletManager_ReloadSchema_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_ReloadSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.ReloadSchemaRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).ReloadSchema(ctx, in)
@@ -774,9 +774,9 @@ func _TabletManager_ReloadSchema_Handler(srv interface{}, ctx context.Context, c
 	return out, nil
 }
 
-func _TabletManager_PreflightSchema_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_PreflightSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.PreflightSchemaRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).PreflightSchema(ctx, in)
@@ -786,9 +786,9 @@ func _TabletManager_PreflightSchema_Handler(srv interface{}, ctx context.Context
 	return out, nil
 }
 
-func _TabletManager_ApplySchema_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.ApplySchemaRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).ApplySchema(ctx, in)
@@ -798,9 +798,9 @@ func _TabletManager_ApplySchema_Handler(srv interface{}, ctx context.Context, co
 	return out, nil
 }
 
-func _TabletManager_ExecuteFetchAsDba_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_ExecuteFetchAsDba_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.ExecuteFetchAsDbaRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).ExecuteFetchAsDba(ctx, in)
@@ -810,9 +810,9 @@ func _TabletManager_ExecuteFetchAsDba_Handler(srv interface{}, ctx context.Conte
 	return out, nil
 }
 
-func _TabletManager_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.ExecuteFetchAsAppRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).ExecuteFetchAsApp(ctx, in)
@@ -822,9 +822,9 @@ func _TabletManager_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Conte
 	return out, nil
 }
 
-func _TabletManager_SlaveStatus_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_SlaveStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.SlaveStatusRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).SlaveStatus(ctx, in)
@@ -834,9 +834,9 @@ func _TabletManager_SlaveStatus_Handler(srv interface{}, ctx context.Context, co
 	return out, nil
 }
 
-func _TabletManager_MasterPosition_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_MasterPosition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.MasterPositionRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).MasterPosition(ctx, in)
@@ -846,9 +846,9 @@ func _TabletManager_MasterPosition_Handler(srv interface{}, ctx context.Context,
 	return out, nil
 }
 
-func _TabletManager_StopSlave_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_StopSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.StopSlaveRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).StopSlave(ctx, in)
@@ -858,9 +858,9 @@ func _TabletManager_StopSlave_Handler(srv interface{}, ctx context.Context, code
 	return out, nil
 }
 
-func _TabletManager_StopSlaveMinimum_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_StopSlaveMinimum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.StopSlaveMinimumRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).StopSlaveMinimum(ctx, in)
@@ -870,9 +870,9 @@ func _TabletManager_StopSlaveMinimum_Handler(srv interface{}, ctx context.Contex
 	return out, nil
 }
 
-func _TabletManager_StartSlave_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_StartSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.StartSlaveRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).StartSlave(ctx, in)
@@ -882,9 +882,9 @@ func _TabletManager_StartSlave_Handler(srv interface{}, ctx context.Context, cod
 	return out, nil
 }
 
-func _TabletManager_TabletExternallyReparented_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_TabletExternallyReparented_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.TabletExternallyReparentedRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).TabletExternallyReparented(ctx, in)
@@ -894,9 +894,9 @@ func _TabletManager_TabletExternallyReparented_Handler(srv interface{}, ctx cont
 	return out, nil
 }
 
-func _TabletManager_TabletExternallyElected_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_TabletExternallyElected_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.TabletExternallyElectedRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).TabletExternallyElected(ctx, in)
@@ -906,9 +906,9 @@ func _TabletManager_TabletExternallyElected_Handler(srv interface{}, ctx context
 	return out, nil
 }
 
-func _TabletManager_GetSlaves_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_GetSlaves_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.GetSlavesRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).GetSlaves(ctx, in)
@@ -918,9 +918,9 @@ func _TabletManager_GetSlaves_Handler(srv interface{}, ctx context.Context, code
 	return out, nil
 }
 
-func _TabletManager_WaitBlpPosition_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_WaitBlpPosition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.WaitBlpPositionRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).WaitBlpPosition(ctx, in)
@@ -930,9 +930,9 @@ func _TabletManager_WaitBlpPosition_Handler(srv interface{}, ctx context.Context
 	return out, nil
 }
 
-func _TabletManager_StopBlp_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_StopBlp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.StopBlpRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).StopBlp(ctx, in)
@@ -942,9 +942,9 @@ func _TabletManager_StopBlp_Handler(srv interface{}, ctx context.Context, codec 
 	return out, nil
 }
 
-func _TabletManager_StartBlp_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_StartBlp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.StartBlpRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).StartBlp(ctx, in)
@@ -954,9 +954,9 @@ func _TabletManager_StartBlp_Handler(srv interface{}, ctx context.Context, codec
 	return out, nil
 }
 
-func _TabletManager_RunBlpUntil_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_RunBlpUntil_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.RunBlpUntilRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).RunBlpUntil(ctx, in)
@@ -966,9 +966,9 @@ func _TabletManager_RunBlpUntil_Handler(srv interface{}, ctx context.Context, co
 	return out, nil
 }
 
-func _TabletManager_ResetReplication_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_ResetReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.ResetReplicationRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).ResetReplication(ctx, in)
@@ -978,9 +978,9 @@ func _TabletManager_ResetReplication_Handler(srv interface{}, ctx context.Contex
 	return out, nil
 }
 
-func _TabletManager_InitMaster_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_InitMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.InitMasterRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).InitMaster(ctx, in)
@@ -990,9 +990,9 @@ func _TabletManager_InitMaster_Handler(srv interface{}, ctx context.Context, cod
 	return out, nil
 }
 
-func _TabletManager_PopulateReparentJournal_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_PopulateReparentJournal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.PopulateReparentJournalRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).PopulateReparentJournal(ctx, in)
@@ -1002,9 +1002,9 @@ func _TabletManager_PopulateReparentJournal_Handler(srv interface{}, ctx context
 	return out, nil
 }
 
-func _TabletManager_InitSlave_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_InitSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.InitSlaveRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).InitSlave(ctx, in)
@@ -1014,9 +1014,9 @@ func _TabletManager_InitSlave_Handler(srv interface{}, ctx context.Context, code
 	return out, nil
 }
 
-func _TabletManager_DemoteMaster_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_DemoteMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.DemoteMasterRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).DemoteMaster(ctx, in)
@@ -1026,9 +1026,9 @@ func _TabletManager_DemoteMaster_Handler(srv interface{}, ctx context.Context, c
 	return out, nil
 }
 
-func _TabletManager_PromoteSlaveWhenCaughtUp_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_PromoteSlaveWhenCaughtUp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).PromoteSlaveWhenCaughtUp(ctx, in)
@@ -1038,9 +1038,9 @@ func _TabletManager_PromoteSlaveWhenCaughtUp_Handler(srv interface{}, ctx contex
 	return out, nil
 }
 
-func _TabletManager_SlaveWasPromoted_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_SlaveWasPromoted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.SlaveWasPromotedRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).SlaveWasPromoted(ctx, in)
@@ -1050,9 +1050,9 @@ func _TabletManager_SlaveWasPromoted_Handler(srv interface{}, ctx context.Contex
 	return out, nil
 }
 
-func _TabletManager_SetMaster_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_SetMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.SetMasterRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).SetMaster(ctx, in)
@@ -1062,9 +1062,9 @@ func _TabletManager_SetMaster_Handler(srv interface{}, ctx context.Context, code
 	return out, nil
 }
 
-func _TabletManager_SlaveWasRestarted_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_SlaveWasRestarted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.SlaveWasRestartedRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).SlaveWasRestarted(ctx, in)
@@ -1074,9 +1074,9 @@ func _TabletManager_SlaveWasRestarted_Handler(srv interface{}, ctx context.Conte
 	return out, nil
 }
 
-func _TabletManager_StopReplicationAndGetStatus_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_StopReplicationAndGetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.StopReplicationAndGetStatusRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).StopReplicationAndGetStatus(ctx, in)
@@ -1086,9 +1086,9 @@ func _TabletManager_StopReplicationAndGetStatus_Handler(srv interface{}, ctx con
 	return out, nil
 }
 
-func _TabletManager_PromoteSlave_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _TabletManager_PromoteSlave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(tabletmanagerdata.PromoteSlaveRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).PromoteSlave(ctx, in)
