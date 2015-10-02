@@ -33,6 +33,8 @@ cache:
   - $MYSQL_ROOT
   # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
   - $HOME/gopath/dist/grpc/.build_finished
+  # Required by make proto and subsequently check_make_proto.sh.
+  - $HOME/gopath/dist/grpc/bin/grpc_python_plugin
   - $HOME/gopath/dist/grpc/lib
   - $HOME/gopath/dist/protobuf/.build_finished
   - $HOME/gopath/dist/protobuf/lib
