@@ -223,10 +223,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 	}()
 
 	return result, func() error {
-		if finalErr != nil {
-			return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
-		}
-		return nil
+		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
 	}, nil
 }
 
@@ -245,30 +242,26 @@ func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, 
 
 // Commit is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) error {
-	if err := itc.tablet.qsc.QueryService().Commit(ctx, &pbq.Target{
+	err := itc.tablet.qsc.QueryService().Commit(ctx, &pbq.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
 	}, &tproto.Session{
 		TransactionId: transactionID,
-	}); err != nil {
-		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
-	}
-	return nil
+	})
+	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
 // Rollback is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64) error {
-	if err := itc.tablet.qsc.QueryService().Rollback(ctx, &pbq.Target{
+	err := itc.tablet.qsc.QueryService().Rollback(ctx, &pbq.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
 	}, &tproto.Session{
 		TransactionId: transactionID,
-	}); err != nil {
-		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
-	}
-	return nil
+	})
+	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
 // Execute2 is part of tabletconn.TabletConn
@@ -352,9 +345,6 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *pbq.St
 	}()
 
 	return result, func() error {
-		if finalErr != nil {
-			return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
-		}
-		return nil
+		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
 	}, nil
 }
