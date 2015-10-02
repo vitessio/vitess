@@ -35,6 +35,7 @@ spec:
               -alsologtostderr
               -port 15001
               -tablet_protocol grpc
+              -service_map 'bsonrpc-vt-vtgateservice'
               -cell test" vitess
           env:
             - name: GOMAXPROCS
