@@ -948,6 +948,16 @@ func (tsv *TabletServer) registerSchemazHandler() {
 	})
 }
 
+// SetPoolSize changes the pool size to the specified value.
+func (tsv *TabletServer) SetPoolSize(val int) {
+	tsv.qe.connPool.SetCapacity(val)
+}
+
+// PoolSize returns the pool size.
+func (tsv *TabletServer) PoolSize() int {
+	return int(tsv.qe.connPool.Capacity())
+}
+
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
 	tsv.qe.txPool.pool.SetCapacity(val)
@@ -966,6 +976,45 @@ func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
 // TxTimeout returns the transaction timeout.
 func (tsv *TabletServer) TxTimeout() time.Duration {
 	return tsv.qe.txPool.Timeout()
+}
+
+// SetQueryCacheCap changes the pool size to the specified value.
+func (tsv *TabletServer) SetQueryCacheCap(val int) {
+	tsv.qe.schemaInfo.SetQueryCacheCap(val)
+}
+
+// QueryCacheCap returns the pool size.
+func (tsv *TabletServer) QueryCacheCap() int {
+	return int(tsv.qe.schemaInfo.QueryCacheCap())
+}
+
+// SetStrictMode sets strict mode on or off.
+func (tsv *TabletServer) SetStrictMode(strict bool) {
+	if strict {
+		tsv.qe.strictMode.Set(1)
+	} else {
+		tsv.qe.strictMode.Set(0)
+	}
+}
+
+// SetMaxResultSize changes the max result size to the specified value.
+func (tsv *TabletServer) SetMaxResultSize(val int) {
+	tsv.qe.maxResultSize.Set(int64(val))
+}
+
+// MaxResultSize returns the max result size.
+func (tsv *TabletServer) MaxResultSize() int {
+	return int(tsv.qe.maxResultSize.Get())
+}
+
+// SetMaxDMLRows changes the max result size to the specified value.
+func (tsv *TabletServer) SetMaxDMLRows(val int) {
+	tsv.qe.maxDMLRows.Set(int64(val))
+}
+
+// MaxDMLRows returns the max result size.
+func (tsv *TabletServer) MaxDMLRows() int {
+	return int(tsv.qe.maxDMLRows.Get())
 }
 
 func init() {
