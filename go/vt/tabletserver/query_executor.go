@@ -642,7 +642,7 @@ func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
 		if err != nil {
 			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_query_cache_size = %v, want int64", err)
 		}
-		qre.qe.schemaInfo.SetQueryCacheSize(int(val))
+		qre.qe.schemaInfo.SetQueryCacheCap(int(val))
 	case "vt_max_result_size":
 		val, err := parseInt64(qre.plan.SetValue)
 		if err != nil {

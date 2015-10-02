@@ -38,7 +38,11 @@ func TestCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	tx := fetcher.Fetch()
+	tx, err := fetcher.Fetch()
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	want := []string{query}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
@@ -71,46 +75,39 @@ func TestCommit(t *testing.T) {
 		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
 	}
 
+	expectedDiffs := []struct {
+		tag  string
+		diff int
+	}{{
+		tag:  "Transactions.TotalCount",
+		diff: 2,
+	}, {
+		tag:  "Transactions.Histograms.Completed.Count",
+		diff: 2,
+	}, {
+		tag:  "Queries.TotalCount",
+		diff: 6,
+	}, {
+		tag:  "Queries.Histograms.BEGIN.Count",
+		diff: 1,
+	}, {
+		tag:  "Queries.Histograms.COMMIT.Count",
+		diff: 1,
+	}, {
+		tag:  "Queries.Histograms.INSERT_PK.Count",
+		diff: 1,
+	}, {
+		tag:  "Queries.Histograms.DML_PK.Count",
+		diff: 1,
+	}, {
+		tag:  "Queries.Histograms.PASS_SELECT.Count",
+		diff: 2,
+	}}
 	vend := framework.DebugVars()
-	v1 := framework.FetchInt(vstart, "Transactions.TotalCount")
-	v2 := framework.FetchInt(vend, "Transactions.TotalCount")
-	if v1+2 != v2 {
-		t.Errorf("Transactions.TotalCount: %d, want %d", v2, v1+2)
-	}
-	v1 = framework.FetchInt(vstart, "Transactions.Histograms.Completed.Count")
-	v2 = framework.FetchInt(vend, "Transactions.Histograms.Completed.Count")
-	if v1+2 != v2 {
-		t.Errorf("Transactions.Histograms.Completed.Count: %d, want %d", v2, v1+2)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.TotalCount")
-	v2 = framework.FetchInt(vend, "Queries.TotalCount")
-	if v1+6 != v2 {
-		t.Errorf("Queries.TotalCount: %d, want %d", v2, v1+6)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.BEGIN.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.BEGIN.Count")
-	if v1+1 != v2 {
-		t.Errorf("Queries.Histograms.BEGIN.Count: %d, want %d", v2, v1+1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.COMMIT.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.COMMIT.Count")
-	if v1+1 != v2 {
-		t.Errorf("Queries.Histograms.COMMIT.Count: %d, want %d", v2, v1+1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.INSERT_PK.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.INSERT_PK.Count")
-	if v1+1 != v2 {
-		t.Errorf("Queries.Histograms.INSERT_PK.Count: %d, want %d", v2, v1+1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.DML_PK.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.DML_PK.Count")
-	if v1+1 != v2 {
-		t.Errorf("Queries.Histograms.DML_PK.Count: %d, want %d", v2, v1+1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.PASS_SELECT.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.PASS_SELECT.Count")
-	if v1+2 != v2 {
-		t.Errorf("Queries.Histograms.PASS_SELECT.Count: %d, want %d", v2, v1+2)
+	for _, expected := range expectedDiffs {
+		if err := compareIntDiff(vend, expected.tag, vstart, expected.diff); err != nil {
+			t.Error(err)
+		}
 	}
 }
 
@@ -136,7 +133,11 @@ func TestRollback(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	tx := fetcher.Fetch()
+	tx, err := fetcher.Fetch()
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	want := []string{query}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
@@ -154,31 +155,30 @@ func TestRollback(t *testing.T) {
 		t.Errorf("rows affected: %d, want 3", qr.RowsAffected)
 	}
 
+	expectedDiffs := []struct {
+		tag  string
+		diff int
+	}{{
+		tag:  "Transactions.TotalCount",
+		diff: 1,
+	}, {
+		tag:  "Transactions.Histograms.Aborted.Count",
+		diff: 1,
+	}, {
+		tag:  "Queries.Histograms.BEGIN.Count",
+		diff: 1,
+	}, {
+		tag:  "Queries.Histograms.ROLLBACK.Count",
+		diff: 1,
+	}, {
+		tag:  "Queries.Histograms.INSERT_PK.Count",
+		diff: 1,
+	}}
 	vend := framework.DebugVars()
-	v1 := framework.FetchInt(vstart, "Transactions.TotalCount")
-	v2 := framework.FetchInt(vend, "Transactions.TotalCount")
-	if v1+1 != v2 {
-		t.Errorf("Transactions.TotalCount: %d, want %d", v2, v1+1)
-	}
-	v1 = framework.FetchInt(vstart, "Transactions.Histograms.Aborted.Count")
-	v2 = framework.FetchInt(vend, "Transactions.Histograms.Aborted.Count")
-	if v1+1 != v2 {
-		t.Errorf("Transactions.Histograms.Aborted.Count: %d, want %d", v2, v1+1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.BEGIN.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.BEGIN.Count")
-	if v1+1 != v2 {
-		t.Errorf("Queries.Histograms.BEGIN.Count: %d, want %d", v2, v1+1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.ROLLBACK.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.ROLLBACK.Count")
-	if v1+1 != v2 {
-		t.Errorf("Queries.Histograms.ROLLBACK.Count: %d, want %d", v2, v1+1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.INSERT_PK.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.INSERT_PK.Count")
-	if v1+1 != v2 {
-		t.Errorf("Queries.Histograms.INSERT_PK.Count: %d, want %d", v2, v1+1)
+	for _, expected := range expectedDiffs {
+		if err := compareIntDiff(vend, expected.tag, vstart, expected.diff); err != nil {
+			t.Error(err)
+		}
 	}
 }
 
@@ -196,7 +196,11 @@ func TestAutoCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	tx := fetcher.Fetch()
+	tx, err := fetcher.Fetch()
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	want := []string{query}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
@@ -229,59 +233,44 @@ func TestAutoCommit(t *testing.T) {
 		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
 	}
 
+	expectedDiffs := []struct {
+		tag  string
+		diff int
+	}{{
+		tag:  "Transactions.TotalCount",
+		diff: 2,
+	}, {
+		tag:  "Transactions.Histograms.Completed.Count",
+		diff: 2,
+	}, {
+		tag:  "Queries.TotalCount",
+		diff: 4,
+	}, {
+		tag:  "Queries.Histograms.BEGIN.Count",
+		diff: 0,
+	}, {
+		tag:  "Queries.Histograms.COMMIT.Count",
+		diff: 0,
+	}, {
+		tag:  "Queries.Histograms.INSERT_PK.Count",
+		diff: 1,
+	}, {
+		tag:  "Queries.Histograms.DML_PK.Count",
+		diff: 1,
+	}, {
+		tag:  "Queries.Histograms.PASS_SELECT.Count",
+		diff: 2,
+	}}
 	vend := framework.DebugVars()
-	v1 := framework.FetchInt(vstart, "Transactions.TotalCount")
-	v2 := framework.FetchInt(vend, "Transactions.TotalCount")
-	if v1+2 != v2 {
-		t.Errorf("Transactions.TotalCount: %d, want %d", v2, v1+2)
-	}
-	v1 = framework.FetchInt(vstart, "Transactions.Histograms.Completed.Count")
-	v2 = framework.FetchInt(vend, "Transactions.Histograms.Completed.Count")
-	if v1+2 != v2 {
-		t.Errorf("Transactions.Histograms.Completed.Count: %d, want %d", v2, v1+2)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.TotalCount")
-	v2 = framework.FetchInt(vend, "Queries.TotalCount")
-	if v1+4 != v2 {
-		t.Errorf("Queries.TotalCount: %d, want %d", v2, v1+6)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.BEGIN.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.BEGIN.Count")
-	if v1 != v2 {
-		t.Errorf("Queries.Histograms.BEGIN.Count: %d, want %d", v2, v1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.COMMIT.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.COMMIT.Count")
-	if v1 != v2 {
-		t.Errorf("Queries.Histograms.COMMIT.Count: %d, want %d", v2, v1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.INSERT_PK.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.INSERT_PK.Count")
-	if v1+1 != v2 {
-		t.Errorf("Queries.Histograms.INSERT_PK.Count: %d, want %d", v2, v1+1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.DML_PK.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.DML_PK.Count")
-	if v1+1 != v2 {
-		t.Errorf("Queries.Histograms.DML_PK.Count: %d, want %d", v2, v1+1)
-	}
-	v1 = framework.FetchInt(vstart, "Queries.Histograms.PASS_SELECT.Count")
-	v2 = framework.FetchInt(vend, "Queries.Histograms.PASS_SELECT.Count")
-	if v1+2 != v2 {
-		t.Errorf("Queries.Histograms.PASS_SELECT.Count: %d, want %d", v2, v1+2)
+	for _, expected := range expectedDiffs {
+		if err := compareIntDiff(vend, expected.tag, vstart, expected.diff); err != nil {
+			t.Error(err)
+		}
 	}
 }
 
 func TestTxPoolSize(t *testing.T) {
 	vstart := framework.DebugVars()
-	v1 := framework.FetchInt(vstart, "TransactionPoolCapacity")
-	if v1 != framework.BaseConfig.TransactionCap {
-		t.Errorf("TransactionPoolCapacity: %d, want %d", v1, framework.BaseConfig.TransactionCap)
-	}
-	v1 = framework.FetchInt(vstart, "TransactionPoolAvailable")
-	if v1 != framework.BaseConfig.TransactionCap {
-		t.Errorf("TransactionPoolAvailable: %d, want %d", v1, framework.BaseConfig.TransactionCap)
-	}
 
 	client1 := framework.NewDefaultClient()
 	err := client1.Begin()
@@ -290,10 +279,8 @@ func TestTxPoolSize(t *testing.T) {
 		return
 	}
 	defer client1.Rollback()
-	vend := framework.DebugVars()
-	v2 := framework.FetchInt(vend, "TransactionPoolAvailable")
-	if v2 != framework.BaseConfig.TransactionCap-1 {
-		t.Errorf("TransactionPoolAvailable: %d, want %d", v2, framework.BaseConfig.TransactionCap-1)
+	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", framework.BaseConfig.TransactionCap-1); err != nil {
+		t.Error(err)
 	}
 
 	defer framework.DefaultServer.SetTxPoolSize(framework.DefaultServer.TxPoolSize())
@@ -301,14 +288,15 @@ func TestTxPoolSize(t *testing.T) {
 	defer framework.DefaultServer.BeginTimeout.Set(framework.DefaultServer.BeginTimeout.Get())
 	timeout := 1 * time.Millisecond
 	framework.DefaultServer.BeginTimeout.Set(timeout)
-	vend = framework.DebugVars()
-	v2 = framework.FetchInt(vend, "TransactionPoolCapacity")
-	if v2 != 1 {
-		t.Errorf("TransactionPoolCapacity: %d, want 1", v2)
+	vend := framework.DebugVars()
+	if err := verifyIntValue(vend, "TransactionPoolAvailable", 0); err != nil {
+		t.Error(err)
 	}
-	v2 = framework.FetchInt(vend, "BeginTimeout")
-	if v2 != int(timeout) {
-		t.Errorf("BeginTimeout: %d, want %d", v2, int(timeout))
+	if err := verifyIntValue(vend, "TransactionPoolCapacity", 1); err != nil {
+		t.Error(err)
+	}
+	if err := verifyIntValue(vend, "BeginTimeout", int(timeout)); err != nil {
+		t.Error(err)
 	}
 
 	client2 := framework.NewDefaultClient()
@@ -317,30 +305,18 @@ func TestTxPoolSize(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Error: %v, must contain %s", err, want)
 	}
-
-	vend = framework.DebugVars()
-	v1 = framework.FetchInt(vstart, "Errors.TxPoolFull")
-	v2 = framework.FetchInt(vend, "Errors.TxPoolFull")
-	if v2 != v1+1 {
-		t.Errorf("Errors.TxPoolFull: %d, want %d", v2, v1+1)
+	if err := compareIntDiff(framework.DebugVars(), "Errors.TxPoolFull", vstart, 1); err != nil {
+		t.Error(err)
 	}
 }
 
 func TestTxTimeout(t *testing.T) {
 	vstart := framework.DebugVars()
-	v1 := framework.FetchInt(vstart, "TransactionPoolTimeout")
-	timeout := int(framework.BaseConfig.TransactionTimeout * 1e9)
-	if v1 != timeout {
-		t.Errorf("Timeout: %d, want %d", v1, timeout)
-	}
 
 	defer framework.DefaultServer.SetTxTimeout(framework.DefaultServer.TxTimeout())
 	framework.DefaultServer.SetTxTimeout(1 * time.Millisecond)
-	vend := framework.DebugVars()
-	v2 := framework.FetchInt(vend, "TransactionPoolTimeout")
-	timeout = int(1 * time.Millisecond)
-	if v2 != timeout {
-		t.Errorf("Timeout: %d, want %d", v2, timeout)
+	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolTimeout", int(1*time.Millisecond)); err != nil {
+		t.Error(err)
 	}
 
 	fetcher := framework.NewTxFetcher()
@@ -356,15 +332,16 @@ func TestTxTimeout(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must contain %s", err, want)
 	}
-	tx := fetcher.Fetch()
+	tx, err := fetcher.Fetch()
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	if tx.Conclusion != "kill" {
 		t.Errorf("Conclusion: %s, want kill", tx.Conclusion)
 	}
-	vend = framework.DebugVars()
-	v1 = framework.FetchInt(vstart, "Kills.Transactions")
-	v2 = framework.FetchInt(vend, "Kills.Transactions")
-	if v2 != v1+1 {
-		t.Errorf("Kills.Transactions: %d, want %d", v2, v1+1)
+	if err := compareIntDiff(framework.DebugVars(), "Kills.Transactions", vstart, 1); err != nil {
+		t.Error(err)
 	}
 }
 
