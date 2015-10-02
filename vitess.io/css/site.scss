@@ -4,20 +4,24 @@
 @import url("https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.css");
 
 // Colors
-$mainBrandColor: #4E5A92;
-$secondBrandColor: #264270;
-$thirdBrandColor: #E8F4FF;
-$activeTocColor: #730073;
-$inverseBrandColor: #FFF;
+$primaryBrandColor: #3F51B5;
+$darkerBrandColor: #283593;
+$lighterBrandColor: #E1F5FE;
+$accentColor: #6A1B9A;
 
-$linkColor: $mainBrandColor;
-$linkHoverColor: darken($linkColor, 10%);
-$linkDisabledColor: #CCC;
-$codeColor: darken($linkColor, 20%);
-$codeBkColor: $thirdBrandColor;
-$wellColor: #F9F9F9;
-$textColor: #6A7476;
-$headingsColor: rgb(81, 91, 93);
+// This ensures that icons on the home page use 100% opacity
+// with the $primaryBrandColor. Otherwise, the icons inherit
+// opacity settings from the header or text is too dark.
+$homePageHeaderColor: #757575;
+
+$linkColor: $primaryBrandColor;
+$linkHoverColor: $darkerBrandColor;
+$codeColor: $darkerBrandColor;
+$codeBkColor: $lighterBrandColor;
+$wellColor: #FAFAFA;
+$textColor: #616161;
+$linkDisabledColor: $textColor;
+
 
 $fontFamily: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
 
@@ -29,7 +33,7 @@ body {
 }
 
 a {
-  color: $mainBrandColor;
+  color: $primaryBrandColor;
 }
 a:hover,
 a:focus {
@@ -40,7 +44,8 @@ a.disabled {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  color: $headingsColor;
+  color: #000;
+  opacity: 0.54;
 }
 
 p, li {line-height: 22px;}
@@ -68,7 +73,7 @@ pre, pre.prettyprint {
 }
 
 .ui-widget-content a {
-  color: $mainBrandColor !important;
+  color: $primaryBrandColor !important;
 }
 
 .ui-widget-content a:hover, a:focus {
@@ -77,16 +82,16 @@ pre, pre.prettyprint {
 
 // Fix Bootstrap mobile menu colors on inverse navbar.
 .navbar-toggle .icon-bar {
-  background-color: $inverseBrandColor;
+  background-color: $lighterBrandColor;
 }
 
 // Shared
 .inverse {
-  background-color: $mainBrandColor;
+  background-color: $primaryBrandColor;
   color: white;
 
   a {
-    color: $inverseBrandColor;
+    color: $lighterBrandColor;
   }
   a:hover,
   a:focus {
@@ -95,29 +100,35 @@ pre, pre.prettyprint {
 }
 
 .inverse .inverse-light {
-  background-color: $thirdBrandColor;
+  background-color: $lighterBrandColor;
 }
 
 /* Home page styles */
+#home {
+  h2 {
+    color: $homePageHeaderColor;
+    opacity: 1;
+  }
+}
 .home-full-width {
   width: 100%;
   padding-left: 0;
   padding-right: 0;
 }
 .jumbotron {
-  background: $secondBrandColor;
-  color: $thirdBrandColor;
+  background: $darkerBrandColor;
+  color: $lighterBrandColor;
   text-align: center;
   width: 100%;
 }
 .page-title-bar{
-  background-color: $thirdBrandColor;
+  background-color: $lighterBrandColor;
   margin: 50px 0px 0px;
   padding-bottom: 10px;
   padding-top: 15px;
 
   h1, h2, h3, h4, h5, h6 {
-    color: $mainBrandColor;
+    color: $primaryBrandColor;
   }
 }
 .page-spacer {
@@ -127,7 +138,7 @@ pre, pre.prettyprint {
 // Used in top nav bar
 #common-nav{
   margin-bottom: 0px;
-  background-color: $secondBrandColor;
+  background-color: $darkerBrandColor;
 
   .logo {
     width: 60px;
@@ -172,7 +183,7 @@ table {
 }
 
 table thead {
-  background-color: $mainBrandColor;
+  background-color: $primaryBrandColor;
 }
 
 table tr th {
@@ -233,7 +244,7 @@ div.indent-details {
   padding-left: 1.6250em;
 }
 #toc {
-  border-left: solid 3px $mainBrandColor;
+  border-left: solid 3px $primaryBrandColor;
   padding-left: 12px;
 }
 #toc ol, #toc ul {
@@ -275,13 +286,14 @@ li {
 }
 
 #masthead {
-  background-color: $thirdBrandColor;
+  background-color: $lighterBrandColor;
   margin-bottom: 40px;
   min-height: 105px;
 
   h1 {
-    color: $mainBrandColor;
+    color: $primaryBrandColor;
     font-size: 36px;
+    opacity: 1;
     padding: 18px;
     @media (min-width: 768px) {
       font-size: 48px;
@@ -427,26 +439,11 @@ table.responsive th:not(:first-child) {
   height: 228px;
 }
 
-.app-bar {
-  background: $mainBrandColor url(/images/bg-990x320.jpg) no-repeat top center;
-  background-size: cover;
-  box-shadow: none;
-  z-index: 1;
-}
-.home .app-bar {
-  background: none;
-}
-.app-bar,
 .navdrawer {
   -webkit-transition: background-color 0.2s ease-out;
           transition: background-color 0.2s ease-out;
 }
-.app-bar-container {
-  background: none;
-  height: 60px;
-  justify-content: space-between;  /* change the flex layout */
-}
-// Might not need navdrawer-container, app-bar-container, combine scrolled
+// Might not need navdrawer-container, combine scrolled
 .navdrawer-container {
   background: #3f4254;
 }
@@ -454,25 +451,12 @@ table.responsive th:not(:first-child) {
   height: 60px;
   color: #3F4254;
 }
-.navdrawer-container a,
-.app-bar .logo {
+.navdrawer-container a {
   font-family: $fontFamily;
   text-transform: uppercase;
 }
 .navdrawer-container a {
   text-transform: uppercase;
-}
-.app-bar .logo {
-  font-size: 23px;
-  line-height: 60px;
-  color: $inverseBrandColor;
-  flex: inherit;  /* reset the flex box to center */
-}
-.app-bar .logo a {
-  padding-left: 55px;
-  font-weight: 700;
-  -webkit-font-smoothing: antialiased;
-  font-smoothing: antialiased;
 }
 #menu {
   background-image: url(/images/hamburger-white.svg);
@@ -514,7 +498,7 @@ table.responsive th:not(:first-child) {
   z-index: 10000;
 
   li.active > a {
-    color: $activeTocColor;
+    color: $accentColor;
     font-weight: bold;
   }
   @media (min-width: 1200px) {
@@ -538,28 +522,10 @@ table.responsive th:not(:first-child) {
 .scrolled {
   margin-bottom: 80px;
   z-index: 20000;
-
-  .app-bar {
-    color: #000000;
-    background: $inverseBrandColor;
-    box-shadow: 0 5px 10px rgba(0,0,0,0.2);
-    .logo {
-      color: #000000;
-    }
-    button:hover {
-      background-color: rgba(78,90,146, 0.1);
-    }
-    button:focus {
-      background-color: rgba(78,90,146, 0.2);
-    }
-    button:active {
-      background-color: rgba(78,90,146, 0.4);
-    }
-  }
 }
 
 main .fa {
-  color: $mainBrandColor;
+  color: $primaryBrandColor;
 }
 #mobile-left-nav-menu-button {
   display: none;
@@ -576,7 +542,7 @@ main .fa {
 #collapsed-left-menu {
   display: none;
   h4 {
-    color: $thirdBrandColor;
+    color: $lighterBrandColor;
   }
   @media screen and (max-width: 767px) {
     display: block;
