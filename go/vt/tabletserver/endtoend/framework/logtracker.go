@@ -6,6 +6,7 @@ package framework
 
 import (
 	"errors"
+	"runtime"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -68,6 +69,10 @@ func NewQueryFetcher() *QueryFetcher {
 		}
 		close(fetcher.queries)
 	}()
+	// If you don't yield here, then we sometimes drop queries because
+	// the goroutine that pumps the queries doesn't get scheduled on time.
+	// This usually causes the race test to fail...
+	runtime.Gosched()
 	return fetcher
 }
 

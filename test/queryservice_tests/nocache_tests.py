@@ -195,10 +195,6 @@ class TestNocache(framework.TestCase):
         self.env.debug_vars()["QueryErrorCounts"], "vtocc_a", "PASS_SELECT")
     tstartTimesNs = self._get_vars_query_stats(
         self.env.debug_vars()["QueryTimesNs"], "vtocc_a", "PASS_SELECT")
-    self.assertEqual(tstartQueryCounts, 1)
-    self.assertEqual(tstartRowCounts, 2)
-    self.assertEqual(tstartErrorCounts, 0)
-    self.assertTrue(tstartTimesNs > 0)
 
     try:
       self.env.execute(
