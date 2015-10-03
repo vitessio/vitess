@@ -497,8 +497,8 @@ func TestMaxDMLRows(t *testing.T) {
 			"(3, 1, '', ''), (3, 2, '', ''), (3, 3, '', '')",
 		nil,
 	)
-	fetcher := framework.NewQueryFetcher()
-	defer fetcher.Close()
+	catcher := framework.NewQueryCatcher()
+	defer catcher.Close()
 
 	// Verify all three rows are updated in a single DML.
 	_, err = client.Execute("update vtocc_a set foo='fghi' where eid = 3", nil)
@@ -506,7 +506,7 @@ func TestMaxDMLRows(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	queryInfo, err := fetcher.Next()
+	queryInfo, err := catcher.Next()
 	if err != nil {
 		t.Error(err)
 		return
@@ -530,7 +530,7 @@ func TestMaxDMLRows(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	queryInfo, err = fetcher.Next()
+	queryInfo, err = catcher.Next()
 	if err != nil {
 		t.Error(err)
 		return
@@ -553,7 +553,7 @@ func TestMaxDMLRows(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	queryInfo, err = fetcher.Next()
+	queryInfo, err = catcher.Next()
 	if err != nil {
 		t.Error(err)
 		return
@@ -575,7 +575,7 @@ func TestMaxDMLRows(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	queryInfo, err = fetcher.Next()
+	queryInfo, err = catcher.Next()
 	if err != nil {
 		t.Error(err)
 		return

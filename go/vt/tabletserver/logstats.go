@@ -69,6 +69,11 @@ func (stats *LogStats) Send() {
 	StatsLogger.Send(stats)
 }
 
+// EventTime returns the time the event was created.
+func (stats *LogStats) EventTime() time.Time {
+	return stats.EndTime
+}
+
 // AddRewrittenSQL adds a single sql statement to the rewritten list
 func (stats *LogStats) AddRewrittenSQL(sql string, start time.Time) {
 	stats.QuerySources |= QuerySourceMySQL

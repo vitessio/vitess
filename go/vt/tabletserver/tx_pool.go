@@ -328,6 +328,11 @@ func (txc *TxConnection) discard(conclusion string) {
 	TxLogger.Send(txc)
 }
 
+// EventTime returns the time the event was created.
+func (txc *TxConnection) EventTime() time.Time {
+	return txc.EndTime
+}
+
 // Format returns a printable version of the connection info.
 func (txc *TxConnection) Format(params url.Values) string {
 	return fmt.Sprintf(

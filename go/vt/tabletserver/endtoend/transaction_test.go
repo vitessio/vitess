@@ -18,7 +18,8 @@ func TestCommit(t *testing.T) {
 	client := framework.NewDefaultClient()
 	defer client.Execute("delete from vtocc_test where intval=4", nil)
 
-	fetcher := framework.NewTxFetcher()
+	catcher := framework.NewTxCatcher()
+	defer catcher.Close()
 	vstart := framework.DebugVars()
 
 	query := "insert into vtocc_test (intval, floatval, charval, binval) " +
@@ -38,7 +39,7 @@ func TestCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	tx, err := fetcher.Fetch()
+	tx, err := catcher.Next()
 	if err != nil {
 		t.Error(err)
 		return
@@ -114,7 +115,8 @@ func TestCommit(t *testing.T) {
 func TestRollback(t *testing.T) {
 	client := framework.NewDefaultClient()
 
-	fetcher := framework.NewTxFetcher()
+	catcher := framework.NewTxCatcher()
+	defer catcher.Close()
 	vstart := framework.DebugVars()
 
 	query := "insert into vtocc_test values(4, null, null, null)"
@@ -133,7 +135,7 @@ func TestRollback(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	tx, err := fetcher.Fetch()
+	tx, err := catcher.Next()
 	if err != nil {
 		t.Error(err)
 		return
@@ -186,7 +188,8 @@ func TestAutoCommit(t *testing.T) {
 	client := framework.NewDefaultClient()
 	defer client.Execute("delete from vtocc_test where intval=4", nil)
 
-	fetcher := framework.NewTxFetcher()
+	catcher := framework.NewTxCatcher()
+	defer catcher.Close()
 	vstart := framework.DebugVars()
 
 	query := "insert into vtocc_test (intval, floatval, charval, binval) " +
@@ -196,7 +199,7 @@ func TestAutoCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	tx, err := fetcher.Fetch()
+	tx, err := catcher.Next()
 	if err != nil {
 		t.Error(err)
 		return
@@ -319,7 +322,8 @@ func TestTxTimeout(t *testing.T) {
 		t.Error(err)
 	}
 
-	fetcher := framework.NewTxFetcher()
+	catcher := framework.NewTxCatcher()
+	defer catcher.Close()
 	client := framework.NewDefaultClient()
 	err := client.Begin()
 	if err != nil {
@@ -332,7 +336,7 @@ func TestTxTimeout(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must contain %s", err, want)
 	}
-	tx, err := fetcher.Fetch()
+	tx, err := catcher.Next()
 	if err != nil {
 		t.Error(err)
 		return
