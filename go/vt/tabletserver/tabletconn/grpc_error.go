@@ -12,6 +12,10 @@ import (
 // TabletErrorFromGRPC returns a ServerError or a
 // OperationalError from the gRPC error.
 func TabletErrorFromGRPC(err error) error {
+	if err == nil {
+		return nil
+	}
+
 	// TODO(aaijazi): Unfortunately, there's no better way to check for a gRPC server
 	// error (vs a client error).
 	// See: https://github.com/grpc/grpc-go/issues/319
