@@ -13,39 +13,6 @@ import utils
 
 class TestNocache(framework.TestCase):
 
-  def test_query_timeout(self):
-    vstart = self.env.debug_vars()
-    conn = tablet_conn.connect(
-        self.env.address, "", "test_keyspace", "0", 5, caller_id="dev")
-    cu = cursor.TabletCursor(conn)
-    self.env.execute("set vt_query_timeout=0.25")
-    try:
-      conn.begin()
-      cu.execute("select sleep(0.5) from vtocc_test", {})
-    except dbexceptions.DatabaseError as e:
-      if ("error: Query" not in str(e) and
-          "error: the query was killed" not in str(e)):
-        self.fail("Query not killed as expected")
-    else:
-      self.fail("Did not receive exception")
-
-    try:
-      cu.execute("select 1 from dual", {})
-    except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "not_in_tx: Transaction")
-    else:
-      self.fail("Did not receive exception")
-
-    cu.close()
-    conn.close()
-
-    vend = self.env.debug_vars()
-    self.assertEqual(vend.QueryTimeout, 250000000)
-    self.assertEqual(vstart.mget("Kills.Queries", 0) + 1, vend.Kills.Queries)
-    self.env.execute("set vt_query_timeout=30")
-    vend = self.env.debug_vars()
-    self.assertEqual(vend.QueryTimeout, 30000000000)
-
   def test_consolidation(self):
     vstart = self.env.debug_vars()
     # The first call always does a full fetch for field info

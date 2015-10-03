@@ -661,7 +661,6 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *pb.Target, query *
 		ctx:           ctx,
 		logStats:      logStats,
 		qe:            tsv.qe,
-		tsv:           tsv,
 	}
 	result, err := qre.Execute()
 	if err != nil {
@@ -700,7 +699,6 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *pb.Target, q
 		ctx:           ctx,
 		logStats:      logStats,
 		qe:            tsv.qe,
-		tsv:           tsv,
 	}
 	err = qre.Stream(sendReply)
 	if err != nil {
@@ -797,7 +795,6 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pb.Target, req 
 		ctx:      ctx,
 		logStats: logStats,
 		qe:       tsv.qe,
-		tsv:      tsv,
 	}
 	columnType, err := getColumnType(qre, splitter.splitColumn, splitter.tableName)
 	if err != nil {

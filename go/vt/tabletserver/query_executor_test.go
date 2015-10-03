@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -576,25 +575,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
-	// set vt_query_timeout
-	vtQueryTimeout := int64(61)
-	setQuery = fmt.Sprintf("set vt_query_timeout = %d", vtQueryTimeout)
-	db.AddQuery(setQuery, &mproto.QueryResult{})
-	qre = newTestQueryExecutor(ctx, tsv, setQuery, 0)
-	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("got: %v, want nil", err)
-	}
-	want = &mproto.QueryResult{}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
-	}
-	vtQueryTimeoutInMillis := time.Duration(vtQueryTimeout) * time.Second
-	if qre.tsv.QueryTimeout.Get() != vtQueryTimeoutInMillis {
-		t.Fatalf("set query failed, expected to have vt_query_timeout: %d, but got: %d", vtQueryTimeoutInMillis, qre.tsv.QueryTimeout.Get())
-	}
-	// set vt_query_timeout
+	// set vt_spot_check_ratio
 	vtSpotCheckRatio := 0.771
 	setQuery = fmt.Sprintf("set vt_spot_check_ratio = %f", vtSpotCheckRatio)
 	db.AddQuery(setQuery, &mproto.QueryResult{})
@@ -1070,7 +1051,6 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 		plan:          tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql),
 		logStats:      logStats,
 		qe:            tsv.qe,
-		tsv:           tsv,
 	}
 }
 

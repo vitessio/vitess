@@ -591,3 +591,33 @@ func TestMaxDMLRows(t *testing.T) {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
 	}
 }
+
+func TestQueryTimeout(t *testing.T) {
+	vstart := framework.DebugVars()
+	defer framework.DefaultServer.QueryTimeout.Set(framework.DefaultServer.QueryTimeout.Get())
+	framework.DefaultServer.QueryTimeout.Set(10 * time.Millisecond)
+
+	client := framework.NewDefaultClient()
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute("select sleep(0.5) from vtocc_test", nil)
+	want := "error: the query was killed"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, must start with %s", err, want)
+	}
+	_, err = client.Execute("select 1 from dual", nil)
+	want = "not_in_tx: Transaction"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, must start with %s", err, want)
+	}
+	vend := framework.DebugVars()
+	if err := verifyIntValue(vend, "QueryTimeout", int(10*time.Millisecond)); err != nil {
+		t.Error(err)
+	}
+	if err := compareIntDiff(vend, "Kills.Queries", vstart, 1); err != nil {
+		t.Error(err)
+	}
+}

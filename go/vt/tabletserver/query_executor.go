@@ -32,9 +32,6 @@ type QueryExecutor struct {
 	ctx           context.Context
 	logStats      *LogStats
 	qe            *QueryEngine
-
-	// TODO(sougou): Remove this after custom set functions are removed.
-	tsv *TabletServer
 }
 
 // poolConn is the interface implemented by users of this specialized pool.
@@ -607,12 +604,6 @@ func (qre *QueryExecutor) execDMLPKRows(conn poolConn, query *sqlparser.ParsedQu
 
 func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
 	switch qre.plan.SetKey {
-	case "vt_query_timeout":
-		val, err := parseDuration(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_query_timeout = %v, want int64 or float64", err)
-		}
-		qre.tsv.QueryTimeout.Set(val)
 	case "vt_spot_check_ratio":
 		val, err := parseFloat64(qre.plan.SetValue)
 		if err != nil {
