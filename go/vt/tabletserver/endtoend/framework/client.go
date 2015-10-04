@@ -80,3 +80,19 @@ func (client *QueryClient) Execute(query string, bindvars map[string]interface{}
 	)
 	return qr, err
 }
+
+// ExecuteBatch executes a batch of queries.
+func (client *QueryClient) ExecuteBatch(queries []proto.BoundQuery, asTransaction bool) (*proto.QueryResultList, error) {
+	var qr = &proto.QueryResultList{}
+	err := client.server.ExecuteBatch(
+		context.Background(),
+		&client.target,
+		&proto.QueryList{
+			Queries:       queries,
+			AsTransaction: asTransaction,
+			TransactionId: client.transactionID,
+		},
+		qr,
+	)
+	return qr, err
+}
