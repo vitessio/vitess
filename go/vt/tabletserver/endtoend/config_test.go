@@ -121,12 +121,12 @@ func TestPoolSize(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
-		framework.NewDefaultClient().Execute("select sleep(1) from dual", nil)
+		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
 		wg.Done()
 	}()
 	// The queries have to be different so consolidator doesn't kick in.
 	go func() {
-		framework.NewDefaultClient().Execute("select sleep(0.5) from dual", nil)
+		framework.NewDefaultClient().Execute("select sleep(0.24) from dual", nil)
 		wg.Done()
 	}()
 	wg.Wait()

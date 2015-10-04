@@ -13,25 +13,6 @@ import utils
 
 class TestNocache(framework.TestCase):
 
-  def test_consolidation(self):
-    vstart = self.env.debug_vars()
-    # The first call always does a full fetch for field info
-    self.assertRaises(
-        dbexceptions.DatabaseError, self.env.execute,
-        "select sleep(3) from dual")
-    time.sleep(2)
-    for i in range(2):
-      try:
-        self.env.execute("select sleep(3) from dual")
-      except dbexceptions.OperationalError:
-        pass
-    vend = self.env.debug_vars()
-    self.assertEqual(
-        vstart.mget("Waits.TotalCount", 0) + 1, vend.Waits.TotalCount)
-    self.assertEqual(
-        vstart.mget("Waits.Histograms.Consolidations.Count", 0) + 1,
-        vend.Waits.Histograms.Consolidations.Count)
-
   def test_batch(self):
     queries = ["select * from vtocc_a where id = :a",
                "select * from vtocc_b where id = :b"]

@@ -460,8 +460,10 @@ func (qre *QueryExecutor) execSelect() (*mproto.QueryResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		result.Fields = qre.plan.Fields
-		return result, nil
+		// result is read-only. So, let's copy it before modifying.
+		newResult := *result
+		newResult.Fields = qre.plan.Fields
+		return &newResult, nil
 	}
 	conn, err := qre.getConn(qre.qe.connPool)
 	if err != nil {

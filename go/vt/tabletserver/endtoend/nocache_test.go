@@ -7,6 +7,7 @@ package endtoend
 import (
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -298,4 +299,30 @@ func TestSchemaReload(t *testing.T) {
 		}
 	}
 	t.Error("schema did not reload")
+}
+
+func TestConsolidation(t *testing.T) {
+	vstart := framework.DebugVars()
+	defer framework.DefaultServer.SetPoolSize(framework.DefaultServer.PoolSize())
+	framework.DefaultServer.SetPoolSize(1)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
+		wg.Done()
+	}()
+	go func() {
+		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
+		wg.Done()
+	}()
+	wg.Wait()
+
+	vend := framework.DebugVars()
+	if err := compareIntDiff(vend, "Waits.TotalCount", vstart, 1); err != nil {
+		t.Error(err)
+	}
+	if err := compareIntDiff(vend, "Waits.Histograms.Consolidations.Count", vstart, 1); err != nil {
+		t.Error(err)
+	}
 }
