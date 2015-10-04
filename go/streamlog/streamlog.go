@@ -60,7 +60,7 @@ func (logger *StreamLogger) Subscribe(name string) chan interface{} {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
-	ch := make(chan interface{}, 1)
+	ch := make(chan interface{}, cap(logger.dataQueue))
 	logger.subscribed[ch] = subscriber{name: name}
 	return ch
 }

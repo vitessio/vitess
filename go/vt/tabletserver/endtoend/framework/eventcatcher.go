@@ -6,7 +6,6 @@ package framework
 
 import (
 	"errors"
-	"runtime"
 	"time"
 
 	"github.com/youtube/vitess/go/streamlog"
@@ -92,10 +91,6 @@ func newEventCatcher(logger *streamlog.StreamLogger) *eventCatcher {
 		}
 		close(catcher.out)
 	}()
-	// If you don't yield here, then we sometimes drop events because
-	// the goroutine that pumps them doesn't get scheduled on time.
-	// This usually causes the race test to fail...
-	runtime.Gosched()
 	return catcher
 }
 
