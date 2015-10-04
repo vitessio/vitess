@@ -22,35 +22,39 @@ var (
 	deliveryDropCount = stats.NewMultiCounters("StreamlogDeliveryDroppedMessages", []string{"Log", "Subscriber"})
 )
 
-type subscriber struct {
-	name string
-}
-
 // StreamLogger is a non-blocking broadcaster of messages.
 // Subscribers can use channels or HTTP.
 type StreamLogger struct {
 	name       string
-	dataQueue  chan interface{}
+	size       int
 	mu         sync.Mutex
-	subscribed map[chan interface{}]subscriber
+	subscribed map[chan interface{}]string
 }
 
-// New returns a new StreamLogger with a buffer that can contain size
-// messages. Any messages sent to it will be available at url.
+// New returns a new StreamLogger that can stream events to subscribers.
+// The size parameter defines the channel size for the subscribers.
 func New(name string, size int) *StreamLogger {
-	logger := &StreamLogger{
+	return &StreamLogger{
 		name:       name,
-		dataQueue:  make(chan interface{}, size),
-		subscribed: make(map[chan interface{}]subscriber),
+		size:       size,
+		subscribed: make(map[chan interface{}]string),
 	}
-	go logger.stream()
-	return logger
 }
 
 // Send sends message to all the writers subscribed to logger. Calling
 // Send does not block.
 func (logger *StreamLogger) Send(message interface{}) {
-	logger.dataQueue <- message
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
+
+	for ch, name := range logger.subscribed {
+		select {
+		case ch <- message:
+			deliveredCount.Add([]string{logger.name, name}, 1)
+		default:
+			deliveryDropCount.Add([]string{logger.name, name}, 1)
+		}
+	}
 	sendCount.Add(logger.name, 1)
 }
 
@@ -60,8 +64,8 @@ func (logger *StreamLogger) Subscribe(name string) chan interface{} {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
-	ch := make(chan interface{}, cap(logger.dataQueue))
-	logger.subscribed[ch] = subscriber{name: name}
+	ch := make(chan interface{}, logger.size)
+	logger.subscribed[ch] = name
 	return ch
 }
 
@@ -71,28 +75,6 @@ func (logger *StreamLogger) Unsubscribe(ch chan interface{}) {
 	defer logger.mu.Unlock()
 
 	delete(logger.subscribed, ch)
-}
-
-// stream sends messages sent to logger to all of its subscribed
-// writers. This method should be called in a goroutine.
-func (logger *StreamLogger) stream() {
-	for message := range logger.dataQueue {
-		logger.transmit(message)
-	}
-}
-
-func (logger *StreamLogger) transmit(message interface{}) {
-	logger.mu.Lock()
-	defer logger.mu.Unlock()
-
-	for ch, sub := range logger.subscribed {
-		select {
-		case ch <- message:
-			deliveredCount.Add([]string{logger.name, sub.name}, 1)
-		default:
-			deliveryDropCount.Add([]string{logger.name, sub.name}, 1)
-		}
-	}
 }
 
 // Name returns the name of StreamLogger.
