@@ -27,7 +27,7 @@ var (
 	connTimeoutPerConn    = flag.Duration("conn-timeout-per-conn", 1500*time.Millisecond, "vttablet connection timeout (per connection)")
 	connLife              = flag.Duration("conn-life", 365*24*time.Hour, "average life of vttablet connections")
 	maxInFlight           = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
-	healthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 200*time.Millisecond, "health check retry delay")
+	healthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 5*time.Second, "health check retry delay")
 	testGateway           = flag.String("test_gateway", "", "additional gateway to test health check module")
 )
 
