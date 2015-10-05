@@ -5,117 +5,21 @@
 package endtoend
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
-
-// compareIntDiff returns an error if end[tag] != start[tag]+diff.
-func compareIntDiff(end map[string]interface{}, tag string, start map[string]interface{}, diff int) error {
-	return verifyIntValue(end, tag, framework.FetchInt(start, tag)+diff)
-}
-
-// verifyIntValue retuns an error if values[tag] != want.
-func verifyIntValue(values map[string]interface{}, tag string, want int) error {
-	got := framework.FetchInt(values, tag)
-	if got != want {
-		return fmt.Errorf("%s: %d, want %d", tag, got, want)
-	}
-	return nil
-}
-
-func TestConfigVars(t *testing.T) {
-	vars := framework.DebugVars()
-	cases := []struct {
-		tag string
-		val int
-	}{{
-		tag: "BeginTimeout",
-		val: int(framework.BaseConfig.TxPoolTimeout * 1e9),
-	}, {
-		tag: "ConnPoolAvailable",
-		val: framework.BaseConfig.PoolSize,
-	}, {
-		tag: "ConnPoolCapacity",
-		val: framework.BaseConfig.PoolSize,
-	}, {
-		tag: "ConnPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
-	}, {
-		tag: "ConnPoolMaxCap",
-		val: framework.BaseConfig.PoolSize,
-	}, {
-		tag: "MaxDMLRows",
-		val: framework.BaseConfig.MaxDMLRows,
-	}, {
-		tag: "MaxResultSize",
-		val: framework.BaseConfig.MaxResultSize,
-	}, {
-		tag: "QueryCacheCapacity",
-		val: framework.BaseConfig.QueryCacheSize,
-	}, {
-		tag: "QueryTimeout",
-		val: int(framework.BaseConfig.QueryTimeout * 1e9),
-	}, {
-		tag: "RowcacheConnPoolAvailable",
-		val: framework.BaseConfig.RowCache.Connections - 50,
-	}, {
-		tag: "RowcacheConnPoolCapacity",
-		val: framework.BaseConfig.RowCache.Connections - 50,
-	}, {
-		tag: "RowcacheConnPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
-	}, {
-		tag: "RowcacheConnPoolMaxCap",
-		val: framework.BaseConfig.RowCache.Connections - 50,
-	}, {
-		tag: "SchemaReloadTime",
-		val: int(framework.BaseConfig.SchemaReloadTime * 1e9),
-	}, {
-		tag: "StreamBufferSize",
-		val: framework.BaseConfig.StreamBufferSize,
-	}, {
-		tag: "StreamConnPoolAvailable",
-		val: framework.BaseConfig.StreamPoolSize,
-	}, {
-		tag: "StreamConnPoolCapacity",
-		val: framework.BaseConfig.StreamPoolSize,
-	}, {
-		tag: "StreamConnPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
-	}, {
-		tag: "StreamConnPoolMaxCap",
-		val: framework.BaseConfig.StreamPoolSize,
-	}, {
-		tag: "TransactionPoolAvailable",
-		val: framework.BaseConfig.TransactionCap,
-	}, {
-		tag: "TransactionPoolCapacity",
-		val: framework.BaseConfig.TransactionCap,
-	}, {
-		tag: "TransactionPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
-	}, {
-		tag: "TransactionPoolMaxCap",
-		val: framework.BaseConfig.TransactionCap,
-	}, {
-		tag: "TransactionPoolTimeout",
-		val: int(framework.BaseConfig.TransactionTimeout * 1e9),
-	}}
-	for _, tcase := range cases {
-		if err := verifyIntValue(vars, tcase.tag, tcase.val); err != nil {
-			t.Error(err)
-		}
-	}
-}
 
 func TestSimpleRead(t *testing.T) {
 	vstart := framework.DebugVars()
@@ -367,72 +271,6 @@ func TestUpsertNonPKHit(t *testing.T) {
 	}
 }
 
-func TestPoolSize(t *testing.T) {
-	vstart := framework.DebugVars()
-	defer framework.DefaultServer.SetPoolSize(framework.DefaultServer.PoolSize())
-	framework.DefaultServer.SetPoolSize(1)
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		framework.NewDefaultClient().Execute("select sleep(1) from dual", nil)
-		wg.Done()
-	}()
-	// The queries have to be different so consolidator doesn't kick in.
-	go func() {
-		framework.NewDefaultClient().Execute("select sleep(0.5) from dual", nil)
-		wg.Done()
-	}()
-	wg.Wait()
-
-	vend := framework.DebugVars()
-	if err := verifyIntValue(vend, "ConnPoolCapacity", 1); err != nil {
-		t.Error(err)
-	}
-	if err := compareIntDiff(vend, "ConnPoolWaitCount", vstart, 1); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestQueryCache(t *testing.T) {
-	defer framework.DefaultServer.SetQueryCacheCap(framework.DefaultServer.QueryCacheCap())
-	framework.DefaultServer.SetQueryCacheCap(1)
-
-	bindVars := map[string]interface{}{"ival1": 1, "ival2": 1}
-	client := framework.NewDefaultClient()
-	_, _ = client.Execute("select * from vtocc_test where intval=:ival1", bindVars)
-	_, _ = client.Execute("select * from vtocc_test where intval=:ival2", bindVars)
-	vend := framework.DebugVars()
-	if err := verifyIntValue(vend, "QueryCacheLength", 1); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "QueryCacheSize", 1); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "QueryCacheCapacity", 1); err != nil {
-		t.Error(err)
-	}
-
-	framework.DefaultServer.SetQueryCacheCap(10)
-	_, _ = client.Execute("select * from vtocc_test where intval=:ival1", bindVars)
-	vend = framework.DebugVars()
-	if err := verifyIntValue(vend, "QueryCacheLength", 2); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "QueryCacheSize", 2); err != nil {
-		t.Error(err)
-	}
-
-	_, _ = client.Execute("select * from vtocc_test where intval=1", bindVars)
-	vend = framework.DebugVars()
-	if err := verifyIntValue(vend, "QueryCacheLength", 3); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "QueryCacheSize", 3); err != nil {
-		t.Error(err)
-	}
-}
-
 func TestSchemaReload(t *testing.T) {
 	conn, err := mysql.Connect(connParams)
 	if err != nil {
@@ -467,127 +305,308 @@ func TestSchemaReload(t *testing.T) {
 	t.Error("schema did not reload")
 }
 
-func TestMexResultSize(t *testing.T) {
-	defer framework.DefaultServer.SetMaxResultSize(framework.DefaultServer.MaxResultSize())
-	framework.DefaultServer.SetMaxResultSize(2)
+func TestConsolidation(t *testing.T) {
+	vstart := framework.DebugVars()
+	defer framework.DefaultServer.SetPoolSize(framework.DefaultServer.PoolSize())
+	framework.DefaultServer.SetPoolSize(1)
 
-	client := framework.NewDefaultClient()
-	query := "select * from vtocc_test"
-	_, err := client.Execute(query, nil)
-	want := "error: Row count exceeded"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
-	}
-	if err := verifyIntValue(framework.DebugVars(), "MaxResultSize", 2); err != nil {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
+		wg.Done()
+	}()
+	go func() {
+		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
+		wg.Done()
+	}()
+	wg.Wait()
+
+	vend := framework.DebugVars()
+	if err := compareIntDiff(vend, "Waits.TotalCount", vstart, 1); err != nil {
 		t.Error(err)
 	}
-
-	framework.DefaultServer.SetMaxResultSize(10)
-	_, err = client.Execute(query, nil)
-	if err != nil {
+	if err := compareIntDiff(vend, "Waits.Histograms.Consolidations.Count", vstart, 1); err != nil {
 		t.Error(err)
-		return
 	}
 }
 
-func TestMaxDMLRows(t *testing.T) {
+func TestBatchRead(t *testing.T) {
 	client := framework.NewDefaultClient()
-	_, err := client.Execute(
-		"insert into vtocc_a(eid, id, name, foo) values "+
-			"(3, 1, '', ''), (3, 2, '', ''), (3, 3, '', '')",
-		nil,
+	queries := []proto.BoundQuery{{
+		Sql:           "select * from vtocc_a where id = :a",
+		BindVariables: map[string]interface{}{"a": 2},
+	}, {
+		Sql:           "select * from vtocc_b where id = :b",
+		BindVariables: map[string]interface{}{"b": 2},
+	}}
+	qr1 := mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name:  "eid",
+			Type:  mysql.TypeLonglong,
+			Flags: 0,
+		}, {
+			Name:  "id",
+			Type:  mysql.TypeLong,
+			Flags: 0,
+		}, {
+			Name:  "name",
+			Type:  mysql.TypeVarString,
+			Flags: 0,
+		}, {
+			Name:  "foo",
+			Type:  mysql.TypeVarString,
+			Flags: mysql.FlagBinary,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.Value{Inner: sqltypes.Numeric("1")},
+				sqltypes.Value{Inner: sqltypes.Numeric("2")},
+				sqltypes.Value{Inner: sqltypes.String("bcde")},
+				sqltypes.Value{Inner: sqltypes.String("fghi")},
+			},
+		},
+	}
+	qr2 := mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name:  "eid",
+			Type:  mysql.TypeLonglong,
+			Flags: 0,
+		}, {
+			Name:  "id",
+			Type:  mysql.TypeLong,
+			Flags: 0,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.Value{Inner: sqltypes.Numeric("1")},
+				sqltypes.Value{Inner: sqltypes.Numeric("2")},
+			},
+		},
+	}
+	want := &proto.QueryResultList{
+		List: []mproto.QueryResult{qr1, qr2},
+	}
+
+	qrl, err := client.ExecuteBatch(queries, false)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if !reflect.DeepEqual(qrl, want) {
+		t.Errorf("ExecueBatch: \n%#v, want \n%#v", qrl, want)
+	}
+}
+
+func TestBatchTransaction(t *testing.T) {
+	client := framework.NewDefaultClient()
+	queries := []proto.BoundQuery{{
+		Sql: "insert into vtocc_test values(4, null, null, null)",
+	}, {
+		Sql: "select * from vtocc_test where intval = 4",
+	}, {
+		Sql: "delete from vtocc_test where intval = 4",
+	}}
+
+	wantRows := [][]sqltypes.Value{
+		[]sqltypes.Value{
+			sqltypes.Value{Inner: sqltypes.Numeric("4")},
+			sqltypes.Value{},
+			sqltypes.Value{},
+			sqltypes.Value{},
+		},
+	}
+
+	// Not in transaction, AsTransaction false
+	qrl, err := client.ExecuteBatch(queries, false)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
+		t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+	}
+
+	// Not in transaction, AsTransaction true
+	qrl, err = client.ExecuteBatch(queries, true)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
+		t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+	}
+
+	// In transaction, AsTransaction false
+	func() {
+		err = client.Begin()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer client.Commit()
+		qrl, err = client.ExecuteBatch(queries, false)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
+			t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+		}
+	}()
+
+	// In transaction, AsTransaction true
+	func() {
+		err = client.Begin()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer client.Rollback()
+		qrl, err = client.ExecuteBatch(queries, true)
+		want := "error: cannot start a new transaction in the scope of an existing one"
+		if err == nil || err.Error() != want {
+			t.Errorf("Error: %v, want %s", err, want)
+		}
+	}()
+}
+
+func TestBindInSelect(t *testing.T) {
+	client := framework.NewDefaultClient()
+
+	// Int bind var.
+	qr, err := client.Execute(
+		"select :bv from dual",
+		map[string]interface{}{"bv": 1},
 	)
-	fetcher := framework.NewQueryFetcher()
-	defer fetcher.Close()
-
-	// Verify all three rows are updated in a single DML.
-	_, err = client.Execute("update vtocc_a set foo='fghi' where eid = 3", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	queryInfo, err := fetcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
+	want := &mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name:  "1",
+			Type:  mysql.TypeLonglong,
+			Flags: mysql.FlagBinary,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.Value{Inner: sqltypes.Numeric("1")},
+			},
+		},
 	}
-	want := "begin; " +
-		"select eid, id from vtocc_a where eid = 3 limit 10001 for update; " +
-		"update vtocc_a set foo = 'fghi' where " +
-		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (3 3 ); */; " +
-		"commit"
-	if queryInfo.RewrittenSQL() != want {
-		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
+	if !reflect.DeepEqual(qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", qr, want)
 	}
 
-	// Verify that rows get split, and if pk changes, those values are also
-	// split correctly.
-	defer framework.DefaultServer.SetMaxDMLRows(framework.DefaultServer.MaxDMLRows())
-	framework.DefaultServer.SetMaxDMLRows(2)
-	_, err = client.Execute("update vtocc_a set eid=2 where eid = 3", nil)
+	// String bind var.
+	qr, err = client.Execute(
+		"select :bv from dual",
+		map[string]interface{}{"bv": "abcd"},
+	)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	queryInfo, err = fetcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
+	want = &mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name:  "abcd",
+			Type:  mysql.TypeVarString,
+			Flags: 0,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.Value{Inner: sqltypes.String("abcd")},
+			},
+		},
 	}
-	want = "begin; " +
-		"select eid, id from vtocc_a where eid = 3 limit 10001 for update; " +
-		"update vtocc_a set eid = 2 where " +
-		"(eid = 3 and id = 1) or (eid = 3 and id = 2) " +
-		"/* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 ); */; " +
-		"update vtocc_a set eid = 2 where (eid = 3 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (3 3 ) (2 3 ); */; " +
-		"commit"
-	if queryInfo.RewrittenSQL() != want {
-		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
+	if !reflect.DeepEqual(qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", qr, want)
 	}
 
-	// Verify that a normal update is split correctly.
-	_, err = client.Execute("update vtocc_a set foo='fghi' where eid = 2", nil)
+	// Binary bind var.
+	qr, err = client.Execute(
+		"select :bv from dual",
+		map[string]interface{}{"bv": "\x00\xff"},
+	)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	queryInfo, err = fetcher.Next()
+	want = &mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name:  "",
+			Type:  mysql.TypeVarString,
+			Flags: 0,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.Value{Inner: sqltypes.String("\x00\xff")},
+			},
+		},
+	}
+	if !reflect.DeepEqual(qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", qr, want)
+	}
+}
+
+var rulesJSON = []byte(`[{
+	"Name": "r1",
+	"Description": "disallow bindvar 'asdfg'",
+	"BindVarConds":[{
+		"Name": "asdfg",
+		"OnAbsent": false,
+		"Operator": "NOOP"
+	}]
+}]`)
+
+func TestQueryRules(t *testing.T) {
+	rules := tabletserver.NewQueryRules()
+	err := rules.UnmarshalJSON(rulesJSON)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	want = "begin; " +
-		"select eid, id from vtocc_a where eid = 2 limit 10001 for update; " +
-		"update vtocc_a set foo = 'fghi' where (eid = 2 and id = 1) or " +
-		"(eid = 2 and id = 2) /* _stream vtocc_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"update vtocc_a set foo = 'fghi' where (eid = 2 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (2 3 ); */; " +
-		"commit"
-	if queryInfo.RewrittenSQL() != want {
-		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
+	err = framework.DefaultServer.SetQueryRules("endtoend", rules)
+	want := "Rule source identifier endtoend is not valid"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want %s", err, want)
 	}
 
-	// Verufy that a delete is split correctly.
-	_, err = client.Execute("delete from vtocc_a where eid = 2", nil)
+	framework.DefaultServer.RegisterQueryRuleSource("endtoend")
+	defer framework.DefaultServer.UnRegisterQueryRuleSource("endtoend")
+	err = framework.DefaultServer.SetQueryRules("endtoend", rules)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	queryInfo, err = fetcher.Next()
+
+	// Query rules don't get triggerred with background context.
+	// So, use a custom one.
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	client := framework.NewClient(ctx, framework.DefaultServer)
+	query := "select * from vtocc_test where intval=:asdfg"
+	bv := map[string]interface{}{"asdfg": 1}
+	_, err = client.Execute(query, bv)
+	want = "error: Query disallowed due to rule: disallow bindvar 'asdfg'"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want %s", err, want)
+	}
+
+	err = framework.DefaultServer.SetQueryRules("endtoend", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	want = "begin; " +
-		"select eid, id from vtocc_a where eid = 2 limit 10001 for update; " +
-		"delete from vtocc_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) " +
-		"/* _stream vtocc_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"delete from vtocc_a where (eid = 2 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (2 3 ); */; " +
-		"commit"
-	if queryInfo.RewrittenSQL() != want {
-		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
+	_, err = client.Execute(query, bv)
+	if err != nil {
+		t.Error(err)
+		return
 	}
 }

@@ -661,7 +661,6 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *pb.Target, query *
 		ctx:           ctx,
 		logStats:      logStats,
 		qe:            tsv.qe,
-		tsv:           tsv,
 	}
 	result, err := qre.Execute()
 	if err != nil {
@@ -700,7 +699,6 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *pb.Target, q
 		ctx:           ctx,
 		logStats:      logStats,
 		qe:            tsv.qe,
-		tsv:           tsv,
 	}
 	err = qre.Stream(sendReply)
 	if err != nil {
@@ -797,7 +795,6 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pb.Target, req 
 		ctx:      ctx,
 		logStats: logStats,
 		qe:       tsv.qe,
-		tsv:      tsv,
 	}
 	columnType, err := getColumnType(qre, splitter.splitColumn, splitter.tableName)
 	if err != nil {
@@ -958,6 +955,16 @@ func (tsv *TabletServer) PoolSize() int {
 	return int(tsv.qe.connPool.Capacity())
 }
 
+// SetStreamPoolSize changes the pool size to the specified value.
+func (tsv *TabletServer) SetStreamPoolSize(val int) {
+	tsv.qe.streamConnPool.SetCapacity(val)
+}
+
+// StreamPoolSize returns the pool size.
+func (tsv *TabletServer) StreamPoolSize() int {
+	return int(tsv.qe.streamConnPool.Capacity())
+}
+
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
 	tsv.qe.txPool.pool.SetCapacity(val)
@@ -997,6 +1004,15 @@ func (tsv *TabletServer) SetStrictMode(strict bool) {
 	}
 }
 
+// SetAutoCommit sets autocommit on or off.
+func (tsv *TabletServer) SetAutoCommit(auto bool) {
+	if auto {
+		tsv.qe.autoCommit.Set(1)
+	} else {
+		tsv.qe.autoCommit.Set(0)
+	}
+}
+
 // SetMaxResultSize changes the max result size to the specified value.
 func (tsv *TabletServer) SetMaxResultSize(val int) {
 	tsv.qe.maxResultSize.Set(int64(val))
@@ -1015,6 +1031,16 @@ func (tsv *TabletServer) SetMaxDMLRows(val int) {
 // MaxDMLRows returns the max result size.
 func (tsv *TabletServer) MaxDMLRows() int {
 	return int(tsv.qe.maxDMLRows.Get())
+}
+
+// SetSpotCheckRatio sets the spot check ration.
+func (tsv *TabletServer) SetSpotCheckRatio(val float64) {
+	tsv.qe.spotCheckFreq.Set(int64(val * spotCheckMultiplier))
+}
+
+// SpotCheckRatio returns the spot check ratio.
+func (tsv *TabletServer) SpotCheckRatio() float64 {
+	return float64(tsv.qe.spotCheckFreq.Get()) / spotCheckMultiplier
 }
 
 func init() {

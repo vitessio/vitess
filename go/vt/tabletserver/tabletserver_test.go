@@ -346,6 +346,56 @@ func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
 	}
 }
 
+func TestTabletServerReconnect(t *testing.T) {
+	db := setUpTabletServerTest()
+	query := "select addr from test_table where pk = 1 limit 1000"
+	want := &mproto.QueryResult{}
+	db.AddQuery(query, want)
+	db.AddQuery("select addr from test_table where 1 != 1", &mproto.QueryResult{})
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	defer tsv.StopService()
+
+	if tsv.GetState() != "SERVING" {
+		t.Errorf("GetState: %s, must be SERVING", tsv.GetState())
+	}
+	if err != nil {
+		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
+	}
+	request := &proto.Query{Sql: query, SessionId: tsv.sessionID}
+	reply := &mproto.QueryResult{}
+	err = tsv.Execute(context.Background(), nil, request, reply)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// make mysql conn fail
+	db.EnableConnFail()
+	err = tsv.Execute(context.Background(), nil, request, reply)
+	if err == nil {
+		t.Error("Execute: want error, got nil")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if tsv.GetState() == "SERVING" {
+		t.Error("GetState is still SERVING, must be NOT_SERVING")
+	}
+
+	// make mysql conn work
+	db.DisableConnFail()
+	err = tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Error(err)
+	}
+	request.SessionId = tsv.sessionID
+	err = tsv.Execute(context.Background(), nil, request, reply)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestTabletServerGetSessionId(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
@@ -1275,6 +1325,96 @@ func TestTerseErrors3(t *testing.T) {
 		Message:   "msg",
 		SQLError:  10,
 	})
+}
+
+func TestConfigChanges(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+
+	newSize := 10
+	newDuration := time.Duration(10 * time.Millisecond)
+
+	tsv.SetPoolSize(newSize)
+	if val := tsv.PoolSize(); val != newSize {
+		t.Errorf("PoolSize: %d, want %d", val, newSize)
+	}
+	if val := int(tsv.qe.connPool.Capacity()); val != newSize {
+		t.Errorf("tsv.qe.connPool.Capacity: %d, want %d", val, newSize)
+	}
+
+	tsv.SetStreamPoolSize(newSize)
+	if val := tsv.StreamPoolSize(); val != newSize {
+		t.Errorf("StreamPoolSize: %d, want %d", val, newSize)
+	}
+	if val := int(tsv.qe.streamConnPool.Capacity()); val != newSize {
+		t.Errorf("tsv.qe.streamConnPool.Capacity: %d, want %d", val, newSize)
+	}
+
+	tsv.SetTxPoolSize(newSize)
+	if val := tsv.TxPoolSize(); val != newSize {
+		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
+	}
+	if val := int(tsv.qe.txPool.pool.Capacity()); val != newSize {
+		t.Errorf("tsv.qe.txPool.pool.Capacity: %d, want %d", val, newSize)
+	}
+
+	tsv.SetTxTimeout(newDuration)
+	if val := tsv.TxTimeout(); val != newDuration {
+		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
+	}
+	if val := tsv.qe.txPool.Timeout(); val != newDuration {
+		t.Errorf("tsv.qe.txPool.Timeout: %v, want %v", val, newDuration)
+	}
+
+	tsv.SetQueryCacheCap(newSize)
+	if val := tsv.QueryCacheCap(); val != newSize {
+		t.Errorf("QueryCacheCap: %d, want %d", val, newSize)
+	}
+	if val := int(tsv.qe.schemaInfo.QueryCacheCap()); val != newSize {
+		t.Errorf("tsv.qe.schemaInfo.QueryCacheCap: %d, want %d", val, newSize)
+	}
+
+	tsv.SetStrictMode(false)
+	if val := tsv.qe.strictMode.Get(); val != 0 {
+		t.Errorf("tsv.qe.strictMode.Get: %d, want 0", val)
+	}
+
+	tsv.SetAutoCommit(true)
+	if val := tsv.qe.autoCommit.Get(); val == 0 {
+		t.Errorf("tsv.qe.autoCommit.Get: %d, want non-0", val)
+	}
+
+	tsv.SetMaxResultSize(newSize)
+	if val := tsv.MaxResultSize(); val != newSize {
+		t.Errorf("MaxResultSize: %d, want %d", val, newSize)
+	}
+	if val := int(tsv.qe.maxResultSize.Get()); val != newSize {
+		t.Errorf("tsv.qe.maxResultSize.Get: %d, want %d", val, newSize)
+	}
+
+	tsv.SetMaxDMLRows(newSize)
+	if val := tsv.MaxDMLRows(); val != newSize {
+		t.Errorf("MaxDMLRows: %d, want %d", val, newSize)
+	}
+	if val := int(tsv.qe.maxDMLRows.Get()); val != newSize {
+		t.Errorf("tsv.qe.maxDMLRows.Get: %d, want %d", val, newSize)
+	}
+
+	tsv.SetSpotCheckRatio(0.5)
+	if val := tsv.SpotCheckRatio(); val != 0.5 {
+		t.Errorf("tsv.SpotCheckRatio: %f, want 0.5", val)
+	}
+	if val := tsv.qe.spotCheckFreq.Get(); val != int64(0.5*spotCheckMultiplier) {
+		t.Errorf("tsv.qe.spotCheckFreq.Get: %d, want %d", val, int64(0.5*spotCheckMultiplier))
+	}
 }
 
 func TestNeedInvalidator(t *testing.T) {

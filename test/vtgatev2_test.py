@@ -1243,31 +1243,6 @@ class TestFailures(BaseTestCase):
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
     self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
 
-  # FIXME(shrutip): this test is basically just testing that
-  # txn pool full error doesn't get thrown anymore with vtgate.
-  # vtgate retries for this condition. Not a very high value
-  # test at this point, could be removed if there is coverage at vtgate level.
-  def test_retry_txn_pool_full(self):
-    vtgate_conn = get_connection()
-    vtgate_conn._execute(
-        'set vt_transaction_cap=1', {},
-        KEYSPACE_NAME, 'master',
-        keyranges=[self.keyrange])
-    vtgate_conn.begin()
-    vtgate_conn2 = get_connection()
-    vtgate_conn2.begin()
-    vtgate_conn.commit()
-    vtgate_conn._execute(
-        'set vt_transaction_cap=20', {},
-        KEYSPACE_NAME, 'master',
-        keyranges=[self.keyrange])
-    vtgate_conn.begin()
-    vtgate_conn._execute(
-        'delete from vt_insert_test', {},
-        KEYSPACE_NAME, 'master',
-        keyranges=[self.keyrange])
-    vtgate_conn.commit()
-
   def test_bind_vars_in_exception_message(self):
     vtgate_conn = get_connection()
     keyspace_id = None
