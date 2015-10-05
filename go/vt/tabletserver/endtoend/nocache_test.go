@@ -11,9 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -468,4 +471,142 @@ func TestBatchTransaction(t *testing.T) {
 			t.Errorf("Error: %v, want %s", err, want)
 		}
 	}()
+}
+
+func TestBindInSelect(t *testing.T) {
+	client := framework.NewDefaultClient()
+
+	// Int bind var.
+	qr, err := client.Execute(
+		"select :bv from dual",
+		map[string]interface{}{"bv": 1},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want := &mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name:  "1",
+			Type:  mysql.TypeLonglong,
+			Flags: mysql.FlagBinary,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.Value{Inner: sqltypes.Numeric("1")},
+			},
+		},
+	}
+	if !reflect.DeepEqual(qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", qr, want)
+	}
+
+	// String bind var.
+	qr, err = client.Execute(
+		"select :bv from dual",
+		map[string]interface{}{"bv": "abcd"},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want = &mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name:  "abcd",
+			Type:  mysql.TypeVarString,
+			Flags: 0,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.Value{Inner: sqltypes.String("abcd")},
+			},
+		},
+	}
+	if !reflect.DeepEqual(qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", qr, want)
+	}
+
+	// Binary bind var.
+	qr, err = client.Execute(
+		"select :bv from dual",
+		map[string]interface{}{"bv": "\x00\xff"},
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want = &mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name:  "",
+			Type:  mysql.TypeVarString,
+			Flags: 0,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.Value{Inner: sqltypes.String("\x00\xff")},
+			},
+		},
+	}
+	if !reflect.DeepEqual(qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", qr, want)
+	}
+}
+
+var rulesJSON = []byte(`[{
+	"Name": "r1",
+	"Description": "disallow bindvar 'asdfg'",
+	"BindVarConds":[{
+		"Name": "asdfg",
+		"OnAbsent": false,
+		"Operator": "NOOP"
+	}]
+}]`)
+
+func TestQueryRules(t *testing.T) {
+	rules := tabletserver.NewQueryRules()
+	err := rules.UnmarshalJSON(rulesJSON)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = framework.DefaultServer.SetQueryRules("endtoend", rules)
+	want := "Rule source identifier endtoend is not valid"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want %s", err, want)
+	}
+
+	framework.DefaultServer.RegisterQueryRuleSource("endtoend")
+	defer framework.DefaultServer.UnRegisterQueryRuleSource("endtoend")
+	err = framework.DefaultServer.SetQueryRules("endtoend", rules)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// Query rules don't get triggerred with background context.
+	// So, use a custom one.
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	client := framework.NewClient(ctx, framework.DefaultServer)
+	query := "select * from vtocc_test where intval=:asdfg"
+	bv := map[string]interface{}{"asdfg": 1}
+	_, err = client.Execute(query, bv)
+	want = "error: Query disallowed due to rule: disallow bindvar 'asdfg'"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want %s", err, want)
+	}
+
+	err = framework.DefaultServer.SetQueryRules("endtoend", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute(query, bv)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 }

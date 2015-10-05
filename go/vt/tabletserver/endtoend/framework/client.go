@@ -18,6 +18,7 @@ import (
 // It's not thread safe, but you can create multiple clients that point to the
 // same server.
 type QueryClient struct {
+	ctx           context.Context
 	target        query.Target
 	server        *tabletserver.TabletServer
 	transactionID int64
@@ -26,14 +27,16 @@ type QueryClient struct {
 // NewDefaultClient creates a new client for the default server.
 func NewDefaultClient() *QueryClient {
 	return &QueryClient{
+		ctx:    context.Background(),
 		target: Target,
 		server: DefaultServer,
 	}
 }
 
 // NewClient creates a new client for the specified server.
-func NewClient(server *tabletserver.TabletServer) *QueryClient {
+func NewClient(ctx context.Context, server *tabletserver.TabletServer) *QueryClient {
 	return &QueryClient{
+		ctx:    ctx,
 		target: Target,
 		server: server,
 	}
@@ -45,7 +48,7 @@ func (client *QueryClient) Begin() error {
 		return errors.New("already in transaction")
 	}
 	var txinfo proto.TransactionInfo
-	err := client.server.Begin(context.Background(), &client.target, &proto.Session{}, &txinfo)
+	err := client.server.Begin(client.ctx, &client.target, &proto.Session{}, &txinfo)
 	if err != nil {
 		return err
 	}
@@ -56,20 +59,20 @@ func (client *QueryClient) Begin() error {
 // Commit commits the current transaction.
 func (client *QueryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Commit(context.Background(), &client.target, &proto.Session{TransactionId: client.transactionID})
+	return client.server.Commit(client.ctx, &client.target, &proto.Session{TransactionId: client.transactionID})
 }
 
 // Rollback rolls back the current transaction.
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Rollback(context.Background(), &client.target, &proto.Session{TransactionId: client.transactionID})
+	return client.server.Rollback(client.ctx, &client.target, &proto.Session{TransactionId: client.transactionID})
 }
 
 // Execute executes a query.
 func (client *QueryClient) Execute(query string, bindvars map[string]interface{}) (*mproto.QueryResult, error) {
 	var qr = &mproto.QueryResult{}
 	err := client.server.Execute(
-		context.Background(),
+		client.ctx,
 		&client.target,
 		&proto.Query{
 			Sql:           query,
@@ -85,7 +88,7 @@ func (client *QueryClient) Execute(query string, bindvars map[string]interface{}
 func (client *QueryClient) ExecuteBatch(queries []proto.BoundQuery, asTransaction bool) (*proto.QueryResultList, error) {
 	var qr = &proto.QueryResultList{}
 	err := client.server.ExecuteBatch(
-		context.Background(),
+		client.ctx,
 		&client.target,
 		&proto.QueryList{
 			Queries:       queries,

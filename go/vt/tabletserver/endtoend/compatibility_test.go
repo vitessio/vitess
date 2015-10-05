@@ -6,6 +6,7 @@ package endtoend
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
@@ -399,5 +400,89 @@ func TestNull(t *testing.T) {
 	}
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+	}
+}
+
+func TestTypeLimits(t *testing.T) {
+	client := framework.NewDefaultClient()
+	defer func() {
+		for _, cleanup := range []string{
+			"delete from vtocc_ints",
+			"delete from vtocc_fracts",
+			"delete from vtocc_strings",
+		} {
+			_, err := client.Execute(cleanup, nil)
+			if err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+
+	for _, query := range []string{
+		"insert into vtocc_ints(tiny, medium) values(1, -129)",
+		"insert into vtocc_fracts(id, num) values(1, 1)",
+		"insert into vtocc_strings(vb) values('a')",
+	} {
+		_, err := client.Execute(query, nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+	}
+
+	want := "error: type mismatch"
+	mismatchCases := []struct {
+		query string
+		bv    map[string]interface{}
+	}{{
+		query: "insert into vtocc_ints(tiny) values('str')",
+		bv:    nil,
+	}, {
+		query: "insert into vtocc_ints(tiny) values(:str)",
+		bv:    map[string]interface{}{"str": "str"},
+	}, {
+		query: "insert into vtocc_ints(tiny) values(1.2)",
+		bv:    nil,
+	}, {
+		query: "insert into vtocc_ints(tiny) values(:fl)",
+		bv:    map[string]interface{}{"fl": 1.2},
+	}, {
+		query: "insert into vtocc_strings(vb) values(1)",
+		bv:    nil,
+	}, {
+		query: "insert into vtocc_strings(vb) values(:id)",
+		bv:    map[string]interface{}{"id": 1},
+	}, {
+		query: "insert into vtocc_strings(vb) select tiny from vtocc_ints",
+		bv:    nil,
+	}, {
+		query: "insert into vtocc_ints(tiny) select num from vtocc_fracts",
+		bv:    nil,
+	}, {
+		query: "insert into vtocc_ints(tiny) select vb from vtocc_strings",
+		bv:    nil,
+	}}
+	for _, request := range mismatchCases {
+		_, err := client.Execute(request.query, request.bv)
+		if err == nil || !strings.HasPrefix(err.Error(), want) {
+			t.Errorf("Error(%s): %v, want %s", request.query, err, want)
+		}
+	}
+
+	want = "error: Out of range"
+	for _, query := range []string{
+		"insert into vtocc_ints(tiny) values(-129)",
+		"insert into vtocc_ints(tiny) select medium from vtocc_ints",
+	} {
+		_, err := client.Execute(query, nil)
+		if err == nil || !strings.HasPrefix(err.Error(), want) {
+			t.Errorf("Error(%s): %v, want %s", query, err, want)
+		}
+	}
+
+	want = "error: Data too long"
+	_, err := client.Execute("insert into vtocc_strings(vb) values('12345678901234567')", nil)
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, want %s", err, want)
 	}
 }
