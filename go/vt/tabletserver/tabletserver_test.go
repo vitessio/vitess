@@ -1387,6 +1387,11 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.qe.strictMode.Get: %d, want 0", val)
 	}
 
+	tsv.SetAutoCommit(true)
+	if val := tsv.qe.autoCommit.Get(); val == 0 {
+		t.Errorf("tsv.qe.autoCommit.Get: %d, want non-0", val)
+	}
+
 	tsv.SetMaxResultSize(newSize)
 	if val := tsv.MaxResultSize(); val != newSize {
 		t.Errorf("MaxResultSize: %d, want %d", val, newSize)

@@ -57,6 +57,7 @@ type QueryEngine struct {
 	// Vars
 	spotCheckFreq    sync2.AtomicInt64
 	strictMode       sync2.AtomicInt64
+	autoCommit       sync2.AtomicInt64
 	maxResultSize    sync2.AtomicInt64
 	maxDMLRows       sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
@@ -67,7 +68,6 @@ type QueryEngine struct {
 	tableaclDenied       *stats.MultiCounters
 	tableaclPseudoDenied *stats.MultiCounters
 	strictTableAcl       bool
-	enableAutoCommit     bool
 	enableTableAclDryRun bool
 	exemptACL            string
 
@@ -110,7 +110,7 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 // This is a singleton class.
 // You must call this only once.
 func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
-	qe := &QueryEngine{enableAutoCommit: config.EnableAutoCommit}
+	qe := &QueryEngine{}
 	qe.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
 
 	qe.cachePool = NewCachePool(
@@ -172,6 +172,9 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 	qe.spotCheckFreq = sync2.NewAtomicInt64(int64(config.SpotCheckRatio * spotCheckMultiplier))
 	if config.StrictMode {
 		qe.strictMode.Set(1)
+	}
+	if config.EnableAutoCommit {
+		qe.autoCommit.Set(1)
 	}
 	qe.strictTableAcl = config.StrictTableAcl
 	qe.enableTableAclDryRun = config.EnableTableAclDryRun

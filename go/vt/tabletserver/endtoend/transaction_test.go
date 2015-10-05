@@ -272,6 +272,17 @@ func TestAutoCommit(t *testing.T) {
 	}
 }
 
+func TestAutoCommitOff(t *testing.T) {
+	framework.DefaultServer.SetAutoCommit(false)
+	defer framework.DefaultServer.SetAutoCommit(true)
+
+	_, err := framework.NewDefaultClient().Execute("insert into vtocc_test values(4, null, null, null)", nil)
+	want := "error: unsupported query"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, must start with %s", err, want)
+	}
+}
+
 func TestTxPoolSize(t *testing.T) {
 	vstart := framework.DebugVars()
 

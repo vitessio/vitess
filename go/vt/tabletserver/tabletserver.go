@@ -1004,6 +1004,15 @@ func (tsv *TabletServer) SetStrictMode(strict bool) {
 	}
 }
 
+// SetAutoCommit sets autocommit on or off.
+func (tsv *TabletServer) SetAutoCommit(auto bool) {
+	if auto {
+		tsv.qe.autoCommit.Set(1)
+	} else {
+		tsv.qe.autoCommit.Set(0)
+	}
+}
+
 // SetMaxResultSize changes the max result size to the specified value.
 func (tsv *TabletServer) SetMaxResultSize(val int) {
 	tsv.qe.maxResultSize.Set(int64(val))
