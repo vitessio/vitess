@@ -329,7 +329,7 @@ func TestQueryTimeout(t *testing.T) {
 	if err := verifyIntValue(vend, "QueryTimeout", int(10*time.Millisecond)); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "Kills.Queries", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "Kills/Queries", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }

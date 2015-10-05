@@ -5,6 +5,9 @@
 package endtoend
 
 import (
+	"fmt"
+	"io/ioutil"
+	"net/http"
 	"reflect"
 	"strings"
 	"sync"
@@ -19,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -29,10 +34,10 @@ func TestSimpleRead(t *testing.T) {
 		return
 	}
 	vend := framework.DebugVars()
-	if err := compareIntDiff(vend, "Queries.TotalCount", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "Queries/TotalCount", vstart, 1); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "Queries.Histograms.PASS_SELECT.Count", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "Queries/Histograms/PASS_SELECT/Count", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }
@@ -163,7 +168,7 @@ func TestIntegrityError(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
-	if err := compareIntDiff(framework.DebugVars(), "InfoErrors.DupKey", vstart, 1); err != nil {
+	if err := compareIntDiff(framework.DebugVars(), "InfoErrors/DupKey", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }
@@ -323,10 +328,10 @@ func TestConsolidation(t *testing.T) {
 	wg.Wait()
 
 	vend := framework.DebugVars()
-	if err := compareIntDiff(vend, "Waits.TotalCount", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "Waits/TotalCount", vstart, 1); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "Waits.Histograms.Consolidations.Count", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "Waits/Histograms/Consolidations/Count", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }
@@ -608,5 +613,86 @@ func TestQueryRules(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
+	}
+}
+
+func TestHealth(t *testing.T) {
+	response, err := http.Get(fmt.Sprintf("%s/debug/health", framework.ServerAddress))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer response.Body.Close()
+	result, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if string(result) != "ok" {
+		t.Errorf("Health check: %s, want ok", result)
+	}
+}
+
+func TestStreamHealth(t *testing.T) {
+	ch := make(chan *pb.StreamHealthResponse, 10)
+	id, _ := framework.DefaultServer.StreamHealthRegister(ch)
+	defer framework.DefaultServer.StreamHealthUnregister(id)
+	framework.DefaultServer.BroadcastHealth(0, nil)
+	health := <-ch
+	if !reflect.DeepEqual(*health.Target, framework.Target) {
+		t.Errorf("Health: %+v, want %+v", *health.Target, framework.Target)
+	}
+}
+
+func TestQueryStats(t *testing.T) {
+	client := framework.NewDefaultClient()
+	vstart := framework.DebugVars()
+
+	start := time.Now()
+	query := "select /* query_stats */ eid from vtocc_a where eid = :eid"
+	bv := map[string]interface{}{"eid": 1}
+	_, _ = client.Execute(query, bv)
+	stat := framework.QueryStats()[query]
+	duration := int(time.Now().Sub(start))
+	if stat.Time <= 0 || stat.Time > duration {
+		t.Errorf("stat.Time: %d, must be between 0 and %d", stat.Time, duration)
+	}
+	stat.Time = 0
+	want := framework.QueryStat{
+		Query:      query,
+		Table:      "vtocc_a",
+		Plan:       "PASS_SELECT",
+		QueryCount: 1,
+		RowCount:   2,
+		ErrorCount: 0,
+	}
+	if stat != want {
+		t.Errorf("stat: %+v, want %+v", stat, want)
+	}
+
+	query = "select /* query_stats */ eid from vtocc_a where dontexist(eid) = :eid"
+	_, _ = client.Execute(query, bv)
+	stat = framework.QueryStats()[query]
+	stat.Time = 0
+	want = framework.QueryStat{
+		Query:      query,
+		Table:      "vtocc_a",
+		Plan:       "PASS_SELECT",
+		QueryCount: 1,
+		RowCount:   0,
+		ErrorCount: 1,
+	}
+	if stat != want {
+		t.Errorf("stat: %+v, want %+v", stat, want)
+	}
+	vend := framework.DebugVars()
+	if err := compareIntDiff(vend, "QueryCounts/vtocc_a.PASS_SELECT", vstart, 2); err != nil {
+		t.Error(err)
+	}
+	if err := compareIntDiff(vend, "QueryRowCounts/vtocc_a.PASS_SELECT", vstart, 2); err != nil {
+		t.Error(err)
+	}
+	if err := compareIntDiff(vend, "QueryErrorCounts/vtocc_a.PASS_SELECT", vstart, 1); err != nil {
+		t.Error(err)
 	}
 }

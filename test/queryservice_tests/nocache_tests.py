@@ -13,9 +13,6 @@ import utils
 
 class TestNocache(framework.TestCase):
 
-  def test_health(self):
-    self.assertEqual(self.env.health(), "ok")
-
   def test_query_stats(self):
     bv = {"eid": 1}
     self.env.execute(
