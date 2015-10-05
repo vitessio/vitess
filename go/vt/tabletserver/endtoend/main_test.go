@@ -26,7 +26,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	flag.Parse()
+	flag.Parse() // Do not remove this comment, import into google3 depends on it
 	tabletserver.Init()
 
 	exitCode := func() int {
