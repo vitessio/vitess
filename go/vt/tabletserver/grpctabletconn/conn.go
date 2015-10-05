@@ -7,7 +7,6 @@ package grpctabletconn
 import (
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
@@ -16,10 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbs "github.com/youtube/vitess/go/vt/proto/queryservice"
@@ -101,7 +98,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
-		return nil, tabletErrorFromGRPC(err)
+		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
 	return mproto.Proto3ToQueryResult(er.Result), nil
 }
@@ -133,7 +130,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 	}
 	ebr, err := conn.c.ExecuteBatch(ctx, req)
 	if err != nil {
-		return nil, tabletErrorFromGRPC(err)
+		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
 	return tproto.Proto3ToQueryResultList(ebr.Results), nil
 }
@@ -160,7 +157,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	}
 	stream, err := conn.c.StreamExecute(ctx, req)
 	if err != nil {
-		return nil, nil, tabletErrorFromGRPC(err)
+		return nil, nil, tabletconn.TabletErrorFromGRPC(err)
 	}
 	sr := make(chan *mproto.QueryResult, 10)
 	var finalError error
@@ -169,7 +166,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 			ser, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
-					finalError = tabletErrorFromGRPC(err)
+					finalError = tabletconn.TabletErrorFromGRPC(err)
 				}
 				close(sr)
 				return
@@ -203,7 +200,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
-		return 0, tabletErrorFromGRPC(err)
+		return 0, tabletconn.TabletErrorFromGRPC(err)
 	}
 	return br.TransactionId, nil
 }
@@ -230,7 +227,7 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 	}
 	_, err := conn.c.Commit(ctx, req)
 	if err != nil {
-		return tabletErrorFromGRPC(err)
+		return tabletconn.TabletErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -257,7 +254,7 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 	}
 	_, err := conn.c.Rollback(ctx, req)
 	if err != nil {
-		return tabletErrorFromGRPC(err)
+		return tabletconn.TabletErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -287,7 +284,7 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {
-		return nil, tabletErrorFromGRPC(err)
+		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
 	return tproto.Proto3ToQuerySplits(sqr.Queries), nil
 }
@@ -360,35 +357,4 @@ func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType pbt.Ta
 // EndPoint returns the rpc end point.
 func (conn *gRPCQueryClient) EndPoint() *pbt.EndPoint {
 	return conn.endPoint
-}
-
-// tabletErrorFromGRPC returns a tabletconn.ServerError or a
-// tabletconn.OperationalError from the gRPC error.
-func tabletErrorFromGRPC(err error) error {
-	// TODO(aaijazi): Unfortunately, there's no better way to check for a gRPC server
-	// error (vs a client error).
-	// See: https://github.com/grpc/grpc-go/issues/319
-	if !strings.Contains(err.Error(), vterrors.GRPCServerErrPrefix) {
-		return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
-	}
-	// server side error, convert it
-	var code int
-	switch grpc.Code(err) {
-	case codes.Internal:
-		code = tabletconn.ERR_FATAL
-	case codes.FailedPrecondition:
-		code = tabletconn.ERR_RETRY
-	case codes.ResourceExhausted:
-		code = tabletconn.ERR_TX_POOL_FULL
-	case codes.Aborted:
-		code = tabletconn.ERR_NOT_IN_TX
-	default:
-		code = tabletconn.ERR_NORMAL
-	}
-
-	return &tabletconn.ServerError{
-		Code:       code,
-		Err:        fmt.Sprintf("vttablet: %v", err),
-		ServerCode: vterrors.GRPCCodeToErrorCode(grpc.Code(err)),
-	}
 }

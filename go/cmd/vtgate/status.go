@@ -193,6 +193,39 @@ google.setOnLoadCallback(function() {
 
 </script>
 `
+
+	healthCheckTemplate = `
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.5rem;
+  }
+</style>
+<table>
+  <tr>
+    <th colspan="5">HealthCheck EndPoints Cache</th>
+  </tr>
+  <tr>
+    <th>Cell</th>
+    <th>Keyspace</th>
+    <th>Shard</th>
+    <th>TabletType</th>
+    <th>EndPointsStats</th>
+  </tr>
+  {{range $i, $eps := .}}
+  <tr>
+    <td>{{google3_third_party_golang_vitess_vtctld_srv_cell $eps.Cell}}</td>
+    <td>{{google3_third_party_golang_vitess_vtctld_srv_keyspace $eps.Cell $eps.Target.Keyspace}}</td>
+    <td>{{google3_third_party_golang_vitess_vtctld_srv_shard $eps.Cell $eps.Target.Keyspace $eps.Target.Shard}}</td>
+    <td>{{google3_third_party_golang_vitess_vtctld_srv_type $eps.Cell $eps.Target.Keyspace $eps.Target.Shard $eps.Target.TabletType}}</td>
+    <td>{{$eps.StatusAsHTML}}</td>
+  </tr>
+  {{end}}
+</table>
+`
 )
 
 // For use by plugins which wish to avoid racing when registering status page parts.
@@ -202,6 +235,9 @@ func init() {
 	servenv.OnRun(func() {
 		servenv.AddStatusPart("Topology Cache", topoTemplate, func() interface{} {
 			return resilientSrvTopoServer.CacheStatus()
+		})
+		servenv.AddStatusPart("Health Check Cache", healthCheckTemplate, func() interface{} {
+			return healthCheck.CacheStatus()
 		})
 		servenv.AddStatusPart("Stats", statsTemplate, func() interface{} {
 			return nil

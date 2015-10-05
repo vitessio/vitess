@@ -29,7 +29,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 
 # Install PHP modules for running tests
 RUN mkdir -p /vt/bin && \
-    curl -sL https://phar.phpunit.de/phpunit.phar > /vt/bin/phpunit && \
+    curl -sL https://phar.phpunit.de/phpunit-4.8.9.phar > /vt/bin/phpunit && \
     chmod +x /vt/bin/phpunit && \
     pecl install mongo && \
     echo 'extension=mongo.so' > /etc/php5/conf.d/20-mongo.ini && \

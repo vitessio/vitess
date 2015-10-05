@@ -176,7 +176,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 		BindVariables: bindVars,
 		TransactionId: transactionID,
 	}, reply); err != nil {
-		return nil, err
+		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
 	return reply, nil
 }
@@ -193,7 +193,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tprot
 		AsTransaction: asTransaction,
 		TransactionId: transactionID,
 	}, reply); err != nil {
-		return nil, err
+		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
 	return reply, nil
 }
@@ -223,7 +223,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 	}()
 
 	return result, func() error {
-		return finalErr
+		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
 	}, nil
 }
 
@@ -235,31 +235,33 @@ func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, 
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
 	}, &tproto.Session{}, result); err != nil {
-		return 0, err
+		return 0, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
 	return result.TransactionId, nil
 }
 
 // Commit is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) error {
-	return itc.tablet.qsc.QueryService().Commit(ctx, &pbq.Target{
+	err := itc.tablet.qsc.QueryService().Commit(ctx, &pbq.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
 	}, &tproto.Session{
 		TransactionId: transactionID,
 	})
+	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
 // Rollback is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64) error {
-	return itc.tablet.qsc.QueryService().Rollback(ctx, &pbq.Target{
+	err := itc.tablet.qsc.QueryService().Rollback(ctx, &pbq.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
 	}, &tproto.Session{
 		TransactionId: transactionID,
 	})
+	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
 // Execute2 is part of tabletconn.TabletConn
@@ -318,7 +320,7 @@ func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.Boun
 		SplitColumn: splitColumn,
 		SplitCount:  splitCount,
 	}, reply); err != nil {
-		return nil, err
+		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
 	return reply.Queries, nil
 }
@@ -343,6 +345,6 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *pbq.St
 	}()
 
 	return result, func() error {
-		return finalErr
+		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
 	}, nil
 }
