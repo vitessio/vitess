@@ -19,15 +19,16 @@ import (
 )
 
 var (
-	cell               = flag.String("cell", "test_nj", "cell to use")
-	schemaFile         = flag.String("vschema_file", "", "JSON schema file")
-	retryDelay         = flag.Duration("retry-delay", 2*time.Millisecond, "retry delay")
-	retryCount         = flag.Int("retry-count", 2, "retry count")
-	connTimeoutTotal   = flag.Duration("conn-timeout-total", 3*time.Second, "vttablet connection timeout (total)")
-	connTimeoutPerConn = flag.Duration("conn-timeout-per-conn", 1500*time.Millisecond, "vttablet connection timeout (per connection)")
-	connLife           = flag.Duration("conn-life", 365*24*time.Hour, "average life of vttablet connections")
-	maxInFlight        = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
-	testGateway        = flag.String("test_gateway", "", "additional gateway to test health check module")
+	cell                  = flag.String("cell", "test_nj", "cell to use")
+	schemaFile            = flag.String("vschema_file", "", "JSON schema file")
+	retryDelay            = flag.Duration("retry-delay", 2*time.Millisecond, "retry delay")
+	retryCount            = flag.Int("retry-count", 2, "retry count")
+	connTimeoutTotal      = flag.Duration("conn-timeout-total", 3*time.Second, "vttablet connection timeout (total)")
+	connTimeoutPerConn    = flag.Duration("conn-timeout-per-conn", 1500*time.Millisecond, "vttablet connection timeout (per connection)")
+	connLife              = flag.Duration("conn-life", 365*24*time.Hour, "average life of vttablet connections")
+	maxInFlight           = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
+	healthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 200*time.Millisecond, "health check retry delay")
+	testGateway           = flag.String("test_gateway", "", "additional gateway to test health check module")
 )
 
 var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
@@ -84,7 +85,7 @@ startServer:
 	topoReader = NewTopoReader(resilientSrvTopoServer)
 	servenv.Register("toporeader", topoReader)
 
-	healthCheck = discovery.NewHealthCheck(*connTimeoutTotal, *retryDelay)
+	healthCheck = discovery.NewHealthCheck(*connTimeoutTotal, *healthCheckRetryDelay)
 
 	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, *maxInFlight, *testGateway)
 	servenv.RunDefault()
