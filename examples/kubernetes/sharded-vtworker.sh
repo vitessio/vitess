@@ -24,7 +24,7 @@ cat vtworker-pod-template.yaml | sed -e "$sed_script" | $KUBECTL create -f -
 set +e
 
 # Wait for vtworker pod to show up.
-until $KUBECTL get pod vtworker &> /dev/null ; do
+until [ $($KUBECTL get pod -o template -t '{{.status.phase}}' vtworker 2> /dev/null) = "Running" ]; do
   echo "Waiting for vtworker pod to be created..."
 	sleep 1
 done

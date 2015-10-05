@@ -28,6 +28,8 @@ spec:
           -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
           -min_healthy_rdonly_endpoints 1
           -cell {{cell}}
+          -tablet_protocol grpc
+          -tablet_manager_protocol grpc
           {{vtworker_command}}" vitess
   restartPolicy: Never
   volumes:
