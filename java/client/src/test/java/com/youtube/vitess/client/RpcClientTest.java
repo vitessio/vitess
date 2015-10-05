@@ -99,13 +99,13 @@ public abstract class RpcClientTest {
   private static Map<String, String> getEcho(Cursor cursor) throws Exception {
     Map<String, String> values = new HashMap<String, String>();
 
-    if (cursor.next()) {
-      // Echo values are stored as columns in the first row of the result.
-      List<Field> fields = cursor.getFields();
-      for (int i = 0; i < fields.size(); i++) {
-        values.put(fields.get(i).getName(), new String(cursor.getBytes(i), StandardCharsets.UTF_8));
-      }
+    // Echo values are stored as columns in the first row of the result.
+    List<Field> fields = cursor.getFields();
+    Assert.assertEquals(true, cursor.next());
+    for (int i = 0; i < fields.size(); i++) {
+      values.put(fields.get(i).getName(), new String(cursor.getBytes(i), StandardCharsets.UTF_8));
     }
+    Assert.assertEquals(false, cursor.next()); // There should only be one row.
     cursor.close();
 
     return values;

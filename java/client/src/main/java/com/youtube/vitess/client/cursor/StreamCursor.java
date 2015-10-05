@@ -38,9 +38,17 @@ public class StreamCursor extends Cursor {
 
   @Override
   public List<Field> getFields() throws SQLException {
-    if (fields == null) {
-      throw new SQLDataException("can't get fields until first streaming result is received");
+    if (streamIterator == null) {
+      throw new SQLDataException("getFields() called on closed Cursor");
     }
+
+    if (fields == null) {
+      // The first QueryResult should have the fields.
+      if (!nextQueryResult()) {
+        throw new SQLDataException("stream ended before fields were received");
+      }
+    }
+
     return fields;
   }
 
@@ -63,14 +71,7 @@ public class StreamCursor extends Cursor {
     }
 
     // Get the next QueryResult. Loop in case we get a QueryResult with no Rows (e.g. only Fields).
-    while (streamIterator.hasNext()) {
-      QueryResult queryResult = streamIterator.next();
-      if (fields == null) {
-        // The first QueryResult should have the fields.
-        fields = queryResult.getFieldsList();
-      }
-      rowIterator = queryResult.getRowsList().iterator();
-
+    while (nextQueryResult()) {
       // Get the first Row from the new QueryResult.
       if (rowIterator.hasNext()) {
         row = rowIterator.next();
@@ -89,5 +90,33 @@ public class StreamCursor extends Cursor {
       throw new SQLDataException("no current row");
     }
     return row;
+  }
+
+  /**
+   * Fetches the next {@link QueryResult} from the stream.
+   *
+   * <p>Whereas the public {@link #next()} method advances the {@link Cursor} state to the next
+   * {@link Row}, this method advances the internal state to the next {@link QueryResult}, which
+   * contains a batch of rows. Specifically, we get the next {@link QueryResult} from
+   * {@link #streamIterator}, and then set {@link #rowIterator} accordingly.
+   *
+   * <p>If {@link #fields} is null, we assume the next {@link QueryResult} must contain the fields,
+   * and set {@link #fields} from it.
+   *
+   * @return false if there are no more results in the stream.
+   */
+  private boolean nextQueryResult() throws SQLException {
+    if (streamIterator.hasNext()) {
+      QueryResult queryResult = streamIterator.next();
+      if (fields == null) {
+        // The first QueryResult should have the fields.
+        fields = queryResult.getFieldsList();
+      }
+      rowIterator = queryResult.getRowsList().iterator();
+      return true;
+    } else {
+      rowIterator = null;
+      return false;
+    }
   }
 }
