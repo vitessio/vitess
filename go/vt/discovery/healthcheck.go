@@ -177,7 +177,7 @@ func (hcc *healthCheckConn) connect(ctx context.Context, hc *HealthCheckImpl, en
 }
 
 // processResponse reads one health check response, and notifies HealthCheckStatsListener.
-// It returns bool to indicate if the caller should reconnect. We do not need to reconnect when the straming is working.
+// It returns bool to indicate if the caller should reconnect. We do not need to reconnect when the streaming is working.
 func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheckImpl, endPoint *pbt.EndPoint, stream <-chan *pbq.StreamHealthResponse, errfunc tabletconn.ErrFunc) (bool, error) {
 	select {
 	case <-ctx.Done():
