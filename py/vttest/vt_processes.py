@@ -69,7 +69,7 @@ class VtProcess(object):
       self.process = subprocess.Popen(cmd,
                                       stdout=self.stdout,
                                       stderr=subprocess.STDOUT)
-      timeout = time.time() + 20.0
+      timeout = time.time() + 60.0
       while time.time() < timeout:
         if environment.process_is_healthy(
             self.name, self.addr()) and self.get_vars():
