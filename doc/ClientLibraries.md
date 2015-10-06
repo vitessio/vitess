@@ -73,14 +73,16 @@ based on the v3 API for the Go native
 
 The Go client does not yet support MapReduce integration.
 
+* [Go client](https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn)
+
 ### Java
 
-Content to be filled in.
+* [Java client](https://github.com/youtube/vitess/blob/master/java/client/src/main/java/com/youtube/vitess/client/VTGateConn.java)
 
 ### PHP
 
-Content to be filled in.
+* [PHP client](https://github.com/youtube/vitess/tree/master/php)
 
 ### Python
 
-Content to be filled in.
+* [Python client](https://github.com/youtube/vitess/blob/master/py/vtdb/vtgatev2.py)
