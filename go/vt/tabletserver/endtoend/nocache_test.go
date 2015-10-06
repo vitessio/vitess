@@ -14,8 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -591,11 +589,7 @@ func TestQueryRules(t *testing.T) {
 		return
 	}
 
-	// Query rules don't get triggerred with background context.
-	// So, use a custom one.
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	defer cancelFunc()
-	client := framework.NewClient(ctx, framework.DefaultServer)
+	client := framework.NewDefaultClient()
 	query := "select * from vtocc_test where intval=:asdfg"
 	bv := map[string]interface{}{"asdfg": 1}
 	_, err = client.Execute(query, bv)
@@ -694,5 +688,37 @@ func TestQueryStats(t *testing.T) {
 	}
 	if err := compareIntDiff(vend, "QueryErrorCounts/vtocc_a.PASS_SELECT", vstart, 1); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestDBAStatements(t *testing.T) {
+	client := framework.NewDefaultClient()
+
+	qr, err := client.Execute("show variables like 'version'", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	wantCol := sqltypes.Value{Inner: sqltypes.String("version")}
+	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
+		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
+	}
+
+	qr, err = client.Execute("describe vtocc_a", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 4 {
+		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
+	}
+
+	qr, err = client.Execute("explain vtocc_a", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if qr.RowsAffected != 4 {
+		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
 	}
 }

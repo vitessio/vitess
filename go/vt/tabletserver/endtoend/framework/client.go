@@ -8,10 +8,14 @@ import (
 	"errors"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
+
+	qrpb "github.com/youtube/vitess/go/vt/proto/query"
+	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // QueryClient provides a convenient wrapper for TabletServer's query service.
@@ -27,7 +31,11 @@ type QueryClient struct {
 // NewDefaultClient creates a new client for the default server.
 func NewDefaultClient() *QueryClient {
 	return &QueryClient{
-		ctx:    context.Background(),
+		ctx: callerid.NewContext(
+			context.Background(),
+			&vtpb.CallerID{},
+			&qrpb.VTGateCallerID{Username: "dev"},
+		),
 		target: Target,
 		server: DefaultServer,
 	}
@@ -82,6 +90,20 @@ func (client *QueryClient) Execute(query string, bindvars map[string]interface{}
 		qr,
 	)
 	return qr, err
+}
+
+// StreamExecute executes a query & streams the results.
+func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}, sendReply func(*mproto.QueryResult) error) error {
+	return client.server.StreamExecute(
+		client.ctx,
+		&client.target,
+		&proto.Query{
+			Sql:           query,
+			BindVariables: bindvars,
+			TransactionId: client.transactionID,
+		},
+		sendReply,
+	)
 }
 
 // ExecuteBatch executes a batch of queries.
