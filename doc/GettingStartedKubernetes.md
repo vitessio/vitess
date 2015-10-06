@@ -57,7 +57,7 @@ account with a project in the Google Developers Console.
 1.  Log in to the Google Developers Console to [enable billing]
     (https://console.developers.google.com/billing).
     1.  Click the **Billing** pane if you are not there already.
-    1.  Click **New billing account**
+    1.  Click **New billing account**.
     1.  Assign a name to the billing account -- e.g. "Vitess on
         Kubernetes." Then click **Continue**. You can sign up
         for the [free trial](https://cloud.google.com/free-trial/)
@@ -73,19 +73,14 @@ account with a project in the Google Developers Console.
         confirm that the project is associated with the correct account.)
     1.  After creating your project, click **APIs & auth** in the left menu.
     1.  Click **APIs**.
-    1.  Find **Google Compute Engine** and **Google Container Engine API**
-        and click the **OFF** button for each to enable those two APIs.
+    1.  Find **Google Compute Engine** and **Google Container Engine API**.
+        (Both should be listed under "Google Cloud APIs".)
+        For each, click on it, then click the **"Enable API"** button.
 
-1.  Follow the [GCE quickstart guide]
-    (https://cloud.google.com/compute/docs/quickstart#setup) to set up
+1.  Follow the [Google Cloud SDK quickstart instructions]
+    (https://cloud.google.com/sdk/#Quick_Start) to set up
     and test the Google Cloud SDK. You will also set your default project
-    ID while completing the quickstart. Start with step 2 in the setup
-    process.
-
-    **Note:** During the quickstart, you'll generate an SSH key for
-    Google Compute Engine, and you will be prompted to enter a
-    passphrase. You will be prompted for that passphrase several times
-    when bringing up your Kubernetes cluster later in this guide.
+    ID while completing the quickstart.
 
     **Note:** If you skip the quickstart guide because you've previously set up
     the Google Cloud SDK, just make sure to set a default project ID by running
@@ -144,10 +139,6 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     # Created [https://container.googleapis.com/v1/projects/vitess/zones/us-central1-b/clusters/example].
     # kubeconfig entry generated for example.
     ```
-
-    **Note:** While the cluster is starting, you may be prompted several
-    times for the passphrase you created while setting up Google
-    Compute Engine.
 
 1.  The command's output includes the IP of the Kubernetes master server:
 
@@ -387,7 +378,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     [keyspace](http://vitess.io/overview/concepts.html#keyspace),
     you have effectively just created a new
     [shard](http://vitess.io/overview/concepts.html#shard).
-    To initialize the keyspace for the new
+    To complete the initialization of the keyspace for the new
     shard, call the `kvtctl.sh RebuildKeyspaceGraph` command:
 
     ``` sh
@@ -455,7 +446,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ### example output:
     # vttablet-100   2/2   Running   0   17m   gke-example-960176fd-node-3mkd
     $ gcloud compute ssh gke-example-960176fd-node-3mkd
-    gke-example-960176fd-node-3mkd:~$ sudo docker ps | grep vttablet-100
+    gke-example-960176fd-node-3mkd:~$ sudo docker ps | grep vttablet-100 | grep k8s_mysql
     ### example output:
     # ef40b4ff08fa   vitess/lite:latest [...]  k8s_mysql.16e2a810_vttablet-100[...]
     k8s-example-3c0115e4-node-x6jc:~$ sudo docker exec -ti ef40b4ff08fa bash
@@ -463,6 +454,11 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     # We need to tell the mysql client the username and socket file to use.
     vttablet-100:/# TERM=ansi mysql -u vt_dba -S /vt/vtdataroot/vt_0000000100/mysql.sock
     ```
+    
+    **Note:** `gcloud compute ssh` uses an SSH key to login to the Kubernetes
+    node. If you haven't done yet, `gcloud` will create an SSH key for
+    you and ask you for a passphrase for the SSH key.
+    For subsequent logins via SSH, it may prompt you for the passphrase again.
 
 1.  **Elect a master vttablet**
 
