@@ -410,7 +410,7 @@ func (epcs *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 		if eps.LastError != nil {
 			color = "red"
 		}
-		epLinks = append(epLinks, fmt.Sprintf(`<a href="http://%v:%d" style=\"color:%v\">%v:%d</a>`, eps.EndPoint.Host, vtPort, color, eps.EndPoint.Host, vtPort))
+		epLinks = append(epLinks, fmt.Sprintf(`<a href="http://%v:%d" style="color:%v">%v:%d</a>`, eps.EndPoint.Host, vtPort, color, eps.EndPoint.Host, vtPort))
 	}
 	return template.HTML(strings.Join(epLinks, " "))
 }
