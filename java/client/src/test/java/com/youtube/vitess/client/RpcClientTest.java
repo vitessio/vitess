@@ -20,6 +20,13 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLDataException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.sql.SQLInvalidAuthorizationSpecException;
+import java.sql.SQLNonTransientException;
+import java.sql.SQLSyntaxErrorException;
+import java.sql.SQLTimeoutException;
+import java.sql.SQLTransientException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -45,6 +52,18 @@ public abstract class RpcClientTest {
   }
 
   private static final String ECHO_PREFIX = "echo://";
+  private static final String ERROR_PREFIX = "error://";
+  private static final String PARTIAL_ERROR_PREFIX = "partialerror://";
+
+  private static final Map<String, Class<?>> EXECUTE_ERRORS =
+      new ImmutableMap.Builder<String, Class<?>>()
+          .put("bad input", SQLSyntaxErrorException.class)
+          .put("deadline exceeded", SQLTimeoutException.class)
+          .put("integrity error", SQLIntegrityConstraintViolationException.class)
+          .put("transient error", SQLTransientException.class)
+          .put("unauthenticated", SQLInvalidAuthorizationSpecException.class)
+          .put("unknown error", SQLNonTransientException.class)
+          .build();
 
   private static final String QUERY = "test query";
   private static final String KEYSPACE = "test_keyspace";
@@ -353,5 +372,223 @@ public abstract class RpcClientTest {
             .build();
     SrvKeyspace actual = conn.getSrvKeyspace(ctx, "big");
     Assert.assertEquals(expected, actual);
+  }
+
+  abstract class Executable {
+    abstract void execute(String query) throws Exception;
+  }
+
+  void checkExecuteErrors(Executable exe, boolean partial) {
+    for (String error : EXECUTE_ERRORS.keySet()) {
+      Class<?> cls = EXECUTE_ERRORS.get(error);
+
+      try {
+        String query = ERROR_PREFIX + error;
+        exe.execute(query);
+        Assert.fail("no exception thrown for " + query);
+      } catch (Exception e) {
+        Assert.assertEquals(cls, e.getClass());
+      }
+
+      if (partial) {
+        try {
+          String query = PARTIAL_ERROR_PREFIX + error;
+          exe.execute(query);
+          Assert.fail("no exception thrown for " + query);
+        } catch (Exception e) {
+          Assert.assertEquals(cls, e.getClass());
+        }
+      }
+    }
+  }
+
+  void checkExecuteErrors(Executable exe) {
+    checkExecuteErrors(exe, true);
+  }
+
+  void checkStreamExecuteErrors(Executable exe) {
+    // Streaming calls don't have partial errors.
+    checkExecuteErrors(exe, false);
+  }
+
+  abstract class TransactionExecutable {
+    abstract void execute(VTGateTx tx, String query) throws Exception;
+  }
+
+  void checkTransactionExecuteErrors(TransactionExecutable exe) throws Exception {
+    for (String error : EXECUTE_ERRORS.keySet()) {
+      Class<?> cls = EXECUTE_ERRORS.get(error);
+
+      try {
+        VTGateTx tx = conn.begin(ctx);
+        String query = ERROR_PREFIX + error;
+        exe.execute(tx, query);
+        Assert.fail("no exception thrown for " + query);
+      } catch (Exception e) {
+        Assert.assertEquals(cls, e.getClass());
+      }
+
+      // Don't close the transaction on partial error.
+      VTGateTx tx = conn.begin(ctx);
+      try {
+        String query = PARTIAL_ERROR_PREFIX + error;
+        exe.execute(tx, query);
+        Assert.fail("no exception thrown for " + query);
+      } catch (Exception e) {
+        Assert.assertEquals(cls, e.getClass());
+      }
+      // The transaction should still be usable now.
+      tx.rollback(ctx);
+
+      // Close the transaction on partial error.
+      tx = conn.begin(ctx);
+      try {
+        String query = PARTIAL_ERROR_PREFIX + error + "/close transaction";
+        exe.execute(tx, query);
+        Assert.fail("no exception thrown for " + query);
+      } catch (Exception e) {
+        Assert.assertEquals(cls, e.getClass());
+      }
+      // The transaction should be unusable now.
+      try {
+        tx.rollback(ctx);
+        Assert.fail("no exception thrown for rollback() after closed transaction");
+      } catch (Exception e) {
+        Assert.assertEquals(SQLDataException.class, e.getClass());
+        Assert.assertEquals(true, e.getMessage().contains("not in transaction"));
+      }
+    }
+  }
+
+  @Test
+  public void testExecuteErrors() throws Exception {
+    checkExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.execute(ctx, query, BIND_VARS, TABLET_TYPE);
+      }
+    });
+    checkExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE);
+      }
+    });
+    checkExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE);
+      }
+    });
+    checkExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE);
+      }
+    });
+    checkExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.executeEntityIds(
+            ctx, query, KEYSPACE, "column1", ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE);
+      }
+    });
+    checkExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.executeBatchShards(ctx,
+            Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)), TABLET_TYPE,
+            true);
+      }
+    });
+    checkExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.executeBatchKeyspaceIds(ctx,
+            Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, query, BIND_VARS)),
+            TABLET_TYPE, true);
+      }
+    });
+  }
+
+  @Test
+  public void testStreamExecuteErrors() throws Exception {
+    checkStreamExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.streamExecute(ctx, query, BIND_VARS, TABLET_TYPE).next();
+      }
+    });
+    checkStreamExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.streamExecuteShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE).next();
+      }
+    });
+    checkStreamExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.streamExecuteKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE)
+            .next();
+      }
+    });
+    checkStreamExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.streamExecuteKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE)
+            .next();
+      }
+    });
+  }
+
+  @Test
+  public void testTransactionExecuteErrors() throws Exception {
+    checkTransactionExecuteErrors(new TransactionExecutable() {
+      @Override
+      void execute(VTGateTx tx, String query) throws Exception {
+        tx.execute(ctx, query, BIND_VARS, TABLET_TYPE, true);
+      }
+    });
+    checkTransactionExecuteErrors(new TransactionExecutable() {
+      @Override
+      void execute(VTGateTx tx, String query) throws Exception {
+        tx.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, true);
+      }
+    });
+    checkTransactionExecuteErrors(new TransactionExecutable() {
+      @Override
+      void execute(VTGateTx tx, String query) throws Exception {
+        tx.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, true);
+      }
+    });
+    checkTransactionExecuteErrors(new TransactionExecutable() {
+      @Override
+      void execute(VTGateTx tx, String query) throws Exception {
+        tx.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE, true);
+      }
+    });
+    checkTransactionExecuteErrors(new TransactionExecutable() {
+      @Override
+      void execute(VTGateTx tx, String query) throws Exception {
+        tx.executeEntityIds(
+            ctx, query, KEYSPACE, "column1", ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, true);
+      }
+    });
+    checkTransactionExecuteErrors(new TransactionExecutable() {
+      @Override
+      void execute(VTGateTx tx, String query) throws Exception {
+        tx.executeBatchShards(ctx,
+            Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)), TABLET_TYPE,
+            true);
+      }
+    });
+    checkTransactionExecuteErrors(new TransactionExecutable() {
+      @Override
+      void execute(VTGateTx tx, String query) throws Exception {
+        tx.executeBatchKeyspaceIds(ctx,
+            Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, query, BIND_VARS)),
+            TABLET_TYPE, true);
+      }
+    });
   }
 }

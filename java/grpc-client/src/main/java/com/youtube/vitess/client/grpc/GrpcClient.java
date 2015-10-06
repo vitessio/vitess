@@ -41,9 +41,16 @@ import com.youtube.vitess.proto.grpc.VitessGrpc.VitessBlockingStub;
 import com.youtube.vitess.proto.grpc.VitessGrpc.VitessStub;
 
 import io.grpc.ChannelImpl;
+import io.grpc.StatusRuntimeException;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.sql.SQLInvalidAuthorizationSpecException;
+import java.sql.SQLNonTransientException;
+import java.sql.SQLSyntaxErrorException;
+import java.sql.SQLTimeoutException;
+import java.sql.SQLTransientException;
 
 /**
  * GrpcClient is a gRPC-based implementation of Vitess Rpcclient.
@@ -252,10 +259,26 @@ public class GrpcClient implements RpcClient {
   }
 
   /**
-   * Converts an exception from the gRPC framework into the appropriate {@link SQLException}
+   * Converts an exception from the gRPC framework into the appropriate {@link SQLException}.
    */
-  private SQLException convertGrpcError(Exception e) {
-    // TODO(enisoc): Implement convertGrpcError.
-    return (SQLException) e;
+  static SQLException convertGrpcError(Throwable e) {
+    if (e instanceof StatusRuntimeException) {
+      StatusRuntimeException sre = (StatusRuntimeException) e;
+      switch (sre.getStatus().getCode()) {
+        case INVALID_ARGUMENT:
+          return new SQLSyntaxErrorException(sre.toString(), sre);
+        case DEADLINE_EXCEEDED:
+          return new SQLTimeoutException(sre.toString(), sre);
+        case ALREADY_EXISTS:
+          return new SQLIntegrityConstraintViolationException(sre.toString(), sre);
+        case UNAUTHENTICATED:
+          return new SQLInvalidAuthorizationSpecException(sre.toString(), sre);
+        case UNAVAILABLE:
+          return new SQLTransientException(sre.toString(), sre);
+        default:
+          return new SQLNonTransientException("gRPC StatusRuntimeException: " + e.toString(), e);
+      }
+    }
+    return new SQLNonTransientException("gRPC error: " + e.toString(), e);
   }
 }

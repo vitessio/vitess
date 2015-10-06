@@ -17,6 +17,12 @@ import com.youtube.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import com.youtube.vitess.proto.Vtrpc.RPCError;
 
 import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.sql.SQLInvalidAuthorizationSpecException;
+import java.sql.SQLNonTransientException;
+import java.sql.SQLSyntaxErrorException;
+import java.sql.SQLTimeoutException;
+import java.sql.SQLTransientException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -26,12 +32,30 @@ import java.util.Map;
  */
 public class Proto {
   /**
-   * checkError raises the proper SQLException for an error returned by VTGate.
+   * Throws the proper SQLException for an error returned by VTGate.
    *
-   * @param error
+   * Errors returned by Vitess are documented in the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtrpc.proto">vtrpc proto</a>.
    */
   public static void checkError(RPCError error) throws SQLException {
-    // TODO(enisoc): Implement checkError.
+    if (error != null) {
+      switch (error.getCode()) {
+        case SUCCESS:
+          break;
+        case BAD_INPUT:
+          throw new SQLSyntaxErrorException(error.toString());
+        case DEADLINE_EXCEEDED:
+          throw new SQLTimeoutException(error.toString());
+        case INTEGRITY_ERROR:
+          throw new SQLIntegrityConstraintViolationException(error.toString());
+        case TRANSIENT_ERROR:
+          throw new SQLTransientException(error.toString());
+        case UNAUTHENTICATED:
+          throw new SQLInvalidAuthorizationSpecException(error.toString());
+        default:
+          throw new SQLNonTransientException("Vitess RPC error: " + error.toString());
+      }
+    }
   }
 
   @SuppressWarnings("unchecked")
