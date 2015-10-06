@@ -73,7 +73,7 @@ A tablet has a status as well as a type. Common statuses and types are listed be
   * rdonly - A MySQL slave that serves read-only traffic for backend processing jobs, such as MapReduce-type jobs. This type of table does not have guaranteed replication latency.
   * spare - A MySQL slave that is not currently in use.
 
-There are several other tablet types that each serve a specific purpose, including <code>experimental</code>, <code>schema</code>, <code>lag</code>, <code>backup</code>, <code>restore</code>, <code>checker</code>.
+There are several other tablet types that each serve a specific purpose, including <code>experimental</code>, <code>schema</code>, <code>lag</code>, <code>backup</code>, <code>restore</code>, <code>worker</code>.
 
 Only <code>master</code>, <code>replica</code>, and <code>rdonly</code> tablets are included in the [serving graph](#serving-graph).
 
