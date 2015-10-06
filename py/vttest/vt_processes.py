@@ -117,7 +117,7 @@ class VtProcess(object):
   def kill(self):
     """Kill the process."""
     # These will proceed without error even if the process is already gone.
-    self.process.kill()
+    self.process.terminate()
 
   def wait(self):
     """Wait for the process to end."""
