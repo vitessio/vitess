@@ -23,6 +23,11 @@ for file in *.proto; do
 done
 popd
 
+# Fix identifiers that are keywords in PHP.
+pushd proto/build/proto2
+sed -i -r -e 's/\bUNSET\b/UNSET_/g' *.proto
+popd
+
 # Generate PHP.
 for file in proto/build/proto2/*.proto; do
   protoc-gen-php -i proto/build/proto2 -o php/src/proto $file
