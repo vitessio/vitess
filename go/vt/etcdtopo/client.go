@@ -9,7 +9,12 @@ import (
 )
 
 func newEtcdClient(machines []string) Client {
-	return etcd.NewClient(machines)
+	c := etcd.NewClient(machines)
+	// Vitess requires strong consistency mode for etcd.
+	if err := c.SetConsistency(etcd.STRONG_CONSISTENCY); err != nil {
+		panic("failed to set consistency on etcd client: " + err.Error())
+	}
+	return c
 }
 
 // Client contains the parts of etcd.Client that are needed.
