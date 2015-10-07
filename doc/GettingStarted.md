@@ -7,7 +7,7 @@ If you run into issues or have questions, please post on our
 ## Docker Build
 
 To run Vitess in Docker, use an
-[Automated Build](https://registry.hub.docker.com/repos/vitess/).
+[Automated Build](https://hub.docker.com/u/vitess/).
 
 * The <code>vitess/base</code> image contains a full development
   environment, capable of building Vitess and running integration tests.
@@ -82,15 +82,15 @@ Vitess runs on either Ubuntu 14.04 (Trusty) or Debian 7.0 (Wheezy). It requires 
     These can be installed with the following apt-get command:
 
     ``` sh
-sudo apt-get install make automake libtool memcached python-dev python-virtualenv python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl unzip
-```
+    sudo apt-get install make automake libtool memcached python-dev python-virtualenv python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl unzip
+    ```
 
 5.  If you decided to use ZooKeeper in step 3, you also need to install a
     Java Runtime, such as OpenJDK.
 
     ``` sh
-      sudo apt-get install openjdk-7-jre</pre>
-```
+    sudo apt-get install openjdk-7-jre
+    ```
 
 ### Build Vitess
 
@@ -99,19 +99,19 @@ sudo apt-get install make automake libtool memcached python-dev python-virtualen
     navigate to the **src/github.com/youtube/vitess** directory.
 
     ``` sh
-cd $WORKSPACE
-git clone https://github.com/youtube/vitess.git src/github.com/youtube/vitess
-cd src/github.com/youtube/vitess
-```
+    cd $WORKSPACE
+    git clone https://github.com/youtube/vitess.git src/github.com/youtube/vitess
+    cd src/github.com/youtube/vitess
+    ```
 
 1.  Set the **MYSQL_FLAVOR** environment variable. Choose the appropriate
     value for your database. This value is case-sensitive.
 
     ``` sh
-export MYSQL_FLAVOR=MariaDB
-or
-export MYSQL_FLAVOR=MySQL56
-```
+    export MYSQL_FLAVOR=MariaDB
+    or
+    export MYSQL_FLAVOR=MySQL56
+    ```
 
 1.  If your selected database installed in a location other than **/usr/bin**,
     set the **VT&#95;MYSQL&#95;ROOT** variable to the root directory of your
@@ -119,15 +119,15 @@ export MYSQL_FLAVOR=MySQL56
     **/usr/local/mysql**, run the following command.
 
     ``` sh
-export VT_MYSQL_ROOT=/usr/local/mysql
-```
+    export VT_MYSQL_ROOT=/usr/local/mysql
+    ```
 
     Note that the command indicates that the **mysql** executable should
     be found at **/usr/local/mysql/bin/mysql**.
 
 1.  Run <code>mysql_config --version</code> and confirm that you
     are running the correct version of MariaDB or MySQL. The value should
-    be <code>10</code> or higher for MariaDB and 5.6.x for MySQL.
+    be 10 or higher for MariaDB and 5.6.x for MySQL.
 
 1.  Build Vitess using the commands below. Note that the
     <code>bootstrap.sh</code> script needs to download some dependencies.
@@ -136,19 +136,19 @@ export VT_MYSQL_ROOT=/usr/local/mysql
     <code>https_proxy</code>, <code>no_proxy</code>).
 
     ``` sh
-./bootstrap.sh
-# Output of bootstrap.sh is shown below
-# skipping zookeeper build
-# go install golang.org/x/tools/cmd/cover ...
-# Found MariaDB installation in ...
-# skipping bson python build
-# creating git pre-commit hooks
-#
-# source dev.env in your shell before building
-# Remaining commands to build Vitess
-. ./dev.env
-make build
-```
+    ./bootstrap.sh
+    # Output of bootstrap.sh is shown below
+    # skipping zookeeper build
+    # go install golang.org/x/tools/cmd/cover ...
+    # Found MariaDB installation in ...
+    # skipping bson python build
+    # creating git pre-commit hooks
+    #
+    # source dev.env in your shell before building
+    # Remaining commands to build Vitess
+    . ./dev.env
+    make build
+    ```
 
     If you build Vitess successfully, you can proceed to
     [start a Vitess cluster](#start-a-vitess-cluster).
@@ -248,15 +248,15 @@ lock service. ZooKeeper is included in the Vitess distribution.
     following command:
 
     ``` sh
-. ./dev.env
-```
+    . ./dev.env
+    ```
 
     From that directory, navigate to the directory that contains
     the example scripts:
 
     ``` sh
-cd examples/local
-```
+    cd examples/local
+    ```
 
 1.  **Start ZooKeeper**
 
@@ -265,10 +265,10 @@ cd examples/local
     service. The following script creates a small ZooKeeper cluster:
 
     ``` sh
-./zk-up.sh
-# Starting zk servers...
-# Waiting for zk servers to be ready...
-```
+    ./zk-up.sh
+    # Starting zk servers...
+    # Waiting for zk servers to be ready...
+    ```
 
     After the ZooKeeper cluster is running, we only need to tell each
     Vitess process how to connect to ZooKeeper. Then, each process can
@@ -285,10 +285,10 @@ cd examples/local
     displays all of the coordination information stored in ZooKeeper.
 
     ``` sh
-./vtctld-up.sh
-# Starting vtctld
-# Access vtctld at http://localhost:15000
-```
+    ./vtctld-up.sh
+    # Starting vtctld
+    # Access vtctld at http://localhost:15000
+    ```
 
     Open <code>http://localhost:15000</code> to verify that
     <code>vtctld</code> is running. There won't be any information
@@ -301,8 +301,8 @@ cd examples/local
     <code>vtctlclient</code> supports:
 
     ``` sh
-$VTROOT/bin/vtctlclient -server localhost:15000
-```
+    $VTROOT/bin/vtctlclient -server localhost:15000
+    ```
 
 1.  **Start vttablets**
 
@@ -311,18 +311,18 @@ $VTROOT/bin/vtctlclient -server localhost:15000
     a new shard.
 
     ``` sh
-./vttablet-up.sh
-# Output from vttablet-up.sh is below
-# Starting MySQL for tablet test-0000000100...
-# Starting vttablet for test-0000000100...
-# Access tablet test-0000000100 at http://localhost:15100/debug/status
-# Starting MySQL for tablet test-0000000101...
-# Starting vttablet for test-0000000101...
-# Access tablet test-0000000101 at http://localhost:15101/debug/status
-# Starting MySQL for tablet test-0000000102...
-# Starting vttablet for test-0000000102...
-# Access tablet test-0000000102 at http://localhost:15102/debug/status
-```
+    ./vttablet-up.sh
+    # Output from vttablet-up.sh is below
+    # Starting MySQL for tablet test-0000000100...
+    # Starting vttablet for test-0000000100...
+    # Access tablet test-0000000100 at http://localhost:15100/debug/status
+    # Starting MySQL for tablet test-0000000101...
+    # Starting vttablet for test-0000000101...
+    # Access tablet test-0000000101 at http://localhost:15101/debug/status
+    # Starting MySQL for tablet test-0000000102...
+    # Starting vttablet for test-0000000102...
+    # Access tablet test-0000000102 at http://localhost:15102/debug/status
+    ```
 
     After this command completes, go back to the <code>vtctld</code>
     web page from the previous step and click the **Topology** link.
@@ -337,8 +337,8 @@ $VTROOT/bin/vtctlclient -server localhost:15000
     new shard:
 
     ``` sh
-$VTROOT/bin/vtctlclient -server localhost:15000 RebuildKeyspaceGraph test_keyspace
-```
+    $VTROOT/bin/vtctlclient -server localhost:15000 RebuildKeyspaceGraph test_keyspace
+    ```
 
     **Note:** Most <code>vtctlclient</code> commands yield no output if
     they run successfully.
@@ -358,8 +358,8 @@ $VTROOT/bin/vtctlclient -server localhost:15000 RebuildKeyspaceGraph test_keyspa
     accepts the change of a replica to be the master.
 
     ``` sh
-$VTROOT/bin/vtctlclient -server localhost:15000 InitShardMaster -force test_keyspace/0 test-0000000100
-```
+    $VTROOT/bin/vtctlclient -server localhost:15000 InitShardMaster -force test_keyspace/0 test-0000000100
+    ```
 
     After running this command, go back to the **Topology** page
     in the <code>vtctld</code> web interface. When you refresh the
@@ -370,12 +370,12 @@ $VTROOT/bin/vtctlclient -server localhost:15000 InitShardMaster -force test_keys
     same data:
 
     ``` sh
-$VTROOT/bin/vtctlclient -server localhost:15000 ListAllTablets test
-# The command's output is shown below:
-# test-0000000100 test_keyspace 0 master localhost:15100 localhost:33100 []
-# test-0000000101 test_keyspace 0 replica localhost:15101 localhost:33101 []
-# test-0000000102 test_keyspace 0 replica localhost:15102 localhost:33102 []
-```
+    $VTROOT/bin/vtctlclient -server localhost:15000 ListAllTablets test
+    # The command's output is shown below:
+    # test-0000000100 test_keyspace 0 master localhost:15100 localhost:33100 []
+    # test-0000000101 test_keyspace 0 replica localhost:15101 localhost:33101 []
+    # test-0000000102 test_keyspace 0 replica localhost:15102 localhost:33102 []
+    ```
 
 1.  **Create a table**
 
@@ -383,18 +383,18 @@ $VTROOT/bin/vtctlclient -server localhost:15000 ListAllTablets test
     file.
 
     ``` sh
-$VTROOT/bin/vtctlclient -server localhost:15000 ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
-```
+    $VTROOT/bin/vtctlclient -server localhost:15000 ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
+    ```
 
     The SQL to create the table is shown below:
 
     ``` sh
-CREATE TABLE test_table (
-  id BIGINT AUTO_INCREMENT,
-  msg VARCHAR(250),
-  PRIMARY KEY(id)
-) Engine=InnoDB
-```
+    CREATE TABLE test_table (
+      id BIGINT AUTO_INCREMENT,
+      msg VARCHAR(250),
+      PRIMARY KEY(id)
+    ) Engine=InnoDB
+    ```
 
 1.  **Start vtgate**
 
@@ -405,8 +405,8 @@ CREATE TABLE test_table (
     the load.
 
     ``` sh
-./vtgate-up.sh
-```
+    ./vtgate-up.sh
+    ```
 
 ### Run a Client Application
 
@@ -421,14 +421,14 @@ To run it, you need to either:
   sets up the environment and then runs <code>client.py</code>
 
     ``` sh
-./client.sh --server=localhost:15001
-# Output from client.sh is shown below
-# Inserting into master...
-# Reading from master...
-# (1L, 'V is for speed')
-# Reading from replica...
-# (1L, 'V is for speed')
-```
+    ./client.sh --server=localhost:15001
+    # Output from client.sh is shown below
+    # Inserting into master...
+    # Reading from master...
+    # (1L, 'V is for speed')
+    # Reading from replica...
+    # (1L, 'V is for speed')
+    ```
 
 
 

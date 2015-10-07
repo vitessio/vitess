@@ -202,6 +202,21 @@ fully catch up on filtered replication before allowing them to begin serving.
 Since filtered replication has been following along with live updates, there
 should only be a few seconds of master unavailability.
 
+When the master traffic is migrated, the filtered replication will be stopped.
+Data updates will be visible on the new shards, but not on the original shard.
+See it for yourself: Add a message to the guestbook page and then inspect
+the database content:
+
+``` sh
+# See what's on shard test_keyspace/0
+# (no updates visible since we migrated away from it):
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
+# See what's on shard test_keyspace/-80:
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000200 "SELECT * FROM messages"
+# See what's on shard test_keyspace/80-:
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000300 "SELECT * FROM messages"
+```
+
 ## Remove original shard
 
 Now that all traffic is being served from the new shards, we can remove the

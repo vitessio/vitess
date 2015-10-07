@@ -267,6 +267,10 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     The **vtctld address** printed by `vtctld-up.sh` is thus the external IP
     of one of the nodes, combined with the `nodePort` assigned for vtctld.
 
+    **Note:** For simplicity, the firewall rule above opens the port on **all**
+    GCE instances in your project. In a production system, you would likely
+    limit it to a specific instance.
+
 1.  **Access vtctld**
 
     To access the `vtctld` service from outside
@@ -602,6 +606,10 @@ As before, you also need to allow access through your platform's firewall:
 # For example, to open port 80 in the GCE firewall:
 $ gcloud compute firewall-rules create guestbook --allow tcp:80
 ```
+
+**Note:** For simplicity, the firewall rule above opens the port on **all**
+GCE instances in your project. In a production system, you would likely
+limit it to a specific instance.
 
 Then, get the external IP of the load balancer for the GuestBook service:
 
