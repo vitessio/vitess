@@ -21,7 +21,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"client": {
@@ -82,7 +82,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"keyspace": {
@@ -109,7 +109,7 @@
 				"php_test"
 			],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"python_client": {
@@ -117,7 +117,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"queryservice_vtocc": {
@@ -173,7 +173,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 3,
 			"RetryMax": 0
 		},
 		"schema": {
@@ -205,7 +205,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"tablet": {
@@ -213,7 +213,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"tabletmanager": {
@@ -274,7 +274,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"vtgatev2": {
