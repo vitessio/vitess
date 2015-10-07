@@ -165,7 +165,9 @@ type internalTabletConn struct {
 }
 
 // Execute is part of tabletconn.TabletConn
+// We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+	bindVars = tproto.Proto3ToBindVariables(tproto.BindVariablesToProto3(bindVars))
 	reply := &mproto.QueryResult{}
 	if err := itc.tablet.qsc.QueryService().Execute(ctx, &pbq.Target{
 		Keyspace:   itc.tablet.keyspace,
@@ -182,14 +184,20 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 }
 
 // ExecuteBatch is part of tabletconn.TabletConn
+// We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+	q := make([]tproto.BoundQuery, len(queries))
+	for i, query := range queries {
+		q[i].Sql = query.Sql
+		q[i].BindVariables = tproto.Proto3ToBindVariables(tproto.BindVariablesToProto3(query.BindVariables))
+	}
 	reply := &tproto.QueryResultList{}
 	if err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &pbq.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
 	}, &tproto.QueryList{
-		Queries:       queries,
+		Queries:       q,
 		AsTransaction: asTransaction,
 		TransactionId: transactionID,
 	}, reply); err != nil {
@@ -199,7 +207,9 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tprot
 }
 
 // StreamExecute is part of tabletconn.TabletConn
+// We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+	bindVars = tproto.Proto3ToBindVariables(tproto.BindVariablesToProto3(bindVars))
 	result := make(chan *mproto.QueryResult, 10)
 	var finalErr error
 

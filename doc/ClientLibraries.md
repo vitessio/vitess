@@ -67,20 +67,44 @@ Vitess client libraries follow these core principles:
 
 ### Go
 
-The Go client exposes the entire API. It also provides an adapter
-based on the v3 API for the Go native
-[database/sql](http://golang.org/pkg/database/sql/).
+The Go client interface is in the
+["vtgateconn" package](https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn).
 
-The Go client does not yet support MapReduce integration.
+There are multiple implementations available. We recommend to use the
+["grpc" implementation](https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn).
+Load it by importing its package:
+
+``` go
+import "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
+```
+
+When you connect to vtgate, use the
+[`DialProtocol` method](https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn#DialProtocol)
+and specify "grpc" as protocol.
+Alternatively, you can set the
+[command line flag "vtgate_protocol"](https://github.com/youtube/vitess/blob/ff800b2a1801f0bb8b0c29a701d9c0988bf827e2/go/vt/vtgate/vtgateconn/vtgateconn.go#L27)
+to "grpc".
+
+The Go client interface has multiple Execute* methods for different use-cases
+and sharding configurations. When you start off with an unsharded database, we
+recommend to use the
+[ExecuteShards method](https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn#VTGateConn.ExecuteShards)
+and pass "0" as only shard.
+
+For an example how to use the Go client, see the end-to-end test
+[local_cluster_test.go](https://github.com/youtube/vitess/blob/master/go/vt/vttest/local_cluster_test.go).
+From this test file, you can also reuse the "LaunchVitess" call to
+instantiate a minimal Vitess setup (including a MySQL server). This way you can
+test your application against an actual instance.
 
 ### Java
 
-Content to be filled in.
+* [Java client](https://github.com/youtube/vitess/blob/master/java/client/src/main/java/com/youtube/vitess/client/VTGateConn.java)
 
 ### PHP
 
-Content to be filled in.
+* [PHP client](https://github.com/youtube/vitess/tree/master/php)
 
 ### Python
 
-Content to be filled in.
+* [Python client](https://github.com/youtube/vitess/blob/master/py/vtdb/vtgatev2.py)

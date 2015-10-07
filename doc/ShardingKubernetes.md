@@ -1,5 +1,6 @@
 This guide walks you through the process of sharding an existing unsharded
-Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace) in Kubernetes.
+Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace) in
+[Kubernetes](http://kubernetes.io/).
 
 ## Prerequisites
 
@@ -69,7 +70,7 @@ These new shards will run in parallel with the original shard during the
 transition, but actual traffic will be served only by the original shard
 until we tell it to switch over.
 
-Check the `vtctld` **Topology** page, or the output of `kvtctl.sh ListAllTablets test`,
+Check the `vtctld` web UI, or the output of `kvtctl.sh ListAllTablets test`,
 to see when the tablets are ready. There should be 5 tablets in each shard.
 
 Once the tablets are ready, initialize replication by electing the first master
@@ -80,7 +81,7 @@ vitess/examples/kubernetes$ ./kvtctl.sh InitShardMaster -force test_keyspace/-80
 vitess/examples/kubernetes$ ./kvtctl.sh InitShardMaster -force test_keyspace/80- test-0000000300
 ```
 
-Now there should be a total of 15 tablets, with one master each:
+Now there should be a total of 15 tablets, with one master for each shard:
 
 ``` sh
 vitess/examples/kubernetes$ ./kvtctl.sh ListAllTablets test
@@ -103,9 +104,10 @@ vitess/examples/kubernetes$ ./kvtctl.sh CopySchemaShard test_keyspace/0 test_key
 vitess/examples/kubernetes$ ./kvtctl.sh CopySchemaShard test_keyspace/0 test_keyspace/80-
 ```
 
-Since the amount of data to copy can be very large, we use a special
-batch process called `vtworker` to stream the data from a single source
-to multiple destinations, routing each row based on its *keyspace_id*:
+Next we copy the data. Since the amount of data to copy can be very large,
+we use a special batch process called `vtworker` to stream the data from a
+single source to multiple destinations, routing each row based on its
+*keyspace_id*:
 
 ``` sh
 vitess/examples/kubernetes$ ./sharded-vtworker.sh SplitClone --strategy=-populate_blp_checkpoint test_keyspace/0
@@ -133,7 +135,7 @@ Next, it will pause replication on one *rdonly* (offline processing) tablet
 to serve as a consistent snapshot of the data. The app can continue without
 downtime, since live traffic is served by *replica* and *master* tablets,
 which are unaffected. Other batch jobs will also be unaffected, since they
-will be served by the remaining, un-paused *rdonly* tablets.
+will be served only by the remaining, un-paused *rdonly* tablets.
 
 ## Check filtered replication
 
@@ -157,6 +159,8 @@ vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000200 "SELEC
 # See what's on shard test_keyspace/80-:
 vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000300 "SELECT * FROM messages"
 ```
+
+Add some messages on various pages of the Guestbook to see how they get routed.
 
 ## Check copied data integrity
 
@@ -182,7 +186,7 @@ Now we're ready to switch over to serving from the new shards.
 The [MigrateServedTypes](http://vitess.io/reference/vtctl.html#migrateservedtypes)
 command lets you do this one
 [tablet type](http://vitess.io/overview/concepts.html#tablet) at a time,
-and even one [cell](http://vitess.io/overview/concepts.html#cell-(data-center))
+and even one [cell](http://vitess.io/overview/concepts.html#cell-data-center)
 at a time. The process can be rolled back at any point *until* the master is
 switched over.
 
@@ -197,6 +201,21 @@ accepting updates. Then the process will wait for the new shard masters to
 fully catch up on filtered replication before allowing them to begin serving.
 Since filtered replication has been following along with live updates, there
 should only be a few seconds of master unavailability.
+
+When the master traffic is migrated, the filtered replication will be stopped.
+Data updates will be visible on the new shards, but not on the original shard.
+See it for yourself: Add a message to the guestbook page and then inspect
+the database content:
+
+``` sh
+# See what's on shard test_keyspace/0
+# (no updates visible since we migrated away from it):
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
+# See what's on shard test_keyspace/-80:
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000200 "SELECT * FROM messages"
+# See what's on shard test_keyspace/80-:
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000300 "SELECT * FROM messages"
+```
 
 ## Remove original shard
 

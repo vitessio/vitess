@@ -24,17 +24,17 @@ func DebugVars() map[string]interface{} {
 	return out
 }
 
-// FetchInt fetches the specified dot-separated tag and returns the
+// FetchInt fetches the specified slash-separated tag and returns the
 // value as an int. It returns 0 on error, or if not found.
 func FetchInt(vars map[string]interface{}, tags string) int {
 	val, _ := FetchVal(vars, tags).(float64)
 	return int(val)
 }
 
-// FetchVal fetches the specified dot-separated tag and returns the
+// FetchVal fetches the specified slash-separated tag and returns the
 // value as an interface. It returns nil on error, or if not found.
 func FetchVal(vars map[string]interface{}, tags string) interface{} {
-	splitTags := strings.Split(tags, ".")
+	splitTags := strings.Split(tags, "/")
 	if len(tags) == 0 {
 		return nil
 	}

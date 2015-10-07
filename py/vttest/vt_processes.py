@@ -69,7 +69,7 @@ class VtProcess(object):
       self.process = subprocess.Popen(cmd,
                                       stdout=self.stdout,
                                       stderr=subprocess.STDOUT)
-      timeout = time.time() + 20.0
+      timeout = time.time() + 60.0
       while time.time() < timeout:
         if environment.process_is_healthy(
             self.name, self.addr()) and self.get_vars():
@@ -117,7 +117,7 @@ class VtProcess(object):
   def kill(self):
     """Kill the process."""
     # These will proceed without error even if the process is already gone.
-    self.process.kill()
+    self.process.terminate()
 
   def wait(self):
     """Wait for the process to end."""

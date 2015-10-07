@@ -329,7 +329,61 @@ func TestQueryTimeout(t *testing.T) {
 	if err := verifyIntValue(vend, "QueryTimeout", int(10*time.Millisecond)); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "Kills.Queries", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "Kills/Queries", vstart, 1); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestStrictMode(t *testing.T) {
+	queries := []string{
+		"insert into vtocc_a(eid, id, name, foo) values (7, 1+1, '', '')",
+		"insert into vtocc_d(eid, id) values (1, 1)",
+		"update vtocc_a set eid = 1+1 where eid = 1 and id = 1",
+		"insert into vtocc_d(eid, id) values (1, 1)",
+		"insert into upsert_test(id1, id2) values " +
+			"(1, 1), (2, 2) on duplicate key update id1 = 1",
+		"insert into upsert_test(id1, id2) select eid, id " +
+			"from vtocc_a limit 1 on duplicate key update id2 = id1",
+		"insert into upsert_test(id1, id2) values " +
+			"(1, 1) on duplicate key update id1 = 2+1",
+	}
+
+	// Strict mode on.
+	func() {
+		client := framework.NewDefaultClient()
+		err := client.Begin()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer client.Rollback()
+
+		want := "error: DML too complex"
+		for _, query := range queries {
+			_, err = client.Execute(query, nil)
+			if err == nil || err.Error() != want {
+				t.Errorf("Execute(%s): %v, want %s", query, err, want)
+			}
+		}
+	}()
+
+	// Strict mode off.
+	func() {
+		framework.DefaultServer.SetStrictMode(false)
+		defer framework.DefaultServer.SetStrictMode(true)
+
+		for _, query := range queries {
+			client := framework.NewDefaultClient()
+			err := client.Begin()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			_, err = client.Execute(query, nil)
+			if err != nil {
+				t.Error(err)
+			}
+			client.Rollback()
+		}
+	}()
 }

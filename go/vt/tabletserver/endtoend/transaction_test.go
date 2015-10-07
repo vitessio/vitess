@@ -80,28 +80,28 @@ func TestCommit(t *testing.T) {
 		tag  string
 		diff int
 	}{{
-		tag:  "Transactions.TotalCount",
+		tag:  "Transactions/TotalCount",
 		diff: 2,
 	}, {
-		tag:  "Transactions.Histograms.Completed.Count",
+		tag:  "Transactions/Histograms/Completed/Count",
 		diff: 2,
 	}, {
-		tag:  "Queries.TotalCount",
+		tag:  "Queries/TotalCount",
 		diff: 6,
 	}, {
-		tag:  "Queries.Histograms.BEGIN.Count",
+		tag:  "Queries/Histograms/BEGIN/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries.Histograms.COMMIT.Count",
+		tag:  "Queries/Histograms/COMMIT/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries.Histograms.INSERT_PK.Count",
+		tag:  "Queries/Histograms/INSERT_PK/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries.Histograms.DML_PK.Count",
+		tag:  "Queries/Histograms/DML_PK/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries.Histograms.PASS_SELECT.Count",
+		tag:  "Queries/Histograms/PASS_SELECT/Count",
 		diff: 2,
 	}}
 	vend := framework.DebugVars()
@@ -161,19 +161,19 @@ func TestRollback(t *testing.T) {
 		tag  string
 		diff int
 	}{{
-		tag:  "Transactions.TotalCount",
+		tag:  "Transactions/TotalCount",
 		diff: 1,
 	}, {
-		tag:  "Transactions.Histograms.Aborted.Count",
+		tag:  "Transactions/Histograms/Aborted/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries.Histograms.BEGIN.Count",
+		tag:  "Queries/Histograms/BEGIN/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries.Histograms.ROLLBACK.Count",
+		tag:  "Queries/Histograms/ROLLBACK/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries.Histograms.INSERT_PK.Count",
+		tag:  "Queries/Histograms/INSERT_PK/Count",
 		diff: 1,
 	}}
 	vend := framework.DebugVars()
@@ -240,28 +240,28 @@ func TestAutoCommit(t *testing.T) {
 		tag  string
 		diff int
 	}{{
-		tag:  "Transactions.TotalCount",
+		tag:  "Transactions/TotalCount",
 		diff: 2,
 	}, {
-		tag:  "Transactions.Histograms.Completed.Count",
+		tag:  "Transactions/Histograms/Completed/Count",
 		diff: 2,
 	}, {
-		tag:  "Queries.TotalCount",
+		tag:  "Queries/TotalCount",
 		diff: 4,
 	}, {
-		tag:  "Queries.Histograms.BEGIN.Count",
+		tag:  "Queries/Histograms/BEGIN/Count",
 		diff: 0,
 	}, {
-		tag:  "Queries.Histograms.COMMIT.Count",
+		tag:  "Queries/Histograms/COMMIT/Count",
 		diff: 0,
 	}, {
-		tag:  "Queries.Histograms.INSERT_PK.Count",
+		tag:  "Queries/Histograms/INSERT_PK/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries.Histograms.DML_PK.Count",
+		tag:  "Queries/Histograms/DML_PK/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries.Histograms.PASS_SELECT.Count",
+		tag:  "Queries/Histograms/PASS_SELECT/Count",
 		diff: 2,
 	}}
 	vend := framework.DebugVars()
@@ -319,7 +319,7 @@ func TestTxPoolSize(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Error: %v, must contain %s", err, want)
 	}
-	if err := compareIntDiff(framework.DebugVars(), "Errors.TxPoolFull", vstart, 1); err != nil {
+	if err := compareIntDiff(framework.DebugVars(), "Errors/TxPoolFull", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }
@@ -355,7 +355,7 @@ func TestTxTimeout(t *testing.T) {
 	if tx.Conclusion != "kill" {
 		t.Errorf("Conclusion: %s, want kill", tx.Conclusion)
 	}
-	if err := compareIntDiff(framework.DebugVars(), "Kills.Transactions", vstart, 1); err != nil {
+	if err := compareIntDiff(framework.DebugVars(), "Kills/Transactions", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }

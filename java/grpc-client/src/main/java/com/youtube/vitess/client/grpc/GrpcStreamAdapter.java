@@ -96,13 +96,7 @@ abstract class GrpcStreamAdapter<V, E>
           }
           if (error != null) {
             // We got an error from the gRPC layer.
-            if (error instanceof SQLException) {
-              // If it's a type we can throw, just pass it through.
-              throw (SQLException) error;
-            } else {
-              // Otherwise wrap it in a type we can throw.
-              throw new SQLException("error in gRPC StreamIterator", error);
-            }
+            throw GrpcClient.convertGrpcError(error);
           }
 
           wait();

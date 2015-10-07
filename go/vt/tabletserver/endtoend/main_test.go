@@ -5,12 +5,16 @@
 package endtoend
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/vttest"
@@ -26,7 +30,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	flag.Parse()
+	flag.Parse() // Do not remove this comment, import into google3 depends on it
 	tabletserver.Init()
 
 	exitCode := func() int {
@@ -48,9 +52,35 @@ func TestMain(m *testing.M) {
 		}
 		defer framework.StopDefaultServer()
 
+		err = initTableACL()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func initTableACL() error {
+	file, err := ioutil.TempFile("", "tableacl.json")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+
+	n, err := file.WriteString(tableACLConfig)
+	if err != nil {
+		return err
+	}
+	if n != len(tableACLConfig) {
+		return errors.New("table acl: short write")
+	}
+	file.Close()
+	tableacl.Register("simpleacl", &simpleacl.Factory{})
+	tableacl.Init(file.Name())
+	return nil
 }
 
 var schema = `create table vtocc_test(intval int, floatval float, charval varchar(256), binval varbinary(256), primary key(intval)) comment 'vtocc_nocache';
@@ -114,3 +144,84 @@ create table vtocc_acl_read_write(key1 bigint, key2 bigint, primary key(key1));
 create table vtocc_acl_admin(key1 bigint, key2 bigint, primary key(key1));
 create table vtocc_acl_unmatched(key1 bigint, key2 bigint, primary key(key1));
 create table vtocc_acl_all_user_read_only(key1 bigint, key2 bigint, primary key(key1));`
+
+var tableACLConfig = `{
+  "table_groups": [
+    {
+      "name": "mysql",
+      "table_names_or_prefixes": [""],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vtocc_cached",
+      "table_names_or_prefixes": ["vtocc_nocache", "vtocc_cached%"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vtocc_renamed",
+      "table_names_or_prefixes": ["vtocc_renamed%"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vtocc_part",
+      "table_names_or_prefixes": ["vtocc_part%"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vtocc",
+      "table_names_or_prefixes": ["vtocc_a", "vtocc_b", "vtocc_c", "dual", "vtocc_d", "vtocc_temp", "vtocc_e", "vtocc_f", "upsert_test", "vtocc_strings", "vtocc_fracts", "vtocc_ints", "vtocc_misc", "vtocc_big", "vtocc_view"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vtocc_test",
+      "table_names_or_prefixes": ["vtocc_test"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vtocc_acl_unmatched",
+      "table_names_or_prefixes": ["vtocc_acl_unmatched"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vtocc_acl_no_access",
+      "table_names_or_prefixes": ["vtocc_acl_no_access"]
+    },
+    {
+      "name": "vtocc_acl_read_only",
+      "table_names_or_prefixes": ["vtocc_acl_read_only"],
+      "readers": ["dev"]
+    },
+    {
+      "name": "vtocc_acl_read_write",
+      "table_names_or_prefixes": ["vtocc_acl_read_write"],
+      "readers": ["dev"],
+      "writers": ["dev"]
+    },
+    {
+      "name": "vtocc_acl_admin",
+      "table_names_or_prefixes": ["vtocc_acl_admin"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vtocc_acl_all_user_read_only",
+      "table_names_or_prefixes": ["vtocc_acl_all_user_read_only"],
+      "readers": ["dev"]
+    }
+  ]
+}`

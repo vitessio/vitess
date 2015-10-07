@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -58,14 +57,23 @@ func requestToError(request string) error {
 	return trimmedRequestToError(strings.TrimPrefix(request, ErrorPrefix))
 }
 
-// requestToPartialError attempts to return a partial error for a given request.
+// requestToPartialError fills reply for a partial error if requested.
+// It returns true if a partial error was requested, false otherwise.
 // This partial error should only be returned by Execute* calls.
-func requestToPartialError(request string) *mproto.RPCError {
+func requestToPartialError(request string, session *proto.Session, reply *proto.QueryResult) bool {
 	if !strings.HasPrefix(request, PartialErrorPrefix) {
-		return nil
+		return false
 	}
-	err := trimmedRequestToError(strings.TrimPrefix(request, PartialErrorPrefix))
-	return vterrors.RPCErrFromVtError(err)
+	request = strings.TrimPrefix(request, PartialErrorPrefix)
+	parts := strings.Split(request, "/")
+	rpcErr := vterrors.RPCErrFromVtError(trimmedRequestToError(parts[0]))
+	reply.Err = rpcErr
+	reply.Error = rpcErr.Message
+	reply.Session = session
+	if len(parts) > 1 && parts[1] == "close transaction" {
+		reply.Session.InTransaction = false
+	}
+	return true
 }
 
 // trimmedRequestToError returns an error for a trimmed request by looking at the
@@ -73,6 +81,16 @@ func requestToPartialError(request string) *mproto.RPCError {
 // If the received string doesn't match a known error, returns an unknown error.
 func trimmedRequestToError(received string) error {
 	switch received {
+	case "bad input":
+		return vterrors.FromError(
+			vtrpc.ErrorCode_BAD_INPUT,
+			errors.New("vtgate test client forced error: bad input"),
+		)
+	case "deadline exceeded":
+		return vterrors.FromError(
+			vtrpc.ErrorCode_DEADLINE_EXCEEDED,
+			errors.New("vtgate test client forced error: deadline exceeded"),
+		)
 	case "integrity error":
 		return vterrors.FromError(
 			vtrpc.ErrorCode_INTEGRITY_ERROR,
@@ -83,6 +101,11 @@ func trimmedRequestToError(received string) error {
 		return vterrors.FromError(
 			vtrpc.ErrorCode_TRANSIENT_ERROR,
 			errors.New("request_backlog: too many requests in flight: vtgate test client forced error"),
+		)
+	case "unauthenticated":
+		return vterrors.FromError(
+			vtrpc.ErrorCode_UNAUTHENTICATED,
+			errors.New("vtgate test client forced error: unauthenticated"),
 		)
 	case "unknown error":
 		return vterrors.FromError(
@@ -98,9 +121,7 @@ func trimmedRequestToError(received string) error {
 }
 
 func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if rpcErr := requestToPartialError(sql); rpcErr != nil {
-		reply.Err = rpcErr
-		reply.Error = rpcErr.Message
+	if requestToPartialError(sql, session, reply) {
 		return nil
 	}
 	if err := requestToError(sql); err != nil {
@@ -110,9 +131,7 @@ func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map
 }
 
 func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if rpcErr := requestToPartialError(sql); rpcErr != nil {
-		reply.Err = rpcErr
-		reply.Error = rpcErr.Message
+	if requestToPartialError(sql, session, reply) {
 		return nil
 	}
 	if err := requestToError(sql); err != nil {
@@ -122,9 +141,7 @@ func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariabl
 }
 
 func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if rpcErr := requestToPartialError(sql); rpcErr != nil {
-		reply.Err = rpcErr
-		reply.Error = rpcErr.Message
+	if requestToPartialError(sql, session, reply) {
 		return nil
 	}
 	if err := requestToError(sql); err != nil {
@@ -134,9 +151,7 @@ func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVa
 }
 
 func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if rpcErr := requestToPartialError(sql); rpcErr != nil {
-		reply.Err = rpcErr
-		reply.Error = rpcErr.Message
+	if requestToPartialError(sql, session, reply) {
 		return nil
 	}
 	if err := requestToError(sql); err != nil {
@@ -146,9 +161,7 @@ func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVari
 }
 
 func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if rpcErr := requestToPartialError(sql); rpcErr != nil {
-		reply.Err = rpcErr
-		reply.Error = rpcErr.Message
+	if requestToPartialError(sql, session, reply) {
 		return nil
 	}
 	if err := requestToError(sql); err != nil {
@@ -159,9 +172,11 @@ func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVari
 
 func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	if len(queries) == 1 {
-		if rpcErr := requestToPartialError(queries[0].Sql); rpcErr != nil {
-			reply.Err = rpcErr
-			reply.Error = rpcErr.Message
+		var partialReply proto.QueryResult
+		if requestToPartialError(queries[0].Sql, session, &partialReply) {
+			reply.Err = partialReply.Err
+			reply.Error = partialReply.Error
+			reply.Session = partialReply.Session
 			return nil
 		}
 		if err := requestToError(queries[0].Sql); err != nil {
@@ -173,9 +188,11 @@ func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []proto.Bo
 
 func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	if len(queries) == 1 {
-		if rpcErr := requestToPartialError(queries[0].Sql); rpcErr != nil {
-			reply.Err = rpcErr
-			reply.Error = rpcErr.Message
+		var partialReply proto.QueryResult
+		if requestToPartialError(queries[0].Sql, session, &partialReply) {
+			reply.Err = partialReply.Err
+			reply.Error = partialReply.Error
+			reply.Session = partialReply.Session
 			return nil
 		}
 		if err := requestToError(queries[0].Sql); err != nil {

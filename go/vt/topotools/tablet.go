@@ -102,28 +102,25 @@ func Scrap(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, for
 // - if health is an empty map, we clear the Tablet's Health record.
 // - if health has values, we overwrite the Tablet's Health record.
 func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, newType pb.TabletType, health map[string]string) error {
-	tablet, err := ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
+	return ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *pb.Tablet) error {
+		if !topo.IsTrivialTypeChange(tablet.Type, newType) {
+			return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, tabletAlias)
+		}
 
-	if !topo.IsTrivialTypeChange(tablet.Type, newType) {
-		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, tabletAlias)
-	}
-
-	tablet.Type = newType
-	if newType == pb.TabletType_IDLE {
-		tablet.Keyspace = ""
-		tablet.Shard = ""
-		tablet.KeyRange = nil
-		tablet.HealthMap = health
-	}
-	if health != nil {
-		if len(health) == 0 {
-			tablet.HealthMap = nil
-		} else {
+		tablet.Type = newType
+		if newType == pb.TabletType_IDLE {
+			tablet.Keyspace = ""
+			tablet.Shard = ""
+			tablet.KeyRange = nil
 			tablet.HealthMap = health
 		}
-	}
-	return ts.UpdateTablet(ctx, tablet)
+		if health != nil {
+			if len(health) == 0 {
+				tablet.HealthMap = nil
+			} else {
+				tablet.HealthMap = health
+			}
+		}
+		return nil
+	})
 }
