@@ -6,6 +6,7 @@ package main
 
 import (
 	"flag"
+	"math/rand"
 	"time"
 
 	log "github.com/golang/glog"
@@ -38,6 +39,7 @@ var healthCheck discovery.HealthCheck
 var initFakeZK func()
 
 func init() {
+	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
 }
 
