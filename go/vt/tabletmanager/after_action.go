@@ -141,7 +141,8 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blac
 	return nil
 }
 
-func (agent *ActionAgent) stopQueryService() {
+func (agent *ActionAgent) stopQueryService(reason string) {
+	log.Infof("Agent is going to stop query service, reason: %v", reason)
 	agent.QueryServiceControl.StopService()
 }
 
@@ -160,24 +161,30 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	var tabletControl *pbt.Shard_TabletControl
 	var blacklistedTables []string
 	var err error
+	var disallowQueryReason string
 	if allowQuery {
 		shardInfo, err = agent.TopoServer.GetShard(ctx, newTablet.Keyspace, newTablet.Shard)
 		if err != nil {
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 		} else {
 			if newTablet.Type == pbt.TabletType_MASTER {
-				allowQuery = len(shardInfo.SourceShards) == 0
+				if allowQuery = len(shardInfo.SourceShards) == 0; !allowQuery {
+					disallowQueryReason = "old master is still in shard info"
+				}
 			}
 			if tc := shardInfo.GetTabletControl(newTablet.Type); tc != nil {
 				if topo.InCellList(newTablet.Alias.Cell, tc.Cells) {
 					if tc.DisableQueryService {
 						allowQuery = false
+						disallowQueryReason = "query service disabled by tablet control"
 					}
 					blacklistedTables = tc.BlacklistedTables
 					tabletControl = tc
 				}
 			}
 		}
+	} else {
+		disallowQueryReason = fmt.Sprintf("not a serving tablet type(%v)", newTablet.Type)
 	}
 
 	// Read the keyspace on masters to get ShardingColumnType,
@@ -202,12 +209,12 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		// anything to start working until either InitMaster or InitSlave.
 		case agent.initReplication:
 			agent.initReplication = false
-			agent.stopQueryService()
+			agent.stopQueryService("initialize replication")
 
 		// Transitioning from replica to master, so clients that were already
 		// connected don't keep on using the master as replica or rdonly.
 		case newTablet.Type == pbt.TabletType_MASTER && oldTablet.Type != pbt.TabletType_MASTER:
-			agent.stopQueryService()
+			agent.stopQueryService("tablet promoted to master")
 
 		// Having different parameters for the query service.
 		// It needs to stop and restart with the new parameters.
@@ -216,14 +223,14 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		//   - changing the BlacklistedTables list
 		case (newTablet.KeyRange != oldTablet.KeyRange),
 			!reflect.DeepEqual(blacklistedTables, agent.BlacklistedTables()):
-			agent.stopQueryService()
+			agent.stopQueryService("keyrange/blacklistedtables changed")
 		}
 
 		if err := agent.allowQueries(newTablet, blacklistedTables); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
-		agent.stopQueryService()
+		agent.stopQueryService(disallowQueryReason)
 	}
 
 	// save the tabletControl we've been using, so the background
