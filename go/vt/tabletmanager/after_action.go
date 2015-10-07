@@ -168,7 +168,8 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 		} else {
 			if newTablet.Type == pbt.TabletType_MASTER {
-				if allowQuery = len(shardInfo.SourceShards) == 0; !allowQuery {
+				if len(shardInfo.SourceShards) > 0 {
+					allowQuery = false
 					disallowQueryReason = "old master is still in shard info"
 				}
 			}
