@@ -472,7 +472,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.Replication
 	// Now stop the query service, to make sure nobody is writing to the
 	// database. This will in effect close the connection pools to the
 	// database.
-	agent.stopQueryService()
+	agent.stopQueryService("DemoteMaster marks server rdonly")
 
 	return agent.MysqlDaemon.DemoteMaster()
 	// There is no serving graph update - the master tablet will
