@@ -89,7 +89,7 @@ sudo apt-get install make automake libtool memcached python-dev python-virtualen
     Java Runtime, such as OpenJDK.
 
     ``` sh
-      sudo apt-get install openjdk-7-jre</pre>
+      sudo apt-get install openjdk-7-jre
 ```
 
 ### Build Vitess
