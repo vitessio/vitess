@@ -49,7 +49,7 @@ public class VTGateTx {
 
   public Cursor execute(Context ctx, String query, Map<String, ?> bindVars, TabletType tabletType,
       boolean notInTransaction) throws SQLException {
-    if (session == null) {
+    if (!inTransaction()) {
       throw new SQLDataException("execute: not in transaction");
     }
     ExecuteRequest.Builder requestBuilder =
@@ -70,7 +70,7 @@ public class VTGateTx {
   public Cursor executeShards(Context ctx, String query, String keyspace, Iterable<String> shards,
       Map<String, ?> bindVars, TabletType tabletType, boolean notInTransaction)
       throws SQLException {
-    if (session == null) {
+    if (!inTransaction()) {
       throw new SQLDataException("executeShards: not in transaction");
     }
     ExecuteShardsRequest.Builder requestBuilder =
@@ -93,7 +93,7 @@ public class VTGateTx {
   public Cursor executeKeyspaceIds(Context ctx, String query, String keyspace,
       Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType,
       boolean notInTransaction) throws SQLException {
-    if (session == null) {
+    if (!inTransaction()) {
       throw new SQLDataException("executeKeyspaceIds: not in transaction");
     }
     ExecuteKeyspaceIdsRequest.Builder requestBuilder =
@@ -116,7 +116,7 @@ public class VTGateTx {
   public Cursor executeKeyRanges(Context ctx, String query, String keyspace,
       Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType,
       boolean notInTransaction) throws SQLException {
-    if (session == null) {
+    if (!inTransaction()) {
       throw new SQLDataException("executeKeyRanges: not in transaction");
     }
     ExecuteKeyRangesRequest.Builder requestBuilder =
@@ -139,7 +139,7 @@ public class VTGateTx {
   public Cursor executeEntityIds(Context ctx, String query, String keyspace,
       String entityColumnName, Map<byte[], ?> entityKeyspaceIds, Map<String, ?> bindVars,
       TabletType tabletType, boolean notInTransaction) throws SQLException {
-    if (session == null) {
+    if (!inTransaction()) {
       throw new SQLDataException("executeEntityIds: not in transaction");
     }
     ExecuteEntityIdsRequest.Builder requestBuilder =
@@ -163,7 +163,7 @@ public class VTGateTx {
 
   public List<Cursor> executeBatchShards(Context ctx, Iterable<? extends BoundShardQuery> queries,
       TabletType tabletType, boolean asTransaction) throws SQLException {
-    if (session == null) {
+    if (!inTransaction()) {
       throw new SQLDataException("executeBatchShards: not in transaction");
     }
     ExecuteBatchShardsRequest.Builder requestBuilder =
@@ -184,7 +184,7 @@ public class VTGateTx {
   public List<Cursor> executeBatchKeyspaceIds(Context ctx,
       Iterable<? extends BoundKeyspaceIdQuery> queries, TabletType tabletType,
       boolean asTransaction) throws SQLException {
-    if (session == null) {
+    if (!inTransaction()) {
       throw new SQLDataException("executeBatchKeyspaceIds: not in transaction");
     }
     ExecuteBatchKeyspaceIdsRequest.Builder requestBuilder =
@@ -204,7 +204,7 @@ public class VTGateTx {
   }
 
   public void commit(Context ctx) throws SQLException {
-    if (session == null) {
+    if (!inTransaction()) {
       throw new SQLDataException("commit: not in transaction");
     }
     CommitRequest.Builder requestBuilder = CommitRequest.newBuilder().setSession(session);
@@ -216,7 +216,7 @@ public class VTGateTx {
   }
 
   public void rollback(Context ctx) throws SQLException {
-    if (session == null) {
+    if (!inTransaction()) {
       throw new SQLDataException("rollback: not in transaction");
     }
     RollbackRequest.Builder requestBuilder = RollbackRequest.newBuilder().setSession(session);
@@ -225,5 +225,9 @@ public class VTGateTx {
     }
     client.rollback(ctx, requestBuilder.build());
     session = null;
+  }
+
+  private boolean inTransaction() {
+    return session != null && session.getInTransaction();
   }
 }
