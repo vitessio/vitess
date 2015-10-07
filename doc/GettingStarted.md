@@ -7,7 +7,7 @@ If you run into issues or have questions, please post on our
 ## Docker Build
 
 To run Vitess in Docker, use an
-[Automated Build](https://registry.hub.docker.com/repos/vitess/).
+[Automated Build](https://hub.docker.com/u/vitess/).
 
 * The <code>vitess/base</code> image contains a full development
   environment, capable of building Vitess and running integration tests.
