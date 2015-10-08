@@ -122,6 +122,16 @@ class VtProcess(object):
 class VtcomboProcess(VtProcess):
   """Represents a vtcombo subprocess."""
 
+  QUERYSERVER_PARAMETERS = [
+      '-queryserver-config-pool-size', '4',
+      '-queryserver-config-query-timeout', '300',
+      '-queryserver-config-schema-reload-time', '60',
+      '-queryserver-config-stream-pool-size', '4',
+      '-queryserver-config-transaction-cap', '4',
+      '-queryserver-config-transaction-timeout', '300',
+      '-queryserver-config-txpool-timeout', '300',
+      ]
+
   def __init__(self, directory, shards, mysql_db, charset):
     VtProcess.__init__(self, 'vtcombo-%s' % os.environ['USER'], directory,
                        environment.vtcombo_binary, port_name='vtcombo')
@@ -134,17 +144,10 @@ class VtcomboProcess(VtProcess):
         '-db-config-app-uname', mysql_db.username(),
         '-db-config-app-pass', mysql_db.password(),
         '-db-config-app-unixsocket', mysql_db.unix_socket(),
-        '-queryserver-config-pool-size', '4',
-        '-queryserver-config-query-timeout', '300',
-        '-queryserver-config-schema-reload-time', '60',
-        '-queryserver-config-stream-pool-size', '4',
-        '-queryserver-config-transaction-cap', '4',
-        '-queryserver-config-transaction-timeout', '300',
-        '-queryserver-config-txpool-timeout', '300',
         '-topology', topology,
         '-mycnf_server_id', '1',
         '-mycnf_socket_file', mysql_db.unix_socket(),
-    ] + environment.extra_vtcombo_parameters()
+    ] + self.QUERYSERVER_PARAMETERS + environment.extra_vtcombo_parameters()
 
 
 vtcombo_process = None
