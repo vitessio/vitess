@@ -55,7 +55,7 @@ class MySQL56(MysqlFlavor):
   def my_cnf(self):
     files = [
         os.path.join(vttop, "config/mycnf/default-fast.cnf"),
-        os.path.join(vttop + "config/mycnf/master_mysql56.cnf"),
+        os.path.join(vttop, "config/mycnf/master_mysql56.cnf"),
         ]
     return ":".join(files)
 
