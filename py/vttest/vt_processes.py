@@ -143,8 +143,10 @@ class VtoccProcess(VtProcess):
         '-db-config-app-uname', mysql_db.username(),
         '-db-config-app-pass', mysql_db.password(),
         '-db-config-app-unixsocket', mysql_db.unix_socket(),
-        '-queryserver-config-transaction-timeout', '300',
+        '-queryserver-config-query-timeout', '300',
         '-queryserver-config-schema-reload-time', '60',
+        '-queryserver-config-transaction-timeout', '300',
+        '-queryserver-config-txpool-timeout', '300',
     ] + environment.extra_vtocc_parameters()
     self.keyspace = keyspace
     self.shard = shard
@@ -241,10 +243,12 @@ class VtcomboProcess(VtProcess):
         '-db-config-app-pass', mysql_db.password(),
         '-db-config-app-unixsocket', mysql_db.unix_socket(),
         '-queryserver-config-pool-size', '4',
-        '-queryserver-config-transaction-cap', '4',
-        '-queryserver-config-transaction-timeout', '300',
+        '-queryserver-config-query-timeout', '300',
         '-queryserver-config-schema-reload-time', '60',
         '-queryserver-config-stream-pool-size', '4',
+        '-queryserver-config-transaction-cap', '4',
+        '-queryserver-config-transaction-timeout', '300',
+        '-queryserver-config-txpool-timeout', '300',
         '-topology', topology,
         '-mycnf_server_id', '1',
         '-mycnf_socket_file', mysql_db.unix_socket(),
