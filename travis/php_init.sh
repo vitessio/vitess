@@ -29,7 +29,13 @@ else
 	chmod +x $HOME/.phpenv/bin/phpunit
 fi
 
-if [ -f $HOME/.phpenv/bin/mongo.so ]; then
+if [ -f $HOME/.phpenv/bin/composer ]; then
+	echo "Using cached composer"
+else
+	curl -sS https://getcomposer.org/installer | php -- --install-dir=$HOME/.phpenv/bin/ --filename=composer
+fi
+
+if [ -f $HOME/.phpenv/lib/mongo.so ]; then
 	echo "Using cached mongo.so"
 else
 	mkdir -p $HOME/mongo
@@ -38,6 +44,12 @@ else
 	phpize
 	./configure
 	make
-	mv modules/mongo.so $HOME/.phpenv/bin/
-	echo "extension=$HOME/.phpenv/bin/mongo.so" > ~/.phpenv/versions/$version/etc/conf.d/mongo.ini
+	mkdir -p $HOME/.phpenv/lib
+	mv modules/mongo.so $HOME/.phpenv/lib/
+	echo "extension=$HOME/.phpenv/lib/mongo.so" > ~/.phpenv/versions/$version/etc/conf.d/mongo.ini
+fi
+
+if [ ! -f $HOME/.phpenv/lib/grpc.so ]; then
+	echo "Forcing rebuild of gRPC so we can build PHP extension"
+	rm -rf $HOME/gopath/dist
 fi

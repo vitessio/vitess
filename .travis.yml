@@ -5,6 +5,8 @@ go:
   - 1.4
 addons:
   apt:
+    sources:
+    - ubuntu-toolchain-r-test
     packages:
     # NOTE: When you add a dependency, don't forget to add comment why it's necessary.
     - automake
@@ -17,7 +19,8 @@ addons:
     - python-pip
     - python-virtualenv
     - libssl-dev
-    - g++
+    - g++-4.8
+    - gcc-4.8
     - git
     - pkg-config
     # installs libaio1 which is required by MariaDB 10.0 server package
@@ -36,6 +39,7 @@ cache:
   # Required by make proto and subsequently check_make_proto.sh.
   - $HOME/gopath/dist/grpc/bin/grpc_python_plugin
   - $HOME/gopath/dist/grpc/lib
+  - $HOME/gopath/dist/grpc/include
   - $HOME/gopath/dist/protobuf/.build_finished
   - $HOME/gopath/dist/protobuf/lib
   # Required by make proto and subsequently check_make_proto.sh.
@@ -54,7 +58,7 @@ before_cache:
   - rm $HOME/gopath/bin/zksrv.sh
   # Delete this file because it keeps changing (having the latest timestamp of an update)
   # and triggers a lengthy update of the cache (~19 seconds).
-  - rm $HOME/.m2/repository/com/youtube/vitess/gorpc-client/0.0.1-SNAPSHOT/resolver-status.properties
+  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/resolver-status.properties
 env:
   global:
     - MYSQL_FLAVOR=MariaDB
@@ -66,9 +70,11 @@ env:
     # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).
     # As of 07/2015 this value works best in a Travis CI container.
     - VT_GO_PARALLEL=4
-    - PATH="$HOME/.phpenv/bin:$PATH"
+    - PATH="$HOME/.phpenv/bin:$HOME/gopath/dist/protobuf/bin:$PATH"
     # Add -follow to TEST_FLAGS below to print as the test runs, to diagnose stuck tests.
     - TEST_FLAGS="-docker=false -timeout=5m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
+    - CC=gcc-4.8
+    - CXX=g++-4.8
   matrix:
     # NOTE: Travis CI schedules up to 5 tests simultaneously.
     #       All our tests should be spread out as evenly as possible across these 5 slots.
@@ -84,6 +90,7 @@ before_install:
   - travis/php_init.sh
 install:
   - ./bootstrap.sh
+  - travis/php_grpc.sh
 before_script:
   - source dev.env
   # Travis only tests. Run only on the first shard.
