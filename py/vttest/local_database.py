@@ -10,11 +10,10 @@ from vttest import vt_processes
 class LocalDatabase(object):
   """Set up a local Vitess database."""
 
-  def __init__(self, shards, schema_dir, mysql_only, use_vtcombo):
+  def __init__(self, shards, schema_dir, mysql_only):
     self.shards = shards
     self.schema_dir = schema_dir
     self.mysql_only = mysql_only
-    self.use_vtcombo = use_vtcombo
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
@@ -28,8 +27,7 @@ class LocalDatabase(object):
     if self.mysql_only:
       return
 
-    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db,
-                                    use_vtcombo=self.use_vtcombo)
+    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db)
 
   def teardown(self):
     """Kill all Vitess processes and wait for them to end.
@@ -52,33 +50,21 @@ class LocalDatabase(object):
 
   def vtgate_addr(self):
     """Get the host:port for vtgate."""
-    if self.use_vtcombo:
-      if environment.get_protocol() == 'grpc':
-        return vt_processes.vtcombo_process.grpc_addr()
-      return vt_processes.vtcombo_process.addr()
-
     if environment.get_protocol() == 'grpc':
-      return vt_processes.vtgate_process.grpc_addr()
-    return vt_processes.vtgate_process.addr()
+      return vt_processes.vtcombo_process.grpc_addr()
+    return vt_processes.vtcombo_process.addr()
 
   def config(self):
     """Returns a dict with enough information to be able to connect."""
     if self.mysql_only:
       return self.mysql_db.config()
-    elif self.use_vtcombo:
-      result = {
-          'port': vt_processes.vtcombo_process.port,
-          }
-      if environment.get_protocol() == 'grpc':
-        result['grpc_port'] = vt_processes.vtcombo_process.grpc_port
-      return result
-    else:
-      result = {
-          'port': vt_processes.vtgate_process.port,
-          }
-      if environment.get_protocol() == 'grpc':
-        result['grpc_port'] = vt_processes.vtgate_process.grpc_port
-      return result
+
+    result = {
+        'port': vt_processes.vtcombo_process.port,
+        }
+    if environment.get_protocol() == 'grpc':
+      result['grpc_port'] = vt_processes.vtcombo_process.grpc_port
+    return result
 
   def mysql_execute(self, queries, db_name=''):
     """Execute queries directly on MySQL."""
