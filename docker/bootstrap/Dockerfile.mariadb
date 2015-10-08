@@ -2,7 +2,7 @@ FROM vitess/bootstrap:common
 
 # Install MariaDB 10.0.x
 RUN apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0xcbcb082a1bb943db && \
-    add-apt-repository 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.0/debian wheezy main' && \
+    add-apt-repository 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.0/debian jessie main' && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-server libmariadbclient-dev && \
     rm -rf /var/lib/apt/lists/*
