@@ -252,7 +252,8 @@ func handleError(err *error, logStats *LogStats, queryServiceStats *QueryService
 			switch terr.SQLError {
 			// MySQL deadlock errors are (usually) due to client behavior, not server
 			// behavior, and therefore logged at the INFO level.
-			case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong, mysql.ErrDataOutOfRange:
+			case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong,
+				mysql.ErrDataOutOfRange, mysql.ErrBadNullError:
 				log.Infof("%v", terr)
 			default:
 				log.Errorf("%v", terr)

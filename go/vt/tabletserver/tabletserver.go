@@ -623,7 +623,8 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 	switch terr.SQLError {
 	case mysql.ErrDupEntry:
 		return myError
-	case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong, mysql.ErrDataOutOfRange:
+	case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong,
+		mysql.ErrDataOutOfRange, mysql.ErrBadNullError:
 		logMethod = log.Infof
 	case 0:
 		if strings.Contains(terr.Error(), "Row count exceeded") {

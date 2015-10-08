@@ -137,6 +137,9 @@ const (
 	// ErrDataTooLong is C.ER_DATA_TOO_LONG
 	ErrDataTooLong = C.ER_DATA_TOO_LONG
 
+	// ErrBadNullError is C.ER_BAD_NULL_ERROR
+	ErrBadNullError = C.ER_BAD_NULL_ERROR
+
 	// ErrDataOutOfRange is C.ER_WARN_DATA_OUT_OF_RANGE
 	ErrDataOutOfRange = C.ER_WARN_DATA_OUT_OF_RANGE
 
