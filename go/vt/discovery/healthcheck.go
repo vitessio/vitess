@@ -186,8 +186,9 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 		if !ok {
 			return true, errfunc()
 		}
+		// TODO(liang): remove after bug fix in tablet.
 		if shr.Target == nil || shr.RealtimeStats == nil {
-			return true, fmt.Errorf("health stats is not valid: %v", shr)
+			return false, fmt.Errorf("health stats is not valid: %v", shr)
 		}
 		// an app-level error from tablet, do not reconnect
 		if shr.RealtimeStats.HealthError != "" {
@@ -208,6 +209,8 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hc.addEndPointToTargetProtected(hcc.target, endPoint)
 			hc.mu.Unlock()
 		} else if hcc.target.TabletType != shr.Target.TabletType {
+			// tablet type changed for the tablet
+			log.Infof("HealthCheckUpdate(Type Change): EP: %v/%+v, target %+v => %+v, reparent time: %v", hcc.cell, endPoint, hcc.target, shr.Target, shr.TabletExternallyReparentedTimestamp)
 			hc.mu.Lock()
 			hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 			hcc.mu.Lock()
@@ -407,10 +410,16 @@ func (epcs *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 	for _, eps := range epcs.EndPointsStats {
 		vtPort := eps.EndPoint.PortMap["vt"]
 		color := "green"
+		extra := ""
 		if eps.LastError != nil {
 			color = "red"
+			extra = fmt.Sprintf("(%v)", eps.LastError)
+		} else if eps.Target.TabletType == pbt.TabletType_MASTER {
+			extra = fmt.Sprintf("(MasterTS: %v)", eps.TabletExternallyReparentedTimestamp)
+		} else {
+			extra = fmt.Sprintf("(RepLag: %v)", eps.Stats.SecondsBehindMaster)
 		}
-		epLinks = append(epLinks, fmt.Sprintf(`<a href="http://%v:%d" style="color:%v">%v:%d</a>`, eps.EndPoint.Host, vtPort, color, eps.EndPoint.Host, vtPort))
+		epLinks = append(epLinks, fmt.Sprintf(`<a href="http://%v:%d" style="color:%v">%v:%d</a>%v`, eps.EndPoint.Host, vtPort, color, eps.EndPoint.Host, vtPort, extra))
 	}
 	return template.HTML(strings.Join(epLinks, " "))
 }
