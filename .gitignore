@@ -41,3 +41,7 @@ preview-vitess.io/
 # test.go output files
 _test/
 /test/stats.json
+
+# php downloaded dependencies
+/php/composer.phar
+/php/vendor

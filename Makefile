@@ -86,7 +86,7 @@ java_test:
 
 php_test:
 	godep go install ./go/cmd/vtgateclienttest
-	php $$PHP_FLAGS $$(which phpunit) php/tests
+	phpunit php/tests
 
 bson:
 	go generate ./go/...
