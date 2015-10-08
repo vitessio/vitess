@@ -208,9 +208,9 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hc.addrToConns[key] = hcc
 			hc.addEndPointToTargetProtected(hcc.target, endPoint)
 			hc.mu.Unlock()
-			log.Infof("StatsUpdate(New Backend): cell: %v, target: %+v, endpoint: %+v, reparent time: %v", hcc.cell, hcc.target, endPoint, hcc.tabletExternallyReparentedTimestamp)
 		} else if hcc.target.TabletType != shr.Target.TabletType {
 			// tablet type changed for the tablet
+			log.Infof("HealthCheckUpdate(Type Change): EP: %v/%+v, target %+v => %+v, reparent time: %v", hcc.cell, endPoint, hcc.target, shr.Target, shr.TabletExternallyReparentedTimestamp)
 			hc.mu.Lock()
 			hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 			hcc.mu.Lock()
@@ -221,7 +221,6 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hcc.mu.Unlock()
 			hc.addEndPointToTargetProtected(shr.Target, endPoint)
 			hc.mu.Unlock()
-			log.Infof("StatsUpdate(Type Change): cell: %v, target: %+v, endpoint: %+v, reparent time: %v", hcc.cell, hcc.target, endPoint, hcc.tabletExternallyReparentedTimestamp)
 		} else {
 			hcc.mu.Lock()
 			hcc.target = shr.Target
