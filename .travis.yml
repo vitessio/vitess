@@ -48,7 +48,7 @@ cache:
   - $HOME/gopath/dist/vt-zookeeper-3.3.5/lib
   # Maven repository for Java dependencies.
   - $HOME/.m2
-  - $HOME/php
+  - $HOME/.phpenv
 before_cache:
   # Travis CI caching doesn't work with this symlink. Just delete it.
   - rm $HOME/gopath/bin/zksrv.sh
@@ -66,8 +66,7 @@ env:
     # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).
     # As of 07/2015 this value works best in a Travis CI container.
     - VT_GO_PARALLEL=4
-    - PHP_FLAGS="-d extension=$HOME/php/mongo.so"
-    - PATH="$HOME/php:$PATH"
+    - PATH="$HOME/.phpenv/bin:$PATH"
     # Add -follow to TEST_FLAGS below to print as the test runs, to diagnose stuck tests.
     - TEST_FLAGS="-docker=false -timeout=5m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
   matrix:
@@ -94,6 +93,7 @@ before_script:
       travis/check_make_proto.sh
     fi
 script:
+  - eval "$(phpenv init -)"
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
   - go run test.go $TEST_FLAGS $TEST_MATRIX
