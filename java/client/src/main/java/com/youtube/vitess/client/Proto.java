@@ -34,7 +34,7 @@ public class Proto {
   /**
    * Throws the proper SQLException for an error returned by VTGate.
    *
-   * Errors returned by Vitess are documented in the
+   * <p>Errors returned by Vitess are documented in the
    * <a href="https://github.com/youtube/vitess/blob/master/proto/vtrpc.proto">vtrpc proto</a>.
    */
   public static void checkError(RPCError error) throws SQLException {
