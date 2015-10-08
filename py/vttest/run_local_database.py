@@ -31,7 +31,7 @@ from vttest import vt_processes
 shard_exp = re.compile(r'(.+)/(.+):(.+)')
 
 
-def main(port, topology, schema_dir, mysql_only, use_vtcombo):
+def main(port, topology, schema_dir, mysql_only):
   shards = []
 
   for shard in topology.split(','):
@@ -44,7 +44,7 @@ def main(port, topology, schema_dir, mysql_only, use_vtcombo):
       sys.exit(1)
 
   environment.base_port = port
-  with local_database.LocalDatabase(shards, schema_dir, mysql_only, use_vtcombo) as local_db:
+  with local_database.LocalDatabase(shards, schema_dir, mysql_only) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
     raw_input()
@@ -54,7 +54,7 @@ if __name__ == '__main__':
   parser = optparse.OptionParser()
   parser.add_option(
       '-p', '--port', type='int',
-      help='Port to use for vtgate. If this is 0, a random port '
+      help='Port to use for vtcombo. If this is 0, a random port '
       'will be chosen.')
   parser.add_option(
       '-t', '--topology',
@@ -75,10 +75,6 @@ if __name__ == '__main__':
       ' Also, the output specifies the mysql unix socket'
       ' instead of the vtgate port.')
   parser.add_option(
-      '-c', '--use_vtcombo', action='store_true',
-      help='If this flag is set, we will run one vtcombo instead of'
-      'vtgate + multiple vtocc.')
-  parser.add_option(
       '-v', '--verbose', action='store_true',
       help='Display extra error messages.')
   (options, args) = parser.parse_args()
@@ -89,5 +85,4 @@ if __name__ == '__main__':
   # or default to MariaDB.
   mysql_flavor.set_mysql_flavor(None)
 
-  main(options.port, options.topology, options.schema_dir, options.mysql_only,
-       options.use_vtcombo)
+  main(options.port, options.topology, options.schema_dir, options.mysql_only)

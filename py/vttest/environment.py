@@ -10,12 +10,6 @@ import os
 import shutil
 import tempfile
 
-# this is the location of the vtocc binary
-vtocc_binary = os.path.join(os.environ['VTROOT'], 'bin', 'vtocc')
-
-# this is the location of the vtgate binary
-vtgate_binary = os.path.join(os.environ['VTROOT'], 'bin', 'vtgate')
-
 # this is the location of the vtcombo binary
 vtcombo_binary = os.path.join(os.environ['VTROOT'], 'bin', 'vtcombo')
 
@@ -56,21 +50,6 @@ def cleanup_test_directory(directory):
   shutil.rmtree(directory)
 
 
-def extra_vtgate_parameters():
-  """Returns extra parameters to send to vtgate."""
-  return [
-    '-service_map', 'grpc-vtgateservice',
-    '-tablet_protocol', 'grpc',
-  ]
-
-
-def extra_vtocc_parameters():
-  """Returns extra parameters to send to vtocc."""
-  return [
-    '-service_map', 'grpc-queryservice',
-  ]
-
-
 def extra_vtcombo_parameters():
   """Returns extra parameters to send to vtcombo."""
   return [
@@ -84,21 +63,21 @@ def process_is_healthy(name, addr):
 
 
 def get_protocol():
-  """Returns the protocol used between client, vtgate and vtocc."""
+  """Returns the protocol used between client and vtcombo."""
   return 'grpc'
 
 
-def get_port(name, instance=0, protocol=None):
+def get_port(name, protocol=None):
   """Returns the port to use for a given process.
 
   This is only called once per process, so picking an unused port will also work.
   """
-  if name == 'vtgate' or name == 'vtcombo':
+  if name == 'vtcombo':
     port = base_port
   elif name == 'mysql':
     port = base_port + 2
   else:
-    port = base_port + 3 + 2*instance
+    raise ValueError('name should be vtcombo or mysql, not %s' % name)
 
   if protocol == 'grpc':
     port += 1
