@@ -151,7 +151,7 @@ func TestNocacheListArgs(t *testing.T) {
 	)
 	want := "error: empty list supplied for list"
 	if err == nil || err.Error() != want {
-		t.Errorf("error returned: %v, want %s", err, want)
+		t.Errorf("Error: %v, want %s", err, want)
 		return
 	}
 }

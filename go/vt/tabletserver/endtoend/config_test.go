@@ -73,6 +73,9 @@ func TestConfigVars(t *testing.T) {
 		tag: "RowcacheConnPoolMaxCap",
 		val: framework.BaseConfig.RowCache.Connections - 50,
 	}, {
+		tag: "RowcacheSpotCheckRatio",
+		val: 0,
+	}, {
 		tag: "SchemaReloadTime",
 		val: int(framework.BaseConfig.SchemaReloadTime * 1e9),
 	}, {
