@@ -53,7 +53,7 @@ def cleanup_test_directory(directory):
 def extra_vtcombo_parameters():
   """Returns extra parameters to send to vtcombo."""
   return [
-    '-service_map', 'grpc-vtgateservice',
+    '-service_map', 'grpc-vtgateservice,bsonrpc-vt-vtgateservice',
   ]
 
 

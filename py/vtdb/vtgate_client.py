@@ -42,10 +42,10 @@ def connect(protocol, vtgate_addrs, timeout, *pargs, **kargs):
     dbexceptions.OperationalError: if we are unable to establish the connection
       (for instance, no available instance).
     dbexceptions.Error: if vtgate_addrs have the wrong type.
-    Exception: if the protocol is unknown, or vtgate_addrs are malformed.
+    ValueError if the protocol is unknown, or vtgate_addrs are malformed.
   """
   if protocol not in vtgate_client_conn_classes:
-    raise Exception('Unknown vtclient protocol', protocol)
+    raise ValueError('Unknown vtclient protocol', protocol)
   conn = vtgate_client_conn_classes[protocol](vtgate_addrs, timeout,
                                               *pargs, **kargs)
   conn.dial()

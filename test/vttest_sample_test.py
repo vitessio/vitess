@@ -22,13 +22,25 @@ process makes it clean up.
 
 import json
 import os
+import struct
 import subprocess
 import urllib
 
 import unittest
 
+from vtdb import vtgate_client
+from vtdb import dbexceptions
+
 import utils
 import environment
+from protocols_flavor import protocols_flavor
+
+
+pack_kid = struct.Struct('!Q').pack
+
+
+def get_keyspace_id(row_id):
+  return row_id
 
 
 class TestMysqlctl(unittest.TestCase):
@@ -64,7 +76,52 @@ class TestMysqlctl(unittest.TestCase):
     # vtctl -vtgate_protocol grpc VtGateExecuteKeyspaceIds -server localhost:15011 -keyspace test_keyspace -keyspace_ids 20 -tablet_type master "show tables"
     utils.pause('good time to test vtcombo with database running')
 
-    # and we're done, clean-up
+    protocol = protocols_flavor().vttest_protocol()
+    if protocol == 'grpc':
+      vtagte_addr = 'localhost:%d' % config['grpc_port']
+    else:
+      vtagte_addr = 'localhost:%d' % config['port']
+    conn_timeout = 30.0
+
+    # Connect to vtgate.
+    conn = vtgate_client.connect(protocol, vtagte_addr, conn_timeout)
+
+    # Insert a row.
+    row_id = 123
+    keyspace_id = get_keyspace_id(row_id)
+    cursor = conn.cursor(
+        'test_keyspace', 'master', keyspace_ids=[pack_kid(keyspace_id)],
+        writable=True)
+    cursor.begin()
+    insert = 'insert into test_table (id, msg, keyspace_id) values (%(id)s, '+\
+        '%(msg)s, %(keyspace_id)s)'
+    bind_variables = {
+        'id': row_id,
+        'msg': 'test %s' % row_id,
+        'keyspace_id': keyspace_id,
+        }
+    cursor.execute(insert, bind_variables)
+    cursor.commit()
+
+    # Read the row back.
+    cursor.execute(
+        'select * from test_table where id=%(id)s', {'id': row_id})
+    result = cursor.fetchall()
+    self.assertEqual(result[0][1], 'test 123')
+
+    # try to insert again, see if we get the rigth integrity error exception
+    # (this is meant to test vtcombo properly returns exceptions, and to a
+    # lesser extend that the python client converts it properly)
+    cursor.begin()
+    with self.assertRaises(dbexceptions.IntegrityError):
+      cursor.execute(insert, bind_variables)
+    cursor.rollback()
+
+    # Clean up.
+    cursor.close()
+    conn.close()
+
+    # and we're done, clean-up process
     sp.stdin.write('\n')
     sp.wait()
 
