@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -155,17 +156,23 @@ func (dg *discoveryGateway) Close(ctx context.Context) error {
 func (dg *discoveryGateway) StatsUpdate(endPoint *pbt.EndPoint, cell string, target *pbq.Target, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats) {
 }
 
+// withRetry gets available connections and executes the action. If there are retryable errors,
+// it retries retryCount times before failing. It does not retry if the connection is in
+// the middle of a transaction. While returning the error check if it maybe a result of
+// a resharding event, and set the re-resolve bit and let the upper layers
+// re-resolve and retry.
 func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, action func(conn tabletconn.TabletConn) error, transactionID int64, isStreaming bool) error {
-	var endPoint *pbt.EndPoint
+	var endPointLastUsed *pbt.EndPoint
 	var err error
 	inTransaction := (transactionID != 0)
 	invalidEndPoints := make(map[string]bool)
 
 	for i := 0; i < dg.retryCount+1; i++ {
+		var endPoint *pbt.EndPoint
 		endPoints := dg.getEndPoints(keyspace, shard, tabletType)
 		if len(endPoints) == 0 {
 			// fail fast if there is no endpoint
-			err = fmt.Errorf("no valid endpoint")
+			err = vterrors.FromError(vtrpc.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid endpoint"))
 			break
 		}
 		shuffleEndPoints(endPoints)
@@ -178,12 +185,19 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 			}
 		}
 		if endPoint == nil {
+			if err == nil {
+				// do not override error from last attempt.
+				err = vterrors.FromError(vtrpc.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no available connection"))
+			}
 			break
 		}
 
 		// execute
+		endPointLastUsed = endPoint
 		conn := dg.hc.GetConnection(endPoint)
 		if conn == nil {
+			err = vterrors.FromError(vtrpc.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for %+v", endPoint))
+			invalidEndPoints[discovery.EndPointToMapKey(endPoint)] = true
 			continue
 		}
 		err = action(conn)
@@ -193,9 +207,12 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		}
 		break
 	}
-	return WrapError(err, keyspace, shard, tabletType, endPoint, inTransaction)
+	return WrapError(err, keyspace, shard, tabletType, endPointLastUsed, inTransaction)
 }
 
+// canRetry determines whether a query can be retried or not.
+// OperationalErrors like retry/fatal are retryable if query is not in a txn.
+// All other errors are non-retryable.
 func (dg *discoveryGateway) canRetry(ctx context.Context, err error, transactionID int64, isStreaming bool) bool {
 	if err == nil {
 		return false
@@ -240,12 +257,39 @@ func shuffleEndPoints(endPoints []*pbt.EndPoint) {
 	}
 }
 
+// getEndPoints gets all available endpoints from HealthCheck,
+// and selects the usable ones based several rules:
+// master - return one from any cells with latest reparent timestamp;
+// replica - return all from local cell.
+// TODO(liang): instead of checking eps.LastError, check eps.serving flag.
+// TODO(liang): select replica by replication lag.
 func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.TabletType) []*pbt.EndPoint {
 	epsList := dg.hc.GetEndPointStatsFromTarget(keyspace, shard, tabletType)
+	// for master, use any cells and return the one with max reparent timestamp.
+	if tabletType == pbt.TabletType_MASTER {
+		var maxTimestamp int64
+		var ep *pbt.EndPoint
+		for _, eps := range epsList {
+			if eps.LastError != nil {
+				continue
+			}
+			if eps.TabletExternallyReparentedTimestamp >= maxTimestamp {
+				maxTimestamp = eps.TabletExternallyReparentedTimestamp
+				ep = eps.EndPoint
+			}
+		}
+		if ep == nil {
+			return nil
+		}
+		return []*pbt.EndPoint{ep}
+	}
+	// for non-master, use only endpoints from local cell.
 	var epList []*pbt.EndPoint
 	for _, eps := range epsList {
-		// use master endpoint regardless of cell, otherwise use only endpoints from local cell.
-		if tabletType != pbt.TabletType_MASTER && dg.localCell != eps.Cell {
+		if eps.LastError != nil {
+			continue
+		}
+		if dg.localCell != eps.Cell {
 			continue
 		}
 		epList = append(epList, eps.EndPoint)
