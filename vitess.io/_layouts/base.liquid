@@ -12,6 +12,9 @@
     <meta name="og:title" content="{{ site.title }} / {{page.title}}"/>
     <meta name="og:image" content="{{ site.baseurl }}/images/{{ site.logo }}"/>
     <meta name="og:description" content="{{ site.description }}"/>
+
+    <!-- GA -->
+    {% include analytics.liquid %}
   </head>
   <body class="{{ page.bodyclass }}" id="top_of_page">
 {% if page.tocDepth %}
@@ -23,7 +26,5 @@
   	{{ content }}
 
     {% include end-of-page-styles.liquid %}
-    <!-- GA -->
-    {% include analytics.liquid %}
   </body>
 </html>
