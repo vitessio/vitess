@@ -114,7 +114,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 buildDMLEvent parses the tuples of the full stream comment.
 The _stream comment is extracted into a StreamEvent.
 */
-// Example query: insert into vtocc_e(foo) values ('foo') /* _stream vtocc_e (eid id name ) (null 1 'bmFtZQ==' ); */
+// Example query: insert into _table_(foo) values ('foo') /* _stream _table_ (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
 func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*proto.StreamEvent, int64, error) {
 	// first extract the comment

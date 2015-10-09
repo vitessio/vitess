@@ -44,12 +44,10 @@ def get_all_extra_my_cnf(extra_my_cnf):
 
 
 class Tablet(object):
-  """This class helps manage a vttablet or vtocc instance.
+  """This class helps manage a vttablet instance.
 
   To use it for vttablet, you need to use init_tablet and/or
-  start_vttablet. For vtocc, you can just call start_vtocc.
-  If you use it to start as vtocc, many of the support functions
-  that are meant for vttablet will not work.
+  start_vttablet.
   """
   default_uid = 62344
   seq = 0
@@ -378,80 +376,6 @@ class Tablet(object):
                (self.port, environment.flush_logs_url),
                stderr=utils.devnull, stdout=utils.devnull)
 
-  def _start_prog(
-      self, binary, port=None, memcache=False,
-      wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
-      schema_override=None,
-      repl_extra_flags=None, table_acl_config=None,
-      lameduck_period=None, security_policy=None,
-      extra_args=None, extra_env=None):
-    if repl_extra_flags is None:
-      repl_extra_flags = {}
-    environment.prog_compile(binary)
-    args = environment.binary_args(binary)
-    args.extend(['-port', '%s' % (port or self.port),
-                 '-log_dir', environment.vtlogroot])
-
-    self._add_dbconfigs(args, repl_extra_flags)
-
-    if memcache:
-      args.extend(['-rowcache-bin', environment.memcached_bin()])
-      memcache_socket = os.path.join(self.tablet_dir, 'memcache.sock')
-      args.extend(['-rowcache-socket', memcache_socket])
-      args.extend(['-enable-rowcache'])
-
-    if filecustomrules:
-      args.extend(['-filecustomrules', filecustomrules])
-    if zkcustomrules:
-      args.extend(['-zkcustomrules', zkcustomrules])
-
-    if schema_override:
-      args.extend(['-schema-override', schema_override])
-
-    if table_acl_config:
-      args.extend(['-table-acl-config', table_acl_config])
-      args.extend(['-queryserver-config-strict-table-acl'])
-
-    if protocols_flavor().service_map():
-      args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
-    if self.grpc_enabled():
-      args.extend(['-grpc_port', str(self.grpc_port)])
-    if lameduck_period:
-      args.extend(['-lameduck-period', lameduck_period])
-    if security_policy:
-      args.extend(['-security_policy', security_policy])
-    if extra_args:
-      args.extend(extra_args)
-
-    args.extend(['-enable-autocommit'])
-    stderr_fd = open(
-        os.path.join(environment.vtlogroot, '%s-%d.stderr' %
-                     (binary, self.tablet_uid)), 'w')
-    # increment count only the first time
-    if not self.proc:
-      Tablet.tablets_running += 1
-    self.proc = utils.run_bg(args, stderr=stderr_fd, extra_env=extra_env)
-
-    log_message = (
-        'Started vttablet: %s (%s) with pid: %s - Log files: '
-        '%s/vttablet.*.{INFO,WARNING,ERROR,FATAL}.*.%s' %
-        (self.tablet_uid, self.tablet_alias, self.proc.pid,
-         environment.vtlogroot, self.proc.pid))
-    # This may race with the stderr output from the process (though
-    # that's usually empty).
-    stderr_fd.write(log_message + '\n')
-    stderr_fd.close()
-    logging.debug(log_message)
-
-    # wait for query service to be in the right state
-    if wait_for_state:
-      if binary == 'vttablet':
-        self.wait_for_vttablet_state(wait_for_state, port=port)
-      else:
-        self.wait_for_vtocc_state(wait_for_state, port=port)
-
-    return self.proc
-
   def start_vttablet(
       self, port=None, memcache=False,
       wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
@@ -467,9 +391,7 @@ class Tablet(object):
 
     The process is also saved in self.proc, so it's easy to kill as well.
     """
-    if repl_extra_flags is None:
-      repl_extra_flags = {}
-    args = []
+    args = environment.binary_args('vttablet')
     # Use 'localhost' as hostname because Travis CI worker hostnames
     # are too long for MySQL replication.
     args.extend(['-tablet_hostname', 'localhost'])
@@ -543,56 +465,68 @@ class Tablet(object):
     if extra_args:
       args.extend(extra_args)
 
-    return self._start_prog(
-        binary='vttablet', port=port,
-        memcache=memcache, wait_for_state=wait_for_state,
-        filecustomrules=filecustomrules,
-        zkcustomrules=zkcustomrules,
-        schema_override=schema_override,
-        repl_extra_flags=repl_extra_flags,
-        table_acl_config=table_acl_config,
-        lameduck_period=lameduck_period, extra_args=args,
-        security_policy=security_policy, extra_env=extra_env)
+    args.extend(['-port', '%s' % (port or self.port),
+                 '-log_dir', environment.vtlogroot])
 
-  def start_vtocc(self, port=None, memcache=False,
-                  wait_for_state='SERVING', filecustomrules=None,
-                  schema_override=None,
-                  repl_extra_flags=None, table_acl_config=None,
-                  lameduck_period=None, security_policy=None,
-                  keyspace=None, shard=False,
-                  extra_args=None):
-    """Starts a vtocc process, and returns it.
+    self._add_dbconfigs(args, repl_extra_flags)
 
-    The process is also saved in self.proc, so it's easy to kill as well.
-    """
-    if repl_extra_flags is None:
-      repl_extra_flags = {}
-    self.keyspace = keyspace
-    self.shard = shard
-    self.dbname = 'vt_' + (self.keyspace or 'database')
-    args = []
-    args.extend(['-db-config-app-unixsocket', self.tablet_dir + '/mysql.sock'])
-    args.extend(['-db-config-dba-unixsocket', self.tablet_dir + '/mysql.sock'])
-    args.extend(['-db-config-app-keyspace', keyspace])
-    args.extend(['-db-config-app-shard', shard])
-    args.extend(['-binlog-path', 'foo'])
+    if memcache:
+      args.extend(['-rowcache-bin', environment.memcached_bin()])
+      memcache_socket = os.path.join(self.tablet_dir, 'memcache.sock')
+      args.extend(['-rowcache-socket', memcache_socket])
+      args.extend(['-enable-rowcache'])
 
+    if filecustomrules:
+      args.extend(['-filecustomrules', filecustomrules])
+    if zkcustomrules:
+      args.extend(['-zkcustomrules', zkcustomrules])
+
+    if schema_override:
+      args.extend(['-schema-override', schema_override])
+
+    if table_acl_config:
+      args.extend(['-table-acl-config', table_acl_config])
+      args.extend(['-queryserver-config-strict-table-acl'])
+
+    if protocols_flavor().service_map():
+      args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
+    if self.grpc_enabled():
+      args.extend(['-grpc_port', str(self.grpc_port)])
+    if lameduck_period:
+      args.extend(['-lameduck-period', lameduck_period])
+    if security_policy:
+      args.extend(['-security_policy', security_policy])
     if extra_args:
       args.extend(extra_args)
 
-    return self._start_prog(binary='vtocc', port=port,
-                            memcache=memcache, wait_for_state=wait_for_state,
-                            filecustomrules=filecustomrules,
-                            schema_override=schema_override,
-                            repl_extra_flags=repl_extra_flags,
-                            table_acl_config=table_acl_config,
-                            lameduck_period=lameduck_period, extra_args=args,
-                            security_policy=security_policy)
+    args.extend(['-enable-autocommit'])
+    stderr_fd = open(
+        os.path.join(environment.vtlogroot, 'vttablet-%d.stderr' %
+                     self.tablet_uid), 'w')
+    # increment count only the first time
+    if not self.proc:
+      Tablet.tablets_running += 1
+    self.proc = utils.run_bg(args, stderr=stderr_fd, extra_env=extra_env)
+
+    log_message = (
+        'Started vttablet: %s (%s) with pid: %s - Log files: '
+        '%s/vttablet.*.{INFO,WARNING,ERROR,FATAL}.*.%s' %
+        (self.tablet_uid, self.tablet_alias, self.proc.pid,
+         environment.vtlogroot, self.proc.pid))
+    # This may race with the stderr output from the process (though
+    # that's usually empty).
+    stderr_fd.write(log_message + '\n')
+    stderr_fd.close()
+    logging.debug(log_message)
+
+    # wait for query service to be in the right state
+    if wait_for_state:
+      self.wait_for_vttablet_state(wait_for_state, port=port)
+
+    return self.proc
+
 
   def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
-    self.wait_for_vtocc_state(expected, timeout=timeout, port=port)
-
-  def wait_for_vtocc_state(self, expected, timeout=60.0, port=None):
     while True:
       v = utils.get_vars(port or self.port)
       last_seen_state = '?'

@@ -40,11 +40,6 @@ class TestEnv(object):
   vttop = environment.vttop
   vtroot = environment.vtroot
 
-  def __init__(self, env):
-    if env not in ['vttablet', 'vtocc']:
-      raise EnvironmentError('unexptected env', env)
-    self.env = env
-
   @property
   def port(self):
     return self.tablet.port
@@ -110,14 +105,13 @@ class TestEnv(object):
           "Operator": "NOOP"
         }]
       }]""")
-    if self.env == 'vttablet':
-      if environment.topo_server().flavor() == 'zookeeper':
-        utils.run(
-            environment.binary_argstr('zk') +
-            ' touch -p /zk/test_ca/config/customrules/testrules')
-        utils.run(
-            environment.binary_argstr('zk') + ' cp ' + filename +
-            ' /zk/test_ca/config/customrules/testrules')
+    if environment.topo_server().flavor() == 'zookeeper':
+      utils.run(
+          environment.binary_argstr('zk') +
+          ' touch -p /zk/test_ca/config/customrules/testrules')
+      utils.run(
+          environment.binary_argstr('zk') + ' cp ' + filename +
+          ' /zk/test_ca/config/customrules/testrules')
 
   def change_customrules(self):
     customrules = os.path.join(environment.tmproot, 'customrules.json')
@@ -131,20 +125,18 @@ class TestEnv(object):
           "Operator": "NOOP"
         }]
       }]""")
-    if self.env == 'vttablet':
-      if environment.topo_server().flavor() == 'zookeeper':
-        utils.run(
-            environment.binary_argstr('zk') + ' cp ' + customrules +
-            ' /zk/test_ca/config/customrules/testrules')
+    if environment.topo_server().flavor() == 'zookeeper':
+      utils.run(
+          environment.binary_argstr('zk') + ' cp ' + customrules +
+          ' /zk/test_ca/config/customrules/testrules')
 
   def restore_customrules(self):
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
-    if self.env == 'vttablet':
-      if environment.topo_server().flavor() == 'zookeeper':
-        utils.run(
-            environment.binary_argstr('zk') + ' cp ' + customrules +
-            ' /zk/test_ca/config/customrules/testrules')
+    if environment.topo_server().flavor() == 'zookeeper':
+      utils.run(
+          environment.binary_argstr('zk') + ' cp ' + customrules +
+          ' /zk/test_ca/config/customrules/testrules')
 
   def create_schema_override(self, filename):
     with open(filename, 'w') as f:
@@ -222,33 +214,23 @@ class TestEnv(object):
     table_acl_config = os.path.join(
         environment.vttop, 'test', 'test_data', 'table_acl_config.json')
 
-    if self.env == 'vttablet':
-      environment.topo_server().setup()
-      self.create_customrules(customrules);
-      utils.run_vtctl('CreateKeyspace -force test_keyspace')
-      self.tablet.init_tablet('master', 'test_keyspace', '0')
-      if environment.topo_server().flavor() == 'zookeeper':
-        self.tablet.start_vttablet(
-            memcache=self.memcache,
-            zkcustomrules='/zk/test_ca/config/customrules/testrules',
-            schema_override=schema_override,
-            table_acl_config=table_acl_config,
-        )
-      else:
-        self.tablet.start_vttablet(
-            memcache=self.memcache,
-            filecustomrules=customrules,
-            schema_override=schema_override,
-            table_acl_config=table_acl_config,
-        )
+    environment.topo_server().setup()
+    self.create_customrules(customrules);
+    utils.run_vtctl('CreateKeyspace -force test_keyspace')
+    self.tablet.init_tablet('master', 'test_keyspace', '0')
+    if environment.topo_server().flavor() == 'zookeeper':
+      self.tablet.start_vttablet(
+          memcache=self.memcache,
+          zkcustomrules='/zk/test_ca/config/customrules/testrules',
+          schema_override=schema_override,
+          table_acl_config=table_acl_config,
+      )
     else:
-      self.create_customrules(customrules);
-      self.tablet.start_vtocc(
+      self.tablet.start_vttablet(
           memcache=self.memcache,
           filecustomrules=customrules,
           schema_override=schema_override,
           table_acl_config=table_acl_config,
-          keyspace='test_keyspace', shard='0',
       )
     self.conn = self.connect()
     self.txlogger = utils.curl(
@@ -256,7 +238,7 @@ class TestEnv(object):
         stdout=open(self.txlog_file, 'w'))
     self.txlog = framework.Tailer(self.txlog_file, flush=self.tablet.flush)
     self.log = framework.Tailer(
-        os.path.join(environment.vtlogroot, '%s.INFO' % self.env),
+        os.path.join(environment.vtlogroot, 'vttablet.INFO'),
         flush=self.tablet.flush)
     self.querylog = Querylog(self)
 
@@ -278,8 +260,7 @@ class TestEnv(object):
       pass
     if getattr(self, 'txlogger', None):
       self.txlogger.terminate()
-    if self.env == 'vttablet':
-      environment.topo_server().teardown()
+    environment.topo_server().teardown()
     utils.kill_sub_processes()
     utils.remove_tmp_files()
     self.tablet.remove_tree()
