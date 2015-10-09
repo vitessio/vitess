@@ -35,7 +35,7 @@ var (
 // StartDefaultServer starts the default server and initializes
 // all the global variables. This function should only be called
 // once at the beginning of the test.
-func StartDefaultServer(connParams sqldb.ConnParams) error {
+func StartDefaultServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.SchemaOverride) error {
 	dbcfgs := dbconfigs.DBConfigs{
 		App: dbconfigs.DBConfig{
 			ConnParams:        connParams,
@@ -69,7 +69,7 @@ func StartDefaultServer(connParams sqldb.ConnParams) error {
 
 	DefaultServer = tabletserver.NewTabletServer(BaseConfig)
 	DefaultServer.Register()
-	err := DefaultServer.StartService(&Target, &dbcfgs, nil, mysqld)
+	err := DefaultServer.StartService(&Target, &dbcfgs, schemaOverrides, mysqld)
 	if err != nil {
 		return fmt.Errorf("could not start service: %v\n", err)
 	}

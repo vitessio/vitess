@@ -33,33 +33,6 @@ class TestWillNotBeCached(framework.TestCase):
 
 
 class TestCache(framework.TestCase):
-  def test_num_str(self):
-    try:
-      self.env.execute(
-          "select bid, eid from vtocc_cached2 where eid = 1 and bid = 1")
-    except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: type mismatch")
-    else:
-      self.fail("Did not receive exception")
-
-  def test_cache_list_arg(self):
-    cu = self.env.execute(
-        "select * from vtocc_cached1 where eid in ::list",
-        {"list": field_types.List([3, 4, 32768])})
-    self.assertEqual(cu.rowcount, 2)
-    cu = self.env.execute(
-        "select * from vtocc_cached1 where eid in ::list",
-        {"list": field_types.List([3, 4])})
-    self.assertEqual(cu.rowcount, 2)
-    cu = self.env.execute(
-        "select * from vtocc_cached1 where eid in ::list",
-        {"list": field_types.List([3])})
-    self.assertEqual(cu.rowcount, 1)
-    with self.assertRaises(dbexceptions.DatabaseError):
-      cu = self.env.execute(
-          "select * from vtocc_cached1 where eid in ::list",
-          {"list": field_types.List()})
-
   def test_uncache(self):
     try:
       # Verify row cache is working
@@ -91,13 +64,6 @@ class TestCache(framework.TestCase):
         "select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
     tend = self.env.table_stats()["vtocc_cached2"]
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
-
-  def test_bad_limit(self):
-    try:
-      with self.assertRaises(dbexceptions.DatabaseError):
-        self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo' limit :a", {"a": -1})
-    finally:
-      self.env.execute("alter table vtocc_cached2 comment ''")
 
   def test_rename(self):
     try:
