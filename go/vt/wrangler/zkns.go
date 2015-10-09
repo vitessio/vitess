@@ -164,7 +164,7 @@ func (wr *Wrangler) exportVtnsToZkns(ctx context.Context, zconn zk.Conn, vtnsAdd
 	}
 
 	// Write the individual endpoints and compute the SRV entries.
-	vtoccAddrs := LegacyZknsAddrs{make([]string, 0, 8)}
+	tabletAddrs := LegacyZknsAddrs{make([]string, 0, 8)}
 	defaultAddrs := LegacyZknsAddrs{make([]string, 0, 8)}
 	for i, entry := range addrs.Entries {
 		zknsAddrPath := fmt.Sprintf("%v/%v", zknsAddrPath, i)
@@ -178,7 +178,7 @@ func (wr *Wrangler) exportVtnsToZkns(ctx context.Context, zconn zk.Conn, vtnsAdd
 			return nil, err
 		}
 		defaultAddrs.Endpoints = append(defaultAddrs.Endpoints, zknsAddrPath)
-		vtoccAddrs.Endpoints = append(vtoccAddrs.Endpoints, zknsAddrPath+":vt")
+		tabletAddrs.Endpoints = append(tabletAddrs.Endpoints, zknsAddrPath+":vt")
 	}
 
 	// Prune any zkns entries that are no longer referenced by the
@@ -199,10 +199,10 @@ func (wr *Wrangler) exportVtnsToZkns(ctx context.Context, zconn zk.Conn, vtnsAdd
 		deleteIdx++
 	}
 
-	// Write the VDNS entries for both vtocc and mysql
-	vtoccVdnsPath := fmt.Sprintf("%v/vt.vdns", zknsAddrPath)
-	zknsPaths = append(zknsPaths, vtoccVdnsPath)
-	if err = writeAddrs(zconn, vtoccVdnsPath, &vtoccAddrs); err != nil {
+	// Write the VDNS entries for both tablet and mysql
+	tabletVdnsPath := fmt.Sprintf("%v/vt.vdns", zknsAddrPath)
+	zknsPaths = append(zknsPaths, tabletVdnsPath)
+	if err = writeAddrs(zconn, tabletVdnsPath, &tabletAddrs); err != nil {
 		return nil, err
 	}
 

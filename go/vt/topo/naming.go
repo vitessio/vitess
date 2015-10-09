@@ -12,7 +12,7 @@ Naming is disconnected from the backend discovery and is used for
 front end clients.
 
 The common query is "resolve keyspace.shard.db_type" and return a list
-of host:port tuples that export our default server (vtocc).  You can
+of host:port tuples that export our default server (vttablet).  You can
 get all shards with "keyspace.*.db_type".
 
 In zk, this is in /zk/local/vt/ns/<keyspace>/<shard>/<db type>

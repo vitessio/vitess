@@ -15,13 +15,13 @@ import (
 var dmlErrorCases = []string{
 	"query",
 	"query /* _stream 10 (eid id name ) (null 1 'bmFtZQ==' ); */",
-	"query /* _stream vtocc_e eid id name ) (null 1 'bmFtZQ==' ); */",
-	"query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */",
-	"query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */",
-	"query /* _stream vtocc_e (eid id name)  (null 'aaa' 'bmFtZQ==' ); */",
-	"query /* _stream vtocc_e (eid id name)  (null 'bmFtZQ==' ); */",
-	"query /* _stream vtocc_e (eid id name)  (null 1.1 'bmFtZQ==' ); */",
-	"query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */",
+	"query /* _stream _table_ eid id name ) (null 1 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (10 id name ) (null 1 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (eid id name  (null 1 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (eid id name)  (null 'aaa' 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (eid id name)  (null 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (eid id name)  (null 1.1 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (eid id name)  (null a 'bmFtZQ==' ); */",
 }
 
 func TestEventErrors(t *testing.T) {
@@ -94,7 +94,7 @@ func TestDMLEvent(t *testing.T) {
 				Sql:      "SET INSERT_ID=10",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      "query /* _stream vtocc_e (eid id name)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */",
+				Sql:      "query /* _stream _table_ (eid id name)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */",
 			}, {
 				Category: proto.BL_DML,
 				Sql:      "query",
@@ -107,7 +107,7 @@ func TestDMLEvent(t *testing.T) {
 		sendEvent: func(event *proto.StreamEvent) error {
 			switch event.Category {
 			case "DML":
-				want := `&{DML vtocc_e [{eid 8 0} {id 8 0} {name 15 0}] [[10 -1 name] [11 18446744073709551615 name]]  1 }`
+				want := `&{DML _table_ [{eid 8 0} {id 8 0} {name 15 0}] [[10 -1 name] [11 18446744073709551615 name]]  1 }`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got \n%s, want \n%s", got, want)

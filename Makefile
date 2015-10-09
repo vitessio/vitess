@@ -67,7 +67,7 @@ unit_test_goveralls: build
 	travis/goveralls.sh
 
 queryservice_test:
-	go run test.go -docker=false queryservice_vtocc queryservice_vttablet
+	go run test.go -docker=false queryservice
 
 .ONESHELL:
 SHELL = /bin/bash

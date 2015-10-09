@@ -26,7 +26,7 @@ This set of helpers has two purposes:
 
 It is expected that Vitess users may change py/vttest/environment.py to match their setup. For instance, YouTube internally does this to use different scripts to bring up a MySQL instance.
 
-These tests need to be as light weight as possible, so the developers who use Vitess can run as many unit tests as they want with minimal resources. We are currently running a single MySQL, multiple vtocc, and one vtgate. The plan is to switch to vtcombo to replace vtgate+vtocc processes with a single process. The MySQL process has multiple databases, one per keyspace / shard. It is the smallest setup with a real MySQL.
+These tests need to be as light weight as possible, so the developers who use Vitess can run as many unit tests as they want with minimal resources. We are running a single MySQL and a single vtcombo instance (that encapsulates one vtgate and multiple vttablets). The MySQL process has multiple databases, one per keyspace / shard, and replication is not enabled. It is the smallest setup with a real MySQL.
 
 This framework supports an initial schema to apply to all keyspaces / shards, per keyspace. This is also the base for testing schema changes before rolling them out to production.
 
@@ -52,15 +52,9 @@ We have made a lot of progress for the Google internal sandbox, however the exte
 
 The following action items exist to make it all consistent:
 
-* Consolidate to use use vttest everywhere, instead of the old google3-only run\_local\_database.py. Note vttest library is working in Google3 and passes unit test scenarios. Haven't had time to clean up the old stuff yet.
-
-* switch the end-to-end google3 tests that require a production setup from vtocc to vtgate. This is a small subset of tests (about 100, not the thousands of YouTube tests that use run\_local\_database.py), so using vttablet is not too bad.
-
-* Switch query\_service.py tests to unit tests using vttest. Sugu is on it, first thing is to let vttest only launch a MySQL (and nothing else), and fix its MySQL parameters.
+* Switch query\_service.py tests to unit tests using vttest. Sugu is making good progress on this.
 
 * Switch java tests to use vttest if they need a full cluster, and not java\_vtgate\_test\_helper.py, retire java\_vtgate\_test\_helper.py. Client unit tests should already use vtgateclienttest.
-
-* Same for google3 C++ client.
 
 * We are removing direct vttablet access to python. This in turn will remove a lot of code and tests, like vtclient.py, tablet.py, zkocc.py, ... Less surface area is good, we just need to make sure we maintain good code coverage. As part of this:
 
