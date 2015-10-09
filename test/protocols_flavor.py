@@ -64,6 +64,10 @@ class ProtocolsFlavor(object):
     """A list of entries to enable all relevant protocols in all servers."""
     raise NotImplementedError('Not implemented in the base class')
 
+  def vttest_protocol(self):
+    """Python protocol to use to talk to a vttest client."""
+    raise NotImplementedError('Not implemented in the base class')
+
 
 __knows_protocols_flavor_map = {}
 __protocols_flavor = None

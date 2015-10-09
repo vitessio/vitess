@@ -51,5 +51,8 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
         'grpc-vtgateservice',
         ]
 
+  def vttest_protocol(self):
+    return 'gorpc'
+
 
 protocols_flavor.register_flavor('grpc', GRpcProtocolsFlavor)
