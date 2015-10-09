@@ -605,22 +605,12 @@ func (qre *QueryExecutor) execDMLPKRows(conn poolConn, query *sqlparser.ParsedQu
 }
 
 func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
-	switch qre.plan.SetKey {
-	case "vt_spot_check_ratio":
-		val, err := parseFloat64(qre.plan.SetValue)
-		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_spot_check_ratio = %v, want float64", err)
-		}
-		qre.qe.spotCheckFreq.Set(int64(val * spotCheckMultiplier))
-	default:
-		conn, err := qre.getConn(qre.qe.connPool)
-		if err != nil {
-			return nil, err
-		}
-		defer conn.Recycle()
-		return qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
+	conn, err := qre.getConn(qre.qe.connPool)
+	if err != nil {
+		return nil, err
 	}
-	return &mproto.QueryResult{}, nil
+	defer conn.Recycle()
+	return qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 }
 
 func parseInt64(v interface{}) (int64, error) {

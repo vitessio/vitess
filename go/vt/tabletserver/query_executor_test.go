@@ -563,7 +563,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	defer tsv.StopService()
 	qre := newTestQueryExecutor(ctx, tsv, setQuery, 0)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	// unrecognized set field will be delegated to MySQL and both Fields and Rows should be
+	// Query will be delegated to MySQL and both Fields and Rows should be
 	// empty arrays in this case.
 	want := &mproto.QueryResult{
 		Rows: make([][]sqltypes.Value, 0),
@@ -574,24 +574,6 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
-	}
-	// set vt_spot_check_ratio
-	vtSpotCheckRatio := 0.771
-	setQuery = fmt.Sprintf("set vt_spot_check_ratio = %f", vtSpotCheckRatio)
-	db.AddQuery(setQuery, &mproto.QueryResult{})
-	qre = newTestQueryExecutor(ctx, tsv, setQuery, 0)
-	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("got: %v, want nil", err)
-	}
-	want = &mproto.QueryResult{}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
-	}
-	vtSpotCheckFreq := int64(vtSpotCheckRatio * spotCheckMultiplier)
-	if qre.qe.spotCheckFreq.Get() != vtSpotCheckFreq {
-		t.Fatalf("set query failed, expected to have vt_spot_check_freq: %d, but got: %d", vtSpotCheckFreq, qre.qe.spotCheckFreq.Get())
 	}
 }
 

@@ -5,6 +5,7 @@
 package endtoend
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -34,7 +35,7 @@ func TestMain(m *testing.M) {
 	tabletserver.Init()
 
 	exitCode := func() int {
-		hdl, err := vttest.LaunchMySQL("vttest", schema, testing.Verbose())
+		hdl, err := vttest.LaunchMySQL("vttest", testSchema, testing.Verbose())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
 			return 1
@@ -45,7 +46,15 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "could not fetch mysql params: %v\n", err)
 			return 1
 		}
-		err = framework.StartDefaultServer(connParams)
+
+		var schemaOverrides []tabletserver.SchemaOverride
+		err = json.Unmarshal([]byte(schemaOverrideJSON), &schemaOverrides)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
+		err = framework.StartDefaultServer(connParams, schemaOverrides)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -83,7 +92,7 @@ func initTableACL() error {
 	return nil
 }
 
-var schema = `create table vtocc_test(intval int, floatval float, charval varchar(256), binval varbinary(256), primary key(intval)) comment 'vtocc_nocache';
+var testSchema = `create table vtocc_test(intval int, floatval float, charval varchar(256), binval varbinary(256), primary key(intval)) comment 'vtocc_nocache';
 delete from vtocc_test;
 insert into vtocc_test values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null);
 
@@ -225,3 +234,25 @@ var tableACLConfig = `{
     }
   ]
 }`
+
+var schemaOverrideJSON = `[{
+	"Name": "vtocc_view",
+	"PKColumns": ["key2"],
+	"Cache": {
+		"Type": "RW"
+	}
+}, {
+	"Name": "vtocc_part1",
+	"PKColumns": ["key2"],
+	"Cache": {
+		"Type": "W",
+		"Table": "vtocc_view"
+	}
+}, {
+	"Name": "vtocc_part2",
+	"PKColumns": ["key3"],
+	"Cache": {
+		"Type": "W",
+		"Table": "vtocc_view"
+	}
+}]`
