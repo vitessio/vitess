@@ -63,8 +63,11 @@ type tableACL struct {
 // currentACL stores current effective ACL information.
 var currentACL tableACL
 
+// aclCallback is the tablet callback executed on table acl reload.
+var aclCallback func()
+
 // Init initiates table ACLs.
-func Init(configFile string) {
+func Init(configFile string, aclCB func()) {
 	data, err := ioutil.ReadFile(configFile)
 	if err != nil {
 		log.Errorf("unable to read tableACL config file: %v", err)
@@ -83,6 +86,8 @@ func Init(configFile string) {
 		log.Errorf("tableACL initialization error: %v", err)
 		panic(fmt.Errorf("tableACL initialization error: %v", err))
 	}
+	aclCallback = aclCB
+	aclCallback()
 }
 
 // InitFromProto inits table ACLs from a proto.
@@ -129,9 +134,13 @@ func load(config *pb.Config) error {
 		return err
 	}
 	currentACL.Lock()
-	defer currentACL.Unlock()
 	currentACL.entries = entries
 	currentACL.config = *config
+	defer func() {
+		currentACL.Unlock()
+		aclCallback()
+	}()
+
 	return nil
 }
 
