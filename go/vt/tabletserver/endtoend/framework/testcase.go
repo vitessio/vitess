@@ -34,6 +34,14 @@ type TestQuery string
 
 // Test executes the query and returns an error if it failed.
 func (tq TestQuery) Test(name string, client *QueryClient) error {
+	switch string(tq) {
+	case "begin":
+		return client.Begin()
+	case "commit":
+		return client.Commit()
+	case "rollback":
+		return client.Rollback()
+	}
 	_, err := client.Execute(string(tq), nil)
 	if err != nil {
 		if name == "" {
@@ -122,7 +130,17 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 		errs = append(errs, fmt.Sprintf("Query catcher failed: %v", err))
 	}
 	if tc.Rewritten != nil {
-		got := strings.Split(queryInfo.RewrittenSQL(), "; ")
+		// Work-around for a quirk. The stream comments also contain
+		// "; ". So, we have to get rid of the additional artifacts
+		// to make it match expected results.
+		unstripped := strings.Split(queryInfo.RewrittenSQL(), "; ")
+		var got []string
+		for _, str := range unstripped {
+			if str == "*/" {
+				continue
+			}
+			got = append(got, str)
+		}
 		if !reflect.DeepEqual(got, tc.Rewritten) {
 			errs = append(errs, fmt.Sprintf("Rewritten mismatch:\n'%+v' does not match\n'%+v'", got, tc.Rewritten))
 		}
@@ -203,6 +221,7 @@ func (mc *MultiCase) Test(name string, client *QueryClient) error {
 	}
 	for _, tcase := range mc.Cases {
 		if err := tcase.Test(name, client); err != nil {
+			client.Rollback()
 			return err
 		}
 	}
