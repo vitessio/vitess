@@ -201,7 +201,3 @@ func shuffle(addressNodes []*addressStatus, length int) {
 		addressNodes[i], addressNodes[index] = addressNodes[index], addressNodes[i]
 	}
 }
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
