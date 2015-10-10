@@ -4,7 +4,7 @@
 # into go.
 # TODO(sougou): delete after migration.
 from queryservice_tests.cases_framework import MultiCase
-import queryservice_tests.nocache_cases as source
+import queryservice_tests.cache_cases1 as source
 
 def main():
   print "\ttestCases := []framework.Testable{"
@@ -56,9 +56,8 @@ def print_details(case, indent):
     print "%s}," %(tabs)
   if case.rowcount:
     print '%sRowsAffected: %s,' % (tabs, case.rowcount)
-  if not case.query_plan:
-    case.query_plan = "PASS_SELECT"
-  print '%sPlan: "%s",' % (tabs, case.query_plan)
+  if case.query_plan:
+    print '%sPlan: "%s",' % (tabs, case.query_plan)
   if case.cache_table:
     print '%sTable: "%s",' % (tabs, case.cache_table)
     if case.cache_hits:
