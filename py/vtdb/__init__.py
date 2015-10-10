@@ -9,9 +9,7 @@ apilevel = '2.0'
 threadsafety = 0
 paramstyle = 'named'
 
-from vtdb.cursorv3 import *
-from vtdb.dbexceptions import *
-from vtdb.field_types import STRING, BINARY, NUMBER, DATETIME, ROWID
-from vtdb.times import Date, Time, Timestamp, DateFromTicks, TimeFromTicks, TimestampFromTicks
-from vtdb.vtgatev2 import *
-from vtdb.vtgatev3 import *
+# TODO(dumbunny): Have callers use dbexceptions.DatabaseError directly
+from vtdb.dbexceptions import DatabaseError
+from vtdb.dbexceptions import IntegrityError
+from vtdb.dbexceptions import OperationalError
