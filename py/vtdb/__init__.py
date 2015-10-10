@@ -13,3 +13,6 @@ paramstyle = 'named'
 from vtdb.dbexceptions import DatabaseError
 from vtdb.dbexceptions import IntegrityError
 from vtdb.dbexceptions import OperationalError
+from vtdb import vtgatev2
+
+_vtgate_client_registered_conn_class_modules = [vtgatev2]
