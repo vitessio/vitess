@@ -4,7 +4,7 @@
 # into go.
 # TODO(sougou): delete after migration.
 from queryservice_tests.cases_framework import MultiCase
-import queryservice_tests.cache_cases1 as source
+import queryservice_tests.cache_cases2 as source
 
 def main():
   print "\ttestCases := []framework.Testable{"

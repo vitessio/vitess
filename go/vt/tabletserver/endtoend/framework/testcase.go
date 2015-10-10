@@ -34,15 +34,7 @@ type TestQuery string
 
 // Test executes the query and returns an error if it failed.
 func (tq TestQuery) Test(name string, client *QueryClient) error {
-	switch string(tq) {
-	case "begin":
-		return client.Begin()
-	case "commit":
-		return client.Commit()
-	case "rollback":
-		return client.Rollback()
-	}
-	_, err := client.Execute(string(tq), nil)
+	_, err := exec(client, string(tq), nil)
 	if err != nil {
 		if name == "" {
 			return err
@@ -106,7 +98,7 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 		tstart = TableStats()[tc.Table]
 	}
 
-	qr, err := client.Execute(tc.Query, tc.BindVars)
+	qr, err := exec(client, tc.Query, tc.BindVars)
 	if err != nil {
 		return fmt.Errorf("%s: Execute failed: %v", name, err)
 	}
@@ -173,6 +165,18 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 		return errors.New(fmt.Sprintf("%s failed:\n", name) + strings.Join(errs, "\n"))
 	}
 	return nil
+}
+
+func exec(client *QueryClient, query string, bv map[string]interface{}) (*mproto.QueryResult, error) {
+	switch query {
+	case "begin":
+		return nil, client.Begin()
+	case "commit":
+		return nil, client.Commit()
+	case "rollback":
+		return nil, client.Rollback()
+	}
+	return client.Execute(query, bv)
 }
 
 func convertRows(qr *mproto.QueryResult) [][]string {

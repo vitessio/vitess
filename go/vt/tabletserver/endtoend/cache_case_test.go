@@ -202,3 +202,326 @@ func TestCacheCases1(t *testing.T) {
 		}
 	}
 }
+
+// TestCacheCases2 covers cases for vtocc_cached2.
+func TestCacheCases2(t *testing.T) {
+	client := framework.NewDefaultClient()
+
+	testCases := []framework.Testable{
+		framework.TestQuery("alter table vtocc_cached2 comment 'new'"),
+		&framework.TestCase{
+			Name:  "PK_IN (null key)",
+			Query: "select * from vtocc_cached2 where eid = 2 and bid = :bid",
+			BindVars: map[string]interface{}{
+				"bid": nil,
+			},
+			Rewritten: []string{
+				"select * from vtocc_cached2 where 1 != 1",
+				"select eid, bid, name, foo from vtocc_cached2 where (eid = 2 and bid = null)",
+			},
+			Plan:   "PK_IN",
+			Table:  "vtocc_cached2",
+			Absent: 1,
+		},
+		// (2.foo) is in cache
+		&framework.TestCase{
+			Name:  "PK_IN (empty cache)",
+			Query: "select * from vtocc_cached2 where eid = 2 and bid = 'foo'",
+			Result: [][]string{
+				{"2", "foo", "abcd2", "efgh"},
+			},
+			Rewritten: []string{
+				"select * from vtocc_cached2 where 1 != 1",
+				"select eid, bid, name, foo from vtocc_cached2 where (eid = 2 and bid = 'foo')",
+			},
+			RowsAffected: 1,
+			Plan:         "PK_IN",
+			Table:        "vtocc_cached2",
+			Misses:       1,
+		},
+		// (2.foo)
+		&framework.TestCase{
+			Name:  "PK_IN, use cache",
+			Query: "select bid, eid, name, foo from vtocc_cached2 where eid = 2 and bid = 'foo'",
+			Result: [][]string{
+				{"foo", "2", "abcd2", "efgh"},
+			},
+			Rewritten: []string{
+				"select bid, eid, name, foo from vtocc_cached2 where 1 != 1",
+			},
+			RowsAffected: 1,
+			Plan:         "PK_IN",
+			Table:        "vtocc_cached2",
+			Hits:         1,
+		},
+		// (2.foo)
+		&framework.TestCase{
+			Name:  "PK_IN, absent",
+			Query: "select bid, eid, name, foo from vtocc_cached2 where eid = 3 and bid = 'foo'",
+			Rewritten: []string{
+				"select bid, eid, name, foo from vtocc_cached2 where 1 != 1",
+				"select eid, bid, name, foo from vtocc_cached2 where (eid = 3 and bid = 'foo')",
+			},
+			Plan:   "PK_IN",
+			Table:  "vtocc_cached2",
+			Absent: 1,
+		},
+		// (1.foo, 2.foo)
+		&framework.TestCase{
+			Name:  "out of order columns list",
+			Query: "select bid, eid from vtocc_cached2 where eid = 1 and bid = 'foo'",
+			Result: [][]string{
+				{"foo", "1"},
+			},
+			Rewritten: []string{
+				"select bid, eid from vtocc_cached2 where 1 != 1",
+				"select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'foo')",
+			},
+			RowsAffected: 1,
+			Table:        "vtocc_cached2",
+			Misses:       1,
+		},
+		// (1.foo, 2.foo)
+		&framework.TestCase{
+			Name:  "out of order columns list, use cache",
+			Query: "select bid, eid from vtocc_cached2 where eid = 1 and bid = 'foo'",
+			Result: [][]string{
+				{"foo", "1"},
+			},
+			RowsAffected: 1,
+			Table:        "vtocc_cached2",
+			Hits:         1,
+		},
+		// (1.foo, 1.bar, 2.foo)
+		&framework.TestCase{
+			Name:  "pk_in for composite pk table, two fetches from db (absent)",
+			Query: "select eid, bid, name, foo from vtocc_cached2 where eid = 1 and bid in('absent1', 'absent2')",
+			Rewritten: []string{
+				"select eid, bid, name, foo from vtocc_cached2 where 1 != 1",
+				"select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'absent1') or (eid = 1 and bid = 'absent2')",
+			},
+			Plan:   "PK_IN",
+			Table:  "vtocc_cached2",
+			Absent: 2,
+		},
+		// (1.foo, 1.bar, 2.foo)
+		&framework.TestCase{
+			Name:  "pk_in for composite pk table, 1 fetch from db",
+			Query: "select eid, bid, name, foo from vtocc_cached2 where eid = 1 and bid in('foo', 'bar')",
+			Result: [][]string{
+				{"1", "foo", "abcd1", "efgh"},
+				{"1", "bar", "abcd1", "efgh"},
+			},
+			Rewritten: []string{
+				"select eid, bid, name, foo from vtocc_cached2 where 1 != 1",
+				"select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')",
+			},
+			RowsAffected: 2,
+			Plan:         "PK_IN",
+			Table:        "vtocc_cached2",
+			Hits:         1,
+			Misses:       1,
+		},
+		// (1.foo, 1.bar, 2.foo)
+		&framework.TestCase{
+			Name:  "pk_in for composite pk table, 0 fetch from db",
+			Query: "select eid, bid, name, foo from vtocc_cached2 where eid = 1 and bid in('foo', 'bar')",
+			Result: [][]string{
+				{"1", "foo", "abcd1", "efgh"},
+				{"1", "bar", "abcd1", "efgh"},
+			},
+			RowsAffected: 2,
+			Plan:         "PK_IN",
+			Table:        "vtocc_cached2",
+			Hits:         2,
+		},
+		// (1.foo, 1.bar, 2.foo, 2.bar)
+		&framework.TestCase{
+			Name:  "select_subquery for composite pk table, 1 fetch from db",
+			Query: "select eid, bid, name, foo from vtocc_cached2 where eid = 2 and name='abcd2'",
+			Result: [][]string{
+				{"2", "foo", "abcd2", "efgh"},
+				{"2", "bar", "abcd2", "efgh"},
+			},
+			Rewritten: []string{
+				"select eid, bid, name, foo from vtocc_cached2 where 1 != 1",
+				"select eid, bid from vtocc_cached2 use index (aname2) where eid = 2 and name = 'abcd2' limit 10001",
+				"select eid, bid, name, foo from vtocc_cached2 where (eid = 2 and bid = 'bar')",
+			},
+			RowsAffected: 2,
+			Plan:         "SELECT_SUBQUERY",
+			Table:        "vtocc_cached2",
+			Hits:         1,
+			Misses:       1,
+		},
+		// (1.foo, 1.bar, 2.foo, 2.bar)
+		&framework.TestCase{
+			Name:  "verify 1.bar is in cache",
+			Query: "select bid, eid from vtocc_cached2 where eid = 1 and bid = 'bar'",
+			Result: [][]string{
+				{"bar", "1"},
+			},
+			Rewritten: []string{
+				"select bid, eid from vtocc_cached2 where 1 != 1",
+			},
+			RowsAffected: 1,
+			Table:        "vtocc_cached2",
+			Hits:         1,
+		},
+		// (1.foo, 1.bar, 2.foo, 2.bar)
+		&framework.MultiCase{
+			Name: "update",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				framework.TestQuery("update vtocc_cached2 set foo='fghi' where bid = 'bar'"),
+				&framework.TestCase{
+					Query:         "commit",
+					Table:         "vtocc_cached2",
+					Invalidations: 2,
+				},
+				&framework.TestCase{
+					Query: "select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
+					Result: [][]string{
+						{"1", "bar", "abcd1", "fghi"},
+					},
+					Rewritten: []string{
+						"select * from vtocc_cached2 where 1 != 1",
+						"select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')",
+					},
+					RowsAffected: 1,
+					Table:        "vtocc_cached2",
+					Misses:       1,
+				},
+			},
+		},
+		// (1.foo, 1.bar, 2.foo, 2.bar)
+		&framework.MultiCase{
+			Name: "this will not invalidate the cache",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				framework.TestQuery("update vtocc_cached2 set foo='fghi' where bid = 'bar'"),
+				framework.TestQuery("rollback"),
+				&framework.TestCase{
+					Query: "select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
+					Result: [][]string{
+						{"1", "bar", "abcd1", "fghi"},
+					},
+					RowsAffected: 1,
+					Table:        "vtocc_cached2",
+					Hits:         1,
+				},
+			},
+		},
+		// (1.foo, 1.bar, 2.foo, 2.bar)
+		&framework.MultiCase{
+			Name: "upsert should invalidate rowcache",
+			Cases: []framework.Testable{
+				&framework.TestCase{
+					Query: "select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
+					Result: [][]string{
+						{"1", "bar", "abcd1", "fghi"},
+					},
+					RowsAffected: 1,
+					Table:        "vtocc_cached2",
+					Hits:         1,
+				},
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert into vtocc_cached2 values(1, 'bar', 'abcd1', 'fghi') on duplicate key update foo='fghi'",
+					Rewritten: []string{
+						"insert into vtocc_cached2 values (1, 'bar', 'abcd1', 'fghi') /* _stream vtocc_cached2 (eid bid ) (1 'YmFy' )",
+						"update vtocc_cached2 set foo = 'fghi' where (eid = 1 and bid = 'bar') /* _stream vtocc_cached2 (eid bid ) (1 'YmFy' )",
+					},
+					Table: "vtocc_cached2",
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
+					Result: [][]string{
+						{"1", "bar", "abcd1", "fghi"},
+					},
+					Rewritten: []string{
+						"select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')",
+					},
+					RowsAffected: 1,
+					Table:        "vtocc_cached2",
+					Misses:       1,
+				},
+			},
+		},
+		// (1.foo, 2.foo, 2.bar)
+		&framework.MultiCase{
+			Name: "delete",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vtocc_cached2 where eid = 1 and bid = 'bar'"),
+				&framework.TestCase{
+					Query:         "commit",
+					Table:         "vtocc_cached2",
+					Invalidations: 1,
+				},
+				&framework.TestCase{
+					Query: "select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
+					Rewritten: []string{
+						"select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')",
+					},
+					Table:  "vtocc_cached2",
+					Absent: 1,
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("insert into vtocc_cached2(eid, bid, name, foo) values (1, 'bar', 'abcd1', 'efgh')"),
+				&framework.TestCase{
+					Query: "commit",
+					Table: "vtocc_cached2",
+				},
+			},
+		},
+		// (1.foo, 2.foo, 2.bar)
+		&framework.TestCase{
+			Name:  "Verify 1.foo is in cache",
+			Query: "select * from vtocc_cached2 where eid = 1 and bid = 'foo'",
+			Result: [][]string{
+				{"1", "foo", "abcd1", "efgh"},
+			},
+			Rewritten: []string{
+				"select * from vtocc_cached2 where 1 != 1",
+			},
+			RowsAffected: 1,
+			Table:        "vtocc_cached2",
+			Hits:         1,
+		},
+		// DDL
+		framework.TestQuery("alter table vtocc_cached2 comment 'test'"),
+		// (1.foo)
+		&framework.TestCase{
+			Name:  "Verify cache is empty after DDL",
+			Query: "select * from vtocc_cached2 where eid = 1 and bid = 'foo'",
+			Result: [][]string{
+				{"1", "foo", "abcd1", "efgh"},
+			},
+			Rewritten: []string{
+				"select * from vtocc_cached2 where 1 != 1",
+				"select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'foo')",
+			},
+			RowsAffected: 1,
+			Table:        "vtocc_cached2",
+			Misses:       1,
+		},
+		// (1.foo)
+		&framework.TestCase{
+			Name:  "Verify row is cached",
+			Query: "select * from vtocc_cached2 where eid = 1 and bid = 'foo'",
+			Result: [][]string{
+				{"1", "foo", "abcd1", "efgh"},
+			},
+			RowsAffected: 1,
+			Table:        "vtocc_cached2",
+			Hits:         1,
+		},
+	}
+	for _, tcase := range testCases {
+		if err := tcase.Test("", client); err != nil {
+			t.Error(err)
+		}
+	}
+}
