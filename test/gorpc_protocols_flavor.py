@@ -53,4 +53,8 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
         'grpc-queryservice',
         ]
 
+  def vttest_protocol(self):
+    return 'gorpc'
+
+
 protocols_flavor.register_flavor('gorpc', GoRpcProtocolsFlavor)

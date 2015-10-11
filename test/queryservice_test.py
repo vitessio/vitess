@@ -26,9 +26,6 @@ def main():
   parser = optparse.OptionParser(usage='usage: %prog [options] [test_names]')
   parser.add_option('-m', '--memcache', action='store_true', default=False,
                     help='starts a memcache d, and tests rowcache')
-  parser.add_option(
-      '-e', '--env', default='vttablet',
-      help='Environment that will be used. Valid options: vttablet, vtocc')
   utils.add_options(parser)
   options, args = parser.parse_args()
 
@@ -42,7 +39,7 @@ def run_tests(options, args):
   suite = unittest.TestSuite()
   if args:
     if args[0] == 'teardown':
-      test_env.TestEnv(options.env).tearDown()
+      test_env.TestEnv().tearDown()
       exit(0)
     for arg in args:
       if hasattr(nocache_tests.TestNocache, arg):
@@ -62,11 +59,11 @@ def run_tests(options, args):
     for m in modules:
       suite.addTests(unittest.TestLoader().loadTestsFromModule(m))
 
-  env = test_env.TestEnv(options.env)
+  env = test_env.TestEnv()
   try:
     env.memcache = options.memcache
     env.setUp()
-    print 'Starting queryservice_test.py: %s' % options.env
+    print 'Starting queryservice_test.py'
     sys.stdout.flush()
     framework.TestCase.setenv(env)
     result = unittest.TextTestRunner(

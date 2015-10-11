@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	port        = flag.Int("port", 6612, "vtocc port")
+	port        = flag.Int("port", 6612, "vttablet port")
 	mysqlPort   = flag.Int("mysql_port", 3306, "mysql port")
 	tabletUID   = flag.Uint("tablet_uid", 41983, "tablet uid")
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")

@@ -120,24 +120,10 @@
 			"Shard": 4,
 			"RetryMax": 0
 		},
-		"queryservice_vtocc": {
+		"queryservice": {
 			"File": "queryservice_test.py",
 			"Args": [
-				"-m",
-				"-e",
-				"vtocc"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0
-		},
-		"queryservice_vttablet": {
-			"File": "queryservice_test.py",
-			"Args": [
-				"-m",
-				"-e",
-				"vttablet"
+				"-m"
 			],
 			"Command": [],
 			"Manual": false,
