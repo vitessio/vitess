@@ -46,7 +46,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	logStats.CacheInvalidations = 3
 	logStats.TransactionID = 131
 	logStats.ctx = callerid.NewContext(
-		context.TODO(),
+		context.Background(),
 		callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
 		callerid.NewImmediateCallerID("immediate-caller"),
 	)
