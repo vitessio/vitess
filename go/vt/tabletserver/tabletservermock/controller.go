@@ -92,10 +92,6 @@ func (tqsc *Controller) ReloadSchema() {
 	tqsc.ReloadSchemaCount++
 }
 
-//ClearQueryPlanCache is part of the tabletserver.Controller interface
-func (tqsc *Controller) ClearQueryPlanCache() {
-}
-
 // RegisterQueryRuleSource is part of the tabletserver.Controller interface
 func (tqsc *Controller) RegisterQueryRuleSource(ruleSource string) {
 }

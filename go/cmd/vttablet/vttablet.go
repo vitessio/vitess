@@ -83,23 +83,18 @@ func main() {
 	}
 	dbcfgs.App.EnableRowcache = *enableRowcache
 
-	// creates and registers the query service
-	qsc := tabletserver.NewServer()
-	qsc.Register()
-	binlog.RegisterUpdateStreamService(mycnf)
-
 	if *tableAclConfig != "" {
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
-		tableacl.Init(
-			*tableAclConfig,
-			func() {
-				qsc.ClearQueryPlanCache()
-			},
-		)
+		tableacl.Init(*tableAclConfig)
 	} else if *enforceTableACLConfig {
 		log.Error("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 		exit.Return(1)
 	}
+
+	// creates and registers the query service
+	qsc := tabletserver.NewServer()
+	qsc.Register()
+	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Create mysqld and register the health reporter (needs to be done
 	// before initializing the agent, so the initial health check

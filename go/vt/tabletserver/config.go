@@ -209,9 +209,6 @@ type Controller interface {
 	// IsHealthy returns the health status of the QueryService
 	IsHealthy() error
 
-	// ClearQueryPlanCache clears internal query plan cache
-	ClearQueryPlanCache()
-
 	// ReloadSchema makes the quey service reload its schema cache
 	ReloadSchema()
 

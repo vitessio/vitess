@@ -493,11 +493,6 @@ func (tsv *TabletServer) ReloadSchema() {
 	tsv.qe.schemaInfo.triggerReload()
 }
 
-// ClearQueryPlanCache clears internal query plan cache
-func (tsv *TabletServer) ClearQueryPlanCache() {
-	tsv.qe.schemaInfo.ClearQueryPlanCache()
-}
-
 // QueryService returns the QueryService part of TabletServer.
 func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
