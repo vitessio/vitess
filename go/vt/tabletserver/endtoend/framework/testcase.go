@@ -126,9 +126,9 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 		// "; ". So, we have to get rid of the additional artifacts
 		// to make it match expected results.
 		unstripped := strings.Split(queryInfo.RewrittenSQL(), "; ")
-		var got []string
+		got := make([]string, 0, len(unstripped))
 		for _, str := range unstripped {
-			if str == "*/" {
+			if str == "" || str == "*/" {
 				continue
 			}
 			got = append(got, str)

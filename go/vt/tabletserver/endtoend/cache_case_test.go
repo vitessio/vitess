@@ -525,3 +525,116 @@ func TestCacheCases2(t *testing.T) {
 		}
 	}
 }
+
+func TestCacheCasesOverrides(t *testing.T) {
+	client := framework.NewDefaultClient()
+
+	testCases := []framework.Testable{
+		&framework.TestCase{
+			Name:  "select from view (cache miss)",
+			Query: "select * from vtocc_view where key2 = 1",
+			Result: [][]string{
+				{"1", "10", "1", "3"},
+			},
+			Rewritten: []string{
+				"select * from vtocc_view where 1 != 1",
+				"select key2, key1, data1, data2 from vtocc_view where key2 in (1)",
+			},
+			RowsAffected: 1,
+			Plan:         "PK_IN",
+			Table:        "vtocc_view",
+			Misses:       1,
+		},
+		&framework.TestCase{
+			Name:  "select from view (cache hit)",
+			Query: "select * from vtocc_view where key2 = 1",
+			Result: [][]string{
+				{"1", "10", "1", "3"},
+			},
+			Rewritten:    []string{},
+			RowsAffected: 1,
+			Plan:         "PK_IN",
+			Table:        "vtocc_view",
+			Hits:         1,
+		},
+		&framework.TestCase{
+			Name:  "update part1 table of view",
+			Query: "update vtocc_part1 set data1 = 2 where key2 = 1",
+			Rewritten: []string{
+				"begin",
+				"update vtocc_part1 set data1 = 2 where key2 in (1) /* _stream vtocc_part1 (key2 ) (1 )",
+				"commit",
+			},
+			RowsAffected: 1,
+			Plan:         "DML_PK",
+		},
+		&framework.TestCase{
+			Name:  "verify cache got invalidated",
+			Query: "select * from vtocc_view where key2 = 1",
+			Result: [][]string{
+				{"1", "10", "2", "3"},
+			},
+			Rewritten: []string{
+				"select key2, key1, data1, data2 from vtocc_view where key2 in (1)",
+			},
+			RowsAffected: 1,
+			Plan:         "PK_IN",
+			Table:        "vtocc_view",
+			Misses:       1,
+		},
+		&framework.TestCase{
+			Name:  "verify cache got reloaded",
+			Query: "select * from vtocc_view where key2 = 1",
+			Result: [][]string{
+				{"1", "10", "2", "3"},
+			},
+			Rewritten:    []string{},
+			RowsAffected: 1,
+			Plan:         "PK_IN",
+			Table:        "vtocc_view",
+			Hits:         1,
+		},
+		&framework.TestCase{
+			Name:  "update part2 table of view",
+			Query: "update vtocc_part2 set data2 = 2 where key3 = 1",
+			Rewritten: []string{
+				"begin",
+				"update vtocc_part2 set data2 = 2 where key3 in (1) /* _stream vtocc_part2 (key3 ) (1 )",
+				"commit",
+			},
+			RowsAffected: 1,
+			Plan:         "DML_PK",
+		},
+		&framework.TestCase{
+			Name:  "re-verify cache got invalidated",
+			Query: "select * from vtocc_view where key2 = 1",
+			Result: [][]string{
+				{"1", "10", "2", "2"},
+			},
+			Rewritten: []string{
+				"select key2, key1, data1, data2 from vtocc_view where key2 in (1)",
+			},
+			RowsAffected: 1,
+			Plan:         "PK_IN",
+			Table:        "vtocc_view",
+			Misses:       1,
+		},
+		&framework.TestCase{
+			Name:  "re-verify cache got reloaded",
+			Query: "select * from vtocc_view where key2 = 1",
+			Result: [][]string{
+				{"1", "10", "2", "2"},
+			},
+			Rewritten:    []string{},
+			RowsAffected: 1,
+			Plan:         "PK_IN",
+			Table:        "vtocc_view",
+			Hits:         1,
+		},
+	}
+	for _, tcase := range testCases {
+		if err := tcase.Test("", client); err != nil {
+			t.Error(err)
+		}
+	}
+}
