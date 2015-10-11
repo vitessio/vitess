@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 )
@@ -97,7 +96,7 @@ func TestTableACLNoAccess(t *testing.T) {
 		query: "select * from vtocc_acl_all_user_read_only where key1=1",
 	}}
 	for _, tcase := range streamCases {
-		err := client.StreamExecute(tcase.query, nil, func(*mproto.QueryResult) error { return nil })
+		_, err := client.StreamExecute(tcase.query, nil)
 		if tcase.err == "" {
 			if err != nil {
 				t.Error(err)

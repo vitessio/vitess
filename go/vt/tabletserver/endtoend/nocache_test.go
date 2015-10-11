@@ -472,3 +472,10 @@ func TestDBAStatements(t *testing.T) {
 		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
 	}
 }
+
+func TestStatus(t *testing.T) {
+	str := framework.DebugStatus()
+	if !strings.Contains(str, "</html>") {
+		t.Errorf("/debug/status: %s\nnot a valid html", str)
+	}
+}

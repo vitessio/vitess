@@ -93,8 +93,9 @@ func (client *QueryClient) Execute(query string, bindvars map[string]interface{}
 }
 
 // StreamExecute executes a query & streams the results.
-func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}, sendReply func(*mproto.QueryResult) error) error {
-	return client.server.StreamExecute(
+func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}) (*mproto.QueryResult, error) {
+	result := &mproto.QueryResult{}
+	err := client.server.StreamExecute(
 		client.ctx,
 		&client.target,
 		&proto.Query{
@@ -102,8 +103,19 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]inter
 			BindVariables: bindvars,
 			TransactionId: client.transactionID,
 		},
-		sendReply,
+		func(res *mproto.QueryResult) error {
+			if result.Fields == nil {
+				result.Fields = res.Fields
+			}
+			result.Rows = append(result.Rows, res.Rows...)
+			result.RowsAffected += uint64(len(res.Rows))
+			return nil
+		},
 	)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // ExecuteBatch executes a batch of queries.
