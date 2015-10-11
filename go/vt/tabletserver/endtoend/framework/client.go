@@ -118,6 +118,20 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]inter
 	return result, nil
 }
 
+// Stream streams the resutls of a query.
+func (client *QueryClient) Stream(query string, bindvars map[string]interface{}, sendFunc func(*mproto.QueryResult) error) error {
+	return client.server.StreamExecute(
+		client.ctx,
+		&client.target,
+		&proto.Query{
+			Sql:           query,
+			BindVariables: bindvars,
+			TransactionId: client.transactionID,
+		},
+		sendFunc,
+	)
+}
+
 // ExecuteBatch executes a batch of queries.
 func (client *QueryClient) ExecuteBatch(queries []proto.BoundQuery, asTransaction bool) (*proto.QueryResultList, error) {
 	var qr = &proto.QueryResultList{}

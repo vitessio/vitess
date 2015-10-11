@@ -148,6 +148,11 @@ func TestQueryRules(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 	}
+	_, err = client.StreamExecute(query, bv)
+	want = "error: Query disallowed due to rule: disallow bindvar 'asdfg'"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want %s", err, want)
+	}
 
 	err = framework.DefaultServer.SetQueryRules("endtoend", nil)
 	if err != nil {

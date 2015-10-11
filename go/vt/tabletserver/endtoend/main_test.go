@@ -129,7 +129,7 @@ insert into vtocc_cached2 values (1, 'bar', 'abcd1', 'efgh');
 insert into vtocc_cached2 values (2, 'foo', 'abcd2', 'efgh');
 insert into vtocc_cached2 values (2, 'bar', 'abcd2', 'efgh');
 
-create table vtocc_big(id int, string1 varchar(128), string2 varchar(100), string3 char(1), string4 varchar(50), string5 varchar(50), date1 date, string6 varchar(16), string7 varchar(120), bigint1 bigint(20), bigint2 bigint(20), date2 date, integer1 int, tinyint1 tinyint(4), primary key(id)) comment 'vtocc_big';
+create table vtocc_big(id int, string1 varchar(128), string2 varchar(100), string3 char(1), string4 varchar(50), string5 varchar(50), string6 varchar(16), string7 varchar(120), bigint1 bigint(20), bigint2 bigint(20), integer1 int, tinyint1 tinyint(4), primary key(id)) comment 'vtocc_big';
 
 create table vtocc_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny)) comment 'vtocc_nocache';
 create table vtocc_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id)) comment 'vtocc_nocache';

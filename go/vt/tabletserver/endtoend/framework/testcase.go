@@ -104,7 +104,7 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 	}
 
 	if tc.Result != nil {
-		result := convertRows(qr)
+		result := RowsToStrings(qr)
 		if !reflect.DeepEqual(result, tc.Result) {
 			errs = append(errs, fmt.Sprintf("Result mismatch:\n'%+v' does not match\n'%+v'", result, tc.Result))
 		}
@@ -179,7 +179,8 @@ func exec(client *QueryClient, query string, bv map[string]interface{}) (*mproto
 	return client.Execute(query, bv)
 }
 
-func convertRows(qr *mproto.QueryResult) [][]string {
+// RowsToStrings converts qr.Rows to [][]string.
+func RowsToStrings(qr *mproto.QueryResult) [][]string {
 	var result [][]string
 	for _, row := range qr.Rows {
 		var srow []string
