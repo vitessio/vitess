@@ -1,6 +1,9 @@
 package discovery
 
-import pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+import (
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+)
 
 func newFakeHealthCheck() *fakeHealthCheck {
 	return &fakeHealthCheck{endPoints: make(map[string]*pbt.EndPoint)}
@@ -33,6 +36,11 @@ func (fhc *fakeHealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard st
 
 // GetEndPointStatsFromTarget returns all EndPointStats for the given target.
 func (fhc *fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*EndPointStats {
+	return nil
+}
+
+// GetConnection returns the TabletConn of the given endpoint.
+func (fhc *fakeHealthCheck) GetConnection(endPoint *pbt.EndPoint) tabletconn.TabletConn {
 	return nil
 }
 
