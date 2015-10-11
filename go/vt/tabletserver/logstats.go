@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/streamlog"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"golang.org/x/net/context"
 )
@@ -67,6 +68,16 @@ func newLogStats(methodName string, ctx context.Context) *LogStats {
 func (stats *LogStats) Send() {
 	stats.EndTime = time.Now()
 	StatsLogger.Send(stats)
+}
+
+// ImmediateCaller returns the immediate caller stored in LogStats.ctx
+func (stats *LogStats) ImmediateCaller() string {
+	return callerid.GetUsername(callerid.ImmediateCallerIDFromContext(stats.ctx))
+}
+
+// EffectiveCaller returns the effective caller stored in LogStats.ctx
+func (stats *LogStats) EffectiveCaller() string {
+	return callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(stats.ctx))
 }
 
 // EventTime returns the time the event was created.
@@ -191,12 +202,15 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 func (stats *LogStats) Format(params url.Values) string {
 	_, fullBindParams := params["full"]
 
+	// TODO: remove username here we fully enforce immediate caller id
 	remoteAddr, username := stats.RemoteAddrUsername()
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t%v\t%q\t\n",
+		"%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t%v\t%q\t\n",
 		stats.Method,
 		remoteAddr,
 		username,
+		stats.ImmediateCaller(),
+		stats.EffectiveCaller(),
 		stats.StartTime.Format(time.StampMicro),
 		stats.EndTime.Format(time.StampMicro),
 		stats.TotalTime().Seconds(),

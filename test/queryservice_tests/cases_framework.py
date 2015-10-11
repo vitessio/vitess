@@ -26,6 +26,8 @@ class Log(object):
       (self.method,
        self.remote_address,
        self.username,
+       self.immediate_caller,
+       self.effective_caller,
        self.start_time,
        self.end_time,
        self.total_time,
