@@ -120,16 +120,6 @@
 			"Shard": 4,
 			"RetryMax": 0
 		},
-		"queryservice": {
-			"File": "queryservice_test.py",
-			"Args": [
-				"-m"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0
-		},
 		"reparent": {
 			"File": "reparent.py",
 			"Args": [],
