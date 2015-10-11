@@ -88,7 +88,7 @@ func initTableACL() error {
 	}
 	file.Close()
 	tableacl.Register("simpleacl", &simpleacl.Factory{})
-	tableacl.Init(file.Name(), func() { framework.DefaultServer.ClearQueryPlanCache() })
+	tableacl.Init(file.Name())
 	return nil
 }
 

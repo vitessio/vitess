@@ -37,12 +37,12 @@ func TestInitWithInvalidFilePath(t *testing.T) {
 			t.Fatalf("init should fail for an invalid config file path")
 		}
 	}()
-	Init("/invalid_file_path", func() {})
+	Init("/invalid_file_path")
 }
 
 func TestInitWithValidConfig(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
-	Init(testfiles.Locate("tableacl/test_table_tableacl_config.json"), func() {})
+	Init(testfiles.Locate("tableacl/test_table_tableacl_config.json"))
 }
 
 func TestInitFromProto(t *testing.T) {

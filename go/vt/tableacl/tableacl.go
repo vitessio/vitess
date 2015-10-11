@@ -82,11 +82,12 @@ func Init(configFile string, aclCB func()) {
 			panic(fmt.Errorf("unable to parse tableACL config file: %v", err))
 		}
 	}
-	aclCallback = aclCB
 	if err = load(config); err != nil {
 		log.Errorf("tableACL initialization error: %v", err)
 		panic(fmt.Errorf("tableACL initialization error: %v", err))
 	}
+	aclCallback = aclCB
+	aclCallback()
 }
 
 // InitFromProto inits table ACLs from a proto.
@@ -137,9 +138,7 @@ func load(config *pb.Config) error {
 	currentACL.config = *config
 	defer func() {
 		currentACL.Unlock()
-		if aclCallback != nil {
-			aclCallback()
-		}
+		aclCallback()
 	}()
 
 	return nil
