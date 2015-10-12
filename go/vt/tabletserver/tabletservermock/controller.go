@@ -14,8 +14,21 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 )
 
+// BroadcastData is used by the mock Controller to send data
+// so the tests can check what was sent.
+type BroadcastData struct {
+	// TERTimestamp stores the last broadcast timestamp
+	TERTimestamp int64
+
+	// RealtimeStats stores the last broadcast stats
+	RealtimeStats pb.RealtimeStats
+}
+
 // Controller is a mock tabletserver.Controller
 type Controller struct {
+	// CurrentTarget stores the last known target
+	CurrentTarget pb.Target
+
 	// QueryServiceEnabled is a state variable
 	QueryServiceEnabled bool
 
@@ -25,14 +38,14 @@ type Controller struct {
 	// SetServingTypeError is the return value for SetServingType
 	SetServingTypeError error
 
-	// StartServiceError is the return value for StartService
-	StartServiceError error
-
 	// IsHealthy is the return value for IsHealthy
 	IsHealthyError error
 
 	// ReloadSchemaCount counts how many times ReloadSchema was called
 	ReloadSchemaCount int
+
+	// BroadcastData is a channel where we send BroadcastHealth data
+	BroadcastData chan *BroadcastData
 }
 
 // NewController returns a mock of tabletserver.Controller
@@ -40,9 +53,9 @@ func NewController() *Controller {
 	return &Controller{
 		QueryServiceEnabled: false,
 		InitDBConfigError:   nil,
-		StartServiceError:   nil,
 		IsHealthyError:      nil,
 		ReloadSchemaCount:   0,
+		BroadcastData:       make(chan *BroadcastData, 10),
 	}
 }
 
@@ -55,21 +68,29 @@ func (tqsc *Controller) AddStatusPart() {
 }
 
 // InitDBConfig is part of the tabletserver.Controller interface
-func (tqsc *Controller) InitDBConfig(*pb.Target, *dbconfigs.DBConfigs, []tabletserver.SchemaOverride, mysqlctl.MysqlDaemon) error {
-	tqsc.QueryServiceEnabled = tqsc.InitDBConfigError == nil
+func (tqsc *Controller) InitDBConfig(target *pb.Target, dbConfigs *dbconfigs.DBConfigs, schemaOverrides []tabletserver.SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
+	if tqsc.InitDBConfigError == nil {
+		tqsc.CurrentTarget = *target
+		tqsc.QueryServiceEnabled = true
+	} else {
+		tqsc.QueryServiceEnabled = false
+	}
 	return tqsc.InitDBConfigError
 }
 
 // SetServingType is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetServingType(topodata.TabletType, bool) error {
-	tqsc.QueryServiceEnabled = tqsc.SetServingTypeError == nil
+func (tqsc *Controller) SetServingType(tabletType topodata.TabletType, serving bool) error {
+	if tqsc.SetServingTypeError == nil {
+		tqsc.CurrentTarget.TabletType = tabletType
+		tqsc.QueryServiceEnabled = serving
+	}
 	return tqsc.SetServingTypeError
 }
 
 // StartService is part of the tabletserver.Controller interface
 func (tqsc *Controller) StartService(*pb.Target, *dbconfigs.DBConfigs, []tabletserver.SchemaOverride, mysqlctl.MysqlDaemon) error {
-	tqsc.QueryServiceEnabled = tqsc.StartServiceError == nil
-	return tqsc.StartServiceError
+	tqsc.QueryServiceEnabled = true
+	return nil
 }
 
 // StopService is part of the tabletserver.Controller interface
@@ -116,4 +137,8 @@ func (tqsc *Controller) QueryService() queryservice.QueryService {
 
 // BroadcastHealth is part of the tabletserver.Controller interface
 func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
+	tqsc.BroadcastData <- &BroadcastData{
+		TERTimestamp:  terTimestamp,
+		RealtimeStats: *stats,
+	}
 }

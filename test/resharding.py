@@ -420,20 +420,19 @@ primary key (name)
     # Enforce health check because it's not running by default as
     # tablets are not started with it.
     utils.run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'replica'])
-    stream_health, _ = utils.run_vtctl(['VtTabletStreamHealth',
-                                        '-count', '1',
-                                        tablet.tablet_alias],
-                                       trap_output=True, auto_log=True)
-    logging.debug('Got health: %s', stream_health)
-    data = json.loads(stream_health)
-    self.assertIn('realtime_stats', data)
-    self.assertNotIn('health_error', data['realtime_stats'])
+    stream_health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                          '-count', '1',
+                                          tablet.tablet_alias])
+    logging.debug('Got health: %s', str(stream_health))
+    self.assertNotIn('serving', stream_health)
+    self.assertIn('realtime_stats', stream_health)
+    self.assertNotIn('health_error', stream_health['realtime_stats'])
     # count is > 0 and therefore not omitted by the Go JSON marshaller.
-    self.assertIn('binlog_players_count', data['realtime_stats'])
+    self.assertIn('binlog_players_count', stream_health['realtime_stats'])
     self.assertEqual(blp_stats['BinlogPlayerMapSize'],
-                     data['realtime_stats']['binlog_players_count'])
+                     stream_health['realtime_stats']['binlog_players_count'])
     self.assertEqual(blp_stats['BinlogPlayerSecondsBehindMaster'],
-                     data['realtime_stats'].get(
+                     stream_health['realtime_stats'].get(
                          'seconds_behind_master_filtered_replication', 0))
 
   def _test_keyrange_constraints(self):
@@ -654,8 +653,14 @@ primary key (name)
     # master 3 should not interfere (we run it to be sure).
     utils.run_vtctl(['RunHealthCheck', shard_3_master.tablet_alias, 'replica'],
                     auto_log=True)
-    utils.check_tablet_query_service(self, shard_2_master, False, False)
-    utils.check_tablet_query_service(self, shard_3_master, False, False)
+    for master in [shard_2_master, shard_3_master]:
+      utils.check_tablet_query_service(self, master, False, False)
+      stream_health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                            '-count', '1',
+                                            master.tablet_alias])
+      logging.debug('Got health: %s', str(stream_health))
+      self.assertIn('realtime_stats', stream_health)
+      self.assertNotIn('serving', stream_health)
 
     # check the destination master 3 is healthy, even though its query
     # service is not running (if not healthy this would exception out)
