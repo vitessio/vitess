@@ -101,7 +101,7 @@ func (ctw *CellTabletsWatcher) loadTablets() {
 	ctw.mu.Lock()
 	for key, ep := range newEndPoints {
 		if _, ok := ctw.endPoints[key]; !ok {
-			ctw.hc.AddEndPoint(ctw.cell, ep)
+			ctw.hc.AddEndPoint(ctw.cell, "", ep)
 		}
 	}
 	for key, ep := range ctw.endPoints {

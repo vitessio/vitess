@@ -33,8 +33,8 @@ func TestHealthCheck(t *testing.T) {
 	l := newListener()
 	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond).(*HealthCheckImpl)
 	hc.SetListener(l)
-	hc.AddEndPoint("cell", ep)
-	t.Logf(`hc = HealthCheck(); hc.AddEndPoint("cell", {Host: "a", PortMap: {"vt": 1}})`)
+	hc.AddEndPoint("cell", "", ep)
+	t.Logf(`hc = HealthCheck(); hc.AddEndPoint("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
 
 	// no endpoint before getting first StreamHealthResponse
 	epsList := hc.GetEndPointStatsFromKeyspaceShard("k", "s")
@@ -127,10 +127,11 @@ func newListener() *listener {
 	return &listener{output: make(chan *EndPointStats, 1)}
 }
 
-func (l *listener) StatsUpdate(endPoint *pbt.EndPoint, cell string, target *pbq.Target, reparentTimestamp int64, stats *pbq.RealtimeStats) {
+func (l *listener) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, reparentTimestamp int64, stats *pbq.RealtimeStats) {
 	l.output <- &EndPointStats{
 		EndPoint: endPoint,
 		Cell:     cell,
+		Name:     name,
 		Target:   target,
 		TabletExternallyReparentedTimestamp: reparentTimestamp,
 		Stats: stats,

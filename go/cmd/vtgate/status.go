@@ -236,7 +236,7 @@ func init() {
 		servenv.AddStatusPart("Topology Cache", topoTemplate, func() interface{} {
 			return resilientSrvTopoServer.CacheStatus()
 		})
-		servenv.AddStatusPart("Health Check Cache", healthCheckTemplate, func() interface{} {
+		servenv.AddStatusPart("Health Check Cache (NOT FOR QUERY ROUTING)", healthCheckTemplate, func() interface{} {
 			return healthCheck.CacheStatus()
 		})
 		servenv.AddStatusPart("Stats", statsTemplate, func() interface{} {
