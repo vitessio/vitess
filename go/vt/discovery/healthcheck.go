@@ -35,7 +35,7 @@ type HealthCheckStatsListener interface {
 // EndPointStats is returned when getting the set of endpoints.
 type EndPointStats struct {
 	EndPoint                            *pbt.EndPoint
-	Name                                string
+	Name                                string // name is an optional tag (e.g. alternative address)
 	Cell                                string
 	Target                              *pbq.Target
 	TabletExternallyReparentedTimestamp int64
@@ -266,6 +266,7 @@ func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener) {
 
 // AddEndPoint adds the endpoint, and starts health check.
 // It does not block.
+// name is an optional tag for the endpoint, e.g. an alternative address.
 func (hc *HealthCheckImpl) AddEndPoint(cell, name string, endPoint *pbt.EndPoint) {
 	go hc.checkConn(cell, name, endPoint)
 }
