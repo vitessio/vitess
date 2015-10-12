@@ -140,8 +140,8 @@ func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, comment string
 		return
 	}
 
-	if strings.Contains(comment, "vtocc_nocache") {
-		log.Infof("%s commented as vtocc_nocache. Will not be cached.", ti.Name)
+	if strings.Contains(comment, "vitess_nocache") {
+		log.Infof("%s commented as vitess_nocache. Will not be cached.", ti.Name)
 		return
 	}
 

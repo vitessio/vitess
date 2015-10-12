@@ -34,9 +34,9 @@ func TestStreamBigData(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer client.Execute("delete from vtocc_big", nil)
+	defer client.Execute("delete from vitess_big", nil)
 
-	qr, err := client.StreamExecute("select * from vtocc_big b1, vtocc_big b2 order by b1.id, b2.id", nil)
+	qr, err := client.StreamExecute("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -79,11 +79,11 @@ func TestStreamTerminate(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer client.Execute("delete from vtocc_big", nil)
+	defer client.Execute("delete from vitess_big", nil)
 
 	called := false
 	err = client.Stream(
-		"select * from vtocc_big b1, vtocc_big b2 order by b1.id, b2.id",
+		"select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id",
 		nil,
 		func(*mproto.QueryResult) error {
 			if !called {
@@ -117,7 +117,7 @@ func populateBigData(client *framework.QueryClient) error {
 
 	for i := 0; i < 100; i++ {
 		stri := strconv.Itoa(i)
-		query := "insert into vtocc_big values " +
+		query := "insert into vitess_big values " +
 			"(" + stri + ", " +
 			"'AAAAAAAAAAAAAAAAAA " + stri + "', " +
 			"'BBBBBBBBBBBBBBBBBB " + stri + "', " +
@@ -139,7 +139,7 @@ func populateBigData(client *framework.QueryClient) error {
 }
 
 func TestStreamError(t *testing.T) {
-	_, err := framework.NewClient().StreamExecute("select count(abcd) from vtocc_big", nil)
+	_, err := framework.NewClient().StreamExecute("select count(abcd) from vitess_big", nil)
 	want := "error: Unknown column"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)

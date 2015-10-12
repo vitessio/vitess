@@ -20,48 +20,48 @@ func TestTableACLNoAccess(t *testing.T) {
 		query string
 		err   string
 	}{{
-		query: "select * from vtocc_acl_no_access where key1=1",
+		query: "select * from vitess_acl_no_access where key1=1",
 		err:   aclErr,
 	}, {
-		query: "delete from vtocc_acl_no_access where key1=1",
+		query: "delete from vitess_acl_no_access where key1=1",
 		err:   aclErr,
 	}, {
-		query: "alter table vtocc_acl_no_access comment 'comment'",
+		query: "alter table vitess_acl_no_access comment 'comment'",
 		err:   aclErr,
 	}, {
-		query: "select * from vtocc_acl_read_only where key1=1",
+		query: "select * from vitess_acl_read_only where key1=1",
 	}, {
-		query: "delete from vtocc_acl_read_only where key1=1",
+		query: "delete from vitess_acl_read_only where key1=1",
 		err:   aclErr,
 	}, {
-		query: "alter table vtocc_acl_read_only comment 'comment'",
+		query: "alter table vitess_acl_read_only comment 'comment'",
 		err:   aclErr,
 	}, {
-		query: "select * from vtocc_acl_read_write where key1=1",
+		query: "select * from vitess_acl_read_write where key1=1",
 	}, {
-		query: "delete from vtocc_acl_read_write where key1=1",
+		query: "delete from vitess_acl_read_write where key1=1",
 	}, {
-		query: "alter table vtocc_acl_read_write comment 'comment'",
+		query: "alter table vitess_acl_read_write comment 'comment'",
 		err:   aclErr,
 	}, {
-		query: "select * from vtocc_acl_admin where key1=1",
+		query: "select * from vitess_acl_admin where key1=1",
 	}, {
-		query: "delete from vtocc_acl_admin where key1=1",
+		query: "delete from vitess_acl_admin where key1=1",
 	}, {
-		query: "alter table vtocc_acl_admin comment 'comment'",
+		query: "alter table vitess_acl_admin comment 'comment'",
 	}, {
-		query: "select * from vtocc_acl_unmatched where key1=1",
+		query: "select * from vitess_acl_unmatched where key1=1",
 	}, {
-		query: "delete from vtocc_acl_unmatched where key1=1",
+		query: "delete from vitess_acl_unmatched where key1=1",
 	}, {
-		query: "alter table vtocc_acl_unmatched comment 'comment'",
+		query: "alter table vitess_acl_unmatched comment 'comment'",
 	}, {
-		query: "select * from vtocc_acl_all_user_read_only where key1=1",
+		query: "select * from vitess_acl_all_user_read_only where key1=1",
 	}, {
-		query: "delete from vtocc_acl_all_user_read_only where key1=1",
+		query: "delete from vitess_acl_all_user_read_only where key1=1",
 		err:   aclErr,
 	}, {
-		query: "alter table vtocc_acl_all_user_read_only comment 'comment'",
+		query: "alter table vitess_acl_all_user_read_only comment 'comment'",
 		err:   aclErr,
 	}}
 
@@ -82,18 +82,18 @@ func TestTableACLNoAccess(t *testing.T) {
 		query string
 		err   string
 	}{{
-		query: "select * from vtocc_acl_no_access where key1=1",
+		query: "select * from vitess_acl_no_access where key1=1",
 		err:   aclErr,
 	}, {
-		query: "select * from vtocc_acl_read_only where key1=1",
+		query: "select * from vitess_acl_read_only where key1=1",
 	}, {
-		query: "select * from vtocc_acl_read_write where key1=1",
+		query: "select * from vitess_acl_read_write where key1=1",
 	}, {
-		query: "select * from vtocc_acl_admin where key1=1",
+		query: "select * from vitess_acl_admin where key1=1",
 	}, {
-		query: "select * from vtocc_acl_unmatched where key1=1",
+		query: "select * from vitess_acl_unmatched where key1=1",
 	}, {
-		query: "select * from vtocc_acl_all_user_read_only where key1=1",
+		query: "select * from vitess_acl_all_user_read_only where key1=1",
 	}}
 	for _, tcase := range streamCases {
 		_, err := client.StreamExecute(tcase.query, nil)
@@ -141,7 +141,7 @@ func TestQueryRules(t *testing.T) {
 	}
 
 	client := framework.NewClient()
-	query := "select * from vtocc_test where intval=:asdfg"
+	query := "select * from vitess_test where intval=:asdfg"
 	bv := map[string]interface{}{"asdfg": 1}
 	_, err = client.Execute(query, bv)
 	want = "error: Query disallowed due to rule: disallow bindvar 'asdfg'"

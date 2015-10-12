@@ -149,8 +149,8 @@ func TestQueryCache(t *testing.T) {
 
 	bindVars := map[string]interface{}{"ival1": 1, "ival2": 1}
 	client := framework.NewClient()
-	_, _ = client.Execute("select * from vtocc_test where intval=:ival1", bindVars)
-	_, _ = client.Execute("select * from vtocc_test where intval=:ival2", bindVars)
+	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
+	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
 	vend := framework.DebugVars()
 	if err := verifyIntValue(vend, "QueryCacheLength", 1); err != nil {
 		t.Error(err)
@@ -163,7 +163,7 @@ func TestQueryCache(t *testing.T) {
 	}
 
 	framework.Server.SetQueryCacheCap(10)
-	_, _ = client.Execute("select * from vtocc_test where intval=:ival1", bindVars)
+	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	vend = framework.DebugVars()
 	if err := verifyIntValue(vend, "QueryCacheLength", 2); err != nil {
 		t.Error(err)
@@ -172,7 +172,7 @@ func TestQueryCache(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, _ = client.Execute("select * from vtocc_test where intval=1", bindVars)
+	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
 	vend = framework.DebugVars()
 	if err := verifyIntValue(vend, "QueryCacheLength", 3); err != nil {
 		t.Error(err)
@@ -187,7 +187,7 @@ func TestMexResultSize(t *testing.T) {
 	framework.Server.SetMaxResultSize(2)
 
 	client := framework.NewClient()
-	query := "select * from vtocc_test"
+	query := "select * from vitess_test"
 	_, err := client.Execute(query, nil)
 	want := "error: Row count exceeded"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -208,7 +208,7 @@ func TestMexResultSize(t *testing.T) {
 func TestMaxDMLRows(t *testing.T) {
 	client := framework.NewClient()
 	_, err := client.Execute(
-		"insert into vtocc_a(eid, id, name, foo) values "+
+		"insert into vitess_a(eid, id, name, foo) values "+
 			"(3, 1, '', ''), (3, 2, '', ''), (3, 3, '', '')",
 		nil,
 	)
@@ -216,7 +216,7 @@ func TestMaxDMLRows(t *testing.T) {
 	defer catcher.Close()
 
 	// Verify all three rows are updated in a single DML.
-	_, err = client.Execute("update vtocc_a set foo='fghi' where eid = 3", nil)
+	_, err = client.Execute("update vitess_a set foo='fghi' where eid = 3", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -227,10 +227,10 @@ func TestMaxDMLRows(t *testing.T) {
 		return
 	}
 	want := "begin; " +
-		"select eid, id from vtocc_a where eid = 3 limit 10001 for update; " +
-		"update vtocc_a set foo = 'fghi' where " +
+		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
+		"update vitess_a set foo = 'fghi' where " +
 		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (3 3 ); */; " +
+		"/* _stream vitess_a (eid id ) (3 1 ) (3 2 ) (3 3 ); */; " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -240,7 +240,7 @@ func TestMaxDMLRows(t *testing.T) {
 	// split correctly.
 	defer framework.Server.SetMaxDMLRows(framework.Server.MaxDMLRows())
 	framework.Server.SetMaxDMLRows(2)
-	_, err = client.Execute("update vtocc_a set eid=2 where eid = 3", nil)
+	_, err = client.Execute("update vitess_a set eid=2 where eid = 3", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -251,19 +251,19 @@ func TestMaxDMLRows(t *testing.T) {
 		return
 	}
 	want = "begin; " +
-		"select eid, id from vtocc_a where eid = 3 limit 10001 for update; " +
-		"update vtocc_a set eid = 2 where " +
+		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
+		"update vitess_a set eid = 2 where " +
 		"(eid = 3 and id = 1) or (eid = 3 and id = 2) " +
-		"/* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 ); */; " +
-		"update vtocc_a set eid = 2 where (eid = 3 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (3 3 ) (2 3 ); */; " +
+		"/* _stream vitess_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 ); */; " +
+		"update vitess_a set eid = 2 where (eid = 3 and id = 3) " +
+		"/* _stream vitess_a (eid id ) (3 3 ) (2 3 ); */; " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
 	}
 
 	// Verify that a normal update is split correctly.
-	_, err = client.Execute("update vtocc_a set foo='fghi' where eid = 2", nil)
+	_, err = client.Execute("update vitess_a set foo='fghi' where eid = 2", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -274,18 +274,18 @@ func TestMaxDMLRows(t *testing.T) {
 		return
 	}
 	want = "begin; " +
-		"select eid, id from vtocc_a where eid = 2 limit 10001 for update; " +
-		"update vtocc_a set foo = 'fghi' where (eid = 2 and id = 1) or " +
-		"(eid = 2 and id = 2) /* _stream vtocc_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"update vtocc_a set foo = 'fghi' where (eid = 2 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (2 3 ); */; " +
+		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
+		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 1) or " +
+		"(eid = 2 and id = 2) /* _stream vitess_a (eid id ) (2 1 ) (2 2 ); */; " +
+		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 3) " +
+		"/* _stream vitess_a (eid id ) (2 3 ); */; " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
 	}
 
 	// Verufy that a delete is split correctly.
-	_, err = client.Execute("delete from vtocc_a where eid = 2", nil)
+	_, err = client.Execute("delete from vitess_a where eid = 2", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -296,11 +296,11 @@ func TestMaxDMLRows(t *testing.T) {
 		return
 	}
 	want = "begin; " +
-		"select eid, id from vtocc_a where eid = 2 limit 10001 for update; " +
-		"delete from vtocc_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) " +
-		"/* _stream vtocc_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"delete from vtocc_a where (eid = 2 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (2 3 ); */; " +
+		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
+		"delete from vitess_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) " +
+		"/* _stream vitess_a (eid id ) (2 1 ) (2 2 ); */; " +
+		"delete from vitess_a where (eid = 2 and id = 3) " +
+		"/* _stream vitess_a (eid id ) (2 3 ); */; " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -318,7 +318,7 @@ func TestQueryTimeout(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	_, err = client.Execute("select sleep(0.5) from vtocc_test", nil)
+	_, err = client.Execute("select sleep(0.5) from vitess_test", nil)
 	want := "error: the query was killed"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)
@@ -339,14 +339,14 @@ func TestQueryTimeout(t *testing.T) {
 
 func TestStrictMode(t *testing.T) {
 	queries := []string{
-		"insert into vtocc_a(eid, id, name, foo) values (7, 1+1, '', '')",
-		"insert into vtocc_d(eid, id) values (1, 1)",
-		"update vtocc_a set eid = 1+1 where eid = 1 and id = 1",
-		"insert into vtocc_d(eid, id) values (1, 1)",
+		"insert into vitess_a(eid, id, name, foo) values (7, 1+1, '', '')",
+		"insert into vitess_d(eid, id) values (1, 1)",
+		"update vitess_a set eid = 1+1 where eid = 1 and id = 1",
+		"insert into vitess_d(eid, id) values (1, 1)",
 		"insert into upsert_test(id1, id2) values " +
 			"(1, 1), (2, 2) on duplicate key update id1 = 1",
 		"insert into upsert_test(id1, id2) select eid, id " +
-			"from vtocc_a limit 1 on duplicate key update id2 = id1",
+			"from vitess_a limit 1 on duplicate key update id2 = id1",
 		"insert into upsert_test(id1, id2) values " +
 			"(1, 1) on duplicate key update id1 = 2+1",
 	}

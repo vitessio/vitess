@@ -16,7 +16,7 @@ import (
 )
 
 func TestCharaterSet(t *testing.T) {
-	qr, err := framework.NewClient().Execute("select * from vtocc_test where intval=1", nil)
+	qr, err := framework.NewClient().Execute("select * from vitess_test where intval=1", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -58,10 +58,10 @@ func TestCharaterSet(t *testing.T) {
 
 func TestInts(t *testing.T) {
 	client := framework.NewClient()
-	defer client.Execute("delete from vtocc_ints", nil)
+	defer client.Execute("delete from vitess_ints", nil)
 
 	_, err := client.Execute(
-		"insert into vtocc_ints values(:tiny, :tinyu, :small, "+
+		"insert into vitess_ints values(:tiny, :tinyu, :small, "+
 			":smallu, :medium, :mediumu, :normal, :normalu, :big, :bigu, :year)",
 		map[string]interface{}{
 			"tiny":    int32(-128),
@@ -81,7 +81,7 @@ func TestInts(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	qr, err := client.Execute("select * from vtocc_ints where tiny = -128", nil)
+	qr, err := client.Execute("select * from vitess_ints where tiny = -128", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -158,10 +158,10 @@ func TestInts(t *testing.T) {
 
 func TestFractionals(t *testing.T) {
 	client := framework.NewClient()
-	defer client.Execute("delete from vtocc_fracts", nil)
+	defer client.Execute("delete from vitess_fracts", nil)
 
 	_, err := client.Execute(
-		"insert into vtocc_fracts values(:id, :deci, :num, :f, :d)",
+		"insert into vitess_fracts values(:id, :deci, :num, :f, :d)",
 		map[string]interface{}{
 			"id":   1,
 			"deci": "1.99",
@@ -174,7 +174,7 @@ func TestFractionals(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	qr, err := client.Execute("select * from vtocc_fracts where id = 1", nil)
+	qr, err := client.Execute("select * from vitess_fracts where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -221,10 +221,10 @@ func TestFractionals(t *testing.T) {
 
 func TestStrings(t *testing.T) {
 	client := framework.NewClient()
-	defer client.Execute("delete from vtocc_strings", nil)
+	defer client.Execute("delete from vitess_strings", nil)
 
 	_, err := client.Execute(
-		"insert into vtocc_strings values "+
+		"insert into vitess_strings values "+
 			"(:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)",
 		map[string]interface{}{
 			"vb":  "a",
@@ -243,7 +243,7 @@ func TestStrings(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	qr, err := client.Execute("select * from vtocc_strings where vb = 'a'", nil)
+	qr, err := client.Execute("select * from vitess_strings where vb = 'a'", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -315,10 +315,10 @@ func TestStrings(t *testing.T) {
 
 func TestMiscTypes(t *testing.T) {
 	client := framework.NewClient()
-	defer client.Execute("delete from vtocc_misc", nil)
+	defer client.Execute("delete from vitess_misc", nil)
 
 	_, err := client.Execute(
-		"insert into vtocc_misc values(:id, :b, :d, :dt, :t)",
+		"insert into vitess_misc values(:id, :b, :d, :dt, :t)",
 		map[string]interface{}{
 			"id": 1,
 			"b":  "\x01",
@@ -331,7 +331,7 @@ func TestMiscTypes(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	qr, err := client.Execute("select * from vtocc_misc where id = 1", nil)
+	qr, err := client.Execute("select * from vitess_misc where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -407,9 +407,9 @@ func TestTypeLimits(t *testing.T) {
 	client := framework.NewClient()
 	defer func() {
 		for _, cleanup := range []string{
-			"delete from vtocc_ints",
-			"delete from vtocc_fracts",
-			"delete from vtocc_strings",
+			"delete from vitess_ints",
+			"delete from vitess_fracts",
+			"delete from vitess_strings",
 		} {
 			_, err := client.Execute(cleanup, nil)
 			if err != nil {
@@ -419,9 +419,9 @@ func TestTypeLimits(t *testing.T) {
 	}()
 
 	for _, query := range []string{
-		"insert into vtocc_ints(tiny, medium) values(1, -129)",
-		"insert into vtocc_fracts(id, num) values(1, 1)",
-		"insert into vtocc_strings(vb) values('a')",
+		"insert into vitess_ints(tiny, medium) values(1, -129)",
+		"insert into vitess_fracts(id, num) values(1, 1)",
+		"insert into vitess_strings(vb) values('a')",
 	} {
 		_, err := client.Execute(query, nil)
 		if err != nil {
@@ -435,31 +435,31 @@ func TestTypeLimits(t *testing.T) {
 		query string
 		bv    map[string]interface{}
 	}{{
-		query: "insert into vtocc_ints(tiny) values('str')",
+		query: "insert into vitess_ints(tiny) values('str')",
 		bv:    nil,
 	}, {
-		query: "insert into vtocc_ints(tiny) values(:str)",
+		query: "insert into vitess_ints(tiny) values(:str)",
 		bv:    map[string]interface{}{"str": "str"},
 	}, {
-		query: "insert into vtocc_ints(tiny) values(1.2)",
+		query: "insert into vitess_ints(tiny) values(1.2)",
 		bv:    nil,
 	}, {
-		query: "insert into vtocc_ints(tiny) values(:fl)",
+		query: "insert into vitess_ints(tiny) values(:fl)",
 		bv:    map[string]interface{}{"fl": 1.2},
 	}, {
-		query: "insert into vtocc_strings(vb) values(1)",
+		query: "insert into vitess_strings(vb) values(1)",
 		bv:    nil,
 	}, {
-		query: "insert into vtocc_strings(vb) values(:id)",
+		query: "insert into vitess_strings(vb) values(:id)",
 		bv:    map[string]interface{}{"id": 1},
 	}, {
-		query: "insert into vtocc_strings(vb) select tiny from vtocc_ints",
+		query: "insert into vitess_strings(vb) select tiny from vitess_ints",
 		bv:    nil,
 	}, {
-		query: "insert into vtocc_ints(tiny) select num from vtocc_fracts",
+		query: "insert into vitess_ints(tiny) select num from vitess_fracts",
 		bv:    nil,
 	}, {
-		query: "insert into vtocc_ints(tiny) select vb from vtocc_strings",
+		query: "insert into vitess_ints(tiny) select vb from vitess_strings",
 		bv:    nil,
 	}}
 	for _, request := range mismatchCases {
@@ -471,8 +471,8 @@ func TestTypeLimits(t *testing.T) {
 
 	want = "error: Out of range"
 	for _, query := range []string{
-		"insert into vtocc_ints(tiny) values(-129)",
-		"insert into vtocc_ints(tiny) select medium from vtocc_ints",
+		"insert into vitess_ints(tiny) values(-129)",
+		"insert into vitess_ints(tiny) select medium from vitess_ints",
 	} {
 		_, err := client.Execute(query, nil)
 		if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -481,7 +481,7 @@ func TestTypeLimits(t *testing.T) {
 	}
 
 	want = "error: Data too long"
-	_, err := client.Execute("insert into vtocc_strings(vb) values('12345678901234567')", nil)
+	_, err := client.Execute("insert into vitess_strings(vb) values('12345678901234567')", nil)
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want %s", err, want)
 	}
