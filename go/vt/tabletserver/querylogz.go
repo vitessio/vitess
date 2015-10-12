@@ -18,27 +18,31 @@ import (
 
 var (
 	querylogzHeader = []byte(`
-		<tr>
-			<th>Method</th>
-			<th>Context</th>
-			<th>Start</th>
-			<th>End</th>
-			<th>Duration</th>
-			<th>MySQL time</th>
-			<th>Conn wait</th>
-			<th>Plan</th>
-			<th>SQL</th>
-			<th>Queries</th>
-			<th>Sources</th>
-			<th>RowsAffected</th>
-			<th>Response Size</th>
-			<th>Cache Hits</th>
-			<th>Cache Misses</th>
-			<th>Cache Absent</th>
-			<th>Cache Invalidations</th>
-			<th>Transaction ID</th>
-			<th>Error</th>
-		</tr>
+		<thead>
+			<tr>
+				<th>Method</th>
+				<th>Context</th>
+				<th>Effective Caller</th>
+				<th>Immediate Caller</th>
+				<th>Start</th>
+				<th>End</th>
+				<th>Duration</th>
+				<th>MySQL time</th>
+				<th>Conn wait</th>
+				<th>Plan</th>
+				<th>SQL</th>
+				<th>Queries</th>
+				<th>Sources</th>
+				<th>RowsAffected</th>
+				<th>Response Size</th>
+				<th>Cache Hits</th>
+				<th>Cache Misses</th>
+				<th>Cache Absent</th>
+				<th>Cache Invalidations</th>
+				<th>Transaction ID</th>
+				<th>Error</th>
+			</tr>
+		</thead>
 	`)
 	querylogzFuncMap = template.FuncMap{
 		"stampMicro":   func(t time.Time) string { return t.Format(time.StampMicro) },
@@ -49,6 +53,8 @@ var (
 		<tr class=".ColorLevel">
 			<td>{{.Method}}</td>
 			<td>{{.ContextHTML}}</td>
+			<td>{{.EffectiveCaller}}</td>
+			<td>{{.ImmediateCaller}}</td>
 			<td>{{.StartTime | stampMicro}}</td>
 			<td>{{.EndTime | stampMicro}}</td>
 			<td>{{.TotalTime.Seconds}}</td>

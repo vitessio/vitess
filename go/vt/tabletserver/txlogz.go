@@ -13,27 +13,37 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/vt/callerid"
+
+	qrpb "github.com/youtube/vitess/go/vt/proto/query"
+	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
-	txlogzHeader = []byte(`<thead>
-
-		<tr>
-			<th>Transaction id</th>
-			<th>Start</th>
-			<th>End</th>
-			<th>Duration</th>
-			<th>Decision</th>
-			<th>Statements</th>
-		</tr>
-</thead>
+	txlogzHeader = []byte(`
+		<thead>
+			<tr>
+				<th>Transaction id</th>
+				<th>Effective caller</th>
+				<th>Immediate caller</th>
+				<th>Start</th>
+				<th>End</th>
+				<th>Duration</th>
+				<th>Decision</th>
+				<th>Statements</th>
+			</tr>
+		</thead>
 	`)
 	txlogzFuncMap = template.FuncMap{
-		"stampMicro": func(t time.Time) string { return t.Format(time.StampMicro) },
+		"stampMicro":         func(t time.Time) string { return t.Format(time.StampMicro) },
+		"getEffectiveCaller": func(e *vtpb.CallerID) string { return callerid.GetPrincipal(e) },
+		"getImmediateCaller": func(i *qrpb.VTGateCallerID) string { return callerid.GetUsername(i) },
 	}
 	txlogzTmpl = template.Must(template.New("example").Funcs(txlogzFuncMap).Parse(`
 		<tr class="{{.ColorLevel}}">
 			<td>{{.TransactionID}}</td>
+			<td>{{.EffectiveCallerID | getEffectiveCaller}}</td>
+			<td>{{.ImmediateCallerID | getImmediateCaller}}</td>
 			<td>{{.StartTime | stampMicro}}</td>
 			<td>{{.EndTime | stampMicro}}</td>
 			<td>{{.Duration}}</td>

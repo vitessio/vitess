@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
 )
@@ -44,11 +45,18 @@ func TestQuerylogzHandler(t *testing.T) {
 	logStats.CacheMisses = 2
 	logStats.CacheInvalidations = 3
 	logStats.TransactionID = 131
+	logStats.ctx = callerid.NewContext(
+		context.Background(),
+		callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
+		callerid.NewImmediateCallerID("immediate-caller"),
+	)
 
 	// fast query
 	fastQueryPattern := []string{
 		`<td>Execute</td>`,
 		`<td></td>`,
+		`<td>effective-caller</td>`,
+		`<td>immediate-caller</td>`,
 		`<td>Nov 29 13:33:09.000000</td>`,
 		`<td>Nov 29 13:33:09.001000</td>`,
 		`<td>0.001</td>`,
@@ -80,6 +88,8 @@ func TestQuerylogzHandler(t *testing.T) {
 	mediumQueryPattern := []string{
 		`<td>Execute</td>`,
 		`<td></td>`,
+		`<td>effective-caller</td>`,
+		`<td>immediate-caller</td>`,
 		`<td>Nov 29 13:33:09.000000</td>`,
 		`<td>Nov 29 13:33:09.020000</td>`,
 		`<td>0.02</td>`,
@@ -111,6 +121,8 @@ func TestQuerylogzHandler(t *testing.T) {
 	slowQueryPattern := []string{
 		`<td>Execute</td>`,
 		`<td></td>`,
+		`<td>effective-caller</td>`,
+		`<td>immediate-caller</td>`,
 		`<td>Nov 29 13:33:09.000000</td>`,
 		`<td>Nov 29 13:33:09.500000</td>`,
 		`<td>0.5</td>`,

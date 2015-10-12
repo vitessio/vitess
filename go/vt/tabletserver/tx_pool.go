@@ -336,8 +336,10 @@ func (txc *TxConnection) EventTime() time.Time {
 // Format returns a printable version of the connection info.
 func (txc *TxConnection) Format(params url.Values) string {
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t%.6f\t%v\t%v\t\n",
+		"%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
 		txc.TransactionID,
+		callerid.GetPrincipal(txc.EffectiveCallerID),
+		callerid.GetUsername(txc.ImmediateCallerID),
 		txc.StartTime.Format(time.StampMicro),
 		txc.EndTime.Format(time.StampMicro),
 		txc.EndTime.Sub(txc.StartTime).Seconds(),
