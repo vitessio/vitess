@@ -24,7 +24,7 @@ import (
 
 func TestSimpleRead(t *testing.T) {
 	vstart := framework.DebugVars()
-	_, err := framework.NewDefaultClient().Execute("select * from vtocc_test where intval=1", nil)
+	_, err := framework.NewClient().Execute("select * from vitess_test where intval=1", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -39,13 +39,13 @@ func TestSimpleRead(t *testing.T) {
 }
 
 func TestBinary(t *testing.T) {
-	client := framework.NewDefaultClient()
-	defer client.Execute("delete from vtocc_test where intval in (4,5)", nil)
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval in (4,5)", nil)
 
 	binaryData := "\x00'\"\b\n\r\t\x1a\\\x00\x0f\xf0\xff"
 	// Test without bindvars.
 	_, err := client.Execute(
-		"insert into vtocc_test values "+
+		"insert into vitess_test values "+
 			"(4, null, null, '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\\x00\x0f\xf0\xff')",
 		nil,
 	)
@@ -53,7 +53,7 @@ func TestBinary(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	qr, err := client.Execute("select binval from vtocc_test where intval=4", nil)
+	qr, err := client.Execute("select binval from vitess_test where intval=4", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -79,14 +79,14 @@ func TestBinary(t *testing.T) {
 
 	// Test with bindvars.
 	_, err = client.Execute(
-		"insert into vtocc_test values(5, null, null, :bindata)",
+		"insert into vitess_test values(5, null, null, :bindata)",
 		map[string]interface{}{"bindata": binaryData},
 	)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	qr, err = client.Execute("select binval from vtocc_test where intval=5", nil)
+	qr, err = client.Execute("select binval from vitess_test where intval=5", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -97,8 +97,8 @@ func TestBinary(t *testing.T) {
 }
 
 func TestNocacheListArgs(t *testing.T) {
-	client := framework.NewDefaultClient()
-	query := "select * from vtocc_test where intval in ::list"
+	client := framework.NewClient()
+	query := "select * from vitess_test where intval in ::list"
 
 	qr, err := client.Execute(
 		query,
@@ -158,8 +158,8 @@ func TestNocacheListArgs(t *testing.T) {
 
 func TestIntegrityError(t *testing.T) {
 	vstart := framework.DebugVars()
-	client := framework.NewDefaultClient()
-	_, err := client.Execute("insert into vtocc_test values(1, null, null, null)", nil)
+	client := framework.NewClient()
+	_, err := client.Execute("insert into vitess_test values(1, null, null, null)", nil)
 	want := "error: Duplicate entry '1'"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
@@ -174,12 +174,12 @@ func TestTrailingComment(t *testing.T) {
 	v1 := framework.FetchInt(vstart, "QueryCacheLength")
 
 	bindVars := map[string]interface{}{"ival": 1}
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	for _, query := range []string{
-		"select * from vtocc_test where intval=:ival",
-		"select * from vtocc_test where intval=:ival /* comment */",
-		"select * from vtocc_test where intval=:ival /* comment1 */ /* comment2 */",
+		"select * from vitess_test where intval=:ival",
+		"select * from vitess_test where intval=:ival /* comment */",
+		"select * from vitess_test where intval=:ival /* comment1 */ /* comment2 */",
 	} {
 		_, err := client.Execute(query, bindVars)
 		if err != nil {
@@ -194,7 +194,7 @@ func TestTrailingComment(t *testing.T) {
 }
 
 func TestUpsertNonPKHit(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	err := client.Begin()
 	if err != nil {
 		t.Error(err)
@@ -224,26 +224,26 @@ func TestSchemaReload(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	_, err = conn.ExecuteFetch("create table vtocc_temp(intval int)", 10, false)
+	_, err = conn.ExecuteFetch("create table vitess_temp(intval int)", 10, false)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	defer func() {
-		_, _ = conn.ExecuteFetch("drop table vtocc_temp", 10, false)
+		_, _ = conn.ExecuteFetch("drop table vitess_temp", 10, false)
 		conn.Close()
 	}()
-	framework.DefaultServer.ReloadSchema()
-	client := framework.NewDefaultClient()
+	framework.Server.ReloadSchema()
+	client := framework.NewClient()
 	waitTime := 50 * time.Millisecond
 	for i := 0; i < 10; i++ {
 		time.Sleep(waitTime)
 		waitTime += 50 * time.Millisecond
-		_, err = client.Execute("select * from vtocc_temp", nil)
+		_, err = client.Execute("select * from vitess_temp", nil)
 		if err == nil {
 			return
 		}
-		want := "error: table vtocc_temp not found in schema"
+		want := "error: table vitess_temp not found in schema"
 		if err.Error() != want {
 			t.Errorf("Error: %v, want %s", err, want)
 			return
@@ -254,17 +254,17 @@ func TestSchemaReload(t *testing.T) {
 
 func TestConsolidation(t *testing.T) {
 	vstart := framework.DebugVars()
-	defer framework.DefaultServer.SetPoolSize(framework.DefaultServer.PoolSize())
-	framework.DefaultServer.SetPoolSize(1)
+	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
+	framework.Server.SetPoolSize(1)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
-		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
 		wg.Done()
 	}()
 	go func() {
-		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -279,7 +279,7 @@ func TestConsolidation(t *testing.T) {
 }
 
 func TestBindInSelect(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	// Int bind var.
 	qr, err := client.Execute(
@@ -379,9 +379,9 @@ func TestHealth(t *testing.T) {
 
 func TestStreamHealth(t *testing.T) {
 	ch := make(chan *pb.StreamHealthResponse, 10)
-	id, _ := framework.DefaultServer.StreamHealthRegister(ch)
-	defer framework.DefaultServer.StreamHealthUnregister(id)
-	framework.DefaultServer.BroadcastHealth(0, nil)
+	id, _ := framework.Server.StreamHealthRegister(ch)
+	defer framework.Server.StreamHealthUnregister(id)
+	framework.Server.BroadcastHealth(0, nil)
 	health := <-ch
 	if !reflect.DeepEqual(*health.Target, framework.Target) {
 		t.Errorf("Health: %+v, want %+v", *health.Target, framework.Target)
@@ -389,11 +389,11 @@ func TestStreamHealth(t *testing.T) {
 }
 
 func TestQueryStats(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	vstart := framework.DebugVars()
 
 	start := time.Now()
-	query := "select /* query_stats */ eid from vtocc_a where eid = :eid"
+	query := "select /* query_stats */ eid from vitess_a where eid = :eid"
 	bv := map[string]interface{}{"eid": 1}
 	_, _ = client.Execute(query, bv)
 	stat := framework.QueryStats()[query]
@@ -404,7 +404,7 @@ func TestQueryStats(t *testing.T) {
 	stat.Time = 0
 	want := framework.QueryStat{
 		Query:      query,
-		Table:      "vtocc_a",
+		Table:      "vitess_a",
 		Plan:       "PASS_SELECT",
 		QueryCount: 1,
 		RowCount:   2,
@@ -414,13 +414,13 @@ func TestQueryStats(t *testing.T) {
 		t.Errorf("stat: %+v, want %+v", stat, want)
 	}
 
-	query = "select /* query_stats */ eid from vtocc_a where dontexist(eid) = :eid"
+	query = "select /* query_stats */ eid from vitess_a where dontexist(eid) = :eid"
 	_, _ = client.Execute(query, bv)
 	stat = framework.QueryStats()[query]
 	stat.Time = 0
 	want = framework.QueryStat{
 		Query:      query,
-		Table:      "vtocc_a",
+		Table:      "vitess_a",
 		Plan:       "PASS_SELECT",
 		QueryCount: 1,
 		RowCount:   0,
@@ -430,19 +430,19 @@ func TestQueryStats(t *testing.T) {
 		t.Errorf("stat: %+v, want %+v", stat, want)
 	}
 	vend := framework.DebugVars()
-	if err := compareIntDiff(vend, "QueryCounts/vtocc_a.PASS_SELECT", vstart, 2); err != nil {
+	if err := compareIntDiff(vend, "QueryCounts/vitess_a.PASS_SELECT", vstart, 2); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "QueryRowCounts/vtocc_a.PASS_SELECT", vstart, 2); err != nil {
+	if err := compareIntDiff(vend, "QueryRowCounts/vitess_a.PASS_SELECT", vstart, 2); err != nil {
 		t.Error(err)
 	}
-	if err := compareIntDiff(vend, "QueryErrorCounts/vtocc_a.PASS_SELECT", vstart, 1); err != nil {
+	if err := compareIntDiff(vend, "QueryErrorCounts/vitess_a.PASS_SELECT", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestDBAStatements(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	qr, err := client.Execute("show variables like 'version'", nil)
 	if err != nil {
@@ -454,7 +454,7 @@ func TestDBAStatements(t *testing.T) {
 		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
 	}
 
-	qr, err = client.Execute("describe vtocc_a", nil)
+	qr, err = client.Execute("describe vitess_a", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -463,12 +463,19 @@ func TestDBAStatements(t *testing.T) {
 		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
 	}
 
-	qr, err = client.Execute("explain vtocc_a", nil)
+	qr, err = client.Execute("explain vitess_a", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	if qr.RowsAffected != 4 {
 		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
+	}
+}
+
+func TestStatus(t *testing.T) {
+	str := framework.DebugStatus()
+	if !strings.Contains(str, "</html>") {
+		t.Errorf("/debug/status: %s\nnot a valid html", str)
 	}
 }

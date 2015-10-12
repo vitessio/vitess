@@ -14,21 +14,21 @@ import (
 )
 
 func TestUncacheableTables(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	nocacheTables := []struct {
 		name   string
 		create string
 		drop   string
 	}{{
-		create: "create table vtocc_nocache(eid int, primary key (eid)) comment 'vtocc_nocache'",
-		drop:   "drop table vtocc_nocache",
+		create: "create table vitess_nocache(eid int, primary key (eid)) comment 'vitess_nocache'",
+		drop:   "drop table vitess_nocache",
 	}, {
-		create: "create table vtocc_nocache(somecol int)",
-		drop:   "drop table vtocc_nocache",
+		create: "create table vitess_nocache(somecol int)",
+		drop:   "drop table vitess_nocache",
 	}, {
-		create: "create table vtocc_nocache(charcol varchar(10), primary key(charcol))",
-		drop:   "drop table vtocc_nocache",
+		create: "create table vitess_nocache(charcol varchar(10), primary key(charcol))",
+		drop:   "drop table vitess_nocache",
 	}}
 	for _, tcase := range nocacheTables {
 		_, err := client.Execute(tcase.create, nil)
@@ -36,10 +36,10 @@ func TestUncacheableTables(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		table, ok := framework.DebugSchema()["vtocc_nocache"]
+		table, ok := framework.DebugSchema()["vitess_nocache"]
 		client.Execute(tcase.drop, nil)
 		if !ok {
-			t.Errorf("%s: table vtocc_nocache not found in schema", tcase.create)
+			t.Errorf("%s: table vitess_nocache not found in schema", tcase.create)
 			continue
 		}
 		if table.CacheType != schema.CACHE_NONE {
@@ -53,16 +53,16 @@ func TestOverrideTables(t *testing.T) {
 		table     string
 		cacheType int
 	}{{
-		table:     "vtocc_cached2",
+		table:     "vitess_cached2",
 		cacheType: schema.CACHE_RW,
 	}, {
-		table:     "vtocc_view",
+		table:     "vitess_view",
 		cacheType: schema.CACHE_RW,
 	}, {
-		table:     "vtocc_part1",
+		table:     "vitess_part1",
 		cacheType: schema.CACHE_W,
 	}, {
-		table:     "vtocc_part2",
+		table:     "vitess_part2",
 		cacheType: schema.CACHE_W,
 	}}
 	for _, tcase := range testCases {
@@ -78,16 +78,16 @@ func TestOverrideTables(t *testing.T) {
 }
 
 func TestCacheDisallows(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	testCases := []struct {
 		query string
 		bv    map[string]interface{}
 		err   string
 	}{{
-		query: "select bid, eid from vtocc_cached2 where eid = 1 and bid = 1",
+		query: "select bid, eid from vitess_cached2 where eid = 1 and bid = 1",
 		err:   "error: type mismatch",
 	}, {
-		query: "select * from vtocc_cached2 where eid = 2 and bid = 'foo' limit :a",
+		query: "select * from vitess_cached2 where eid = 2 and bid = 'foo' limit :a",
 		bv:    map[string]interface{}{"a": -1},
 		err:   "error: negative limit",
 	}}
@@ -101,8 +101,8 @@ func TestCacheDisallows(t *testing.T) {
 }
 
 func TestCacheListArgs(t *testing.T) {
-	client := framework.NewDefaultClient()
-	query := "select * from vtocc_cached1 where eid in ::list"
+	client := framework.NewClient()
+	query := "select * from vitess_cached1 where eid in ::list"
 	successCases := []struct {
 		bv       map[string]interface{}
 		rowcount uint64
@@ -135,8 +135,8 @@ func TestCacheListArgs(t *testing.T) {
 	}
 }
 
-func verifyVtoccCached2(t *testing.T, table string) error {
-	client := framework.NewDefaultClient()
+func verifyvitessCached2(t *testing.T, table string) error {
+	client := framework.NewClient()
 	query := fmt.Sprintf("select * from %s where eid = 2 and bid = 'foo'", table)
 	_, err := client.Execute(query, nil)
 	if err != nil {
@@ -155,35 +155,35 @@ func verifyVtoccCached2(t *testing.T, table string) error {
 }
 
 func TestUncache(t *testing.T) {
-	// Verify rowcache is working vtocc_cached2
-	err := verifyVtoccCached2(t, "vtocc_cached2")
+	// Verify rowcache is working vitess_cached2
+	err := verifyvitessCached2(t, "vitess_cached2")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	// Disable rowcache for vtocc_cached2
-	client := framework.NewDefaultClient()
-	_, err = client.Execute("alter table vtocc_cached2 comment 'vtocc_nocache'", nil)
+	// Disable rowcache for vitess_cached2
+	client := framework.NewClient()
+	_, err = client.Execute("alter table vitess_cached2 comment 'vitess_nocache'", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	_, err = client.Execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'", nil)
+	_, err = client.Execute("select * from vitess_cached2 where eid = 2 and bid = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
 	}
-	if tstat, ok := framework.TableStats()["vtocc_cached2"]; ok {
+	if tstat, ok := framework.TableStats()["vitess_cached2"]; ok {
 		t.Errorf("table stats was found: %v, want not found", tstat)
 	}
 
 	// Re-enable rowcache and verify it's working
-	_, err = client.Execute("alter table vtocc_cached2 comment ''", nil)
+	_, err = client.Execute("alter table vitess_cached2 comment ''", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	err = verifyVtoccCached2(t, "vtocc_cached2")
+	err = verifyvitessCached2(t, "vitess_cached2")
 	if err != nil {
 		t.Error(err)
 		return
@@ -191,37 +191,37 @@ func TestUncache(t *testing.T) {
 }
 
 func TestRename(t *testing.T) {
-	// Verify rowcache is working vtocc_cached2
-	err := verifyVtoccCached2(t, "vtocc_cached2")
+	// Verify rowcache is working vitess_cached2
+	err := verifyvitessCached2(t, "vitess_cached2")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
 	// Rename & test
-	client := framework.NewDefaultClient()
-	_, err = client.Execute("alter table vtocc_cached2 rename to vtocc_renamed", nil)
+	client := framework.NewClient()
+	_, err = client.Execute("alter table vitess_cached2 rename to vitess_renamed", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	if tstat, ok := framework.TableStats()["vtocc_cached2"]; ok {
+	if tstat, ok := framework.TableStats()["vitess_cached2"]; ok {
 		t.Errorf("table stats was found: %v, want not found", tstat)
 	}
 
-	err = verifyVtoccCached2(t, "vtocc_renamed")
+	err = verifyvitessCached2(t, "vitess_renamed")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
 	// Rename back & verify
-	_, err = client.Execute("rename table vtocc_renamed to vtocc_cached2", nil)
+	_, err = client.Execute("rename table vitess_renamed to vitess_cached2", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	err = verifyVtoccCached2(t, "vtocc_cached2")
+	err = verifyvitessCached2(t, "vitess_cached2")
 	if err != nil {
 		t.Error(err)
 		return
@@ -230,8 +230,8 @@ func TestRename(t *testing.T) {
 
 func TestSpotCheck(t *testing.T) {
 	vstart := framework.DebugVars()
-	client := framework.NewDefaultClient()
-	_, err := client.Execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'", nil)
+	client := framework.NewClient()
+	_, err := client.Execute("select * from vitess_cached2 where eid = 2 and bid = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -240,14 +240,14 @@ func TestSpotCheck(t *testing.T) {
 		t.Error(err)
 	}
 
-	defer framework.DefaultServer.SetSpotCheckRatio(framework.DefaultServer.SpotCheckRatio())
-	framework.DefaultServer.SetSpotCheckRatio(1)
+	defer framework.Server.SetSpotCheckRatio(framework.Server.SpotCheckRatio())
+	framework.Server.SetSpotCheckRatio(1)
 	if err := verifyIntValue(framework.DebugVars(), "RowcacheSpotCheckRatio", 1); err != nil {
 		t.Error(err)
 	}
 
 	vstart = framework.DebugVars()
-	_, err = client.Execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'", nil)
+	_, err = client.Execute("select * from vitess_cached2 where eid = 2 and bid = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -257,7 +257,7 @@ func TestSpotCheck(t *testing.T) {
 	}
 
 	vstart = framework.DebugVars()
-	_, err = client.Execute("select * from vtocc_cached1 where eid in (9)", nil)
+	_, err = client.Execute("select * from vitess_cached1 where eid in (9)", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -265,7 +265,7 @@ func TestSpotCheck(t *testing.T) {
 	if err := compareIntDiff(framework.DebugVars(), "RowcacheSpotCheckCount", vstart, 0); err != nil {
 		t.Error(err)
 	}
-	_, err = client.Execute("select * from vtocc_cached1 where eid in (9)", nil)
+	_, err = client.Execute("select * from vitess_cached1 where eid in (9)", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -276,24 +276,24 @@ func TestSpotCheck(t *testing.T) {
 }
 
 func TestCacheTypes(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	badRequests := []struct {
 		query string
 		bv    map[string]interface{}
 	}{{
-		query: "select * from vtocc_cached2 where eid = 'str' and bid = 'str'",
+		query: "select * from vitess_cached2 where eid = 'str' and bid = 'str'",
 	}, {
-		query: "select * from vtocc_cached2 where eid = :str and bid = :str",
+		query: "select * from vitess_cached2 where eid = :str and bid = :str",
 		bv:    map[string]interface{}{"str": "str"},
 	}, {
-		query: "select * from vtocc_cached2 where eid = 1 and bid = 1",
+		query: "select * from vitess_cached2 where eid = 1 and bid = 1",
 	}, {
-		query: "select * from vtocc_cached2 where eid = :id and bid = :id",
+		query: "select * from vitess_cached2 where eid = :id and bid = :id",
 		bv:    map[string]interface{}{"id": 1},
 	}, {
-		query: "select * from vtocc_cached2 where eid = 1.2 and bid = 1.2",
+		query: "select * from vitess_cached2 where eid = 1.2 and bid = 1.2",
 	}, {
-		query: "select * from vtocc_cached2 where eid = :fl and bid = :fl",
+		query: "select * from vitess_cached2 where eid = :fl and bid = :fl",
 		bv:    map[string]interface{}{"fl": 1.2},
 	}}
 	want := "error: type mismatch"
@@ -306,7 +306,7 @@ func TestCacheTypes(t *testing.T) {
 }
 
 func TestNoData(t *testing.T) {
-	qr, err := framework.NewDefaultClient().Execute("select * from vtocc_cached2 where eid = 6 and name = 'bar'", nil)
+	qr, err := framework.NewClient().Execute("select * from vitess_cached2 where eid = 6 and name = 'bar'", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -317,8 +317,8 @@ func TestNoData(t *testing.T) {
 }
 
 func TestCacheStats(t *testing.T) {
-	client := framework.NewDefaultClient()
-	query := "select * from vtocc_cached2 where eid = 2 and bid = 'foo'"
+	client := framework.NewClient()
+	query := "select * from vitess_cached2 where eid = 2 and bid = 'foo'"
 	_, err := client.Execute(query, nil)
 	if err != nil {
 		t.Error(err)
@@ -330,22 +330,22 @@ func TestCacheStats(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if err := compareIntDiff(framework.DebugVars(), "RowcacheStats/vtocc_cached2.Hits", vstart, 1); err != nil {
+	if err := compareIntDiff(framework.DebugVars(), "RowcacheStats/vitess_cached2.Hits", vstart, 1); err != nil {
 		t.Error(err)
 	}
 
 	vstart = framework.DebugVars()
-	_, err = client.Execute("update vtocc_part2 set data2 = 2 where key3 = 1", nil)
+	_, err = client.Execute("update vitess_part2 set data2 = 2 where key3 = 1", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	_, err = client.Execute("select * from vtocc_view where key2 = 1", nil)
+	_, err = client.Execute("select * from vitess_view where key2 = 1", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	if err := compareIntDiff(framework.DebugVars(), "RowcacheStats/vtocc_view.Misses", vstart, 1); err != nil {
+	if err := compareIntDiff(framework.DebugVars(), "RowcacheStats/vitess_view.Misses", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }

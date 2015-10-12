@@ -15,14 +15,14 @@ import (
 )
 
 func TestCommit(t *testing.T) {
-	client := framework.NewDefaultClient()
-	defer client.Execute("delete from vtocc_test where intval=4", nil)
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
 
 	catcher := framework.NewTxCatcher()
 	defer catcher.Close()
 	vstart := framework.DebugVars()
 
-	query := "insert into vtocc_test (intval, floatval, charval, binval) " +
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin()
 	if err != nil {
@@ -52,7 +52,7 @@ func TestCommit(t *testing.T) {
 		t.Errorf("conclusion: %s, want commit", tx.Conclusion)
 	}
 
-	qr, err := client.Execute("select * from vtocc_test", nil)
+	qr, err := client.Execute("select * from vitess_test", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -61,13 +61,13 @@ func TestCommit(t *testing.T) {
 		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
 	}
 
-	_, err = client.Execute("delete from vtocc_test where intval=4", nil)
+	_, err = client.Execute("delete from vitess_test where intval=4", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	qr, err = client.Execute("select * from vtocc_test", nil)
+	qr, err = client.Execute("select * from vitess_test", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -113,13 +113,13 @@ func TestCommit(t *testing.T) {
 }
 
 func TestRollback(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	catcher := framework.NewTxCatcher()
 	defer catcher.Close()
 	vstart := framework.DebugVars()
 
-	query := "insert into vtocc_test values(4, null, null, null)"
+	query := "insert into vitess_test values(4, null, null, null)"
 	err := client.Begin()
 	if err != nil {
 		t.Error(err)
@@ -148,7 +148,7 @@ func TestRollback(t *testing.T) {
 		t.Errorf("conclusion: %s, want rollback", tx.Conclusion)
 	}
 
-	qr, err := client.Execute("select * from vtocc_test", nil)
+	qr, err := client.Execute("select * from vitess_test", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -185,14 +185,14 @@ func TestRollback(t *testing.T) {
 }
 
 func TestAutoCommit(t *testing.T) {
-	client := framework.NewDefaultClient()
-	defer client.Execute("delete from vtocc_test where intval=4", nil)
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
 
 	catcher := framework.NewTxCatcher()
 	defer catcher.Close()
 	vstart := framework.DebugVars()
 
-	query := "insert into vtocc_test (intval, floatval, charval, binval) " +
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	_, err := client.Execute(query, nil)
 	if err != nil {
@@ -212,7 +212,7 @@ func TestAutoCommit(t *testing.T) {
 		t.Errorf("conclusion: %s, want commit", tx.Conclusion)
 	}
 
-	qr, err := client.Execute("select * from vtocc_test", nil)
+	qr, err := client.Execute("select * from vitess_test", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -221,13 +221,13 @@ func TestAutoCommit(t *testing.T) {
 		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
 	}
 
-	_, err = client.Execute("delete from vtocc_test where intval=4", nil)
+	_, err = client.Execute("delete from vitess_test where intval=4", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	qr, err = client.Execute("select * from vtocc_test", nil)
+	qr, err = client.Execute("select * from vitess_test", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -273,10 +273,10 @@ func TestAutoCommit(t *testing.T) {
 }
 
 func TestAutoCommitOff(t *testing.T) {
-	framework.DefaultServer.SetAutoCommit(false)
-	defer framework.DefaultServer.SetAutoCommit(true)
+	framework.Server.SetAutoCommit(false)
+	defer framework.Server.SetAutoCommit(true)
 
-	_, err := framework.NewDefaultClient().Execute("insert into vtocc_test values(4, null, null, null)", nil)
+	_, err := framework.NewClient().Execute("insert into vitess_test values(4, null, null, null)", nil)
 	want := "error: unsupported query"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)
@@ -286,7 +286,7 @@ func TestAutoCommitOff(t *testing.T) {
 func TestTxPoolSize(t *testing.T) {
 	vstart := framework.DebugVars()
 
-	client1 := framework.NewDefaultClient()
+	client1 := framework.NewClient()
 	err := client1.Begin()
 	if err != nil {
 		t.Error(err)
@@ -297,11 +297,11 @@ func TestTxPoolSize(t *testing.T) {
 		t.Error(err)
 	}
 
-	defer framework.DefaultServer.SetTxPoolSize(framework.DefaultServer.TxPoolSize())
-	framework.DefaultServer.SetTxPoolSize(1)
-	defer framework.DefaultServer.BeginTimeout.Set(framework.DefaultServer.BeginTimeout.Get())
+	defer framework.Server.SetTxPoolSize(framework.Server.TxPoolSize())
+	framework.Server.SetTxPoolSize(1)
+	defer framework.Server.BeginTimeout.Set(framework.Server.BeginTimeout.Get())
 	timeout := 1 * time.Millisecond
-	framework.DefaultServer.BeginTimeout.Set(timeout)
+	framework.Server.BeginTimeout.Set(timeout)
 	vend := framework.DebugVars()
 	if err := verifyIntValue(vend, "TransactionPoolAvailable", 0); err != nil {
 		t.Error(err)
@@ -313,7 +313,7 @@ func TestTxPoolSize(t *testing.T) {
 		t.Error(err)
 	}
 
-	client2 := framework.NewDefaultClient()
+	client2 := framework.NewClient()
 	err = client2.Begin()
 	want := "tx_pool_full"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -327,15 +327,15 @@ func TestTxPoolSize(t *testing.T) {
 func TestTxTimeout(t *testing.T) {
 	vstart := framework.DebugVars()
 
-	defer framework.DefaultServer.SetTxTimeout(framework.DefaultServer.TxTimeout())
-	framework.DefaultServer.SetTxTimeout(1 * time.Millisecond)
+	defer framework.Server.SetTxTimeout(framework.Server.TxTimeout())
+	framework.Server.SetTxTimeout(1 * time.Millisecond)
 	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolTimeout", int(1*time.Millisecond)); err != nil {
 		t.Error(err)
 	}
 
 	catcher := framework.NewTxCatcher()
 	defer catcher.Close()
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	err := client.Begin()
 	if err != nil {
 		t.Error(err)
@@ -362,8 +362,8 @@ func TestTxTimeout(t *testing.T) {
 
 func TestForUpdate(t *testing.T) {
 	for _, mode := range []string{"for update", "lock in share mode"} {
-		client := framework.NewDefaultClient()
-		query := fmt.Sprintf("select * from vtocc_test where intval=2 %s", mode)
+		client := framework.NewClient()
+		query := fmt.Sprintf("select * from vitess_test where intval=2 %s", mode)
 		_, err := client.Execute(query, nil)
 		want := "error: Disallowed"
 		if err == nil || !strings.HasPrefix(err.Error(), want) {

@@ -28,8 +28,8 @@ type QueryClient struct {
 	transactionID int64
 }
 
-// NewDefaultClient creates a new client for the default server.
-func NewDefaultClient() *QueryClient {
+// NewClient creates a new client for Server.
+func NewClient() *QueryClient {
 	return &QueryClient{
 		ctx: callerid.NewContext(
 			context.Background(),
@@ -37,16 +37,7 @@ func NewDefaultClient() *QueryClient {
 			&qrpb.VTGateCallerID{Username: "dev"},
 		),
 		target: Target,
-		server: DefaultServer,
-	}
-}
-
-// NewClient creates a new client for the specified server.
-func NewClient(ctx context.Context, server *tabletserver.TabletServer) *QueryClient {
-	return &QueryClient{
-		ctx:    ctx,
-		target: Target,
-		server: server,
+		server: Server,
 	}
 }
 
@@ -93,7 +84,33 @@ func (client *QueryClient) Execute(query string, bindvars map[string]interface{}
 }
 
 // StreamExecute executes a query & streams the results.
-func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}, sendReply func(*mproto.QueryResult) error) error {
+func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}) (*mproto.QueryResult, error) {
+	result := &mproto.QueryResult{}
+	err := client.server.StreamExecute(
+		client.ctx,
+		&client.target,
+		&proto.Query{
+			Sql:           query,
+			BindVariables: bindvars,
+			TransactionId: client.transactionID,
+		},
+		func(res *mproto.QueryResult) error {
+			if result.Fields == nil {
+				result.Fields = res.Fields
+			}
+			result.Rows = append(result.Rows, res.Rows...)
+			result.RowsAffected += uint64(len(res.Rows))
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Stream streams the resutls of a query.
+func (client *QueryClient) Stream(query string, bindvars map[string]interface{}, sendFunc func(*mproto.QueryResult) error) error {
 	return client.server.StreamExecute(
 		client.ctx,
 		&client.target,
@@ -102,7 +119,7 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]inter
 			BindVariables: bindvars,
 			TransactionId: client.transactionID,
 		},
-		sendReply,
+		sendFunc,
 	)
 }
 

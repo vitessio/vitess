@@ -8,7 +8,7 @@ MAKEFLAGS = -s
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
 
 all: build test
 
@@ -65,9 +65,6 @@ unit_test_race: build
 # Requires the secret COVERALLS_TOKEN env variable to be set.
 unit_test_goveralls: build
 	travis/goveralls.sh
-
-queryservice_test:
-	go run test.go -docker=false queryservice
 
 .ONESHELL:
 SHELL = /bin/bash
