@@ -157,6 +157,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	// first health check, should change us to replica, and update the
 	// mysql port to 3306
 	before := time.Now()
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 12 * time.Second
 	agent.runHealthCheck(targetTabletType)
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -174,8 +175,16 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
+	bd := <-agent.QueryServiceControl.(*tabletservermock.Controller).BroadcastData
+	if bd.RealtimeStats.SecondsBehindMaster != 12 {
+		t.Errorf("unexpected replicaton delay: %v", *bd)
+	}
+	if agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType != pb.TabletType_REPLICA {
+		t.Errorf("invalid tabletserver target: %v", agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType)
+	}
 
 	// now make the tablet unhealthy
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 13 * time.Second
 	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
 	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
@@ -191,6 +200,13 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	}
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
+	bd = <-agent.QueryServiceControl.(*tabletservermock.Controller).BroadcastData
+	if bd.RealtimeStats.SecondsBehindMaster != 13 {
+		t.Errorf("unexpected replicaton delay: %v", *bd)
+	}
+	if agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType != pb.TabletType_SPARE {
+		t.Errorf("invalid tabletserver target: %v", agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType)
 	}
 }
 
@@ -217,6 +233,13 @@ func TestQueryServiceNotStarting(t *testing.T) {
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
+	bd := <-agent.QueryServiceControl.(*tabletservermock.Controller).BroadcastData
+	if bd.RealtimeStats.HealthError != "test cannot start query service" {
+		t.Errorf("unexpected HealthError: %v", *bd)
+	}
+	if agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType != pb.TabletType_SPARE {
+		t.Errorf("invalid tabletserver target: %v", agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType)
+	}
 }
 
 // TestQueryServiceStopped verifies that if a healthy tablet's query
@@ -228,6 +251,7 @@ func TestQueryServiceStopped(t *testing.T) {
 
 	// first health check, should change us to replica
 	before := time.Now()
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 14 * time.Second
 	agent.runHealthCheck(targetTabletType)
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -242,6 +266,13 @@ func TestQueryServiceStopped(t *testing.T) {
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
+	bd := <-agent.QueryServiceControl.(*tabletservermock.Controller).BroadcastData
+	if bd.RealtimeStats.SecondsBehindMaster != 14 {
+		t.Errorf("unexpected replicaton delay: %v", *bd)
+	}
+	if agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType != pb.TabletType_REPLICA {
+		t.Errorf("invalid tabletserver target: %v", agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType)
+	}
 
 	// shut down query service and prevent it from starting again
 	agent.QueryServiceControl.StopService()
@@ -249,6 +280,7 @@ func TestQueryServiceStopped(t *testing.T) {
 
 	// health check should now fail
 	before = time.Now()
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 15 * time.Second
 	agent.runHealthCheck(targetTabletType)
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -263,6 +295,16 @@ func TestQueryServiceStopped(t *testing.T) {
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
+	bd = <-agent.QueryServiceControl.(*tabletservermock.Controller).BroadcastData
+	if bd.RealtimeStats.SecondsBehindMaster != 15 {
+		t.Errorf("unexpected replicaton delay: %v", *bd)
+	}
+	if bd.RealtimeStats.HealthError != "test cannot start query service" {
+		t.Errorf("unexpected HealthError: %v", *bd)
+	}
+	if agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType != pb.TabletType_REPLICA {
+		t.Errorf("invalid tabletserver target: %v", agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType)
+	}
 }
 
 // TestTabletControl verifies the shard's TabletControl record can disable
@@ -274,6 +316,7 @@ func TestTabletControl(t *testing.T) {
 
 	// first health check, should change us to replica
 	before := time.Now()
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
 	agent.runHealthCheck(targetTabletType)
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -287,6 +330,13 @@ func TestTabletControl(t *testing.T) {
 	}
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
+	bd := <-agent.QueryServiceControl.(*tabletservermock.Controller).BroadcastData
+	if bd.RealtimeStats.SecondsBehindMaster != 16 {
+		t.Errorf("unexpected replicaton delay: %v", *bd)
+	}
+	if agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType != pb.TabletType_REPLICA {
+		t.Errorf("invalid tabletserver target: %v", agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType)
 	}
 
 	// now update the shard
@@ -317,6 +367,7 @@ func TestTabletControl(t *testing.T) {
 
 	// check running a health check will not start it again
 	before = time.Now()
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 17 * time.Second
 	agent.runHealthCheck(targetTabletType)
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -331,9 +382,17 @@ func TestTabletControl(t *testing.T) {
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
+	bd = <-agent.QueryServiceControl.(*tabletservermock.Controller).BroadcastData
+	if bd.RealtimeStats.SecondsBehindMaster != 17 {
+		t.Errorf("unexpected replicaton delay: %v", *bd)
+	}
+	if agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType != pb.TabletType_REPLICA {
+		t.Errorf("invalid tabletserver target: %v", agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType)
+	}
 
 	// go unhealthy, check we go to spare and QS is not running
 	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 18 * time.Second
 	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
@@ -349,9 +408,17 @@ func TestTabletControl(t *testing.T) {
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
+	bd = <-agent.QueryServiceControl.(*tabletservermock.Controller).BroadcastData
+	if bd.RealtimeStats.SecondsBehindMaster != 18 {
+		t.Errorf("unexpected replicaton delay: %v", *bd)
+	}
+	if agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType != pb.TabletType_SPARE {
+		t.Errorf("invalid tabletserver target: %v", agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType)
+	}
 
 	// go back healthy, check QS is still not running
 	agent.HealthReporter.(*fakeHealthCheck).reportError = nil
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
 	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
@@ -366,6 +433,13 @@ func TestTabletControl(t *testing.T) {
 	}
 	if agent._healthyTime.Sub(before) < 0 {
 		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
+	bd = <-agent.QueryServiceControl.(*tabletservermock.Controller).BroadcastData
+	if bd.RealtimeStats.SecondsBehindMaster != 19 {
+		t.Errorf("unexpected replicaton delay: %v", *bd)
+	}
+	if agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType != pb.TabletType_REPLICA {
+		t.Errorf("invalid tabletserver target: %v", agent.QueryServiceControl.(*tabletservermock.Controller).CurrentTarget.TabletType)
 	}
 }
 
