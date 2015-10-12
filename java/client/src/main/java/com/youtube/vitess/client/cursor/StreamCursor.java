@@ -1,9 +1,9 @@
 package com.youtube.vitess.client.cursor;
 
 import com.youtube.vitess.client.StreamIterator;
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Query.QueryResult;
-import com.youtube.vitess.proto.Query.Row;
 
 import java.sql.SQLDataException;
 import java.sql.SQLException;
@@ -17,8 +17,7 @@ import java.util.List;
  */
 public class StreamCursor extends Cursor {
   private StreamIterator<QueryResult> streamIterator;
-  private Iterator<Row> rowIterator;
-  private Row row;
+  private Iterator<Query.Row> rowIterator;
 
   private List<Field> fields;
 
@@ -51,7 +50,6 @@ public class StreamCursor extends Cursor {
 
     return fields;
   }
-
   @Override
   public void close() throws Exception {
     streamIterator.close();
@@ -59,37 +57,26 @@ public class StreamCursor extends Cursor {
   }
 
   @Override
-  public boolean next() throws SQLException {
+  public Row next() throws SQLException {
     if (streamIterator == null) {
       throw new SQLDataException("next() called on closed Cursor");
     }
 
     // Get the next Row from the current QueryResult.
     if (rowIterator != null && rowIterator.hasNext()) {
-      row = rowIterator.next();
-      return true;
+      return new Row(getFields(), rowIterator.next(), getFieldMap());
     }
 
     // Get the next QueryResult. Loop in case we get a QueryResult with no Rows (e.g. only Fields).
     while (nextQueryResult()) {
       // Get the first Row from the new QueryResult.
       if (rowIterator.hasNext()) {
-        row = rowIterator.next();
-        return true;
+        return new Row(getFields(), rowIterator.next(), getFieldMap());
       }
     }
 
     // No more Rows and no more QueryResults.
-    row = null;
-    return false;
-  }
-
-  @Override
-  protected Row getCurrentRow() throws SQLException {
-    if (row == null) {
-      throw new SQLDataException("no current row");
-    }
-    return row;
+    return null;
   }
 
   /**

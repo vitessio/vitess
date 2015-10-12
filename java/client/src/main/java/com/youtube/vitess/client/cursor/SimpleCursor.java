@@ -1,8 +1,8 @@
 package com.youtube.vitess.client.cursor;
 
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Query.QueryResult;
-import com.youtube.vitess.proto.Query.Row;
 
 import java.sql.SQLDataException;
 import java.sql.SQLException;
@@ -14,8 +14,7 @@ import java.util.List;
  */
 public class SimpleCursor extends Cursor {
   private QueryResult queryResult;
-  private Iterator<Row> rowIterator;
-  private Row row;
+  private Iterator<Query.Row> rowIterator;
 
   public SimpleCursor(QueryResult queryResult) {
     this.queryResult = queryResult;
@@ -39,30 +38,18 @@ public class SimpleCursor extends Cursor {
 
   @Override
   public void close() throws Exception {
-    row = null;
     rowIterator = null;
   }
 
   @Override
-  public boolean next() throws SQLException {
+  public Row next() throws SQLException {
     if (rowIterator == null) {
       throw new SQLDataException("next() called on closed Cursor");
     }
 
     if (rowIterator.hasNext()) {
-      row = rowIterator.next();
-      return true;
+      return new Row(queryResult.getFieldsList(), rowIterator.next(), getFieldMap());
     }
-
-    row = null;
-    return false;
-  }
-
-  @Override
-  protected Row getCurrentRow() throws SQLException {
-    if (row == null) {
-      throw new SQLDataException("no current row");
-    }
-    return row;
+    return null;
   }
 }

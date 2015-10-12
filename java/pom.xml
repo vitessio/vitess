@@ -14,6 +14,7 @@
         <module>client</module>
         <module>gorpc</module>
         <module>grpc-client</module>
+        <module>hadoop</module>
         <module>vtgate-client</module>
     </modules>
 
@@ -93,4 +94,18 @@
         <version>${protobuf.java.version}</version>
       </dependency>
     </dependencies>
+
+    <build>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.3</version>
+          <configuration>
+            <source>1.7</source>
+            <target>1.7</target>
+          </configuration>
+        </plugin>
+      </plugins>
+    </build>
 </project>

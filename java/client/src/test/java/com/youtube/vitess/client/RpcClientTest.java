@@ -2,8 +2,8 @@ package com.youtube.vitess.client;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
-
 import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.client.cursor.Row;
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Topodata.KeyRange;
 import com.youtube.vitess.proto.Topodata.KeyspaceIdType;
@@ -13,7 +13,6 @@ import com.youtube.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
 import com.youtube.vitess.proto.Topodata.TabletType;
 import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
 import com.youtube.vitess.proto.Vtrpc.CallerID;
-
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Before;
@@ -120,11 +119,12 @@ public abstract class RpcClientTest {
 
     // Echo values are stored as columns in the first row of the result.
     List<Field> fields = cursor.getFields();
-    Assert.assertEquals(true, cursor.next());
+    Row row = cursor.next();
+    Assert.assertNotNull(row);
     for (int i = 0; i < fields.size(); i++) {
-      values.put(fields.get(i).getName(), new String(cursor.getBytes(i), StandardCharsets.UTF_8));
+      values.put(fields.get(i).getName(), new String(row.getBytes(i), StandardCharsets.UTF_8));
     }
-    Assert.assertEquals(false, cursor.next()); // There should only be one row.
+    Assert.assertNull(cursor.next()); // There should only be one row.
     cursor.close();
 
     return values;
