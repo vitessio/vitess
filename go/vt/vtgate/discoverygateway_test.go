@@ -261,12 +261,13 @@ func (fhc *fakeHealthCheck) SetListener(listener discovery.HealthCheckStatsListe
 }
 
 // AddEndPoint adds the endpoint, and starts health check.
-func (fhc *fakeHealthCheck) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
+func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *pbt.EndPoint) {
 	key := discovery.EndPointToMapKey(endPoint)
 	item := &fhcItem{
 		eps: &discovery.EndPointStats{
 			EndPoint: endPoint,
 			Cell:     cell,
+			Name:     name,
 		},
 	}
 	fhc.items[key] = item
@@ -328,7 +329,7 @@ func (fhc *fakeHealthCheck) addTestEndPoint(cell, host string, port int32, keysp
 	key := discovery.EndPointToMapKey(ep)
 	item := fhc.items[key]
 	if item == nil {
-		fhc.AddEndPoint(cell, ep)
+		fhc.AddEndPoint(cell, "", ep)
 		item = fhc.items[key]
 	}
 	item.eps.Target = &pbq.Target{Keyspace: keyspace, Shard: shard, TabletType: tabletType}
