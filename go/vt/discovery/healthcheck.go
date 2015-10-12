@@ -437,6 +437,9 @@ func (epsl EndPointStatsList) Swap(i, j int) {
 // StatusAsHTML returns an HTML version of the status.
 func (epcs *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 	epLinks := make([]string, 0, 1)
+	if epcs.EndPointsStats != nil {
+		sort.Sort(epcs.EndPointsStats)
+	}
 	for _, eps := range epcs.EndPointsStats {
 		vtPort := eps.EndPoint.PortMap["vt"]
 		color := "green"
