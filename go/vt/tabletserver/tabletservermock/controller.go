@@ -25,9 +25,6 @@ type Controller struct {
 	// SetServingTypeError is the return value for SetServingType
 	SetServingTypeError error
 
-	// StartServiceError is the return value for StartService
-	StartServiceError error
-
 	// IsHealthy is the return value for IsHealthy
 	IsHealthyError error
 
@@ -40,7 +37,6 @@ func NewController() *Controller {
 	return &Controller{
 		QueryServiceEnabled: false,
 		InitDBConfigError:   nil,
-		StartServiceError:   nil,
 		IsHealthyError:      nil,
 		ReloadSchemaCount:   0,
 	}
@@ -61,15 +57,17 @@ func (tqsc *Controller) InitDBConfig(*pb.Target, *dbconfigs.DBConfigs, []tablets
 }
 
 // SetServingType is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetServingType(topodata.TabletType, bool) error {
-	tqsc.QueryServiceEnabled = tqsc.SetServingTypeError == nil
+func (tqsc *Controller) SetServingType(tabletType topodata.TabletType, serving bool) error {
+	if tqsc.SetServingTypeError == nil {
+		tqsc.QueryServiceEnabled = serving
+	}
 	return tqsc.SetServingTypeError
 }
 
 // StartService is part of the tabletserver.Controller interface
 func (tqsc *Controller) StartService(*pb.Target, *dbconfigs.DBConfigs, []tabletserver.SchemaOverride, mysqlctl.MysqlDaemon) error {
-	tqsc.QueryServiceEnabled = tqsc.StartServiceError == nil
-	return tqsc.StartServiceError
+	tqsc.QueryServiceEnabled = true
+	return nil
 }
 
 // StopService is part of the tabletserver.Controller interface

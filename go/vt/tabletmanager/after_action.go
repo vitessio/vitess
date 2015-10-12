@@ -9,7 +9,6 @@ package tabletmanager
 import (
 	"encoding/hex"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"golang.org/x/net/context"
@@ -48,36 +47,12 @@ const keyrangeQueryRules string = "KeyrangeQueryRules"
 const blacklistQueryRules string = "BlacklistQueryRules"
 
 func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet, blacklistedTables []string) error {
-	// if the query service is already running, we're not starting it again
-	if agent.QueryServiceControl.IsServing() {
-		return nil
-	}
-
-	// only for real instances
-	if agent.DBConfigs != nil {
-		// Update our DB config to match the info we have in the tablet
-		if agent.DBConfigs.App.DbName == "" {
-			agent.DBConfigs.App.DbName = topoproto.TabletDbName(tablet)
-		}
-		agent.DBConfigs.App.Keyspace = tablet.Keyspace
-		agent.DBConfigs.App.Shard = tablet.Shard
-		if tablet.Type != pbt.TabletType_MASTER {
-			agent.DBConfigs.App.EnableInvalidator = true
-		} else {
-			agent.DBConfigs.App.EnableInvalidator = false
-		}
-	}
-
 	err := agent.loadKeyspaceAndBlacklistRules(tablet, blacklistedTables)
 	if err != nil {
 		return err
 	}
 
-	return agent.QueryServiceControl.StartService(&pb.Target{
-		Keyspace:   tablet.Keyspace,
-		Shard:      tablet.Shard,
-		TabletType: tablet.Type,
-	}, agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon)
+	return agent.QueryServiceControl.SetServingType(tablet.Type, true)
 }
 
 // loadKeyspaceAndBlacklistRules does what the name suggests:
@@ -141,9 +116,38 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blac
 	return nil
 }
 
-func (agent *ActionAgent) stopQueryService(reason string) {
-	log.Infof("Agent is going to stop query service, reason: %v", reason)
-	agent.QueryServiceControl.StopService()
+func (agent *ActionAgent) disallowQueries(tablet *pbt.Tablet, reason string) error {
+	log.Infof("Agent is going to disallow queries, reason: %v", reason)
+
+	return agent.QueryServiceControl.SetServingType(tablet.Type, false)
+}
+
+func (agent *ActionAgent) broadcastHealth() {
+	// get the replication delays
+	agent.mutex.Lock()
+	replicationDelay := agent._replicationDelay
+	healthError := agent._healthy
+	terTime := agent._tabletExternallyReparentedTime
+	agent.mutex.Unlock()
+
+	// send it to our observers
+	// FIXME(alainjobart,liguo) add CpuUsage
+	stats := &pb.RealtimeStats{
+		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
+	}
+	if agent.BinlogPlayerMap != nil {
+		stats.SecondsBehindMasterFilteredReplication, stats.BinlogPlayersCount = agent.BinlogPlayerMap.StatusSummary()
+	}
+	if healthError != nil {
+		stats.HealthError = healthError.Error()
+	}
+	var ts int64
+	if !terTime.IsZero() {
+		ts = terTime.Unix()
+	}
+	defer func() {
+		agent.QueryServiceControl.BroadcastHealth(ts, stats)
+	}()
 }
 
 // changeCallback is run after every action that might
@@ -188,50 +192,12 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		disallowQueryReason = fmt.Sprintf("not a serving tablet type(%v)", newTablet.Type)
 	}
 
-	// Read the keyspace on masters to get ShardingColumnType,
-	// for binlog replication, only if source shards are set.
-	var keyspaceInfo *topo.KeyspaceInfo
-	if newTablet.Type == pbt.TabletType_MASTER && shardInfo != nil && len(shardInfo.SourceShards) > 0 {
-		keyspaceInfo, err = agent.TopoServer.GetKeyspace(ctx, newTablet.Keyspace)
-		if err != nil {
-			log.Errorf("Cannot read keyspace for this tablet %v: %v", newTablet.Alias, err)
-			keyspaceInfo = nil
-		}
-	}
-
 	if allowQuery {
-		// There are a few transitions when we need to restart the query service:
-		switch {
-		// If either InitMaster or InitSlave was called, because those calls
-		// (or a prior call to ResetReplication) may have silently broken the
-		// rowcache invalidator by executing RESET MASTER.
-		// Note that we don't care about fixing it after ResetReplication itself
-		// since that call breaks everything on purpose, and we don't expect
-		// anything to start working until either InitMaster or InitSlave.
-		case agent.initReplication:
-			agent.initReplication = false
-			agent.stopQueryService("initialize replication")
-
-		// Transitioning from replica to master, so clients that were already
-		// connected don't keep on using the master as replica or rdonly.
-		case newTablet.Type == pbt.TabletType_MASTER && oldTablet.Type != pbt.TabletType_MASTER:
-			agent.stopQueryService("tablet promoted to master")
-
-		// Having different parameters for the query service.
-		// It needs to stop and restart with the new parameters.
-		// That includes:
-		//   - changing KeyRange
-		//   - changing the BlacklistedTables list
-		case (newTablet.KeyRange != oldTablet.KeyRange),
-			!reflect.DeepEqual(blacklistedTables, agent.BlacklistedTables()):
-			agent.stopQueryService("keyrange/blacklistedtables changed")
-		}
-
 		if err := agent.allowQueries(newTablet, blacklistedTables); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
-		agent.stopQueryService(disallowQueryReason)
+		agent.disallowQueries(newTablet, disallowQueryReason)
 	}
 
 	// save the tabletControl we've been using, so the background
@@ -261,6 +227,16 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// See if we need to start or stop any binlog player
 	if agent.BinlogPlayerMap != nil {
 		if newTablet.Type == pbt.TabletType_MASTER {
+			// Read the keyspace on masters to get
+			// ShardingColumnType, for binlog replication,
+			// only if source shards are set.
+			var keyspaceInfo *topo.KeyspaceInfo
+			if shardInfo != nil && len(shardInfo.SourceShards) > 0 {
+				keyspaceInfo, err = agent.TopoServer.GetKeyspace(ctx, newTablet.Keyspace)
+				if err != nil {
+					keyspaceInfo = nil
+				}
+			}
 			agent.BinlogPlayerMap.RefreshMap(agent.batchCtx, newTablet, keyspaceInfo, shardInfo)
 		} else {
 			agent.BinlogPlayerMap.StopAllPlayersAndReset()
