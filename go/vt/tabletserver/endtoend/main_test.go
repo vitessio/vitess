@@ -54,12 +54,12 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = framework.StartDefaultServer(connParams, schemaOverrides)
+		err = framework.StartServer(connParams, schemaOverrides)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
-		defer framework.StopDefaultServer()
+		defer framework.StopServer()
 
 		err = initTableACL()
 		if err != nil {

@@ -27,7 +27,7 @@ Absent mismatch on table stats: 0, want 3
 Absent mismatch on query info: 0, want 3`
 
 func TestTheFramework(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	expectFail := framework.TestCase{
 		Name:  "fail",
@@ -54,7 +54,7 @@ func TestTheFramework(t *testing.T) {
 }
 
 func TestNocacheCases(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	testCases := []framework.Testable{
 		&framework.TestCase{

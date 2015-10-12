@@ -118,18 +118,18 @@ func TestConfigVars(t *testing.T) {
 
 func TestPoolSize(t *testing.T) {
 	vstart := framework.DebugVars()
-	defer framework.DefaultServer.SetPoolSize(framework.DefaultServer.PoolSize())
-	framework.DefaultServer.SetPoolSize(1)
+	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
+	framework.Server.SetPoolSize(1)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
-		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
 		wg.Done()
 	}()
 	// The queries have to be different so consolidator doesn't kick in.
 	go func() {
-		framework.NewDefaultClient().Execute("select sleep(0.24) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.24) from dual", nil)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -144,11 +144,11 @@ func TestPoolSize(t *testing.T) {
 }
 
 func TestQueryCache(t *testing.T) {
-	defer framework.DefaultServer.SetQueryCacheCap(framework.DefaultServer.QueryCacheCap())
-	framework.DefaultServer.SetQueryCacheCap(1)
+	defer framework.Server.SetQueryCacheCap(framework.Server.QueryCacheCap())
+	framework.Server.SetQueryCacheCap(1)
 
 	bindVars := map[string]interface{}{"ival1": 1, "ival2": 1}
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	_, _ = client.Execute("select * from vtocc_test where intval=:ival1", bindVars)
 	_, _ = client.Execute("select * from vtocc_test where intval=:ival2", bindVars)
 	vend := framework.DebugVars()
@@ -162,7 +162,7 @@ func TestQueryCache(t *testing.T) {
 		t.Error(err)
 	}
 
-	framework.DefaultServer.SetQueryCacheCap(10)
+	framework.Server.SetQueryCacheCap(10)
 	_, _ = client.Execute("select * from vtocc_test where intval=:ival1", bindVars)
 	vend = framework.DebugVars()
 	if err := verifyIntValue(vend, "QueryCacheLength", 2); err != nil {
@@ -183,10 +183,10 @@ func TestQueryCache(t *testing.T) {
 }
 
 func TestMexResultSize(t *testing.T) {
-	defer framework.DefaultServer.SetMaxResultSize(framework.DefaultServer.MaxResultSize())
-	framework.DefaultServer.SetMaxResultSize(2)
+	defer framework.Server.SetMaxResultSize(framework.Server.MaxResultSize())
+	framework.Server.SetMaxResultSize(2)
 
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	query := "select * from vtocc_test"
 	_, err := client.Execute(query, nil)
 	want := "error: Row count exceeded"
@@ -197,7 +197,7 @@ func TestMexResultSize(t *testing.T) {
 		t.Error(err)
 	}
 
-	framework.DefaultServer.SetMaxResultSize(10)
+	framework.Server.SetMaxResultSize(10)
 	_, err = client.Execute(query, nil)
 	if err != nil {
 		t.Error(err)
@@ -206,7 +206,7 @@ func TestMexResultSize(t *testing.T) {
 }
 
 func TestMaxDMLRows(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	_, err := client.Execute(
 		"insert into vtocc_a(eid, id, name, foo) values "+
 			"(3, 1, '', ''), (3, 2, '', ''), (3, 3, '', '')",
@@ -238,8 +238,8 @@ func TestMaxDMLRows(t *testing.T) {
 
 	// Verify that rows get split, and if pk changes, those values are also
 	// split correctly.
-	defer framework.DefaultServer.SetMaxDMLRows(framework.DefaultServer.MaxDMLRows())
-	framework.DefaultServer.SetMaxDMLRows(2)
+	defer framework.Server.SetMaxDMLRows(framework.Server.MaxDMLRows())
+	framework.Server.SetMaxDMLRows(2)
 	_, err = client.Execute("update vtocc_a set eid=2 where eid = 3", nil)
 	if err != nil {
 		t.Error(err)
@@ -309,10 +309,10 @@ func TestMaxDMLRows(t *testing.T) {
 
 func TestQueryTimeout(t *testing.T) {
 	vstart := framework.DebugVars()
-	defer framework.DefaultServer.QueryTimeout.Set(framework.DefaultServer.QueryTimeout.Get())
-	framework.DefaultServer.QueryTimeout.Set(10 * time.Millisecond)
+	defer framework.Server.QueryTimeout.Set(framework.Server.QueryTimeout.Get())
+	framework.Server.QueryTimeout.Set(10 * time.Millisecond)
 
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	err := client.Begin()
 	if err != nil {
 		t.Error(err)
@@ -353,7 +353,7 @@ func TestStrictMode(t *testing.T) {
 
 	// Strict mode on.
 	func() {
-		client := framework.NewDefaultClient()
+		client := framework.NewClient()
 		err := client.Begin()
 		if err != nil {
 			t.Error(err)
@@ -372,11 +372,11 @@ func TestStrictMode(t *testing.T) {
 
 	// Strict mode off.
 	func() {
-		framework.DefaultServer.SetStrictMode(false)
-		defer framework.DefaultServer.SetStrictMode(true)
+		framework.Server.SetStrictMode(false)
+		defer framework.Server.SetStrictMode(true)
 
 		for _, query := range queries {
-			client := framework.NewDefaultClient()
+			client := framework.NewClient()
 			err := client.Begin()
 			if err != nil {
 				t.Error(err)

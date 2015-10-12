@@ -16,7 +16,7 @@ import (
 )
 
 func TestBatchRead(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	queries := []proto.BoundQuery{{
 		Sql:           "select * from vtocc_a where id = :a",
 		BindVariables: map[string]interface{}{"a": 2},
@@ -85,7 +85,7 @@ func TestBatchRead(t *testing.T) {
 }
 
 func TestBatchTransaction(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	queries := []proto.BoundQuery{{
 		Sql: "insert into vtocc_test values(4, null, null, null)",
 	}, {

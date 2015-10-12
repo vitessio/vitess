@@ -28,8 +28,8 @@ type QueryClient struct {
 	transactionID int64
 }
 
-// NewDefaultClient creates a new client for the default server.
-func NewDefaultClient() *QueryClient {
+// NewClient creates a new client for Server.
+func NewClient() *QueryClient {
 	return &QueryClient{
 		ctx: callerid.NewContext(
 			context.Background(),
@@ -37,16 +37,7 @@ func NewDefaultClient() *QueryClient {
 			&qrpb.VTGateCallerID{Username: "dev"},
 		),
 		target: Target,
-		server: DefaultServer,
-	}
-}
-
-// NewClient creates a new client for the specified server.
-func NewClient(ctx context.Context, server *tabletserver.TabletServer) *QueryClient {
-	return &QueryClient{
-		ctx:    ctx,
-		target: Target,
-		server: server,
+		server: Server,
 	}
 }
 

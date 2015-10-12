@@ -13,7 +13,7 @@ import (
 )
 
 func TestTableACLNoAccess(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	aclErr := "error: table acl error"
 	execCases := []struct {
@@ -126,21 +126,21 @@ func TestQueryRules(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	err = framework.DefaultServer.SetQueryRules("endtoend", rules)
+	err = framework.Server.SetQueryRules("endtoend", rules)
 	want := "Rule source identifier endtoend is not valid"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 	}
 
-	framework.DefaultServer.RegisterQueryRuleSource("endtoend")
-	defer framework.DefaultServer.UnRegisterQueryRuleSource("endtoend")
-	err = framework.DefaultServer.SetQueryRules("endtoend", rules)
+	framework.Server.RegisterQueryRuleSource("endtoend")
+	defer framework.Server.UnRegisterQueryRuleSource("endtoend")
+	err = framework.Server.SetQueryRules("endtoend", rules)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	query := "select * from vtocc_test where intval=:asdfg"
 	bv := map[string]interface{}{"asdfg": 1}
 	_, err = client.Execute(query, bv)
@@ -154,7 +154,7 @@ func TestQueryRules(t *testing.T) {
 		t.Errorf("Error: %v, want %s", err, want)
 	}
 
-	err = framework.DefaultServer.SetQueryRules("endtoend", nil)
+	err = framework.Server.SetQueryRules("endtoend", nil)
 	if err != nil {
 		t.Error(err)
 		return

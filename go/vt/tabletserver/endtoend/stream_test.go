@@ -17,7 +17,7 @@ import (
 )
 
 func TestStreamUnion(t *testing.T) {
-	qr, err := framework.NewDefaultClient().StreamExecute("select 1 from dual union select 1 from dual", nil)
+	qr, err := framework.NewClient().StreamExecute("select 1 from dual union select 1 from dual", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -28,7 +28,7 @@ func TestStreamUnion(t *testing.T) {
 }
 
 func TestStreamBigData(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	err := populateBigData(client)
 	if err != nil {
 		t.Error(err)
@@ -73,7 +73,7 @@ func TestStreamBigData(t *testing.T) {
 }
 
 func TestStreamTerminate(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	err := populateBigData(client)
 	if err != nil {
 		t.Error(err)
@@ -139,7 +139,7 @@ func populateBigData(client *framework.QueryClient) error {
 }
 
 func TestStreamError(t *testing.T) {
-	_, err := framework.NewDefaultClient().StreamExecute("select count(abcd) from vtocc_big", nil)
+	_, err := framework.NewClient().StreamExecute("select count(abcd) from vtocc_big", nil)
 	want := "error: Unknown column"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)

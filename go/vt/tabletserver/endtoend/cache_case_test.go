@@ -12,7 +12,7 @@ import (
 
 // TestCacheCases1 covers cases for vtocc_cached1.
 func TestCacheCases1(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	testCases := []framework.Testable{
 		framework.TestQuery("alter table vtocc_cached1 comment 'new'"),
@@ -205,7 +205,7 @@ func TestCacheCases1(t *testing.T) {
 
 // TestCacheCases2 covers cases for vtocc_cached2.
 func TestCacheCases2(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	testCases := []framework.Testable{
 		framework.TestQuery("alter table vtocc_cached2 comment 'new'"),
@@ -527,7 +527,7 @@ func TestCacheCases2(t *testing.T) {
 }
 
 func TestCacheCasesOverrides(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	testCases := []framework.Testable{
 		&framework.TestCase{

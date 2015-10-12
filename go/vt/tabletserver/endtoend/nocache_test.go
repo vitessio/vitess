@@ -24,7 +24,7 @@ import (
 
 func TestSimpleRead(t *testing.T) {
 	vstart := framework.DebugVars()
-	_, err := framework.NewDefaultClient().Execute("select * from vtocc_test where intval=1", nil)
+	_, err := framework.NewClient().Execute("select * from vtocc_test where intval=1", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -39,7 +39,7 @@ func TestSimpleRead(t *testing.T) {
 }
 
 func TestBinary(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	defer client.Execute("delete from vtocc_test where intval in (4,5)", nil)
 
 	binaryData := "\x00'\"\b\n\r\t\x1a\\\x00\x0f\xf0\xff"
@@ -97,7 +97,7 @@ func TestBinary(t *testing.T) {
 }
 
 func TestNocacheListArgs(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	query := "select * from vtocc_test where intval in ::list"
 
 	qr, err := client.Execute(
@@ -158,7 +158,7 @@ func TestNocacheListArgs(t *testing.T) {
 
 func TestIntegrityError(t *testing.T) {
 	vstart := framework.DebugVars()
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	_, err := client.Execute("insert into vtocc_test values(1, null, null, null)", nil)
 	want := "error: Duplicate entry '1'"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -174,7 +174,7 @@ func TestTrailingComment(t *testing.T) {
 	v1 := framework.FetchInt(vstart, "QueryCacheLength")
 
 	bindVars := map[string]interface{}{"ival": 1}
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	for _, query := range []string{
 		"select * from vtocc_test where intval=:ival",
@@ -194,7 +194,7 @@ func TestTrailingComment(t *testing.T) {
 }
 
 func TestUpsertNonPKHit(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	err := client.Begin()
 	if err != nil {
 		t.Error(err)
@@ -233,8 +233,8 @@ func TestSchemaReload(t *testing.T) {
 		_, _ = conn.ExecuteFetch("drop table vtocc_temp", 10, false)
 		conn.Close()
 	}()
-	framework.DefaultServer.ReloadSchema()
-	client := framework.NewDefaultClient()
+	framework.Server.ReloadSchema()
+	client := framework.NewClient()
 	waitTime := 50 * time.Millisecond
 	for i := 0; i < 10; i++ {
 		time.Sleep(waitTime)
@@ -254,17 +254,17 @@ func TestSchemaReload(t *testing.T) {
 
 func TestConsolidation(t *testing.T) {
 	vstart := framework.DebugVars()
-	defer framework.DefaultServer.SetPoolSize(framework.DefaultServer.PoolSize())
-	framework.DefaultServer.SetPoolSize(1)
+	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
+	framework.Server.SetPoolSize(1)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
-		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
 		wg.Done()
 	}()
 	go func() {
-		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -279,7 +279,7 @@ func TestConsolidation(t *testing.T) {
 }
 
 func TestBindInSelect(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	// Int bind var.
 	qr, err := client.Execute(
@@ -379,9 +379,9 @@ func TestHealth(t *testing.T) {
 
 func TestStreamHealth(t *testing.T) {
 	ch := make(chan *pb.StreamHealthResponse, 10)
-	id, _ := framework.DefaultServer.StreamHealthRegister(ch)
-	defer framework.DefaultServer.StreamHealthUnregister(id)
-	framework.DefaultServer.BroadcastHealth(0, nil)
+	id, _ := framework.Server.StreamHealthRegister(ch)
+	defer framework.Server.StreamHealthUnregister(id)
+	framework.Server.BroadcastHealth(0, nil)
 	health := <-ch
 	if !reflect.DeepEqual(*health.Target, framework.Target) {
 		t.Errorf("Health: %+v, want %+v", *health.Target, framework.Target)
@@ -389,7 +389,7 @@ func TestStreamHealth(t *testing.T) {
 }
 
 func TestQueryStats(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	vstart := framework.DebugVars()
 
 	start := time.Now()
@@ -442,7 +442,7 @@ func TestQueryStats(t *testing.T) {
 }
 
 func TestDBAStatements(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	qr, err := client.Execute("show variables like 'version'", nil)
 	if err != nil {

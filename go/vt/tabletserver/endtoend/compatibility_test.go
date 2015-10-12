@@ -16,7 +16,7 @@ import (
 )
 
 func TestCharaterSet(t *testing.T) {
-	qr, err := framework.NewDefaultClient().Execute("select * from vtocc_test where intval=1", nil)
+	qr, err := framework.NewClient().Execute("select * from vtocc_test where intval=1", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -57,7 +57,7 @@ func TestCharaterSet(t *testing.T) {
 }
 
 func TestInts(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	defer client.Execute("delete from vtocc_ints", nil)
 
 	_, err := client.Execute(
@@ -157,7 +157,7 @@ func TestInts(t *testing.T) {
 }
 
 func TestFractionals(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	defer client.Execute("delete from vtocc_fracts", nil)
 
 	_, err := client.Execute(
@@ -220,7 +220,7 @@ func TestFractionals(t *testing.T) {
 }
 
 func TestStrings(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	defer client.Execute("delete from vtocc_strings", nil)
 
 	_, err := client.Execute(
@@ -314,7 +314,7 @@ func TestStrings(t *testing.T) {
 }
 
 func TestMiscTypes(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	defer client.Execute("delete from vtocc_misc", nil)
 
 	_, err := client.Execute(
@@ -377,7 +377,7 @@ func TestMiscTypes(t *testing.T) {
 }
 
 func TestNull(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	qr, err := client.Execute("select null from dual", nil)
 	if err != nil {
 		t.Error(err)
@@ -404,7 +404,7 @@ func TestNull(t *testing.T) {
 }
 
 func TestTypeLimits(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	defer func() {
 		for _, cleanup := range []string{
 			"delete from vtocc_ints",

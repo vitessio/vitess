@@ -14,7 +14,7 @@ import (
 )
 
 func TestUncacheableTables(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 
 	nocacheTables := []struct {
 		name   string
@@ -78,7 +78,7 @@ func TestOverrideTables(t *testing.T) {
 }
 
 func TestCacheDisallows(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	testCases := []struct {
 		query string
 		bv    map[string]interface{}
@@ -101,7 +101,7 @@ func TestCacheDisallows(t *testing.T) {
 }
 
 func TestCacheListArgs(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	query := "select * from vtocc_cached1 where eid in ::list"
 	successCases := []struct {
 		bv       map[string]interface{}
@@ -136,7 +136,7 @@ func TestCacheListArgs(t *testing.T) {
 }
 
 func verifyVtoccCached2(t *testing.T, table string) error {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	query := fmt.Sprintf("select * from %s where eid = 2 and bid = 'foo'", table)
 	_, err := client.Execute(query, nil)
 	if err != nil {
@@ -163,7 +163,7 @@ func TestUncache(t *testing.T) {
 	}
 
 	// Disable rowcache for vtocc_cached2
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	_, err = client.Execute("alter table vtocc_cached2 comment 'vtocc_nocache'", nil)
 	if err != nil {
 		t.Error(err)
@@ -199,7 +199,7 @@ func TestRename(t *testing.T) {
 	}
 
 	// Rename & test
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	_, err = client.Execute("alter table vtocc_cached2 rename to vtocc_renamed", nil)
 	if err != nil {
 		t.Error(err)
@@ -230,7 +230,7 @@ func TestRename(t *testing.T) {
 
 func TestSpotCheck(t *testing.T) {
 	vstart := framework.DebugVars()
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	_, err := client.Execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
@@ -240,8 +240,8 @@ func TestSpotCheck(t *testing.T) {
 		t.Error(err)
 	}
 
-	defer framework.DefaultServer.SetSpotCheckRatio(framework.DefaultServer.SpotCheckRatio())
-	framework.DefaultServer.SetSpotCheckRatio(1)
+	defer framework.Server.SetSpotCheckRatio(framework.Server.SpotCheckRatio())
+	framework.Server.SetSpotCheckRatio(1)
 	if err := verifyIntValue(framework.DebugVars(), "RowcacheSpotCheckRatio", 1); err != nil {
 		t.Error(err)
 	}
@@ -276,7 +276,7 @@ func TestSpotCheck(t *testing.T) {
 }
 
 func TestCacheTypes(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	badRequests := []struct {
 		query string
 		bv    map[string]interface{}
@@ -306,7 +306,7 @@ func TestCacheTypes(t *testing.T) {
 }
 
 func TestNoData(t *testing.T) {
-	qr, err := framework.NewDefaultClient().Execute("select * from vtocc_cached2 where eid = 6 and name = 'bar'", nil)
+	qr, err := framework.NewClient().Execute("select * from vtocc_cached2 where eid = 6 and name = 'bar'", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -317,7 +317,7 @@ func TestNoData(t *testing.T) {
 }
 
 func TestCacheStats(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	query := "select * from vtocc_cached2 where eid = 2 and bid = 'foo'"
 	_, err := client.Execute(query, nil)
 	if err != nil {
