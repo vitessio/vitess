@@ -120,30 +120,6 @@
 			"Shard": 4,
 			"RetryMax": 0
 		},
-		"queryservice_vtocc": {
-			"File": "queryservice_test.py",
-			"Args": [
-				"-m",
-				"-e",
-				"vtocc"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0
-		},
-		"queryservice_vttablet": {
-			"File": "queryservice_test.py",
-			"Args": [
-				"-m",
-				"-e",
-				"vttablet"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0
-		},
 		"reparent": {
 			"File": "reparent.py",
 			"Args": [],

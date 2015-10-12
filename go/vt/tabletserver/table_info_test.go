@@ -68,7 +68,7 @@ func TestTableInfoWithoutRowCacheViaComment(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "vtocc_nocache", db)
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "vitess_nocache", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}

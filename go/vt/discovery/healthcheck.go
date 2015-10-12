@@ -55,6 +55,8 @@ type HealthCheck interface {
 	GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats
 	// GetEndPointStatsFromTarget returns all EndPointStats for the given target.
 	GetEndPointStatsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*EndPointStats
+	// GetConnection returns the TabletConn of the given endpoint.
+	GetConnection(endPoint *pbt.EndPoint) tabletconn.TabletConn
 	// CacheStatus returns a displayable version of the cache.
 	CacheStatus() EndPointsCacheStatusList
 }
@@ -346,6 +348,19 @@ func (hc *HealthCheckImpl) GetEndPointStatsFromTarget(keyspace, shard string, ta
 		res = append(res, eps)
 	}
 	return res
+}
+
+// GetConnection returns the TabletConn of the given endpoint.
+func (hc *HealthCheckImpl) GetConnection(endPoint *pbt.EndPoint) tabletconn.TabletConn {
+	hc.mu.RLock()
+	defer hc.mu.RUnlock()
+	hcc := hc.addrToConns[EndPointToMapKey(endPoint)]
+	if hcc == nil {
+		return nil
+	}
+	hcc.mu.RLock()
+	defer hcc.mu.RUnlock()
+	return hcc.conn
 }
 
 // addEndPointToTargetProtected adds the endpoint to the given target.

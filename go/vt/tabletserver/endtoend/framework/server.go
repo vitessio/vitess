@@ -22,20 +22,20 @@ import (
 )
 
 var (
-	// BaseConfig is the base config of the default server.
+	// BaseConfig is the base config of the server.
 	BaseConfig tabletserver.Config
-	// Target is the target info for the default server.
+	// Target is the target info for the server.
 	Target query.Target
-	// DefaultServer is the default server.
-	DefaultServer *tabletserver.TabletServer
-	// ServerAddress is the http URL for the default server.
+	// Server is the TabletServer for the framework.
+	Server *tabletserver.TabletServer
+	// ServerAddress is the http URL for the server.
 	ServerAddress string
 )
 
-// StartDefaultServer starts the default server and initializes
+// StartServer starts the server and initializes
 // all the global variables. This function should only be called
 // once at the beginning of the test.
-func StartDefaultServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.SchemaOverride) error {
+func StartServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.SchemaOverride) error {
 	dbcfgs := dbconfigs.DBConfigs{
 		App: dbconfigs.DBConfig{
 			ConnParams:        connParams,
@@ -67,9 +67,9 @@ func StartDefaultServer(connParams sqldb.ConnParams, schemaOverrides []tabletser
 		TabletType: topodata.TabletType_MASTER,
 	}
 
-	DefaultServer = tabletserver.NewTabletServer(BaseConfig)
-	DefaultServer.Register()
-	err := DefaultServer.StartService(&Target, &dbcfgs, schemaOverrides, mysqld)
+	Server = tabletserver.NewTabletServer(BaseConfig)
+	Server.Register()
+	err := Server.StartService(&Target, &dbcfgs, schemaOverrides, mysqld)
 	if err != nil {
 		return fmt.Errorf("could not start service: %v\n", err)
 	}
@@ -92,42 +92,7 @@ func StartDefaultServer(connParams sqldb.ConnParams, schemaOverrides []tabletser
 	return nil
 }
 
-// StopDefaultServer must be called once all the tests are done.
-func StopDefaultServer() {
-	DefaultServer.StopService()
-}
-
-// NewServer starts a new unregistered TabletServer.
-// You have to end it with StopService once testing is done.
-func NewServer(config tabletserver.Config, connParams sqldb.ConnParams, enableRowcache bool) (*tabletserver.TabletServer, error) {
-	dbcfgs := dbconfigs.DBConfigs{
-		App: dbconfigs.DBConfig{
-			ConnParams:        connParams,
-			Keyspace:          "vttest",
-			Shard:             "0",
-			EnableRowcache:    enableRowcache,
-			EnableInvalidator: false,
-		},
-	}
-
-	mysqld := mysqlctl.NewMysqld(
-		"Dba",
-		"App",
-		&mysqlctl.Mycnf{},
-		&dbcfgs.Dba,
-		&dbcfgs.App.ConnParams,
-		&dbcfgs.Repl)
-
-	Target = query.Target{
-		Keyspace:   "vttest",
-		Shard:      "0",
-		TabletType: topodata.TabletType_MASTER,
-	}
-
-	server := tabletserver.NewTabletServer(config)
-	err := server.StartService(&Target, &dbcfgs, nil, mysqld)
-	if err != nil {
-		return nil, err
-	}
-	return server, nil
+// StopServer must be called once all the tests are done.
+func StopServer() {
+	Server.StopService()
 }

@@ -16,12 +16,12 @@ import (
 )
 
 func TestBatchRead(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	queries := []proto.BoundQuery{{
-		Sql:           "select * from vtocc_a where id = :a",
+		Sql:           "select * from vitess_a where id = :a",
 		BindVariables: map[string]interface{}{"a": 2},
 	}, {
-		Sql:           "select * from vtocc_b where id = :b",
+		Sql:           "select * from vitess_b where id = :b",
 		BindVariables: map[string]interface{}{"b": 2},
 	}}
 	qr1 := mproto.QueryResult{
@@ -85,13 +85,13 @@ func TestBatchRead(t *testing.T) {
 }
 
 func TestBatchTransaction(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	queries := []proto.BoundQuery{{
-		Sql: "insert into vtocc_test values(4, null, null, null)",
+		Sql: "insert into vitess_test values(4, null, null, null)",
 	}, {
-		Sql: "select * from vtocc_test where intval = 4",
+		Sql: "select * from vitess_test where intval = 4",
 	}, {
-		Sql: "delete from vtocc_test where intval = 4",
+		Sql: "delete from vitess_test where intval = 4",
 	}}
 
 	wantRows := [][]sqltypes.Value{

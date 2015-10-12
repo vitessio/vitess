@@ -12,7 +12,7 @@ import (
 
 // TableStat contains the stats for one table.
 type TableStat struct {
-	Hits, Absent, Misses, Invaildations int
+	Hits, Absent, Misses, Invalidations int
 }
 
 // TableStats parses /debug/table_stats and returns

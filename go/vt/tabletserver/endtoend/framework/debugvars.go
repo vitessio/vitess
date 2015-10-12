@@ -7,6 +7,7 @@ package framework
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -50,4 +51,16 @@ func FetchVal(vars map[string]interface{}, tags string) interface{} {
 		}
 	}
 	return current[splitTags[len(splitTags)-1]]
+}
+
+// DebugStatus returns the contents of /debug/status. The function returns
+// an empty string on error.
+func DebugStatus() string {
+	response, err := http.Get(fmt.Sprintf("%s/debug/status", ServerAddress))
+	if err != nil {
+		return ""
+	}
+	defer response.Body.Close()
+	b, _ := ioutil.ReadAll(response.Body)
+	return string(b)
 }

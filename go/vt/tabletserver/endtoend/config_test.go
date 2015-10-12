@@ -118,18 +118,18 @@ func TestConfigVars(t *testing.T) {
 
 func TestPoolSize(t *testing.T) {
 	vstart := framework.DebugVars()
-	defer framework.DefaultServer.SetPoolSize(framework.DefaultServer.PoolSize())
-	framework.DefaultServer.SetPoolSize(1)
+	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
+	framework.Server.SetPoolSize(1)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
-		framework.NewDefaultClient().Execute("select sleep(0.25) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
 		wg.Done()
 	}()
 	// The queries have to be different so consolidator doesn't kick in.
 	go func() {
-		framework.NewDefaultClient().Execute("select sleep(0.24) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.24) from dual", nil)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -144,13 +144,13 @@ func TestPoolSize(t *testing.T) {
 }
 
 func TestQueryCache(t *testing.T) {
-	defer framework.DefaultServer.SetQueryCacheCap(framework.DefaultServer.QueryCacheCap())
-	framework.DefaultServer.SetQueryCacheCap(1)
+	defer framework.Server.SetQueryCacheCap(framework.Server.QueryCacheCap())
+	framework.Server.SetQueryCacheCap(1)
 
 	bindVars := map[string]interface{}{"ival1": 1, "ival2": 1}
-	client := framework.NewDefaultClient()
-	_, _ = client.Execute("select * from vtocc_test where intval=:ival1", bindVars)
-	_, _ = client.Execute("select * from vtocc_test where intval=:ival2", bindVars)
+	client := framework.NewClient()
+	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
+	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
 	vend := framework.DebugVars()
 	if err := verifyIntValue(vend, "QueryCacheLength", 1); err != nil {
 		t.Error(err)
@@ -162,8 +162,8 @@ func TestQueryCache(t *testing.T) {
 		t.Error(err)
 	}
 
-	framework.DefaultServer.SetQueryCacheCap(10)
-	_, _ = client.Execute("select * from vtocc_test where intval=:ival1", bindVars)
+	framework.Server.SetQueryCacheCap(10)
+	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	vend = framework.DebugVars()
 	if err := verifyIntValue(vend, "QueryCacheLength", 2); err != nil {
 		t.Error(err)
@@ -172,7 +172,7 @@ func TestQueryCache(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, _ = client.Execute("select * from vtocc_test where intval=1", bindVars)
+	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
 	vend = framework.DebugVars()
 	if err := verifyIntValue(vend, "QueryCacheLength", 3); err != nil {
 		t.Error(err)
@@ -183,11 +183,11 @@ func TestQueryCache(t *testing.T) {
 }
 
 func TestMexResultSize(t *testing.T) {
-	defer framework.DefaultServer.SetMaxResultSize(framework.DefaultServer.MaxResultSize())
-	framework.DefaultServer.SetMaxResultSize(2)
+	defer framework.Server.SetMaxResultSize(framework.Server.MaxResultSize())
+	framework.Server.SetMaxResultSize(2)
 
-	client := framework.NewDefaultClient()
-	query := "select * from vtocc_test"
+	client := framework.NewClient()
+	query := "select * from vitess_test"
 	_, err := client.Execute(query, nil)
 	want := "error: Row count exceeded"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -197,7 +197,7 @@ func TestMexResultSize(t *testing.T) {
 		t.Error(err)
 	}
 
-	framework.DefaultServer.SetMaxResultSize(10)
+	framework.Server.SetMaxResultSize(10)
 	_, err = client.Execute(query, nil)
 	if err != nil {
 		t.Error(err)
@@ -206,9 +206,9 @@ func TestMexResultSize(t *testing.T) {
 }
 
 func TestMaxDMLRows(t *testing.T) {
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	_, err := client.Execute(
-		"insert into vtocc_a(eid, id, name, foo) values "+
+		"insert into vitess_a(eid, id, name, foo) values "+
 			"(3, 1, '', ''), (3, 2, '', ''), (3, 3, '', '')",
 		nil,
 	)
@@ -216,7 +216,7 @@ func TestMaxDMLRows(t *testing.T) {
 	defer catcher.Close()
 
 	// Verify all three rows are updated in a single DML.
-	_, err = client.Execute("update vtocc_a set foo='fghi' where eid = 3", nil)
+	_, err = client.Execute("update vitess_a set foo='fghi' where eid = 3", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -227,10 +227,10 @@ func TestMaxDMLRows(t *testing.T) {
 		return
 	}
 	want := "begin; " +
-		"select eid, id from vtocc_a where eid = 3 limit 10001 for update; " +
-		"update vtocc_a set foo = 'fghi' where " +
+		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
+		"update vitess_a set foo = 'fghi' where " +
 		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (3 3 ); */; " +
+		"/* _stream vitess_a (eid id ) (3 1 ) (3 2 ) (3 3 ); */; " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -238,9 +238,9 @@ func TestMaxDMLRows(t *testing.T) {
 
 	// Verify that rows get split, and if pk changes, those values are also
 	// split correctly.
-	defer framework.DefaultServer.SetMaxDMLRows(framework.DefaultServer.MaxDMLRows())
-	framework.DefaultServer.SetMaxDMLRows(2)
-	_, err = client.Execute("update vtocc_a set eid=2 where eid = 3", nil)
+	defer framework.Server.SetMaxDMLRows(framework.Server.MaxDMLRows())
+	framework.Server.SetMaxDMLRows(2)
+	_, err = client.Execute("update vitess_a set eid=2 where eid = 3", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -251,19 +251,19 @@ func TestMaxDMLRows(t *testing.T) {
 		return
 	}
 	want = "begin; " +
-		"select eid, id from vtocc_a where eid = 3 limit 10001 for update; " +
-		"update vtocc_a set eid = 2 where " +
+		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
+		"update vitess_a set eid = 2 where " +
 		"(eid = 3 and id = 1) or (eid = 3 and id = 2) " +
-		"/* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 ); */; " +
-		"update vtocc_a set eid = 2 where (eid = 3 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (3 3 ) (2 3 ); */; " +
+		"/* _stream vitess_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 ); */; " +
+		"update vitess_a set eid = 2 where (eid = 3 and id = 3) " +
+		"/* _stream vitess_a (eid id ) (3 3 ) (2 3 ); */; " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
 	}
 
 	// Verify that a normal update is split correctly.
-	_, err = client.Execute("update vtocc_a set foo='fghi' where eid = 2", nil)
+	_, err = client.Execute("update vitess_a set foo='fghi' where eid = 2", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -274,18 +274,18 @@ func TestMaxDMLRows(t *testing.T) {
 		return
 	}
 	want = "begin; " +
-		"select eid, id from vtocc_a where eid = 2 limit 10001 for update; " +
-		"update vtocc_a set foo = 'fghi' where (eid = 2 and id = 1) or " +
-		"(eid = 2 and id = 2) /* _stream vtocc_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"update vtocc_a set foo = 'fghi' where (eid = 2 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (2 3 ); */; " +
+		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
+		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 1) or " +
+		"(eid = 2 and id = 2) /* _stream vitess_a (eid id ) (2 1 ) (2 2 ); */; " +
+		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 3) " +
+		"/* _stream vitess_a (eid id ) (2 3 ); */; " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
 	}
 
 	// Verufy that a delete is split correctly.
-	_, err = client.Execute("delete from vtocc_a where eid = 2", nil)
+	_, err = client.Execute("delete from vitess_a where eid = 2", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -296,11 +296,11 @@ func TestMaxDMLRows(t *testing.T) {
 		return
 	}
 	want = "begin; " +
-		"select eid, id from vtocc_a where eid = 2 limit 10001 for update; " +
-		"delete from vtocc_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) " +
-		"/* _stream vtocc_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"delete from vtocc_a where (eid = 2 and id = 3) " +
-		"/* _stream vtocc_a (eid id ) (2 3 ); */; " +
+		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
+		"delete from vitess_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) " +
+		"/* _stream vitess_a (eid id ) (2 1 ) (2 2 ); */; " +
+		"delete from vitess_a where (eid = 2 and id = 3) " +
+		"/* _stream vitess_a (eid id ) (2 3 ); */; " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -309,16 +309,16 @@ func TestMaxDMLRows(t *testing.T) {
 
 func TestQueryTimeout(t *testing.T) {
 	vstart := framework.DebugVars()
-	defer framework.DefaultServer.QueryTimeout.Set(framework.DefaultServer.QueryTimeout.Get())
-	framework.DefaultServer.QueryTimeout.Set(10 * time.Millisecond)
+	defer framework.Server.QueryTimeout.Set(framework.Server.QueryTimeout.Get())
+	framework.Server.QueryTimeout.Set(10 * time.Millisecond)
 
-	client := framework.NewDefaultClient()
+	client := framework.NewClient()
 	err := client.Begin()
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	_, err = client.Execute("select sleep(0.5) from vtocc_test", nil)
+	_, err = client.Execute("select sleep(0.5) from vitess_test", nil)
 	want := "error: the query was killed"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)
@@ -339,21 +339,21 @@ func TestQueryTimeout(t *testing.T) {
 
 func TestStrictMode(t *testing.T) {
 	queries := []string{
-		"insert into vtocc_a(eid, id, name, foo) values (7, 1+1, '', '')",
-		"insert into vtocc_d(eid, id) values (1, 1)",
-		"update vtocc_a set eid = 1+1 where eid = 1 and id = 1",
-		"insert into vtocc_d(eid, id) values (1, 1)",
+		"insert into vitess_a(eid, id, name, foo) values (7, 1+1, '', '')",
+		"insert into vitess_d(eid, id) values (1, 1)",
+		"update vitess_a set eid = 1+1 where eid = 1 and id = 1",
+		"insert into vitess_d(eid, id) values (1, 1)",
 		"insert into upsert_test(id1, id2) values " +
 			"(1, 1), (2, 2) on duplicate key update id1 = 1",
 		"insert into upsert_test(id1, id2) select eid, id " +
-			"from vtocc_a limit 1 on duplicate key update id2 = id1",
+			"from vitess_a limit 1 on duplicate key update id2 = id1",
 		"insert into upsert_test(id1, id2) values " +
 			"(1, 1) on duplicate key update id1 = 2+1",
 	}
 
 	// Strict mode on.
 	func() {
-		client := framework.NewDefaultClient()
+		client := framework.NewClient()
 		err := client.Begin()
 		if err != nil {
 			t.Error(err)
@@ -372,11 +372,11 @@ func TestStrictMode(t *testing.T) {
 
 	// Strict mode off.
 	func() {
-		framework.DefaultServer.SetStrictMode(false)
-		defer framework.DefaultServer.SetStrictMode(true)
+		framework.Server.SetStrictMode(false)
+		defer framework.Server.SetStrictMode(true)
 
 		for _, query := range queries {
-			client := framework.NewDefaultClient()
+			client := framework.NewClient()
 			err := client.Begin()
 			if err != nil {
 				t.Error(err)
