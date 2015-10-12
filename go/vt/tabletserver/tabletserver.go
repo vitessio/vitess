@@ -854,7 +854,8 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 // BroadcastHealth will broadcast the current health to all listeners
 func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
 	shr := &pb.StreamHealthResponse{
-		Target: tsv.target,
+		Target:  tsv.target,
+		Serving: tsv.IsServing(),
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}
