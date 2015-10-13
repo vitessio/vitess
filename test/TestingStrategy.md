@@ -52,15 +52,7 @@ We have made a lot of progress for the Google internal sandbox, however the exte
 
 The following action items exist to make it all consistent:
 
-* Switch query\_service.py tests to unit tests using vttest. Sugu is making good progress on this.
-
 * Switch java tests to use vttest if they need a full cluster, and not java\_vtgate\_test\_helper.py, retire java\_vtgate\_test\_helper.py. Client unit tests should already use vtgateclienttest.
-
-* We are removing direct vttablet access to python. This in turn will remove a lot of code and tests, like vtclient.py, tablet.py, zkocc.py, ... Less surface area is good, we just need to make sure we maintain good code coverage. As part of this:
-
-  * test/vtdb\_test.py needs to go away. But we need to make sure what it tests is covered in other places. So if it's just testing the python vttablet library, that should go. If it's also testing vttablet timeout behaviors, that should stay.
-
-  * no integration test can depend on direct vttablet access. vtctl has helper query methods for this if needed.
 
 * the python client tests (using vtgateclienttest) are in test/python\_client\_test.py. They need to be finished. Note these are hard to differentiate from the tests in vtgatev2\_test.py. The rule of thumb is if you are testing a client-library feature, tests should be in test/python\_client\_test.py. If you are testing an end-to-end behavior, tests should be in vtgatev2\_test.py.
 

@@ -10,13 +10,14 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -33,7 +34,6 @@ var (
 )
 
 var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
-var topoReader *TopoReader
 var healthCheck discovery.HealthCheck
 
 var initFakeZK func()
@@ -80,12 +80,6 @@ func main() {
 
 startServer:
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
-
-	// For the initial phase vtgate is exposing
-	// topoReader api. This will be subsumed by
-	// vtgate once vtgate's client functions become active.
-	topoReader = NewTopoReader(resilientSrvTopoServer)
-	servenv.Register("toporeader", topoReader)
 
 	healthCheck = discovery.NewHealthCheck(*connTimeoutTotal, *healthCheckRetryDelay)
 

@@ -45,7 +45,6 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
     return [
         'bsonrpc-vt-queryservice',
         'bsonrpc-vt-tabletmanager',
-        'bsonrpc-vt-toporeader',
         'bsonrpc-vt-updatestream',
         'bsonrpc-vt-vtctl',
         'bsonrpc-vt-vtgateservice',

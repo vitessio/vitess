@@ -4,7 +4,7 @@
 
 from distutils.core import setup
 
-setup(name = "vtdb",
-      packages=["vtdb", "net"],
+setup(name = "vitess",
+      packages=["net", "vtctl", "vtdb", "vtproto", "vttest"],
       platforms = "Any",
       )
