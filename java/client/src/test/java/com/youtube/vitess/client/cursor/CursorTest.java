@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString;
 
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Query.QueryResult;
-import com.youtube.vitess.proto.Query.Row;
+import com.youtube.vitess.proto.Query;
 
 import org.joda.time.DateTime;
 import org.junit.Assert;
@@ -44,10 +44,11 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("12345")))
+                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("12345")))
                   .build())) {
-        cursor.next();
-        Assert.assertEquals(12345, cursor.getInt("col0"));
+        Row row = cursor.next();
+        Assert.assertNotNull(row);
+        Assert.assertEquals(12345, row.getInt("col0"));
       }
     }
   }
@@ -64,10 +65,11 @@ public class CursorTest {
                         .setFlags(Field.Flag.VT_UNSIGNED_FLAG_VALUE)
                         .build())
                 .addRows(
-                    Row.newBuilder().addValues(ByteString.copyFromUtf8("18446744073709551615")))
+                    Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("18446744073709551615")))
                 .build())) {
-      cursor.next();
-      Assert.assertEquals(UnsignedLong.fromLongBits(-1), cursor.getULong("col0"));
+      Row row = cursor.next();
+      Assert.assertNotNull(row);
+      Assert.assertEquals(UnsignedLong.fromLongBits(-1), row.getULong("col0"));
     }
   }
 
@@ -79,10 +81,11 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("val123")))
+                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("val123")))
                   .build())) {
-        cursor.next();
-        Assert.assertEquals("val123", cursor.getString("col0"));
+        Row row = cursor.next();
+        Assert.assertNotNull(row);
+        Assert.assertEquals("val123", row.getString("col0"));
       }
     }
   }
@@ -95,10 +98,11 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("12345")))
+                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("12345")))
                   .build())) {
-        cursor.next();
-        Assert.assertEquals(12345L, cursor.getLong("col0"));
+        Row row = cursor.next();
+        Assert.assertNotNull(row);
+        Assert.assertEquals(12345L, row.getLong("col0"));
       }
     }
   }
@@ -110,10 +114,11 @@ public class CursorTest {
             QueryResult.newBuilder()
                 .addFields(
                     Field.newBuilder().setName("col0").setType(Field.Type.TYPE_DOUBLE).build())
-                .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("2.5")))
+                .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("2.5")))
                 .build())) {
-      cursor.next();
-      Assert.assertEquals(2.5, cursor.getDouble("col0"), 0.01);
+      Row row = cursor.next();
+      Assert.assertNotNull(row);
+      Assert.assertEquals(2.5, row.getDouble("col0"), 0.01);
     }
   }
 
@@ -124,10 +129,11 @@ public class CursorTest {
             QueryResult.newBuilder()
                 .addFields(
                     Field.newBuilder().setName("col0").setType(Field.Type.TYPE_FLOAT).build())
-                .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("2.5")))
+                .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("2.5")))
                 .build())) {
-      cursor.next();
-      Assert.assertEquals(2.5f, cursor.getFloat("col0"), 0.01f);
+      Row row = cursor.next();
+      Assert.assertNotNull(row);
+      Assert.assertEquals(2.5f, row.getFloat("col0"), 0.01f);
     }
   }
 
@@ -140,10 +146,11 @@ public class CursorTest {
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
                   .addRows(
-                      Row.newBuilder().addValues(ByteString.copyFromUtf8("2008-01-02 14:15:16")))
+                      Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("2008-01-02 14:15:16")))
                   .build())) {
-        cursor.next();
-        Assert.assertEquals(new DateTime(2008, 1, 2, 14, 15, 16), cursor.getDateTime("col0"));
+        Row row = cursor.next();
+        Assert.assertNotNull(row);
+        Assert.assertEquals(new DateTime(2008, 1, 2, 14, 15, 16), row.getDateTime("col0"));
       }
     }
 
@@ -153,10 +160,11 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("2008-01-02")))
+                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("2008-01-02")))
                   .build())) {
-        cursor.next();
-        Assert.assertEquals(new DateTime(2008, 1, 2, 0, 0, 0), cursor.getDateTime("col0"));
+        Row row = cursor.next();
+        Assert.assertNotNull(row);
+        Assert.assertEquals(new DateTime(2008, 1, 2, 0, 0, 0), row.getDateTime("col0"));
       }
     }
 
@@ -164,10 +172,11 @@ public class CursorTest {
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
                 .addFields(Field.newBuilder().setName("col0").setType(Field.Type.TYPE_TIME).build())
-                .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("12:34:56")))
+                .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("12:34:56")))
                 .build())) {
-      cursor.next();
-      Assert.assertEquals(new DateTime(1970, 1, 1, 12, 34, 56), cursor.getDateTime("col0"));
+      Row row = cursor.next();
+      Assert.assertNotNull(row);
+      Assert.assertEquals(new DateTime(1970, 1, 1, 12, 34, 56), row.getDateTime("col0"));
     }
   }
 
@@ -182,10 +191,11 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("hello world")))
+                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("hello world")))
                   .build())) {
-        cursor.next();
-        Assert.assertArrayEquals("hello world".getBytes("UTF-8"), cursor.getBytes("col0"));
+        Row row = cursor.next();
+        Assert.assertNotNull(row);
+        Assert.assertArrayEquals("hello world".getBytes("UTF-8"), row.getBytes("col0"));
       }
     }
   }
@@ -198,11 +208,12 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("1234.56789")))
+                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("1234.56789")))
                   .build())) {
-        cursor.next();
+        Row row = cursor.next();
+        Assert.assertNotNull(row);
         Assert.assertEquals(
-            new BigDecimal(BigInteger.valueOf(123456789), 5), cursor.getBigDecimal("col0"));
+            new BigDecimal(BigInteger.valueOf(123456789), 5), row.getBigDecimal("col0"));
       }
     }
   }
@@ -213,10 +224,11 @@ public class CursorTest {
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
                 .addFields(Field.newBuilder().setName("col0").setType(Field.Type.TYPE_YEAR).build())
-                .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("1234")))
+                .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("1234")))
                 .build())) {
-      cursor.next();
-      Assert.assertEquals(1234, cursor.getShort("col0"));
+      Row row = cursor.next();
+      Assert.assertNotNull(row);
+      Assert.assertEquals(1234, row.getShort("col0"));
     }
   }
 
@@ -226,10 +238,11 @@ public class CursorTest {
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
                 .addFields(Field.newBuilder().setName("col0").setType(Field.Type.TYPE_NULL).build())
-                .addRows(Row.newBuilder().addValues(ByteString.copyFromUtf8("1234")))
+                .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("1234")))
                 .build())) {
-      cursor.next();
-      Assert.assertEquals(null, cursor.getObject("col0"));
+      Row row = cursor.next();
+      Assert.assertNotNull(row);
+      Assert.assertEquals(null, row.getObject("col0"));
     }
   }
 }
