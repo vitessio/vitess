@@ -30,7 +30,6 @@ import (
 )
 
 var (
-	enableRowcache        = flag.Bool("enable-rowcache", false, "enable rowcacche")
 	enforceTableACLConfig = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
 	tableAclConfig        = flag.String("table-acl-config", "", "path to table access checker config file")
 	tabletPath            = flag.String("tablet-path", "", "tablet alias")
@@ -81,7 +80,6 @@ func main() {
 	if err != nil {
 		log.Warning(err)
 	}
-	dbcfgs.App.EnableRowcache = *enableRowcache
 
 	// creates and registers the query service
 	qsc := tabletserver.NewServer()

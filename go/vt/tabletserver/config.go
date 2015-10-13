@@ -45,6 +45,7 @@ func init() {
 	flag.StringVar(&qsConfig.TableAclExemptACL, "queryserver-config-acl-exempt-acl", DefaultQsConfig.TableAclExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
 	flag.BoolVar(&qsConfig.TerseErrors, "queryserver-config-terse-errors", DefaultQsConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
 	flag.BoolVar(&qsConfig.EnablePublishStats, "queryserver-config-enable-publish-stats", DefaultQsConfig.EnablePublishStats, "set this flag to true makes queryservice publish monitoring stats")
+	flag.BoolVar(&qsConfig.RowCache.Enabled, "enable-rowcache", DefaultQsConfig.RowCache.Enabled, "set this flag to enable rowcache. The rest of the rowcache parameters will also need to be accordingly specified.")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file, vttablet launches a memcached if rowcache is enabled. This config specifies the location of the memcache binary.")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
 	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "socket filename hint: a unique filename will be generated based on this input")
@@ -66,6 +67,7 @@ func Init() {
 
 // RowCacheConfig encapsulates the configuration for RowCache
 type RowCacheConfig struct {
+	Enabled     bool
 	Binary      string
 	Memory      int
 	Socket      string
@@ -192,16 +194,10 @@ type Controller interface {
 	AddStatusPart()
 
 	// InitDBConfig sets up the db config vars.
-	InitDBConfig(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
+	InitDBConfig(pb.Target, dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
 	SetServingType(tabletType topodata.TabletType, serving bool) error
-
-	// StartService enables queries.
-	StartService(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
-
-	// StopService shuts down the query service.
-	StopService()
 
 	// IsServing returns true if the query service is running
 	IsServing() bool

@@ -85,8 +85,8 @@ type TabletServer struct {
 	// before starting the tabletserver. For backward compatibility,
 	// we temporarily allow them to be changed until the migration
 	// to the new API is complete.
-	target          *pb.Target
-	dbconfigs       *dbconfigs.DBConfigs
+	target          pb.Target
+	dbconfigs       dbconfigs.DBConfigs
 	schemaOverrides []SchemaOverride
 	mysqld          mysqlctl.MysqlDaemon
 
@@ -203,7 +203,7 @@ func (tsv *TabletServer) IsServing() bool {
 
 // InitDBConfig inititalizes the db config variables for TabletServer. You must call this function before
 // calling StartService or SetServingType.
-func (tsv *TabletServer) InitDBConfig(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
+func (tsv *TabletServer) InitDBConfig(target pb.Target, dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
@@ -216,28 +216,16 @@ func (tsv *TabletServer) InitDBConfig(target *pb.Target, dbconfigs *dbconfigs.DB
 	return nil
 }
 
-// StartService starts the query service. It returns an
-// error if the state is anything other than StateNotConnected.
-// If it succeeds, the resulting state is StateServing.
-// Otherwise, it reverts back to StateNotConnected.
-func (tsv *TabletServer) StartService(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) (err error) {
-	tsv.mu.Lock()
-	if tsv.state != StateNotConnected {
-		state := tsv.state
-		tsv.mu.Unlock()
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "cannot start tabletserver, current state: %d", state)
+// StartService is a convenience function for InitDBConfig->SetServingType
+// with serving=true.
+func (tsv *TabletServer) StartService(target pb.Target, dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) (err error) {
+	// Save tablet type away to prevent data races
+	tabletType := target.TabletType
+	err = tsv.InitDBConfig(target, dbconfigs, schemaOverrides, mysqld)
+	if err != nil {
+		return err
 	}
-
-	// Same as InitDBConfig
-	tsv.target = target
-	tsv.dbconfigs = dbconfigs
-	tsv.schemaOverrides = schemaOverrides
-	tsv.mysqld = mysqld
-
-	tsv.setState(StateTransitioning)
-	tsv.mu.Unlock()
-
-	return tsv.fullStart()
+	return tsv.SetServingType(tabletType, true)
 }
 
 const (
@@ -271,9 +259,6 @@ func (tsv *TabletServer) SetServingType(tabletType topodata.TabletType, serving 
 func (tsv *TabletServer) decideAction(tabletType topodata.TabletType, serving bool) (action int, err error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
-	if tsv.target == nil {
-		return actionNone, NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "cannot SetServingType if existing target is nil")
-	}
 	tsv.target.TabletType = tabletType
 	switch tsv.state {
 	case StateNotConnected:
@@ -335,7 +320,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		}
 	}()
 
-	if needInvalidator(tsv.target, tsv.dbconfigs) {
+	if tsv.needInvalidator(tsv.target) {
 		tsv.invalidator.Open(tsv.dbconfigs.App.DbName, tsv.mysqld)
 	} else {
 		tsv.invalidator.Close()
@@ -349,12 +334,9 @@ func (tsv *TabletServer) serveNewType() (err error) {
 }
 
 // needInvalidator returns true if the rowcache invalidator needs to be enabled.
-func needInvalidator(target *pb.Target, dbconfigs *dbconfigs.DBConfigs) bool {
-	if !dbconfigs.App.EnableRowcache {
+func (tsv *TabletServer) needInvalidator(target pb.Target) bool {
+	if !tsv.config.RowCache.Enabled {
 		return false
-	}
-	if target == nil {
-		return dbconfigs.App.EnableInvalidator
 	}
 	return target.TabletType != topodata.TabletType_MASTER
 }
@@ -853,8 +835,11 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 
 // BroadcastHealth will broadcast the current health to all listeners
 func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
+	tsv.mu.Lock()
+	target := tsv.target
+	tsv.mu.Unlock()
 	shr := &pb.StreamHealthResponse{
-		Target:  tsv.target,
+		Target:  &target,
 		Serving: tsv.IsServing(),
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
@@ -889,7 +874,7 @@ func (tsv *TabletServer) startRequest(target *pb.Target, sessionID int64, allowS
 	return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
 
 verifySession:
-	if target != nil && tsv.target != nil {
+	if target != nil {
 		// a valid target can be used instead of a valid session
 		if target.Keyspace != tsv.target.Keyspace {
 			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid keyspace %v", target.Keyspace)

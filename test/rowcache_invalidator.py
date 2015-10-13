@@ -12,7 +12,6 @@ import unittest
 import urllib2
 
 import environment
-import framework
 import tablet
 import utils
 
@@ -84,6 +83,27 @@ def tearDownModule():
   replica_tablet.remove_tree()
 
 
+class MultiDict(dict):
+
+  def __getattr__(self, name):
+    v = self[name]
+    if type(v) == dict:
+      v = MultiDict(v)
+    return v
+
+  def mget(self, mkey, default=None):
+    keys = mkey.split('.')
+    try:
+      v = self
+      for key in keys:
+        v = v[key]
+    except KeyError:
+      v = default
+    if type(v) == dict:
+      v = MultiDict(v)
+    return v
+
+
 class RowCacheInvalidator(unittest.TestCase):
 
   def setUp(self):
@@ -94,11 +114,11 @@ class RowCacheInvalidator(unittest.TestCase):
 
   def replica_stats(self):
     url = 'http://localhost:%d/debug/table_stats' % replica_tablet.port
-    return framework.MultiDict(json.load(urllib2.urlopen(url)))
+    return MultiDict(json.load(urllib2.urlopen(url)))
 
   def replica_vars(self):
     url = 'http://localhost:%d/debug/vars' % replica_tablet.port
-    return framework.MultiDict(json.load(urllib2.urlopen(url)))
+    return MultiDict(json.load(urllib2.urlopen(url)))
 
   def perform_insert(self, count):
     for i in xrange(count):
