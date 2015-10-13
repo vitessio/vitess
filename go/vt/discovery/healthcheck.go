@@ -29,12 +29,13 @@ func init() {
 
 // HealthCheckStatsListener is the listener to receive health check stats update.
 type HealthCheckStatsListener interface {
-	StatsUpdate(endPoint *pbt.EndPoint, cell string, target *pbq.Target, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats)
+	StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats)
 }
 
 // EndPointStats is returned when getting the set of endpoints.
 type EndPointStats struct {
 	EndPoint                            *pbt.EndPoint
+	Name                                string // name is an optional tag (e.g. alternative address)
 	Cell                                string
 	Target                              *pbq.Target
 	TabletExternallyReparentedTimestamp int64
@@ -47,7 +48,7 @@ type HealthCheck interface {
 	// SetListener sets the listener for healthcheck updates. It should not block.
 	SetListener(listener HealthCheckStatsListener)
 	// AddEndPoint adds the endpoint, and starts health check.
-	AddEndPoint(cell string, endPoint *pbt.EndPoint)
+	AddEndPoint(cell, name string, endPoint *pbt.EndPoint)
 	// RemoveEndPoint removes the endpoint, and stops the health check.
 	RemoveEndPoint(endPoint *pbt.EndPoint)
 	// GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
@@ -85,9 +86,11 @@ type HealthCheckImpl struct {
 }
 
 // healthCheckConn contains details about an endpoint.
+// TODO(liang): add serving field after vttablet update.
 type healthCheckConn struct {
 	// set at construction time
 	cell       string
+	name       string
 	cancelFunc context.CancelFunc
 
 	// mu protects all the following fields
@@ -101,10 +104,11 @@ type healthCheckConn struct {
 }
 
 // checkConn performs health checking on the given endpoint.
-func (hc *HealthCheckImpl) checkConn(cell string, endPoint *pbt.EndPoint) {
+func (hc *HealthCheckImpl) checkConn(cell, name string, endPoint *pbt.EndPoint) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	hcc := &healthCheckConn{
 		cell:       cell,
+		name:       name,
 		cancelFunc: cancelFunc,
 	}
 	defer func() {
@@ -212,7 +216,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hc.mu.Unlock()
 		} else if hcc.target.TabletType != shr.Target.TabletType {
 			// tablet type changed for the tablet
-			log.Infof("HealthCheckUpdate(Type Change): EP: %v/%+v, target %+v => %+v, reparent time: %v", hcc.cell, endPoint, hcc.target, shr.Target, shr.TabletExternallyReparentedTimestamp)
+			log.Infof("HealthCheckUpdate(Type Change): %v, EP: %v/%+v, target %+v => %+v, reparent time: %v", hcc.name, hcc.cell, endPoint, hcc.target, shr.Target, shr.TabletExternallyReparentedTimestamp)
 			hc.mu.Lock()
 			hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 			hcc.mu.Lock()
@@ -233,7 +237,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 		}
 		// notify downstream for tablettype and realtimestats change
 		if hc.listener != nil {
-			hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.target, hcc.tabletExternallyReparentedTimestamp, hcc.stats)
+			hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.name, hcc.target, hcc.tabletExternallyReparentedTimestamp, hcc.stats)
 		}
 		return false, nil
 	}
@@ -262,8 +266,9 @@ func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener) {
 
 // AddEndPoint adds the endpoint, and starts health check.
 // It does not block.
-func (hc *HealthCheckImpl) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
-	go hc.checkConn(cell, endPoint)
+// name is an optional tag for the endpoint, e.g. an alternative address.
+func (hc *HealthCheckImpl) AddEndPoint(cell, name string, endPoint *pbt.EndPoint) {
+	go hc.checkConn(cell, name, endPoint)
 }
 
 // RemoveEndPoint removes the endpoint, and stops the health check.
@@ -416,27 +421,60 @@ func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *pbq.Target,
 type EndPointsCacheStatus struct {
 	Cell           string
 	Target         *pbq.Target
-	EndPointsStats []*EndPointStats
+	EndPointsStats EndPointStatsList
+}
+
+// EndPointStatsList is used for sorting.
+type EndPointStatsList []*EndPointStats
+
+// Len is part of sort.Interface.
+func (epsl EndPointStatsList) Len() int {
+	return len(epsl)
+}
+
+// Less is part of sort.Interface
+func (epsl EndPointStatsList) Less(i, j int) bool {
+	name1 := epsl[i].Name
+	if name1 == "" {
+		name1 = EndPointToMapKey(epsl[i].EndPoint)
+	}
+	name2 := epsl[j].Name
+	if name2 == "" {
+		name2 = EndPointToMapKey(epsl[j].EndPoint)
+	}
+	return name1 < name2
+}
+
+// Swap is part of sort.Interface
+func (epsl EndPointStatsList) Swap(i, j int) {
+	epsl[i], epsl[j] = epsl[j], epsl[i]
 }
 
 // StatusAsHTML returns an HTML version of the status.
 func (epcs *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 	epLinks := make([]string, 0, 1)
+	if epcs.EndPointsStats != nil {
+		sort.Sort(epcs.EndPointsStats)
+	}
 	for _, eps := range epcs.EndPointsStats {
 		vtPort := eps.EndPoint.PortMap["vt"]
 		color := "green"
 		extra := ""
 		if eps.LastError != nil {
 			color = "red"
-			extra = fmt.Sprintf("(%v)", eps.LastError)
+			extra = fmt.Sprintf(" (%v)", eps.LastError)
 		} else if eps.Target.TabletType == pbt.TabletType_MASTER {
-			extra = fmt.Sprintf("(MasterTS: %v)", eps.TabletExternallyReparentedTimestamp)
+			extra = fmt.Sprintf(" (MasterTS: %v)", eps.TabletExternallyReparentedTimestamp)
 		} else {
-			extra = fmt.Sprintf("(RepLag: %v)", eps.Stats.SecondsBehindMaster)
+			extra = fmt.Sprintf(" (RepLag: %v)", eps.Stats.SecondsBehindMaster)
 		}
-		epLinks = append(epLinks, fmt.Sprintf(`<a href="http://%v:%d" style="color:%v">%v:%d</a>%v`, eps.EndPoint.Host, vtPort, color, eps.EndPoint.Host, vtPort, extra))
+		name := eps.Name
+		if name == "" {
+			name = fmt.Sprintf("%v:%d", eps.EndPoint.Host, vtPort)
+		}
+		epLinks = append(epLinks, fmt.Sprintf(`<a href="http://%v:%d" style="color:%v">%v</a>%v`, eps.EndPoint.Host, vtPort, color, name, extra))
 	}
-	return template.HTML(strings.Join(epLinks, " "))
+	return template.HTML(strings.Join(epLinks, "<br>"))
 }
 
 // EndPointsCacheStatusList is used for sorting.
@@ -476,14 +514,14 @@ func (hc *HealthCheckImpl) CacheStatus() EndPointsCacheStatusList {
 					hcc.mu.RLock()
 					if epcs, ok = epcsMap[hcc.cell]; !ok {
 						epcs = &EndPointsCacheStatus{
-							Cell:           hcc.cell,
-							Target:         hcc.target,
-							EndPointsStats: make([]*EndPointStats, 0, 1),
+							Cell:   hcc.cell,
+							Target: hcc.target,
 						}
 						epcsMap[hcc.cell] = epcs
 					}
 					stats := &EndPointStats{
 						Cell:     hcc.cell,
+						Name:     hcc.name,
 						Target:   hcc.target,
 						EndPoint: ep,
 						Stats:    hcc.stats,

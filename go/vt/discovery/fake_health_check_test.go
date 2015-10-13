@@ -18,7 +18,7 @@ func (fhc *fakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
 }
 
 // AddEndPoint adds the endpoint, and starts health check.
-func (fhc *fakeHealthCheck) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
+func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *pbt.EndPoint) {
 	key := EndPointToMapKey(endPoint)
 	fhc.endPoints[key] = endPoint
 }

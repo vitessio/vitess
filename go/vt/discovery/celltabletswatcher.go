@@ -5,9 +5,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // NewCellTabletsWatcher returns a CellTabletsWatcher and starts refreshing.
@@ -18,11 +21,16 @@ func NewCellTabletsWatcher(topoServer topo.Server, hc HealthCheck, cell string, 
 		cell:            cell,
 		refreshInterval: refreshInterval,
 		sem:             make(chan int, topoReadConcurrency),
-		endPoints:       make(map[string]*pbt.EndPoint),
+		endPoints:       make(map[string]*tabletEndPoint),
 	}
 	ctw.ctx, ctw.cancelFunc = context.WithCancel(context.Background())
 	go ctw.watch()
 	return ctw
+}
+
+type tabletEndPoint struct {
+	alias    string
+	endPoint *pbt.EndPoint
 }
 
 // CellTabletsWatcher pulls endpoints of all running tablets periodically.
@@ -38,7 +46,7 @@ type CellTabletsWatcher struct {
 
 	// mu protects all variables below
 	mu        sync.Mutex
-	endPoints map[string]*pbt.EndPoint
+	endPoints map[string]*tabletEndPoint
 }
 
 // watch pulls all endpoints and notifies HealthCheck by adding/removing endpoints.
@@ -58,7 +66,7 @@ func (ctw *CellTabletsWatcher) watch() {
 // loadTablets reads all tablets from topology, converts to endpoints, and updates HealthCheck.
 func (ctw *CellTabletsWatcher) loadTablets() {
 	var wg sync.WaitGroup
-	newEndPoints := make(map[string]*pbt.EndPoint)
+	newEndPoints := make(map[string]*tabletEndPoint)
 	tabletAlias, err := ctw.topoServer.GetTabletsByCell(ctw.ctx, ctw.cell)
 	if err != nil {
 		select {
@@ -92,21 +100,21 @@ func (ctw *CellTabletsWatcher) loadTablets() {
 			}
 			key := EndPointToMapKey(endPoint)
 			ctw.mu.Lock()
-			newEndPoints[key] = endPoint
+			newEndPoints[key] = &tabletEndPoint{alias: topoproto.TabletAliasString(alias), endPoint: endPoint}
 			ctw.mu.Unlock()
 		}(tAlias)
 	}
 
 	wg.Wait()
 	ctw.mu.Lock()
-	for key, ep := range newEndPoints {
+	for key, tep := range newEndPoints {
 		if _, ok := ctw.endPoints[key]; !ok {
-			ctw.hc.AddEndPoint(ctw.cell, ep)
+			ctw.hc.AddEndPoint(ctw.cell, tep.alias, tep.endPoint)
 		}
 	}
-	for key, ep := range ctw.endPoints {
+	for key, tep := range ctw.endPoints {
 		if _, ok := newEndPoints[key]; !ok {
-			ctw.hc.RemoveEndPoint(ep)
+			ctw.hc.RemoveEndPoint(tep.endPoint)
 		}
 	}
 	ctw.endPoints = newEndPoints
