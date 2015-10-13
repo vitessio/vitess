@@ -44,6 +44,9 @@ class VtdbLogger(object):
   def log_private_data(self, private_data):
     logging.info('Additional exception data %s', private_data)
 
+  def warning(self, msg, *args, **kwargs):
+    logging.warning(msg, *args, **kwargs)
+
 
 # registration mechanism for VtdbLogger
 __vtdb_logger = VtdbLogger()
