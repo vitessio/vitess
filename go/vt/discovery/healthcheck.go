@@ -143,21 +143,21 @@ func (hc *HealthCheckImpl) checkConn(cell, name string, endPoint *pbt.EndPoint) 
 		for {
 			reconnect, err := hcc.processResponse(ctx, hc, endPoint, stream, errfunc)
 			if err != nil {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
 				hcc.mu.Lock()
-				if hcc.target != nil {
-					hcErrorCounters.Add([]string{hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String())}, 1)
-				}
 				hcc.serving = false
 				hcc.lastError = err
 				hcc.mu.Unlock()
 				// notify downstream for serving status change
 				if hc.listener != nil {
 					hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.name, hcc.target, hcc.serving, hcc.tabletExternallyReparentedTimestamp, hcc.stats)
+				}
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+				if hcc.target != nil {
+					hcErrorCounters.Add([]string{hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String())}, 1)
 				}
 				if reconnect {
 					hcc.mu.Lock()
@@ -213,7 +213,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			// The first time we see response for the endpoint.
 			hcc.mu.Lock()
 			hcc.target = shr.Target
-			//hcc.serving = shr.Serving
+			hcc.serving = shr.Serving
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.lastError = nil
@@ -230,7 +230,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 			hcc.mu.Lock()
 			hcc.target = shr.Target
-			//hcc.serving = shr.Serving
+			hcc.serving = shr.Serving
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.lastError = nil
@@ -240,7 +240,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 		} else {
 			hcc.mu.Lock()
 			hcc.target = shr.Target
-			//hcc.serving = shr.Serving
+			hcc.serving = shr.Serving
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.lastError = nil
