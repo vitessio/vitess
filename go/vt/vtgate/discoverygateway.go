@@ -269,7 +269,7 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 		var maxTimestamp int64
 		var ep *pbt.EndPoint
 		for _, eps := range epsList {
-			if !eps.Serving {
+			if eps.LastError != nil || !eps.Serving {
 				continue
 			}
 			if eps.TabletExternallyReparentedTimestamp >= maxTimestamp {
@@ -285,7 +285,7 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 	// for non-master, use only endpoints from local cell.
 	var epList []*pbt.EndPoint
 	for _, eps := range epsList {
-		if !eps.Serving {
+		if eps.LastError != nil || !eps.Serving {
 			continue
 		}
 		if dg.localCell != eps.Cell {
