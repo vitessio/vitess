@@ -11,7 +11,6 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtgatev2
 from vtdb import vtgate_cursor
-from zk import zkocc
 
 # conn is the connection to vtgate.
 conn = None

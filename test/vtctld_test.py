@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-import json
 import logging
-import os
 import socket
 import unittest
 import urllib2
@@ -10,7 +8,6 @@ import re
 import environment
 import tablet
 import utils
-from zk import zkocc
 
 
 # range '' - 80
@@ -111,10 +108,6 @@ class TestVtctld(unittest.TestCase):
 
     # run checks now before we start the tablets
     utils.validate_topology()
-
-    # start a vtgate server too
-    utils.VtGate(
-    ).start(cache_ttl='0s', extra_args=utils.vtctld.process_args())
 
   def setUp(self):
     self.data = utils.vtctld.dbtopo()
@@ -243,23 +236,6 @@ class TestVtctld(unittest.TestCase):
     self.assertIn('Alias: <a href="http://localhost:', shard_0_replica_status)
     self.assertIn('</html>', shard_0_replica_status)
 
-  def test_vtgate(self):
-    # do a few vtgate topology queries to prime the cache
-    vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), 'test_nj', 30.0)
-    vtgate_client.dial()
-    vtgate_client.get_srv_keyspace_names('test_nj')
-    vtgate_client.get_srv_keyspace('test_nj', 'test_keyspace')
-    vtgate_client.get_end_points('test_nj', 'test_keyspace', '-80', 'master')
-    vtgate_client.close()
-
-    status = utils.vtgate.get_status()
-    self.assertIn('</html>', status)  # end of page
-    self.assertIn('/serving_graph/test_nj">test_nj', status)  # vtctld link
-
-    utils.pause(
-        'You can now run a browser and connect to http://%s:%d%s to '
-        'manually check vtgate status page' %
-        (socket.getfqdn(), utils.vtgate.port, environment.status_url))
 
 if __name__ == '__main__':
   utils.main()

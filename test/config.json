@@ -176,14 +176,6 @@
 			"Shard": 4,
 			"RetryMax": 0
 		},
-		"tablet": {
-			"File": "tablet_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0
-		},
 		"tabletmanager": {
 			"File": "tabletmanager.py",
 			"Args": [],
@@ -227,14 +219,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
-		},
-		"vtdb": {
-			"File": "vtdb_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
 			"RetryMax": 0
 		},
 		"vtgate_utils": {

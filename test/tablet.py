@@ -17,7 +17,6 @@ import utils
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
 
-from vtdb import tablet
 
 tablet_cell_map = {
     62344: 'nj',
@@ -353,13 +352,6 @@ class Tablet(object):
       else:
         expected_state = 'NOT_SERVING'
       self.start_vttablet(wait_for_state=expected_state, **kwargs)
-
-  def conn(self, user=None, password=None):
-    conn = tablet.TabletConnection(
-        'localhost:%d' % self.port, self.tablet_type, self.keyspace,
-        self.shard, 30, caller_id='dev')
-    conn.dial()
-    return conn
 
   @property
   def tablet_dir(self):

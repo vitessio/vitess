@@ -33,10 +33,10 @@ def connect(protocol, *pargs, **kargs):
     A dialed VtctlClient.
 
   Raises:
-    Exception: if the protocol is unknown.
+    ValueError: if the protocol is unknown.
   """
   if protocol not in vtctl_client_conn_classes:
-    raise Exception('Unknown vtclient protocol', protocol)
+    raise ValueError('Unknown vtctl protocol', protocol)
   conn = vtctl_client_conn_classes[protocol](*pargs, **kargs)
   conn.dial()
   return conn
