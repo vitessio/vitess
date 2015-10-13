@@ -41,7 +41,6 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def service_map(self):
     return [
-        'bsonrpc-vt-toporeader',
         'bsonrpc-vt-vtgateservice',
         'grpc-queryservice',
         'grpc-updatestream',
