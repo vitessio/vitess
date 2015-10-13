@@ -18,7 +18,6 @@ import tablet
 import utils
 from protocols_flavor import protocols_flavor
 
-from net import gorpc
 from vtdb import dbexceptions
 from vtdb import keyrange
 from vtdb import keyrange_constants

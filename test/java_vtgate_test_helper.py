@@ -29,8 +29,6 @@ import sys
 import environment
 import tablet
 
-from vtdb import topology
-
 
 class Tablet(tablet.Tablet):
 
