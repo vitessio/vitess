@@ -1001,6 +1001,7 @@ var testStreamHealthStreamHealthResponse = &pb.StreamHealthResponse{
 		Shard:      "test_shard",
 		TabletType: pbt.TabletType_RDONLY,
 	},
+	Serving: true,
 	TabletExternallyReparentedTimestamp: 1234589,
 	RealtimeStats: &pb.RealtimeStats{
 		HealthError:                            "random error",
