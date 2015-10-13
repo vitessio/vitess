@@ -44,7 +44,8 @@ func TestHealthCheck(t *testing.T) {
 
 	// one endpoint after receiving a StreamHealthResponse
 	shr := &pbq.StreamHealthResponse{
-		Target: &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+		Target:  &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+		Serving: true,
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
@@ -52,11 +53,12 @@ func TestHealthCheck(t *testing.T) {
 		EndPoint: ep,
 		Cell:     "cell",
 		Target:   &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+		Serving:  true,
 		Stats:    &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 		TabletExternallyReparentedTimestamp: 10,
 	}
 	input <- shr
-	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
 	res := <-l.output
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
@@ -68,7 +70,8 @@ func TestHealthCheck(t *testing.T) {
 
 	// TabletType changed
 	shr = &pbq.StreamHealthResponse{
-		Target: &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Target:  &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Serving: true,
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
 	}
@@ -76,11 +79,12 @@ func TestHealthCheck(t *testing.T) {
 		EndPoint: ep,
 		Cell:     "cell",
 		Target:   &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Serving:  true,
 		Stats:    &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
 		TabletExternallyReparentedTimestamp: 0,
 	}
 	input <- shr
-	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
 	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
@@ -127,12 +131,13 @@ func newListener() *listener {
 	return &listener{output: make(chan *EndPointStats, 1)}
 }
 
-func (l *listener) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, reparentTimestamp int64, stats *pbq.RealtimeStats) {
+func (l *listener) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, serving bool, reparentTimestamp int64, stats *pbq.RealtimeStats) {
 	l.output <- &EndPointStats{
 		EndPoint: endPoint,
 		Cell:     cell,
 		Name:     name,
 		Target:   target,
+		Serving:  serving,
 		TabletExternallyReparentedTimestamp: reparentTimestamp,
 		Stats: stats,
 	}

@@ -29,7 +29,7 @@ func init() {
 
 // HealthCheckStatsListener is the listener to receive health check stats update.
 type HealthCheckStatsListener interface {
-	StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats)
+	StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, serving bool, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats)
 }
 
 // EndPointStats is returned when getting the set of endpoints.
@@ -38,6 +38,7 @@ type EndPointStats struct {
 	Name                                string // name is an optional tag (e.g. alternative address)
 	Cell                                string
 	Target                              *pbq.Target
+	Serving                             bool
 	TabletExternallyReparentedTimestamp int64
 	Stats                               *pbq.RealtimeStats
 	LastError                           error
@@ -98,6 +99,7 @@ type healthCheckConn struct {
 	mu                                  sync.RWMutex
 	conn                                tabletconn.TabletConn
 	target                              *pbq.Target
+	serving                             bool
 	tabletExternallyReparentedTimestamp int64
 	stats                               *pbq.RealtimeStats
 	lastError                           error
@@ -132,6 +134,7 @@ func (hc *HealthCheckImpl) checkConn(cell, name string, endPoint *pbt.EndPoint) 
 			if hcc.target != nil {
 				hcErrorCounters.Add([]string{hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String())}, 1)
 			}
+			hcc.serving = false
 			hcc.lastError = err
 			hcc.mu.Unlock()
 			time.Sleep(hc.retryDelay)
@@ -140,17 +143,22 @@ func (hc *HealthCheckImpl) checkConn(cell, name string, endPoint *pbt.EndPoint) 
 		for {
 			reconnect, err := hcc.processResponse(ctx, hc, endPoint, stream, errfunc)
 			if err != nil {
+				hcc.mu.Lock()
+				hcc.serving = false
+				hcc.lastError = err
+				hcc.mu.Unlock()
+				// notify downstream for serving status change
+				if hc.listener != nil {
+					hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.name, hcc.target, hcc.serving, hcc.tabletExternallyReparentedTimestamp, hcc.stats)
+				}
 				select {
 				case <-ctx.Done():
 					return
 				default:
 				}
-				hcc.mu.Lock()
 				if hcc.target != nil {
 					hcErrorCounters.Add([]string{hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String())}, 1)
 				}
-				hcc.lastError = err
-				hcc.mu.Unlock()
 				if reconnect {
 					hcc.mu.Lock()
 					hcc.conn.Close()
@@ -205,6 +213,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			// The first time we see response for the endpoint.
 			hcc.mu.Lock()
 			hcc.target = shr.Target
+			hcc.serving = shr.Serving
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.lastError = nil
@@ -221,6 +230,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 			hcc.mu.Lock()
 			hcc.target = shr.Target
+			hcc.serving = shr.Serving
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.lastError = nil
@@ -230,6 +240,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 		} else {
 			hcc.mu.Lock()
 			hcc.target = shr.Target
+			hcc.serving = shr.Serving
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.lastError = nil
@@ -237,7 +248,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 		}
 		// notify downstream for tablettype and realtimestats change
 		if hc.listener != nil {
-			hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.name, hcc.target, hcc.tabletExternallyReparentedTimestamp, hcc.stats)
+			hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.name, hcc.target, hcc.serving, hcc.tabletExternallyReparentedTimestamp, hcc.stats)
 		}
 		return false, nil
 	}
@@ -303,8 +314,9 @@ func (hc *HealthCheckImpl) GetEndPointStatsFromKeyspaceShard(keyspace, shard str
 				EndPoint: ep,
 				Cell:     hcc.cell,
 				TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
-				Target: hcc.target,
-				Stats:  hcc.stats,
+				Target:  hcc.target,
+				Serving: hcc.serving,
+				Stats:   hcc.stats,
 			}
 			hcc.mu.RUnlock()
 			res = append(res, eps)
@@ -342,8 +354,9 @@ func (hc *HealthCheckImpl) GetEndPointStatsFromTarget(keyspace, shard string, ta
 			EndPoint: ep,
 			Cell:     hcc.cell,
 			TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
-			Target: hcc.target,
-			Stats:  hcc.stats,
+			Target:  hcc.target,
+			Serving: hcc.serving,
+			Stats:   hcc.stats,
 		}
 		hcc.mu.RUnlock()
 		res = append(res, eps)
@@ -463,6 +476,9 @@ func (epcs *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 		if eps.LastError != nil {
 			color = "red"
 			extra = fmt.Sprintf(" (%v)", eps.LastError)
+		} else if !eps.Serving {
+			color = "red"
+			extra = "Not Serving"
 		} else if eps.Target.TabletType == pbt.TabletType_MASTER {
 			extra = fmt.Sprintf(" (MasterTS: %v)", eps.TabletExternallyReparentedTimestamp)
 		} else {
@@ -523,6 +539,7 @@ func (hc *HealthCheckImpl) CacheStatus() EndPointsCacheStatusList {
 						Cell:     hcc.cell,
 						Name:     hcc.name,
 						Target:   hcc.target,
+						Serving:  hcc.serving,
 						EndPoint: ep,
 						Stats:    hcc.stats,
 						TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,

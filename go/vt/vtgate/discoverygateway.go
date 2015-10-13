@@ -153,7 +153,7 @@ func (dg *discoveryGateway) Close(ctx context.Context) error {
 }
 
 // StatsUpdate receives updates about target and realtime stats changes.
-func (dg *discoveryGateway) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats) {
+func (dg *discoveryGateway) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, serving bool, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats) {
 }
 
 // withRetry gets available connections and executes the action. If there are retryable errors,
@@ -261,7 +261,6 @@ func shuffleEndPoints(endPoints []*pbt.EndPoint) {
 // and selects the usable ones based several rules:
 // master - return one from any cells with latest reparent timestamp;
 // replica - return all from local cell.
-// TODO(liang): instead of checking eps.LastError, check eps.serving flag.
 // TODO(liang): select replica by replication lag.
 func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.TabletType) []*pbt.EndPoint {
 	epsList := dg.hc.GetEndPointStatsFromTarget(keyspace, shard, tabletType)
@@ -270,7 +269,7 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 		var maxTimestamp int64
 		var ep *pbt.EndPoint
 		for _, eps := range epsList {
-			if eps.LastError != nil {
+			if eps.LastError != nil || !eps.Serving {
 				continue
 			}
 			if eps.TabletExternallyReparentedTimestamp >= maxTimestamp {
@@ -286,7 +285,7 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 	// for non-master, use only endpoints from local cell.
 	var epList []*pbt.EndPoint
 	for _, eps := range epsList {
-		if eps.LastError != nil {
+		if eps.LastError != nil || !eps.Serving {
 			continue
 		}
 		if dg.localCell != eps.Cell {
