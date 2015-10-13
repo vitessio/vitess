@@ -988,6 +988,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 		config.StrictMode = false
 	}
 	if flags&enableRowCache > 0 {
+		config.RowCache.Enabled = true
 		config.RowCache.Binary = "ls"
 		config.RowCache.Connections = 100
 	}
@@ -999,11 +1000,6 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	tsv := NewTabletServer(config)
 	testUtils := newTestUtils()
 	dbconfigs := testUtils.newDBConfigs(db)
-	if flags&enableRowCache > 0 {
-		dbconfigs.App.EnableRowcache = true
-	} else {
-		dbconfigs.App.EnableRowcache = false
-	}
 	schemaOverrides := []SchemaOverride{}
 	if flags&enableSchemaOverrides > 0 {
 		schemaOverrides = getTestTableSchemaOverrides()

@@ -126,10 +126,8 @@ func MysqlParams(cp *sqldb.ConnParams) (sqldb.ConnParams, error) {
 // shard.
 type DBConfig struct {
 	sqldb.ConnParams
-	Keyspace          string
-	Shard             string
-	EnableRowcache    bool
-	EnableInvalidator bool
+	Keyspace string
+	Shard    string
 }
 
 func (d *DBConfig) String() string {

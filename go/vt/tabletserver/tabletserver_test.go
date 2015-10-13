@@ -72,11 +72,11 @@ func TestTabletServerAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T
 	config := testUtils.newQueryServiceConfig()
 	// disable strict mode
 	config.StrictMode = false
+	// enable rowcache
+	config.RowCache.Enabled = true
 	tsv := NewTabletServer(config)
 	checkTabletServerState(t, tsv, StateNotConnected)
 	dbconfigs := testUtils.newDBConfigs(db)
-	// enable rowcache
-	dbconfigs.App.EnableRowcache = true
 	target := pb.Target{TabletType: topodata.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
@@ -1422,22 +1422,22 @@ func TestConfigChanges(t *testing.T) {
 
 func TestNeedInvalidator(t *testing.T) {
 	testUtils := newTestUtils()
-	db := setUpTabletServerTest()
-	dbconfigs := testUtils.newDBConfigs(db)
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
 
-	// EnableRowCache is false
+	tsv.config.RowCache.Enabled = false
 	target := pb.Target{TabletType: topodata.TabletType_REPLICA}
-	if needInvalidator(target, dbconfigs) {
+	if tsv.needInvalidator(target) {
 		t.Errorf("got true, want false")
 	}
 
-	dbconfigs.App.EnableRowcache = true
-	if !needInvalidator(target, dbconfigs) {
+	tsv.config.RowCache.Enabled = true
+	if !tsv.needInvalidator(target) {
 		t.Errorf("got false, want true")
 	}
 
 	target.TabletType = topodata.TabletType_MASTER
-	if needInvalidator(target, dbconfigs) {
+	if tsv.needInvalidator(target) {
 		t.Errorf("got true, want false")
 	}
 }

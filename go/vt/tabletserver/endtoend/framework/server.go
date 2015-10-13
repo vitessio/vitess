@@ -38,11 +38,9 @@ var (
 func StartServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.SchemaOverride) error {
 	dbcfgs := dbconfigs.DBConfigs{
 		App: dbconfigs.DBConfig{
-			ConnParams:        connParams,
-			Keyspace:          "vttest",
-			Shard:             "0",
-			EnableRowcache:    true,
-			EnableInvalidator: false,
+			ConnParams: connParams,
+			Keyspace:   "vttest",
+			Shard:      "0",
 		},
 	}
 
@@ -55,6 +53,7 @@ func StartServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.Sch
 		&dbcfgs.Repl)
 
 	BaseConfig = tabletserver.DefaultQsConfig
+	BaseConfig.RowCache.Enabled = true
 	BaseConfig.RowCache.Binary = vttest.MemcachedPath()
 	BaseConfig.RowCache.Socket = path.Join(os.TempDir(), "memcache.sock")
 	BaseConfig.RowCache.Connections = 100

@@ -320,7 +320,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		}
 	}()
 
-	if needInvalidator(tsv.target, tsv.dbconfigs) {
+	if tsv.needInvalidator(tsv.target) {
 		tsv.invalidator.Open(tsv.dbconfigs.App.DbName, tsv.mysqld)
 	} else {
 		tsv.invalidator.Close()
@@ -334,8 +334,8 @@ func (tsv *TabletServer) serveNewType() (err error) {
 }
 
 // needInvalidator returns true if the rowcache invalidator needs to be enabled.
-func needInvalidator(target pb.Target, dbconfigs dbconfigs.DBConfigs) bool {
-	if !dbconfigs.App.EnableRowcache {
+func (tsv *TabletServer) needInvalidator(target pb.Target) bool {
+	if !tsv.config.RowCache.Enabled {
 		return false
 	}
 	return target.TabletType != topodata.TabletType_MASTER

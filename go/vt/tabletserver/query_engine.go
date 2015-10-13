@@ -41,6 +41,7 @@ const spotCheckMultiplier = 1e6
 // TODO(sougou): Switch to error return scheme.
 type QueryEngine struct {
 	schemaInfo *SchemaInfo
+	config     Config
 	dbconfigs  dbconfigs.DBConfigs
 
 	// Pools
@@ -110,7 +111,7 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 // This is a singleton class.
 // You must call this only once.
 func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
-	qe := &QueryEngine{}
+	qe := &QueryEngine{config: config}
 	qe.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
 
 	qe.cachePool = NewCachePool(
@@ -224,10 +225,10 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs, schemaOverrides []Sch
 	if qe.strictMode.Get() != 0 {
 		strictMode = true
 	}
-	if !strictMode && dbconfigs.App.EnableRowcache {
+	if !strictMode && qe.config.RowCache.Enabled {
 		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
 	}
-	if dbconfigs.App.EnableRowcache {
+	if qe.config.RowCache.Enabled {
 		qe.cachePool.Open()
 		log.Infof("rowcache is enabled")
 	} else {
