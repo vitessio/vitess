@@ -127,12 +127,13 @@ func newListener() *listener {
 	return &listener{output: make(chan *EndPointStats, 1)}
 }
 
-func (l *listener) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, reparentTimestamp int64, stats *pbq.RealtimeStats) {
+func (l *listener) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, serving bool, reparentTimestamp int64, stats *pbq.RealtimeStats) {
 	l.output <- &EndPointStats{
 		EndPoint: endPoint,
 		Cell:     cell,
 		Name:     name,
 		Target:   target,
+		Serving:  serving,
 		TabletExternallyReparentedTimestamp: reparentTimestamp,
 		Stats: stats,
 	}

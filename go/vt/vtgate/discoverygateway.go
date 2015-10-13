@@ -153,7 +153,7 @@ func (dg *discoveryGateway) Close(ctx context.Context) error {
 }
 
 // StatsUpdate receives updates about target and realtime stats changes.
-func (dg *discoveryGateway) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats) {
+func (dg *discoveryGateway) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, serving bool, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats) {
 }
 
 // withRetry gets available connections and executes the action. If there are retryable errors,
