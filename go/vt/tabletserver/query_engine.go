@@ -41,7 +41,7 @@ const spotCheckMultiplier = 1e6
 // TODO(sougou): Switch to error return scheme.
 type QueryEngine struct {
 	schemaInfo *SchemaInfo
-	dbconfigs  *dbconfigs.DBConfigs
+	dbconfigs  dbconfigs.DBConfigs
 
 	// Pools
 	cachePool      *CachePool
@@ -209,7 +209,7 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 }
 
 // Open must be called before sending requests to QueryEngine.
-func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride) {
+func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride) {
 	qe.dbconfigs = dbconfigs
 	appParams := dbconfigs.App.ConnParams
 	// Create dba params based on App connection params
@@ -296,7 +296,6 @@ func (qe *QueryEngine) Close() {
 	qe.connPool.Close()
 	qe.schemaInfo.Close()
 	qe.cachePool.Close()
-	qe.dbconfigs = nil
 }
 
 // Commit commits the specified transaction.

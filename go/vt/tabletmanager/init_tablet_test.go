@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -40,7 +41,7 @@ func TestInitTablet(t *testing.T) {
 		TopoServer:         ts,
 		TabletAlias:        tabletAlias,
 		MysqlDaemon:        mysqlDaemon,
-		DBConfigs:          nil,
+		DBConfigs:          dbconfigs.DBConfigs{},
 		SchemaOverrides:    nil,
 		BinlogPlayerMap:    nil,
 		LockTimeout:        10 * time.Second,

@@ -193,7 +193,7 @@ func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType p
 // ReloadSchema will reload the schema
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ReloadSchema(ctx context.Context) {
-	if agent.DBConfigs == nil {
+	if agent.DBConfigs.IsZero() {
 		// we skip this for test instances that can't connect to the DB anyway
 		return
 	}

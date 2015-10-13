@@ -58,7 +58,8 @@ func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
 	tsv := NewTabletServer(config)
 	checkTabletServerState(t, tsv, StateNotConnected)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
 		t.Fatalf("TabletServer.StartService should fail")
 	}
@@ -76,7 +77,8 @@ func TestTabletServerAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T
 	dbconfigs := testUtils.newDBConfigs(db)
 	// enable rowcache
 	dbconfigs.App.EnableRowcache = true
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
 		t.Fatalf("TabletServer.StartService should fail because strict mode is disabled while rowcache is enabled.")
 	}
@@ -91,14 +93,15 @@ func TestTabletServerAllowQueries(t *testing.T) {
 	checkTabletServerState(t, tsv, StateNotConnected)
 	dbconfigs := testUtils.newDBConfigs(db)
 	tsv.setState(StateServing)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	tsv.StopService()
-	want := "cannot start tabletserver"
+	want := "InitDBConfig failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("TabletServer.StartService: %v, must contain %s", err, want)
 	}
 	tsv.setState(StateShuttingDown)
-	err = tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err = tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
 		t.Fatalf("TabletServer.StartService should fail")
 	}
@@ -106,41 +109,33 @@ func TestTabletServerAllowQueries(t *testing.T) {
 }
 
 func TestTabletServerInitDBConfig(t *testing.T) {
-	_ = setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.setState(StateServing)
-	err := tsv.InitDBConfig(nil, nil, nil, nil)
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	dbconfigs := testUtils.newDBConfigs(db)
+	err := tsv.InitDBConfig(target, dbconfigs, nil, nil)
 	want := "InitDBConfig failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("TabletServer.StartService: %v, must contain %s", err, want)
+		t.Errorf("InitDBConfig: %v, must contain %s", err, want)
 	}
 	tsv.setState(StateNotConnected)
-	err = tsv.InitDBConfig(nil, nil, nil, nil)
+	err = tsv.InitDBConfig(target, dbconfigs, nil, nil)
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestDecideAction(t *testing.T) {
-	_ = setUpTabletServerTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	err := tsv.InitDBConfig(nil, nil, nil, nil)
-	if err != nil {
-		t.Error(err)
-	}
-
-	_, err = tsv.decideAction(topodata.TabletType_MASTER, false)
-	want := "cannot SetServingType"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("TabletServer.StartService: %v, must contain %s", err, want)
-	}
-
-	target := &pb.Target{}
-	err = tsv.InitDBConfig(target, nil, nil, nil)
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	dbconfigs := testUtils.newDBConfigs(db)
+	err := tsv.InitDBConfig(target, dbconfigs, nil, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -213,16 +208,16 @@ func TestDecideAction(t *testing.T) {
 
 	tsv.setState(StateTransitioning)
 	action, err = tsv.decideAction(topodata.TabletType_MASTER, false)
-	want = "cannot SetServingType"
+	want := "cannot SetServingType"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("TabletServer.StartService: %v, must contain %s", err, want)
+		t.Errorf("decideAction: %v, must contain %s", err, want)
 	}
 
 	tsv.setState(StateShuttingDown)
 	action, err = tsv.decideAction(topodata.TabletType_MASTER, false)
 	want = "cannot SetServingType"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("TabletServer.StartService: %v, must contain %s", err, want)
+		t.Errorf("decideAction: %v, must contain %s", err, want)
 	}
 }
 
@@ -232,20 +227,8 @@ func TestSetServingType(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-
-	err := tsv.InitDBConfig(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = tsv.SetServingType(topodata.TabletType_REPLICA, true)
-	want := "cannot SetServingType"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("TabletServer.StartService: %v, must contain %s", err, want)
-	}
-
-	target := &pb.Target{}
-	err = tsv.InitDBConfig(target, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.InitDBConfig(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Error(err)
 	}
@@ -284,8 +267,8 @@ func TestTabletServerCheckMysql(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	target := &pb.Target{}
-	err := tsv.StartService(target, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	if err != nil {
 		t.Fatal(err)
@@ -309,7 +292,8 @@ func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	if err != nil {
 		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
@@ -356,7 +340,8 @@ func TestTabletServerReconnect(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 
 	if tsv.GetState() != "SERVING" {
@@ -385,7 +370,7 @@ func TestTabletServerReconnect(t *testing.T) {
 
 	// make mysql conn work
 	db.DisableConnFail()
-	err = tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err = tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Error(err)
 	}
@@ -407,7 +392,8 @@ func TestTabletServerGetSessionId(t *testing.T) {
 	keyspace := "test_keyspace"
 	shard := "0"
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -447,7 +433,8 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -546,7 +533,8 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -591,7 +579,8 @@ func TestTabletServerRollback(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -637,7 +626,8 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -684,7 +674,8 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -720,7 +711,8 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -744,7 +736,8 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -777,7 +770,8 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -811,7 +805,8 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -859,7 +854,8 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -914,7 +910,8 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	config.EnableAutoCommit = true
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -946,7 +943,8 @@ func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -984,7 +982,8 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -1060,7 +1059,8 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -1121,7 +1121,8 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -1186,7 +1187,8 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -1333,7 +1335,8 @@ func TestConfigChanges(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
-	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
@@ -1423,29 +1426,18 @@ func TestNeedInvalidator(t *testing.T) {
 	dbconfigs := testUtils.newDBConfigs(db)
 
 	// EnableRowCache is false
-	if needInvalidator(nil, &dbconfigs) {
+	target := pb.Target{TabletType: topodata.TabletType_REPLICA}
+	if needInvalidator(target, dbconfigs) {
 		t.Errorf("got true, want false")
 	}
 
-	// EnableInvalidator is false
 	dbconfigs.App.EnableRowcache = true
-	if needInvalidator(nil, &dbconfigs) {
-		t.Errorf("got true, want false")
-	}
-
-	dbconfigs.App.EnableInvalidator = true
-	if !needInvalidator(nil, &dbconfigs) {
-		t.Errorf("got false, want true")
-	}
-
-	target := &pb.Target{}
-	// TabletType is not MASTER
-	if !needInvalidator(target, &dbconfigs) {
+	if !needInvalidator(target, dbconfigs) {
 		t.Errorf("got false, want true")
 	}
 
 	target.TabletType = topodata.TabletType_MASTER
-	if needInvalidator(target, &dbconfigs) {
+	if needInvalidator(target, dbconfigs) {
 		t.Errorf("got true, want false")
 	}
 }

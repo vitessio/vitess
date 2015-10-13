@@ -43,7 +43,7 @@ var tabletMap map[uint32]*tablet
 
 // initTabletMap creates the action agents and associated data structures
 // for all tablets
-func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
+func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
@@ -65,8 +65,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		dbname := entry[column+1:]
 		keyspaceMap[keyspace] = true
 
-		localDBConfigs := &(*dbcfgs)
-		localDBConfigs.App.DbName = dbname
+		dbcfgs.App.DbName = dbname
 
 		// create the master
 		alias := &pb.TabletAlias{
@@ -76,7 +75,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		log.Infof("Creating master tablet %v for %v/%v", topoproto.TabletAliasString(alias), keyspace, shard)
 		flag.Lookup("debug-url-prefix").Value.Set(fmt.Sprintf("/debug-%d", uid))
 		masterController := tabletserver.NewServer()
-		masterAgent := tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), masterController, localDBConfigs, mysqld, keyspace, shard, dbname, "replica")
+		masterAgent := tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), masterController, dbcfgs, mysqld, keyspace, shard, dbname, "replica")
 		if err := masterAgent.TabletExternallyReparented(ctx, ""); err != nil {
 			log.Fatalf("TabletExternallyReparented failed on master: %v", err)
 		}
@@ -106,7 +105,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 			dbname:     dbname,
 
 			qsc:   replicaController,
-			agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), replicaController, localDBConfigs, mysqld, keyspace, shard, dbname, "replica"),
+			agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), replicaController, dbcfgs, mysqld, keyspace, shard, dbname, "replica"),
 		}
 		uid++
 
@@ -125,7 +124,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 			dbname:     dbname,
 
 			qsc:   rdonlyController,
-			agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), rdonlyController, localDBConfigs, mysqld, keyspace, shard, dbname, "rdonly"),
+			agent: tabletmanager.NewComboActionAgent(ctx, ts, alias, int32(8000+uid), int32(9000+uid), rdonlyController, dbcfgs, mysqld, keyspace, shard, dbname, "rdonly"),
 		}
 		uid++
 	}

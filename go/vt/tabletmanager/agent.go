@@ -64,7 +64,7 @@ type ActionAgent struct {
 	TopoServer          topo.Server
 	TabletAlias         *pb.TabletAlias
 	MysqlDaemon         mysqlctl.MysqlDaemon
-	DBConfigs           *dbconfigs.DBConfigs
+	DBConfigs           dbconfigs.DBConfigs
 	SchemaOverrides     []tabletserver.SchemaOverride
 	BinlogPlayerMap     *BinlogPlayerMap
 	LockTimeout         time.Duration
@@ -139,7 +139,7 @@ func NewActionAgent(
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
 	tabletAlias *pb.TabletAlias,
-	dbcfgs *dbconfigs.DBConfigs,
+	dbcfgs dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
 	overridesFile string,
@@ -231,7 +231,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *p
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
 		MysqlDaemon:         mysqlDaemon,
-		DBConfigs:           nil,
+		DBConfigs:           dbconfigs.DBConfigs{},
 		SchemaOverrides:     nil,
 		BinlogPlayerMap:     nil,
 		History:             history.New(historyLength),
@@ -247,7 +247,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *p
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		HealthReporter:      health.DefaultAggregator,
@@ -501,7 +501,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	}
 
 	// initialize tablet server
-	if agent.DBConfigs != nil {
+	if !agent.DBConfigs.IsZero() {
 		// Only for real instances
 		// Update our DB config to match the info we have in the tablet
 		if agent.DBConfigs.App.DbName == "" {
@@ -510,7 +510,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		agent.DBConfigs.App.Keyspace = tablet.Keyspace
 		agent.DBConfigs.App.Shard = tablet.Shard
 	}
-	if err := agent.QueryServiceControl.InitDBConfig(&pbq.Target{
+	if err := agent.QueryServiceControl.InitDBConfig(pbq.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,

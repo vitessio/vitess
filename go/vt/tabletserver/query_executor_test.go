@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	pb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
@@ -1006,7 +1008,8 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	if flags&enableSchemaOverrides > 0 {
 		schemaOverrides = getTestTableSchemaOverrides()
 	}
-	tsv.StartService(nil, &dbconfigs, schemaOverrides, testUtils.newMysqld(&dbconfigs))
+	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	tsv.StartService(target, dbconfigs, schemaOverrides, testUtils.newMysqld(&dbconfigs))
 	return tsv
 }
 
@@ -1016,7 +1019,7 @@ func newTransaction(tsv *TabletServer) int64 {
 		TransactionId: 0,
 	}
 	txInfo := proto.TransactionInfo{TransactionId: 0}
-	err := tsv.Begin(context.Background(), tsv.target, &session, &txInfo)
+	err := tsv.Begin(context.Background(), &tsv.target, &session, &txInfo)
 	if err != nil {
 		panic(fmt.Errorf("failed to start a transaction: %v", err))
 	}
@@ -1041,7 +1044,7 @@ func testCommitHelper(t *testing.T, tsv *TabletServer, queryExecutor *QueryExecu
 		SessionId:     tsv.sessionID,
 		TransactionId: queryExecutor.transactionID,
 	}
-	if err := tsv.Commit(queryExecutor.ctx, tsv.target, &session); err != nil {
+	if err := tsv.Commit(queryExecutor.ctx, &tsv.target, &session); err != nil {
 		t.Fatalf("failed to commit transaction: %d, err: %v", queryExecutor.transactionID, err)
 	}
 }

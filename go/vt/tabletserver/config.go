@@ -192,16 +192,10 @@ type Controller interface {
 	AddStatusPart()
 
 	// InitDBConfig sets up the db config vars.
-	InitDBConfig(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
+	InitDBConfig(pb.Target, dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
 	SetServingType(tabletType topodata.TabletType, serving bool) error
-
-	// StartService enables queries.
-	StartService(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
-
-	// StopService shuts down the query service.
-	StopService()
 
 	// IsServing returns true if the query service is running
 	IsServing() bool

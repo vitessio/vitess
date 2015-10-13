@@ -69,7 +69,7 @@ func StartServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.Sch
 
 	Server = tabletserver.NewTabletServer(BaseConfig)
 	Server.Register()
-	err := Server.StartService(&Target, &dbcfgs, schemaOverrides, mysqld)
+	err := Server.StartService(Target, dbcfgs, schemaOverrides, mysqld)
 	if err != nil {
 		return fmt.Errorf("could not start service: %v\n", err)
 	}

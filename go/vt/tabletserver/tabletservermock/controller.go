@@ -68,9 +68,9 @@ func (tqsc *Controller) AddStatusPart() {
 }
 
 // InitDBConfig is part of the tabletserver.Controller interface
-func (tqsc *Controller) InitDBConfig(target *pb.Target, dbConfigs *dbconfigs.DBConfigs, schemaOverrides []tabletserver.SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
+func (tqsc *Controller) InitDBConfig(target pb.Target, dbConfigs dbconfigs.DBConfigs, schemaOverrides []tabletserver.SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
 	if tqsc.InitDBConfigError == nil {
-		tqsc.CurrentTarget = *target
+		tqsc.CurrentTarget = target
 		tqsc.QueryServiceEnabled = true
 	} else {
 		tqsc.QueryServiceEnabled = false
@@ -85,17 +85,6 @@ func (tqsc *Controller) SetServingType(tabletType topodata.TabletType, serving b
 		tqsc.QueryServiceEnabled = serving
 	}
 	return tqsc.SetServingTypeError
-}
-
-// StartService is part of the tabletserver.Controller interface
-func (tqsc *Controller) StartService(*pb.Target, *dbconfigs.DBConfigs, []tabletserver.SchemaOverride, mysqlctl.MysqlDaemon) error {
-	tqsc.QueryServiceEnabled = true
-	return nil
-}
-
-// StopService is part of the tabletserver.Controller interface
-func (tqsc *Controller) StopService() {
-	tqsc.QueryServiceEnabled = false
 }
 
 // IsServing is part of the tabletserver.Controller interface
