@@ -48,6 +48,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -486,7 +487,8 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	}
 
 	// Reread to get the changes we just made
-	if _, err := agent.readTablet(ctx); err != nil {
+	tablet, err := agent.readTablet(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -498,6 +500,25 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		return err
 	}
 
+	// initialize tablet server
+	if agent.DBConfigs != nil {
+		// Only for real instances
+		// Update our DB config to match the info we have in the tablet
+		if agent.DBConfigs.App.DbName == "" {
+			agent.DBConfigs.App.DbName = topoproto.TabletDbName(tablet.Tablet)
+		}
+		agent.DBConfigs.App.Keyspace = tablet.Keyspace
+		agent.DBConfigs.App.Shard = tablet.Shard
+	}
+	if err := agent.QueryServiceControl.InitDBConfig(&pbq.Target{
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: tablet.Type,
+	}, agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon); err != nil {
+		return fmt.Errorf("failed to InitDBConfig: %v", err)
+	}
+
+	// and update our state
 	oldTablet := &pb.Tablet{}
 	if err = agent.updateState(ctx, oldTablet, "Start"); err != nil {
 		log.Warningf("Initial updateState failed, will need a state change before running properly: %v", err)

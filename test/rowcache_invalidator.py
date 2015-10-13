@@ -273,40 +273,6 @@ class RowCacheInvalidator(unittest.TestCase):
     hits2 = self.replica_stats()['vt_insert_test']['Hits']
     self.assertEqual(hits2 - hits, 1, 'This should have hit the cache')
 
-  def test_service_disabled(self):
-    # perform some inserts, then change state to stop the invalidator
-    self.perform_insert(500)
-    inv_before = self.replica_stats()['Totals']['Invalidations']
-    invStats_before = self.replica_vars()
-    utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-
-    # wait until it's stopped
-    timeout = 30
-    while True:
-      invStats_after = self.replica_vars()
-      if invStats_after['RowcacheInvalidatorState'] == 'Stopped':
-        break
-      timeout = utils.wait_step(
-          'RowcacheInvalidatorState, got %s expecting Stopped' %
-          invStats_after['RowcacheInvalidatorState'], timeout, sleep_time=0.1)
-
-    # check all data is right
-    inv_after = self.replica_stats()['Totals']['Invalidations']
-    invStats_after = self.replica_vars()
-    logging.debug(
-        'Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats '
-        '%s\n\tAfter: Invalidations: %d InvalidatorStats %s',
-        inv_before, invStats_before['RowcacheInvalidatorPosition'],
-        inv_after, invStats_after['RowcacheInvalidatorPosition'])
-    self.assertEqual(inv_after, 0,
-                     'Row-cache invalid. should be disabled, no invalidations')
-    self.assertEqual(invStats_after['RowcacheInvalidatorState'], 'Stopped',
-                     'Row-cache invalidator should be disabled')
-
-    # and restore the type
-    utils.run_vtctl(
-        ['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
-
   def _exec_vt_txn(self, query):
     master_tablet.execute(query, auto_log=False)
 

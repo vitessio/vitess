@@ -22,7 +22,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -201,9 +200,11 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 		}
 	} else {
 		if isQueryServiceRunning {
-			// we are not healthy or should not be running the
+			// We are not healthy or should not be running the
 			// query service, shut it down.
-			agent.stopQueryService(
+			// Note this is possibly sending 'spare' as
+			// the tablet type, we will clean it up later.
+			agent.disallowQueries(tablet.Tablet,
 				fmt.Sprintf("health-check failure(%v)", err),
 			)
 		}
@@ -253,27 +254,10 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	agent._healthy = err
 	agent._healthyTime = time.Now()
 	agent._replicationDelay = replicationDelay
-	terTime := agent._tabletExternallyReparentedTime
 	agent.mutex.Unlock()
 
 	// send it to our observers
-	// (the Target has already been updated when restarting the
-	// query service earlier)
-	// FIXME(alainjobart,liguo) add CpuUsage
-	stats := &pb.RealtimeStats{
-		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
-	}
-	stats.SecondsBehindMasterFilteredReplication, stats.BinlogPlayersCount = agent.BinlogPlayerMap.StatusSummary()
-	if err != nil {
-		stats.HealthError = err.Error()
-	}
-	defer func() {
-		var ts int64
-		if !terTime.IsZero() {
-			ts = terTime.Unix()
-		}
-		agent.QueryServiceControl.BroadcastHealth(ts, stats)
-	}()
+	agent.broadcastHealth()
 
 	// Update our topo.Server state, start with no change
 	newTabletType := tablet.Type

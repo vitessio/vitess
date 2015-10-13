@@ -99,7 +99,12 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 
 	agent.mutex.Lock()
 	agent._tabletExternallyReparentedTime = time.Now()
+	agent._replicationDelay = 0
 	agent.mutex.Unlock()
+
+	// update the listeners in the background
+	event.DispatchUpdate(ev, "broadcasting to listeners")
+	agent.broadcastHealth()
 
 	// Directly write the new master endpoint in the serving graph.
 	// We will do a true rebuild in the background soon, but in the meantime,

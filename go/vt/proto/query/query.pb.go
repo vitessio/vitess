@@ -835,14 +835,18 @@ type StreamHealthResponse struct {
 	// target is the current server type. Only queries with that exact Target
 	// record will be accepted.
 	Target *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	// serving is true iff the tablet is serving. A tablet may not be serving
+	// if filtered replication is enabled on a master for instance,
+	// or if a replica should not be used because the keyspace is being resharded.
+	Serving bool `protobuf:"varint,2,opt,name=serving" json:"serving,omitempty"`
 	// tablet_externally_reparented_timestamp contains the last time
 	// tabletmanager.TabletExternallyReparented was called on this tablet,
 	// or 0 if it was never called. This is meant to differentiate two tablets
 	// that report a target.TabletType of MASTER, only the one with the latest
 	// timestamp should be trusted.
-	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,2,opt,name=tablet_externally_reparented_timestamp" json:"tablet_externally_reparented_timestamp,omitempty"`
+	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,3,opt,name=tablet_externally_reparented_timestamp" json:"tablet_externally_reparented_timestamp,omitempty"`
 	// realtime_stats contains information about the tablet status
-	RealtimeStats *RealtimeStats `protobuf:"bytes,3,opt,name=realtime_stats" json:"realtime_stats,omitempty"`
+	RealtimeStats *RealtimeStats `protobuf:"bytes,4,opt,name=realtime_stats" json:"realtime_stats,omitempty"`
 }
 
 func (m *StreamHealthResponse) Reset()         { *m = StreamHealthResponse{} }

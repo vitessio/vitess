@@ -449,6 +449,7 @@ class TestTabletManager(unittest.TestCase):
     self.assertIn(
         'replication_reporter: Replication is not running',
         health['realtime_stats']['health_error'])
+    self.assertNotIn('serving', health)
 
     # then restart replication, and write data, make sure we go back to healthy
     utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
@@ -472,6 +473,8 @@ class TestTabletManager(unittest.TestCase):
       logging.debug('Got health: %s', line)
       data = json.loads(line)
       self.assertIn('realtime_stats', data)
+      self.assertIn('serving', data)
+      self.assertTrue(data['serving'])
       self.assertNotIn('health_error', data['realtime_stats'])
       self.assertNotIn('tablet_externally_reparented_timestamp', data)
       self.assertEqual('test_keyspace', data['target']['keyspace'])
