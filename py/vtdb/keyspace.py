@@ -78,16 +78,3 @@ class Keyspace(object):
 
 def _shard_contain_kid(pkid, start, end):
   return start <= pkid and (end == keyrange_constants.MAX_KEY or pkid < end)
-
-
-def read_keyspace(topo_client, keyspace_name):
-  try:
-    data = topo_client.get_srv_keyspace('local', keyspace_name)
-    if not data:
-      raise dbexceptions.OperationalError('invalid empty keyspace',
-                                          keyspace_name)
-    return Keyspace(keyspace_name, keyrange_constants.srv_keyspace_proto3_to_old(data))
-  except dbexceptions.OperationalError as e:
-    raise e
-  except Exception as e:
-    raise dbexceptions.OperationalError('invalid keyspace', keyspace_name, e)
