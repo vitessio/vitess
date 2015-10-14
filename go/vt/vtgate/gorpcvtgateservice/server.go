@@ -334,11 +334,6 @@ func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *proto.K
 	// If there was an app error, send a QueryResult back with it.
 	qr := new(proto.QueryResult)
 	vtgate.AddVtGateError(vtgErr, &qr.Err)
-	// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
-	// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
-	// problems where the client will get out of sync with the number of QueryResults sent.
-	// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
-	// (signalling that all clients are able to handle new-style errors).
 	return sendReply(qr)
 }
 
