@@ -9,7 +9,6 @@ import com.youtube.vitess.vtgate.Field;
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.QueryResponse;
 import com.youtube.vitess.vtgate.QueryResult;
-import com.youtube.vitess.vtgate.RPCError;
 import com.youtube.vitess.vtgate.SplitQueryRequest;
 import com.youtube.vitess.vtgate.SplitQueryResponse;
 import com.youtube.vitess.vtgate.rpcclient.RpcClient;
@@ -110,18 +109,7 @@ public class GoRpcClient implements RpcClient {
   public SplitQueryResponse splitQuery(SplitQueryRequest request) throws ConnectionException {
     String callMethod = "VTGate.SplitQuery";
     Response response = call(callMethod, Bsonify.splitQueryRequestToBson(request));
-    SplitQueryResponse splitQueryResponse = Bsonify.bsonToSplitQueryResponse(
-      (BSONObject) response.getReply());
-    try {
-      RPCError err = splitQueryResponse.getErr();
-      if (err != null) {
-        throw new ConnectionException(err.getMessage());
-      }
-    } catch (ConnectionException e) {
-      LOGGER.error("vtgate exception", e);
-      throw new ConnectionException("vtgate exception: " + e.getMessage());
-    }
-    return splitQueryResponse;
+    return Bsonify.bsonToSplitQueryResponse((BSONObject) response.getReply());
   }
 
   private Response call(String methodName, Object args) throws ConnectionException {
