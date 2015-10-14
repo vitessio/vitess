@@ -6,7 +6,6 @@ import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.RpcClientFactory;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.cursor.Cursor;
-import com.youtube.vitess.client.cursor.Row;
 import com.youtube.vitess.proto.Query.BoundQuery;
 import com.youtube.vitess.proto.Topodata.TabletType;
 import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
@@ -23,13 +22,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-public class VitessRecordReader extends RecordReader<NullWritable, Row> {
+public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> {
   private VitessInputSplit split;
   private VTGateConn vtgate;
   private VitessConf conf;
   private long rowsProcessed = 0;
   private Cursor cursor;
-  private Row currentRow;
+  private RowWritable currentRow;
 
   /**
    * Fetch connection parameters from Configuraiton and open VtGate connection.
@@ -72,7 +71,7 @@ public class VitessRecordReader extends RecordReader<NullWritable, Row> {
   }
 
   @Override
-  public Row getCurrentValue() throws IOException, InterruptedException {
+  public RowWritable getCurrentValue() throws IOException, InterruptedException {
     return currentRow;
   }
 
@@ -109,7 +108,7 @@ public class VitessRecordReader extends RecordReader<NullWritable, Row> {
           throw new IllegalArgumentException("unknown split info: " + splitInfo);
         }
       }
-      currentRow = cursor.next();
+      currentRow = new RowWritable(cursor.next());
     } catch (SQLException e) {
       throw new RuntimeException(e);
     }

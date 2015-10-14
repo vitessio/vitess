@@ -29,7 +29,7 @@ import java.util.Random;
  * Input splits ({@link VitessInputSplit}) are fetched from VtGate via an RPC. map() calls are supplied
  * with a {@link KeyspaceIdWritable}, {@link RowWritable} pair.
  */
-public class VitessInputFormat extends InputFormat<NullWritable, Row> {
+public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
 
   @Override
   public List<InputSplit> getSplits(JobContext context) {
@@ -70,7 +70,7 @@ public class VitessInputFormat extends InputFormat<NullWritable, Row> {
       return splits;
   }
 
-  public RecordReader<NullWritable, Row> createRecordReader(InputSplit split,
+  public RecordReader<NullWritable, RowWritable> createRecordReader(InputSplit split,
       TaskAttemptContext context) throws IOException, InterruptedException {
     return new VitessRecordReader();
   }
