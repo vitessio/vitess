@@ -341,12 +341,6 @@ func TestTxTimeout(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	time.Sleep(5 * time.Millisecond)
-	err = client.Commit()
-	want := "not_in_tx: Transaction"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must contain %s", err, want)
-	}
 	tx, err := catcher.Next()
 	if err != nil {
 		t.Error(err)
@@ -357,6 +351,13 @@ func TestTxTimeout(t *testing.T) {
 	}
 	if err := compareIntDiff(framework.DebugVars(), "Kills/Transactions", vstart, 1); err != nil {
 		t.Error(err)
+	}
+
+	// Ensure commit fails.
+	err = client.Commit()
+	want := "not_in_tx: Transaction"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Error: %v, must contain %s", err, want)
 	}
 }
 

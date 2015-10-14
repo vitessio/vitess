@@ -124,12 +124,12 @@ func TestPoolSize(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
-		framework.NewClient().Execute("select sleep(0.25) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
 		wg.Done()
 	}()
 	// The queries have to be different so consolidator doesn't kick in.
 	go func() {
-		framework.NewClient().Execute("select sleep(0.24) from dual", nil)
+		framework.NewClient().Execute("select sleep(0.49) from dual", nil)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -310,7 +310,7 @@ func TestMaxDMLRows(t *testing.T) {
 func TestQueryTimeout(t *testing.T) {
 	vstart := framework.DebugVars()
 	defer framework.Server.QueryTimeout.Set(framework.Server.QueryTimeout.Get())
-	framework.Server.QueryTimeout.Set(10 * time.Millisecond)
+	framework.Server.QueryTimeout.Set(100 * time.Millisecond)
 
 	client := framework.NewClient()
 	err := client.Begin()
@@ -318,7 +318,7 @@ func TestQueryTimeout(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	_, err = client.Execute("select sleep(0.5) from vitess_test", nil)
+	_, err = client.Execute("select sleep(1) from vitess_test", nil)
 	want := "error: the query was killed"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)
@@ -329,7 +329,7 @@ func TestQueryTimeout(t *testing.T) {
 		t.Errorf("Error: %v, must start with %s", err, want)
 	}
 	vend := framework.DebugVars()
-	if err := verifyIntValue(vend, "QueryTimeout", int(10*time.Millisecond)); err != nil {
+	if err := verifyIntValue(vend, "QueryTimeout", int(100*time.Millisecond)); err != nil {
 		t.Error(err)
 	}
 	if err := compareIntDiff(vend, "Kills/Queries", vstart, 1); err != nil {
