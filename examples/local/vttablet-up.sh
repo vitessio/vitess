@@ -8,6 +8,7 @@ cell='test'
 keyspace='test_keyspace'
 shard=0
 uid_base=100
+tablet_type='replica'
 port_base=15100
 grpc_port_base=16100
 mysql_port_base=33100
@@ -90,7 +91,7 @@ for uid_index in $uids; do
     -tablet-path $alias \
     -init_keyspace $keyspace \
     -init_shard $shard \
-    -target_tablet_type replica \
+    -target_tablet_type $tablet_type \
     -enable-rowcache \
     -rowcache-bin $memcached_path \
     -rowcache-socket $VTDATAROOT/$tablet_dir/memcache.sock \
@@ -98,7 +99,8 @@ for uid_index in $uids; do
     -file_backup_storage_root $VTDATAROOT/backups \
     -restore_from_backup \
     -grpc_port $grpc_port \
-    -service_map 'grpc-queryservice,grpc-tabletmanager' \
+    -binlog_player_protocol grpc \
+    -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
   echo "Access tablet $alias at http://$hostname:$port/debug/status"
