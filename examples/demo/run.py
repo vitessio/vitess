@@ -30,7 +30,8 @@ def start_vitess():
   args = [os.path.join(vttop, 'py/vttest/run_local_database.py'),
           '--port', '12345',
           '--topology', 'user/-80:user0,user/80-:user1,lookup/0:lookup',
-          '--schema_dir', os.path.join(vttop, 'examples/demo/schema')]
+          '--schema_dir', os.path.join(vttop, 'examples/demo/schema'),
+          '--vschema', os.path.join(vttop, 'examples/demo/schema/vschema.json')]
   sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
   # This load will make us wait for vitess to come up.
