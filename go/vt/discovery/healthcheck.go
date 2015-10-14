@@ -478,7 +478,7 @@ func (epcs *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 			extra = fmt.Sprintf(" (%v)", eps.LastError)
 		} else if !eps.Serving {
 			color = "red"
-			extra = "Not Serving"
+			extra = " (Not Serving)"
 		} else if eps.Target.TabletType == pbt.TabletType_MASTER {
 			extra = fmt.Sprintf(" (MasterTS: %v)", eps.TabletExternallyReparentedTimestamp)
 		} else {
