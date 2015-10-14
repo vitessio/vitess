@@ -27,9 +27,11 @@ class LocalDatabase(object):
     if self.mysql_only:
       return
 
-    vschema = os.path.join(self.schema_dir, "vschema.json")
-    if not os.path.isfile(vschema):
-      vschema = ''
+    vschema = ''
+    if self.schema_dir:
+      path = os.path.join(self.schema_dir, "vschema.json")
+      if os.path.isfile(path):
+        vschema = path
     vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db, vschema)
 
   def teardown(self):
