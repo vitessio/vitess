@@ -16,7 +16,6 @@ import com.youtube.vitess.vtgate.QueryResponse;
 import com.youtube.vitess.vtgate.QueryResult;
 import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.Row.Cell;
-import com.youtube.vitess.vtgate.RPCError;
 import com.youtube.vitess.vtgate.SplitQueryRequest;
 import com.youtube.vitess.vtgate.SplitQueryResponse;
 
@@ -203,20 +202,6 @@ public class Bsonify {
         error = new String(err);
       }
     }
-
-    RPCError err = null;
-    if (reply.containsField("Err")) {
-      BSONObject errBson = (BSONObject) reply.get("Err");
-      if (errBson != null) {
-        long code = (long) errBson.get("Code");
-        String messageString = null;
-        byte[] message = (byte[]) errBson.get("Message");
-        if (message.length > 0) {
-          messageString = new String(message);
-        }
-        err = new RPCError(code, messageString);
-      }
-    }
     BasicBSONList result = (BasicBSONList) reply.get("Splits");
     Map<Query, Long> queries = new HashMap<>();
     for (Object split : result) {
@@ -268,6 +253,6 @@ public class Bsonify {
       long size = (long) splitObj.get("Size");
       queries.put(q, size);
     }
-    return new SplitQueryResponse(queries, error, err);
+    return new SplitQueryResponse(queries, error);
   }
 }

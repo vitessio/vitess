@@ -94,6 +94,7 @@ class TestEnv(object):
           utils.run_vtctl(['ApplyVSchema', '-vschema_file', self.vschema])
       utils.VtGate(port=self.vtgate_port).start(
         cache_ttl='500s',
+        rpc_error_only_in_reply=False
       )
     except:
       self.shutdown()
@@ -104,8 +105,7 @@ class TestEnv(object):
     # StreamingServerShutdownIT.java expects an EOF from the vtgate
     # client and not an error that vttablet killed the query (which is
     # seen when vtgate is killed last).
-    if utils.vtgate:
-      utils.vtgate.kill()
+    utils.vtgate.kill()
     tablet.kill_tablets(self.tablets)
     teardown_procs = [t.teardown_mysql() for t in self.tablets]
     utils.wait_procs(teardown_procs, raise_on_error=False)
