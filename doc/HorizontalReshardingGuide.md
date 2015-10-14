@@ -12,21 +12,21 @@ To complete these steps, you must have:
 1. A running [keyspace](http://vitess.io/overview/concepts.html#keyspace).
    A keyspace is a logical database that maps to one or more MySQL databases.
 
-1. Two or more [rdonly tablets](http://vitess.io/overview/concepts.html#tablet)
-   running on the source shard. You set the desired tablet type when starting
-   `vttablet` with the `-target_tablet_type` flag. See the
-   [vttablet-up.sh](https://github.com/youtube/vitess/blob/master/examples/local/vttablet-up.sh)
-   script for example.
+1.  Two or more [rdonly tablets](http://vitess.io/overview/concepts.html#tablet)
+    running on the source shard. You set the desired tablet type when starting
+    `vttablet` with the `-target_tablet_type` flag. See the
+    [vttablet-up.sh](https://github.com/youtube/vitess/blob/master/examples/local/vttablet-up.sh)
+    script for example.
 
-   During resharding, one of these tablets will pause its replication to ensure
-   a consistent snapshot of the data. For this reason, you can't do resharding
-   if there are only `master` and `replica` tablets, because those are reserved
-   for live traffic and Vitess will never take them out of service for batch
-   processes like resharding.
+    During resharding, one of these tablets will pause its replication to ensure
+    a consistent snapshot of the data. For this reason, you can't do resharding
+    if there are only `master` and `replica` tablets, because those are reserved
+    for live traffic and Vitess will never take them out of service for batch
+    processes like resharding.
 
-   Having at least two `rdonly` tablets ensures that data updates that occur on
-   the source shard during the resharding process propagate to the destination
-   shard. Steps 3 and 4 of the resharding process discuss this in more detail.
+    Having at least two `rdonly` tablets ensures that data updates that occur on
+    the source shard during the resharding process propagate to the destination
+    shard. Steps 3 and 4 of the resharding process discuss this in more detail.
 
 We recommend that you also review the
 [Range-Based Sharding](http://vitess.io/user-guide/sharding.html#range-based-sharding)
