@@ -132,7 +132,7 @@ class VtcomboProcess(VtProcess):
       '-queryserver-config-txpool-timeout', '300',
       ]
 
-  def __init__(self, directory, shards, mysql_db, charset):
+  def __init__(self, directory, shards, mysql_db, vschema, charset):
     VtProcess.__init__(self, 'vtcombo-%s' % os.environ['USER'], directory,
                        environment.vtcombo_binary, port_name='vtcombo')
     topology = ",".join(["%s/%s:%s" % (shard.keyspace, shard.name,
@@ -148,12 +148,14 @@ class VtcomboProcess(VtProcess):
         '-mycnf_server_id', '1',
         '-mycnf_socket_file', mysql_db.unix_socket(),
     ] + self.QUERYSERVER_PARAMETERS + environment.extra_vtcombo_parameters()
+    if vschema:
+      self.extraparams.extend(['-vschema', vschema])
 
 
 vtcombo_process = None
 
 
-def start_vt_processes(directory, shards, mysql_db,
+def start_vt_processes(directory, shards, mysql_db, vschema,
                        charset='utf8'):
   """Start the vt processes.
 
@@ -167,7 +169,7 @@ def start_vt_processes(directory, shards, mysql_db,
 
   logging.info('start_vt_processes(directory=%s,vtcombo_binary=%s)',
                directory, environment.vtcombo_binary)
-  vtcombo_process = VtcomboProcess(directory, shards, mysql_db, charset)
+  vtcombo_process = VtcomboProcess(directory, shards, mysql_db, vschema, charset)
   vtcombo_process.wait_start()
 
 

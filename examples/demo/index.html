@@ -37,8 +37,7 @@ license that can be found in the LICENSE file.
         </div>
         <table class="col-md-9">
           <tr data-ng-repeat="queryInfo in result.queries track by $index">
-            <td>{{queryInfo[0]}}</td>
-            <td>{{queryInfo[1]}}</td>
+            <td>{{queryInfo}}</td>
           </tr>
         </table>
         <div class="col-md-9 alert alert-danger" data-ng-show="result.error">

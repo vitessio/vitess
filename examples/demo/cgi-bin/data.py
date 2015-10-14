@@ -40,14 +40,14 @@ def exec_query(cursor, title, query, response):
         "error": str(e),
         }
 
-def capture_log(prefix, port, queries):
+def capture_log(port, queries):
   p = subprocess.Popen(["curl", "-s", "-N", "http://localhost:%d/debug/querylog" % port], stdout=subprocess.PIPE)
   def collect():
     for line in iter(p.stdout.readline, ''):
-      query = line.split("\t")[10].strip('"')
+      query = line.split("\t")[12].strip('"')
       if not query:
         continue
-      queries.append([prefix, query])
+      queries.append(query)
   t = threading.Thread(target=collect)
   t.daemon = True
   t.start()
@@ -56,7 +56,7 @@ def capture_log(prefix, port, queries):
 def main():
   print "Content-Type: application/json\n"
   try:
-    conn = vtgatev3.connect("localhost:15009", 10.0)
+    conn = vtgatev3.connect("localhost:12345", 10.0)
     cursor = conn.cursor("master")
 
     args = cgi.FieldStorage()
@@ -65,15 +65,11 @@ def main():
 
     try:
       queries = []
-      user0 = capture_log("user0", 15003, queries)
-      user1 = capture_log("user1", 15005, queries)
-      lookup = capture_log("lookup", 15007, queries)
+      stats = capture_log(12345, queries)
       time.sleep(0.25)
       exec_query(cursor, "result", query, response)
     finally:
-      user0.terminate()
-      user1.terminate()
-      lookup.terminate()
+      stats.terminate()
       time.sleep(0.25)
       response["queries"] = queries
 

@@ -27,7 +27,10 @@ class LocalDatabase(object):
     if self.mysql_only:
       return
 
-    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db)
+    vschema = os.path.join(self.schema_dir, "vschema.json")
+    if not os.path.isfile(vschema):
+      vschema = ''
+    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db, vschema)
 
   def teardown(self):
     """Kill all Vitess processes and wait for them to end.
