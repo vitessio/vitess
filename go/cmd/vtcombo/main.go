@@ -19,8 +19,10 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
+	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk/fakezk"
 )
@@ -32,6 +34,7 @@ const (
 
 var (
 	topology = flag.String("topology", "", "Define which shards exist in the test topology in the form <keyspace>/<shardrange>:<dbname>,... The dbname must be unique among all shards, since they share a MySQL instance in the test environment.")
+	vschema  = flag.String("vschema", "", "vschema file")
 )
 
 func init() {
@@ -58,6 +61,7 @@ func main() {
 	ts := topo.GetServerByName("fakezk")
 
 	servenv.Init()
+	tabletserver.Init()
 
 	// database configs
 	mycnf, err := mysqlctl.NewMycnfFromFlags(0)
@@ -75,10 +79,21 @@ func main() {
 	binlog.RegisterUpdateStreamService(mycnf)
 	initTabletMap(ts, *topology, mysqld, dbcfgs, mycnf)
 
+	// vschema
+	var schema *planbuilder.Schema
+	if *vschema != "" {
+		schema, err = planbuilder.LoadFile(*vschema)
+		if err != nil {
+			log.Error(err)
+			exit.Return(1)
+		}
+		log.Infof("v3 is enabled: loaded schema from file")
+	}
+
 	// vtgate configuration and init
 	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 	healthCheck := discovery.NewHealthCheck(30*time.Second /*connTimeoutTotal*/, 1*time.Millisecond /*retryDelay*/)
-	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, nil /*schema*/, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, 0 /*maxInFlight*/, "" /*testGateway*/)
+	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, 0 /*maxInFlight*/, "" /*testGateway*/)
 
 	servenv.OnTerm(func() {
 		// FIXME(alainjobart) stop vtgate, all tablets

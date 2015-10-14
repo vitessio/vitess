@@ -10,9 +10,10 @@ from vttest import vt_processes
 class LocalDatabase(object):
   """Set up a local Vitess database."""
 
-  def __init__(self, shards, schema_dir, mysql_only):
+  def __init__(self, shards, schema_dir, vschema, mysql_only):
     self.shards = shards
     self.schema_dir = schema_dir
+    self.vschema = vschema
     self.mysql_only = mysql_only
 
   def setup(self):
@@ -27,7 +28,7 @@ class LocalDatabase(object):
     if self.mysql_only:
       return
 
-    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db)
+    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db, self.vschema)
 
   def teardown(self):
     """Kill all Vitess processes and wait for them to end.
