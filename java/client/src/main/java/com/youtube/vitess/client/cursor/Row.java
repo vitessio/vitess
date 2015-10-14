@@ -1,26 +1,20 @@
 package com.youtube.vitess.client.cursor;
 
-import com.google.common.collect.Lists;
-import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
-import org.apache.hadoop.io.Writable;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.ISODateTimeFormat;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
-public class Row implements Writable {
+public class Row {
   private Map<String, Integer> fieldMap;
   private List<Field> fields;
   private Query.Row rawRow;
@@ -31,9 +25,11 @@ public class Row implements Writable {
     this.fieldMap = fieldMap;
   }
 
-  public List<Field> getFields() {
-    return fields;
-  }
+  public List<Field> getFields() { return fields; }
+
+  public Query.Row getRowProto() { return rawRow; }
+
+  public Map<String, Integer> getFieldMap() { return fieldMap; }
 
   public int findColumn(String columnLabel) throws SQLException {
     if (!fieldMap.containsKey(columnLabel)) {
@@ -200,24 +196,5 @@ public class Row implements Writable {
       default:
         throw new SQLDataException("unknown field type: " + field.getType());
     }
-  }
-
-  @Override
-  public void write(DataOutput out) throws IOException {
-    out.writeInt(fields.size());
-    for (Field field : fields) {
-      out.writeUTF(BaseEncoding.base64().encode(field.toByteArray()));
-    }
-    out.writeUTF(BaseEncoding.base64().encode(rawRow.toByteArray()));
-  }
-
-  @Override
-  public void readFields(DataInput in) throws IOException {
-    int fieldLen = in.readInt();
-    fields = Lists.newArrayListWithCapacity(fieldLen);
-    for (int i=0; i < fieldLen; i++) {
-      fields.add(Field.parseFrom(BaseEncoding.base64().decode(in.readUTF())));
-    }
-    rawRow = Query.Row.parseFrom(BaseEncoding.base64().decode(in.readUTF()));
   }
 }
