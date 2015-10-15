@@ -195,7 +195,7 @@ func TestDecideAction(t *testing.T) {
 	}
 
 	tsv.setState(StateServing)
-	action, err = tsv.decideAction(topodata.TabletType_MASTER, true)
+	action, err = tsv.decideAction(topodata.TabletType_REPLICA, true)
 	if err != nil {
 		t.Error(err)
 	}
@@ -204,6 +204,19 @@ func TestDecideAction(t *testing.T) {
 	}
 	if tsv.state != StateTransitioning {
 		t.Errorf("tsv.state: %v, want %v", tsv.state, StateTransitioning)
+	}
+	tsv.target.TabletType = topodata.TabletType_MASTER
+
+	tsv.setState(StateServing)
+	action, err = tsv.decideAction(topodata.TabletType_MASTER, true)
+	if err != nil {
+		t.Error(err)
+	}
+	if action != actionNone {
+		t.Errorf("decideAction: %v, want %v", action, actionNone)
+	}
+	if tsv.state != StateServing {
+		t.Errorf("tsv.state: %v, want %v", tsv.state, StateServing)
 	}
 
 	tsv.setState(StateTransitioning)
