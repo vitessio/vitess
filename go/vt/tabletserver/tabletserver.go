@@ -80,6 +80,7 @@ type TabletServer struct {
 	mu       sync.Mutex
 	state    int64
 	requests sync.WaitGroup
+	begins   sync.WaitGroup
 
 	// The following variables should be initialized only once
 	// before starting the tabletserver. For backward compatibility,
@@ -196,6 +197,13 @@ func (tsv *TabletServer) setState(state int64) {
 	tsv.state = state
 }
 
+// transition obtains a lock and changes the state.
+func (tsv *TabletServer) transition(newState int64) {
+	tsv.mu.Lock()
+	tsv.setState(newState)
+	tsv.mu.Unlock()
+}
+
 // IsServing returns true if TabletServer is in SERVING state.
 func (tsv *TabletServer) IsServing() bool {
 	return tsv.GetState() == "SERVING"
@@ -291,9 +299,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 		if x := recover(); x != nil {
 			log.Errorf("Could not start tabletserver: %v", x)
 			tsv.qe.Close()
-			tsv.mu.Lock()
-			tsv.setState(StateNotConnected)
-			tsv.mu.Unlock()
+			tsv.transition(StateNotConnected)
 			err = x.(error)
 		}
 	}()
@@ -313,9 +319,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		if x := recover(); x != nil {
 			log.Errorf("Could not start tabletserver: %v", x)
 			tsv.qe.Close()
-			tsv.mu.Lock()
-			tsv.setState(StateNotConnected)
-			tsv.mu.Unlock()
+			tsv.transition(StateNotConnected)
 			err = x.(error)
 		}
 	}()
@@ -327,9 +331,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	}
 	tsv.sessionID = Rand()
 	log.Infof("Session id: %d", tsv.sessionID)
-	tsv.mu.Lock()
-	tsv.setState(StateServing)
-	tsv.mu.Unlock()
+	tsv.transition(StateServing)
 	return nil
 }
 
@@ -343,13 +345,8 @@ func (tsv *TabletServer) needInvalidator(target pb.Target) bool {
 
 func (tsv *TabletServer) gracefulStop() {
 	defer close(tsv.setTimeBomb())
-
-	tsv.qe.WaitForTxEmpty()
-	tsv.qe.streamQList.TerminateAll()
-	tsv.requests.Wait()
-	tsv.mu.Lock()
-	tsv.setState(StateNotServing)
-	tsv.mu.Unlock()
+	tsv.waitForShutdown()
+	tsv.transition(StateNotServing)
 }
 
 // StopService shuts down the tabletserver to the uninitialized state.
@@ -368,22 +365,25 @@ func (tsv *TabletServer) StopService() {
 	tsv.setState(StateShuttingDown)
 	tsv.mu.Unlock()
 
-	// Same as gracefulStop.
 	log.Infof("Executing graceful transition to NotServing")
-	tsv.qe.WaitForTxEmpty()
-	tsv.qe.streamQList.TerminateAll()
-	tsv.requests.Wait()
+	tsv.waitForShutdown()
 
 	defer func() {
-		tsv.mu.Lock()
-		tsv.setState(StateNotConnected)
-		tsv.mu.Unlock()
+		tsv.transition(StateNotConnected)
 	}()
 	log.Infof("Shutting down query service")
 
 	tsv.invalidator.Close()
 	tsv.qe.Close()
 	tsv.sessionID = Rand()
+}
+
+func (tsv *TabletServer) waitForShutdown() {
+	// Wait till begins have completed before waiting on tx pool.
+	tsv.begins.Wait()
+	tsv.qe.WaitForTxEmpty()
+	tsv.qe.streamQList.TerminateAll()
+	tsv.requests.Wait()
 }
 
 func (tsv *TabletServer) setTimeBomb() chan struct{} {
@@ -456,9 +456,7 @@ func (tsv *TabletServer) isMySQLReachable() bool {
 		// temporarily switching to StateTransitioning.
 		tsv.setState(StateTransitioning)
 		defer func() {
-			tsv.mu.Lock()
-			tsv.setState(StateNotServing)
-			tsv.mu.Unlock()
+			tsv.transition(StateNotServing)
 		}()
 	default:
 		tsv.mu.Unlock()
@@ -508,14 +506,14 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *pb.Target, session *
 	logStats.OriginalSQL = "begin"
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 
-	if err = tsv.startRequest(target, session.SessionId, false); err != nil {
+	if err = tsv.startRequest(target, session.SessionId, true, false); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.BeginTimeout.Get())
 	defer func() {
 		tsv.qe.queryServiceStats.QueryStats.Record("BEGIN", time.Now())
 		cancel()
-		tsv.endRequest()
+		tsv.endRequest(true)
 	}()
 
 	txInfo.TransactionId = tsv.qe.txPool.Begin(ctx)
@@ -530,14 +528,14 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *pb.Target, session 
 	logStats.TransactionID = session.TransactionId
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 
-	if err = tsv.startRequest(target, session.SessionId, true); err != nil {
+	if err = tsv.startRequest(target, session.SessionId, false, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
 		tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", time.Now())
 		cancel()
-		tsv.endRequest()
+		tsv.endRequest(false)
 	}()
 
 	tsv.qe.Commit(ctx, logStats, session.TransactionId)
@@ -551,14 +549,14 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *pb.Target, sessio
 	logStats.TransactionID = session.TransactionId
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 
-	if err = tsv.startRequest(target, session.SessionId, true); err != nil {
+	if err = tsv.startRequest(target, session.SessionId, false, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
 		tsv.qe.queryServiceStats.QueryStats.Record("ROLLBACK", time.Now())
 		cancel()
-		tsv.endRequest()
+		tsv.endRequest(false)
 	}()
 
 	tsv.qe.txPool.Rollback(ctx, session.TransactionId)
@@ -628,13 +626,13 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *pb.Target, query *
 	defer tsv.handleExecError(query, &err, logStats)
 
 	allowShutdown := (query.TransactionId != 0)
-	if err = tsv.startRequest(target, query.SessionId, allowShutdown); err != nil {
+	if err = tsv.startRequest(target, query.SessionId, false, allowShutdown); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
 		cancel()
-		tsv.endRequest()
+		tsv.endRequest(false)
 	}()
 
 	if query.BindVariables == nil {
@@ -670,10 +668,10 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *pb.Target, q
 	logStats := newLogStats("StreamExecute", ctx)
 	defer tsv.handleExecError(query, &err, logStats)
 
-	if err = tsv.startRequest(target, query.SessionId, false); err != nil {
+	if err = tsv.startRequest(target, query.SessionId, false, false); err != nil {
 		return err
 	}
-	defer tsv.endRequest()
+	defer tsv.endRequest(false)
 
 	if query.BindVariables == nil {
 		query.BindVariables = make(map[string]interface{})
@@ -708,10 +706,10 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *pb.Target, qu
 	}
 
 	allowShutdown := (queryList.TransactionId != 0)
-	if err = tsv.startRequest(target, queryList.SessionId, allowShutdown); err != nil {
+	if err = tsv.startRequest(target, queryList.SessionId, false, allowShutdown); err != nil {
 		return err
 	}
-	defer tsv.endRequest()
+	defer tsv.endRequest(false)
 	defer handleError(&err, nil, tsv.qe.queryServiceStats)
 
 	session := proto.Session{
@@ -760,13 +758,13 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *pb.Target, qu
 func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	logStats := newLogStats("SplitQuery", ctx)
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
-	if err = tsv.startRequest(target, req.SessionID, false); err != nil {
+	if err = tsv.startRequest(target, req.SessionID, false, false); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
 		cancel()
-		tsv.endRequest()
+		tsv.endRequest(false)
 	}()
 
 	splitter := NewQuerySplitter(&(req.Query), req.SplitColumn, req.SplitCount, tsv.qe.schemaInfo)
@@ -862,13 +860,13 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeS
 // and only one corresponding endRequest. When the service shuts down,
 // StopService will wait on this waitgroup to ensure that there are
 // no requests in flight.
-func (tsv *TabletServer) startRequest(target *pb.Target, sessionID int64, allowShutdown bool) (err error) {
+func (tsv *TabletServer) startRequest(target *pb.Target, sessionID int64, isBegin, allowShutdown bool) (err error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state == StateServing {
 		goto verifySession
 	}
-	if allowShutdown && tsv.state == StateShuttingDown {
+	if (isBegin || allowShutdown) && tsv.state == StateShuttingDown {
 		goto verifySession
 	}
 	return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
@@ -893,12 +891,20 @@ verifySession:
 
 ok:
 	tsv.requests.Add(1)
+	// If it's a begin, we should make the shutdown code
+	// wait for the call to end before it waits for tx empty.
+	if isBegin {
+		tsv.begins.Add(1)
+	}
 	return nil
 }
 
 // endRequest unregisters the current request (a waitgroup) as done.
-func (tsv *TabletServer) endRequest() {
+func (tsv *TabletServer) endRequest(isBegin bool) {
 	tsv.requests.Done()
+	if isBegin {
+		tsv.begins.Done()
+	}
 }
 
 func (tsv *TabletServer) registerDebugHealthHandler() {
