@@ -267,6 +267,16 @@ func (tsv *TabletServer) SetServingType(tabletType topodata.TabletType, serving 
 func (tsv *TabletServer) decideAction(tabletType topodata.TabletType, serving bool) (action int, err error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
+	// Handle the case where the requested TabletType and serving state
+	// match our current state. This avoids an unnecessary transition.
+	// There's no similar shortcut if serving is false, because there
+	// are different 'not serving' states that require different actions.
+	if tsv.target.TabletType == tabletType {
+		if serving && tsv.state == StateServing {
+			// We're already in the desired state.
+			return actionNone, nil
+		}
+	}
 	tsv.target.TabletType = tabletType
 	switch tsv.state {
 	case StateNotConnected:
