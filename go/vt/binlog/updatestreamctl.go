@@ -127,12 +127,18 @@ func logError() {
 // EnableUpdateStreamService enables the RPC service for UpdateStream
 func EnableUpdateStreamService(dbname string, mysqld mysqlctl.MysqlDaemon) {
 	defer logError()
+	if UpdateStreamRpcService == nil {
+		return
+	}
 	UpdateStreamRpcService.enable(dbname, mysqld)
 }
 
 // DisableUpdateStreamService disables the RPC service for UpdateStream
 func DisableUpdateStreamService() {
 	defer logError()
+	if UpdateStreamRpcService == nil {
+		return
+	}
 	UpdateStreamRpcService.disable()
 }
 
