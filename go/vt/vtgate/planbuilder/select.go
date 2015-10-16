@@ -4,7 +4,11 @@
 
 package planbuilder
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import (
+	"fmt"
+
+	"github.com/youtube/vitess/go/vt/sqlparser"
+)
 
 func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
 	plan := &Plan{ID: NoPlan}
@@ -69,13 +73,13 @@ func exprHasAggregates(node sqlparser.Expr) bool {
 		return exprHasAggregates(node.Left) || exprHasAggregates(node.Right)
 	case *sqlparser.RangeCond:
 		return exprHasAggregates(node.Left) || exprHasAggregates(node.From) || exprHasAggregates(node.To)
-	case *sqlparser.NullCheck:
+	case *sqlparser.IsExpr:
 		return exprHasAggregates(node.Expr)
 	case *sqlparser.ExistsExpr:
 		return false
 	case sqlparser.StrVal, sqlparser.NumVal, sqlparser.ValArg,
-		*sqlparser.NullVal, *sqlparser.ColName, sqlparser.ValTuple,
-		sqlparser.ListArg:
+		*sqlparser.NullVal, sqlparser.BoolVal, *sqlparser.ColName,
+		sqlparser.ValTuple, sqlparser.ListArg, *sqlparser.KeyrangeExpr:
 		return false
 	case *sqlparser.Subquery:
 		return false
@@ -106,8 +110,10 @@ func exprHasAggregates(node sqlparser.Expr) bool {
 			}
 		}
 		return false
+	case nil:
+		return false
 	default:
-		panic("unexpected")
+		panic(fmt.Errorf("unexpected type: %T", node))
 	}
 }
 

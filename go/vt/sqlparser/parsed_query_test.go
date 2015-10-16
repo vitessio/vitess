@@ -5,6 +5,7 @@
 package sqlparser
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -192,5 +193,21 @@ func TestParsedQuery(t *testing.T) {
 		if got != tcase.output {
 			t.Errorf("for test case: %s, got: '%s', want '%s'", tcase.desc, got, tcase.output)
 		}
+	}
+}
+
+func TestGenerateParsedQuery(t *testing.T) {
+	stmt, err := Parse("select * from a where id =:id")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	pq := GenerateParsedQuery(stmt)
+	want := &ParsedQuery{
+		Query:         "select * from a where id = :id",
+		bindLocations: []bindLocation{{offset: 27, length: 3}},
+	}
+	if !reflect.DeepEqual(pq, want) {
+		t.Errorf("GenerateParsedQuery: %+v, want %+v", pq, want)
 	}
 }

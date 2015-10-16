@@ -460,13 +460,14 @@ func (*NotExpr) IExpr()        {}
 func (*ParenBoolExpr) IExpr()  {}
 func (*ComparisonExpr) IExpr() {}
 func (*RangeCond) IExpr()      {}
-func (*NullCheck) IExpr()      {}
+func (*IsExpr) IExpr()         {}
 func (*ExistsExpr) IExpr()     {}
 func (*KeyrangeExpr) IExpr()   {}
 func (StrVal) IExpr()          {}
 func (NumVal) IExpr()          {}
 func (ValArg) IExpr()          {}
 func (*NullVal) IExpr()        {}
+func (BoolVal) IExpr()         {}
 func (*ColName) IExpr()        {}
 func (ValTuple) IExpr()        {}
 func (*Subquery) IExpr()       {}
@@ -476,19 +477,49 @@ func (*UnaryExpr) IExpr()      {}
 func (*FuncExpr) IExpr()       {}
 func (*CaseExpr) IExpr()       {}
 
+// AllExprs must contain one variable for each
+// AST type that satisfies Expr. This allows
+// for external packages to verify
+// that they're not missing on any types.
+var AllExprs = []Expr{
+	&AndExpr{},
+	&OrExpr{},
+	&NotExpr{},
+	&ParenBoolExpr{},
+	&ComparisonExpr{},
+	&RangeCond{},
+	&IsExpr{},
+	&ExistsExpr{},
+	&KeyrangeExpr{},
+	StrVal(""),
+	NumVal(""),
+	ValArg(""),
+	&NullVal{},
+	BoolVal(false),
+	&ColName{},
+	ValTuple{},
+	&Subquery{},
+	ListArg(""),
+	&BinaryExpr{},
+	&UnaryExpr{},
+	&FuncExpr{},
+	&CaseExpr{},
+}
+
 // BoolExpr represents a boolean expression.
 type BoolExpr interface {
 	IBoolExpr()
 	Expr
 }
 
+func (BoolVal) IBoolExpr()         {}
 func (*AndExpr) IBoolExpr()        {}
 func (*OrExpr) IBoolExpr()         {}
 func (*NotExpr) IBoolExpr()        {}
 func (*ParenBoolExpr) IBoolExpr()  {}
 func (*ComparisonExpr) IBoolExpr() {}
 func (*RangeCond) IBoolExpr()      {}
-func (*NullCheck) IBoolExpr()      {}
+func (*IsExpr) IBoolExpr()         {}
 func (*ExistsExpr) IBoolExpr()     {}
 func (*KeyrangeExpr) IBoolExpr()   {}
 
@@ -570,19 +601,23 @@ func (node *RangeCond) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s %v and %v", node.Left, node.Operator, node.From, node.To)
 }
 
-// NullCheck represents an IS NULL or an IS NOT NULL expression.
-type NullCheck struct {
+// IsExpr represents an IS ... or an IS NOT ... expression.
+type IsExpr struct {
 	Operator string
-	Expr     ValExpr
+	Expr     Expr
 }
 
-// NullCheck.Operator
+// IsExpr.Operator
 const (
-	AST_IS_NULL     = "is null"
-	AST_IS_NOT_NULL = "is not null"
+	AST_IS_NULL      = "is null"
+	AST_IS_NOT_NULL  = "is not null"
+	AST_IS_TRUE      = "is true"
+	AST_IS_NOT_TRUE  = "is not true"
+	AST_IS_FALSE     = "is false"
+	AST_IS_NOT_FALSE = "is not false"
 )
 
-func (node *NullCheck) Format(buf *TrackedBuffer) {
+func (node *IsExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s", node.Expr, node.Operator)
 }
 
@@ -650,6 +685,17 @@ type NullVal struct{}
 
 func (node *NullVal) Format(buf *TrackedBuffer) {
 	buf.Myprintf("null")
+}
+
+// BoolVal is true or false.
+type BoolVal bool
+
+func (node BoolVal) Format(buf *TrackedBuffer) {
+	if node {
+		buf.Myprintf("true")
+	} else {
+		buf.Myprintf("false")
+	}
 }
 
 // ColName represents a column name.
