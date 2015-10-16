@@ -12,7 +12,6 @@ import (
 
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateservice"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconntest"
 	"golang.org/x/net/context"
@@ -32,8 +31,6 @@ func TestGoRPCVTGateConn(t *testing.T) {
 	// Create a Go Rpc server and listen on the port
 	server := rpcplus.NewServer()
 	server.Register(gorpcvtgateservice.New(service))
-	// TODO(aaijazi): remove this flag once all VtGate Gorpc clients properly support the new behavior
-	*vtgate.RPCErrorOnlyInReply = true
 
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
