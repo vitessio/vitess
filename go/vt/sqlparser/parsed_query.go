@@ -17,13 +17,15 @@ type bindLocation struct {
 	offset, length int
 }
 
+// ParsedQuery represents a parsed query where
+// bind locations are precompued for fast substitutions.
 type ParsedQuery struct {
 	Query         string
 	bindLocations []bindLocation
 }
 
-type EncoderFunc func(value interface{}) ([]byte, error)
-
+// GenerateQuery generates a query by substituting the specified
+// bindVariables.
 func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}) ([]byte, error) {
 	if len(pq.bindLocations) == 0 {
 		return []byte(pq.Query), nil
@@ -46,10 +48,12 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}) ([]by
 	return buf.Bytes(), nil
 }
 
+// MarshalJSON is a custom JSON marshaler for ParsedQuery.
 func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
 	return json.Marshal(pq.Query)
 }
 
+// EncodeValue encodes one bind variable value into the query.
 func EncodeValue(buf *bytes.Buffer, value interface{}) error {
 	switch bindVal := value.(type) {
 	case nil:
@@ -99,11 +103,15 @@ func EncodeValue(buf *bytes.Buffer, value interface{}) error {
 	return nil
 }
 
+// TupleEqualityList is for generating equality constraints
+// for tables that have composite primary keys.
 type TupleEqualityList struct {
 	Columns []string
 	Rows    [][]sqltypes.Value
 }
 
+// Encode generates the where clause constraints for the tuple
+// equality.
 func (tpl *TupleEqualityList) Encode(buf *bytes.Buffer) error {
 	if len(tpl.Rows) == 0 {
 		return errors.New("cannot encode with 0 rows")
@@ -153,6 +161,7 @@ func (tpl *TupleEqualityList) encodeAsEquality(buf *bytes.Buffer) error {
 	return nil
 }
 
+// FetchBindVar resolves the bind variable by fetching it from bindVariables.
 func FetchBindVar(name string, bindVariables map[string]interface{}) (val interface{}, isList bool, err error) {
 	name = name[1:]
 	if name[0] == ':' {
