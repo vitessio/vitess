@@ -573,7 +573,7 @@ func (node *RangeCond) Format(buf *TrackedBuffer) {
 // IsExpr represents an IS ... or an IS NOT ... expression.
 type IsExpr struct {
 	Operator string
-	Expr     ValExpr
+	Expr     Expr
 }
 
 // IsExpr.Operator

@@ -79,6 +79,12 @@ func TestIsPrecedence(t *testing.T) {
 	}{{
 		input:  "select * from a where a+b is true",
 		output: "((a + b) is true)",
+	}, {
+		input:  "select * from a where a=1 and b=2 is true",
+		output: "(a = 1 and (b = 2 is true))",
+	}, {
+		input:  "select * from a where (a=1 and b=2) is true",
+		output: "((a = 1 and b = 2) is true)",
 	}}
 	for _, tcase := range validSQL {
 		tree, err := Parse(tcase.input)

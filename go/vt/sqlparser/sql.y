@@ -91,12 +91,12 @@ func forceEOF(yylex interface{}) {
 %left <empty> AND
 %right <empty> NOT
 %right <empty> BETWEEN CASE WHEN THEN ELSE
-%token <empty> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE IN
+%left <empty> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE IN
 %left <empty> '|'
 %left <empty> '&'
+%left <empty> SHIFT_LEFT SHIFT_RIGHT
 %left <empty> '+' '-'
 %left <empty> '*' '/' '%'
-%left <empty> SHIFT_LEFT SHIFT_RIGHT
 %left <empty> '^'
 %right <empty> '~' UNARY
 %nonassoc <empty> '.'
@@ -553,6 +553,10 @@ boolean_expression:
 | openb boolean_expression closeb
   {
     $$ = &ParenBoolExpr{Expr: $2}
+  }
+| boolean_expression IS is_suffix
+  {
+    $$ = &IsExpr{Operator: $3, Expr: $1}
   }
 
 condition:

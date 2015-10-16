@@ -163,6 +163,10 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* not */ 1 from t where not a = b",
 	}, {
+		input: "select /* bool is */ 1 from t where a = b is null",
+	}, {
+		input: "select /* bool is not */ 1 from t where a = b is not false",
+	}, {
 		input: "select /* exists */ 1 from t where exists (select 1 from t)",
 	}, {
 		input: "select /* keyrange */ 1 from t where keyrange(1, 2)",
