@@ -16,7 +16,7 @@ import (
 )
 
 // VtctlClientProtocol specifices which RPC client implementation should be used.
-var VtctlClientProtocol = flag.String("vtctl_client_protocol", "gorpc", "the protocol to use to talk to the vtctl server")
+var VtctlClientProtocol = flag.String("vtctl_client_protocol", "grpc", "the protocol to use to talk to the vtctl server")
 
 // ErrFunc is returned by streaming queries to get the error
 type ErrFunc func() error
