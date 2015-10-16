@@ -42,7 +42,8 @@ $ chmod +x $VTROOT/bin/phpunit
 Then run the tests like this:
 
 ``` sh
-vitess/php$ phpunit tests
+vitess$ . dev.env
+vitess$ make php_test
 ```
 
 ### Coverage
