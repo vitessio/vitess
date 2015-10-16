@@ -73,19 +73,24 @@ func forceEOF(yylex interface{}) {
 
 %token LEX_ERROR
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
-%token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
+%token <empty> ALL DISTINCT AS EXISTS NULL ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
 %token <empty> VALUES LAST_INSERT_ID
 %token <bytes> ID STRING NUMBER VALUE_ARG LIST_ARG COMMENT
-%token <empty> LE GE NE NULL_SAFE_EQUAL
-%token <empty> '(' '=' '<' '>'
-
+%token <empty> '('
 %left <empty> UNION MINUS EXCEPT INTERSECT
-%left <empty> ','
 %left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
+%left <empty> ','
 %left <empty> ON
+
+// Precedence dictated by mysql. But the vitess grammar is simplified.
+// Some of these operators don't conflict in our situation. Nevertheless,
+// it's better to have thesed listed in the correct order. Also, we don't
+// support all operators yet.
 %left <empty> OR
 %left <empty> AND
 %right <empty> NOT
+%right <empty> BETWEEN CASE WHEN THEN ELSE
+%token <empty> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE IN
 %left <empty> '|'
 %left <empty> '&'
 %left <empty> '+' '-'
@@ -94,7 +99,6 @@ func forceEOF(yylex interface{}) {
 %left <empty> '^'
 %right <empty> '~' UNARY
 %nonassoc <empty> '.'
-%right <empty> CASE, WHEN, THEN, ELSE
 %left <empty> END
 
 // DDL Tokens
