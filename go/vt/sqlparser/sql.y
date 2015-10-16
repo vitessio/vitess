@@ -560,7 +560,15 @@ boolean_expression:
   }
 
 condition:
-  value_expression compare value_expression
+  TRUE
+  {
+    $$ = BoolVal(true)
+  }
+| FALSE
+  {
+    $$ = BoolVal(false)
+  }
+| value_expression compare value_expression
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }

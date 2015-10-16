@@ -74,8 +74,8 @@ func hasSubquery(node sqlparser.Expr) bool {
 	case *sqlparser.ExistsExpr:
 		return true
 	case sqlparser.StrVal, sqlparser.NumVal, sqlparser.ValArg,
-		*sqlparser.NullVal, *sqlparser.ColName, sqlparser.ValTuple,
-		sqlparser.ListArg, *sqlparser.KeyrangeExpr:
+		*sqlparser.NullVal, sqlparser.BoolVal, *sqlparser.ColName,
+		sqlparser.ValTuple, sqlparser.ListArg, *sqlparser.KeyrangeExpr:
 		return false
 	case *sqlparser.Subquery:
 		return true
@@ -106,7 +106,7 @@ func hasSubquery(node sqlparser.Expr) bool {
 	case nil:
 		return false
 	default:
-		panic("unexpected")
+		panic(fmt.Errorf("unexpected type: %T", node))
 	}
 }
 

@@ -467,6 +467,7 @@ func (StrVal) IExpr()          {}
 func (NumVal) IExpr()          {}
 func (ValArg) IExpr()          {}
 func (*NullVal) IExpr()        {}
+func (BoolVal) IExpr()         {}
 func (*ColName) IExpr()        {}
 func (ValTuple) IExpr()        {}
 func (*Subquery) IExpr()       {}
@@ -476,12 +477,42 @@ func (*UnaryExpr) IExpr()      {}
 func (*FuncExpr) IExpr()       {}
 func (*CaseExpr) IExpr()       {}
 
+// AllExprs must contain one variable for each
+// AST type that satisfies Expr. This allows
+// for external packages to verify
+// that they're not missing on any types.
+var AllExprs = []Expr{
+	&AndExpr{},
+	&OrExpr{},
+	&NotExpr{},
+	&ParenBoolExpr{},
+	&ComparisonExpr{},
+	&RangeCond{},
+	&IsExpr{},
+	&ExistsExpr{},
+	&KeyrangeExpr{},
+	StrVal(""),
+	NumVal(""),
+	ValArg(""),
+	&NullVal{},
+	BoolVal(false),
+	&ColName{},
+	ValTuple{},
+	&Subquery{},
+	ListArg(""),
+	&BinaryExpr{},
+	&UnaryExpr{},
+	&FuncExpr{},
+	&CaseExpr{},
+}
+
 // BoolExpr represents a boolean expression.
 type BoolExpr interface {
 	IBoolExpr()
 	Expr
 }
 
+func (BoolVal) IBoolExpr()         {}
 func (*AndExpr) IBoolExpr()        {}
 func (*OrExpr) IBoolExpr()         {}
 func (*NotExpr) IBoolExpr()        {}
@@ -654,6 +685,17 @@ type NullVal struct{}
 
 func (node *NullVal) Format(buf *TrackedBuffer) {
 	buf.Myprintf("null")
+}
+
+// BoolVal is true or false.
+type BoolVal bool
+
+func (node BoolVal) Format(buf *TrackedBuffer) {
+	if node {
+		buf.Myprintf("true")
+	} else {
+		buf.Myprintf("false")
+	}
 }
 
 // ColName represents a column name.
