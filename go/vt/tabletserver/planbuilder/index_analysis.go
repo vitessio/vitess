@@ -73,7 +73,7 @@ func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValu
 		if !ok {
 			return nil, nil
 		}
-		if !sqlparser.StringIn(condition.Operator, sqlparser.AST_EQ, sqlparser.AST_IN) {
+		if !sqlparser.StringIn(condition.Operator, sqlparser.EqualStr, sqlparser.InStr) {
 			return nil, nil
 		}
 		index := pkIndexScore.FindMatch(string(condition.Left.(*sqlparser.ColName).Name))
@@ -81,7 +81,7 @@ func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValu
 			return nil, nil
 		}
 		switch condition.Operator {
-		case sqlparser.AST_EQ, sqlparser.AST_IN:
+		case sqlparser.EqualStr, sqlparser.InStr:
 			var err error
 			pkValues[index], err = sqlparser.AsInterface(condition.Right)
 			if err != nil {

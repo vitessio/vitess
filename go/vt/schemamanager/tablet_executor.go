@@ -112,12 +112,12 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		tableWithCount[tableSchema.Name] = tableSchema.RowCount
 	}
 	for _, ddl := range parsedDDLs {
-		if ddl.Action == sqlparser.AST_DROP {
+		if ddl.Action == sqlparser.DropStr {
 			continue
 		}
 		tableName := string(ddl.Table)
 		if rowCount, ok := tableWithCount[tableName]; ok {
-			if rowCount > 100000 && ddl.Action == sqlparser.AST_ALTER {
+			if rowCount > 100000 && ddl.Action == sqlparser.AlterStr {
 				return fmt.Errorf(
 					"big schema change, ddl: %v alters a table with more than 100 thousand rows", ddl)
 			}

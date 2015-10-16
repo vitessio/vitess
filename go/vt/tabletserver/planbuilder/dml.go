@@ -339,23 +339,23 @@ func analyzeBoolean(node sqlparser.BoolExpr) (conditions []sqlparser.BoolExpr) {
 		switch {
 		case sqlparser.StringIn(
 			node.Operator,
-			sqlparser.AST_EQ,
-			sqlparser.AST_LT,
-			sqlparser.AST_GT,
-			sqlparser.AST_LE,
-			sqlparser.AST_GE,
-			sqlparser.AST_NSE,
-			sqlparser.AST_LIKE):
+			sqlparser.EqualStr,
+			sqlparser.LessThanStr,
+			sqlparser.GreaterThanStr,
+			sqlparser.LessEqualStr,
+			sqlparser.GreaterEqualStr,
+			sqlparser.NullSafeEqualStr,
+			sqlparser.LikeStr):
 			if sqlparser.IsColName(node.Left) && sqlparser.IsValue(node.Right) {
 				return []sqlparser.BoolExpr{node}
 			}
-		case node.Operator == sqlparser.AST_IN:
+		case node.Operator == sqlparser.InStr:
 			if sqlparser.IsColName(node.Left) && sqlparser.IsSimpleTuple(node.Right) {
 				return []sqlparser.BoolExpr{node}
 			}
 		}
 	case *sqlparser.RangeCond:
-		if node.Operator != sqlparser.AST_BETWEEN {
+		if node.Operator != sqlparser.BetweenStr {
 			return nil
 		}
 		if sqlparser.IsColName(node.Left) && sqlparser.IsValue(node.From) && sqlparser.IsValue(node.To) {
