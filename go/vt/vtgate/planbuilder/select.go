@@ -69,7 +69,7 @@ func exprHasAggregates(node sqlparser.Expr) bool {
 		return exprHasAggregates(node.Left) || exprHasAggregates(node.Right)
 	case *sqlparser.RangeCond:
 		return exprHasAggregates(node.Left) || exprHasAggregates(node.From) || exprHasAggregates(node.To)
-	case *sqlparser.NullCheck:
+	case *sqlparser.IsExpr:
 		return exprHasAggregates(node.Expr)
 	case *sqlparser.ExistsExpr:
 		return false

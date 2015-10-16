@@ -73,14 +73,15 @@ func forceEOF(yylex interface{}) {
 
 %token LEX_ERROR
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
-%token <empty> ALL DISTINCT AS EXISTS NULL ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
+%token <empty> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
 %token <empty> VALUES LAST_INSERT_ID
 %token <bytes> ID STRING NUMBER VALUE_ARG LIST_ARG COMMENT
-%token <empty> '('
+%token <empty> '(' ')'
 %left <empty> UNION MINUS EXCEPT INTERSECT
 %left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <empty> ','
 %left <empty> ON
+%token <empty> NULL TRUE FALSE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
@@ -131,6 +132,7 @@ func forceEOF(yylex interface{}) {
 %type <str> compare
 %type <insRows> row_list
 %type <valExpr> value value_expression
+%type <str> is_suffix
 %type <colTuple> col_tuple
 %type <valExprs> value_expression_list
 %type <values> tuple_list
@@ -582,13 +584,9 @@ condition:
   {
     $$ = &RangeCond{Left: $1, Operator: AST_NOT_BETWEEN, From: $4, To: $6}
   }
-| value_expression IS NULL
+| value_expression IS is_suffix
   {
-    $$ = &NullCheck{Operator: AST_IS_NULL, Expr: $1}
-  }
-| value_expression IS NOT NULL
-  {
-    $$ = &NullCheck{Operator: AST_IS_NOT_NULL, Expr: $1}
+    $$ = &IsExpr{Operator: $3, Expr: $1}
   }
 | EXISTS subquery
   {
@@ -597,6 +595,32 @@ condition:
 | KEYRANGE openb value ',' value closeb
   {
     $$ = &KeyrangeExpr{Start: $3, End: $5}
+  }
+
+is_suffix:
+  NULL
+  {
+    $$ = AST_IS_NULL
+  }
+| NOT NULL
+  {
+    $$ = AST_IS_NOT_NULL
+  }
+| TRUE
+  {
+    $$ = AST_IS_TRUE
+  }
+| NOT TRUE
+  {
+    $$ = AST_IS_NOT_TRUE
+  }
+| FALSE
+  {
+    $$ = AST_IS_FALSE
+  }
+| NOT FALSE
+  {
+    $$ = AST_IS_NOT_FALSE
   }
 
 compare:

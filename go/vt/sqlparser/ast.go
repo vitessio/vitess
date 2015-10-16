@@ -460,7 +460,7 @@ func (*NotExpr) IExpr()        {}
 func (*ParenBoolExpr) IExpr()  {}
 func (*ComparisonExpr) IExpr() {}
 func (*RangeCond) IExpr()      {}
-func (*NullCheck) IExpr()      {}
+func (*IsExpr) IExpr()         {}
 func (*ExistsExpr) IExpr()     {}
 func (*KeyrangeExpr) IExpr()   {}
 func (StrVal) IExpr()          {}
@@ -488,7 +488,7 @@ func (*NotExpr) IBoolExpr()        {}
 func (*ParenBoolExpr) IBoolExpr()  {}
 func (*ComparisonExpr) IBoolExpr() {}
 func (*RangeCond) IBoolExpr()      {}
-func (*NullCheck) IBoolExpr()      {}
+func (*IsExpr) IBoolExpr()         {}
 func (*ExistsExpr) IBoolExpr()     {}
 func (*KeyrangeExpr) IBoolExpr()   {}
 
@@ -570,19 +570,23 @@ func (node *RangeCond) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s %v and %v", node.Left, node.Operator, node.From, node.To)
 }
 
-// NullCheck represents an IS NULL or an IS NOT NULL expression.
-type NullCheck struct {
+// IsExpr represents an IS ... or an IS NOT ... expression.
+type IsExpr struct {
 	Operator string
 	Expr     ValExpr
 }
 
-// NullCheck.Operator
+// IsExpr.Operator
 const (
-	AST_IS_NULL     = "is null"
-	AST_IS_NOT_NULL = "is not null"
+	AST_IS_NULL      = "is null"
+	AST_IS_NOT_NULL  = "is not null"
+	AST_IS_TRUE      = "is true"
+	AST_IS_NOT_TRUE  = "is not true"
+	AST_IS_FALSE     = "is false"
+	AST_IS_NOT_FALSE = "is not false"
 )
 
-func (node *NullCheck) Format(buf *TrackedBuffer) {
+func (node *IsExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s", node.Expr, node.Operator)
 }
 

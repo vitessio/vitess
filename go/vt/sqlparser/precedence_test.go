@@ -17,6 +17,8 @@ func readable(node Expr) string {
 		return fmt.Sprintf("(%s and %s)", readable(node.Left), readable(node.Right))
 	case *BinaryExpr:
 		return fmt.Sprintf("(%s %s %s)", readable(node.Left), node.Operator, readable(node.Right))
+	case *IsExpr:
+		return fmt.Sprintf("(%s %s)", readable(node.Expr), node.Operator)
 	default:
 		return String(node)
 	}
@@ -64,6 +66,27 @@ func TestPlusStarPrecedence(t *testing.T) {
 			continue
 		}
 		expr := readable(tree.(*Select).SelectExprs[0].(*NonStarExpr).Expr)
+		if expr != tcase.output {
+			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
+		}
+	}
+}
+
+func TestIsPrecedence(t *testing.T) {
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select * from a where a+b is true",
+		output: "((a + b) is true)",
+	}}
+	for _, tcase := range validSQL {
+		tree, err := Parse(tcase.input)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+		expr := readable(tree.(*Select).Where.Expr)
 		if expr != tcase.output {
 			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
 		}

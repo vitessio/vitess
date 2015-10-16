@@ -69,7 +69,7 @@ func hasSubquery(node sqlparser.Expr) bool {
 		return hasSubquery(node.Left) || hasSubquery(node.Right)
 	case *sqlparser.RangeCond:
 		return hasSubquery(node.Left) || hasSubquery(node.From) || hasSubquery(node.To)
-	case *sqlparser.NullCheck:
+	case *sqlparser.IsExpr:
 		return hasSubquery(node.Expr)
 	case *sqlparser.ExistsExpr:
 		return true

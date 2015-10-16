@@ -187,6 +187,14 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* is not null */ 1 from t where a is not null",
 	}, {
+		input: "select /* is true */ 1 from t where a is true",
+	}, {
+		input: "select /* is not true */ 1 from t where a is not true",
+	}, {
+		input: "select /* is false */ 1 from t where a is false",
+	}, {
+		input: "select /* is not false */ 1 from t where a is not false",
+	}, {
 		input: "select /* < */ 1 from t where a < b",
 	}, {
 		input: "select /* <= */ 1 from t where a <= b",
