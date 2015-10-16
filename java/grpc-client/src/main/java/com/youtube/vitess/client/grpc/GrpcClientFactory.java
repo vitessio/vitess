@@ -7,14 +7,14 @@ import com.youtube.vitess.client.RpcClientFactory;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 
-import java.net.SocketAddress;
+import java.net.InetSocketAddress;
 
 /**
  * GrpcClientFactory creates RpcClients with the gRPC implemenation.
  */
 public class GrpcClientFactory implements RpcClientFactory {
   @Override
-  public RpcClient create(Context ctx, SocketAddress address) {
+  public RpcClient create(Context ctx, InetSocketAddress address) {
     return new GrpcClient(
         NettyChannelBuilder.forAddress(address).negotiationType(NegotiationType.PLAINTEXT).build());
   }
