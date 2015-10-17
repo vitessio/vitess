@@ -67,11 +67,12 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blac
 			planID   planbuilder.PlanType
 			onAbsent bool
 		}{
-			{planbuilder.PLAN_INSERT_PK, true},
-			{planbuilder.PLAN_INSERT_SUBQUERY, true},
-			{planbuilder.PLAN_PASS_DML, false},
-			{planbuilder.PLAN_DML_PK, false},
-			{planbuilder.PLAN_DML_SUBQUERY, false},
+			{planbuilder.PlanInsertPK, true},
+			{planbuilder.PlanInsertSubquery, true},
+			{planbuilder.PlanPassDML, false},
+			{planbuilder.PlanDMLPK, false},
+			{planbuilder.PlanDMLSubquery, false},
+			{planbuilder.PlanUpsertPK, false},
 		}
 		for _, plan := range dmlPlans {
 			qr := tabletserver.NewQueryRule(

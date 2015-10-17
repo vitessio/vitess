@@ -133,7 +133,7 @@ func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
 		Value := &queryzRow{
 			Query:  wrappable(v),
 			Table:  plan.TableName,
-			Plan:   plan.PlanId,
+			Plan:   plan.PlanID,
 			Reason: plan.Reason,
 		}
 		Value.Count, Value.tm, Value.Rows, Value.Errors = plan.Stats()

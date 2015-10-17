@@ -1,7 +1,7 @@
 # select
 "select * from a"
 {
-  "PlanId": "SELECT_STREAM",
+  "PlanID": "SELECT_STREAM",
   "TableName": "a",
   "FullQuery": "select * from a"
 }
@@ -9,7 +9,7 @@
 # select join
 "select * from a join b"
 {
-  "PlanId": "SELECT_STREAM",
+  "PlanID": "SELECT_STREAM",
   "FullQuery": "select * from a join b"
 }
 
@@ -20,7 +20,7 @@
 # union
 "select * from a union select * from b"
 {
-  "PlanId": "SELECT_STREAM",
+  "PlanID": "SELECT_STREAM",
   "FullQuery": "select * from a union select * from b"
 }
 

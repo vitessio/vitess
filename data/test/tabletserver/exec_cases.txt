@@ -1,7 +1,7 @@
 # union
 "select * from a union select * from b"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "SELECT",
   "FieldQuery": "select * from a where 1 != 1 union select * from b where 1 != 1",
   "FullQuery": "select * from a union select * from b"
@@ -10,7 +10,7 @@
 # distinct
 "select distinct * from a"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "SELECT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -20,7 +20,7 @@
 # grouy by
 "select * from a group by b"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "SELECT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -30,7 +30,7 @@
 # having
 "select * from a having b=1"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "SELECT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -40,7 +40,7 @@
 # limit
 "select * from a limit 5"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -51,7 +51,7 @@
 # cross-db
 "select * from a.b"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "TABLE",
   "FieldQuery": "select * from a.b where 1 != 1",
   "FullQuery": "select * from a.b limit :#maxLimit"
@@ -60,7 +60,7 @@
 # multi-table
 "select * from a,b"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "TABLE",
   "FieldQuery": "select * from a, b where 1 != 1",
   "FullQuery": "select * from a, b limit :#maxLimit"
@@ -69,7 +69,7 @@
 # multi-table (join)
 "select * from a join b"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "TABLE",
   "FieldQuery": "select * from a join b where 1 != 1",
   "FullQuery": "select * from a join b limit :#maxLimit"
@@ -78,7 +78,7 @@
 # multi-table (right join)
 "select * from a right join b"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "TABLE",
   "FieldQuery": "select * from a right join b on 1 != 1 where 1 != 1",
   "FullQuery": "select * from a right join b limit :#maxLimit"
@@ -87,7 +87,7 @@
 # table not cached
 "select * from b"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "NOCACHE",
   "TableName": "b",
   "FieldQuery": "select * from b where 1 != 1",
@@ -97,7 +97,7 @@
 # Parenthesized table
 "select * from (b)"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "TABLE",
   "FieldQuery": "select * from (b) where 1 != 1",
   "FullQuery": "select * from (b) limit :#maxLimit"
@@ -106,7 +106,7 @@
 # bind in select list
 "select :bv from a"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "SELECT_LIST",
   "TableName": "a",
   "FullQuery": "select :bv from a limit :#maxLimit"
@@ -115,7 +115,7 @@
 # complex select list
 "select eid+1 from a"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "SELECT_LIST",
   "TableName": "a",
   "FieldQuery": "select eid + 1 from a where 1 != 1",
@@ -125,7 +125,7 @@
 # case in select list
 "select case when eid = 1 then 1 end from a"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "SELECT_LIST",
   "TableName": "a",
   "FieldQuery": "select case when eid = 1 then 1 end from a where 1 != 1",
@@ -135,7 +135,7 @@
 # simple
 "select eid from a"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select eid from a where 1 != 1",
@@ -146,7 +146,7 @@
 # as
 "select eid as foo from a"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select eid as foo from a where 1 != 1",
@@ -157,7 +157,7 @@
 # *
 "select * from a"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -168,7 +168,7 @@
 # c.eid
 "select c.eid from a as c"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select c.eid from a as c where 1 != 1",
@@ -179,7 +179,7 @@
 # (eid)
 "select (eid) from a"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "SELECT_LIST",
   "TableName": "a",
   "FieldQuery": "select (eid) from a where 1 != 1",
@@ -189,7 +189,7 @@
 # for update
 "select eid from a for update"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "LOCK",
   "TableName": "a",
   "FieldQuery": "select eid from a where 1 != 1",
@@ -199,7 +199,7 @@
 # lock in share mode
 "select eid from a lock in share mode"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "LOCK",
   "TableName": "a",
   "FieldQuery": "select eid from a where 1 != 1",
@@ -209,7 +209,7 @@
 # composite pk supplied values
 "select * from a where eid = 1 and id in (1, 2)"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = 1 and id in (1, 2) limit :#maxLimit",
@@ -222,7 +222,7 @@
 # positional arguments
 "select * from a where eid = ? and id in (?, ?)"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = :v1 and id in (:v2, :v3) limit :#maxLimit",
@@ -235,7 +235,7 @@
 # composite pk subquery
 "select * from a where name = 'foo'"
 {
-  "PlanId": "SELECT_SUBQUERY",
+  "PlanID": "SELECT_SUBQUERY",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where name = 'foo' limit :#maxLimit",
@@ -248,7 +248,7 @@
 # covering index
 "select eid, name, id from a where name = 'foo'"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "COVERING",
   "TableName": "a",
   "FieldQuery": "select eid, name, id from a where 1 != 1",
@@ -260,7 +260,7 @@
 # subquery
 "select * from d where id = 1"
 {
-  "PlanId": "SELECT_SUBQUERY",
+  "PlanID": "SELECT_SUBQUERY",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id = 1 limit :#maxLimit",
@@ -273,7 +273,7 @@
 # subquery with limit
 "select * from d where id = 1 limit 1"
 {
-  "PlanId": "SELECT_SUBQUERY",
+  "PlanID": "SELECT_SUBQUERY",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id = 1 limit 1",
@@ -286,7 +286,7 @@
 # complex where (expression)
 "select * from a where eid+1 = 1"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -297,7 +297,7 @@
 # complex where (non-value operand)
 "select * from a where eid = id"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -308,7 +308,7 @@
 # inequality on pk columns
 "select * from d where name between 'foo' and 'bar'"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "PKINDEX",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
@@ -320,7 +320,7 @@
 # (condition)
 "select * from a where (eid=1) and (id=2)"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where (eid = 1) and (id = 2) limit :#maxLimit",
@@ -333,7 +333,7 @@
 # pk match
 "select * from a where eid=1 and id=1"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = 1 and id = 1 limit :#maxLimit",
@@ -346,7 +346,7 @@
 # disjoint index match
 "select * from d where bar='foo' and id=1"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "NOINDEX_MATCH",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
@@ -357,7 +357,7 @@
 # string pk match
 "select * from d where name='foo'"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit :#maxLimit",
@@ -370,7 +370,7 @@
 # string pk match with limit
 "select * from d where name='foo' limit 1"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit 1",
@@ -384,7 +384,7 @@
 # string pk match with limit 0
 "select * from d where name='foo' limit 0"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit 0",
@@ -398,7 +398,7 @@
 # string pk match with limit bindvar
 "select * from d where name='foo' limit :a"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit :a",
@@ -412,7 +412,7 @@
 # string pk match with offset limit
 "select * from d where name='foo' limit 1, 1"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "LIMIT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
@@ -436,7 +436,7 @@
 # reversed conditions with and clause
 "select * from d where 'foo'=name and eid=1"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
@@ -447,7 +447,7 @@
 # pk IN
 "select * from d where name in ('foo', 'bar')"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in ('foo', 'bar') limit :#maxLimit",
@@ -460,7 +460,7 @@
 # pk IN parameter list
 "select * from d where name in (:a,:b)"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in (:a, :b) limit :#maxLimit",
@@ -473,7 +473,7 @@
 # pk IN, single value list
 "select * from d where name in ('foo')"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in ('foo') limit :#maxLimit",
@@ -486,7 +486,7 @@
 # pk IN, single value parameter list
 "select * from d where name in (:a)"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in (:a) limit :#maxLimit",
@@ -499,7 +499,7 @@
 # pk IN, limit clause
 "select * from d where name in (:a) limit 1"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in (:a) limit 1",
@@ -513,7 +513,7 @@
 # double pk IN
 "select * from a where eid in (1) and id in (1, 2)"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -524,7 +524,7 @@
 # double pk IN 2
 "select * from a where eid in (1, 2) and id in (1, 2)"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -535,7 +535,7 @@
 # pk as tuple
 "select * from a where (eid, id) in ((1, 1), (2, 2))"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -546,7 +546,7 @@
 # no index match
 "select * from d where foo='bar'"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "NOINDEX_MATCH",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
@@ -557,7 +557,7 @@
 # table alias
 "select * from d as c where c.name='foo'"
 {
-  "PlanId": "PK_IN",
+  "PlanID": "PK_IN",
   "TableName": "d",
   "FieldQuery": "select * from d as c where 1 != 1",
   "FullQuery": "select * from d as c where c.name = 'foo' limit :#maxLimit",
@@ -570,7 +570,7 @@
 # non-pk inequality match
 "select * from d where id<0"
 {
-  "PlanId": "SELECT_SUBQUERY",
+  "PlanID": "SELECT_SUBQUERY",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id \u003c 0 limit :#maxLimit",
@@ -583,7 +583,7 @@
 # non-pk IN non-value operand
 "select * from d where name in ('foo', id)"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
@@ -594,7 +594,7 @@
 # non-pk between
 "select * from d where id between 1 and 2"
 {
-  "PlanId": "SELECT_SUBQUERY",
+  "PlanID": "SELECT_SUBQUERY",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id between 1 and 2 limit :#maxLimit",
@@ -607,7 +607,7 @@
 # non-pk not between
 "select * from d where id not between 1 and 2"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
@@ -618,7 +618,7 @@
 # non-column between
 "select * from d where 1 between 1 and 2"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
@@ -629,7 +629,7 @@
 # complex predicate
 "select * from d where name is not null"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
@@ -640,7 +640,7 @@
 # order by
 "select * from a where eid=1 and id=1 order by name"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "ORDER",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -651,7 +651,7 @@
 # cardinality override
 "select * from d where bar = 'foo'"
 { 
-  "PlanId": "SELECT_SUBQUERY",
+  "PlanID": "SELECT_SUBQUERY",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where bar = 'foo' limit :#maxLimit",
@@ -664,7 +664,7 @@
 # index override (use)
 "select * from d use index(d_bar_never) where bar = 'foo'"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "HAS_HINTS",
   "TableName": "d",
   "FieldQuery": "select * from d use index (d_bar_never) where 1 != 1",
@@ -675,7 +675,7 @@
 # index override (force)
 "select * from d force index(d_bar_never) where bar = 'foo'"
 {
-  "PlanId": "PASS_SELECT",
+  "PlanID": "PASS_SELECT",
   "Reason": "HAS_HINTS",
   "TableName": "d",
   "FieldQuery": "select * from d force index (d_bar_never) where 1 != 1",
@@ -690,7 +690,7 @@
 # insert cross-db
 "insert into b.a (eid, id) values (1, :a)"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "TABLE",
   "FullQuery": "insert into b.a(eid, id) values (1, :a)"
 }
@@ -698,7 +698,7 @@
 # insert with qualified column names
 "insert into a (a.eid, id) values (1, 2)"
 {
-  "PlanId": "INSERT_PK",
+  "PlanID": "INSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a(a.eid, id) values (1, 2)",
   "OuterQuery": "insert into a(a.eid, id) values (1, 2)",
@@ -712,7 +712,7 @@
 # insert with bind value
 "insert into a (eid, id) values (1, :a)"
 {
-  "PlanId": "INSERT_PK",
+  "PlanID": "INSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id) values (1, :a)",
   "OuterQuery": "insert into a(eid, id) values (1, :a)",
@@ -722,7 +722,7 @@
 # default number
 "insert into a (id) values (1)"
 {
-  "PlanId": "INSERT_PK",
+  "PlanID": "INSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a(id) values (1)",
   "OuterQuery": "insert into a(id) values (1)",
@@ -732,7 +732,7 @@
 # default string
 "insert into d(id) values(1)"
 {
-  "PlanId": "INSERT_PK",
+  "PlanID": "INSERT_PK",
   "TableName": "d",
   "FullQuery": "insert into d(id) values (1)",
   "OuterQuery": "insert into d(id) values (1)",
@@ -746,7 +746,7 @@
 # negative number
 "insert into a (eid, id) values (-1, 2)"
 {
-  "PlanId": "INSERT_PK",
+  "PlanID": "INSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id) values (-1, 2)",
   "OuterQuery": "insert into a(eid, id) values (-1, 2)",
@@ -756,7 +756,7 @@
 # positive number
 "insert into a (eid, id) values (+1, 2)"
 {
-  "PlanId": "INSERT_PK",
+  "PlanID": "INSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id) values (1, 2)",
   "OuterQuery": "insert into a(eid, id) values (1, 2)",
@@ -766,7 +766,7 @@
 # non-trivial unary
 "insert into a (eid, id) values (~1, 2)"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "COMPLEX_EXPR",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id) values (~1, 2)"
@@ -775,7 +775,7 @@
 # complex
 "insert into a (eid, id) values (1+1, 2)"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "COMPLEX_EXPR",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id) values (1 + 1, 2)"
@@ -784,7 +784,7 @@
 # no index
 "insert into c (eid, id) values (1, 2)"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
   "FullQuery": "insert into c(eid, id) values (1, 2)"
@@ -793,7 +793,7 @@
 # no column list
 "insert into a values (1, 2)"
 {
-  "PlanId": "INSERT_PK",
+  "PlanID": "INSERT_PK",
   "TableName": "a",
   "FullQuery": "insert into a values (1, 2)",
   "OuterQuery": "insert into a values (1, 2)",
@@ -803,7 +803,7 @@
 # on dup
 "insert into b (eid, id) values (1, 2) on duplicate key update name = func(a)"
 {
-  "PlanId": "UPSERT_PK",
+  "PlanID": "UPSERT_PK",
   "TableName": "b",
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
   "OuterQuery": "insert into b(eid, id) values (1, 2)",
@@ -814,7 +814,7 @@
 # on dup pk change
 "insert into b (eid, id) values (1, 2) on duplicate key update eid = 2"
 {
-  "PlanId": "UPSERT_PK",
+  "PlanID": "UPSERT_PK",
   "TableName": "b",
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update eid = 2",
   "OuterQuery": "insert into b(eid, id) values (1, 2)",
@@ -826,7 +826,7 @@
 # on dup complex pk change
 "insert into b (id, eid) values (1, 2) on duplicate key update eid = func(a)"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "b",
   "FullQuery": "insert into b(id, eid) values (1, 2) on duplicate key update eid = func(a)",
@@ -836,7 +836,7 @@
 # on dup multi-row
 "insert into b (id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "UPSERT",
   "TableName": "b",
   "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
@@ -846,7 +846,7 @@
 # on dup subquery
 "insert into b (id, eid) select * from a on duplicate key update name = func(a)"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "UPSERT",
   "TableName": "b",
   "FullQuery": "insert into b(id, eid) select * from a on duplicate key update name = func(a)"
@@ -855,7 +855,7 @@
 # subquery
 "insert into b (eid, id) select * from a"
 {
-  "PlanId": "INSERT_SUBQUERY",
+  "PlanID": "INSERT_SUBQUERY",
   "TableName": "b",
   "FullQuery": "insert into b(eid, id) select * from a",
   "OuterQuery": "insert into b(eid, id) values :#values",
@@ -867,7 +867,7 @@
 # subquery with no column list
 "insert into b select * from a"
 {
-  "PlanId": "INSERT_SUBQUERY",
+  "PlanID": "INSERT_SUBQUERY",
   "TableName": "b",
   "FullQuery": "insert into b select * from a",
   "OuterQuery": "insert into b values :#values",
@@ -879,7 +879,7 @@
 # multi-row
 "insert into b (eid, id) values (1, 2), (3, 4)"
 {
-  "PlanId": "INSERT_PK",
+  "PlanID": "INSERT_PK",
   "TableName": "b",
   "FullQuery": "insert into b(eid, id) values (1, 2), (3, 4)",
   "OuterQuery": "insert into b(eid, id) values (1, 2), (3, 4)",
@@ -889,7 +889,7 @@
 # update cross-db
 "update b.a set name='foo' where eid=1 and id=1"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "TABLE",
   "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1"
 }
@@ -897,7 +897,7 @@
 # pk changed
 "update b set eid=1"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "b",
   "FullQuery": "update b set eid = 1",
   "OuterQuery": "update b set eid = 1 where :#pk",
@@ -912,7 +912,7 @@
 # pk changed as qualified column name
 "update b set a.eid=1"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "b",
   "FullQuery": "update b set a.eid = 1",
   "OuterQuery": "update b set a.eid = 1 where :#pk",
@@ -923,7 +923,7 @@
 # complex pk change
 "update b set eid=foo()"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "b",
   "FullQuery": "update b set eid = foo()"
@@ -932,7 +932,7 @@
 # update subquery
 "update a set name='foo'"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "a",
   "FullQuery": "update a set name = 'foo'",
   "OuterQuery": "update a set name = 'foo' where :#pk",
@@ -942,7 +942,7 @@
 # update complex where clause
 "update a set name='foo' where eid+1=1"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid + 1 = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
@@ -952,7 +952,7 @@
 # pk
 "update a set name='foo' where eid=1 and id=1"
 {
-  "PlanId": "DML_PK",
+  "PlanID": "DML_PK",
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
@@ -962,7 +962,7 @@
 # update with qualified column name
 "update a set a.name='foo' where eid=1 and id=1"
 {
-  "PlanId": "DML_PK",
+  "PlanID": "DML_PK",
   "TableName": "a",
   "FullQuery": "update a set a.name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": "update a set a.name = 'foo' where :#pk",
@@ -972,7 +972,7 @@
 # partial pk
 "update a set name='foo' where eid=1"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
@@ -982,7 +982,7 @@
 # partial pk with limit
 "update a set name='foo' where eid=1 limit 10"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid = 1 limit 10",
   "OuterQuery": "update a set name = 'foo' where :#pk",
@@ -992,7 +992,7 @@
 # non-pk
 "update a set name='foo' where eid=1 and name='foo'"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid = 1 and name = 'foo'",
   "OuterQuery": "update a set name = 'foo' where :#pk",
@@ -1002,7 +1002,7 @@
 # no index
 "update c set eid=1"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
   "FullQuery": "update c set eid = 1"
@@ -1011,7 +1011,7 @@
 # delete cross-db
 "delete from b.a where eid=1 and id=1"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "TABLE",
   "FullQuery": "delete from b.a where eid = 1 and id = 1"
 }
@@ -1019,7 +1019,7 @@
 # delete with no where clause
 "delete from a"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "a",
   "FullQuery": "delete from a",
   "OuterQuery": "delete from a where :#pk",
@@ -1029,7 +1029,7 @@
 # delete complex where clause
 "delete from a where eid+1=1"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "a",
   "FullQuery": "delete from a where eid + 1 = 1",
   "OuterQuery": "delete from a where :#pk",
@@ -1039,7 +1039,7 @@
 # pk
 "delete from a where eid=1 and id=1"
 {
-  "PlanId": "DML_PK",
+  "PlanID": "DML_PK",
   "TableName": "a",
   "FullQuery": "delete from a where eid = 1 and id = 1",
   "OuterQuery": "delete from a where :#pk",
@@ -1049,7 +1049,7 @@
 # partial pk
 "delete from a where eid=1"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "a",
   "FullQuery": "delete from a where eid = 1",
   "OuterQuery": "delete from a where :#pk",
@@ -1059,7 +1059,7 @@
 # non-pk
 "delete from a where eid=1 and name='foo'"
 {
-  "PlanId": "DML_SUBQUERY",
+  "PlanID": "DML_SUBQUERY",
   "TableName": "a",
   "FullQuery": "delete from a where eid = 1 and name = 'foo'",
   "OuterQuery": "delete from a where :#pk",
@@ -1069,7 +1069,7 @@
 # no index
 "delete from c"
 {
-  "PlanId": "PASS_DML",
+  "PlanID": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
   "FullQuery": "delete from c"
@@ -1078,7 +1078,7 @@
 # int
 "set  a=1"
 {
-  "PlanId": "SET",
+  "PlanID": "SET",
   "FullQuery": "set a = 1",
   "SetKey": "a",
   "SetValue": 1
@@ -1087,7 +1087,7 @@
 # float
 "set  a=1.2"
 {
-  "PlanId": "SET",
+  "PlanID": "SET",
   "FullQuery": "set a = 1.2",
   "SetKey": "a",
   "SetValue": 1.2
@@ -1096,7 +1096,7 @@
 # string
 "set a='b'"
 {
-  "PlanId": "SET",
+  "PlanID": "SET",
   "FullQuery": "set a = 'b'",
   "SetKey": "a"
 }
@@ -1104,67 +1104,67 @@
 # multi
 "set a=1, b=2"
 {
-  "PlanId": "SET",
+  "PlanID": "SET",
   "FullQuery": "set a = 1, b = 2"
 }
 
 # create
 "create table a(a int, b varchar(8))"
 {
-  "PlanId": "DDL"
+  "PlanID": "DDL"
 }
 
 # alter
 "alter table a add column(a int)"
 {
-  "PlanId": "DDL",
+  "PlanID": "DDL",
   "TableName": "a"
 }
 
 # alter rename
 "alter table a rename b"
 {
-  "PlanId": "DDL",
+  "PlanID": "DDL",
   "TableName": "a"
 }
 
 # rename
 "rename table a to b"
 {
-  "PlanId": "DDL",
+  "PlanID": "DDL",
   "TableName": "a"
 }
 
 # drop
 "drop table a"
 {
-  "PlanId": "DDL",
+  "PlanID": "DDL",
   "TableName": "a"
 }
 
 # analyze
 "analyze table a"
 {
-  "PlanId": "DDL",
+  "PlanID": "DDL",
   "TableName": "a"
 }
 
 # show
 "show a"
 {
-  "PlanId": "OTHER"
+  "PlanID": "OTHER"
 }
 
 # describe
 "describe a"
 {
-  "PlanId": "OTHER"
+  "PlanID": "OTHER"
 }
 
 # explain
 "explain a"
 {
-  "PlanId": "OTHER"
+  "PlanID": "OTHER"
 }
 
 # table not found

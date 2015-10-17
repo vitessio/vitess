@@ -16,13 +16,13 @@ import (
 
 func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan, err error) {
 	plan = &ExecPlan{
-		PlanId:    PLAN_PASS_DML,
+		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(upd),
 	}
 
 	tableName := sqlparser.GetTableName(upd.Table)
 	if tableName == "" {
-		plan.Reason = REASON_TABLE
+		plan.Reason = ReasonTable
 		return plan, nil
 	}
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
@@ -32,14 +32,14 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
 		log.Warningf("no primary key for table %s", tableName)
-		plan.Reason = REASON_TABLE_NOINDEX
+		plan.Reason = ReasonTableNoIndex
 		return plan, nil
 	}
 
 	plan.SecondaryPKValues, err = analyzeUpdateExpressions(upd.Exprs, tableInfo.Indexes[0])
 	if err != nil {
 		if err == ErrTooComplex {
-			plan.Reason = REASON_PK_CHANGE
+			plan.Reason = ReasonPKChange
 			return plan, nil
 		}
 		return nil, err
@@ -53,26 +53,26 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 			return nil, err
 		}
 		if pkValues != nil {
-			plan.PlanId = PLAN_DML_PK
+			plan.PlanID = PlanDMLPK
 			plan.PKValues = pkValues
 			return plan, nil
 		}
 	}
 
-	plan.PlanId = PLAN_DML_SUBQUERY
+	plan.PlanID = PlanDMLSubquery
 	plan.Subquery = GenerateUpdateSubquery(upd, tableInfo)
 	return plan, nil
 }
 
 func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan, err error) {
 	plan = &ExecPlan{
-		PlanId:    PLAN_PASS_DML,
+		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(del),
 	}
 
 	tableName := sqlparser.GetTableName(del.Table)
 	if tableName == "" {
-		plan.Reason = REASON_TABLE
+		plan.Reason = ReasonTable
 		return plan, nil
 	}
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
@@ -82,7 +82,7 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
 		log.Warningf("no primary key for table %s", tableName)
-		plan.Reason = REASON_TABLE_NOINDEX
+		plan.Reason = ReasonTableNoIndex
 		return plan, nil
 	}
 
@@ -94,20 +94,20 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 			return nil, err
 		}
 		if pkValues != nil {
-			plan.PlanId = PLAN_DML_PK
+			plan.PlanID = PlanDMLPK
 			plan.PKValues = pkValues
 			return plan, nil
 		}
 	}
 
-	plan.PlanId = PLAN_DML_SUBQUERY
+	plan.PlanID = PlanDMLSubquery
 	plan.Subquery = GenerateDeleteSubquery(del, tableInfo)
 	return plan, nil
 }
 
 func analyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
 	plan = &ExecPlan{
-		PlanId:    PLAN_SET,
+		PlanID:    PlanSet,
 		FullQuery: GenerateFullQuery(set),
 	}
 	if len(set.Exprs) > 1 { // Multiple set values
@@ -153,7 +153,7 @@ func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index
 func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan, err error) {
 	// Default plan
 	plan = &ExecPlan{
-		PlanId:     PLAN_PASS_SELECT,
+		PlanID:     PlanPassSelect,
 		FieldQuery: GenerateFieldQuery(sel),
 		FullQuery:  GenerateSelectLimitQuery(sel),
 	}
@@ -161,7 +161,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	// from
 	tableName, hasHints := analyzeFrom(sel.From)
 	if tableName == "" {
-		plan.Reason = REASON_TABLE
+		plan.Reason = ReasonTable
 		return plan, nil
 	}
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
@@ -171,24 +171,24 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 
 	// There are bind variables in the SELECT list
 	if plan.FieldQuery == nil {
-		plan.Reason = REASON_SELECT_LIST
+		plan.Reason = ReasonSelectList
 		return plan, nil
 	}
 
 	if sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil {
-		plan.Reason = REASON_SELECT
+		plan.Reason = ReasonSelect
 		return plan, nil
 	}
 
 	// Don't improve the plan if the select is locking the row
 	if sel.Lock != "" {
-		plan.Reason = REASON_LOCK
+		plan.Reason = ReasonLock
 		return plan, nil
 	}
 
 	// Further improvements possible only if table is row-cached
 	if tableInfo.CacheType == schema.CACHE_NONE || tableInfo.CacheType == schema.CACHE_W {
-		plan.Reason = REASON_NOCACHE
+		plan.Reason = ReasonNocache
 		return plan, nil
 	}
 
@@ -198,7 +198,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 		return nil, err
 	}
 	if selects == nil {
-		plan.Reason = REASON_SELECT_LIST
+		plan.Reason = ReasonSelectList
 		return plan, nil
 	}
 	plan.ColumnNumbers = selects
@@ -206,13 +206,13 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	// where
 	conditions := analyzeWhere(sel.Where)
 	if conditions == nil {
-		plan.Reason = REASON_WHERE
+		plan.Reason = ReasonWhere
 		return plan, nil
 	}
 
 	// order
 	if sel.OrderBy != nil {
-		plan.Reason = REASON_ORDER
+		plan.Reason = ReasonOrder
 		return plan, nil
 	}
 
@@ -232,11 +232,11 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 			return nil, err
 		}
 		if offset != nil {
-			plan.Reason = REASON_LIMIT
+			plan.Reason = ReasonLimit
 			return plan, nil
 		}
 		plan.Limit = rowcount
-		plan.PlanId = PLAN_PK_IN
+		plan.PlanID = PlanPKIn
 		plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
 		plan.PKValues = pkValues
 		return plan, nil
@@ -244,18 +244,18 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 
 	// TODO: Analyze hints to improve plan.
 	if hasHints {
-		plan.Reason = REASON_HAS_HINTS
+		plan.Reason = ReasonHasHints
 		return plan, nil
 	}
 
 	indexUsed := getIndexMatch(conditions, tableInfo.Indexes)
 	if indexUsed == nil {
-		plan.Reason = REASON_NOINDEX_MATCH
+		plan.Reason = ReasonNoIndexMatch
 		return plan, nil
 	}
 	plan.IndexUsed = indexUsed.Name
 	if plan.IndexUsed == "PRIMARY" {
-		plan.Reason = REASON_PKINDEX
+		plan.Reason = ReasonPKIndex
 		return plan, nil
 	}
 	var missing bool
@@ -267,10 +267,10 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 		break
 	}
 	if !missing {
-		plan.Reason = REASON_COVERING
+		plan.Reason = ReasonCovering
 		return plan, nil
 	}
-	plan.PlanId = PLAN_SELECT_SUBQUERY
+	plan.PlanID = PlanSelectSubquery
 	plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
 	plan.Subquery = GenerateSelectSubquery(sel, tableInfo, plan.IndexUsed)
 	return plan, nil
@@ -367,12 +367,12 @@ func analyzeBoolean(node sqlparser.BoolExpr) (conditions []sqlparser.BoolExpr) {
 
 func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan, err error) {
 	plan = &ExecPlan{
-		PlanId:    PLAN_PASS_DML,
+		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(ins),
 	}
 	tableName := sqlparser.GetTableName(ins.Table)
 	if tableName == "" {
-		plan.Reason = REASON_TABLE
+		plan.Reason = ReasonTable
 		return plan, nil
 	}
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
@@ -382,7 +382,7 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
 		log.Warningf("no primary key for table %s", tableName)
-		plan.Reason = REASON_TABLE_NOINDEX
+		plan.Reason = ReasonTableNoIndex
 		return plan, nil
 	}
 
@@ -392,10 +392,10 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		if ins.OnDup != nil {
 			// Upserts not allowed for subqueries.
 			// http://bugs.mysql.com/bug.php?id=58637
-			plan.Reason = REASON_UPSERT
+			plan.Reason = ReasonUpsert
 			return plan, nil
 		}
-		plan.PlanId = PLAN_INSERT_SUBQUERY
+		plan.PlanID = PlanInsertSubquery
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
 		plan.Subquery = GenerateSelectLimitQuery(sel)
 		if len(ins.Columns) != 0 {
@@ -422,29 +422,29 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		return nil, err
 	}
 	if pkValues == nil {
-		plan.Reason = REASON_COMPLEX_EXPR
+		plan.Reason = ReasonComplexExpr
 		return plan, nil
 	}
 	plan.PKValues = pkValues
 	if ins.OnDup == nil {
-		plan.PlanId = PLAN_INSERT_PK
+		plan.PlanID = PlanInsertPK
 		plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
 		return plan, nil
 	}
 	if len(rowList) > 1 {
 		// Upsert supported only for single row inserts.
-		plan.Reason = REASON_UPSERT
+		plan.Reason = ReasonUpsert
 		return plan, nil
 	}
 	plan.SecondaryPKValues, err = analyzeUpdateExpressions(sqlparser.UpdateExprs(ins.OnDup), tableInfo.Indexes[0])
 	if err != nil {
 		if err == ErrTooComplex {
-			plan.Reason = REASON_PK_CHANGE
+			plan.Reason = ReasonPKChange
 			return plan, nil
 		}
 		return nil, err
 	}
-	plan.PlanId = PLAN_UPSERT_PK
+	plan.PlanID = PlanUpsertPK
 	newins := *ins
 	newins.Ignore = ""
 	newins.OnDup = nil
