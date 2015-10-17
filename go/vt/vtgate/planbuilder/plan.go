@@ -84,15 +84,15 @@ func (pln *Plan) MarshalJSON() ([]byte, error) {
 		col = pln.ColVindex.Col
 	}
 	marshalPlan := struct {
-		ID        PlanID
-		Reason    string
-		Table     string
-		Original  string
-		Rewritten string
-		Subquery  string
-		Vindex    string
-		Col       string
-		Values    interface{}
+		ID        PlanID      `json:",omitempty"`
+		Reason    string      `json:",omitempty"`
+		Table     string      `json:",omitempty"`
+		Original  string      `json:",omitempty"`
+		Rewritten string      `json:",omitempty"`
+		Subquery  string      `json:",omitempty"`
+		Vindex    string      `json:",omitempty"`
+		Col       string      `json:",omitempty"`
+		Values    interface{} `json:",omitempty"`
 	}{
 		ID:        pln.ID,
 		Reason:    pln.Reason,

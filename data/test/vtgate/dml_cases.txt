@@ -1,96 +1,58 @@
 # update table not found
 "update nouser set val = 1"
 {
-  "ID":"NoPlan",
-  "Reason":"table nouser not found",
-  "Table": "",
-  "Original":"update nouser set val = 1",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "table nouser not found",
+  "Original": "update nouser set val = 1"
 }
 
 # delete table not found
 "delete from nouser"
 {
-  "ID":"NoPlan",
-  "Reason":"table nouser not found",
-  "Table": "",
-  "Original":"delete from nouser",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "table nouser not found",
+  "Original": "delete from nouser"
 }
 
 # update unsharded
 "update main1 set val = 1"
 {
-  "ID":"UpdateUnsharded",
-  "Reason":"",
-  "Table":"main1",
+  "ID": "UpdateUnsharded",
+  "Table": "main1",
   "Original": "update main1 set val = 1",
-  "Rewritten":"update main1 set val = 1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Rewritten": "update main1 set val = 1"
 }
 
 # delete unsharded
 "delete from main1"
 {
-  "ID":"DeleteUnsharded",
-  "Reason":"",
-  "Table":"main1",
+  "ID": "DeleteUnsharded",
+  "Table": "main1",
   "Original": "delete from main1",
-  "Rewritten":"delete from main1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Rewritten": "delete from main1"
 }
 
 # update with no where clause
 "update user set val = 1"
 {
-  "ID": "NoPlan",
   "Reason": "update has multi-shard where clause",
   "Table": "user",
-  "Original": "update user set val = 1",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "update user set val = 1"
 }
 
 # delete from with no where clause
 "delete from user"
 {
-  "ID": "NoPlan",
   "Reason": "delete has multi-shard where clause",
   "Table": "user",
-  "Original": "delete from user",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "delete from user"
 }
 
 # update by primary keyspace id
 "update user set val = 1 where id = 1"
 {
   "ID": "UpdateEqual",
-  "Reason": "",
   "Table": "user",
   "Original": "update user set val = 1 where id = 1",
   "Rewritten": "update user set val = 1 where id = 1",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
@@ -100,7 +62,6 @@
 "delete from user where id = 1"
 {
   "ID": "DeleteEqual",
-  "Reason": "",
   "Table": "user",
   "Original": "delete from user where id = 1",
   "Rewritten": "delete from user where id = 1",
@@ -113,124 +74,74 @@
 # update KEYRANGE
 "update user set val = 1 where keyrange(1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "update has multi-shard where clause",
   "Table": "user",
-  "Original": "update user set val = 1 where keyrange(1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "update user set val = 1 where keyrange(1, 2)"
 }
 
 # delete KEYRANGE
 "delete from user where keyrange(1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "delete has multi-shard where clause",
   "Table": "user",
-  "Original": "delete from user where keyrange(1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "delete from user where keyrange(1, 2)"
 }
 
 # update with primary id through IN clause
 "update user set val = 1 where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "update has multi-shard where clause",
   "Table": "user",
-  "Original": "update user set val = 1 where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "update user set val = 1 where id in (1, 2)"
 }
 
 # delete from with primary id through IN clause
 "delete from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "delete has multi-shard where clause",
   "Table": "user",
-  "Original": "delete from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "delete from user where id in (1, 2)"
 }
 
 # update with non-unique key
 "update user set val = 1 where name = 'foo'"
 {
-  "ID": "NoPlan",
   "Reason": "update has multi-shard where clause",
   "Table": "user",
-  "Original": "update user set val = 1 where name = 'foo'",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "update user set val = 1 where name = 'foo'"
 }
 
 # delete from with primary id through IN clause
 "delete from user where name = 'foo'"
 {
-  "ID": "NoPlan",
   "Reason": "delete has multi-shard where clause",
   "Table": "user",
-  "Original": "delete from user where name = 'foo'",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "delete from user where name = 'foo'"
 }
 
 # update with no index match
 "update user set val = 1 where user_id = 1"
 {
-  "ID": "NoPlan",
   "Reason": "update has multi-shard where clause",
   "Table": "user",
-  "Original": "update user set val = 1 where user_id = 1",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "update user set val = 1 where user_id = 1"
 }
 
 # delete from with no index match
 "delete from user where user_id = 1"
 {
-  "ID": "NoPlan",
   "Reason": "delete has multi-shard where clause",
   "Table": "user",
-  "Original": "delete from user where user_id = 1",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "delete from user where user_id = 1"
 }
 
 # update by lookup
 "update music set val = 1 where id = 1"
 {
   "ID": "UpdateEqual",
-  "Reason": "",
   "Table": "music",
   "Original": "update music set val = 1 where id = 1",
   "Rewritten": "update music set val = 1 where id = 1",
-  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "id",
   "Values": 1
@@ -240,7 +151,6 @@
 "delete from music where id = 1"
 {
   "ID": "DeleteEqual",
-  "Reason": "",
   "Table": "music",
   "Original": "delete from music where id = 1",
   "Rewritten": "delete from music where id = 1",
@@ -254,11 +164,9 @@
 "delete from music_extra where user_id = 1"
 {
   "ID": "DeleteEqual",
-  "Reason": "",
   "Table": "music_extra",
   "Original": "delete from music_extra where user_id = 1",
   "Rewritten": "delete from music_extra where user_id = 1",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "user_id",
   "Values": 1
@@ -267,41 +175,23 @@
 # update by lookup with IN clause
 "update music set val = 1 where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "update has multi-shard where clause",
   "Table": "music",
-  "Original": "update music set val = 1 where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "update music set val = 1 where id in (1, 2)"
 }
 
 # delete from by lookup with IN clause
 "delete from music where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "delete has multi-shard where clause",
   "Table": "music",
-  "Original": "delete from music where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "delete from music where id in (1, 2)"
 }
 
 # update changes index column
 "update music set id = 1 where id = 1"
 {
-  "ID": "NoPlan",
   "Reason": "index is changing",
   "Table": "music",
-  "Original": "update music set id = 1 where id = 1",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "update music set id = 1 where id = 1"
 }
