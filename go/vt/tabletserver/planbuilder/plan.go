@@ -187,51 +187,51 @@ func (rt ReasonType) MarshalJSON() ([]byte, error) {
 // nil if no value was specified
 type ExecPlan struct {
 	PlanId    PlanType
-	Reason    ReasonType
-	TableName string
+	Reason    ReasonType `json:",omitempty"`
+	TableName string     `json:",omitempty"`
 
 	// FieldQuery is used to fetch field info
-	FieldQuery *sqlparser.ParsedQuery
+	FieldQuery *sqlparser.ParsedQuery `json:",omitempty"`
 
 	// FullQuery will be set for all plans.
-	FullQuery *sqlparser.ParsedQuery
+	FullQuery *sqlparser.ParsedQuery `json:",omitempty"`
 
 	// For PK plans, only OuterQuery is set.
 	// For SUBQUERY plans, Subquery is also set.
 	// IndexUsed is set only for PLAN_SELECT_SUBQUERY
-	OuterQuery  *sqlparser.ParsedQuery
-	Subquery    *sqlparser.ParsedQuery
-	UpsertQuery *sqlparser.ParsedQuery
-	IndexUsed   string
+	OuterQuery  *sqlparser.ParsedQuery `json:",omitempty"`
+	Subquery    *sqlparser.ParsedQuery `json:",omitempty"`
+	UpsertQuery *sqlparser.ParsedQuery `json:",omitempty"`
+	IndexUsed   string                 `json:",omitempty"`
 
 	// For selects, columns to be returned
 	// For PLAN_INSERT_SUBQUERY, columns to be inserted
-	ColumnNumbers []int
+	ColumnNumbers []int `json:",omitempty"`
 
 	// PLAN_PK_IN, PLAN_DML_PK: where clause values
 	// PLAN_INSERT_PK: values clause
-	PKValues []interface{}
+	PKValues []interface{} `json:",omitempty"`
 
 	// PK_IN. Limit clause value.
-	Limit interface{}
+	Limit interface{} `json:",omitempty"`
 
 	// For update: set clause if pk is changing
-	SecondaryPKValues []interface{}
+	SecondaryPKValues []interface{} `json:",omitempty"`
 
 	// For PLAN_INSERT_SUBQUERY: pk columns in the subquery result
-	SubqueryPKColumns []int
+	SubqueryPKColumns []int `json:",omitempty"`
 
 	// PLAN_SET
-	SetKey   string
-	SetValue interface{}
+	SetKey   string      `json:",omitempty"`
+	SetValue interface{} `json:",omitempty"`
 }
 
-func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) (*schema.Table, error) {
+func (plan *ExecPlan) setTableInfo(tableName string, getTable TableGetter) (*schema.Table, error) {
 	tableInfo, ok := getTable(tableName)
 	if !ok {
 		return nil, fmt.Errorf("table %s not found in schema", tableName)
 	}
-	node.TableName = tableInfo.Name
+	plan.TableName = tableInfo.Name
 	return tableInfo, nil
 }
 

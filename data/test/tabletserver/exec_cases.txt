@@ -3,20 +3,8 @@
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
-  "TableName": "",
   "FieldQuery": "select * from a where 1 != 1 union select * from b where 1 != 1",
-  "FullQuery": "select * from a union select * from b",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select * from a union select * from b"
 }
 
 # distinct
@@ -26,18 +14,7 @@
   "Reason": "SELECT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select distinct * from a limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select distinct * from a limit :#maxLimit"
 }
 
 # grouy by
@@ -47,18 +24,7 @@
   "Reason": "SELECT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a group by b limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select * from a group by b limit :#maxLimit"
 }
 
 # having
@@ -68,18 +34,7 @@
   "Reason": "SELECT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a having b = 1 limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select * from a having b = 1 limit :#maxLimit"
 }
 
 # limit
@@ -90,22 +45,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit 5",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # cross-db
@@ -113,20 +53,8 @@
 {
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
-  "TableName": "",
   "FieldQuery": "select * from a.b where 1 != 1",
-  "FullQuery": "select * from a.b limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select * from a.b limit :#maxLimit"
 }
 
 # multi-table
@@ -134,20 +62,8 @@
 {
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
-  "TableName": "",
   "FieldQuery": "select * from a, b where 1 != 1",
-  "FullQuery": "select * from a, b limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select * from a, b limit :#maxLimit"
 }
 
 # multi-table (join)
@@ -155,20 +71,8 @@
 {
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
-  "TableName": "",
   "FieldQuery": "select * from a join b where 1 != 1",
-  "FullQuery": "select * from a join b limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select * from a join b limit :#maxLimit"
 }
 
 # multi-table (right join)
@@ -176,20 +80,8 @@
 {
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
-  "TableName": "",
   "FieldQuery": "select * from a right join b on 1 != 1 where 1 != 1",
-  "FullQuery": "select * from a right join b limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select * from a right join b limit :#maxLimit"
 }
 
 # table not cached
@@ -199,18 +91,7 @@
   "Reason": "NOCACHE",
   "TableName": "b",
   "FieldQuery": "select * from b where 1 != 1",
-  "FullQuery": "select * from b limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select * from b limit :#maxLimit"
 }
 
 # Parenthesized table
@@ -218,20 +99,8 @@
 {
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
-  "TableName": "",
   "FieldQuery": "select * from (b) where 1 != 1",
-  "FullQuery": "select * from (b) limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select * from (b) limit :#maxLimit"
 }
 
 # bind in select list
@@ -240,19 +109,7 @@
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT_LIST",
   "TableName": "a",
-  "FieldQuery": null,
-  "FullQuery": "select :bv from a limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select :bv from a limit :#maxLimit"
 }
 
 # complex select list
@@ -262,18 +119,7 @@
   "Reason": "SELECT_LIST",
   "TableName": "a",
   "FieldQuery": "select eid + 1 from a where 1 != 1",
-  "FullQuery": "select eid + 1 from a limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select eid + 1 from a limit :#maxLimit"
 }
 
 # case in select list
@@ -283,18 +129,7 @@
   "Reason": "SELECT_LIST",
   "TableName": "a",
   "FieldQuery": "select case when eid = 1 then 1 end from a where 1 != 1",
-  "FullQuery": "select case when eid = 1 then 1 end from a limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select case when eid = 1 then 1 end from a limit :#maxLimit"
 }
 
 # simple
@@ -305,19 +140,7 @@
   "TableName": "a",
   "FieldQuery": "select eid from a where 1 != 1",
   "FullQuery": "select eid from a limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0]
 }
 
 # as
@@ -328,19 +151,7 @@
   "TableName": "a",
   "FieldQuery": "select eid as foo from a where 1 != 1",
   "FullQuery": "select eid as foo from a limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0]
 }
 
 # *
@@ -351,22 +162,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # c.eid
@@ -377,19 +173,7 @@
   "TableName": "a",
   "FieldQuery": "select c.eid from a as c where 1 != 1",
   "FullQuery": "select c.eid from a as c limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0]
 }
 
 # (eid)
@@ -399,18 +183,7 @@
   "Reason": "SELECT_LIST",
   "TableName": "a",
   "FieldQuery": "select (eid) from a where 1 != 1",
-  "FullQuery": "select (eid) from a limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select (eid) from a limit :#maxLimit"
 }
 
 # for update
@@ -420,18 +193,7 @@
   "Reason": "LOCK",
   "TableName": "a",
   "FieldQuery": "select eid from a where 1 != 1",
-  "FullQuery": "select eid from a limit :#maxLimit for update",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select eid from a limit :#maxLimit for update"
 }
 
 # lock in share mode
@@ -441,96 +203,46 @@
   "Reason": "LOCK",
   "TableName": "a",
   "FieldQuery": "select eid from a where 1 != 1",
-  "FullQuery": "select eid from a limit :#maxLimit lock in share mode",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "select eid from a limit :#maxLimit lock in share mode"
 }
 
 # composite pk supplied values
 "select * from a where eid = 1 and id in (1, 2)"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = 1 and id in (1, 2) limit :#maxLimit",
   "OuterQuery": "select eid, id, name, foo from a where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [1,[1,2]],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": [1,[1,2]]
 }
 
 # positional arguments
 "select * from a where eid = ? and id in (?, ?)"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = :v1 and id in (:v2, :v3) limit :#maxLimit",
   "OuterQuery": "select eid, id, name, foo from a where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [":v1",[":v2",":v3"]],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": [":v1",[":v2",":v3"]]
 }
 
 # composite pk subquery
 "select * from a where name = 'foo'"
 {
   "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where name = 'foo' limit :#maxLimit",
   "OuterQuery": "select eid, id, name, foo from a where :#pk",
   "Subquery": "select eid, id from a use index (b_name) where name = 'foo' limit :#maxLimit",
-  "UpsertQuery": null,
   "IndexUsed": "b_name",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # covering index
@@ -541,73 +253,34 @@
   "TableName": "a",
   "FieldQuery": "select eid, name, id from a where 1 != 1",
   "FullQuery": "select eid, name, id from a where name = 'foo' limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "b_name",
-  "ColumnNumbers": [
-    0,
-    2,
-    1
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 2, 1]
 }
 
 # subquery
 "select * from d where id = 1"
 {
   "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id = 1 limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id = 1 limit :#maxLimit",
-  "UpsertQuery": null,
   "IndexUsed": "d_id",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # subquery with limit
 "select * from d where id = 1 limit 1"
 {
   "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id = 1 limit 1",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id = 1 limit 1",
-  "UpsertQuery": null,
   "IndexUsed": "d_id",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # complex where (expression)
@@ -618,22 +291,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid + 1 = 1 limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # complex where (non-value operand)
@@ -644,22 +302,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = id limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # inequality on pk columns
@@ -670,80 +313,34 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name between 'foo' and 'bar' limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # (condition)
 "select * from a where (eid=1) and (id=2)"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where (eid = 1) and (id = 2) limit :#maxLimit",
   "OuterQuery": "select eid, id, name, foo from a where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [
-    1,
-    2
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": [1, 2]
 }
 
 # pk match
 "select * from a where eid=1 and id=1"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = 1 and id = 1 limit :#maxLimit",
   "OuterQuery": "select eid, id, name, foo from a where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [
-    1,
-    1
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": [1, 1]
 }
 
 # disjoint index match
@@ -754,134 +351,62 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where bar = 'foo' and id = 1 limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # string pk match
 "select * from d where name='foo'"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [
-    "foo"
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": ["foo"]
 }
 
 # string pk match with limit
 "select * from d where name='foo' limit 1"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit 1",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [
-    "foo"
-  ],
-  "Limit": 1,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": ["foo"],
+  "Limit": 1
 }
 
 # string pk match with limit 0
 "select * from d where name='foo' limit 0"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit 0",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues":[
-    "foo"
-  ],
-  "Limit": 0,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": ["foo"],
+  "Limit": 0
 }
 
 # string pk match with limit bindvar
 "select * from d where name='foo' limit :a"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit :a",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues":[
-    "foo"
-  ],
-  "Limit": ":a",
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": ["foo"],
+  "Limit": ":a"
 }
 
 # string pk match with offset limit
@@ -892,22 +417,8 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit 1, 1",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # string pk match with invalid limit
@@ -930,162 +441,73 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where 'foo' = name and eid = 1 limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # pk IN
 "select * from d where name in ('foo', 'bar')"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in ('foo', 'bar') limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [[
-    "foo",
-    "bar"
-  ]],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": [["foo", "bar"]]
 }
 
 # pk IN parameter list
 "select * from d where name in (:a,:b)"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in (:a, :b) limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [[
-    ":a",
-    ":b"
-  ]],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": [[":a", ":b"]]
 }
 
 # pk IN, single value list
 "select * from d where name in ('foo')"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in ('foo') limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [[
-    "foo"
-  ]],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": [["foo"]]
 }
 
 # pk IN, single value parameter list
 "select * from d where name in (:a)"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in (:a) limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [[
-    ":a"
-  ]],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": [[":a"]]
 }
 
 # pk IN, limit clause
 "select * from d where name in (:a) limit 1"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in (:a) limit 1",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
+  "ColumnNumbers": [0, 1, 2, 3],
   "PKValues": [[":a"]],
-  "Limit": 1,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "Limit": 1
 }
 
 # double pk IN
@@ -1096,22 +518,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid in (1) and id in (1, 2) limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # double pk IN 2
@@ -1122,22 +529,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # pk as tuple
@@ -1148,102 +540,44 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where (eid, id) in ((1, 1), (2, 2)) limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # no index match
 "select * from d where foo='bar'"
 {
-  "PlanId":"PASS_SELECT",
-  "Reason":"NOINDEX_MATCH",
-  "TableName":"d",
+  "PlanId": "PASS_SELECT",
+  "Reason": "NOINDEX_MATCH",
+  "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
-  "FullQuery":"select * from d where foo = 'bar' limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery":null,
-  "UpsertQuery": null,
-  "IndexUsed":"",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues":null,
-  "Limit": null,
-  "SecondaryPKValues":null,
-  "SubqueryPKColumns":null,
-  "SetKey":"",
-  "SetValue":null
+  "FullQuery": "select * from d where foo = 'bar' limit :#maxLimit",
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # table alias
 "select * from d as c where c.name='foo'"
 {
   "PlanId": "PK_IN",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d as c where 1 != 1",
   "FullQuery": "select * from d as c where c.name = 'foo' limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d as c where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [
-    "foo"
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3],
+  "PKValues": ["foo"]
 }
 
 # non-pk inequality match
 "select * from d where id<0"
 {
   "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id \u003c 0 limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id \u003c 0 limit :#maxLimit",
-  "UpsertQuery": null,
   "IndexUsed": "d_id",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # non-pk IN non-value operand
@@ -1254,48 +588,20 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in ('foo', id) limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # non-pk between
 "select * from d where id between 1 and 2"
 {
   "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id between 1 and 2 limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id between 1 and 2 limit :#maxLimit",
-  "UpsertQuery": null,
   "IndexUsed": "d_id",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # non-pk not between
@@ -1306,22 +612,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id not between 1 and 2 limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # non-column between
@@ -1332,22 +623,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where 1 between 1 and 2 limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # complex predicate
@@ -1358,22 +634,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name is not null limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # order by
@@ -1384,48 +645,20 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = 1 and id = 1 order by name asc limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # cardinality override
 "select * from d where bar = 'foo'"
 { 
   "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where bar = 'foo' limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_bar) where bar = 'foo' limit :#maxLimit",
-  "UpsertQuery": null,
   "IndexUsed": "d_bar",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # index override (use)
@@ -1436,22 +669,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d use index (d_bar_never) where 1 != 1",
   "FullQuery": "select * from d use index (d_bar_never) where bar = 'foo' limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # index override (force)
@@ -1462,22 +680,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d force index (d_bar_never) where 1 != 1",
   "FullQuery": "select * from d force index (d_bar_never) where bar = 'foo' limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1, 2, 3]
 }
 
 # column not found
@@ -1489,44 +692,17 @@
 {
   "PlanId": "PASS_DML",
   "Reason": "TABLE",
-  "TableName": "",
-  "FieldQuery": null,
-  "FullQuery": "insert into b.a(eid, id) values (1, :a)",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "insert into b.a(eid, id) values (1, :a)"
 }
 
 # insert with qualified column names
 "insert into a (a.eid, id) values (1, 2)"
 {
   "PlanId": "INSERT_PK",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "insert into a(a.eid, id) values (1, 2)",
   "OuterQuery": "insert into a(a.eid, id) values (1, 2)",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    1,
-    2
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [1, 2]
 }
 
 # insert sub-select
@@ -1537,71 +713,30 @@
 "insert into a (eid, id) values (1, :a)"
 {
   "PlanId": "INSERT_PK",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "insert into a(eid, id) values (1, :a)",
   "OuterQuery": "insert into a(eid, id) values (1, :a)",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    1,
-    ":a"
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [1, ":a"]
 }
 
 # default number
 "insert into a (id) values (1)"
 {
   "PlanId": "INSERT_PK",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "insert into a(id) values (1)",
   "OuterQuery": "insert into a(id) values (1)",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    0,
-    1
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [0, 1]
 }
 
 # default string
 "insert into d(id) values(1)"
 {
   "PlanId": "INSERT_PK",
-  "Reason": "DEFAULT",
   "TableName": "d",
-  "FieldQuery": null,
   "FullQuery": "insert into d(id) values (1)",
   "OuterQuery": "insert into d(id) values (1)",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    "0"
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": ["0"]
 }
 
 # mismatch
@@ -1612,48 +747,20 @@
 "insert into a (eid, id) values (-1, 2)"
 {
   "PlanId": "INSERT_PK",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "insert into a(eid, id) values (-1, 2)",
   "OuterQuery": "insert into a(eid, id) values (-1, 2)",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    -1,
-    2
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [-1, 2]
 }
 
 # positive number
 "insert into a (eid, id) values (+1, 2)"
 {
   "PlanId": "INSERT_PK",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "insert into a(eid, id) values (1, 2)",
   "OuterQuery": "insert into a(eid, id) values (1, 2)",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    1,
-    2
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [1, 2]
 }
 
 # non-trivial unary
@@ -1662,19 +769,7 @@
   "PlanId": "PASS_DML",
   "Reason": "COMPLEX_EXPR",
   "TableName": "a",
-  "FieldQuery": null,
-  "FullQuery": "insert into a(eid, id) values (~1, 2)",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "insert into a(eid, id) values (~1, 2)"
 }
 
 # complex
@@ -1683,19 +778,7 @@
   "PlanId": "PASS_DML",
   "Reason": "COMPLEX_EXPR",
   "TableName": "a",
-  "FieldQuery": null,
-  "FullQuery": "insert into a(eid, id) values (1 + 1, 2)",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "insert into a(eid, id) values (1 + 1, 2)"
 }
 
 # no index
@@ -1704,85 +787,40 @@
   "PlanId": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
-  "FieldQuery": null,
-  "FullQuery": "insert into c(eid, id) values (1, 2)",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "insert into c(eid, id) values (1, 2)"
 }
 
 # no column list
 "insert into a values (1, 2)"
 {
   "PlanId": "INSERT_PK",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "insert into a values (1, 2)",
   "OuterQuery": "insert into a values (1, 2)",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    1,
-    2
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [1, 2]
 }
 
 # on dup
 "insert into b (eid, id) values (1, 2) on duplicate key update name = func(a)"
 {
   "PlanId": "UPSERT_PK",
-  "Reason": "DEFAULT",
   "TableName": "b",
-  "FieldQuery": null,
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
   "OuterQuery": "insert into b(eid, id) values (1, 2)",
-  "Subquery": null,
   "UpsertQuery": "update b set name = func(a) where :#pk",
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [1, 2],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [1, 2]
 }
 
 # on dup pk change
 "insert into b (eid, id) values (1, 2) on duplicate key update eid = 2"
 {
   "PlanId": "UPSERT_PK",
-  "Reason": "DEFAULT",
   "TableName": "b",
-  "FieldQuery": null,
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update eid = 2",
   "OuterQuery": "insert into b(eid, id) values (1, 2)",
-  "Subquery": null,
   "UpsertQuery": "update b set eid = 2 where :#pk",
-  "IndexUsed": "",
-  "ColumnNumbers": null,
   "PKValues": [1, 2],
-  "Limit": null,
-  "SecondaryPKValues": [2, null],
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "SecondaryPKValues": [2, null]
 }
 
 # on dup complex pk change
@@ -1791,19 +829,8 @@
   "PlanId": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "b",
-  "FieldQuery": null,
   "FullQuery": "insert into b(id, eid) values (1, 2) on duplicate key update eid = func(a)",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [2, 1],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [2, 1]
 }
 
 # on dup multi-row
@@ -1812,19 +839,8 @@
   "PlanId": "PASS_DML",
   "Reason": "UPSERT",
   "TableName": "b",
-  "FieldQuery": null,
   "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [[2,3],[1,2]],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [[2,3],[1,2]]
 }
 
 # on dup subquery
@@ -1833,103 +849,41 @@
   "PlanId": "PASS_DML",
   "Reason": "UPSERT",
   "TableName": "b",
-  "FieldQuery": null,
-  "FullQuery": "insert into b(id, eid) select * from a on duplicate key update name = func(a)",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "insert into b(id, eid) select * from a on duplicate key update name = func(a)"
 }
 
 # subquery
 "insert into b (eid, id) select * from a"
 {
   "PlanId": "INSERT_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "b",
-  "FieldQuery": null,
   "FullQuery": "insert into b(eid, id) select * from a",
   "OuterQuery": "insert into b(eid, id) values :#values",
   "Subquery": "select * from a limit :#maxLimit",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": [
-    0,
-    1
-  ],
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1],
+  "SubqueryPKColumns": [0, 1]
 }
 
 # subquery with no column list
 "insert into b select * from a"
 {
   "PlanId": "INSERT_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "b",
-  "FieldQuery": null,
   "FullQuery": "insert into b select * from a",
   "OuterQuery": "insert into b values :#values",
   "Subquery": "select * from a limit :#maxLimit",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1
-  ],
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": [
-    0,
-    1
-  ],
-  "SetKey": "",
-  "SetValue": null
+  "ColumnNumbers": [0, 1],
+  "SubqueryPKColumns": [0, 1]
 }
 
 # multi-row
 "insert into b (eid, id) values (1, 2), (3, 4)"
 {
   "PlanId": "INSERT_PK",
-  "Reason": "DEFAULT",
   "TableName": "b",
-  "FieldQuery": null,
   "FullQuery": "insert into b(eid, id) values (1, 2), (3, 4)",
   "OuterQuery": "insert into b(eid, id) values (1, 2), (3, 4)",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    [
-      1,
-      3
-    ],
-    [
-      2,
-      4
-    ]
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [[1, 3], [2, 4]]
 }
 
 # update cross-db
@@ -1937,44 +891,18 @@
 {
   "PlanId": "PASS_DML",
   "Reason": "TABLE",
-  "TableName": "",
-  "FieldQuery": null,
-  "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1"
 }
 
 # pk changed
 "update b set eid=1"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "b",
-  "FieldQuery": null,
   "FullQuery": "update b set eid = 1",
   "OuterQuery": "update b set eid = 1 where :#pk",
   "Subquery": "select eid, id from b limit :#maxLimit for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": [
-    1,
-    null
-  ],
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "SecondaryPKValues": [1, null]
 }
 
 # type mismatch
@@ -1985,24 +913,11 @@
 "update b set a.eid=1"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "b",
-  "FieldQuery": null,
   "FullQuery": "update b set a.eid = 1",
   "OuterQuery": "update b set a.eid = 1 where :#pk",
   "Subquery": "select eid, id from b limit :#maxLimit for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": [
-    1,
-    null
-  ],
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "SecondaryPKValues": [1, null]
 }
 
 # complex pk change
@@ -2011,172 +926,77 @@
   "PlanId": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "b",
-  "FieldQuery": null,
-  "FullQuery": "update b set eid = foo()",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "update b set eid = foo()"
 }
 
 # update subquery
 "update a set name='foo'"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "update a set name = 'foo'",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a limit :#maxLimit for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "Subquery": "select eid, id from a limit :#maxLimit for update"
 }
 
 # update complex where clause
 "update a set name='foo' where eid+1=1"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "update a set name = 'foo' where eid + 1 = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update"
 }
 
 # pk
 "update a set name='foo' where eid=1 and id=1"
 {
   "PlanId": "DML_PK",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "update a set name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    1,
-    1
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [1, 1]
 }
 
 # update with qualified column name
 "update a set a.name='foo' where eid=1 and id=1"
 {
   "PlanId": "DML_PK",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "update a set a.name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": "update a set a.name = 'foo' where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    1,
-    1
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [1, 1]
 }
 
 # partial pk
 "update a set name='foo' where eid=1"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "update a set name = 'foo' where eid = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update"
 }
 
 # partial pk with limit
 "update a set name='foo' where eid=1 limit 10"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "update a set name = 'foo' where eid = 1 limit 10",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a where eid = 1 limit 10 for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "Subquery": "select eid, id from a where eid = 1 limit 10 for update"
 }
 
 # non-pk
 "update a set name='foo' where eid=1 and name='foo'"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "update a set name = 'foo' where eid = 1 and name = 'foo'",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update"
 }
 
 # no index
@@ -2185,19 +1005,7 @@
   "PlanId": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
-  "FieldQuery": null,
-  "FullQuery": "update c set eid = 1",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "update c set eid = 1"
 }
 
 # delete cross-db
@@ -2205,128 +1013,57 @@
 {
   "PlanId": "PASS_DML",
   "Reason": "TABLE",
-  "TableName": "",
-  "FieldQuery": null,
-  "FullQuery": "delete from b.a where eid = 1 and id = 1",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "delete from b.a where eid = 1 and id = 1"
 }
 
 # delete with no where clause
 "delete from a"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "delete from a",
   "OuterQuery": "delete from a where :#pk",
-  "Subquery": "select eid, id from a limit :#maxLimit for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "Subquery": "select eid, id from a limit :#maxLimit for update"
 }
 
 # delete complex where clause
 "delete from a where eid+1=1"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "delete from a where eid + 1 = 1",
   "OuterQuery": "delete from a where :#pk",
-  "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update"
 }
 
 # pk
 "delete from a where eid=1 and id=1"
 {
   "PlanId": "DML_PK",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "delete from a where eid = 1 and id = 1",
   "OuterQuery": "delete from a where :#pk",
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": [
-    1,
-    1
-  ],
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "PKValues": [1, 1]
 }
 
 # partial pk
 "delete from a where eid=1"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "delete from a where eid = 1",
   "OuterQuery": "delete from a where :#pk",
-  "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update"
 }
 
 # non-pk
 "delete from a where eid=1 and name='foo'"
 {
   "PlanId": "DML_SUBQUERY",
-  "Reason": "DEFAULT",
   "TableName": "a",
-  "FieldQuery": null,
   "FullQuery": "delete from a where eid = 1 and name = 'foo'",
   "OuterQuery": "delete from a where :#pk",
-  "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update",
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update"
 }
 
 # no index
@@ -2335,38 +1072,14 @@
   "PlanId": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
-  "FieldQuery": null,
-  "FullQuery": "delete from c",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "delete from c"
 }
 
 # int
 "set  a=1"
 {
   "PlanId": "SET",
-  "Reason": "DEFAULT",
-  "TableName": "",
-  "FieldQuery": null,
   "FullQuery": "set a = 1",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
   "SetKey": "a",
   "SetValue": 1
 }
@@ -2375,19 +1088,7 @@
 "set  a=1.2"
 {
   "PlanId": "SET",
-  "Reason": "DEFAULT",
-  "TableName": "",
-  "FieldQuery": null,
   "FullQuery": "set a = 1.2",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
   "SetKey": "a",
   "SetValue": 1.2
 }
@@ -2396,231 +1097,74 @@
 "set a='b'"
 {
   "PlanId": "SET",
-  "Reason": "DEFAULT",
-  "TableName": "",
-  "FieldQuery": null,
   "FullQuery": "set a = 'b'",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "a",
-  "SetValue": null
+  "SetKey": "a"
 }
 
 # multi
 "set a=1, b=2"
 {
   "PlanId": "SET",
-  "Reason": "DEFAULT",
-  "TableName": "",
-  "FieldQuery": null,
-  "FullQuery": "set a = 1, b = 2",
-  "OuterQuery": null,
-  "Subquery": null,
-  "UpsertQuery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "Limit": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
+  "FullQuery": "set a = 1, b = 2"
 }
 
 # create
 "create table a(a int, b varchar(8))"
 {
-  "PlanId":"DDL",
-  "Reason":"DEFAULT",
-  "TableName":"",
-  "FieldQuery":null,
-  "FullQuery":null,
-  "OuterQuery":null,
-  "Subquery":null,
-  "UpsertQuery": null,
-  "IndexUsed":"",
-  "ColumnNumbers":null,
-  "PKValues":null,
-  "Limit": null,
-  "SecondaryPKValues":null,
-  "SubqueryPKColumns":null,
-  "SetKey":"",
-  "SetValue":null
+  "PlanId": "DDL"
 }
 
 # alter
 "alter table a add column(a int)"
 {
-  "PlanId":"DDL",
-  "Reason":"DEFAULT",
-  "TableName":"a",
-  "FieldQuery":null,
-  "FullQuery":null,
-  "OuterQuery":null,
-  "Subquery":null,
-  "UpsertQuery": null,
-  "IndexUsed":"",
-  "ColumnNumbers":null,
-  "PKValues":null,
-  "Limit": null,
-  "SecondaryPKValues":null,
-  "SubqueryPKColumns":null,
-  "SetKey":"",
-  "SetValue":null
+  "PlanId": "DDL",
+  "TableName": "a"
 }
 
 # alter rename
 "alter table a rename b"
 {
-  "PlanId":"DDL",
-  "Reason":"DEFAULT",
-  "TableName":"a",
-  "FieldQuery":null,
-  "FullQuery":null,
-  "OuterQuery":null,
-  "Subquery":null,
-  "UpsertQuery": null,
-  "IndexUsed":"",
-  "ColumnNumbers":null,
-  "PKValues":null,
-  "Limit": null,
-  "SecondaryPKValues":null,
-  "SubqueryPKColumns":null,
-  "SetKey":"",
-  "SetValue":null
+  "PlanId": "DDL",
+  "TableName": "a"
 }
 
 # rename
 "rename table a to b"
 {
-  "PlanId":"DDL",
-  "Reason":"DEFAULT",
-  "TableName":"a",
-  "FieldQuery":null,
-  "FullQuery":null,
-  "OuterQuery":null,
-  "Subquery":null,
-  "UpsertQuery": null,
-  "IndexUsed":"",
-  "ColumnNumbers":null,
-  "PKValues":null,
-  "Limit": null,
-  "SecondaryPKValues":null,
-  "SubqueryPKColumns":null,
-  "SetKey":"",
-  "SetValue":null
+  "PlanId": "DDL",
+  "TableName": "a"
 }
 
 # drop
 "drop table a"
 {
-  "PlanId":"DDL",
-  "Reason":"DEFAULT",
-  "TableName":"a",
-  "FieldQuery":null,
-  "FullQuery":null,
-  "OuterQuery":null,
-  "Subquery":null,
-  "UpsertQuery": null,
-  "IndexUsed":"",
-  "ColumnNumbers":null,
-  "PKValues":null,
-  "Limit": null,
-  "SecondaryPKValues":null,
-  "SubqueryPKColumns":null,
-  "SetKey":"",
-  "SetValue":null
+  "PlanId": "DDL",
+  "TableName": "a"
 }
 
 # analyze
 "analyze table a"
 {
-  "PlanId":"DDL",
-  "Reason":"DEFAULT",
-  "TableName":"a",
-  "FieldQuery":null,
-  "FullQuery":null,
-  "OuterQuery":null,
-  "Subquery":null,
-  "UpsertQuery": null,
-  "IndexUsed":"",
-  "ColumnNumbers":null,
-  "PKValues":null,
-  "Limit": null,
-  "SecondaryPKValues":null,
-  "SubqueryPKColumns":null,
-  "SetKey":"",
-  "SetValue":null
+  "PlanId": "DDL",
+  "TableName": "a"
 }
 
 # show
 "show a"
 {
-  "PlanId":"OTHER",
-  "Reason":"DEFAULT",
-  "TableName":"",
-  "FieldQuery":null,
-  "FullQuery":null,
-  "OuterQuery":null,
-  "Subquery":null,
-  "UpsertQuery": null,
-  "IndexUsed":"",
-  "ColumnNumbers":null,
-  "PKValues":null,
-  "Limit": null,
-  "SecondaryPKValues":null,
-  "SubqueryPKColumns":null,
-  "SetKey":"",
-  "SetValue":null
+  "PlanId": "OTHER"
 }
 
 # describe
 "describe a"
 {
-  "PlanId":"OTHER",
-  "Reason":"DEFAULT",
-  "TableName":"",
-  "FieldQuery":null,
-  "FullQuery":null,
-  "OuterQuery":null,
-  "Subquery":null,
-  "UpsertQuery": null,
-  "IndexUsed":"",
-  "ColumnNumbers":null,
-  "PKValues":null,
-  "Limit": null,
-  "SecondaryPKValues":null,
-  "SubqueryPKColumns":null,
-  "SetKey":"",
-  "SetValue":null
+  "PlanId": "OTHER"
 }
 
 # explain
 "explain a"
 {
-  "PlanId":"OTHER",
-  "Reason":"DEFAULT",
-  "TableName":"",
-  "FieldQuery":null,
-  "FullQuery":null,
-  "OuterQuery":null,
-  "Subquery":null,
-  "UpsertQuery": null,
-  "IndexUsed":"",
-  "ColumnNumbers":null,
-  "PKValues":null,
-  "Limit": null,
-  "SecondaryPKValues":null,
-  "SubqueryPKColumns":null,
-  "SetKey":"",
-  "SetValue":null
+  "PlanId": "OTHER"
 }
 
 # table not found
