@@ -23,11 +23,11 @@ func TestEWMACalc(t *testing.T) {
 
 	// Test invalid weighting factor
 	e = NewEWMA(-0.1)
-	if e.weightingFactor != defaultWeightingFactor {
-		t.Errorf("Weighting factor should fall back to defult(%v), but got %v", defaultWeightingFactor, e.weightingFactor)
+	if e.weightingFactor != DefaultWeightingFactor {
+		t.Errorf("Weighting factor should fall back to defult(%v), but got %v", DefaultWeightingFactor, e.weightingFactor)
 	}
 	e = NewEWMA(1.01)
-	if e.weightingFactor != defaultWeightingFactor {
-		t.Errorf("Weighting factor should fall back to defult(%v), but got %v", defaultWeightingFactor, e.weightingFactor)
+	if e.weightingFactor != DefaultWeightingFactor {
+		t.Errorf("Weighting factor should fall back to defult(%v), but got %v", DefaultWeightingFactor, e.weightingFactor)
 	}
 }

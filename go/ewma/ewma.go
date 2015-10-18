@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	// The default smoothing factor α
-	defaultWeightingFactor = 0.8
+	// DefaultWeightingFactor is the default smoothing factor α
+	// The value 0.875 is used in TCP RTT estimation
+	DefaultWeightingFactor = 0.875
 )
 
 // EWMA is the class to calculate exponentially weighted moving average of a series of data
@@ -33,9 +34,9 @@ func NewEWMA(wf float64) *EWMA {
 		log.Infof(
 			"Invalid weighting factor: %v, using default value(%v) instead.",
 			wf,
-			defaultWeightingFactor,
+			DefaultWeightingFactor,
 		)
-		wf = defaultWeightingFactor
+		wf = DefaultWeightingFactor
 	}
 	return &EWMA{
 		weightingFactor: wf,
@@ -61,4 +62,9 @@ func (e *EWMA) GetEWMA() float64 {
 		return 0
 	}
 	return e.currAverage
+}
+
+// Size makes EWMA to satisfy cache.Value interface
+func (e *EWMA) Size() int {
+	return 1
 }
