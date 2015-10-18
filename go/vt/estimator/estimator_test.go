@@ -1,9 +1,10 @@
 package estimator
 
 import (
-	"github.com/youtube/vitess/go/ewma"
 	"sync"
 	"testing"
+
+	"github.com/youtube/vitess/go/ewma"
 )
 
 func TestEstimator(t *testing.T) {
