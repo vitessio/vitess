@@ -27,7 +27,9 @@ ifdef VT_MYSQL_ROOT
 endif
 
 build:
+ifndef NOBANNER
 	echo $$(date): Building source tree
+endif
 	godep go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
 
 # To pass extra flags, run test.go manually.
