@@ -23,9 +23,7 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtdb_logger
 from vtdb import vtgate_cursor
-from vtdb import vtgatev2
-
-conn_class = vtgatev2
+from vtdb import vtgate_client
 
 shard_0_master = tablet.Tablet()
 shard_0_replica1 = tablet.Tablet()
@@ -184,11 +182,10 @@ def setup_tablets():
   utils.VtGate().start()
 
 
-def get_connection(user=None, password=None, timeout=10.0):
-  vtgate_addrs = {'vt': [utils.vtgate.addr(),]}
+def get_connection(timeout=10.0):
+  protocol = protocols_flavor().vtgate_python_protocol()
   try:
-    return conn_class.connect(vtgate_addrs, timeout,
-                              user=user, password=password)
+    return vtgate_client.connect(protocol, utils.vtgate.addr(), timeout)
   except Exception:
     logging.exception('Connection to vtgate (timeout=%s) failed.', timeout)
     raise
@@ -914,7 +911,9 @@ class TestFailures(BaseTestCase):
       vtgate_conn.commit()
       self.fail('Failed to raise DatabaseError exception')
     except dbexceptions.DatabaseError:
-      if conn_class == vtgatev2:
+      # FIXME(alainjobart) add a method to get the session to vtgate_client,
+      # instead of poking into it like this.
+      if protocols_flavor().vtgate_python_protocol() == 'gorpc':
         logging.info(
             'SHARD SESSIONS: %s', vtgate_conn.session['ShardSessions'])
         transaction_id = (

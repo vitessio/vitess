@@ -23,7 +23,7 @@ import (
 
 // TabletManagerProtocol is the implementation to use for tablet
 // manager protocol. It is exported for tests only.
-var TabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")
+var TabletManagerProtocol = flag.String("tablet_manager_protocol", "grpc", "the protocol to use to talk to vttablet")
 
 // ErrFunc is used by streaming RPCs that don't return a specific result
 type ErrFunc func() error

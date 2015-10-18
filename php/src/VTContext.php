@@ -1,13 +1,11 @@
 <?php
-
-class VTDeadlineExceededException extends Exception {
-}
+require_once (dirname(__FILE__) . '/VTException.php');
 
 /**
  * VTContext is an immutable object carrying request-specific deadlines and
  * credentials (callerId).
  *
- * Example usage:
+ * <p>Example usage:
  * <pre>
  * $ctx = VTContext::getDefault()->withDeadlineAfter(0.5); // 500ms timeout
  * $conn->doSomething($ctx, ...);

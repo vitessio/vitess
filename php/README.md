@@ -6,14 +6,27 @@ See `demo.php` for a simple example of using the API.
 
 ## Prerequisites
 
-PHP 5.3+ is required.
+PHP 5.5+ is required.
 
-This library uses the BSON codec library contained within the MongoDB plugin.
-For example, you can install this on Debian/Ubuntu like this:
+### gRPC Extension Module
+
+Install the [gRPC extension module](https://pecl.php.net/package/gRPC).
+
+For example, on Debian/Ubuntu:
 
 ``` sh
 $ sudo apt-get install php5-dev php5-cli php-pear
-$ sudo pecl install mongo
+$ sudo pecl install grpc-beta
+```
+
+### gRPC Dependencies
+
+To download the dependencies of the gRPC PHP library, run Composer:
+
+``` sh
+$ cd vitess/php
+vitess/php$ curl -sS https://getcomposer.org/installer | php
+vitess/php$ php composer.phar install
 ```
 
 ## Unit Tests
@@ -29,7 +42,8 @@ $ chmod +x $VTROOT/bin/phpunit
 Then run the tests like this:
 
 ``` sh
-vitess/php$ phpunit tests
+vitess$ . dev.env
+vitess$ make php_test
 ```
 
 ### Coverage

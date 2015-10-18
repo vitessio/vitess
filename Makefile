@@ -117,6 +117,9 @@ docker_lite:
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh
 
+docker_etcd:
+	cd docker/etcd-lite && ./build.sh
+
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb

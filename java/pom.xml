@@ -15,7 +15,6 @@
         <module>gorpc</module>
         <module>grpc-client</module>
         <module>hadoop</module>
-        <module>vtgate-client</module>
     </modules>
 
     <organization>
