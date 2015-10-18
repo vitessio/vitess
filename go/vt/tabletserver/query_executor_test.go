@@ -856,7 +856,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	bannedAddr := "127.0.0.1"
 	bannedUser := "u2"
 
-	alterRule := NewQueryRule("disable update", "disable update", QR_FAIL)
+	alterRule := NewQueryRule("disable update", "disable update", QRFail)
 	alterRule.SetIPCond(bannedAddr)
 	alterRule.SetUserCond(bannedUser)
 	alterRule.SetQueryCond("select.*")
@@ -916,7 +916,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	bannedAddr := "127.0.0.1"
 	bannedUser := "x"
 
-	alterRule := NewQueryRule("disable update", "disable update", QR_FAIL_RETRY)
+	alterRule := NewQueryRule("disable update", "disable update", QRFailRetry)
 	alterRule.SetIPCond(bannedAddr)
 	alterRule.SetUserCond(bannedUser)
 	alterRule.SetQueryCond("select.*")

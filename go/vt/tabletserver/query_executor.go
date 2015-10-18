@@ -227,9 +227,9 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 	action, desc := qre.plan.Rules.getAction(remoteAddr, username, qre.bindVars)
 	switch action {
-	case QR_FAIL:
+	case QRFail:
 		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Query disallowed due to rule: %s", desc)
-	case QR_FAIL_RETRY:
+	case QRFailRetry:
 		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %s", desc)
 	}
 

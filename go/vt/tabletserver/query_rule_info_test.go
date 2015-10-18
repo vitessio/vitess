@@ -47,17 +47,17 @@ func setupQueryRules() {
 		qr = NewQueryRule(
 			fmt.Sprintf("enforce keyspace_id range for %v", plan.planID),
 			fmt.Sprintf("keyspace_id_not_in_range_%v", plan.planID),
-			QR_FAIL,
+			QRFail,
 		)
 		qr.AddPlanCond(plan.planID)
-		qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, QR_NOTIN, key.KeyRange{Start: "aa", End: "zz"})
+		qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, QRNotIn, key.KeyRange{Start: "aa", End: "zz"})
 		keyrangeRules.Add(qr)
 	}
 
 	// mock blacklisted tables
 	blacklistRules = NewQueryRules()
 	blacklistedTables := []string{"bannedtable1", "bannedtable2", "bannedtable3"}
-	qr = NewQueryRule("enforce blacklisted tables", "blacklisted_table", QR_FAIL_RETRY)
+	qr = NewQueryRule("enforce blacklisted tables", "blacklisted_table", QRFailRetry)
 	for _, t := range blacklistedTables {
 		qr.AddTableCond(t)
 	}
@@ -65,9 +65,9 @@ func setupQueryRules() {
 
 	// mock custom rules
 	otherRules = NewQueryRules()
-	qr = NewQueryRule("sample custom rule", "customrule_ban_bindvar", QR_FAIL)
+	qr = NewQueryRule("sample custom rule", "customrule_ban_bindvar", QRFail)
 	qr.AddTableCond("t_customer")
-	qr.AddBindVarCond("bindvar1", true, false, QR_NOOP, nil)
+	qr.AddBindVarCond("bindvar1", true, false, QRNoOp, nil)
 	otherRules.Add(qr)
 }
 
@@ -220,8 +220,8 @@ func TestQueryRuleInfoFilterByPlan(t *testing.T) {
 
 	// Test match two rules: both keyrange rule and custom rule will be matched
 	otherRules = NewQueryRules()
-	qr := NewQueryRule("sample custom rule", "customrule_ban_bindvar", QR_FAIL)
-	qr.AddBindVarCond("bindvar1", true, false, QR_NOOP, nil)
+	qr := NewQueryRule("sample custom rule", "customrule_ban_bindvar", QRFail)
+	qr.AddBindVarCond("bindvar1", true, false, QRNoOp, nil)
 	otherRules.Add(qr)
 	qri.SetRules(customQueryRules, otherRules)
 	qrs = qri.filterByPlan("insert into t_test values (:bindvar1, 123, 'test')", planbuilder.PlanInsertPK, "t_test")

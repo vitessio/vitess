@@ -43,7 +43,7 @@ func TestTabletErrorMsgTooLong(t *testing.T) {
 		t.Fatalf("tablet error should have error type ErrFatal and error code %v", vtrpc.ErrorCode_INTEGRITY_ERROR)
 	}
 	if tabletErr.Message != string(buf[:maxErrLen]) {
-		t.Fatalf("message should be capped, only %s character will be shown", maxErrLen)
+		t.Fatalf("message should be capped, only %d character will be shown", maxErrLen)
 	}
 }
 

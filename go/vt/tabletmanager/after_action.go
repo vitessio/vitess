@@ -78,10 +78,10 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blac
 			qr := tabletserver.NewQueryRule(
 				fmt.Sprintf("enforce keyspace_id range for %v", plan.planID),
 				fmt.Sprintf("keyspace_id_not_in_range_%v", plan.planID),
-				tabletserver.QR_FAIL,
+				tabletserver.QRFail,
 			)
 			qr.AddPlanCond(plan.planID)
-			err := qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, tabletserver.QR_NOTIN, tablet.KeyRange)
+			err := qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, tabletserver.QRNotIn, tablet.KeyRange)
 			if err != nil {
 				return fmt.Errorf("Unable to add keyspace rule: %v", err)
 			}
@@ -98,7 +98,7 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blac
 			return err
 		}
 		log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
-		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_RETRY)
+		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QRFailRetry)
 		for _, t := range tables {
 			qr.AddTableCond(t)
 		}
