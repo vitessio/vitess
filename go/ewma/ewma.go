@@ -18,6 +18,7 @@ const (
 	defaultWeightingFactor = 0.8
 )
 
+// EWMA is the class to calculate exponentially weighted moving average of a series of data
 type EWMA struct {
 	// The weighting factor α
 	weightingFactor float64
@@ -25,7 +26,7 @@ type EWMA struct {
 	currAverage float64
 }
 
-// NewEWMA prepares a EWMA object which can calculate
+// NewEWMA returns a EWMA object which can calculate
 // EWMA of a series of data gradually added to it
 func NewEWMA(wf float64) *EWMA {
 	if wf < 0 || wf > 1.0 {
@@ -53,7 +54,7 @@ func (e *EWMA) AddValue(value float64) {
 	}
 }
 
-// GetAverage returns the EWMA calculated from historical data
+// GetEWMA returns the EWMA calculated from historical data
 func (e *EWMA) GetEWMA() float64 {
 	if math.IsNaN(e.currAverage) {
 		// No value has been added yet, returning 0
