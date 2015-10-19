@@ -101,6 +101,7 @@ import (
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/netutil"
 	hk "github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -570,18 +571,6 @@ func parseTabletType(param string, types []pb.TabletType) (pb.TabletType, error)
 		return pb.TabletType_UNKNOWN, fmt.Errorf("Type %v is not one of: %v", tabletType, strings.Join(topoproto.MakeStringTypeList(types), " "))
 	}
 	return tabletType, nil
-}
-
-// parseKeyspaceIDType parses the keyspace id type into the enum
-func parseKeyspaceIDType(param string) (pb.KeyspaceIdType, error) {
-	if param == "" {
-		return pb.KeyspaceIdType_UNSET, nil
-	}
-	value, ok := pb.KeyspaceIdType_value[strings.ToUpper(param)]
-	if !ok {
-		return pb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
-	}
-	return pb.KeyspaceIdType(value), nil
 }
 
 // parseServingTabletType3 parses the tablet type into the enum,
@@ -1481,7 +1470,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 
 	keyspace := subFlags.Arg(0)
-	kit, err := parseKeyspaceIDType(*shardingColumnType)
+	kit, err := key.ParseKeyspaceIDType(*shardingColumnType)
 	if err != nil {
 		return err
 	}
@@ -1569,7 +1558,7 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 	kit := pb.KeyspaceIdType_UNSET
 	if subFlags.NArg() >= 3 {
 		var err error
-		kit, err = parseKeyspaceIDType(subFlags.Arg(2))
+		kit, err = key.ParseKeyspaceIDType(subFlags.Arg(2))
 		if err != nil {
 			return err
 		}

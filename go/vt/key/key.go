@@ -127,6 +127,18 @@ func IsKeyspaceIdTypeInList(typ KeyspaceIdType, types []KeyspaceIdType) bool {
 	return false
 }
 
+// ParseKeyspaceIDType parses the keyspace id type into the enum
+func ParseKeyspaceIDType(param string) (pb.KeyspaceIdType, error) {
+	if param == "" {
+		return pb.KeyspaceIdType_UNSET, nil
+	}
+	value, ok := pb.KeyspaceIdType_value[strings.ToUpper(param)]
+	if !ok {
+		return pb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
+	}
+	return pb.KeyspaceIdType(value), nil
+}
+
 //
 // KeyRange definitions
 //
