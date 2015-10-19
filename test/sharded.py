@@ -73,6 +73,11 @@ class TestSharded(unittest.TestCase):
 
   def test_sharding(self):
 
+    utils.run_vtctl(['CreateKeyspace',
+                     '--sharding_column_name', 'keyspace_id',
+                     '--sharding_column_type', 'uint64',
+                     'test_keyspace'])
+    
     shard_0_master.init_tablet('master', 'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
     shard_1_master.init_tablet('master', 'test_keyspace', '80-')

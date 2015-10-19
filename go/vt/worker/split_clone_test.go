@@ -248,6 +248,13 @@ func testSplitClone(t *testing.T, strategy string) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
+	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
+		ShardingColumnName: "keyspace_id",
+		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,

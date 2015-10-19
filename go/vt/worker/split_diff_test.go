@@ -154,6 +154,13 @@ func TestSplitDiff(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient(), time.Second)
 	ctx := context.Background()
 
+	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
+		ShardingColumnName: "keyspace_id",
+		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,

@@ -170,6 +170,14 @@ func ParseKeyRangeParts(start, end string) (*pb.KeyRange, error) {
 	return &pb.KeyRange{Start: s, End: e}, nil
 }
 
+// KeyRangeString prints a pb.KeyRange
+func KeyRangeString(k *pb.KeyRange) string {
+	if k == nil {
+		return "<nil>"
+	}
+	return hex.EncodeToString(k.Start) + "-" + hex.EncodeToString(k.End)
+}
+
 // KeyRangeIsPartial returns true if the KeyRange does not cover the entire space.
 func KeyRangeIsPartial(kr *pb.KeyRange) bool {
 	if kr == nil {

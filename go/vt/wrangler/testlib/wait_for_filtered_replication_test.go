@@ -84,6 +84,14 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
+	// create keyspace
+	if err := ts.CreateKeyspace(context.Background(), keyspace, &pbt.Keyspace{
+		ShardingColumnName: "keyspace_id",
+		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+
 	// source of the filtered replication. We don't start its loop because we don't connect to it.
 	source := NewFakeTablet(t, wr, "cell1", 0, pbt.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, keyspace, "0"))

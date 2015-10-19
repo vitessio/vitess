@@ -17,10 +17,8 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/binlog"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
@@ -40,14 +38,11 @@ var (
 	historyLength = 16
 )
 
-// Query rules from keyrange
-const keyrangeQueryRules string = "KeyrangeQueryRules"
-
 // Query rules from blacklist
 const blacklistQueryRules string = "BlacklistQueryRules"
 
 func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet, blacklistedTables []string) error {
-	err := agent.loadKeyspaceAndBlacklistRules(tablet, blacklistedTables)
+	err := agent.loadBlacklistRules(tablet, blacklistedTables)
 	if err != nil {
 		return err
 	}
@@ -55,40 +50,8 @@ func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet, blacklistedTables []s
 	return agent.QueryServiceControl.SetServingType(tablet.Type, true)
 }
 
-// loadKeyspaceAndBlacklistRules does what the name suggests:
-// 1. load and build keyrange query rules
-// 2. load and build blacklist query rules
-func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blacklistedTables []string) (err error) {
-	// Keyrange rules
-	keyrangeRules := tabletserver.NewQueryRules()
-	if key.KeyRangeIsPartial(tablet.KeyRange) {
-		log.Infof("Restricting to keyrange: %v", tablet.KeyRange)
-		dmlPlans := []struct {
-			planID   planbuilder.PlanType
-			onAbsent bool
-		}{
-			{planbuilder.PLAN_INSERT_PK, true},
-			{planbuilder.PLAN_INSERT_SUBQUERY, true},
-			{planbuilder.PLAN_PASS_DML, false},
-			{planbuilder.PLAN_DML_PK, false},
-			{planbuilder.PLAN_DML_SUBQUERY, false},
-		}
-		for _, plan := range dmlPlans {
-			qr := tabletserver.NewQueryRule(
-				fmt.Sprintf("enforce keyspace_id range for %v", plan.planID),
-				fmt.Sprintf("keyspace_id_not_in_range_%v", plan.planID),
-				tabletserver.QR_FAIL,
-			)
-			qr.AddPlanCond(plan.planID)
-			err := qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, tabletserver.QR_NOTIN, tablet.KeyRange)
-			if err != nil {
-				return fmt.Errorf("Unable to add keyspace rule: %v", err)
-			}
-			keyrangeRules.Add(qr)
-		}
-	}
-
-	// Blacklisted tables
+// loadBlacklistRules loads and builds the blacklist query rules
+func (agent *ActionAgent) loadBlacklistRules(tablet *pbt.Tablet, blacklistedTables []string) (err error) {
 	blacklistRules := tabletserver.NewQueryRules()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
@@ -103,13 +66,8 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blac
 		}
 		blacklistRules.Add(qr)
 	}
-	// Push all three sets of QueryRules to TabletServerRpcService
-	loadRuleErr := agent.QueryServiceControl.SetQueryRules(keyrangeQueryRules, keyrangeRules)
-	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s: %s", keyrangeQueryRules, loadRuleErr)
-	}
 
-	loadRuleErr = agent.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
+	loadRuleErr := agent.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
 	if loadRuleErr != nil {
 		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
 	}

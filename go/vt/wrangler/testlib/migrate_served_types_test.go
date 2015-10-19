@@ -40,6 +40,14 @@ func TestMigrateServedTypes(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
+	// create keyspace
+	if err := ts.CreateKeyspace(context.Background(), "ks", &pb.Keyspace{
+		ShardingColumnName: "keyspace_id",
+		ShardingColumnType: pb.KeyspaceIdType_UINT64,
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+
 	// create the source shard
 	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "ks", "0"))
