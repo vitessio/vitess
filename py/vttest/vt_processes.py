@@ -175,12 +175,14 @@ def start_vt_processes(directory, shards, mysql_db, vschema,
 
 def kill_vt_processes():
   """Call kill() on all processes."""
+  logging.info('kill_vt_processes()')
   if vtcombo_process:
     vtcombo_process.kill()
 
 
 def wait_vt_processes():
   """Call wait() on all processes."""
+  logging.info('wait_vt_processes()')
   if vtcombo_process:
     vtcombo_process.wait()
 
