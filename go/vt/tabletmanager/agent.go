@@ -66,7 +66,7 @@ var (
 type ActionAgent struct {
 	// The following fields are set during creation
 	QueryServiceControl tabletserver.Controller
-	UpdateStream        *binlog.UpdateStream
+	UpdateStream        binlog.UpdateStreamControl
 	HealthReporter      health.Reporter
 	TopoServer          topo.Server
 	TabletAlias         *pb.TabletAlias
@@ -158,7 +158,6 @@ func NewActionAgent(
 
 	agent = &ActionAgent{
 		QueryServiceControl: queryServiceControl,
-		UpdateStream:        binlog.NewUpdateStream(mycnf),
 		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          topoServer,
@@ -198,15 +197,13 @@ func NewActionAgent(
 		}
 	}
 
-	if err := agent.Start(batchCtx, int32(mysqlPort), port, gRPCPort); err != nil {
+	// Start will get the tablet info, and update our state from it
+	if err := agent.Start(batchCtx, int32(mysqlPort), port, gRPCPort, true); err != nil {
 		return nil, err
 	}
 
 	// register the RPC services from the agent
 	agent.registerQueryService()
-
-	// register the RPC services from UpdateStream
-	agent.UpdateStream.RegisterService()
 
 	// two cases then:
 	// - restoreFromBackup is set: we restore, then initHealthCheck, all
@@ -237,6 +234,7 @@ func NewActionAgent(
 func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
+		UpdateStream:        binlog.NewUpdateStreamControlMock(),
 		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
@@ -249,7 +247,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *p
 		lastHealthMapCount:  new(stats.Int),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
-	if err := agent.Start(batchCtx, 0, vtPort, grpcPort); err != nil {
+	if err := agent.Start(batchCtx, 0, vtPort, grpcPort, false); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 	return agent
@@ -261,6 +259,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *p
 func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
+		UpdateStream:        binlog.NewUpdateStreamControlMock(),
 		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
@@ -285,7 +284,7 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 	}
 
 	// and start the agent
-	if err := agent.Start(batchCtx, 0, vtPort, grpcPort); err != nil {
+	if err := agent.Start(batchCtx, 0, vtPort, grpcPort, false); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 	return agent
@@ -447,7 +446,8 @@ func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
 
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
-func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort int32) error {
+// If initUpdateStream is set, update stream service will also be registered.
+func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort int32, initUpdateStream bool) error {
 	var err error
 	if _, err = agent.readTablet(ctx); err != nil {
 		return err
@@ -510,7 +510,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		return err
 	}
 
-	// initialize tablet server
+	// get and fix the dbname if necessary
 	if !agent.DBConfigs.IsZero() {
 		// Only for real instances
 		// Update our DB config to match the info we have in the tablet
@@ -520,6 +520,17 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		agent.DBConfigs.App.Keyspace = tablet.Keyspace
 		agent.DBConfigs.App.Shard = tablet.Shard
 	}
+
+	// create and register the RPC services from UpdateStream
+	// (it needs the dbname, so it has to be delayed up to here,
+	// but it has to be before updateState below that may use it)
+	if initUpdateStream {
+		us := binlog.NewUpdateStream(agent.MysqlDaemon, agent.DBConfigs.App.DbName)
+		us.RegisterService()
+		agent.UpdateStream = us
+	}
+
+	// initialize tablet server
 	if err := agent.QueryServiceControl.InitDBConfig(pbq.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,

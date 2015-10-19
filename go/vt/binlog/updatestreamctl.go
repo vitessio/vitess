@@ -43,15 +43,57 @@ var (
 	tablesTransactions   = stats.NewInt("UpdateStreamTablesTransactions")
 )
 
-// UpdateStream is the real implementation of proto.UpdateStream
-type UpdateStream struct {
-	mycnf *mysqlctl.Mycnf
+// UpdateStreamControl is the interface an UpdateStream service implements
+// to bring it up or down.
+type UpdateStreamControl interface {
+	// Enable will allow any new RPC calls
+	Enable()
 
+	// Disable will interrupt all current calls, and disallow any new call
+	Disable()
+
+	// IsEnabled returns true iff the service is enabled
+	IsEnabled() bool
+}
+
+// UpdateStreamControlMock is an implementation of UpdateStreamControl
+// to be used in tests
+type UpdateStreamControlMock struct {
+	enabled bool
+}
+
+// NewUpdateStreamControlMock creates a new UpdateStreamControlMock
+func NewUpdateStreamControlMock() *UpdateStreamControlMock {
+	return &UpdateStreamControlMock{}
+}
+
+// Enable is part of UpdateStreamControl
+func (m *UpdateStreamControlMock) Enable() {
+	m.enabled = true
+}
+
+// Disable is part of UpdateStreamControl
+func (m *UpdateStreamControlMock) Disable() {
+	m.enabled = false
+}
+
+// IsEnabled is part of UpdateStreamControl
+func (m *UpdateStreamControlMock) IsEnabled() bool {
+	return m.enabled
+}
+
+// UpdateStream is the real implementation of proto.UpdateStream
+// and UpdateStreamControl
+type UpdateStream struct {
+	// the following variables are set at construction time
+
+	mysqld mysqlctl.MysqlDaemon
+	dbname string
+
+	// actionLock protects the following variables
 	actionLock     sync.Mutex
 	state          sync2.AtomicInt64
-	mysqld         mysqlctl.MysqlDaemon
 	stateWaitGroup sync.WaitGroup
-	dbname         string
 	streams        streamList
 }
 
@@ -95,8 +137,11 @@ type RegisterUpdateStreamServiceFunc func(proto.UpdateStream)
 var RegisterUpdateStreamServices []RegisterUpdateStreamServiceFunc
 
 // NewUpdateStream returns a new UpdateStream object
-func NewUpdateStream(mycnf *mysqlctl.Mycnf) *UpdateStream {
-	return &UpdateStream{mycnf: mycnf}
+func NewUpdateStream(mysqld mysqlctl.MysqlDaemon, dbname string) *UpdateStream {
+	return &UpdateStream{
+		mysqld: mysqld,
+		dbname: dbname,
+	}
 }
 
 // RegisterService needs to be called to publish stats, and to start listening
@@ -120,7 +165,7 @@ func logError() {
 }
 
 // Enable will allow connections to the service
-func (updateStream *UpdateStream) Enable(dbname string, mysqld mysqlctl.MysqlDaemon) {
+func (updateStream *UpdateStream) Enable() {
 	defer logError()
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
@@ -128,21 +173,9 @@ func (updateStream *UpdateStream) Enable(dbname string, mysqld mysqlctl.MysqlDae
 		return
 	}
 
-	if dbname == "" {
-		log.Errorf("Missing db name, cannot enable update stream service")
-		return
-	}
-
-	if updateStream.mycnf.BinLogPath == "" {
-		log.Errorf("Update stream service requires binlogs enabled")
-		return
-	}
-
 	updateStream.state.Set(usEnabled)
-	updateStream.mysqld = mysqld
-	updateStream.dbname = dbname
 	updateStream.streams.Init()
-	log.Infof("Enabling update stream, dbname: %s, binlogpath: %s", updateStream.dbname, updateStream.mycnf.BinLogPath)
+	log.Infof("Enabling update stream, dbname: %s", updateStream.dbname)
 }
 
 // Disable will disallow any connection to the service

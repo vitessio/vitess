@@ -162,12 +162,10 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	agent.setTabletControl(tabletControl)
 
 	// update stream needs to be started or stopped too
-	if agent.UpdateStream != nil {
-		if topo.IsRunningUpdateStream(newTablet.Type) {
-			agent.UpdateStream.Enable(agent.DBConfigs.App.DbName, agent.MysqlDaemon)
-		} else {
-			agent.UpdateStream.Disable()
-		}
+	if topo.IsRunningUpdateStream(newTablet.Type) {
+		agent.UpdateStream.Enable()
+	} else {
+		agent.UpdateStream.Disable()
 	}
 
 	statsType.Set(strings.ToLower(newTablet.Type.String()))
