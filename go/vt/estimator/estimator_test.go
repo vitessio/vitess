@@ -41,6 +41,9 @@ func TestEstimator(t *testing.T) {
 			t.Errorf("Expect the estimated value of key %v to be %v, but got %v", k, v, ev)
 		}
 	}
+	if v := e.Estimate("select cc from t_test where col3:=bv1"); v != 0 {
+		t.Errorf("Expect estimator to return 0 for new query, but got %v", v)
+	}
 	// Test invalid arguments to NewEstimator
 	e = NewEstimator(0, 0.8)
 	if ca := e.records.Capacity(); ca != DefaultCapacity {
