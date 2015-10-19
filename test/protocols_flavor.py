@@ -12,7 +12,7 @@ class ProtocolsFlavor(object):
   """Base class for protocols flavor."""
 
   def binlog_player_protocol(self):
-    """The binlog player protocol between vttablets, in go."""
+    """Tdthe binlog player protocol between vttablets, in go."""
     raise NotImplementedError('Not implemented in the base class')
 
   def binlog_player_python_protocol(self):
