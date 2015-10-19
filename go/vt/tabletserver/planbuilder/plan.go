@@ -24,38 +24,38 @@ var (
 type PlanType int
 
 const (
-	// PLAN_PASS_SELECT is pass through select statements. This is the
+	// PlanPassSelect is pass through select statements. This is the
 	// default plan for select statements.
-	PLAN_PASS_SELECT PlanType = iota
-	// PLAN_PASS_DML is pass through update & delete statements. This is
+	PlanPassSelect PlanType = iota
+	// PlanPassDML is pass through update & delete statements. This is
 	// the default plan for update and delete statements.
-	PLAN_PASS_DML
-	// PLAN_PK_EQUAL is deprecated. Use PLAN_PK_IN instead.
-	PLAN_PK_EQUAL
-	// PLAN_PK_IN is select statement with a single IN clause on primary key
-	PLAN_PK_IN
-	// PLAN_SELECT_SUBQUERY is select statement with a subselect statement
-	PLAN_SELECT_SUBQUERY
-	// PLAN_DML_PK is an update or delete with an equality where clause(s)
+	PlanPassDML
+	// PlanPKEqual is deprecated. Use PlanPKIn instead.
+	PlanPKEqual
+	// PlanPKIn is select statement with a single IN clause on primary key
+	PlanPKIn
+	// PlanSelectSubquery is select statement with a subselect statement
+	PlanSelectSubquery
+	// PlanDMLPK is an update or delete with an equality where clause(s)
 	// on primary key(s)
-	PLAN_DML_PK
-	// PLAN_DML_SUBQUERY is an update or delete with a subselect statement
-	PLAN_DML_SUBQUERY
-	// PLAN_INSERT_PK is insert statement where the PK value is
+	PlanDMLPK
+	// PlanDMLSubquery is an update or delete with a subselect statement
+	PlanDMLSubquery
+	// PlanInsertPK is insert statement where the PK value is
 	// supplied with the query
-	PLAN_INSERT_PK
-	// PLAN_INSERT_SUBQUERY is same as PLAN_DML_SUBQUERY but for inserts
-	PLAN_INSERT_SUBQUERY
-	// PLAN_SET is for SET statements
-	PLAN_SET
-	// PLAN_DDL is for DDL statements
-	PLAN_DDL
-	// PLAN_SELECT_STREAM is used for streaming queries
-	PLAN_SELECT_STREAM
-	// PLAN_OTHER is for SHOW, DESCRIBE & EXPLAIN statements
-	PLAN_OTHER
-	// PLAN_UPSERT_PK is for insert ... on duplicate key constructs
-	PLAN_UPSERT_PK
+	PlanInsertPK
+	// PlanInsertSubquery is same as PlanDMLSubquery but for inserts
+	PlanInsertSubquery
+	// PlanSet is for SET statements
+	PlanSet
+	// PlanDDL is for DDL statements
+	PlanDDL
+	// PlanSelectStream is used for streaming queries
+	PlanSelectStream
+	// PlanOther is for SHOW, DESCRIBE & EXPLAIN statements
+	PlanOther
+	// PlanUpsertPK is for insert ... on duplicate key constructs
+	PlanUpsertPK
 	// NumPlans stores the total number of plans
 	NumPlans
 )
@@ -97,7 +97,7 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 
 // IsSelect returns true if PlanType is about a select query.
 func (pt PlanType) IsSelect() bool {
-	return pt == PLAN_PASS_SELECT || pt == PLAN_PK_IN || pt == PLAN_SELECT_SUBQUERY || pt == PLAN_SELECT_STREAM
+	return pt == PlanPassSelect || pt == PlanPKIn || pt == PlanSelectSubquery || pt == PlanSelectStream
 }
 
 // MarshalJSON returns a json string for PlanType.
@@ -111,42 +111,43 @@ func (pt PlanType) MinRole() tableacl.Role {
 }
 
 var tableAclRoles = map[PlanType]tableacl.Role{
-	PLAN_PASS_SELECT:     tableacl.READER,
-	PLAN_PK_IN:           tableacl.READER,
-	PLAN_SELECT_SUBQUERY: tableacl.READER,
-	PLAN_SET:             tableacl.READER,
-	PLAN_PASS_DML:        tableacl.WRITER,
-	PLAN_DML_PK:          tableacl.WRITER,
-	PLAN_DML_SUBQUERY:    tableacl.WRITER,
-	PLAN_INSERT_PK:       tableacl.WRITER,
-	PLAN_INSERT_SUBQUERY: tableacl.WRITER,
-	PLAN_DDL:             tableacl.ADMIN,
-	PLAN_SELECT_STREAM:   tableacl.READER,
-	PLAN_OTHER:           tableacl.ADMIN,
-	PLAN_UPSERT_PK:       tableacl.WRITER,
+	PlanPassSelect:     tableacl.READER,
+	PlanPKIn:           tableacl.READER,
+	PlanSelectSubquery: tableacl.READER,
+	PlanSet:            tableacl.READER,
+	PlanPassDML:        tableacl.WRITER,
+	PlanDMLPK:          tableacl.WRITER,
+	PlanDMLSubquery:    tableacl.WRITER,
+	PlanInsertPK:       tableacl.WRITER,
+	PlanInsertSubquery: tableacl.WRITER,
+	PlanDDL:            tableacl.ADMIN,
+	PlanSelectStream:   tableacl.READER,
+	PlanOther:          tableacl.ADMIN,
+	PlanUpsertPK:       tableacl.WRITER,
 }
 
 // ReasonType indicates why a query plan fails to build
 type ReasonType int
 
+// Reason codes give a hint about why a certain plan was chosen.
 const (
-	REASON_DEFAULT ReasonType = iota
-	REASON_SELECT
-	REASON_TABLE
-	REASON_NOCACHE
-	REASON_SELECT_LIST
-	REASON_LOCK
-	REASON_WHERE
-	REASON_ORDER
-	REASON_LIMIT
-	REASON_PKINDEX
-	REASON_COVERING
-	REASON_NOINDEX_MATCH
-	REASON_TABLE_NOINDEX
-	REASON_PK_CHANGE
-	REASON_HAS_HINTS
-	REASON_COMPLEX_EXPR
-	REASON_UPSERT
+	ReasonDefault ReasonType = iota
+	ReasonSelect
+	ReasonTable
+	ReasonNocache
+	ReasonSelectList
+	ReasonLock
+	ReasonWhere
+	ReasonOrder
+	ReasonLimit
+	ReasonPKIndex
+	ReasonCovering
+	ReasonNoIndexMatch
+	ReasonTableNoIndex
+	ReasonPKChange
+	ReasonHasHints
+	ReasonComplexExpr
+	ReasonUpsert
 )
 
 // Must exactly match order of reason constants.
@@ -186,52 +187,52 @@ func (rt ReasonType) MarshalJSON() ([]byte, error) {
 // string: bind variable name starting with ':', or
 // nil if no value was specified
 type ExecPlan struct {
-	PlanId    PlanType
-	Reason    ReasonType
-	TableName string
+	PlanID    PlanType
+	Reason    ReasonType `json:",omitempty"`
+	TableName string     `json:",omitempty"`
 
 	// FieldQuery is used to fetch field info
-	FieldQuery *sqlparser.ParsedQuery
+	FieldQuery *sqlparser.ParsedQuery `json:",omitempty"`
 
 	// FullQuery will be set for all plans.
-	FullQuery *sqlparser.ParsedQuery
+	FullQuery *sqlparser.ParsedQuery `json:",omitempty"`
 
 	// For PK plans, only OuterQuery is set.
 	// For SUBQUERY plans, Subquery is also set.
-	// IndexUsed is set only for PLAN_SELECT_SUBQUERY
-	OuterQuery  *sqlparser.ParsedQuery
-	Subquery    *sqlparser.ParsedQuery
-	UpsertQuery *sqlparser.ParsedQuery
-	IndexUsed   string
+	// IndexUsed is set only for PlanSelectSubquery
+	OuterQuery  *sqlparser.ParsedQuery `json:",omitempty"`
+	Subquery    *sqlparser.ParsedQuery `json:",omitempty"`
+	UpsertQuery *sqlparser.ParsedQuery `json:",omitempty"`
+	IndexUsed   string                 `json:",omitempty"`
 
 	// For selects, columns to be returned
-	// For PLAN_INSERT_SUBQUERY, columns to be inserted
-	ColumnNumbers []int
+	// For PlanInsertSubquery, columns to be inserted
+	ColumnNumbers []int `json:",omitempty"`
 
-	// PLAN_PK_IN, PLAN_DML_PK: where clause values
-	// PLAN_INSERT_PK: values clause
-	PKValues []interface{}
+	// PlanPKIn, PlanDMLPK: where clause values
+	// PlanInsertPK: values clause
+	PKValues []interface{} `json:",omitempty"`
 
 	// PK_IN. Limit clause value.
-	Limit interface{}
+	Limit interface{} `json:",omitempty"`
 
 	// For update: set clause if pk is changing
-	SecondaryPKValues []interface{}
+	SecondaryPKValues []interface{} `json:",omitempty"`
 
-	// For PLAN_INSERT_SUBQUERY: pk columns in the subquery result
-	SubqueryPKColumns []int
+	// For PlanInsertSubquery: pk columns in the subquery result
+	SubqueryPKColumns []int `json:",omitempty"`
 
-	// PLAN_SET
-	SetKey   string
-	SetValue interface{}
+	// PlanSet
+	SetKey   string      `json:",omitempty"`
+	SetValue interface{} `json:",omitempty"`
 }
 
-func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) (*schema.Table, error) {
+func (plan *ExecPlan) setTableInfo(tableName string, getTable TableGetter) (*schema.Table, error) {
 	tableInfo, ok := getTable(tableName)
 	if !ok {
 		return nil, fmt.Errorf("table %s not found in schema", tableName)
 	}
-	node.TableName = tableInfo.Name
+	plan.TableName = tableInfo.Name
 	return tableInfo, nil
 }
 
@@ -248,7 +249,7 @@ func GetExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if plan.PlanId == PLAN_PASS_DML {
+	if plan.PlanID == PlanPassDML {
 		log.Warningf("PASS_DML: %s", sql)
 	}
 	return plan, nil
@@ -262,7 +263,7 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 	}
 
 	plan = &ExecPlan{
-		PlanId:    PLAN_SELECT_STREAM,
+		PlanID:    PlanSelectStream,
 		FullQuery: GenerateFullQuery(statement),
 	}
 
@@ -289,10 +290,10 @@ func analyzeSQL(statement sqlparser.Statement, getTable TableGetter) (plan *Exec
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		return &ExecPlan{
-			PlanId:     PLAN_PASS_SELECT,
+			PlanID:     PlanPassSelect,
 			FieldQuery: GenerateFieldQuery(stmt),
 			FullQuery:  GenerateFullQuery(stmt),
-			Reason:     REASON_SELECT,
+			Reason:     ReasonSelect,
 		}, nil
 	case *sqlparser.Select:
 		return analyzeSelect(stmt, getTable)
@@ -307,7 +308,7 @@ func analyzeSQL(statement sqlparser.Statement, getTable TableGetter) (plan *Exec
 	case *sqlparser.DDL:
 		return analyzeDDL(stmt, getTable), nil
 	case *sqlparser.Other:
-		return &ExecPlan{PlanId: PLAN_OTHER}, nil
+		return &ExecPlan{PlanID: PlanOther}, nil
 	}
 	return nil, errors.New("invalid SQL")
 }

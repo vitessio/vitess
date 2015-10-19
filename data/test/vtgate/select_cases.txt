@@ -1,376 +1,213 @@
 # syntax error
 "the quick brown fox"
 {
-  "ID":"NoPlan",
-  "Reason":"syntax error at position 4 near 'the'",
-  "Table": "",
-  "Original":"the quick brown fox",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "syntax error at position 4 near 'the'",
+  "Original": "the quick brown fox"
 }
 
 # unions not supported yet
 "select * from user union select * from user"
 {
-  "ID":"NoPlan",
-  "Reason":"cannot build a plan for this construct",
-  "Table": "",
-  "Original":"select * from user union select * from user",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "cannot build a plan for this construct",
+  "Original": "select * from user union select * from user"
 }
 
 # set statements not supported yet
 "set a=1"
 {
-  "ID":"NoPlan",
-  "Reason":"cannot build a plan for this construct",
-  "Table": "",
-  "Original":"set a=1",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "cannot build a plan for this construct",
+  "Original": "set a=1"
 }
 
 # ddl not supported yet
 "create table a()"
 {
-  "ID":"NoPlan",
-  "Reason":"cannot build a plan for this construct",
-  "Table": "",
-  "Original":"create table a()",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "cannot build a plan for this construct",
+  "Original": "create table a()"
 }
 
 # admin statements not supported yet
 "explain select * from user"
 {
-  "ID":"NoPlan",
-  "Reason":"cannot build a plan for this construct",
-  "Table": "",
-  "Original":"explain select * from user",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "cannot build a plan for this construct",
+  "Original": "explain select * from user"
 }
 
 # select with complex table expression
 "select * from (select 2 from dual)"
 {
-  "ID":"NoPlan",
-  "Reason":"complex table expression",
-  "Table": "",
-  "Original":"select * from (select 2 from dual)",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "complex table expression",
+  "Original": "select * from (select 2 from dual)"
 }
 
 # select on non-existent table
 "select * from nouser where id = 1"
 {
-  "ID":"NoPlan",
-  "Reason":"table nouser not found",
-  "Table": "",
-  "Original":"select * from nouser where id = 1",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "table nouser not found",
+  "Original": "select * from nouser where id = 1"
 }
 
 # select with join
 "select * from music, user where id = 1"
 {
-  "ID":"NoPlan",
-  "Reason":"complex table expression",
-  "Table": "",
-  "Original":"select * from music, user where id = 1",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "complex table expression",
+  "Original": "select * from music, user where id = 1"
 }
 
 # select with parenthesized table expr
 "select * from (user) where id = 1"
 {
-  "ID":"NoPlan",
-  "Reason":"complex table expression",
-  "Table": "",
-  "Original":"select * from (user) where id = 1",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Reason": "complex table expression",
+  "Original": "select * from (user) where id = 1"
 }
 
 # select unsharded table
 "select * from main1"
 {
-  "ID":"SelectUnsharded",
-  "Reason":"",
+  "ID": "SelectUnsharded",
   "Table": "main1",
-  "Original":"select * from main1",
-  "Rewritten":"",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Original": "select * from main1"
 }
 
 # select with no where clause
 "select * from user"
 {
   "ID": "SelectScatter",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user",
-  "Rewritten": "select * from user",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user",
+  "Rewritten": "select * from user"
 }
 
 # select with subquery
 "select * from user where id in (select * from music)"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where id in (select * from music)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where id in (select * from music)"
 }
 
 # select with subquery in NOT expression
 "select * from user where not (id in (select * from music))"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where not (id in (select * from music))",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where not (id in (select * from music))"
 }
 
 # select with subquery in range expression
 "select * from user where id between (select 1 from dual) and 2"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where id between (select 1 from dual) and 2",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where id between (select 1 from dual) and 2"
 }
 
 # select with subquery in null check
 "select * from user where (select 1 from dual) is null"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where (select 1 from dual) is null",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where (select 1 from dual) is null"
 }
 
 # select with subquery in exists
 "select * from user where exists (select 1 from dual)"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where exists (select 1 from dual)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where exists (select 1 from dual)"
 }
 
 # select with subquery in binary expr
 "select * from user where 1+1 = (select 1 from dual)"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where 1+1 = (select 1 from dual)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where 1+1 = (select 1 from dual)"
 }
 
 # select with subquery in unary expr
 "select * from user where id = -(select 1 from dual)"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where id = -(select 1 from dual)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where id = -(select 1 from dual)"
 }
 
 # select with subquery in func expr
 "select * from user where id = func(1, (select 1 from dual))"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where id = func(1, (select 1 from dual))",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where id = func(1, (select 1 from dual))"
 }
 
 # select with no subquery in func expr
 "select * from user where id = func(1)"
 {
-  "ID":"SelectScatter",
-  "Reason":"",
+  "ID": "SelectScatter",
   "Table": "user",
-  "Original":"select * from user where id = func(1)",
-  "Rewritten":"select * from user where id = func(1)",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Original": "select * from user where id = func(1)",
+  "Rewritten": "select * from user where id = func(1)"
 }
 
 # select with subquery in case Expr
 "select * from user where id = case (select 1 from dual) when a=b then c end"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where id = case (select 1 from dual) when a=b then c end",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where id = case (select 1 from dual) when a=b then c end"
 }
 
 # select with subquery in case Else
 "select * from user where id = case aa when a = b then c else (select 1 from dual) end"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where id = case aa when a = b then c else (select 1 from dual) end",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where id = case aa when a = b then c else (select 1 from dual) end"
 }
 
 # select with subquery in case When cond
 "select * from user where id = case aa when (select 1 from dual) = b then c else d end"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where id = case aa when (select 1 from dual) = b then c else d end",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where id = case aa when (select 1 from dual) = b then c else d end"
 }
 
 # select with subquery in case When expr
 "select * from user where id = case aa when a = b then (select 1 from dual) else d end"
 {
-  "ID": "NoPlan",
   "Reason": "has subquery",
   "Table": "user",
-  "Original":"select * from user where id = case aa when a = b then (select 1 from dual) else d end",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where id = case aa when a = b then (select 1 from dual) else d end"
 }
 
 # select with no subquery in case
 "select * from user where id = case aa when a = b then c end"
 {
-  "ID":"SelectScatter",
-  "Reason":"",
+  "ID": "SelectScatter",
   "Table": "user",
-  "Original":"select * from user where id = case aa when a = b then c end",
-  "Rewritten": "select * from user where id = case aa when a = b then c end",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Original": "select * from user where id = case aa when a = b then c end",
+  "Rewritten": "select * from user where id = case aa when a = b then c end"
 }
 
 # select by primary keyspace id, inverted
 "select * from user where 1 = id"
 {
-  "ID":"SelectScatter",
-  "Reason":"",
+  "ID": "SelectScatter",
   "Table": "user",
-  "Original":"select * from user where 1 = id",
-  "Rewritten":"select * from user where 1 = id",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Original": "select * from user where 1 = id",
+  "Rewritten": "select * from user where 1 = id"
 }
 
 # select by primary keyspace id
 "select * from user where id = 1"
 {
   "ID": "SelectEqual",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where id = 1",
+  "Original": "select * from user where id = 1",
   "Rewritten": "select * from user where id = 1",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
@@ -380,11 +217,9 @@
 "select * from user where id = 9223372036854775808"
 {
   "ID": "SelectEqual",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where id = 9223372036854775808",
+  "Original": "select * from user where id = 9223372036854775808",
   "Rewritten": "select * from user where id = 9223372036854775808",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 9223372036854775808
@@ -394,11 +229,9 @@
 "select * from user where name = 'foo'"
 {
   "ID": "SelectEqual",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where name = 'foo'",
+  "Original": "select * from user where name = 'foo'",
   "Rewritten": "select * from user where name = 'foo'",
-  "Subquery": "",
   "Vindex": "name_user_map",
   "Col": "name",
   "Values": "Zm9v"
@@ -407,26 +240,19 @@
 # select by primary keyspace id, invalid value
 "select * from user where id = 1.1"
 {
-  "ID":"SelectScatter",
-  "Reason":"",
+  "ID": "SelectScatter",
   "Table": "user",
-  "Original":"select * from user where id = 1.1",
-  "Rewritten":"select * from user where id = 1.1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Original": "select * from user where id = 1.1",
+  "Rewritten": "select * from user where id = 1.1"
 }
 
 # select with primary keyspace id through bind var
 "select * from user where id = :id"
 {
   "ID": "SelectEqual",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where id = :id",
+  "Original": "select * from user where id = :id",
   "Rewritten": "select * from user where id = :id",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": ":id"
@@ -436,70 +262,48 @@
 "select * from user where id in (1, 2)"
 {
   "ID": "SelectIN",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where id in (1, 2)",
+  "Original": "select * from user where id in (1, 2)",
   "Rewritten": "select * from user where id in ::_vals",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
-  "Values": [
-    1,
-    2
-  ]
+  "Values": [1, 2]
 }
 
 # select with primary id through IN clause, complex expression
 "select * from user where id in (1+1, 2)"
 {
-  "ID":"SelectScatter",
-  "Reason":"",
+  "ID": "SelectScatter",
   "Table": "user",
-  "Original":"select * from user where id in (1+1, 2)",
-  "Rewritten":"select * from user where id in (1 + 1, 2)",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Original": "select * from user where id in (1+1, 2)",
+  "Rewritten": "select * from user where id in (1 + 1, 2)"
 }
 
 # select with primary id through IN clause, float expression
 "select * from user where id in (1.1, 2)"
 {
-  "ID":"SelectScatter",
-  "Reason":"",
+  "ID": "SelectScatter",
   "Table": "user",
-  "Original":"select * from user where id in (1.1, 2)",
-  "Rewritten":"select * from user where id in (1.1, 2)",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values":null
+  "Original": "select * from user where id in (1.1, 2)",
+  "Rewritten": "select * from user where id in (1.1, 2)"
 }
 
 # select with no vindex match
 "select * from user where user_id = 1"
 {
   "ID": "SelectScatter",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where user_id = 1",
-  "Rewritten": "select * from user where user_id = 1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where user_id = 1",
+  "Rewritten": "select * from user where user_id = 1"
 }
 
 # select with primary id with different column name
 "select * from user_extra where user_id = 1"
 {
   "ID": "SelectEqual",
-  "Reason": "",
   "Table": "user_extra",
-  "Original":"select * from user_extra where user_id = 1",
+  "Original": "select * from user_extra where user_id = 1",
   "Rewritten": "select * from user_extra where user_id = 1",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "user_id",
   "Values": 1
@@ -509,11 +313,9 @@
 "select * from music where user_id = 1"
 {
   "ID": "SelectEqual",
-  "Reason": "",
   "Table": "music",
-  "Original":"select * from music where user_id = 1",
+  "Original": "select * from music where user_id = 1",
   "Rewritten": "select * from music where user_id = 1",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "user_id",
   "Values": 1
@@ -523,11 +325,9 @@
 "select * from music where id = 1"
 {
   "ID": "SelectEqual",
-  "Reason": "",
   "Table": "music",
-  "Original":"select * from music where id = 1",
+  "Original": "select * from music where id = 1",
   "Rewritten": "select * from music where id = 1",
-  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "id",
   "Values": 1
@@ -537,45 +337,33 @@
 "select * from music where id in (1, 2)"
 {
   "ID": "SelectIN",
-  "Reason": "",
   "Table": "music",
-  "Original":"select * from music where id in (1, 2)",
+  "Original": "select * from music where id in (1, 2)",
   "Rewritten": "select * from music where id in ::_vals",
-  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "id",
-  "Values": [
-    1,
-    2
-  ]
+  "Values": [1, 2]
 }
 
 # select by lookup with IN clause and bind vars
 "select * from music where id in (:a, 2)"
 {
   "ID": "SelectIN",
-  "Reason": "",
   "Table": "music",
-  "Original":"select * from music where id in (:a, 2)",
+  "Original": "select * from music where id in (:a, 2)",
   "Rewritten": "select * from music where id in ::_vals",
-  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "id",
-  "Values": [
-    ":a",
-    2
-  ]
+  "Values": [":a", 2]
 }
 
 # select by lookup with list bind var
 "select * from music where id in ::list"
 {
   "ID": "SelectIN",
-  "Reason": "",
   "Table": "music",
-  "Original":"select * from music where id in ::list",
+  "Original": "select * from music where id in ::list",
   "Rewritten": "select * from music where id in ::_vals",
-  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "id",
   "Values": "::list"
@@ -585,11 +373,9 @@
 "select * from music_extra where music_id = 1"
 {
   "ID": "SelectEqual",
-  "Reason": "",
   "Table": "music_extra",
-  "Original":"select * from music_extra where music_id = 1",
+  "Original": "select * from music_extra where music_id = 1",
   "Rewritten": "select * from music_extra where music_id = 1",
-  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "music_id",
   "Values": 1
@@ -599,25 +385,18 @@
 "select * from user where id = 1 and var = 2 or var = 3"
 {
   "ID": "SelectScatter",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where id = 1 and var = 2 or var = 3",
-  "Rewritten": "select * from user where id = 1 and var = 2 or var = 3",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where id = 1 and var = 2 or var = 3",
+  "Rewritten": "select * from user where id = 1 and var = 2 or var = 3"
 }
 
 # select with acceptable parenthesized OR clause at end
 "select * from user where id = 1 and (var = 2 or var = 3)"
 {
   "ID": "SelectEqual",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where id = 1 and (var = 2 or var = 3)",
+  "Original": "select * from user where id = 1 and (var = 2 or var = 3)",
   "Rewritten": "select * from user where id = 1 and (var = 2 or var = 3)",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
@@ -627,25 +406,18 @@
 "select * from user where var = 2 or var = 3 and id = 1"
 {
   "ID": "SelectScatter",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where var = 2 or var = 3 and id = 1",
-  "Rewritten": "select * from user where var = 2 or var = 3 and id = 1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where var = 2 or var = 3 and id = 1",
+  "Rewritten": "select * from user where var = 2 or var = 3 and id = 1"
 }
 
 # select with acceptable parenthesized OR clause at beginning
 "select * from user where (var = 2 or var = 3) and id = 1"
 {
   "ID": "SelectEqual",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where (var = 2 or var = 3) and id = 1",
+  "Original": "select * from user where (var = 2 or var = 3) and id = 1",
   "Rewritten": "select * from user where (var = 2 or var = 3) and id = 1",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
@@ -655,13 +427,9 @@
 "select * from user where keyrange(1, 2)"
 {
   "ID": "SelectKeyrange",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where keyrange(1, 2)",
+  "Original": "select * from user where keyrange(1, 2)",
   "Rewritten": "select * from user",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
   "Values": [1, 2]
 }
 
@@ -669,13 +437,9 @@
 "select * from user where (keyrange(1, 2))"
 {
   "ID": "SelectKeyrange",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where (keyrange(1, 2))",
+  "Original": "select * from user where (keyrange(1, 2))",
   "Rewritten": "select * from user",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
   "Values": [1, 2]
 }
 
@@ -683,13 +447,9 @@
 "select * from user where keyrange(1, 2) and a = 1"
 {
   "ID": "SelectKeyrange",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where keyrange(1, 2) and a = 1",
+  "Original": "select * from user where keyrange(1, 2) and a = 1",
   "Rewritten": "select * from user where a = 1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
   "Values": [1, 2]
 }
 
@@ -697,13 +457,9 @@
 "select * from user where a = 1 and keyrange(1, 2)"
 {
   "ID": "SelectKeyrange",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where a = 1 and keyrange(1, 2)",
+  "Original": "select * from user where a = 1 and keyrange(1, 2)",
   "Rewritten": "select * from user where a = 1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
   "Values": [1, 2]
 }
 
@@ -711,13 +467,9 @@
 "select * from user where (keyrange(1, 2)) and a = 1"
 {
   "ID": "SelectKeyrange",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where (keyrange(1, 2)) and a = 1",
+  "Original": "select * from user where (keyrange(1, 2)) and a = 1",
   "Rewritten": "select * from user where a = 1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
   "Values": [1, 2]
 }
 
@@ -725,13 +477,9 @@
 "select * from user where a = 1 and (keyrange(1, 2))"
 {
   "ID": "SelectKeyrange",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where a = 1 and (keyrange(1, 2))",
+  "Original": "select * from user where a = 1 and (keyrange(1, 2))",
   "Rewritten": "select * from user where a = 1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
   "Values": [1, 2]
 }
 
@@ -739,13 +487,9 @@
 "select * from user where ((keyrange(1, 2))) and a = 1"
 {
   "ID": "SelectKeyrange",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where ((keyrange(1, 2))) and a = 1",
+  "Original": "select * from user where ((keyrange(1, 2))) and a = 1",
   "Rewritten": "select * from user where a = 1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
   "Values": [1, 2]
 }
 
@@ -753,13 +497,9 @@
 "select * from user where a = 1 and ((keyrange(1, 2)))"
 {
   "ID": "SelectKeyrange",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where a = 1 and ((keyrange(1, 2)))",
+  "Original": "select * from user where a = 1 and ((keyrange(1, 2)))",
   "Rewritten": "select * from user where a = 1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
   "Values": [1, 2]
 }
 
@@ -767,13 +507,9 @@
 "select * from user where (b = 2 and (keyrange(1, 2))) and a = 1"
 {
   "ID": "SelectKeyrange",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where (b = 2 and (keyrange(1, 2))) and a = 1",
+  "Original": "select * from user where (b = 2 and (keyrange(1, 2))) and a = 1",
   "Rewritten": "select * from user where (b = 2) and a = 1",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
   "Values": [1, 2]
 }
 
@@ -781,354 +517,215 @@
 "select * from user where a = 1 and (b = 2 and (keyrange(1, 2)))"
 {
   "ID": "SelectKeyrange",
-  "Reason": "",
   "Table": "user",
-  "Original":"select * from user where a = 1 and (b = 2 and (keyrange(1, 2)))",
+  "Original": "select * from user where a = 1 and (b = 2 and (keyrange(1, 2)))",
   "Rewritten": "select * from user where a = 1 and (b = 2)",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
   "Values": [1, 2]
 }
 
 # select with KEYRANGE syntax error
 "select * from user where keyrange(1+1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "syntax error at position 37",
-  "Table": "",
-  "Original":"select * from user where keyrange(1+1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where keyrange(1+1, 2)"
 }
 
 # select KEYRANGE innvalid lhs
 "select * from user where keyrange(1.1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "invalid keyrange: strconv.ParseUint: parsing \"1.1\": invalid syntax",
   "Table": "user",
-  "Original":"select * from user where keyrange(1.1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where keyrange(1.1, 2)"
 }
 
 # select KEYRANGE innvalid lhs of AND
 "select * from user where keyrange(1.1, 2) and a = 1"
 {
-  "ID": "NoPlan",
   "Reason": "invalid keyrange: strconv.ParseUint: parsing \"1.1\": invalid syntax",
   "Table": "user",
-  "Original":"select * from user where keyrange(1.1, 2) and a = 1",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where keyrange(1.1, 2) and a = 1"
 }
 
 # select KEYRANGE innvalid in parenthesized
 "select * from user where (keyrange(1.1, 2))"
 {
-  "ID": "NoPlan",
   "Reason": "invalid keyrange: strconv.ParseUint: parsing \"1.1\": invalid syntax",
   "Table": "user",
-  "Original":"select * from user where (keyrange(1.1, 2))",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where (keyrange(1.1, 2))"
 }
 
 # select KEYRANGE innvalid rhs of AND
 "select * from user where a = 1 and keyrange(1.1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "invalid keyrange: strconv.ParseUint: parsing \"1.1\": invalid syntax",
   "Table": "user",
-  "Original":"select * from user where a = 1 and keyrange(1.1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where a = 1 and keyrange(1.1, 2)"
 }
 
 # select KEYRANGE ininvalid rhs
 "select * from user where keyrange(1, 2.2)"
 {
-  "ID": "NoPlan",
   "Reason": "invalid keyrange: strconv.ParseUint: parsing \"2.2\": invalid syntax",
   "Table": "user",
-  "Original":"select * from user where keyrange(1, 2.2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select * from user where keyrange(1, 2.2)"
 }
 
 # aggregates in select, simple
 "select count(*) from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select count(*) from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select count(*) from user where id in (1, 2)"
 }
 
 # aggregates in select, non-unique vindex
 "select count(*) from user where name = 'foo'"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select count(*) from user where name = 'foo'",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select count(*) from user where name = 'foo'"
 }
 
 # aggregates in select, AND
 "select a = 1 and count(*) = 1 from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select a = 1 and count(*) = 1 from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select a = 1 and count(*) = 1 from user where id in (1, 2)"
 }
 
 # aggregates in select, OR
 "select a = 1 or count(*) = 1 from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select a = 1 or count(*) = 1 from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select a = 1 or count(*) = 1 from user where id in (1, 2)"
 }
 
 # aggregates in select, parenthesized bool
 "select (not count(*) = 1) from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select (not count(*) = 1) from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select (not count(*) = 1) from user where id in (1, 2)"
 }
 
 # aggregates in select, BETWEEN
 "select count(*) between 1 and 2 from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select count(*) between 1 and 2 from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select count(*) between 1 and 2 from user where id in (1, 2)"
 }
 
 # aggregates in select, IS NULL
 "select count(*) is null from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select count(*) is null from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select count(*) is null from user where id in (1, 2)"
 }
 
 # subquery in select list, EXISTS (cannot aggregate)
 "select exists (select 1 from dual) from user where id in (1, 2)"
 {
-  "ID":"SelectIN",
-  "Reason":"",
+  "ID": "SelectIN",
   "Table": "user",
-  "Original":"select exists (select 1 from dual) from user where id in (1, 2)",
-  "Rewritten":"select exists (select 1 from dual) from user where id in ::_vals",
-  "Subquery": "",
+  "Original": "select exists (select 1 from dual) from user where id in (1, 2)",
+  "Rewritten": "select exists (select 1 from dual) from user where id in ::_vals",
   "Vindex": "user_index",
   "Col": "id",
-  "Values":[1,2]
+  "Values": [1,2]
 }
 
 # subquery in select in select list
 "select (select 1 from dual) from user where id in (1, 2)"
 {
-  "ID":"SelectIN",
-  "Reason":"",
+  "ID": "SelectIN",
   "Table": "user",
-  "Original":"select (select 1 from dual) from user where id in (1, 2)",
+  "Original": "select (select 1 from dual) from user where id in (1, 2)",
   "Rewritten": "select (select 1 from dual) from user where id in ::_vals",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
-  "Values":[1,2]
+  "Values": [1,2]
 }
 
 # aggregates in select, binary expression
 "select count(*)+1 from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select count(*)+1 from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select count(*)+1 from user where id in (1, 2)"
 }
 
 # aggregates in select, binary expression
 "select -count(*) from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select -count(*) from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select -count(*) from user where id in (1, 2)"
 }
 
 # aggregates in select, aggregate in non-aggregate function
 "select fun(1, count(*)) from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select fun(1, count(*)) from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select fun(1, count(*)) from user where id in (1, 2)"
 }
 
 # aggregates in select, non-aggregate function
 "select fun(*) from user where id in (1, 2)"
 {
   "ID": "SelectIN",
-  "Reason": "",
   "Table": "user",
-  "Original":"select fun(*) from user where id in (1, 2)",
+  "Original": "select fun(*) from user where id in (1, 2)",
   "Rewritten": "select fun(*) from user where id in ::_vals",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
-  "Values": [
-    1,
-    2
-  ]
+  "Values": [1, 2]
 }
 
 # aggregates in select, case Expr
 "select case count(*) when a = b then d end from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select case count(*) when a = b then d end from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select case count(*) when a = b then d end from user where id in (1, 2)"
 }
 
 # aggregates in select, case else
 "select case a when a = b then d else count(*) end from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select case a when a = b then d else count(*) end from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select case a when a = b then d else count(*) end from user where id in (1, 2)"
 }
 
 # aggregates in select, case WHEN cond
 "select case a when count(*) = b then d else e end from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select case a when count(*) = b then d else e end from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select case a when count(*) = b then d else e end from user where id in (1, 2)"
 }
 
 # aggregates in select, case WHEN expr
 "select case a when a = b then count(*) else e end from user where id in (1, 2)"
 {
-  "ID": "NoPlan",
   "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
-  "Original":"select case a when a = b then count(*) else e end from user where id in (1, 2)",
-  "Rewritten": "",
-  "Subquery": "",
-  "Vindex": "",
-  "Col": "",
-  "Values": null
+  "Original": "select case a when a = b then count(*) else e end from user where id in (1, 2)"
 }
 
 # aggregates in select, no aggregates
 "select case a when a = b then d else e end from user where id in (1, 2)"
 {
   "ID": "SelectIN",
-  "Reason": "",
   "Table": "user",
-  "Original":"select case a when a = b then d else e end from user where id in (1, 2)",
+  "Original": "select case a when a = b then d else e end from user where id in (1, 2)",
   "Rewritten": "select case a when a = b then d else e end from user where id in ::_vals",
-  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
-  "Values": [
-    1,
-    2
-  ]
+  "Values": [1, 2]
 }

@@ -6,12 +6,14 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
+// DDLPlan provides a plan for DDLs.
 type DDLPlan struct {
 	Action    string
 	TableName string
 	NewName   string
 }
 
+// DDLParse parses a DDL and produces a DDLPlan.
 func DDLParse(sql string) (plan *DDLPlan) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
@@ -29,7 +31,7 @@ func DDLParse(sql string) (plan *DDLPlan) {
 }
 
 func analyzeDDL(ddl *sqlparser.DDL, getTable TableGetter) *ExecPlan {
-	plan := &ExecPlan{PlanId: PLAN_DDL}
+	plan := &ExecPlan{PlanID: PlanDDL}
 	tableName := string(ddl.Table)
 	// Skip TableName if table is empty (create statements) or not found in schema
 	if tableName != "" {

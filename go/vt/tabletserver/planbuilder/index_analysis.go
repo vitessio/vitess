@@ -9,7 +9,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-type IndexScore struct {
+type indexScore struct {
 	Index       *schema.Index
 	ColumnMatch []bool
 	MatchFailed bool
@@ -18,15 +18,15 @@ type IndexScore struct {
 type scoreValue int64
 
 const (
-	NO_MATCH      = scoreValue(-1)
-	PERFECT_SCORE = scoreValue(0)
+	noMatch      = scoreValue(-1)
+	perfectScore = scoreValue(0)
 )
 
-func NewIndexScore(index *schema.Index) *IndexScore {
-	return &IndexScore{index, make([]bool, len(index.Columns)), false}
+func newIndexScore(index *schema.Index) *indexScore {
+	return &indexScore{index, make([]bool, len(index.Columns)), false}
 }
 
-func (is *IndexScore) FindMatch(columnName string) int {
+func (is *indexScore) FindMatch(columnName string) int {
 	if is.MatchFailed {
 		return -1
 	}
@@ -42,11 +42,11 @@ func (is *IndexScore) FindMatch(columnName string) int {
 	return -1
 }
 
-func (is *IndexScore) GetScore() scoreValue {
+func (is *indexScore) GetScore() scoreValue {
 	if is.MatchFailed {
-		return NO_MATCH
+		return noMatch
 	}
-	score := NO_MATCH
+	score := noMatch
 	for i, indexColumn := range is.ColumnMatch {
 		if indexColumn {
 			score = scoreValue(is.Index.Cardinality[i])
@@ -54,34 +54,34 @@ func (is *IndexScore) GetScore() scoreValue {
 		}
 		return score
 	}
-	return PERFECT_SCORE
+	return perfectScore
 }
 
-func NewIndexScoreList(indexes []*schema.Index) []*IndexScore {
-	scoreList := make([]*IndexScore, len(indexes))
+func newIndexScoreList(indexes []*schema.Index) []*indexScore {
+	scoreList := make([]*indexScore, len(indexes))
 	for i, v := range indexes {
-		scoreList[i] = NewIndexScore(v)
+		scoreList[i] = newIndexScore(v)
 	}
 	return scoreList
 }
 
 func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValues []interface{}, err error) {
-	pkIndexScore := NewIndexScore(pkIndex)
-	pkValues = make([]interface{}, len(pkIndexScore.ColumnMatch))
+	pkindexScore := newIndexScore(pkIndex)
+	pkValues = make([]interface{}, len(pkindexScore.ColumnMatch))
 	for _, condition := range conditions {
 		condition, ok := condition.(*sqlparser.ComparisonExpr)
 		if !ok {
 			return nil, nil
 		}
-		if !sqlparser.StringIn(condition.Operator, sqlparser.AST_EQ, sqlparser.AST_IN) {
+		if !sqlparser.StringIn(condition.Operator, sqlparser.EqualStr, sqlparser.InStr) {
 			return nil, nil
 		}
-		index := pkIndexScore.FindMatch(string(condition.Left.(*sqlparser.ColName).Name))
+		index := pkindexScore.FindMatch(string(condition.Left.(*sqlparser.ColName).Name))
 		if index == -1 {
 			return nil, nil
 		}
 		switch condition.Operator {
-		case sqlparser.AST_EQ, sqlparser.AST_IN:
+		case sqlparser.EqualStr, sqlparser.InStr:
 			var err error
 			pkValues[index], err = sqlparser.AsInterface(condition.Right)
 			if err != nil {
@@ -91,14 +91,14 @@ func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValu
 			panic("unreachable")
 		}
 	}
-	if pkIndexScore.GetScore() == PERFECT_SCORE {
+	if pkindexScore.GetScore() == perfectScore {
 		return pkValues, nil
 	}
 	return nil, nil
 }
 
 func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) *schema.Index {
-	indexScores := NewIndexScoreList(indexes)
+	indexScores := newIndexScoreList(indexes)
 	for _, condition := range conditions {
 		var col string
 		switch condition := condition.(type) {
@@ -113,14 +113,14 @@ func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) *sc
 			index.FindMatch(col)
 		}
 	}
-	highScore := NO_MATCH
+	highScore := noMatch
 	highScorer := -1
 	for i, index := range indexScores {
 		curScore := index.GetScore()
-		if curScore == NO_MATCH {
+		if curScore == noMatch {
 			continue
 		}
-		if curScore == PERFECT_SCORE {
+		if curScore == perfectScore {
 			highScorer = i
 			break
 		}

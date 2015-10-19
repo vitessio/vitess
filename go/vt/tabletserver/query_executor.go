@@ -53,7 +53,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.BindVariables = qre.bindVars
 	qre.logStats.TransactionID = qre.transactionID
-	planName := qre.plan.PlanId.String()
+	planName := qre.plan.PlanID.String()
 	qre.logStats.PlanType = planName
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
@@ -74,7 +74,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 		return nil, err
 	}
 
-	if qre.plan.PlanId == planbuilder.PLAN_DDL {
+	if qre.plan.PlanID == planbuilder.PlanDDL {
 		return qre.execDDL()
 	}
 
@@ -87,41 +87,41 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 		if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CACHE_NONE {
 			invalidator = conn.DirtyKeys(qre.plan.TableName)
 		}
-		switch qre.plan.PlanId {
-		case planbuilder.PLAN_PASS_DML:
+		switch qre.plan.PlanID {
+		case planbuilder.PlanPassDML:
 			if qre.qe.strictMode.Get() != 0 {
 				return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "DML too complex")
 			}
 			reply, err = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
-		case planbuilder.PLAN_INSERT_PK:
+		case planbuilder.PlanInsertPK:
 			reply, err = qre.execInsertPK(conn)
-		case planbuilder.PLAN_INSERT_SUBQUERY:
+		case planbuilder.PlanInsertSubquery:
 			reply, err = qre.execInsertSubquery(conn)
-		case planbuilder.PLAN_DML_PK:
+		case planbuilder.PlanDMLPK:
 			reply, err = qre.execDMLPK(conn, invalidator)
-		case planbuilder.PLAN_DML_SUBQUERY:
+		case planbuilder.PlanDMLSubquery:
 			reply, err = qre.execDMLSubquery(conn, invalidator)
-		case planbuilder.PLAN_OTHER:
+		case planbuilder.PlanOther:
 			reply, err = qre.execSQL(conn, qre.query, true)
-		case planbuilder.PLAN_UPSERT_PK:
+		case planbuilder.PlanUpsertPK:
 			reply, err = qre.execUpsertPK(conn, invalidator)
 		default: // select or set in a transaction, just count as select
 			reply, err = qre.execDirect(conn)
 		}
 	} else {
-		switch qre.plan.PlanId {
-		case planbuilder.PLAN_PASS_SELECT:
-			if qre.plan.Reason == planbuilder.REASON_LOCK {
+		switch qre.plan.PlanID {
+		case planbuilder.PlanPassSelect:
+			if qre.plan.Reason == planbuilder.ReasonLock {
 				return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
 			}
 			reply, err = qre.execSelect()
-		case planbuilder.PLAN_PK_IN:
+		case planbuilder.PlanPKIn:
 			reply, err = qre.execPKIN()
-		case planbuilder.PLAN_SELECT_SUBQUERY:
+		case planbuilder.PlanSelectSubquery:
 			reply, err = qre.execSubquery()
-		case planbuilder.PLAN_SET:
+		case planbuilder.PlanSet:
 			reply, err = qre.execSet()
-		case planbuilder.PLAN_OTHER:
+		case planbuilder.PlanOther:
 			conn, connErr := qre.getConn(qre.qe.connPool)
 			if connErr != nil {
 				return nil, connErr
@@ -141,10 +141,10 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 // Stream performs a streaming query execution.
 func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) error {
 	qre.logStats.OriginalSQL = qre.query
-	qre.logStats.PlanType = qre.plan.PlanId.String()
+	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
-		qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), start)
+		qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanID.String(), start)
 		addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
 	}(time.Now())
 
@@ -188,21 +188,21 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err er
 	if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CACHE_NONE {
 		invalidator = conn.DirtyKeys(qre.plan.TableName)
 	}
-	switch qre.plan.PlanId {
-	case planbuilder.PLAN_PASS_DML:
+	switch qre.plan.PlanID {
+	case planbuilder.PlanPassDML:
 		if qre.qe.strictMode.Get() != 0 {
 			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "DML too complex")
 		}
 		reply, err = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
-	case planbuilder.PLAN_INSERT_PK:
+	case planbuilder.PlanInsertPK:
 		reply, err = qre.execInsertPK(conn)
-	case planbuilder.PLAN_INSERT_SUBQUERY:
+	case planbuilder.PlanInsertSubquery:
 		reply, err = qre.execInsertSubquery(conn)
-	case planbuilder.PLAN_DML_PK:
+	case planbuilder.PlanDMLPK:
 		reply, err = qre.execDMLPK(conn, invalidator)
-	case planbuilder.PLAN_DML_SUBQUERY:
+	case planbuilder.PlanDMLSubquery:
 		reply, err = qre.execDMLSubquery(conn, invalidator)
-	case planbuilder.PLAN_UPSERT_PK:
+	case planbuilder.PlanUpsertPK:
 		reply, err = qre.execUpsertPK(conn, invalidator)
 	default:
 		return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
@@ -227,9 +227,9 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 	action, desc := qre.plan.Rules.getAction(remoteAddr, username, qre.bindVars)
 	switch action {
-	case QR_FAIL:
+	case QRFail:
 		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Query disallowed due to rule: %s", desc)
-	case QR_FAIL_RETRY:
+	case QRFailRetry:
 		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %s", desc)
 	}
 
@@ -258,7 +258,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	tableACLStatsKey := []string{
 		qre.plan.TableName,
 		qre.plan.Authorized.GroupName,
-		qre.plan.PlanId.String(),
+		qre.plan.PlanID.String(),
 		callerID.Username,
 	}
 	// perform table ACL check if it is enabled.
@@ -269,7 +269,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 		}
 		// raise error if in strictTableAcl mode, else just log an error.
 		if qre.qe.strictTableAcl {
-			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanId, qre.plan.TableName)
+			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName)
 			qre.qe.tableaclDenied.Add(tableACLStatsKey, 1)
 			qre.qe.accessCheckerLogger.Errorf("%s", errStr)
 			return NewTabletError(ErrFail, vtrpc.ErrorCode_PERMISSION_DENIED, "%s", errStr)

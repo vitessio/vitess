@@ -438,9 +438,9 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
-	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
-	if plan.PlanId.IsSelect() {
+	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName)
+	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanID.MinRole())
+	if plan.PlanID.IsSelect() {
 		if plan.FieldQuery == nil {
 			log.Warningf("Cannot cache field info: %s", sql)
 		} else {
@@ -455,7 +455,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 			}
 			plan.Fields = r.Fields
 		}
-	} else if plan.PlanId == planbuilder.PLAN_DDL || plan.PlanId == planbuilder.PLAN_SET {
+	} else if plan.PlanID == planbuilder.PlanDDL || plan.PlanID == planbuilder.PlanSet {
 		return plan
 	}
 	si.queries.Set(sql, plan)
@@ -480,8 +480,8 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
-	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
+	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName)
+	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanID.MinRole())
 	return plan
 }
 
@@ -660,7 +660,7 @@ func (si *SchemaInfo) getQueryStats(f queryStatsFunc) map[string]int64 {
 			if table == "" {
 				table = "Join"
 			}
-			planType := plan.PlanId.String()
+			planType := plan.PlanID.String()
 			data := f(plan)
 			qstats[table+"."+planType] += data
 		}
@@ -722,7 +722,7 @@ func (si *SchemaInfo) handleHTTPQueryStats(response http.ResponseWriter, request
 			var pqstats perQueryStats
 			pqstats.Query = unicoded(v)
 			pqstats.Table = plan.TableName
-			pqstats.Plan = plan.PlanId
+			pqstats.Plan = plan.PlanID
 			pqstats.QueryCount, pqstats.Time, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
 			qstats = append(qstats, pqstats)
 		}

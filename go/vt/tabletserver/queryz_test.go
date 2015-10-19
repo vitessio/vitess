@@ -24,8 +24,8 @@ func TestQueryzHandler(t *testing.T) {
 	plan1 := &ExecPlan{
 		ExecPlan: &planbuilder.ExecPlan{
 			TableName: "test_table",
-			PlanId:    planbuilder.PLAN_PASS_SELECT,
-			Reason:    planbuilder.REASON_SELECT,
+			PlanID:    planbuilder.PlanPassSelect,
+			Reason:    planbuilder.ReasonSelect,
 		},
 	}
 	plan1.AddStats(10, 1*time.Second, 2, 0)
@@ -34,8 +34,8 @@ func TestQueryzHandler(t *testing.T) {
 	plan2 := &ExecPlan{
 		ExecPlan: &planbuilder.ExecPlan{
 			TableName: "test_table",
-			PlanId:    planbuilder.PLAN_DDL,
-			Reason:    planbuilder.REASON_DEFAULT,
+			PlanID:    planbuilder.PlanDDL,
+			Reason:    planbuilder.ReasonDefault,
 		},
 	}
 	plan2.AddStats(1, 1*time.Millisecond, 1, 0)
@@ -44,8 +44,8 @@ func TestQueryzHandler(t *testing.T) {
 	plan3 := &ExecPlan{
 		ExecPlan: &planbuilder.ExecPlan{
 			TableName: "",
-			PlanId:    planbuilder.PLAN_OTHER,
-			Reason:    planbuilder.REASON_DEFAULT,
+			PlanID:    planbuilder.PlanOther,
+			Reason:    planbuilder.ReasonDefault,
 		},
 	}
 	plan3.AddStats(1, 50*time.Millisecond, 1, 0)

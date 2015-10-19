@@ -420,7 +420,7 @@ func TestShardConnTimeout(t *testing.T) {
 }
 
 func TestShardConnReconnect(t *testing.T) {
-	retryDelay := 10 * time.Millisecond
+	retryDelay := 50 * time.Millisecond
 	retryCount := 5
 	s := createSandbox("TestShardConnReconnect")
 	// case 1: resolved 0 endpoint, return error
