@@ -10,7 +10,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -84,7 +83,6 @@ func main() {
 	// creates and registers the query service
 	qsc := tabletserver.NewServer()
 	qsc.Register()
-	binlog.RegisterUpdateStreamService(mycnf)
 
 	if *tableAclConfig != "" {
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
@@ -121,7 +119,6 @@ func main() {
 	})
 	servenv.OnTerm(func() {
 		qsc.StopService()
-		binlog.DisableUpdateStreamService()
 		agent.Stop()
 	})
 	servenv.OnClose(func() {

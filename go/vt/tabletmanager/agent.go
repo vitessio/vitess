@@ -38,6 +38,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
+	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/key"
@@ -65,6 +66,7 @@ var (
 type ActionAgent struct {
 	// The following fields are set during creation
 	QueryServiceControl tabletserver.Controller
+	UpdateStream        *binlog.UpdateStream
 	HealthReporter      health.Reporter
 	TopoServer          topo.Server
 	TabletAlias         *pb.TabletAlias
@@ -156,6 +158,7 @@ func NewActionAgent(
 
 	agent = &ActionAgent{
 		QueryServiceControl: queryServiceControl,
+		UpdateStream:        binlog.NewUpdateStream(mycnf),
 		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          topoServer,
@@ -201,6 +204,9 @@ func NewActionAgent(
 
 	// register the RPC services from the agent
 	agent.registerQueryService()
+
+	// register the RPC services from UpdateStream
+	agent.UpdateStream.RegisterService()
 
 	// two cases then:
 	// - restoreFromBackup is set: we restore, then initHealthCheck, all
@@ -537,6 +543,9 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 
 // Stop shutdowns this agent.
 func (agent *ActionAgent) Stop() {
+	if agent.UpdateStream != nil {
+		agent.UpdateStream.Disable()
+	}
 	if agent.BinlogPlayerMap != nil {
 		agent.BinlogPlayerMap.StopAllPlayersAndReset()
 	}

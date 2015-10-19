@@ -16,7 +16,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
-	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -109,7 +108,7 @@ func (agent *ActionAgent) broadcastHealth() {
 }
 
 // changeCallback is run after every action that might
-// have changed something in the tablet record.
+// have changed something in the tablet record or in the topology.
 func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *pbt.Tablet) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("ActionAgent.changeCallback")
@@ -132,7 +131,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			if newTablet.Type == pbt.TabletType_MASTER {
 				if len(shardInfo.SourceShards) > 0 {
 					allowQuery = false
-					disallowQueryReason = "old master is still in shard info"
+					disallowQueryReason = "master tablet with filtered replication on"
 				}
 			}
 			if tc := shardInfo.GetTabletControl(newTablet.Type); tc != nil {
@@ -163,10 +162,12 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	agent.setTabletControl(tabletControl)
 
 	// update stream needs to be started or stopped too
-	if topo.IsRunningUpdateStream(newTablet.Type) {
-		binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.MysqlDaemon)
-	} else {
-		binlog.DisableUpdateStreamService()
+	if agent.UpdateStream != nil {
+		if topo.IsRunningUpdateStream(newTablet.Type) {
+			agent.UpdateStream.Enable(agent.DBConfigs.App.DbName, agent.MysqlDaemon)
+		} else {
+			agent.UpdateStream.Disable()
+		}
 	}
 
 	statsType.Set(strings.ToLower(newTablet.Type.String()))

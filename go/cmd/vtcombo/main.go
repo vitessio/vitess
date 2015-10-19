@@ -14,7 +14,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -76,7 +75,6 @@ func main() {
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 
 	// tablets configuration and init
-	binlog.RegisterUpdateStreamService(mycnf)
 	initTabletMap(ts, *topology, mysqld, dbcfgs, mycnf)
 
 	// vschema
