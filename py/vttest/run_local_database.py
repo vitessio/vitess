@@ -20,6 +20,7 @@ and then just wait for it to exit.
 import json
 import logging
 import optparse
+import os
 import re
 import sys
 
@@ -47,7 +48,15 @@ def main(port, topology, schema_dir, vschema, mysql_only):
   with local_database.LocalDatabase(shards, schema_dir, vschema, mysql_only) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
-    raw_input()
+    try:
+      raw_input()
+    except EOFError:
+      sys.stderr.write(
+          'WARNING: %s: No empty line was received on stdin.'
+          ' Instead, stdin was closed and the cluster will be shut down now.'
+          ' Make sure to send the empty line instead to proactively shutdown'
+          ' the local cluster. For example, did you forget the shutdown in'
+          ' your test\'s tearDown()?\n' % os.path.basename(__file__))
 
 if __name__ == '__main__':
 
