@@ -1,5 +1,6 @@
 """Create a local Vitess database for testing."""
 
+import glob
 import logging
 import os
 
