@@ -127,6 +127,18 @@ func IsKeyspaceIdTypeInList(typ KeyspaceIdType, types []KeyspaceIdType) bool {
 	return false
 }
 
+// ParseKeyspaceIDType parses the keyspace id type into the enum
+func ParseKeyspaceIDType(param string) (pb.KeyspaceIdType, error) {
+	if param == "" {
+		return pb.KeyspaceIdType_UNSET, nil
+	}
+	value, ok := pb.KeyspaceIdType_value[strings.ToUpper(param)]
+	if !ok {
+		return pb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
+	}
+	return pb.KeyspaceIdType(value), nil
+}
+
 //
 // KeyRange definitions
 //
@@ -168,6 +180,14 @@ func ParseKeyRangeParts(start, end string) (*pb.KeyRange, error) {
 		return nil, err
 	}
 	return &pb.KeyRange{Start: s, End: e}, nil
+}
+
+// KeyRangeString prints a pb.KeyRange
+func KeyRangeString(k *pb.KeyRange) string {
+	if k == nil {
+		return "<nil>"
+	}
+	return hex.EncodeToString(k.Start) + "-" + hex.EncodeToString(k.End)
 }
 
 // KeyRangeIsPartial returns true if the KeyRange does not cover the entire space.

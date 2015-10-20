@@ -38,11 +38,14 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
+	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -52,6 +55,9 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+// Query rules from keyrange
+const keyrangeQueryRules string = "KeyrangeQueryRules"
+
 var (
 	tabletHostname = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
 )
@@ -60,6 +66,7 @@ var (
 type ActionAgent struct {
 	// The following fields are set during creation
 	QueryServiceControl tabletserver.Controller
+	UpdateStream        binlog.UpdateStreamControl
 	HealthReporter      health.Reporter
 	TopoServer          topo.Server
 	TabletAlias         *pb.TabletAlias
@@ -190,7 +197,8 @@ func NewActionAgent(
 		}
 	}
 
-	if err := agent.Start(batchCtx, int32(mysqlPort), port, gRPCPort); err != nil {
+	// Start will get the tablet info, and update our state from it
+	if err := agent.Start(batchCtx, int32(mysqlPort), port, gRPCPort, true); err != nil {
 		return nil, err
 	}
 
@@ -226,6 +234,7 @@ func NewActionAgent(
 func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
+		UpdateStream:        binlog.NewUpdateStreamControlMock(),
 		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
@@ -238,7 +247,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *p
 		lastHealthMapCount:  new(stats.Int),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
-	if err := agent.Start(batchCtx, 0, vtPort, grpcPort); err != nil {
+	if err := agent.Start(batchCtx, 0, vtPort, grpcPort, false); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 	return agent
@@ -250,6 +259,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *p
 func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
+		UpdateStream:        binlog.NewUpdateStreamControlMock(),
 		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
@@ -274,7 +284,7 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 	}
 
 	// and start the agent
-	if err := agent.Start(batchCtx, 0, vtPort, grpcPort); err != nil {
+	if err := agent.Start(batchCtx, 0, vtPort, grpcPort, false); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 	return agent
@@ -282,7 +292,6 @@ func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *
 
 // registerQueryRuleSources registers query rule sources under control of agent
 func (agent *ActionAgent) registerQueryRuleSources() {
-	agent.QueryServiceControl.RegisterQueryRuleSource(keyrangeQueryRules)
 	agent.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
 }
 
@@ -437,7 +446,8 @@ func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
 
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
-func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort int32) error {
+// If initUpdateStream is set, update stream service will also be registered.
+func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort int32, initUpdateStream bool) error {
 	var err error
 	if _, err = agent.readTablet(ctx); err != nil {
 		return err
@@ -500,7 +510,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		return err
 	}
 
-	// initialize tablet server
+	// get and fix the dbname if necessary
 	if !agent.DBConfigs.IsZero() {
 		// Only for real instances
 		// Update our DB config to match the info we have in the tablet
@@ -510,12 +520,28 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		agent.DBConfigs.App.Keyspace = tablet.Keyspace
 		agent.DBConfigs.App.Shard = tablet.Shard
 	}
+
+	// create and register the RPC services from UpdateStream
+	// (it needs the dbname, so it has to be delayed up to here,
+	// but it has to be before updateState below that may use it)
+	if initUpdateStream {
+		us := binlog.NewUpdateStream(agent.MysqlDaemon, agent.DBConfigs.App.DbName)
+		us.RegisterService()
+		agent.UpdateStream = us
+	}
+
+	// initialize tablet server
 	if err := agent.QueryServiceControl.InitDBConfig(pbq.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
 	}, agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon); err != nil {
 		return fmt.Errorf("failed to InitDBConfig: %v", err)
+	}
+
+	// initialize the key range query rule
+	if err := agent.initializeKeyRangeRule(ctx, tablet.Keyspace, tablet.KeyRange); err != nil {
+		return err
 	}
 
 	// and update our state
@@ -528,6 +554,9 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 
 // Stop shutdowns this agent.
 func (agent *ActionAgent) Stop() {
+	if agent.UpdateStream != nil {
+		agent.UpdateStream.Disable()
+	}
 	if agent.BinlogPlayerMap != nil {
 		agent.BinlogPlayerMap.StopAllPlayersAndReset()
 	}
@@ -562,4 +591,57 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	}
 
 	return tablet
+}
+
+// initializeKeyRangeRule will create and set the key range rules
+func (agent *ActionAgent) initializeKeyRangeRule(ctx context.Context, keyspace string, keyRange *pb.KeyRange) error {
+	// check we have a partial key range
+	if !key.KeyRangeIsPartial(keyRange) {
+		log.Infof("Tablet covers the full KeyRange, not adding KeyRange query rule")
+		return nil
+	}
+
+	// read the keyspace to get the sharding column name
+	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return fmt.Errorf("cannot read keyspace %v to get sharding key: %v", keyspace, err)
+	}
+	if keyspaceInfo.ShardingColumnName == "" {
+		return fmt.Errorf("keyspace %v has an empty ShardingColumnName, cannot setup KeyRange rule", keyspace)
+	}
+
+	// create the rules
+	log.Infof("Restricting to keyrange: %v", key.KeyRangeString(keyRange))
+	keyrangeRules := tabletserver.NewQueryRules()
+	dmlPlans := []struct {
+		planID   planbuilder.PlanType
+		onAbsent bool
+	}{
+		{planbuilder.PlanInsertPK, true},
+		{planbuilder.PlanInsertSubquery, true},
+		{planbuilder.PlanPassDML, false},
+		{planbuilder.PlanDMLPK, false},
+		{planbuilder.PlanDMLSubquery, false},
+		{planbuilder.PlanUpsertPK, false},
+	}
+	for _, plan := range dmlPlans {
+		qr := tabletserver.NewQueryRule(
+			fmt.Sprintf("enforce %v range for %v", keyspaceInfo.ShardingColumnName, plan.planID),
+			fmt.Sprintf("%v_not_in_range_%v", keyspaceInfo.ShardingColumnName, plan.planID),
+			tabletserver.QRFail,
+		)
+		qr.AddPlanCond(plan.planID)
+		err := qr.AddBindVarCond(keyspaceInfo.ShardingColumnName, plan.onAbsent, true, tabletserver.QRNotIn, keyRange)
+		if err != nil {
+			return fmt.Errorf("Unable to add key range rule: %v", err)
+		}
+		keyrangeRules.Add(qr)
+	}
+
+	// and load them
+	agent.QueryServiceControl.RegisterQueryRuleSource(keyrangeQueryRules)
+	if err := agent.QueryServiceControl.SetQueryRules(keyrangeQueryRules, keyrangeRules); err != nil {
+		return fmt.Errorf("failed to load query rule set %s: %s", keyrangeQueryRules, err)
+	}
+	return nil
 }

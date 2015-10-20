@@ -16,11 +16,8 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
-	"github.com/youtube/vitess/go/vt/binlog"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
@@ -40,14 +37,11 @@ var (
 	historyLength = 16
 )
 
-// Query rules from keyrange
-const keyrangeQueryRules string = "KeyrangeQueryRules"
-
 // Query rules from blacklist
 const blacklistQueryRules string = "BlacklistQueryRules"
 
 func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet, blacklistedTables []string) error {
-	err := agent.loadKeyspaceAndBlacklistRules(tablet, blacklistedTables)
+	err := agent.loadBlacklistRules(tablet, blacklistedTables)
 	if err != nil {
 		return err
 	}
@@ -55,41 +49,8 @@ func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet, blacklistedTables []s
 	return agent.QueryServiceControl.SetServingType(tablet.Type, true)
 }
 
-// loadKeyspaceAndBlacklistRules does what the name suggests:
-// 1. load and build keyrange query rules
-// 2. load and build blacklist query rules
-func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blacklistedTables []string) (err error) {
-	// Keyrange rules
-	keyrangeRules := tabletserver.NewQueryRules()
-	if key.KeyRangeIsPartial(tablet.KeyRange) {
-		log.Infof("Restricting to keyrange: %v", tablet.KeyRange)
-		dmlPlans := []struct {
-			planID   planbuilder.PlanType
-			onAbsent bool
-		}{
-			{planbuilder.PlanInsertPK, true},
-			{planbuilder.PlanInsertSubquery, true},
-			{planbuilder.PlanPassDML, false},
-			{planbuilder.PlanDMLPK, false},
-			{planbuilder.PlanDMLSubquery, false},
-			{planbuilder.PlanUpsertPK, false},
-		}
-		for _, plan := range dmlPlans {
-			qr := tabletserver.NewQueryRule(
-				fmt.Sprintf("enforce keyspace_id range for %v", plan.planID),
-				fmt.Sprintf("keyspace_id_not_in_range_%v", plan.planID),
-				tabletserver.QRFail,
-			)
-			qr.AddPlanCond(plan.planID)
-			err := qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, tabletserver.QRNotIn, tablet.KeyRange)
-			if err != nil {
-				return fmt.Errorf("Unable to add keyspace rule: %v", err)
-			}
-			keyrangeRules.Add(qr)
-		}
-	}
-
-	// Blacklisted tables
+// loadBlacklistRules loads and builds the blacklist query rules
+func (agent *ActionAgent) loadBlacklistRules(tablet *pbt.Tablet, blacklistedTables []string) (err error) {
 	blacklistRules := tabletserver.NewQueryRules()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
@@ -104,13 +65,8 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blac
 		}
 		blacklistRules.Add(qr)
 	}
-	// Push all three sets of QueryRules to TabletServerRpcService
-	loadRuleErr := agent.QueryServiceControl.SetQueryRules(keyrangeQueryRules, keyrangeRules)
-	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s: %s", keyrangeQueryRules, loadRuleErr)
-	}
 
-	loadRuleErr = agent.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
+	loadRuleErr := agent.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
 	if loadRuleErr != nil {
 		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
 	}
@@ -152,7 +108,7 @@ func (agent *ActionAgent) broadcastHealth() {
 }
 
 // changeCallback is run after every action that might
-// have changed something in the tablet record.
+// have changed something in the tablet record or in the topology.
 func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *pbt.Tablet) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("ActionAgent.changeCallback")
@@ -175,7 +131,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			if newTablet.Type == pbt.TabletType_MASTER {
 				if len(shardInfo.SourceShards) > 0 {
 					allowQuery = false
-					disallowQueryReason = "old master is still in shard info"
+					disallowQueryReason = "master tablet with filtered replication on"
 				}
 			}
 			if tc := shardInfo.GetTabletControl(newTablet.Type); tc != nil {
@@ -207,9 +163,9 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 
 	// update stream needs to be started or stopped too
 	if topo.IsRunningUpdateStream(newTablet.Type) {
-		binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.MysqlDaemon)
+		agent.UpdateStream.Enable()
 	} else {
-		binlog.DisableUpdateStreamService()
+		agent.UpdateStream.Disable()
 	}
 
 	statsType.Set(strings.ToLower(newTablet.Type.String()))

@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -104,6 +106,13 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
+
+	if err := ts.CreateKeyspace(context.Background(), "ks", &pb.Keyspace{
+		ShardingColumnName: "keyspace_id",
+		ShardingColumnType: pb.KeyspaceIdType_UINT64,
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
 
 	sourceMaster := NewFakeTablet(t, wr, "cell1", 0,
 		pb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-80"))

@@ -11,6 +11,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
@@ -63,9 +64,24 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		keyspace := entry[:slash]
 		shard := entry[slash+1 : column]
 		dbname := entry[column+1:]
-		keyspaceMap[keyspace] = true
-
 		dbcfgs.App.DbName = dbname
+
+		// create the keyspace if necessary, so we can set the
+		// ShardingColumnName and ShardingColumnType
+		if _, ok := keyspaceMap[keyspace]; !ok {
+			kit, err := key.ParseKeyspaceIDType(*shardingColumnType)
+			if err != nil {
+				log.Fatalf("parseKeyspaceIDType(%v) failed: %v", *shardingColumnType, err)
+			}
+
+			if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{
+				ShardingColumnName: *shardingColumnName,
+				ShardingColumnType: kit,
+			}); err != nil {
+				log.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
+			}
+			keyspaceMap[keyspace] = true
+		}
 
 		// create the master
 		alias := &pb.TabletAlias{

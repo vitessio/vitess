@@ -107,6 +107,8 @@ index by_msg (msg)
                      '-sql=' + create_view_template % ('view1', 'moving1'),
                      'source_keyspace'],
                     auto_log=True)
+    for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
+      utils.run_vtctl(['ReloadSchema', t.tablet_alias])
 
   def _vtdb_conn(self):
     addr = utils.vtgate.rpc_endpoint()
@@ -193,7 +195,6 @@ index by_msg (msg)
       self.assertNotIn('BlacklistedTables', status)
 
     # check we can or cannot access the tables
-    utils.run_vtctl(['ReloadSchema', tablet.tablet_alias])
     for t in ['moving1', 'moving2']:
       if expected and 'moving.*' in expected:
         # table is blacklisted, should get the error

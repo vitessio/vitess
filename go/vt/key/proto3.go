@@ -5,7 +5,6 @@
 package key
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -37,14 +36,6 @@ func ProtoToKeyspaceIdType(k pb.KeyspaceIdType) KeyspaceIdType {
 		return KIT_BYTES
 	}
 	panic(fmt.Errorf("Invalid value for KeyspaceIdType: %v", k))
-}
-
-// KeyRangeString prints a pb.KeyRange
-func KeyRangeString(k *pb.KeyRange) string {
-	if k == nil {
-		return "<nil>"
-	}
-	return hex.EncodeToString(k.Start) + "-" + hex.EncodeToString(k.End)
 }
 
 // KeyRangeToProto translates a KeyRange to proto, or panics

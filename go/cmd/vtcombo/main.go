@@ -14,7 +14,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -33,8 +32,10 @@ const (
 )
 
 var (
-	topology = flag.String("topology", "", "Define which shards exist in the test topology in the form <keyspace>/<shardrange>:<dbname>,... The dbname must be unique among all shards, since they share a MySQL instance in the test environment.")
-	vschema  = flag.String("vschema", "", "vschema file")
+	topology           = flag.String("topology", "", "Define which shards exist in the test topology in the form <keyspace>/<shardrange>:<dbname>,... The dbname must be unique among all shards, since they share a MySQL instance in the test environment.")
+	shardingColumnName = flag.String("sharding_column_name", "keyspace_id", "Specifies the column to use for sharding operations")
+	shardingColumnType = flag.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
+	vschema            = flag.String("vschema", "", "vschema file")
 )
 
 func init() {
@@ -76,7 +77,6 @@ func main() {
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 
 	// tablets configuration and init
-	binlog.RegisterUpdateStreamService(mycnf)
 	initTabletMap(ts, *topology, mysqld, dbcfgs, mycnf)
 
 	// vschema

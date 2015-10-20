@@ -24,13 +24,13 @@ import (
 /* API and config for UpdateStream Service */
 
 const (
-	DISABLED int64 = iota
-	ENABLED
+	usDisabled int64 = iota
+	usEnabled
 )
 
 var usStateNames = map[int64]string{
-	ENABLED:  "Enabled",
-	DISABLED: "Disabled",
+	usEnabled:  "Enabled",
+	usDisabled: "Disabled",
 }
 
 var (
@@ -43,15 +43,57 @@ var (
 	tablesTransactions   = stats.NewInt("UpdateStreamTablesTransactions")
 )
 
-// UpdateStream is the real implementation of proto.UpdateStream
-type UpdateStream struct {
-	mycnf *mysqlctl.Mycnf
+// UpdateStreamControl is the interface an UpdateStream service implements
+// to bring it up or down.
+type UpdateStreamControl interface {
+	// Enable will allow any new RPC calls
+	Enable()
 
+	// Disable will interrupt all current calls, and disallow any new call
+	Disable()
+
+	// IsEnabled returns true iff the service is enabled
+	IsEnabled() bool
+}
+
+// UpdateStreamControlMock is an implementation of UpdateStreamControl
+// to be used in tests
+type UpdateStreamControlMock struct {
+	enabled bool
+}
+
+// NewUpdateStreamControlMock creates a new UpdateStreamControlMock
+func NewUpdateStreamControlMock() *UpdateStreamControlMock {
+	return &UpdateStreamControlMock{}
+}
+
+// Enable is part of UpdateStreamControl
+func (m *UpdateStreamControlMock) Enable() {
+	m.enabled = true
+}
+
+// Disable is part of UpdateStreamControl
+func (m *UpdateStreamControlMock) Disable() {
+	m.enabled = false
+}
+
+// IsEnabled is part of UpdateStreamControl
+func (m *UpdateStreamControlMock) IsEnabled() bool {
+	return m.enabled
+}
+
+// UpdateStream is the real implementation of proto.UpdateStream
+// and UpdateStreamControl
+type UpdateStream struct {
+	// the following variables are set at construction time
+
+	mysqld mysqlctl.MysqlDaemon
+	dbname string
+
+	// actionLock protects the following variables
 	actionLock     sync.Mutex
 	state          sync2.AtomicInt64
-	mysqld         mysqlctl.MysqlDaemon
 	stateWaitGroup sync.WaitGroup
-	dbname         string
 	streams        streamList
 }
 
@@ -86,10 +128,6 @@ func (sl *streamList) Stop() {
 	sl.Unlock()
 }
 
-// UpdateStream is the singleton that gets initialized during
-// startup and that gets called by all RPC server implementations
-var UpdateStreamRpcService *UpdateStream
-
 // RegisterUpdateStreamServiceFunc is the type to use for delayed
 // registration of RPC servers until we have all the objects
 type RegisterUpdateStreamServiceFunc func(proto.UpdateStream)
@@ -98,23 +136,25 @@ type RegisterUpdateStreamServiceFunc func(proto.UpdateStream)
 // callbacks to invoke
 var RegisterUpdateStreamServices []RegisterUpdateStreamServiceFunc
 
-// RegisterUpdateStreamService needs to be called to start listening
-// to clients
-func RegisterUpdateStreamService(mycnf *mysqlctl.Mycnf) {
-	// check we haven't been called already
-	if UpdateStreamRpcService != nil {
-		panic("Update Stream service already initialized")
+// NewUpdateStream returns a new UpdateStream object
+func NewUpdateStream(mysqld mysqlctl.MysqlDaemon, dbname string) *UpdateStream {
+	return &UpdateStream{
+		mysqld: mysqld,
+		dbname: dbname,
 	}
+}
 
-	// create the singleton
-	UpdateStreamRpcService = &UpdateStream{mycnf: mycnf}
+// RegisterService needs to be called to publish stats, and to start listening
+// to clients. Only once instance can call this in a process.
+func (updateStream *UpdateStream) RegisterService() {
+	// publish the stats
 	stats.Publish("UpdateStreamState", stats.StringFunc(func() string {
-		return usStateNames[UpdateStreamRpcService.state.Get()]
+		return usStateNames[updateStream.state.Get()]
 	}))
 
-	// and register all the instances
+	// and register all the RPC protocols
 	for _, f := range RegisterUpdateStreamServices {
-		f(UpdateStreamRpcService)
+		f(updateStream)
 	}
 }
 
@@ -124,79 +164,38 @@ func logError() {
 	}
 }
 
-// EnableUpdateStreamService enables the RPC service for UpdateStream
-func EnableUpdateStreamService(dbname string, mysqld mysqlctl.MysqlDaemon) {
+// Enable will allow connections to the service
+func (updateStream *UpdateStream) Enable() {
 	defer logError()
-	if UpdateStreamRpcService == nil {
-		return
-	}
-	UpdateStreamRpcService.enable(dbname, mysqld)
-}
-
-// DisableUpdateStreamService disables the RPC service for UpdateStream
-func DisableUpdateStreamService() {
-	defer logError()
-	if UpdateStreamRpcService == nil {
-		return
-	}
-	UpdateStreamRpcService.disable()
-}
-
-// ServeUpdateStream sill serve one UpdateStream
-func ServeUpdateStream(position string, sendReply func(reply *proto.StreamEvent) error) error {
-	return UpdateStreamRpcService.ServeUpdateStream(position, sendReply)
-}
-
-// IsUpdateStreamEnabled returns true if the RPC service is enabled
-func IsUpdateStreamEnabled() bool {
-	return UpdateStreamRpcService.isEnabled()
-}
-
-// GetReplicationPosition returns the current replication position of
-// the service
-func GetReplicationPosition() (myproto.ReplicationPosition, error) {
-	return UpdateStreamRpcService.getReplicationPosition()
-}
-
-func (updateStream *UpdateStream) enable(dbname string, mysqld mysqlctl.MysqlDaemon) {
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
-	if updateStream.isEnabled() {
+	if updateStream.IsEnabled() {
 		return
 	}
 
-	if dbname == "" {
-		log.Errorf("Missing db name, cannot enable update stream service")
-		return
-	}
-
-	if updateStream.mycnf.BinLogPath == "" {
-		log.Errorf("Update stream service requires binlogs enabled")
-		return
-	}
-
-	updateStream.state.Set(ENABLED)
-	updateStream.mysqld = mysqld
-	updateStream.dbname = dbname
+	updateStream.state.Set(usEnabled)
 	updateStream.streams.Init()
-	log.Infof("Enabling update stream, dbname: %s, binlogpath: %s", updateStream.dbname, updateStream.mycnf.BinLogPath)
+	log.Infof("Enabling update stream, dbname: %s", updateStream.dbname)
 }
 
-func (updateStream *UpdateStream) disable() {
+// Disable will disallow any connection to the service
+func (updateStream *UpdateStream) Disable() {
+	defer logError()
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
-	if !updateStream.isEnabled() {
+	if !updateStream.IsEnabled() {
 		return
 	}
 
-	updateStream.state.Set(DISABLED)
+	updateStream.state.Set(usDisabled)
 	updateStream.streams.Stop()
 	updateStream.stateWaitGroup.Wait()
 	log.Infof("Update Stream Disabled")
 }
 
-func (updateStream *UpdateStream) isEnabled() bool {
-	return updateStream.state.Get() == ENABLED
+// IsEnabled returns true if UpdateStream is enabled
+func (updateStream *UpdateStream) IsEnabled() bool {
+	return updateStream.state.Get() == usEnabled
 }
 
 // ServeUpdateStream is part of the proto.UpdateStream interface
@@ -207,7 +206,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply f
 	}
 
 	updateStream.actionLock.Lock()
-	if !updateStream.isEnabled() {
+	if !updateStream.IsEnabled() {
 		updateStream.actionLock.Unlock()
 		log.Errorf("Unable to serve client request: update stream service is not enabled")
 		return fmt.Errorf("update stream service is not enabled")
@@ -237,14 +236,14 @@ func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply f
 }
 
 // StreamKeyRange is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIdType key.KeyspaceIdType, keyRange *pb.KeyRange, charset *mproto.Charset, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType key.KeyspaceIdType, keyRange *pb.KeyRange, charset *mproto.Charset, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
 	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
 	}
 
 	updateStream.actionLock.Lock()
-	if !updateStream.isEnabled() {
+	if !updateStream.IsEnabled() {
 		updateStream.actionLock.Unlock()
 		log.Errorf("Unable to serve client request: Update stream service is not enabled")
 		return fmt.Errorf("update stream service is not enabled")
@@ -258,7 +257,7 @@ func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIdType
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
 	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
-	f := KeyRangeFilterFunc(keyspaceIdType, keyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(keyspaceIDType, keyRange, func(reply *proto.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
@@ -280,7 +279,7 @@ func (updateStream *UpdateStream) StreamTables(position string, tables []string,
 	}
 
 	updateStream.actionLock.Lock()
-	if !updateStream.isEnabled() {
+	if !updateStream.IsEnabled() {
 		updateStream.actionLock.Unlock()
 		log.Errorf("Unable to serve client request: Update stream service is not enabled")
 		return fmt.Errorf("update stream service is not enabled")
@@ -314,14 +313,4 @@ func (updateStream *UpdateStream) HandlePanic(err *error) {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
 		*err = fmt.Errorf("uncaught panic: %v", x)
 	}
-}
-
-func (updateStream *UpdateStream) getReplicationPosition() (myproto.ReplicationPosition, error) {
-	updateStream.actionLock.Lock()
-	defer updateStream.actionLock.Unlock()
-	if !updateStream.isEnabled() {
-		return myproto.ReplicationPosition{}, fmt.Errorf("update stream service is not enabled")
-	}
-
-	return updateStream.mysqld.MasterPosition()
 }
