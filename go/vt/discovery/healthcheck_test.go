@@ -67,6 +67,22 @@ func TestHealthCheck(t *testing.T) {
 	if len(epsList) != 1 || !reflect.DeepEqual(epsList[0], want) {
 		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want %+v`, epsList, want)
 	}
+	epcsl := hc.CacheStatus()
+	epcslWant := EndPointsCacheStatusList{{
+		Cell:   "cell",
+		Target: &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+		EndPointsStats: EndPointStatsList{{
+			EndPoint: ep,
+			Cell:     "cell",
+			Target:   &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+			Serving:  true,
+			Stats:    &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+			TabletExternallyReparentedTimestamp: 10,
+		}},
+	}}
+	if !reflect.DeepEqual(epcsl, epcslWant) {
+		t.Errorf(`hc.CacheStatus() = %+v; want %+v`, epcsl, epcslWant)
+	}
 
 	// TabletType changed
 	shr = &pbq.StreamHealthResponse{
