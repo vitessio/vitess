@@ -617,20 +617,21 @@ func (agent *ActionAgent) initializeKeyRangeRule(ctx context.Context, keyspace s
 		planID   planbuilder.PlanType
 		onAbsent bool
 	}{
-		{planbuilder.PLAN_INSERT_PK, true},
-		{planbuilder.PLAN_INSERT_SUBQUERY, true},
-		{planbuilder.PLAN_PASS_DML, false},
-		{planbuilder.PLAN_DML_PK, false},
-		{planbuilder.PLAN_DML_SUBQUERY, false},
+		{planbuilder.PlanInsertPK, true},
+		{planbuilder.PlanInsertSubquery, true},
+		{planbuilder.PlanPassDML, false},
+		{planbuilder.PlanDMLPK, false},
+		{planbuilder.PlanDMLSubquery, false},
+		{planbuilder.PlanUpsertPK, false},
 	}
 	for _, plan := range dmlPlans {
 		qr := tabletserver.NewQueryRule(
 			fmt.Sprintf("enforce %v range for %v", keyspaceInfo.ShardingColumnName, plan.planID),
 			fmt.Sprintf("%v_not_in_range_%v", keyspaceInfo.ShardingColumnName, plan.planID),
-			tabletserver.QR_FAIL,
+			tabletserver.QRFail,
 		)
 		qr.AddPlanCond(plan.planID)
-		err := qr.AddBindVarCond(keyspaceInfo.ShardingColumnName, plan.onAbsent, true, tabletserver.QR_NOTIN, keyRange)
+		err := qr.AddBindVarCond(keyspaceInfo.ShardingColumnName, plan.onAbsent, true, tabletserver.QRNotIn, keyRange)
 		if err != nil {
 			return fmt.Errorf("Unable to add key range rule: %v", err)
 		}

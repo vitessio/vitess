@@ -339,7 +339,7 @@ func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
 		t.Fatalf("invalid state reported by expvar, should be a valid state code, but got: %s", tabletState.String())
 	}
 	if varzState != StateNotConnected {
-		t.Fatalf("queryservice should be in %d state, but exposed varz reports: %s", StateNotConnected, varzState)
+		t.Fatalf("queryservice should be in %d state, but exposed varz reports: %d", StateNotConnected, varzState)
 	}
 }
 

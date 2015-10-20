@@ -6,12 +6,13 @@ package tableacl
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"os"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/testfiles"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
@@ -40,9 +41,40 @@ func TestInitWithInvalidFilePath(t *testing.T) {
 	Init("/invalid_file_path", func() {})
 }
 
+var aclJSON = `{
+  "table_groups": [
+    {
+      "name": "group01",
+      "table_names_or_prefixes": ["test_table"],
+      "readers": ["vt"],
+      "writers": ["vt"]
+    }
+  ]
+}`
+
 func TestInitWithValidConfig(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
-	Init(testfiles.Locate("tableacl/test_table_tableacl_config.json"), func() {})
+	f, err := ioutil.TempFile("", "tableacl")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.Remove(f.Name())
+	n, err := f.WriteString(aclJSON)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if n != len(aclJSON) {
+		t.Error("short write")
+		return
+	}
+	err = f.Close()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	Init(f.Name(), func() {})
 }
 
 func TestInitFromProto(t *testing.T) {

@@ -155,7 +155,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 	}
 	if !start.IsNull() {
 		startClause = &sqlparser.ComparisonExpr{
-			Operator: sqlparser.AST_GE,
+			Operator: sqlparser.GreaterEqualStr,
 			Left:     pk,
 			Right:    sqlparser.ValArg([]byte(":" + startBindVarName)),
 		}
@@ -172,7 +172,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 	// splitColumn < end
 	if !end.IsNull() {
 		endClause = &sqlparser.ComparisonExpr{
-			Operator: sqlparser.AST_LT,
+			Operator: sqlparser.LessThanStr,
 			Left:     pk,
 			Right:    sqlparser.ValArg([]byte(":" + endBindVarName)),
 		}
@@ -206,7 +206,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 		}
 	}
 	return &sqlparser.Where{
-		Type: sqlparser.AST_WHERE,
+		Type: sqlparser.WhereStr,
 		Expr: clauses,
 	}
 }

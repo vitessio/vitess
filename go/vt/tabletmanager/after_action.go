@@ -59,7 +59,7 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *pbt.Tablet, blacklistedTabl
 			return err
 		}
 		log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
-		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_RETRY)
+		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QRFailRetry)
 		for _, t := range tables {
 			qr.AddTableCond(t)
 		}

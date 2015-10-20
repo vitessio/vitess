@@ -13,7 +13,7 @@ func TestWhere(t *testing.T) {
 	if buf.String() != "" {
 		t.Errorf("w.Format(nil): %q, want \"\"", buf.String)
 	}
-	w = NewWhere(AST_WHERE, nil)
+	w = NewWhere(WhereStr, nil)
 	buf = NewTrackedBuffer(nil)
 	w.Format(buf)
 	if buf.String() != "" {

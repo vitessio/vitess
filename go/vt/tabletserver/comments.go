@@ -8,7 +8,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
-const TRAILING_COMMENT = "_trailingComment"
+const trailingComment = "_trailingComment"
 
 type matchtracker struct {
 	query string
@@ -26,13 +26,13 @@ func stripTrailing(query *proto.Query) {
 	pos := tracker.matchComments()
 	if pos >= 0 {
 		query.Sql = tracker.query[:pos]
-		query.BindVariables[TRAILING_COMMENT] = tracker.query[pos:]
+		query.BindVariables[trailingComment] = tracker.query[pos:]
 	}
 }
 
 // restoreTrailing undoes work done by stripTrailing
 func restoreTrailing(sql []byte, bindVars map[string]interface{}) []byte {
-	if ytcomment, ok := bindVars[TRAILING_COMMENT]; ok {
+	if ytcomment, ok := bindVars[trailingComment]; ok {
 		sql = append(sql, ytcomment.(string)...)
 	}
 	return sql
