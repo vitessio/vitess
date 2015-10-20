@@ -5,7 +5,6 @@
 package testlib
 
 import (
-	"flag"
 	"fmt"
 	"net"
 	"testing"
@@ -25,7 +24,7 @@ import (
 
 func init() {
 	// make sure we use the right protocol
-	flag.Set("vtctl_client_protocol", "grpc")
+	*vtctlclient.VtctlClientProtocol = "grpc"
 }
 
 // VtctlPipe is a vtctl server based on a topo server, and a client that
