@@ -286,16 +286,17 @@ class TestReparent(unittest.TestCase):
                          tablet_31981])
 
   def test_reparent_graceful_range_based(self):
-    shard_id = '0000000000000000-ffffffffffffffff'
-    self._test_reparent_graceful(shard_id)
+    utils.run_vtctl(['CreateKeyspace',
+                     '--sharding_column_name', 'keyspace_id',
+                     '--sharding_column_type', 'uint64',
+                     'test_keyspace'])
+    self._test_reparent_graceful('0000000000000000-ffffffffffffffff')
 
   def test_reparent_graceful(self):
-    shard_id = '0'
-    self._test_reparent_graceful(shard_id)
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+    self._test_reparent_graceful('0')
 
   def _test_reparent_graceful(self, shard_id):
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-
     # create the database so vttablets start, as they are serving
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62044.create_db('vt_test_keyspace')
