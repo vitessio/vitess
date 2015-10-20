@@ -69,14 +69,21 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		// create the keyspace if necessary, so we can set the
 		// ShardingColumnName and ShardingColumnType
 		if _, ok := keyspaceMap[keyspace]; !ok {
-			kit, err := key.ParseKeyspaceIDType(*shardingColumnType)
-			if err != nil {
-				log.Fatalf("parseKeyspaceIDType(%v) failed: %v", *shardingColumnType, err)
+			// only set for sharding key info for sharded keyspaces
+			scn := ""
+			sct := pb.KeyspaceIdType_UNSET
+			if shard != "0" {
+				var err error
+				sct, err = key.ParseKeyspaceIDType(*shardingColumnType)
+				if err != nil {
+					log.Fatalf("parseKeyspaceIDType(%v) failed: %v", *shardingColumnType, err)
+				}
+				scn = *shardingColumnName
 			}
 
 			if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{
-				ShardingColumnName: *shardingColumnName,
-				ShardingColumnType: kit,
+				ShardingColumnName: scn,
+				ShardingColumnType: sct,
 			}); err != nil {
 				log.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
 			}
