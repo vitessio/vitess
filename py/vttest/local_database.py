@@ -94,20 +94,25 @@ class LocalDatabase(object):
 
     if not self.schema_dir:
       return
-    for keyspace in os.listdir(self.schema_dir):
+    
+    if not os.path.isdir(self.schema_dir):
+      raise Exception('schema_dir "%s" is not a directory.' % self.schema_dir)
+    
+    for keyspace in set([shard.keyspace for shard in self.shards]):
       keyspace_dir = os.path.join(self.schema_dir, keyspace)
-      if os.path.isdir(keyspace_dir):
-        for filename in os.listdir(keyspace_dir):
-          filepath = os.path.join(keyspace_dir, filename)
-          logging.info(
-              'Loading schema for keyspace %s from file %s', keyspace,
-              filepath)
-          cmds = self.get_sql_commands_from_file(filepath, keyspace_dir)
+      if not os.path.isdir(keyspace_dir):
+        raise Exception('No keyspace subdirectory found in the schema dir. '
+                        'Expected directory: %s' % keyspace_dir)
 
-          # Run the cmds on each shard in the keyspace.
-          for shard in self.shards:
-            if shard.keyspace == keyspace:
-              self.mysql_execute(cmds, db_name=shard.db_name)
+      for filepath in glob.glob(os.path.join(keyspace_dir, '*.sql')):
+        logging.info('Loading schema for keyspace %s from file %s',
+                     keyspace, filepath)
+        cmds = self.get_sql_commands_from_file(filepath, keyspace_dir)
+
+        # Run the cmds on each shard in the keyspace.
+        for shard in self.shards:
+          if shard.keyspace == keyspace:
+            self.mysql_execute(cmds, db_name=shard.db_name)
 
   def get_sql_commands_from_file(self, filename, source_root=None):
     """Given a file, extract an array of commands from the file.
