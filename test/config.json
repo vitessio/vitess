@@ -21,7 +21,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0
 		},
 		"custom_sharding": {
@@ -39,7 +39,7 @@
 				"travis/goveralls.sh"
 			],
 			"Manual": true,
-			"Shard": 1,
+			"Shard": 0,
 			"RetryMax": 0
 		},
 		"initial_sharding": {
@@ -47,7 +47,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 2,
 			"RetryMax": 0
 		},
 		"initial_sharding_bytes": {
@@ -74,7 +74,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 1,
 			"RetryMax": 0
 		},
 		"keyspace": {
@@ -82,7 +82,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"mysqlctl": {
@@ -101,7 +101,7 @@
 				"php_test"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 3,
 			"RetryMax": 0
 		},
 		"python_client": {
@@ -109,7 +109,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0
 		},
 		"reparent": {
@@ -125,7 +125,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 2,
 			"RetryMax": 0
 		},
 		"resharding_bytes": {
@@ -133,7 +133,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 3,
 			"RetryMax": 0
 		},
 		"rowcache_invalidator": {
@@ -141,7 +141,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"schema": {
@@ -157,7 +157,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 2,
 			"RetryMax": 0
 		},
 		"sharded": {
@@ -173,7 +173,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 1,
 			"RetryMax": 0
 		},
 		"tabletmanager": {
@@ -181,7 +181,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 1,
 			"RetryMax": 0
 		},
 		"unit": {
@@ -191,7 +191,7 @@
 				"tools/unit_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 0,
 			"RetryMax": 1
 		},
 		"unit_race": {
@@ -202,7 +202,7 @@
 				"unit_test_race"
 			],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 3,
 			"RetryMax": 0
 		},
 		"update_stream": {
@@ -226,7 +226,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"vtgate_utils": {
@@ -234,7 +234,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 1,
 			"RetryMax": 0
 		},
 		"vtgatev2": {
@@ -242,7 +242,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 1,
 			"RetryMax": 0
 		},
 		"vtgatev3": {
@@ -250,7 +250,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 3,
 			"RetryMax": 0
 		},
 		"vttest_sample": {
@@ -258,7 +258,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 4,
 			"RetryMax": 0
 		},
 		"worker": {
@@ -266,7 +266,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 1,
 			"RetryMax": 0
 		}
 	}
