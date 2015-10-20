@@ -102,9 +102,11 @@ class LocalDatabase(object):
     for keyspace in set([shard.keyspace for shard in self.shards]):
       keyspace_dir = os.path.join(self.schema_dir, keyspace)
       if not os.path.isdir(keyspace_dir):
-        logging.warn('No subdirectory found in schema dir %s for keyspace %s.',
-                     keyspace, keyspace_dir)
-        continue
+        raise Exception('No subdirectory found in schema dir %s for keyspace %s. '
+                        'For keyspaces without an initial schema, create the '
+                        'directory %s and leave a README file to explain why the '
+                        'directory exists.' %
+                        (self.schema_dir, keyspace, keyspace_dir))
 
       for filepath in glob.glob(os.path.join(keyspace_dir, '*.sql')):
         logging.info('Loading schema for keyspace %s from file %s',
