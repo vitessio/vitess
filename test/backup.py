@@ -118,10 +118,16 @@ class TestBackup(unittest.TestCase):
     self._insert_master(1)
     timeout = 10
     while True:
-      result = tablet_replica1.mquery(
-          'vt_test_keyspace', 'select count(*) from vt_insert_test')
-      if result[0][0] == 1:
-        break
+      try:
+        result = tablet_replica1.mquery(
+            'vt_test_keyspace', 'select count(*) from vt_insert_test')
+        if result[0][0] == 1:
+          break
+      except:
+        # ignore exceptions, we'll just timeout (the tablet creation
+        # can take some time to replicate, and we get a 'table vt_insert_test
+        # does not exist exception in some rare cases)
+        logging.exception('exception waiting for data to replicate')
       timeout = utils.wait_step('slave tablet getting data', timeout)
 
     # backup the slave
