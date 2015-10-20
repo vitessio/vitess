@@ -221,6 +221,14 @@
 			"Shard": 4,
 			"RetryMax": 0
 		},
+		"vtctld": {
+			"File": "vtctld_test.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0
+		},
 		"vtgate_utils": {
 			"File": "vtgate_utils_test.py",
 			"Args": [],

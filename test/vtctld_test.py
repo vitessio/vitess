@@ -57,7 +57,10 @@ class TestVtctld(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+    utils.run_vtctl(['CreateKeyspace',
+                     '--sharding_column_name', 'keyspace_id',
+                     '--sharding_column_type', 'uint64',
+                     'test_keyspace'])
     utils.run_vtctl(
         ['CreateKeyspace', '--served_from',
          'master:test_keyspace,replica:test_keyspace,rdonly:test_keyspace',
