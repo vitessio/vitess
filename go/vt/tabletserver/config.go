@@ -154,7 +154,7 @@ var DefaultQsConfig = Config{
 	SpotCheckRatio:       0,
 	StrictMode:           true,
 	StrictTableAcl:       false,
-	TerseErrors:          false,
+	TerseErrors:          true,
 	EnablePublishStats:   true,
 	EnableAutoCommit:     false,
 	EnableTableAclDryRun: false,
