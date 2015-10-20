@@ -102,6 +102,20 @@ def setUpModule():
     utils.run_vtctl(['ReloadSchema', master_tablet.tablet_alias])
     utils.run_vtctl(['ReloadSchema', replica_tablet.tablet_alias])
 
+    # wait for the master and slave tablet's ReloadSchema to have worked
+    timeout = 10
+    while True:
+      try:
+        master_tablet.execute('select count(1) from vt_insert_test')
+        replica_tablet.execute('select count(1) from vt_insert_test')
+        break
+      except:
+        logging.exception('query failed')
+        timeout = utils.wait_step('slave tablet having correct schema', timeout)
+        # also re-run ReloadSchema on slave, it case the first one
+        # didn't get the replicated table.
+        utils.run_vtctl(['ReloadSchema', replica_tablet.tablet_alias])
+
   except:
     tearDownModule()
     raise
