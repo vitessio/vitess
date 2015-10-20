@@ -94,11 +94,10 @@ account with a project in the Google Developers Console.
     $ gcloud config set project PROJECT
     ```
 
-1.  Enable or update beta features in the `gcloud` tool, and install
-    the `kubectl` tool:
+1.  Install or update the `kubectl` tool:
 
     ``` sh
-    $ gcloud components update beta kubectl
+    $ gcloud components update kubectl
     ```
 
 ### Locate kubectl
@@ -133,7 +132,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 1.  Create a Container Engine cluster:
 
     ``` sh
-    $ gcloud beta container clusters create example --machine-type n1-standard-4 --num-nodes 5
+    $ gcloud container clusters create example --machine-type n1-standard-4 --num-nodes 5
     ### example output:
     # Creating cluster example...done.
     # Created [https://container.googleapis.com/v1/projects/vitess/zones/us-central1-b/clusters/example].
@@ -704,7 +703,7 @@ Then tear down the Container Engine cluster itself, which will stop the virtual
 machines running on Compute Engine:
 
 ``` sh
-$ gcloud beta container clusters delete example
+$ gcloud container clusters delete example
 ```
 
 It's also a good idea to remove the firewall rules you created, unless you plan
