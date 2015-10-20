@@ -87,12 +87,13 @@ type HealthCheckImpl struct {
 }
 
 // healthCheckConn contains details about an endpoint.
-// TODO(liang): add serving field after vttablet update.
 type healthCheckConn struct {
 	// set at construction time
 	cell       string
 	name       string
+	ctx        context.Context
 	cancelFunc context.CancelFunc
+	endPoint   *pbt.EndPoint
 
 	// mu protects all the following fields
 	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
@@ -106,13 +107,7 @@ type healthCheckConn struct {
 }
 
 // checkConn performs health checking on the given endpoint.
-func (hc *HealthCheckImpl) checkConn(cell, name string, endPoint *pbt.EndPoint) {
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	hcc := &healthCheckConn{
-		cell:       cell,
-		name:       name,
-		cancelFunc: cancelFunc,
-	}
+func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, endPoint *pbt.EndPoint) {
 	defer func() {
 		hcc.mu.Lock()
 		if hcc.conn != nil {
@@ -123,17 +118,15 @@ func (hc *HealthCheckImpl) checkConn(cell, name string, endPoint *pbt.EndPoint) 
 	}()
 	// retry health check if it fails
 	for {
-		stream, errfunc, err := hcc.connect(ctx, hc, endPoint)
+		stream, errfunc, err := hcc.connect(hc, endPoint)
 		if err != nil {
 			select {
-			case <-ctx.Done():
+			case <-hcc.ctx.Done():
 				return
 			default:
 			}
 			hcc.mu.Lock()
-			if hcc.target != nil {
-				hcErrorCounters.Add([]string{hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String())}, 1)
-			}
+			hcErrorCounters.Add([]string{hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String())}, 1)
 			hcc.serving = false
 			hcc.lastError = err
 			hcc.mu.Unlock()
@@ -141,7 +134,7 @@ func (hc *HealthCheckImpl) checkConn(cell, name string, endPoint *pbt.EndPoint) 
 			continue
 		}
 		for {
-			reconnect, err := hcc.processResponse(ctx, hc, endPoint, stream, errfunc)
+			reconnect, err := hcc.processResponse(hc, endPoint, stream, errfunc)
 			if err != nil {
 				hcc.mu.Lock()
 				hcc.serving = false
@@ -152,13 +145,11 @@ func (hc *HealthCheckImpl) checkConn(cell, name string, endPoint *pbt.EndPoint) 
 					hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.name, hcc.target, hcc.serving, hcc.tabletExternallyReparentedTimestamp, hcc.stats)
 				}
 				select {
-				case <-ctx.Done():
+				case <-hcc.ctx.Done():
 					return
 				default:
 				}
-				if hcc.target != nil {
-					hcErrorCounters.Add([]string{hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String())}, 1)
-				}
+				hcErrorCounters.Add([]string{hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String())}, 1)
 				if reconnect {
 					hcc.mu.Lock()
 					hcc.conn.Close()
@@ -173,12 +164,12 @@ func (hc *HealthCheckImpl) checkConn(cell, name string, endPoint *pbt.EndPoint) 
 }
 
 // connect creates connection to the endpoint and starts streaming.
-func (hcc *healthCheckConn) connect(ctx context.Context, hc *HealthCheckImpl, endPoint *pbt.EndPoint) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, "" /*keyspace*/, "" /*shard*/, pbt.TabletType_RDONLY, hc.connTimeout)
+func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, endPoint *pbt.EndPoint) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	conn, err := tabletconn.GetDialer()(hcc.ctx, endPoint, "" /*keyspace*/, "" /*shard*/, pbt.TabletType_RDONLY, hc.connTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
-	stream, errfunc, err := conn.StreamHealth(ctx)
+	stream, errfunc, err := conn.StreamHealth(hcc.ctx)
 	if err != nil {
 		conn.Close()
 		return nil, nil, err
@@ -192,10 +183,10 @@ func (hcc *healthCheckConn) connect(ctx context.Context, hc *HealthCheckImpl, en
 
 // processResponse reads one health check response, and notifies HealthCheckStatsListener.
 // It returns bool to indicate if the caller should reconnect. We do not need to reconnect when the streaming is working.
-func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheckImpl, endPoint *pbt.EndPoint, stream <-chan *pbq.StreamHealthResponse, errfunc tabletconn.ErrFunc) (bool, error) {
+func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *pbt.EndPoint, stream <-chan *pbq.StreamHealthResponse, errfunc tabletconn.ErrFunc) (bool, error) {
 	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
+	case <-hcc.ctx.Done():
+		return false, hcc.ctx.Err()
 	case shr, ok := <-stream:
 		if !ok {
 			return true, errfunc()
@@ -209,7 +200,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			return false, fmt.Errorf("vttablet error: %v", shr.RealtimeStats.HealthError)
 		}
 
-		if hcc.target == nil {
+		if hcc.target.TabletType == pbt.TabletType_UNKNOWN {
 			// The first time we see response for the endpoint.
 			hcc.mu.Lock()
 			hcc.target = shr.Target
@@ -219,8 +210,6 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hcc.lastError = nil
 			hcc.mu.Unlock()
 			hc.mu.Lock()
-			key := EndPointToMapKey(endPoint)
-			hc.addrToConns[key] = hcc
 			hc.addEndPointToTargetProtected(hcc.target, endPoint)
 			hc.mu.Unlock()
 		} else if hcc.target.TabletType != shr.Target.TabletType {
@@ -261,13 +250,12 @@ func (hc *HealthCheckImpl) deleteConn(endPoint *pbt.EndPoint) {
 	key := EndPointToMapKey(endPoint)
 	hcc, ok := hc.addrToConns[key]
 	if !ok {
+		log.Warningf("deleting unknown endpoint: %+v", endPoint)
 		return
 	}
 	hcc.cancelFunc()
 	delete(hc.addrToConns, key)
-	if hcc.target != nil {
-		hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
-	}
+	hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 }
 
 // SetListener sets the listener for healthcheck updates. It should not block.
@@ -276,10 +264,29 @@ func (hc *HealthCheckImpl) SetListener(listener HealthCheckStatsListener) {
 }
 
 // AddEndPoint adds the endpoint, and starts health check.
-// It does not block.
+// It does not block on making connection.
 // name is an optional tag for the endpoint, e.g. an alternative address.
 func (hc *HealthCheckImpl) AddEndPoint(cell, name string, endPoint *pbt.EndPoint) {
-	go hc.checkConn(cell, name, endPoint)
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	hcc := &healthCheckConn{
+		cell:       cell,
+		name:       name,
+		ctx:        ctx,
+		cancelFunc: cancelFunc,
+		endPoint:   endPoint,
+		target:     &pbq.Target{},
+	}
+	key := EndPointToMapKey(endPoint)
+	hc.mu.Lock()
+	if _, ok := hc.addrToConns[key]; ok {
+		hc.mu.Unlock()
+		log.Warningf("adding duplicate endpoint %v for %v: %+v", name, cell, endPoint)
+		return
+	}
+	hc.addrToConns[key] = hcc
+	hc.mu.Unlock()
+
+	go hc.checkConn(hcc, cell, name, endPoint)
 }
 
 // RemoveEndPoint removes the endpoint, and stops the health check.
@@ -514,47 +521,38 @@ func (epcsl EndPointsCacheStatusList) Swap(i, j int) {
 
 // CacheStatus returns a displayable version of the cache.
 func (hc *HealthCheckImpl) CacheStatus() EndPointsCacheStatusList {
-	epcsl := make(EndPointsCacheStatusList, 0, 1)
+	epcsMap := make(map[string]*EndPointsCacheStatus)
 	hc.mu.RLock()
-	for _, shardMap := range hc.targetToEPs {
-		for _, ttMap := range shardMap {
-			for _, epList := range ttMap {
-				epcsMap := make(map[string]*EndPointsCacheStatus)
-				var epcs *EndPointsCacheStatus
-				for _, ep := range epList {
-					key := EndPointToMapKey(ep)
-					hcc, ok := hc.addrToConns[key]
-					if !ok {
-						continue
-					}
-					hcc.mu.RLock()
-					if epcs, ok = epcsMap[hcc.cell]; !ok {
-						epcs = &EndPointsCacheStatus{
-							Cell:   hcc.cell,
-							Target: hcc.target,
-						}
-						epcsMap[hcc.cell] = epcs
-					}
-					stats := &EndPointStats{
-						Cell:     hcc.cell,
-						Name:     hcc.name,
-						Target:   hcc.target,
-						Serving:  hcc.serving,
-						EndPoint: ep,
-						Stats:    hcc.stats,
-						TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
-						LastError:                           hcc.lastError,
-					}
-					hcc.mu.RUnlock()
-					epcs.EndPointsStats = append(epcs.EndPointsStats, stats)
-				}
-				for _, epcs := range epcsMap {
-					epcsl = append(epcsl, epcs)
-				}
+	for _, hcc := range hc.addrToConns {
+		hcc.mu.RLock()
+		key := fmt.Sprintf("%v.%v.%v.%v", hcc.cell, hcc.target.Keyspace, hcc.target.Shard, string(hcc.target.TabletType))
+		var epcs *EndPointsCacheStatus
+		var ok bool
+		if epcs, ok = epcsMap[key]; !ok {
+			epcs = &EndPointsCacheStatus{
+				Cell:   hcc.cell,
+				Target: hcc.target,
 			}
+			epcsMap[key] = epcs
 		}
+		stats := &EndPointStats{
+			Cell:     hcc.cell,
+			Name:     hcc.name,
+			Target:   hcc.target,
+			Serving:  hcc.serving,
+			EndPoint: hcc.endPoint,
+			Stats:    hcc.stats,
+			TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
+			LastError:                           hcc.lastError,
+		}
+		hcc.mu.RUnlock()
+		epcs.EndPointsStats = append(epcs.EndPointsStats, stats)
 	}
 	hc.mu.RUnlock()
+	epcsl := make(EndPointsCacheStatusList, 0, len(epcsMap))
+	for _, epcs := range epcsMap {
+		epcsl = append(epcsl, epcs)
+	}
 	sort.Sort(epcsl)
 	return epcsl
 }
