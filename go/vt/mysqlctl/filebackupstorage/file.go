@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package filebackupstorage implements the BacksupStorage interface
+// Package filebackupstorage implements the BackupStorage interface
 // for a local filesystem (which can be an NFS mount).
 package filebackupstorage
 
@@ -26,14 +26,14 @@ var (
 // FileBackupHandle implements BackupHandle for local file system.
 type FileBackupHandle struct {
 	fbs      *FileBackupStorage
-	bucket   string
+	dir      string
 	name     string
 	readOnly bool
 }
 
-// Bucket is part of the BackupHandle interface
-func (fbh *FileBackupHandle) Bucket() string {
-	return fbh.bucket
+// Directory is part of the BackupHandle interface
+func (fbh *FileBackupHandle) Directory() string {
+	return fbh.dir
 }
 
 // Name is part of the BackupHandle interface
@@ -46,7 +46,7 @@ func (fbh *FileBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 	if fbh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
-	p := path.Join(*FileBackupStorageRoot, fbh.bucket, fbh.name, filename)
+	p := path.Join(*FileBackupStorageRoot, fbh.dir, fbh.name, filename)
 	return os.Create(p)
 }
 
@@ -63,7 +63,7 @@ func (fbh *FileBackupHandle) AbortBackup() error {
 	if fbh.readOnly {
 		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
 	}
-	return fbh.fbs.RemoveBackup(fbh.bucket, fbh.name)
+	return fbh.fbs.RemoveBackup(fbh.dir, fbh.name)
 }
 
 // ReadFile is part of the BackupHandle interface
@@ -71,7 +71,7 @@ func (fbh *FileBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 	if !fbh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
-	p := path.Join(*FileBackupStorageRoot, fbh.bucket, fbh.name, filename)
+	p := path.Join(*FileBackupStorageRoot, fbh.dir, fbh.name, filename)
 	return os.Open(p)
 }
 
@@ -79,9 +79,9 @@ func (fbh *FileBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 type FileBackupStorage struct{}
 
 // ListBackups is part of the BackupStorage interface
-func (fbs *FileBackupStorage) ListBackups(bucket string) ([]backupstorage.BackupHandle, error) {
+func (fbs *FileBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandle, error) {
 	// ReadDir already sorts the results
-	p := path.Join(*FileBackupStorageRoot, bucket)
+	p := path.Join(*FileBackupStorageRoot, dir)
 	fi, err := ioutil.ReadDir(p)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -100,7 +100,7 @@ func (fbs *FileBackupStorage) ListBackups(bucket string) ([]backupstorage.Backup
 		}
 		result = append(result, &FileBackupHandle{
 			fbs:      fbs,
-			bucket:   bucket,
+			dir:      dir,
 			name:     info.Name(),
 			readOnly: true,
 		})
@@ -109,14 +109,14 @@ func (fbs *FileBackupStorage) ListBackups(bucket string) ([]backupstorage.Backup
 }
 
 // StartBackup is part of the BackupStorage interface
-func (fbs *FileBackupStorage) StartBackup(bucket, name string) (backupstorage.BackupHandle, error) {
-	// make sure the bucket directory exists
-	p := path.Join(*FileBackupStorageRoot, bucket)
+func (fbs *FileBackupStorage) StartBackup(dir, name string) (backupstorage.BackupHandle, error) {
+	// Make sure the directory exists.
+	p := path.Join(*FileBackupStorageRoot, dir)
 	if err := os.MkdirAll(p, os.ModePerm); err != nil {
 		return nil, err
 	}
 
-	// creates the backup directory
+	// Create the subdirectory for this named backup.
 	p = path.Join(p, name)
 	if err := os.Mkdir(p, os.ModePerm); err != nil {
 		return nil, err
@@ -124,15 +124,15 @@ func (fbs *FileBackupStorage) StartBackup(bucket, name string) (backupstorage.Ba
 
 	return &FileBackupHandle{
 		fbs:      fbs,
-		bucket:   bucket,
+		dir:      dir,
 		name:     name,
 		readOnly: false,
 	}, nil
 }
 
 // RemoveBackup is part of the BackupStorage interface
-func (fbs *FileBackupStorage) RemoveBackup(bucket, name string) error {
-	p := path.Join(*FileBackupStorageRoot, bucket, name)
+func (fbs *FileBackupStorage) RemoveBackup(dir, name string) error {
+	p := path.Join(*FileBackupStorageRoot, dir, name)
 	return os.RemoveAll(p)
 }
 

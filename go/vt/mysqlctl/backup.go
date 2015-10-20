@@ -181,14 +181,14 @@ func findFilesTobackup(cnf *Mycnf) ([]FileEntry, error) {
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bucket, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
+func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
 
 	// start the backup with the BackupStorage
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return err
 	}
-	bh, err := bs.StartBackup(bucket, name)
+	bh, err := bs.StartBackup(dir, name)
 	if err != nil {
 		return fmt.Errorf("StartBackup failed: %v", err)
 	}
@@ -500,14 +500,14 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
-func Restore(ctx context.Context, mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
+func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurrency int, hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
 	// find the right backup handle: most recent one, with a MANIFEST
 	log.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return proto.ReplicationPosition{}, err
 	}
-	bhs, err := bs.ListBackups(bucket)
+	bhs, err := bs.ListBackups(dir)
 	if err != nil {
 		return proto.ReplicationPosition{}, fmt.Errorf("ListBackups failed: %v", err)
 	}
@@ -521,18 +521,18 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, bucket string, restoreConc
 			err := dec.Decode(&bm)
 			rc.Close()
 			if err != nil {
-				log.Warningf("Possibly incomplete backup %v in bucket %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), bucket, err)
+				log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
 			} else {
-				log.Infof("Restore: found backup %v %v to restore with %v files", bh.Bucket(), bh.Name(), len(bm.FileEntries))
+				log.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
 				break
 			}
 		} else {
-			log.Warningf("Possibly incomplete backup %v in bucket %v on BackupStorage (cannot read MANIFEST)", bh.Name(), bucket)
+			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot read MANIFEST)", bh.Name(), dir)
 		}
 		toRestore--
 	}
 	if toRestore < 0 {
-		log.Errorf("No backup to restore on BackupStorage for bucket %v", bucket)
+		log.Errorf("No backup to restore on BackupStorage for directory %v", dir)
 		return proto.ReplicationPosition{}, ErrNoBackup
 	}
 

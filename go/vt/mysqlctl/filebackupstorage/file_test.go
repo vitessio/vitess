@@ -39,8 +39,8 @@ func TestListBackups(t *testing.T) {
 	defer cleanupFileBackupStorage(fbs)
 
 	// verify we have no entry now
-	bucket := "keyspace/shard"
-	bhs, err := fbs.ListBackups(bucket)
+	dir := "keyspace/shard"
+	bhs, err := fbs.ListBackups(dir)
 	if err != nil {
 		t.Fatalf("ListBackups on empty fbs failed: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestListBackups(t *testing.T) {
 
 	// add one empty backup
 	firstBackup := "cell-0001-2015-01-14-10-00-00"
-	bh, err := fbs.StartBackup(bucket, firstBackup)
+	bh, err := fbs.StartBackup(dir, firstBackup)
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
@@ -59,19 +59,19 @@ func TestListBackups(t *testing.T) {
 	}
 
 	// verify we have one entry now
-	bhs, err = fbs.ListBackups(bucket)
+	bhs, err = fbs.ListBackups(dir)
 	if err != nil {
 		t.Fatalf("ListBackups on empty fbs failed: %v", err)
 	}
 	if len(bhs) != 1 ||
-		bhs[0].Bucket() != bucket ||
+		bhs[0].Directory() != dir ||
 		bhs[0].Name() != firstBackup {
 		t.Fatalf("ListBackups with one backup returned wrong results: %#v", bhs)
 	}
 
 	// add another one, with earlier date
 	secondBackup := "cell-0001-2015-01-12-10-00-00"
-	bh, err = fbs.StartBackup(bucket, secondBackup)
+	bh, err = fbs.StartBackup(dir, secondBackup)
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
@@ -80,46 +80,46 @@ func TestListBackups(t *testing.T) {
 	}
 
 	// verify we have two sorted entries now
-	bhs, err = fbs.ListBackups(bucket)
+	bhs, err = fbs.ListBackups(dir)
 	if err != nil {
 		t.Fatalf("ListBackups on empty fbs failed: %v", err)
 	}
 	if len(bhs) != 2 ||
-		bhs[0].Bucket() != bucket ||
+		bhs[0].Directory() != dir ||
 		bhs[0].Name() != secondBackup ||
-		bhs[1].Bucket() != bucket ||
+		bhs[1].Directory() != dir ||
 		bhs[1].Name() != firstBackup {
 		t.Fatalf("ListBackups with two backups returned wrong results: %#v", bhs)
 	}
 
 	// remove a backup, back to one
-	if err := fbs.RemoveBackup(bucket, secondBackup); err != nil {
+	if err := fbs.RemoveBackup(dir, secondBackup); err != nil {
 		t.Fatalf("RemoveBackup failed: %v", err)
 	}
-	bhs, err = fbs.ListBackups(bucket)
+	bhs, err = fbs.ListBackups(dir)
 	if err != nil {
 		t.Fatalf("ListBackups after deletion failed: %v", err)
 	}
 	if len(bhs) != 1 ||
-		bhs[0].Bucket() != bucket ||
+		bhs[0].Directory() != dir ||
 		bhs[0].Name() != firstBackup {
 		t.Fatalf("ListBackups after deletion returned wrong results: %#v", bhs)
 	}
 
 	// add a backup but abort it, should stay at one
-	bh, err = fbs.StartBackup(bucket, secondBackup)
+	bh, err = fbs.StartBackup(dir, secondBackup)
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
 	if err := bh.AbortBackup(); err != nil {
 		t.Fatalf("bh.AbortBackup failed: %v", err)
 	}
-	bhs, err = fbs.ListBackups(bucket)
+	bhs, err = fbs.ListBackups(dir)
 	if err != nil {
 		t.Fatalf("ListBackups after abort failed: %v", err)
 	}
 	if len(bhs) != 1 ||
-		bhs[0].Bucket() != bucket ||
+		bhs[0].Directory() != dir ||
 		bhs[0].Name() != firstBackup {
 		t.Fatalf("ListBackups after abort returned wrong results: %#v", bhs)
 	}
@@ -140,13 +140,13 @@ func TestFileContents(t *testing.T) {
 	fbs := setupFileBackupStorage(t)
 	defer cleanupFileBackupStorage(fbs)
 
-	bucket := "keyspace/shard"
+	dir := "keyspace/shard"
 	name := "cell-0001-2015-01-14-10-00-00"
 	filename1 := "file1"
 	contents1 := "contents of the first file"
 
 	// start a backup, add a file
-	bh, err := fbs.StartBackup(bucket, name)
+	bh, err := fbs.StartBackup(dir, name)
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestFileContents(t *testing.T) {
 	}
 
 	// re-read the file
-	bhs, err := fbs.ListBackups(bucket)
+	bhs, err := fbs.ListBackups(dir)
 	if err != nil || len(bhs) != 1 {
 		t.Fatalf("ListBackups after abort returned wrong return: %v %v", err, bhs)
 	}
