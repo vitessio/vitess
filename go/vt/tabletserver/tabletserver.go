@@ -600,7 +600,12 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 	}
 	var myError error
 	if tsv.config.TerseErrors && terr.SQLError != 0 && len(query.BindVariables) != 0 {
-		myError = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SQLError, query.Sql)
+		myError = &TabletError{
+			ErrorType: terr.ErrorType,
+			SQLError:  terr.SQLError,
+			ErrorCode: terr.ErrorCode,
+			Message:   fmt.Sprintf("(errno %d) during query: %s", terr.SQLError, query.Sql),
+		}
 	} else {
 		myError = terr
 	}
