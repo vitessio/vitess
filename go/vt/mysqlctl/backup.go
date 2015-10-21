@@ -45,8 +45,11 @@ const (
 )
 
 var (
-	// ErrNoBackup is returned when there is no backup
+	// ErrNoBackup is returned when there is no backup.
 	ErrNoBackup = errors.New("no available backup")
+
+	// ErrExistingDB is returned when there's already an active DB.
+	ErrExistingDB = errors.New("skipping restore due to existing database")
 )
 
 // FileEntry is one file to backup
@@ -399,10 +402,19 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 
 // checkNoDB makes sure there is no vt_ db already there. Used by Restore,
 // we do not wnat to destroy an existing DB.
-func checkNoDB(mysqld MysqlDaemon) error {
+// Returns true iff the condition is satisfied (there's no DB).
+// Returns (false, nil) if the check succeeds but the condition is not
+// satisfied (there is a DB).
+// Returns non-nil error if one occurs while trying to perform the check.
+func checkNoDB(ctx context.Context, mysqld MysqlDaemon) (bool, error) {
+	// Wait for mysqld to be ready, in case it was launched in parallel with us.
+	if err := mysqld.Wait(ctx); err != nil {
+		return false, err
+	}
+
 	qr, err := mysqld.FetchSuperQuery("SHOW DATABASES")
 	if err != nil {
-		return fmt.Errorf("checkNoDB failed: %v", err)
+		return false, fmt.Errorf("checkNoDB failed: %v", err)
 	}
 
 	for _, row := range qr.Rows {
@@ -410,16 +422,19 @@ func checkNoDB(mysqld MysqlDaemon) error {
 			dbName := row[0].String()
 			tableQr, err := mysqld.FetchSuperQuery("SHOW TABLES FROM " + dbName)
 			if err != nil {
-				return fmt.Errorf("checkNoDB failed: %v", err)
-			} else if len(tableQr.Rows) == 0 {
+				return false, fmt.Errorf("checkNoDB failed: %v", err)
+			}
+			if len(tableQr.Rows) == 0 {
 				// no tables == empty db, all is well
 				continue
 			}
-			return fmt.Errorf("checkNoDB failed, found active db %v", dbName)
+			// found active db
+			log.Warningf("checkNoDB failed, found active db %v", dbName)
+			return false, nil
 		}
 	}
 
-	return nil
+	return true, nil
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the
@@ -511,25 +526,26 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 	if err != nil {
 		return proto.ReplicationPosition{}, fmt.Errorf("ListBackups failed: %v", err)
 	}
-	toRestore := len(bhs) - 1
 	var bh backupstorage.BackupHandle
 	var bm BackupManifest
-	for toRestore >= 0 {
+	var toRestore int
+	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
 		bh = bhs[toRestore]
-		if rc, err := bh.ReadFile(backupManifest); err == nil {
-			dec := json.NewDecoder(rc)
-			err := dec.Decode(&bm)
-			rc.Close()
-			if err != nil {
-				log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
-			} else {
-				log.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
-				break
-			}
-		} else {
-			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot read MANIFEST)", bh.Name(), dir)
+		rc, err := bh.ReadFile(backupManifest)
+		if err != nil {
+			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
+			continue
 		}
-		toRestore--
+
+		err = json.NewDecoder(rc).Decode(&bm)
+		rc.Close()
+		if err != nil {
+			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
+			continue
+		}
+
+		log.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
+		break
 	}
 	if toRestore < 0 {
 		log.Errorf("No backup to restore on BackupStorage for directory %v", dir)
@@ -537,8 +553,12 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 	}
 
 	log.Infof("Restore: checking no existing data is present")
-	if err := checkNoDB(mysqld); err != nil {
+	ok, err := checkNoDB(ctx, mysqld)
+	if err != nil {
 		return proto.ReplicationPosition{}, err
+	}
+	if !ok {
+		return proto.ReplicationPosition{}, ErrExistingDB
 	}
 
 	log.Infof("Restore: shutdown mysqld")

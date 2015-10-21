@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"golang.org/x/net/context"
@@ -42,49 +43,73 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 		return fmt.Errorf("Cannot change type to RESTORE: %v", err)
 	}
 
-	// do the optional restore, if that fails we are in a bad state,
-	// just log.Fatalf out.
-	bucket := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, bucket, *restoreConcurrency, agent.hookExtraEnv())
-	if err != nil && err != mysqlctl.ErrNoBackup {
-		return fmt.Errorf("Cannot restore original backup: %v", err)
+	// Try to restore. Depending on the reason for failure, we may be ok.
+	// If we're not ok, return an error and the agent will log.Fatalf,
+	// causing the process to be restarted and the restore retried.
+	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
+	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv())
+	switch err {
+	case nil:
+		// Reconnect to master.
+		if err := agent.startReplication(ctx, pos); err != nil {
+			return err
+		}
+	case mysqlctl.ErrNoBackup:
+		log.Infof("Auto-restore is enabled, but no backups were found. Starting up empty.")
+	case mysqlctl.ErrExistingDB:
+		log.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
+	default:
+		return fmt.Errorf("Can't restore backup: %v", err)
 	}
 
-	if err == nil {
-		// now read the shard to find the current master, and its location
-		si, err := agent.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
-		if err != nil {
-			return fmt.Errorf("Cannot read shard: %v", err)
-		}
-		if si.MasterAlias == nil {
-			return fmt.Errorf("Shard %v/%v has no master", tablet.Keyspace, tablet.Shard)
-		}
-		ti, err := agent.TopoServer.GetTablet(ctx, si.MasterAlias)
-		if err != nil {
-			return fmt.Errorf("Cannot read master tablet %v: %v", si.MasterAlias, err)
-		}
-
-		// set replication straight
-		status := &myproto.ReplicationStatus{
-			Position:   pos,
-			MasterHost: ti.Hostname,
-			MasterPort: int(ti.PortMap["mysql"]),
-		}
-		cmds, err := agent.MysqlDaemon.StartReplicationCommands(status)
-		if err != nil {
-			return fmt.Errorf("MysqlDaemon.StartReplicationCommands failed: %v", err)
-		}
-		if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
-			return fmt.Errorf("MysqlDaemon.ExecuteSuperQueryList failed: %v", err)
-		}
-	}
-
-	// change type back to original type
+	// Change type back to original type if we're ok to serve.
 	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *pb.Tablet) error {
 		tablet.Type = originalType
 		return nil
 	}); err != nil {
 		return fmt.Errorf("Cannot change type back to %v: %v", originalType, err)
 	}
+	return nil
+}
+
+func (agent *ActionAgent) startReplication(ctx context.Context, pos myproto.ReplicationPosition) error {
+	// Set the position at which to resume from the master.
+	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
+	if err != nil {
+		return err
+	}
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
+		return fmt.Errorf("failed to set slave position: %v", err)
+	}
+
+	// Read the shard to find the current master, and its location.
+	tablet := agent.Tablet()
+	si, err := agent.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return fmt.Errorf("can't read shard: %v", err)
+	}
+	if si.MasterAlias == nil {
+		// We've restored, but there's no master. This is fine, since we've
+		// already set the position at which to resume when we're later reparented.
+		// If we had instead considered this fatal, all tablets would crash-loop
+		// until a master appears, which would make it impossible to elect a master.
+		log.Warningf("Can't start replication after restore: shard %v/%v has no master.", tablet.Keyspace, tablet.Shard)
+		return nil
+	}
+	ti, err := agent.TopoServer.GetTablet(ctx, si.MasterAlias)
+	if err != nil {
+		return fmt.Errorf("Cannot read master tablet %v: %v", si.MasterAlias, err)
+	}
+
+	// Set master and start slave.
+	cmds, err = agent.MysqlDaemon.SetMasterCommands(ti.Hostname, int(ti.PortMap["mysql"]))
+	if err != nil {
+		return fmt.Errorf("MysqlDaemon.SetMasterCommands failed: %v", err)
+	}
+	cmds = append(cmds, "START SLAVE")
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
+		return fmt.Errorf("failed to start replication: %v", err)
+	}
+
 	return nil
 }

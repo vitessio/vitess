@@ -248,12 +248,16 @@ func (mysqld *Mysqld) Start(ctx context.Context) error {
 		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
 	}
 
-	// give it some time to succeed - usually by the time the socket emerges
-	// we are in good shape
+	return mysqld.Wait(ctx)
+}
+
+// Wait returns nil when mysqld is up and accepting connections.
+func (mysqld *Mysqld) Wait(ctx context.Context) error {
+	log.Infof("Waiting for mysqld socket file (%v) to be ready...", mysqld.config.SocketFile)
 	for {
 		select {
 		case <-ctx.Done():
-			return errors.New(name + ": deadline exceeded waiting for " + mysqld.config.SocketFile)
+			return errors.New("deadline exceeded waiting for mysqld socket file to appear: " + mysqld.config.SocketFile)
 		default:
 		}
 
@@ -266,9 +270,8 @@ func (mysqld *Mysqld) Start(ctx context.Context) error {
 				return nil
 			}
 		} else if !os.IsNotExist(statErr) {
-			return statErr
+			return fmt.Errorf("can't stat mysqld socket file: %v", statErr)
 		}
-		log.Infof("%v: sleeping for 1s waiting for socket file %v", ts, mysqld.config.SocketFile)
 		time.Sleep(time.Second)
 	}
 }
