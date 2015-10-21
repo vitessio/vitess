@@ -19,11 +19,12 @@ import (
 
 // TabletExecutor applies schema changes to all tablets.
 type TabletExecutor struct {
-	tmClient    tmclient.TabletManagerClient
-	topoServer  topo.Server
-	tabletInfos []*topo.TabletInfo
-	schemaDiffs []*tmutils.SchemaChangeResult
-	isClosed    bool
+	tmClient             tmclient.TabletManagerClient
+	topoServer           topo.Server
+	tabletInfos          []*topo.TabletInfo
+	schemaDiffs          []*tmutils.SchemaChangeResult
+	isClosed             bool
+	allowBigSchemaChange bool
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
@@ -31,10 +32,23 @@ func NewTabletExecutor(
 	tmClient tmclient.TabletManagerClient,
 	topoServer topo.Server) *TabletExecutor {
 	return &TabletExecutor{
-		tmClient:   tmClient,
-		topoServer: topoServer,
-		isClosed:   true,
+		tmClient:             tmClient,
+		topoServer:           topoServer,
+		isClosed:             true,
+		allowBigSchemaChange: false,
 	}
+}
+
+// AllowBigSchemaChange skips big schema changes check and tablet executor will
+// send all schema changes to all VTTablets even for big changes.
+func (exec *TabletExecutor) AllowBigSchemaChange() {
+	exec.allowBigSchemaChange = true
+}
+
+// DisallowBigSchemaChange enforce big schema change check and will reject
+// certain schema changes.
+func (exec *TabletExecutor) DisallowBigSchemaChange() {
+	exec.allowBigSchemaChange = false
 }
 
 // Open opens a connection to the master for every shard
@@ -89,6 +103,10 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 			return fmt.Errorf("schema change works for DDLs only, but get non DDL statement: %s", sql)
 		}
 		parsedDDLs[i] = ddl
+	}
+	if exec.allowBigSchemaChange {
+		log.Warningf("skipped big schema check, this may cause visible MySQL downtime")
+		return nil
 	}
 	return exec.detectBigSchemaChanges(ctx, parsedDDLs)
 }

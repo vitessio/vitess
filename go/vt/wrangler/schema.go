@@ -326,11 +326,14 @@ func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, ch
 	if err != nil {
 		return nil, err
 	}
-
+	executor := schemamanager.NewTabletExecutor(wr.tmc, wr.ts)
+	if force {
+		executor.AllowBigSchemaChange()
+	}
 	err = schemamanager.Run(
 		ctx,
 		schemamanager.NewPlainController(change, keyspace),
-		schemamanager.NewTabletExecutor(wr.tmc, wr.ts),
+		executor,
 	)
 
 	return nil, wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
