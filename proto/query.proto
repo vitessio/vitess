@@ -136,6 +136,36 @@ message Row {
   repeated bytes values = 1;
 }
 
+message Cell {
+  bytes value = 1;
+}
+
+message Row1 {
+  repeated Cell values = 1;
+}
+
+message Result1 {
+  repeated Row1 rows = 1;
+}
+
+message Row2 {
+  repeated bool is_null = 1;
+  repeated bytes values = 2;
+}
+
+message Result2 {
+  repeated Row2 rows = 1;
+}
+
+message Row3 {
+  repeated int64 indexes = 1;
+  bytes values = 2;
+}
+
+message Result3 {
+  repeated Row3 rows = 1;
+}
+
 // QueryResult is returned by Execute and ExecuteStream.
 //
 // As returned by Execute, len(fields) is always equal to len(row)
