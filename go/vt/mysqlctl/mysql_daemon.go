@@ -40,7 +40,7 @@ type MysqlDaemon interface {
 	MasterPosition() (proto.ReplicationPosition, error)
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
-	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
+	SetSlavePositionCommands(pos proto.ReplicationPosition) ([]string, error)
 	SetMasterCommands(masterHost string, masterPort int) ([]string, error)
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
@@ -124,14 +124,14 @@ type FakeMysqlDaemon struct {
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
 
-	// StartReplicationCommandsStatus is matched against the input
-	// of StartReplicationCommands. If it doesn't match,
-	// StartReplicationCommands will return an error.
-	StartReplicationCommandsStatus *proto.ReplicationStatus
+	// SetSlavePositionCommandsPos is matched against the input
+	// of SetSlavePositionCommands. If it doesn't match,
+	// SetSlavePositionCommands will return an error.
+	SetSlavePositionCommandsPos proto.ReplicationPosition
 
-	// StartReplicationCommandsResult is what
-	// StartReplicationCommands will return
-	StartReplicationCommandsResult []string
+	// SetSlavePositionCommandsResult is what
+	// SetSlavePositionCommands will return
+	SetSlavePositionCommandsResult []string
 
 	// SetMasterCommandsInput is matched against the input
 	// of SetMasterCommands (as "%v:%v"). If it doesn't match,
@@ -263,13 +263,12 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 	return nil
 }
 
-// StartReplicationCommands is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error) {
-	status.MasterConnectRetry = int(masterConnectRetry.Seconds())
-	if !reflect.DeepEqual(fmd.StartReplicationCommandsStatus, status) {
-		return nil, fmt.Errorf("wrong status for StartReplicationCommands: expected %v got %v", fmd.StartReplicationCommandsStatus, status)
+// SetSlavePositionCommands is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) SetSlavePositionCommands(pos proto.ReplicationPosition) ([]string, error) {
+	if !reflect.DeepEqual(fmd.SetSlavePositionCommandsPos, pos) {
+		return nil, fmt.Errorf("wrong pos for SetSlavePositionCommands: expected %v got %v", fmd.SetSlavePositionCommandsPos, pos)
 	}
-	return fmd.StartReplicationCommandsResult, nil
+	return fmd.SetSlavePositionCommandsResult, nil
 }
 
 // SetMasterCommands is part of the MysqlDaemon interface

@@ -440,15 +440,16 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *pb.TabletAlias,
 		return err
 	}
 
-	status := &myproto.ReplicationStatus{
-		Position:   replicationPosition,
-		MasterHost: ti.Hostname,
-		MasterPort: int(ti.PortMap["mysql"]),
-	}
-	cmds, err := agent.MysqlDaemon.StartReplicationCommands(status)
+	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(replicationPosition)
 	if err != nil {
 		return err
 	}
+	cmds2, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, int(ti.PortMap["mysql"]))
+	if err != nil {
+		return err
+	}
+	cmds = append(cmds, cmds2...)
+	cmds = append(cmds, "START SLAVE")
 
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
 		return err

@@ -36,7 +36,7 @@ func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (proto.ReplicationPosition
 func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (proto.ReplicationStatus, error) {
 	return proto.ReplicationStatus{}, nil
 }
-func (fakeMysqlFlavor) StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error) {
+func (fakeMysqlFlavor) SetSlavePositionCommands(pos proto.ReplicationPosition) ([]string, error) {
 	return nil, nil
 }
 func (fakeMysqlFlavor) SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {

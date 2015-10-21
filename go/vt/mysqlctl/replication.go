@@ -214,21 +214,15 @@ func (mysqld *Mysqld) MasterPosition() (rp proto.ReplicationPosition, err error)
 	return flavor.MasterPosition(mysqld)
 }
 
-// StartReplicationCommands returns the commands used to start
-// replication to the provided master using the provided starting
-// position.  The provided MasterConnectRetry will be ignored and
-// replaced by the command line parameter.
-func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error) {
+// SetSlavePositionCommands returns the commands to set the
+// replication position at which the slave will resume
+// when it is later reparented with SetMasterCommands.
+func (mysqld *Mysqld) SetSlavePositionCommands(pos proto.ReplicationPosition) ([]string, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
-		return nil, fmt.Errorf("StartReplicationCommands needs flavor: %v", err)
+		return nil, fmt.Errorf("SetSlavePositionCommands needs flavor: %v", err)
 	}
-	params, err := dbconfigs.MysqlParams(mysqld.replParams)
-	if err != nil {
-		return nil, err
-	}
-	status.MasterConnectRetry = int(masterConnectRetry.Seconds())
-	return flavor.StartReplicationCommands(&params, status)
+	return flavor.SetSlavePositionCommands(pos)
 }
 
 // SetMasterCommands returns the commands to run to make the provided

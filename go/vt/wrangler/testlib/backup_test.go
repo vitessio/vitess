@@ -5,6 +5,7 @@
 package testlib
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -123,6 +124,8 @@ func TestBackupRestore(t *testing.T) {
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"cmd1",
+		"set master cmd 1",
+		"START SLAVE",
 	}
 	destTablet.FakeMysqlDaemon.Mycnf = &mysqlctl.Mycnf{
 		DataDir:               sourceDataDir,
@@ -132,13 +135,10 @@ func TestBackupRestore(t *testing.T) {
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
 		"SHOW DATABASES": &mproto.QueryResult{},
 	}
-	destTablet.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
-		Position:           sourceTablet.FakeMysqlDaemon.CurrentMasterPosition,
-		MasterHost:         master.Tablet.Hostname,
-		MasterPort:         int(master.Tablet.PortMap["mysql"]),
-		MasterConnectRetry: 10,
-	}
-	destTablet.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1"}
+	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
+	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
+	destTablet.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
+	destTablet.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
