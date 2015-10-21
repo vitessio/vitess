@@ -491,8 +491,11 @@ class TestReparent(unittest.TestCase):
                         ['START SLAVE'])
 
     # in brutal mode, we kill the old master first
+    # and delete its tablet record
     if brutal:
       tablet_62344.kill_vttablet()
+      utils.run_vtctl(['DeleteTablet', '-allow_master',
+                       tablet_62344.tablet_alias], auto_log=True)
 
     base_time = time.time()
 
