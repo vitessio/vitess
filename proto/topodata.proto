@@ -45,7 +45,6 @@ message TabletAlias {
 enum TabletType {
   option allow_alias = true; // so we can have RDONLY and BATCH co-exist
   UNKNOWN = 0;               // not a valid value
-  IDLE = 1;
   MASTER = 2;
   REPLICA = 3;
   RDONLY = 4;
@@ -56,7 +55,6 @@ enum TabletType {
   BACKUP = 8;
   RESTORE = 9;
   WORKER = 10;
-  SCRAP = 11;
 }
 
 // Tablet represents information about a running instance of vttablet.

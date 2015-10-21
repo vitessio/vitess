@@ -48,10 +48,7 @@ type TabletType string
 //go:generate bsongen -file $GOFILE -type TabletType -o tablet_type_bson.go
 
 const (
-	// idle -  no keyspace, shard or type assigned
-	TYPE_IDLE = TabletType("idle")
-
-	// primary copy of data
+	// primary copy of data, accepts writes
 	TYPE_MASTER = TabletType("master")
 
 	// a slaved copy of the data ready to be promoted to master
@@ -87,9 +84,6 @@ const (
 	// A tablet that is used by a worker process. It is probably
 	// lagging in replication.
 	TYPE_WORKER = TabletType("worker")
-
-	// a machine with data that needs to be wiped
-	TYPE_SCRAP = TabletType("scrap")
 )
 
 // IsTrivialTypeChange returns if this db type be trivially reassigned
@@ -101,11 +95,9 @@ func IsTrivialTypeChange(oldTabletType, newTabletType pb.TabletType) bool {
 		case pb.TabletType_REPLICA, pb.TabletType_RDONLY, pb.TabletType_SPARE, pb.TabletType_BACKUP, pb.TabletType_EXPERIMENTAL, pb.TabletType_SCHEMA_UPGRADE, pb.TabletType_WORKER:
 			return true
 		}
-	case pb.TabletType_SCRAP:
-		return newTabletType == pb.TabletType_IDLE
 	case pb.TabletType_RESTORE:
 		switch newTabletType {
-		case pb.TabletType_SPARE, pb.TabletType_IDLE:
+		case pb.TabletType_SPARE:
 			return true
 		}
 	}
@@ -140,27 +132,13 @@ func IsRunningUpdateStream(tt pb.TabletType) bool {
 	return false
 }
 
-// IsInReplicationGraph returns if this tablet appears in the replication graph
-// Only IDLE and SCRAP are not in the replication graph.
-// The other non-obvious types are BACKUP, SNAPSHOT_SOURCE, RESTORE:
-// these have had a master at some point (or were the master), so they are
-// in the graph.
-func IsInReplicationGraph(tt pb.TabletType) bool {
-	switch tt {
-	case pb.TabletType_IDLE, pb.TabletType_SCRAP:
-		return false
-	}
-	return true
-}
-
 // IsSlaveType returns if this type should be connected to a master db
 // and actively replicating?
 // MASTER is not obviously (only support one level replication graph)
-// IDLE and SCRAP are not either
 // BACKUP, RESTORE, TYPE_WORKER may or may not be, but we don't know for sure
 func IsSlaveType(tt pb.TabletType) bool {
 	switch tt {
-	case pb.TabletType_MASTER, pb.TabletType_IDLE, pb.TabletType_SCRAP, pb.TabletType_BACKUP, pb.TabletType_RESTORE, pb.TabletType_WORKER:
+	case pb.TabletType_MASTER, pb.TabletType_BACKUP, pb.TabletType_RESTORE, pb.TabletType_WORKER:
 		return false
 	}
 	return true
@@ -235,13 +213,6 @@ func (ti *TabletInfo) MysqlAddr() string {
 	return netutil.JoinHostPort(ti.Hostname, int32(ti.PortMap["mysql"]))
 }
 
-// IsAssigned returns if this tablet ever assigned data?
-// A "scrap" node will show up as assigned even though its data
-// cannot be used for serving.
-func (ti *TabletInfo) IsAssigned() bool {
-	return ti.Keyspace != "" && ti.Shard != ""
-}
-
 // DbName is usually implied by keyspace. Having the shard information in the
 // database name complicates mysql replication.
 func (ti *TabletInfo) DbName() string {
@@ -257,11 +228,6 @@ func (ti *TabletInfo) Version() int64 {
 // IsInServingGraph returns if this tablet is in the serving graph
 func (ti *TabletInfo) IsInServingGraph() bool {
 	return IsInServingGraph(ti.Type)
-}
-
-// IsInReplicationGraph returns if this tablet is in the replication graph.
-func (ti *TabletInfo) IsInReplicationGraph() bool {
-	return IsInReplicationGraph(ti.Type)
 }
 
 // IsSlaveType returns if this tablet's type is a slave
@@ -362,43 +328,18 @@ func Validate(ctx context.Context, ts Server, tabletAlias *pb.TabletAlias) error
 		return fmt.Errorf("bad tablet alias data for tablet %v: %#v", topoproto.TabletAliasString(tabletAlias), tablet.Alias)
 	}
 
-	// Some tablets have no information to generate valid replication paths.
-	// We have three cases to handle:
-	// - we are a tablet in the replication graph, and should have
-	//   replication data (first case below)
-	// - we are in scrap mode but used to be assigned in the graph
-	//   somewhere (second case below)
-	// Idle tablets are just not in any graph at all, we don't even know
-	// their keyspace / shard to know where to check.
-	if tablet.IsInReplicationGraph() {
-		if err = ts.ValidateShard(ctx, tablet.Keyspace, tablet.Shard); err != nil {
-			return err
-		}
+	// Validate the entry in the shard replication nodes
+	if err = ts.ValidateShard(ctx, tablet.Keyspace, tablet.Shard); err != nil {
+		return err
+	}
 
-		si, err := ts.GetShardReplication(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
-		if err != nil {
-			return err
-		}
+	si, err := ts.GetShardReplication(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return err
+	}
 
-		_, err = si.GetShardReplicationNode(tabletAlias)
-		if err != nil {
-			return fmt.Errorf("tablet %v not found in cell %v shard replication: %v", tabletAlias, tablet.Alias.Cell, err)
-		}
-
-	} else if tablet.IsAssigned() {
-		// this case is to make sure a scrap node that used to be in
-		// a replication graph doesn't leave a node behind.
-		// However, while an action is running, there is some
-		// time where this might be inconsistent.
-		si, err := ts.GetShardReplication(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
-		if err != nil {
-			return err
-		}
-
-		node, err := si.GetShardReplicationNode(tabletAlias)
-		if err != ErrNoNode {
-			return fmt.Errorf("unexpected replication data found(possible pending action?): %v (%v)", node, tablet.Type)
-		}
+	if _, err = si.GetShardReplicationNode(tabletAlias); err != nil {
+		return fmt.Errorf("tablet %v not found in cell %v shard replication: %v", tabletAlias, tablet.Alias.Cell, err)
 	}
 
 	return nil
@@ -411,11 +352,6 @@ func (ts Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 	err := ts.Impl.CreateTablet(ctx, tablet)
 	if err != nil {
 		return err
-	}
-
-	// Then add the tablet to the replication graphs
-	if !IsInReplicationGraph(tablet.Type) {
-		return nil
 	}
 
 	if err := UpdateTabletReplicationData(ctx, ts, tablet); err != nil {

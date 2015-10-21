@@ -104,7 +104,6 @@ func (tal TabletAliasList) Swap(i, j int) {
 
 // AllTabletTypes lists all the possible tablet types
 var AllTabletTypes = []pb.TabletType{
-	pb.TabletType_IDLE,
 	pb.TabletType_MASTER,
 	pb.TabletType_REPLICA,
 	pb.TabletType_RDONLY,
@@ -115,7 +114,6 @@ var AllTabletTypes = []pb.TabletType{
 	pb.TabletType_BACKUP,
 	pb.TabletType_RESTORE,
 	pb.TabletType_WORKER,
-	pb.TabletType_SCRAP,
 }
 
 // SlaveTabletTypes contains all the tablet type that can have replication

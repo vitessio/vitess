@@ -67,7 +67,6 @@ type TabletType int32
 
 const (
 	TabletType_UNKNOWN        TabletType = 0
-	TabletType_IDLE           TabletType = 1
 	TabletType_MASTER         TabletType = 2
 	TabletType_REPLICA        TabletType = 3
 	TabletType_RDONLY         TabletType = 4
@@ -78,12 +77,10 @@ const (
 	TabletType_BACKUP         TabletType = 8
 	TabletType_RESTORE        TabletType = 9
 	TabletType_WORKER         TabletType = 10
-	TabletType_SCRAP          TabletType = 11
 )
 
 var TabletType_name = map[int32]string{
 	0: "UNKNOWN",
-	1: "IDLE",
 	2: "MASTER",
 	3: "REPLICA",
 	4: "RDONLY",
@@ -94,11 +91,9 @@ var TabletType_name = map[int32]string{
 	8:  "BACKUP",
 	9:  "RESTORE",
 	10: "WORKER",
-	11: "SCRAP",
 }
 var TabletType_value = map[string]int32{
 	"UNKNOWN":        0,
-	"IDLE":           1,
 	"MASTER":         2,
 	"REPLICA":        3,
 	"RDONLY":         4,
@@ -109,7 +104,6 @@ var TabletType_value = map[string]int32{
 	"BACKUP":         8,
 	"RESTORE":        9,
 	"WORKER":         10,
-	"SCRAP":          11,
 }
 
 func (x TabletType) String() string {

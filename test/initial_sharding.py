@@ -11,7 +11,7 @@
 # - we clone into 2 instances
 # - we enable filtered replication
 # - we move all serving types
-# - we scrap the source tablets
+# - we remove the source tablets
 # - we remove the original shard
 
 import base64
@@ -472,9 +472,7 @@ index by_msg (msg)
     # make sure we can't delete a shard with tablets
     utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], expect_fail=True)
 
-    # scrap the original tablets in the original shard
-    for t in [shard_master, shard_replica, shard_rdonly1]:
-      utils.run_vtctl(['ScrapTablet', t.tablet_alias], auto_log=True)
+    # remove the original tablets in the original shard
     tablet.kill_tablets([shard_master, shard_replica, shard_rdonly1])
     for t in [shard_master, shard_replica, shard_rdonly1]:
       utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)

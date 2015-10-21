@@ -98,10 +98,10 @@ func SortedTabletMap(tabletMap map[pb.TabletAlias]*topo.TabletInfo) (map[pb.Tabl
 	slaveMap := make(map[pb.TabletAlias]*topo.TabletInfo)
 	masterMap := make(map[pb.TabletAlias]*topo.TabletInfo)
 	for alias, ti := range tabletMap {
-		if ti.Type != pb.TabletType_MASTER && ti.Type != pb.TabletType_SCRAP {
-			slaveMap[alias] = ti
-		} else {
+		if ti.Type == pb.TabletType_MASTER {
 			masterMap[alias] = ti
+		} else {
+			slaveMap[alias] = ti
 		}
 	}
 	return slaveMap, masterMap

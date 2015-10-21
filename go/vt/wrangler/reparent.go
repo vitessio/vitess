@@ -207,8 +207,8 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		wr.logger.Warningf("master-elect tablet %v is not a master in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
 	haveOtherMaster := false
-	for alias, ti := range masterTabletMap {
-		if !topoproto.TabletAliasEqual(&alias, masterElectTabletAlias) && ti.Type != pb.TabletType_SCRAP {
+	for alias, _ := range masterTabletMap {
+		if !topoproto.TabletAliasEqual(&alias, masterElectTabletAlias) {
 			haveOtherMaster = true
 		}
 	}
@@ -505,7 +505,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	// Deal with the old master: try to remote-scrap it, if it's
 	// truely dead we force-scrap it. Remove it from our map in any case.
 	if shardInfo.HasMaster() {
-		scrapOldMaster := true
+		deleteOldMaster := true
 		oldMasterTabletInfo, ok := tabletMap[*shardInfo.MasterAlias]
 		if ok {
 			delete(tabletMap, *shardInfo.MasterAlias)
@@ -513,23 +513,19 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			oldMasterTabletInfo, err = wr.ts.GetTablet(ctx, shardInfo.MasterAlias)
 			if err != nil {
 				wr.logger.Warningf("cannot read old master tablet %v, won't touch it: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
-				scrapOldMaster = false
+				deleteOldMaster = false
 			}
 		}
 
-		if scrapOldMaster {
+		if deleteOldMaster {
 			ev.OldMaster = *oldMasterTabletInfo.Tablet
-			wr.logger.Infof("scrapping old master %v", topoproto.TabletAliasString(shardInfo.MasterAlias))
+			wr.logger.Infof("deleting old master %v", topoproto.TabletAliasString(shardInfo.MasterAlias))
 
 			ctx, cancel := context.WithTimeout(ctx, waitSlaveTimeout)
 			defer cancel()
 
-			if err := wr.tmc.Scrap(ctx, oldMasterTabletInfo); err != nil {
-				wr.logger.Warningf("remote scrapping failed master failed, will force the scrap: %v", err)
-
-				if err := topotools.Scrap(ctx, wr.ts, shardInfo.MasterAlias, true); err != nil {
-					wr.logger.Warningf("old master topo scrapping failed, continuing anyway: %v", err)
-				}
+			if err := topotools.DeleteTablet(ctx, wr.ts, oldMasterTabletInfo.Tablet); err != nil {
+				wr.logger.Warningf("failed to delete old master tablet %v: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
 			}
 		}
 	}

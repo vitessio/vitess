@@ -113,14 +113,6 @@ func (tm *TabletManager) ChangeType(ctx context.Context, args *pb.TabletType, re
 	})
 }
 
-// Scrap wraps RPCAgent.Scrap
-func (tm *TabletManager) Scrap(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
-	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionScrap, args, reply, true, func() error {
-		return tm.agent.Scrap(ctx)
-	})
-}
-
 // RefreshState wraps RPCAgent.RefreshState
 func (tm *TabletManager) RefreshState(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)

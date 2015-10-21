@@ -171,8 +171,6 @@ func (ks KeyspaceNodes) HasType(tabletType pb.TabletType) bool {
 // Topology is the entire set of tablets in the topology.
 type Topology struct {
 	Assigned map[string]*KeyspaceNodes // indexed by keyspace name
-	Idle     []*TabletNode
-	Scrap    []*TabletNode
 	Partial  bool
 }
 
@@ -180,8 +178,6 @@ type Topology struct {
 func DbTopology(ctx context.Context, ts topo.Server) (*Topology, error) {
 	topology := &Topology{
 		Assigned: make(map[string]*KeyspaceNodes),
-		Idle:     make([]*TabletNode, 0),
-		Scrap:    make([]*TabletNode, 0),
 		Partial:  false,
 	}
 
@@ -200,30 +196,23 @@ func DbTopology(ctx context.Context, ts topo.Server) (*Topology, error) {
 	assigned := make(map[string]map[string][]*TabletNodesByType)
 	for _, ti := range tabletInfos {
 		tablet := newTabletNodeFromTabletInfo(ti)
-		switch ti.Type {
-		case pb.TabletType_IDLE:
-			topology.Idle = append(topology.Idle, tablet)
-		case pb.TabletType_SCRAP:
-			topology.Scrap = append(topology.Scrap, tablet)
-		default:
-			if _, ok := assigned[ti.Keyspace]; !ok {
-				assigned[ti.Keyspace] = make(map[string][]*TabletNodesByType)
-			}
-			var tabletNode *TabletNodesByType
-			for _, tabletNodes := range assigned[ti.Keyspace][ti.Shard] {
-				if tabletNodes.TabletType == ti.Type {
-					tabletNode = tabletNodes
-					break
-				}
-			}
-			if tabletNode == nil {
-				tabletNode = &TabletNodesByType{
-					TabletType: ti.Type,
-				}
-				assigned[ti.Keyspace][ti.Shard] = append(assigned[ti.Keyspace][ti.Shard], tabletNode)
-			}
-			tabletNode.Nodes = append(tabletNode.Nodes, tablet)
+		if _, ok := assigned[ti.Keyspace]; !ok {
+			assigned[ti.Keyspace] = make(map[string][]*TabletNodesByType)
 		}
+		var tabletNode *TabletNodesByType
+		for _, tabletNodes := range assigned[ti.Keyspace][ti.Shard] {
+			if tabletNodes.TabletType == ti.Type {
+				tabletNode = tabletNodes
+				break
+			}
+		}
+		if tabletNode == nil {
+			tabletNode = &TabletNodesByType{
+				TabletType: ti.Type,
+			}
+			assigned[ti.Keyspace][ti.Shard] = append(assigned[ti.Keyspace][ti.Shard], tabletNode)
+		}
+		tabletNode.Nodes = append(tabletNode.Nodes, tablet)
 	}
 
 	for keyspace, shardMap := range assigned {

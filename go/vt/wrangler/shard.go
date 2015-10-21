@@ -29,7 +29,7 @@ func (wr *Wrangler) unlockShard(ctx context.Context, keyspace, shard string, act
 
 // updateShardCellsAndMaster will update the 'Cells' and possibly
 // MasterAlias records for the shard, if needed.
-func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.ShardInfo, tabletAlias *pb.TabletAlias, tabletType pb.TabletType, force bool) error {
+func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.ShardInfo, tabletAlias *pb.TabletAlias, tabletType pb.TabletType, allowMasterOverride bool) error {
 	// See if we need to update the Shard:
 	// - add the tablet's cell to the shard's Cells if needed
 	// - change the master if needed
@@ -65,7 +65,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 		wasUpdated = true
 	}
 	if tabletType == pb.TabletType_MASTER && !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
-		if si.HasMaster() && !force {
+		if si.HasMaster() && !allowMasterOverride {
 			return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", topoproto.TabletAliasString(si.MasterAlias), keyspace, shard))
 		}
 		si.MasterAlias = tabletAlias

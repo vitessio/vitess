@@ -138,23 +138,6 @@ class TestTabletManager(unittest.TestCase):
 
     tablet_62344.kill_vttablet()
 
-    tablet_62344.init_tablet('idle')
-    tablet_62344.scrap(force=True)
-
-  def test_scrap(self):
-    # Start up a master mysql and vttablet
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-
-    tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    tablet_62044.init_tablet('replica', 'test_keyspace', '0')
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/*'])
-    utils.validate_topology()
-    self._check_srv_shard()
-
-    tablet_62044.scrap(force=True)
-    utils.validate_topology()
-    self._check_srv_shard()
-
   _create_vt_select_test = '''create table vt_select_test (
   id bigint auto_increment,
   msg varchar(64),
@@ -326,7 +309,7 @@ class TestTabletManager(unittest.TestCase):
       self.fail('proc1 still running')
     tablet_62344.kill_vttablet()
 
-  def test_scrap_and_reinit(self):
+  def test_shard_replication_fix(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     tablet_62344.create_db('vt_test_keyspace')
@@ -337,21 +320,11 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.init_tablet('replica', 'test_keyspace', '0')
 
     # make sure the replica is in the replication graph
-    before_scrap = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
+    before_bogus = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                          'test_keyspace/0'])
-    self.assertEqual(2, len(before_scrap['nodes']),
+    self.assertEqual(2, len(before_bogus['nodes']),
                      'wrong shard replication nodes before: %s' %
-                     str(before_scrap))
-
-    # scrap and re-init
-    utils.run_vtctl(['ScrapTablet', '-force', tablet_62044.tablet_alias])
-    tablet_62044.init_tablet('replica', 'test_keyspace', '0')
-
-    after_scrap = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
-                                        'test_keyspace/0'])
-    self.assertEqual(2, len(after_scrap['nodes']),
-                     'wrong shard replication nodes after: %s' %
-                     str(after_scrap))
+                     str(before_bogus))
 
     # manually add a bogus entry to the replication graph, and check
     # it is removed by ShardReplicationFix
@@ -366,7 +339,7 @@ class TestTabletManager(unittest.TestCase):
                     auto_log=True)
     after_fix = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                       'test_keyspace/0'])
-    self.assertEqual(2, len(after_scrap['nodes']),
+    self.assertEqual(2, len(after_fix['nodes']),
                      'wrong shard replication nodes after fix: %s' %
                      str(after_fix))
 

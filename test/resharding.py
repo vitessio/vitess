@@ -794,15 +794,14 @@ primary key (name)
     self.assertIn('No binlog player is running', shard_2_master_status)
     self.assertIn('</html>', shard_2_master_status)
 
-    # scrap the original tablets in the original shard
-    for t in [shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
-              shard_1_rdonly1]:
-      utils.run_vtctl(['ScrapTablet', t.tablet_alias], auto_log=True)
+    # delete the original tablets in the original shard
     tablet.kill_tablets([shard_1_master, shard_1_slave1, shard_1_slave2,
                          shard_1_ny_rdonly, shard_1_rdonly1])
-    for t in [shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
+    for t in [shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
               shard_1_rdonly1]:
       utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
+    utils.run_vtctl(['DeleteTablet', '-allow_master',
+                     shard_1_master.tablet_alias], auto_log=True)
 
     # rebuild the serving graph, all mentions of the old shards shoud be gone
     utils.run_vtctl(

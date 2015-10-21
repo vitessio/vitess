@@ -378,7 +378,6 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 	// if newParentTabletAlias is passed in, use that as the new master
 	if !topoproto.TabletAliasIsZero(newParentTabletAlias) {
 		log.Infof("Reparenting with new master set to %v", topoproto.TabletAliasString(newParentTabletAlias))
-		oldMasterAlias := shardInfo.MasterAlias
 
 		// Create reusable Reparent event with available info
 		ev := &events.Reparent{}
@@ -387,13 +386,9 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 			return nil, err
 		}
 
-		// Here we would apply the schema change to the old
-		// master, but we just scrap it, to be consistent
-		// with the previous implementation of the reparent.
-		// (this code will be refactored at some point anyway)
-		if err := wr.Scrap(ctx, oldMasterAlias, false, false); err != nil {
-			wr.Logger().Warningf("Scrapping old master %v from shard %v/%v failed: %v", topoproto.TabletAliasString(oldMasterAlias), shardInfo.Keyspace(), shardInfo.ShardName(), err)
-		}
+		// FIXME(alainjobart) Here we would apply the schema
+		// change to the old master, but there is nothign we
+		// can do now.
 	}
 	return &myproto.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
 }

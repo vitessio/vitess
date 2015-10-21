@@ -56,9 +56,6 @@ type TabletManagerClient interface {
 	// ChangeType asks the remote tablet to change its type
 	ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType pb.TabletType) error
 
-	// Scrap scraps the live running tablet
-	Scrap(ctx context.Context, tablet *topo.TabletInfo) error
-
 	// Sleep will sleep for a duration (used for tests)
 	Sleep(ctx context.Context, tablet *topo.TabletInfo, duration time.Duration) error
 

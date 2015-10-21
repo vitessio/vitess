@@ -73,7 +73,6 @@ class Tablet(object):
   # this will eventually be coming from the proto3
   tablet_type_value = {
       'UNKNOWN': 0,
-      'IDLE': 1,
       'MASTER': 2,
       'REPLICA': 3,
       'RDONLY': 4,
@@ -84,7 +83,6 @@ class Tablet(object):
       'BACKUP': 8,
       'RESTORE': 9,
       'WORKER': 10,
-      'SCRAP': 11,
   }
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None,
@@ -305,38 +303,24 @@ class Tablet(object):
     ]
     return utils.run_vtctl(args)
 
-  def scrap(self, force=False, skip_rebuild=False):
-    args = ['ScrapTablet']
-    if force:
-      args.append('-force')
-    if skip_rebuild:
-      args.append('-skip-rebuild')
-    args.append(self.tablet_alias)
-    utils.run_vtctl(args, auto_log=True)
-
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True,
+  def init_tablet(self, tablet_type, keyspace, shard,
                   start=False, dbname=None, parent=True, wait_for_start=True,
                   include_mysql_port=True, **kwargs):
     self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
 
-    if dbname is None:
-      self.dbname = 'vt_' + (self.keyspace or 'database')
-    else:
-      self.dbname = dbname
+    self.dbname = dbname or ('vt_' + self.keyspace)
 
     args = ['InitTablet',
             '-hostname', 'localhost',
             '-port', str(self.port)]
     if include_mysql_port:
       args.extend(['-mysql_port', str(self.mysql_port)])
-    if force:
-      args.append('-force')
     if parent:
       args.append('-parent')
     if dbname:
-      args.extend(['-db-name-override', dbname])
+      args.extend(['-db_name_override', dbname])
     if keyspace:
       args.extend(['-keyspace', keyspace])
     if shard:

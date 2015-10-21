@@ -54,23 +54,14 @@ COMMAND ARGUMENT DEFINITIONS
                    the tablet that indicates the tablet should not be
                    considered a potential master. Vitess also does not
                    worry about lag for experimental tablets when reparenting.
-  -- idle: An idle vttablet that does not have a keyspace, shard
-           or type assigned
-  -- lag: A slaved copy of data intentionally lagged for pseudo-backup.
-  -- lag_orphan: A tablet in the midst of a reparenting process. During that
-                 process, the tablet goes into a <code>lag_orphan</code> state
-                 until it is reparented properly.
   -- master: A primary copy of data
   -- rdonly: A slaved copy of data for OLAP load patterns
   -- replica: A slaved copy of data ready to be promoted to master
-  -- restore: A tablet that has not been in the replication graph and is
-              restoring from a snapshot. Typically, a tablet progresses from
-              the <code>idle</code> state to the <code>restore</code> state
-              and then to the <code>spare</code> state.
+  -- restore: A tablet that is restoring from a snapshot. Typically, this
+              happens at tablet startup, then it goes to its right state..
   -- schema_apply: A slaved copy of data that had been serving query traffic
                    but that is not applying a schema change. Following the
                    change, the tablet will revert to its serving type.
-  -- scrap: A tablet that contains data that needs to be wiped.
   -- snapshot_source: A slaved copy of data where mysqld is <b>not</b>
                       running and where Vitess is serving data files to
                       clone slaves. Use this command to enter this mode:
@@ -134,7 +125,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Tablets", []command{
 			command{"InitTablet", commandInitTablet,
-				"[-force] [-parent] [-update] [-db-name-override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] [-keyspace=<keyspace>] [-shard=<shard>] [-parent_alias=<parent alias>] <tablet alias> <tablet type>",
+				"[-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
 				"Initializes a tablet in the topology.\n" +
 					"Valid <tablet type> values are:\n" +
 					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.AllTabletTypes), " ")},
@@ -144,12 +135,9 @@ var commands = []commandGroup{
 			command{"UpdateTabletAddrs", commandUpdateTabletAddrs,
 				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-grpc-port <grpc port>] <tablet alias> ",
 				"Updates the IP address and port numbers of a tablet."},
-			command{"ScrapTablet", commandScrapTablet,
-				"[-force] [-skip-rebuild] <tablet alias>",
-				"Scraps a tablet."},
 			command{"DeleteTablet", commandDeleteTablet,
-				"<tablet alias> ...",
-				"Deletes scrapped tablet(s) from the topology."},
+				"[-allow_master] [-skip_rebuild] <tablet alias> ...",
+				"Deletes tablet(s) from the topology."},
 			command{"SetReadOnly", commandSetReadOnly,
 				"<tablet alias>",
 				"Sets the tablet as read-only."},
@@ -587,19 +575,19 @@ func parseServingTabletType3(param string) (pb.TabletType, error) {
 }
 
 func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	var (
-		dbNameOverride = subFlags.String("db-name-override", "", "Overrides the name of the database that the vttablet uses")
-		force          = subFlags.Bool("force", false, "Overwrites the node if the node already exists")
-		parent         = subFlags.Bool("parent", false, "Creates the parent shard and keyspace if they don't yet exist")
-		update         = subFlags.Bool("update", false, "Performs update if a tablet with the provided alias already exists")
-		hostname       = subFlags.String("hostname", "", "The server on which the tablet is running")
-		mysqlPort      = subFlags.Int("mysql_port", 0, "The mysql port for the mysql daemon")
-		port           = subFlags.Int("port", 0, "The main port for the vttablet process")
-		grpcPort       = subFlags.Int("grpc_port", 0, "The gRPC port for the vttablet process")
-		keyspace       = subFlags.String("keyspace", "", "The keyspace to which this tablet belongs")
-		shard          = subFlags.String("shard", "", "The shard to which this tablet belongs")
-		tags           flagutil.StringMapValue
-	)
+	dbNameOverride := subFlags.String("db_name_override", "", "Overrides the name of the database that the vttablet uses")
+	allowUpdate := subFlags.Bool("allow_update", false, "Use this flag to force initialization if a tablet with the same name already exists. Use with caution.")
+	allowDifferentShard := subFlags.Bool("allow_different_shard", false, "Use this flag to force initialization if a tablet with the same name but a different keyspace/shard already exists. Use with caution.")
+	allowMasterOverride := subFlags.Bool("allow_master_override", false, "Use this flag to force initialization if a tablet is created as master, and a master for the keyspace/shard already exists. Use with caution.")
+	createShardAndKeyspace := subFlags.Bool("parent", false, "Creates the parent shard and keyspace if they don't yet exist")
+	hostname := subFlags.String("hostname", "", "The server on which the tablet is running")
+	mysqlPort := subFlags.Int("mysql_port", 0, "The mysql port for the mysql daemon")
+	port := subFlags.Int("port", 0, "The main port for the vttablet process")
+	grpcPort := subFlags.Int("grpc_port", 0, "The gRPC port for the vttablet process")
+	keyspace := subFlags.String("keyspace", "", "The keyspace to which this tablet belongs")
+	shard := subFlags.String("shard", "", "The shard to which this tablet belongs")
+
+	var tags flagutil.StringMapValue
 	subFlags.Var(&tags, "tags", "A comma-separated list of key:value pairs that are used to tag the tablet")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -638,7 +626,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		tablet.PortMap["grpc"] = int32(*grpcPort)
 	}
 
-	return wr.InitTablet(ctx, tablet, *force, *parent, *update)
+	return wr.InitTablet(ctx, tablet, *allowMasterOverride, *allowDifferentShard, *createShardAndKeyspace, *allowUpdate)
 }
 
 func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -706,24 +694,9 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	})
 }
 
-func commandScrapTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "Changes the tablet type to <code>scrap</code> in ZooKeeper or etcd if a tablet is offline")
-	skipRebuild := subFlags.Bool("skip-rebuild", false, "Skips rebuilding the shard graph after scrapping the tablet")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the ScrapTablet command.")
-	}
-
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	return wr.Scrap(ctx, tabletAlias, *force, *skipRebuild)
-}
-
 func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	allowMaster := subFlags.Bool("allow_master", false, "Allows for the master tablet of a shard to be deleted. Use with caution.")
+	skipRebuild := subFlags.Bool("skip_rebuild", false, "Skips rebuilding the shard serving graph after deleting the tablet")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -736,7 +709,7 @@ func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	for _, tabletAlias := range tabletAliases {
-		if err := wr.DeleteTablet(ctx, tabletAlias); err != nil {
+		if err := wr.DeleteTablet(ctx, tabletAlias, *allowMaster, *skipRebuild); err != nil {
 			return err
 		}
 	}
