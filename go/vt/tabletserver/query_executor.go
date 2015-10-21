@@ -130,7 +130,8 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 			reply, err = qre.execSQL(conn, qre.query, true)
 		default:
 			if qre.qe.autoCommit.Get() == 0 {
-				return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
+				return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT,
+					"unsupported query outside transaction: %s", qre.query)
 			}
 			reply, err = qre.execDmlAutoCommit()
 		}
