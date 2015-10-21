@@ -23,6 +23,8 @@ $VTROOT/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates \
   -tablet_protocol grpc \
   -tablet_manager_protocol grpc \
   -service_map 'bsonrpc-vt-vtctl' \
+  -backup_storage_implementation file \
+  -file_backup_storage_root $VTDATAROOT/backups \
   -log_dir $VTDATAROOT/tmp -port $port > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 disown -a
 

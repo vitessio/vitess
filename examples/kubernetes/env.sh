@@ -25,3 +25,11 @@ get_vtctld_addr() {
   echo "$VTCTLD_ADDR"
 }
 
+config_file=`dirname "${BASH_SOURCE}"`/config.sh
+if [ ! -f $config_file ]; then
+  echo "Please run ./configure.sh first to generate config.sh file."
+  exit 1
+fi
+
+source $config_file
+
