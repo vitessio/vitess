@@ -213,7 +213,7 @@ func BenchmarkUnmarshal3(b *testing.B) {
 		return
 	}
 	for i := 0; i < b.N; i++ {
-		res := &query.Result2{}
+		res := &query.Result3{}
 		err = proto.Unmarshal(bytes, res)
 		if err != nil {
 			b.Error(err)
