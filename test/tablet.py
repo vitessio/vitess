@@ -140,7 +140,7 @@ class Tablet(object):
     args.extend(cmd)
     return utils.run_bg(args, extra_env=extra_env)
 
-  def mysqlctld(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
+  def mysqlctld(self, cmd, extra_my_cnf=None, verbose=False):
     extra_env = {}
     all_extra_my_cnf = get_all_extra_my_cnf(extra_my_cnf)
     if all_extra_my_cnf:

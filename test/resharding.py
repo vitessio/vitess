@@ -4,15 +4,12 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import base64
-import json
 import logging
 import struct
 import threading
 import time
 import unittest
 
-from vtdb import dbexceptions
 from vtdb import keyrange_constants
 
 import environment
@@ -366,7 +363,6 @@ primary key (name)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
   def _check_lots_not_present(self, count, base=0):
-    found = 0
     for i in xrange(count):
       self._check_value(shard_3_replica, 'resharding1', 10000 + base + i,
                         'msg-range1-%d' % i, 0xA000000000000000 + base + i,
@@ -688,7 +684,6 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_rdonly1, False, True)
 
     # then serve replica from the split shards
-    source_tablet = shard_1_slave2
     destination_shards = ['test_keyspace/80-c0', 'test_keyspace/c0-']
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],

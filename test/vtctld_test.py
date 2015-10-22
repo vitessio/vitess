@@ -134,8 +134,8 @@ class TestVtctld(unittest.TestCase):
     self._check_all_tablets(out)
 
     # python RPC client to vtctld
-    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
-                               mode=utils.VTCTL_RPC)
+    out, _ = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                             mode=utils.VTCTL_RPC)
     self._check_all_tablets(out)
 
   def test_assigned(self):

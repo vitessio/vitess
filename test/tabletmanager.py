@@ -175,7 +175,7 @@ class TestTabletManager(unittest.TestCase):
 
     # try a frontend RefreshState that should timeout as the tablet is busy
     # running the other one
-    stdout, stderr = utils.run_vtctl(
+    _, stderr = utils.run_vtctl(
         ['-wait-time', '3s', 'RefreshState', tablet_62344.tablet_alias],
         expect_fail=True)
     self.assertIn(protocols_flavor().rpc_timeout_message(), stderr)
@@ -226,6 +226,7 @@ class TestTabletManager(unittest.TestCase):
         self.assertFail(
             'cannot find expected %s in %s' %
             (str(expectedStdout), hr['Stdout']))
+    self.assertEqual(hr['Stderr'], expectedStderr)
 
   def test_hook(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -298,8 +299,8 @@ class TestTabletManager(unittest.TestCase):
 
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     proc1 = tablet_62344.start_vttablet()
-    proc2 = tablet_62344.start_vttablet()
-    for timeout in xrange(20):
+    tablet_62344.start_vttablet()
+    for _ in xrange(20):
       logging.debug('Sleeping waiting for first process to die')
       time.sleep(1.0)
       proc1.poll()
@@ -657,7 +658,7 @@ class TestTabletManager(unittest.TestCase):
   def test_fallback_policy(self):
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    proc1 = tablet_62344.start_vttablet(security_policy='bogus')
+    tablet_62344.start_vttablet(security_policy='bogus')
     f = urllib.urlopen('http://localhost:%d/queryz' % int(tablet_62344.port))
     response = f.read()
     f.close()

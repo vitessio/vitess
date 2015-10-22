@@ -854,7 +854,7 @@ def check_db_read_write(uid):
 
 
 def wait_db_read_only(uid):
-  for x in xrange(3):
+  for _ in xrange(3):
     try:
       check_db_read_only(uid)
       return

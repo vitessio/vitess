@@ -214,7 +214,7 @@ index by_msg (msg)
                       qr['Rows'][0][0], t, tablet.tablet_alias)
 
   def _check_client_conn_redirection(
-      self, source_ks, destination_ks, db_types, servedfrom_db_types,
+      self, destination_ks, servedfrom_db_types,
       moved_tables=None):
     # check that the ServedFrom indirection worked correctly.
     if moved_tables is None:
@@ -463,7 +463,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
     self._check_client_conn_redirection(
-        'source_keyspace', 'destination_keyspace', ['rdonly'],
+        'destination_keyspace',
         ['master', 'replica'], ['moving1', 'moving2'])
 
     # then serve replica from the destination shards
@@ -475,7 +475,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
     self._check_client_conn_redirection(
-        'source_keyspace', 'destination_keyspace', ['replica', 'rdonly'],
+        'destination_keyspace',
         ['master'], ['moving1', 'moving2'])
 
     # move replica back and forth
@@ -495,7 +495,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
     self._check_client_conn_redirection(
-        'source_keyspace', 'destination_keyspace', ['replica', 'rdonly'],
+        'destination_keyspace',
         ['master'], ['moving1', 'moving2'])
 
     # then serve master from the destination shards
@@ -507,8 +507,8 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
     self._check_client_conn_redirection(
-        'source_keyspace', 'destination_keyspace',
-        ['replica', 'rdonly', 'master'], [], ['moving1', 'moving2'])
+        'destination_keyspace',
+        [], ['moving1', 'moving2'])
 
     # check 'vtctl SetShardTabletControl' command works as expected:
     # clear the rdonly entry, re-add it, and then clear all entries.

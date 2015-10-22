@@ -198,7 +198,8 @@ class TestBinlog(unittest.TestCase):
     # Insert something and make sure it comes through intact.
     sql = (
         "INSERT INTO test_table (id, keyspace_id, msg) "
-        "VALUES (19283, 1, 'testing checksum enabled') /* vtgate:: keyspace_id:00000001 */")
+        "VALUES (19283, 1, 'testing checksum enabled') "
+        "/* vtgate:: keyspace_id:00000001 */")
     src_master.mquery('vt_test_keyspace', sql, write=True)
 
     # Look for it using update stream to see if binlog streamer can talk to

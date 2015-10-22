@@ -171,7 +171,7 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug('dialing replica update stream service')
     replica_conn = self._get_replica_stream_conn()
     try:
-      for stream_event in replica_conn.stream_update(start_position):
+      for _ in replica_conn.stream_update(start_position):
         break
     except Exception as e:
       self.assertIn('update stream service is not enabled', str(e))
@@ -183,7 +183,7 @@ class TestUpdateStream(unittest.TestCase):
                 v['UpdateStreamState'])
 
   def perform_writes(self, count):
-    for i in xrange(count):
+    for _ in xrange(count):
       self._exec_vt_txn(self._populate_vt_insert_test)
       self._exec_vt_txn(['delete from vt_insert_test'])
 
@@ -277,8 +277,6 @@ class TestUpdateStream(unittest.TestCase):
       )
     logging.debug('run_test_stream_parity starting @ %s',
                   master_start_position)
-    master_txn_count = 0
-    replica_txn_count = 0
     self._exec_vt_txn(self._populate_vt_a(15))
     self._exec_vt_txn(self._populate_vt_b(14))
     self._exec_vt_txn(['delete from vt_a'])

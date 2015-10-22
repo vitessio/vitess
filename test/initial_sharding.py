@@ -14,11 +14,8 @@
 # - we remove the source tablets
 # - we remove the original shard
 
-import base64
 import logging
-import threading
 import struct
-import time
 import unittest
 
 from vtdb import keyrange_constants
@@ -168,7 +165,8 @@ index by_msg (msg)
         'vt_test_keyspace',
         ['begin',
          'insert into %s(id, msg, keyspace_id) '
-         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
+         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
+         '/* user_id:%d */' %
          (table, id, msg, keyspace_id, k, id),
          'commit'],
         write=True)
