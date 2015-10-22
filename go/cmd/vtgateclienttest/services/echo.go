@@ -272,11 +272,15 @@ func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 
 func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
+		bv, err := tproto.BindVariablesToProto3(bindVariables)
+		if err != nil {
+			return nil, err
+		}
 		return []*pbg.SplitQueryResponse_Part{
 			&pbg.SplitQueryResponse_Part{
 				Query: &pbq.BoundQuery{
 					Sql:           fmt.Sprintf("%v:%v:%v", sql, splitColumn, splitCount),
-					BindVariables: tproto.BindVariablesToProto3(bindVariables),
+					BindVariables: bv,
 				},
 				KeyRangePart: &pbg.SplitQueryResponse_KeyRangePart{
 					Keyspace: keyspace,
