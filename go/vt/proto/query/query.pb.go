@@ -15,6 +15,13 @@ It has these top-level messages:
 	BoundQuery
 	Field
 	Row
+	Cell
+	Row1
+	Result1
+	Row2
+	Result2
+	Row3
+	Result3
 	QueryResult
 	GetSessionIdRequest
 	GetSessionIdResponse
@@ -341,6 +348,92 @@ type Row struct {
 func (m *Row) Reset()         { *m = Row{} }
 func (m *Row) String() string { return proto.CompactTextString(m) }
 func (*Row) ProtoMessage()    {}
+
+type Cell struct {
+	Value []byte `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+}
+
+func (m *Cell) Reset()         { *m = Cell{} }
+func (m *Cell) String() string { return proto.CompactTextString(m) }
+func (*Cell) ProtoMessage()    {}
+
+type Row1 struct {
+	Values []*Cell `protobuf:"bytes,1,rep,name=values" json:"values,omitempty"`
+}
+
+func (m *Row1) Reset()         { *m = Row1{} }
+func (m *Row1) String() string { return proto.CompactTextString(m) }
+func (*Row1) ProtoMessage()    {}
+
+func (m *Row1) GetValues() []*Cell {
+	if m != nil {
+		return m.Values
+	}
+	return nil
+}
+
+type Result1 struct {
+	Rows []*Row1 `protobuf:"bytes,1,rep,name=rows" json:"rows,omitempty"`
+}
+
+func (m *Result1) Reset()         { *m = Result1{} }
+func (m *Result1) String() string { return proto.CompactTextString(m) }
+func (*Result1) ProtoMessage()    {}
+
+func (m *Result1) GetRows() []*Row1 {
+	if m != nil {
+		return m.Rows
+	}
+	return nil
+}
+
+type Row2 struct {
+	IsNull []bool   `protobuf:"varint,1,rep,name=is_null" json:"is_null,omitempty"`
+	Values [][]byte `protobuf:"bytes,2,rep,name=values,proto3" json:"values,omitempty"`
+}
+
+func (m *Row2) Reset()         { *m = Row2{} }
+func (m *Row2) String() string { return proto.CompactTextString(m) }
+func (*Row2) ProtoMessage()    {}
+
+type Result2 struct {
+	Rows []*Row2 `protobuf:"bytes,1,rep,name=rows" json:"rows,omitempty"`
+}
+
+func (m *Result2) Reset()         { *m = Result2{} }
+func (m *Result2) String() string { return proto.CompactTextString(m) }
+func (*Result2) ProtoMessage()    {}
+
+func (m *Result2) GetRows() []*Row2 {
+	if m != nil {
+		return m.Rows
+	}
+	return nil
+}
+
+type Row3 struct {
+	Indexes []int64 `protobuf:"varint,1,rep,name=indexes" json:"indexes,omitempty"`
+	Values  []byte  `protobuf:"bytes,2,opt,name=values,proto3" json:"values,omitempty"`
+}
+
+func (m *Row3) Reset()         { *m = Row3{} }
+func (m *Row3) String() string { return proto.CompactTextString(m) }
+func (*Row3) ProtoMessage()    {}
+
+type Result3 struct {
+	Rows []*Row3 `protobuf:"bytes,1,rep,name=rows" json:"rows,omitempty"`
+}
+
+func (m *Result3) Reset()         { *m = Result3{} }
+func (m *Result3) String() string { return proto.CompactTextString(m) }
+func (*Result3) ProtoMessage()    {}
+
+func (m *Result3) GetRows() []*Row3 {
+	if m != nil {
+		return m.Rows
+	}
+	return nil
+}
 
 // QueryResult is returned by Execute and ExecuteStream.
 //
