@@ -147,6 +147,8 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 					listArg[i] = lv.(float64)
 				}
 				bv.ValueFloatList = listArg
+			case nil:
+				// do nothing
 			default:
 				return nil, fmt.Errorf("unexpected type %T for variable %q", valt, k)
 			}
@@ -270,6 +272,8 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 				listArg[i] = lv
 			}
 			bv.ValueFloatList = listArg
+		case nil:
+			// do nothing
 		default:
 			return nil, fmt.Errorf("unexpected type %T for variable %q", v, k)
 		}
