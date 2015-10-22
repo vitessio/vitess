@@ -66,44 +66,41 @@ func (x KeyspaceIdType) String() string {
 type TabletType int32
 
 const (
-	TabletType_UNKNOWN        TabletType = 0
-	TabletType_MASTER         TabletType = 2
-	TabletType_REPLICA        TabletType = 3
-	TabletType_RDONLY         TabletType = 4
-	TabletType_BATCH          TabletType = 4
-	TabletType_SPARE          TabletType = 5
-	TabletType_EXPERIMENTAL   TabletType = 6
-	TabletType_SCHEMA_UPGRADE TabletType = 7
-	TabletType_BACKUP         TabletType = 8
-	TabletType_RESTORE        TabletType = 9
-	TabletType_WORKER         TabletType = 10
+	TabletType_UNKNOWN      TabletType = 0
+	TabletType_MASTER       TabletType = 1
+	TabletType_REPLICA      TabletType = 2
+	TabletType_RDONLY       TabletType = 3
+	TabletType_BATCH        TabletType = 3
+	TabletType_SPARE        TabletType = 4
+	TabletType_EXPERIMENTAL TabletType = 5
+	TabletType_BACKUP       TabletType = 6
+	TabletType_RESTORE      TabletType = 7
+	TabletType_WORKER       TabletType = 8
 )
 
 var TabletType_name = map[int32]string{
 	0: "UNKNOWN",
-	2: "MASTER",
-	3: "REPLICA",
-	4: "RDONLY",
-	// Duplicate value: 4: "BATCH",
-	5:  "SPARE",
-	6:  "EXPERIMENTAL",
-	7:  "SCHEMA_UPGRADE",
-	8:  "BACKUP",
-	9:  "RESTORE",
-	10: "WORKER",
+	1: "MASTER",
+	2: "REPLICA",
+	3: "RDONLY",
+	// Duplicate value: 3: "BATCH",
+	4: "SPARE",
+	5: "EXPERIMENTAL",
+	6: "BACKUP",
+	7: "RESTORE",
+	8: "WORKER",
 }
 var TabletType_value = map[string]int32{
-	"UNKNOWN":        0,
-	"MASTER":         2,
-	"REPLICA":        3,
-	"RDONLY":         4,
-	"BATCH":          4,
-	"SPARE":          5,
-	"EXPERIMENTAL":   6,
-	"SCHEMA_UPGRADE": 7,
-	"BACKUP":         8,
-	"RESTORE":        9,
-	"WORKER":         10,
+	"UNKNOWN":      0,
+	"MASTER":       1,
+	"REPLICA":      2,
+	"RDONLY":       3,
+	"BATCH":        3,
+	"SPARE":        4,
+	"EXPERIMENTAL": 5,
+	"BACKUP":       6,
+	"RESTORE":      7,
+	"WORKER":       8,
 }
 
 func (x TabletType) String() string {

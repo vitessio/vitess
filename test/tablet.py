@@ -73,16 +73,15 @@ class Tablet(object):
   # this will eventually be coming from the proto3
   tablet_type_value = {
       'UNKNOWN': 0,
-      'MASTER': 2,
-      'REPLICA': 3,
-      'RDONLY': 4,
-      'BATCH': 4,
-      'SPARE': 5,
-      'EXPERIMENTAL': 6,
-      'SCHEMA_UPGRADE': 7,
-      'BACKUP': 8,
-      'RESTORE': 9,
-      'WORKER': 10,
+      'MASTER': 1,
+      'REPLICA': 2,
+      'RDONLY': 3,
+      'BATCH': 3,
+      'SPARE': 4,
+      'EXPERIMENTAL': 5,
+      'BACKUP': 6,
+      'RESTORE': 7,
+      'WORKER': 8,
   }
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None,

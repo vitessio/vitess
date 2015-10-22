@@ -68,11 +68,6 @@ const (
 	// a potential master and don't worry about lag when reparenting.
 	TYPE_EXPERIMENTAL = TabletType("experimental")
 
-	// a slaved copy of the data that was serving but is now applying
-	// a schema change. Will go bak to its serving type after the
-	// upgrade
-	TYPE_SCHEMA_UPGRADE = TabletType("schema_apply")
-
 	// a slaved copy of the data, but offline to queries other than backup
 	// replication sql thread may be stopped
 	TYPE_BACKUP = TabletType("backup")
@@ -90,9 +85,9 @@ const (
 // without changes to the replication graph
 func IsTrivialTypeChange(oldTabletType, newTabletType pb.TabletType) bool {
 	switch oldTabletType {
-	case pb.TabletType_REPLICA, pb.TabletType_RDONLY, pb.TabletType_SPARE, pb.TabletType_BACKUP, pb.TabletType_EXPERIMENTAL, pb.TabletType_SCHEMA_UPGRADE, pb.TabletType_WORKER:
+	case pb.TabletType_REPLICA, pb.TabletType_RDONLY, pb.TabletType_SPARE, pb.TabletType_BACKUP, pb.TabletType_EXPERIMENTAL, pb.TabletType_WORKER:
 		switch newTabletType {
-		case pb.TabletType_REPLICA, pb.TabletType_RDONLY, pb.TabletType_SPARE, pb.TabletType_BACKUP, pb.TabletType_EXPERIMENTAL, pb.TabletType_SCHEMA_UPGRADE, pb.TabletType_WORKER:
+		case pb.TabletType_REPLICA, pb.TabletType_RDONLY, pb.TabletType_SPARE, pb.TabletType_BACKUP, pb.TabletType_EXPERIMENTAL, pb.TabletType_WORKER:
 			return true
 		}
 	case pb.TabletType_RESTORE:
