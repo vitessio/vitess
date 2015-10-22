@@ -145,7 +145,7 @@ class TestPythonClientErrors(TestPythonClientBase):
     # ExecuteEntityIds test
     cursor = self.conn.cursor('keyspace', 'master')
     with self.assertRaises(exception):
-      cursor.execute_entity_ids(
+      cursor.execute(
           query, {},
           entity_keyspace_id_map={1: self.KEYSPACE_ID_0X80},
           entity_column_name='user_id')
@@ -324,7 +324,7 @@ class TestPythonClient(TestPythonClientBase):
         self._open_keyranges_cursor(), cursor_execute_key_ranges_method)
 
     def cursor_execute_entity_ids_method(cursor):
-      cursor.execute_entity_ids(
+      cursor.execute(
           effective_caller_id_test_query, {},
           entity_keyspace_id_map={1: self.KEYSPACE_ID_0X80},
           entity_column_name='user_id')
