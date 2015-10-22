@@ -12,6 +12,8 @@ import unittest
 import urllib
 import urllib2
 
+from vtproto import topodata_pb2
+
 import environment
 import utils
 import tablet
@@ -352,7 +354,7 @@ class TestTabletManager(unittest.TestCase):
         tablet.get_healthz()
 
   def wait_for_tablet_type_change(self, tablet_alias, expected_type):
-    t = tablet.Tablet.tablet_type_value[expected_type.upper()]
+    t = topodata_pb2.TabletType.Value(expected_type.upper())
     timeout = 10
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_alias])
@@ -390,7 +392,7 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure the master is still master
     ti = utils.run_vtctl_json(['GetTablet', tablet_62344.tablet_alias])
-    self.assertEqual(ti['type'], tablet.Tablet.tablet_type_value['MASTER'],
+    self.assertEqual(ti['type'], topodata_pb2.MASTER,
                      'unexpected master type: %s' % ti['type'])
 
     # stop replication, make sure we go unhealthy.
@@ -453,7 +455,7 @@ class TestTabletManager(unittest.TestCase):
       self.assertNotIn('tablet_externally_reparented_timestamp', data)
       self.assertEqual('test_keyspace', data['target']['keyspace'])
       self.assertEqual('0', data['target']['shard'])
-      self.assertEqual(3, data['target']['tablet_type'])
+      self.assertEqual(topodata_pb2.REPLICA, data['target']['tablet_type'])
 
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])
@@ -462,7 +464,7 @@ class TestTabletManager(unittest.TestCase):
     # to reset its state to spare
     ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
     self.assertEqual(
-        ti['type'], tablet.Tablet.tablet_type_value['SPARE'],
+        ti['type'], topodata_pb2.SPARE,
         "tablet didn't go to spare while in lameduck mode: %s" % str(ti))
 
     # Also the replica should be gone from the serving graph.

@@ -5,6 +5,8 @@ import unittest
 import urllib2
 import re
 
+from vtproto import topodata_pb2
+
 import environment
 import tablet
 import utils
@@ -209,11 +211,10 @@ class TestVtctld(unittest.TestCase):
     for tn in s0['TabletNodes']:
       tt = tn['TabletType']
       types.append(tt)
-      if tt == tablet.Tablet.tablet_type_value['MASTER']:
+      if tt == topodata_pb2.MASTER:
         self.assertEqual(len(tn['Nodes']), 1)
-    self.assertItemsEqual(sorted(types), [
-        tablet.Tablet.tablet_type_value['MASTER'],
-        tablet.Tablet.tablet_type_value['REPLICA']])
+    self.assertItemsEqual(sorted(types),
+                          sorted([topodata_pb2.MASTER, topodata_pb2.REPLICA]))
     self.assertEqual(
         self.serving_data['redirected_keyspace']['ServedFrom']['master'],
         'test_keyspace')

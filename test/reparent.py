@@ -9,6 +9,8 @@ import logging
 import time
 import unittest
 
+from vtproto import topodata_pb2
+
 import environment
 import utils
 import tablet
@@ -546,8 +548,7 @@ class TestReparent(unittest.TestCase):
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                    '-count', '1',
                                    tablet_62044.tablet_alias])
-    self.assertEqual(health['target']['tablet_type'],
-                     tablet.Tablet.tablet_type_value['MASTER'])
+    self.assertEqual(health['target']['tablet_type'], topodata_pb2.MASTER)
     # have to compare the int version, or the rounding errors can break
     self.assertTrue(
         health['tablet_externally_reparented_timestamp'] >= int(base_time))

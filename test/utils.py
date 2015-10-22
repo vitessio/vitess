@@ -17,15 +17,19 @@ import urllib2
 
 import MySQLdb
 
-import environment
+from vtproto import topodata_pb2
 
 from vtdb import keyrange_constants
+
 from vtctl import vtctl_client
-from mysql_flavor import set_mysql_flavor
+
+import environment
 from mysql_flavor import mysql_flavor
-from protocols_flavor import set_protocols_flavor
+from mysql_flavor import set_mysql_flavor
 from protocols_flavor import protocols_flavor
+from protocols_flavor import set_protocols_flavor
 from topo_flavor.server import set_topo_server_flavor
+
 
 options = None
 devnull = open('/dev/null', 'w')
@@ -869,7 +873,9 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
   result = ''
   pmap = {}
   for partition in ks['partitions']:
-    tablet_type = keyrange_constants.PROTO3_TABLET_TYPE_TO_STRING[partition['served_type']]
+    tablet_type = topodata_pb2.TabletType.Name(partition['served_type']).lower()
+    if tablet_type == 'batch':
+      tablet_type = 'rdonly'
     r = 'Partitions(%s):' % tablet_type
     for shard in partition['shard_references']:
       s = ''
