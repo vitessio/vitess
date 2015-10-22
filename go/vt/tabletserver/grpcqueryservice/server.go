@@ -176,9 +176,11 @@ func (q *query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (
 	}, reply); err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	return &pb.SplitQueryResponse{
-		Queries: proto.QuerySplitsToProto3(reply.Queries),
-	}, nil
+	qs, err := proto.QuerySplitsToProto3(reply.Queries)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.SplitQueryResponse{Queries: qs}, nil
 }
 
 // StreamHealth is part of the queryservice.QueryServer interface

@@ -5,6 +5,8 @@
 package proto
 
 import (
+	"fmt"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
@@ -24,17 +26,21 @@ func TargetToProto3(target *Target) *pb.Target {
 }
 
 // BoundQueryToProto3 converts internal types to proto3 BoundQuery
-func BoundQueryToProto3(sql string, bindVars map[string]interface{}) *pb.BoundQuery {
+func BoundQueryToProto3(sql string, bindVars map[string]interface{}) (*pb.BoundQuery, error) {
+	bv, err := BindVariablesToProto3(bindVars)
+	if err != nil {
+		return nil, err
+	}
 	return &pb.BoundQuery{
 		Sql:           sql,
-		BindVariables: BindVariablesToProto3(bindVars),
-	}
+		BindVariables: bv,
+	}, nil
 }
 
 // BindVariablesToProto3 converts internal type to proto3 BindVariable array
-func BindVariablesToProto3(bindVars map[string]interface{}) map[string]*pb.BindVariable {
+func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.BindVariable, error) {
 	if len(bindVars) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	result := make(map[string]*pb.BindVariable)
@@ -49,7 +55,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) map[string]*pb.BindV
 
 			// This assumes homogenous types, but that is what we support.
 			val := v[0]
-			switch val.(type) {
+			switch valt := val.(type) {
 			// string and []byte are TYPE_BYTES_LIST
 			case string:
 				bv.Type = pb.BindVariable_TYPE_BYTES_LIST
@@ -141,6 +147,8 @@ func BindVariablesToProto3(bindVars map[string]interface{}) map[string]*pb.BindV
 					listArg[i] = lv.(float64)
 				}
 				bv.ValueFloatList = listArg
+			default:
+				return nil, fmt.Errorf("unexpected type %T for variable %q", valt, k)
 			}
 		case string:
 			bv.Type = pb.BindVariable_TYPE_BYTES
@@ -262,10 +270,12 @@ func BindVariablesToProto3(bindVars map[string]interface{}) map[string]*pb.BindV
 				listArg[i] = lv
 			}
 			bv.ValueFloatList = listArg
+		default:
+			return nil, fmt.Errorf("unexpected type %T for variable %q", v, k)
 		}
 		result[k] = bv
 	}
-	return result
+	return result, nil
 }
 
 // Proto3ToBoundQuery converts a proto.BoundQuery to the internal data structure
@@ -379,16 +389,20 @@ func Proto3ToQuerySplits(queries []*pb.QuerySplit) []QuerySplit {
 }
 
 // QuerySplitsToProto3 converts a native QuerySplit array to the proto3 version
-func QuerySplitsToProto3(queries []QuerySplit) []*pb.QuerySplit {
+func QuerySplitsToProto3(queries []QuerySplit) ([]*pb.QuerySplit, error) {
 	if len(queries) == 0 {
-		return nil
+		return nil, nil
 	}
 	result := make([]*pb.QuerySplit, len(queries))
 	for i, qs := range queries {
+		q, err := BoundQueryToProto3(qs.Query.Sql, qs.Query.BindVariables)
+		if err != nil {
+			return nil, err
+		}
 		result[i] = &pb.QuerySplit{
-			Query:    BoundQueryToProto3(qs.Query.Sql, qs.Query.BindVariables),
+			Query:    q,
 			RowCount: qs.RowCount,
 		}
 	}
-	return result
+	return result, nil
 }
