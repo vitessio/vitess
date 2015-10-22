@@ -159,7 +159,7 @@ class TestBackup(unittest.TestCase):
     backups = backups.splitlines()
     logging.debug('list of backups: %s', backups)
     self.assertEqual(len(backups), 1)
-    self.assertTrue(backups[0].startswith(tablet_replica1.tablet_alias))
+    self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
 
     # remove the backup
     utils.run_vtctl(

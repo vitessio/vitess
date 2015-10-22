@@ -263,7 +263,7 @@ Then tear down the Container Engine cluster itself, which will stop the virtual
 machines running on Compute Engine:
 
 ``` sh
-$ gcloud beta container clusters delete example
+$ gcloud container clusters delete example
 ```
 
 It's also a good idea to remove the firewall rules you created, unless you plan

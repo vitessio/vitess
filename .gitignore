@@ -45,3 +45,7 @@ _test/
 # php downloaded dependencies
 /php/composer.phar
 /php/vendor
+
+# site-local example files
+/examples/kubernetes/config.sh
+

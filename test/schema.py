@@ -255,10 +255,9 @@ class TestSchema(unittest.TestCase):
 
     self._setUp_tablets_shard_2()
 
-    # CopySchemaShard is responsible for creating the db; one
-    # shouldn't exist before the command is run.
-    self._check_db_not_created(shard_2_master)
-    self._check_db_not_created(shard_2_replica1)
+    # InitShardMaster creates the db, but there shouldn't be any tables yet.
+    self._check_tables(shard_2_master, 0)
+    self._check_tables(shard_2_replica1, 0)
 
     # Run the command twice to make sure it's idempotent.
     for _ in range(2):

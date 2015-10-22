@@ -440,15 +440,16 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *pb.TabletAlias,
 		return err
 	}
 
-	status := &myproto.ReplicationStatus{
-		Position:   replicationPosition,
-		MasterHost: ti.Hostname,
-		MasterPort: int(ti.PortMap["mysql"]),
-	}
-	cmds, err := agent.MysqlDaemon.StartReplicationCommands(status)
+	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(replicationPosition)
 	if err != nil {
 		return err
 	}
+	cmds2, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, int(ti.PortMap["mysql"]))
+	if err != nil {
+		return err
+	}
+	cmds = append(cmds, cmds2...)
+	cmds = append(cmds, "START SLAVE")
 
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
 		return err
@@ -709,9 +710,9 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run the backup
-	bucket := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	name := fmt.Sprintf("%v.%v", topoproto.TabletAliasString(tablet.Alias), time.Now().UTC().Format("2006-01-02.150405"))
-	returnErr := mysqlctl.Backup(ctx, agent.MysqlDaemon, l, bucket, name, concurrency, agent.hookExtraEnv())
+	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
+	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
+	returnErr := mysqlctl.Backup(ctx, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
 
 	// and change our type back to the appropriate value:
 	// - if healthcheck is enabled, go to spare

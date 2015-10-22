@@ -17,6 +17,11 @@ spec:
           mountPath: /dev/log
         - name: vtdataroot
           mountPath: /vt/vtdataroot
+        - name: certs
+          readOnly: true
+          # Mount root certs from the host OS into the location
+          # expected for our container OS (Debian):
+          mountPath: /etc/ssl/certs/ca-certificates.crt
       resources:
         limits:
           memory: "1Gi"
@@ -27,19 +32,9 @@ spec:
         - >-
           set -e
 
-          mysql_socket="$VTDATAROOT/{{tablet_subdir}}/mysql.sock"
-
           mkdir -p $VTDATAROOT/tmp
 
           chown -R vitess /vt
-
-          while [ ! -e $mysql_socket ]; do
-          echo "[$(date)] waiting for $mysql_socket" ;
-          sleep 1 ;
-          done
-
-          su -p -s /bin/bash -c "mysql -u vt_dba -S $mysql_socket
-          -e 'CREATE DATABASE IF NOT EXISTS vt_{{keyspace}}'" vitess
 
           su -p -s /bin/bash -c "/vt/bin/vttablet
           -topo_implementation etcd
@@ -55,6 +50,7 @@ spec:
           -init_keyspace {{keyspace}}
           -init_shard {{shard}}
           -target_tablet_type {{tablet_type}}
+          -health_check_interval 5s
           -mysqlctl_socket $VTDATAROOT/mysqlctl.sock
           -db-config-app-uname vt_app
           -db-config-app-dbname vt_{{keyspace}}
@@ -70,7 +66,8 @@ spec:
           -db-config-filtered-charset utf8
           -enable-rowcache
           -rowcache-bin /usr/bin/memcached
-          -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock" vitess
+          -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock
+          -restore_from_backup {{backup_flags}}" vitess
     - name: mysql
       image: vitess/lite
       volumeMounts:
@@ -115,4 +112,12 @@ spec:
       hostPath: {path: /dev/log}
     - name: vtdataroot
       {{vtdataroot_volume}}
+    - name: certs
+      # Uncomment one of the following lines to configure the location
+      # of the root certificates file on your host OS. We need this so
+      # we can import it into the container OS.
+      # If your host OS is Fedora/RHEL:
+      #hostPath: {path: /etc/pki/tls/certs/ca-bundle.crt}
+      # If your host OS is Debian/Ubuntu/Gentoo:
+      hostPath: {path: /etc/ssl/certs/ca-certificates.crt}
 

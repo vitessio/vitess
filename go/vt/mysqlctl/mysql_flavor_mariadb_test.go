@@ -179,79 +179,19 @@ func TestMariadbMakeBinlogEvent(t *testing.T) {
 	}
 }
 
-func TestMariadbStartReplicationCommands(t *testing.T) {
-	params := &sqldb.ConnParams{
-		Uname: "username",
-		Pass:  "password",
-	}
-	status := &proto.ReplicationStatus{
-		Position:           proto.ReplicationPosition{GTIDSet: proto.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}},
-		MasterHost:         "localhost",
-		MasterPort:         123,
-		MasterConnectRetry: 1234,
-	}
+func TestMariadbSetSlavePositionCommands(t *testing.T) {
+	pos := proto.ReplicationPosition{GTIDSet: proto.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}}
 	want := []string{
 		"SET GLOBAL gtid_slave_pos = '1-41983-12345'",
-		`CHANGE MASTER TO
-  MASTER_HOST = 'localhost',
-  MASTER_PORT = 123,
-  MASTER_USER = 'username',
-  MASTER_PASSWORD = 'password',
-  MASTER_CONNECT_RETRY = 1234,
-  MASTER_USE_GTID = slave_pos`,
-		"START SLAVE",
 	}
 
-	got, err := (&mariaDB10{}).StartReplicationCommands(params, status)
+	got, err := (&mariaDB10{}).SetSlavePositionCommands(pos)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mariaDB10{}).StartReplicationCommands(%#v, %#v) = %#v, want %#v", params, status, got, want)
-	}
-}
-
-func TestMariadbStartReplicationCommandsSSL(t *testing.T) {
-	params := &sqldb.ConnParams{
-		Uname:     "username",
-		Pass:      "password",
-		SslCa:     "ssl-ca",
-		SslCaPath: "ssl-ca-path",
-		SslCert:   "ssl-cert",
-		SslKey:    "ssl-key",
-	}
-	mysql.EnableSSL(params)
-	status := &proto.ReplicationStatus{
-		Position:           proto.ReplicationPosition{GTIDSet: proto.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}},
-		MasterHost:         "localhost",
-		MasterPort:         123,
-		MasterConnectRetry: 1234,
-	}
-	want := []string{
-		"SET GLOBAL gtid_slave_pos = '1-41983-12345'",
-		`CHANGE MASTER TO
-  MASTER_HOST = 'localhost',
-  MASTER_PORT = 123,
-  MASTER_USER = 'username',
-  MASTER_PASSWORD = 'password',
-  MASTER_CONNECT_RETRY = 1234,
-  MASTER_SSL = 1,
-  MASTER_SSL_CA = 'ssl-ca',
-  MASTER_SSL_CAPATH = 'ssl-ca-path',
-  MASTER_SSL_CERT = 'ssl-cert',
-  MASTER_SSL_KEY = 'ssl-key',
-  MASTER_USE_GTID = slave_pos`,
-		"START SLAVE",
-	}
-
-	got, err := (&mariaDB10{}).StartReplicationCommands(params, status)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mariaDB10{}).StartReplicationCommands(%#v, %#v) = %#v, want %#v", params, status, got, want)
+		t.Errorf("(&mariaDB10{}).SetSlavePositionCommands(%#v) = %#v, want %#v", pos, got, want)
 	}
 }
 

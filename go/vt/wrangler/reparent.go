@@ -305,6 +305,16 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		return err
 	}
 
+	// Create database if necessary on the master. Slaves will get it too through
+	// replication. Since the user called InitShardMaster, they've told us to
+	// assume that whatever data is on all the slaves is what they intended.
+	// If the database doesn't exist, it means the user intends for these tablets
+	// to begin serving with no data (i.e. first time initialization).
+	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", topoproto.TabletDbName(masterElectTabletInfo.Tablet))
+	if _, err := wr.TabletManagerClient().ExecuteFetchAsDba(ctx, masterElectTabletInfo, createDB, 1, false, false, true); err != nil {
+		return fmt.Errorf("failed to create database: %v", err)
+	}
+
 	// Then we rebuild the entire serving graph for the shard,
 	// to account for all changes.
 	event.DispatchUpdate(ev, "rebuilding shard graph")

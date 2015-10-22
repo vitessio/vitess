@@ -162,83 +162,20 @@ func TestMysql56PromoteSlaveCommands(t *testing.T) {
 	}
 }
 
-func TestMysql56StartReplicationCommands(t *testing.T) {
-	params := &sqldb.ConnParams{
-		Uname: "username",
-		Pass:  "password",
-	}
+func TestMysql56SetSlavePositionCommands(t *testing.T) {
 	pos, _ := (&mysql56{}).ParseReplicationPosition("00010203-0405-0607-0809-0a0b0c0d0e0f:1-2")
-	status := &proto.ReplicationStatus{
-		Position:           pos,
-		MasterHost:         "localhost",
-		MasterPort:         123,
-		MasterConnectRetry: 1234,
-	}
 	want := []string{
 		"RESET MASTER",
 		"SET GLOBAL gtid_purged = '00010203-0405-0607-0809-0a0b0c0d0e0f:1-2'",
-		`CHANGE MASTER TO
-  MASTER_HOST = 'localhost',
-  MASTER_PORT = 123,
-  MASTER_USER = 'username',
-  MASTER_PASSWORD = 'password',
-  MASTER_CONNECT_RETRY = 1234,
-  MASTER_AUTO_POSITION = 1`,
-		"START SLAVE",
 	}
 
-	got, err := (&mysql56{}).StartReplicationCommands(params, status)
+	got, err := (&mysql56{}).SetSlavePositionCommands(pos)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mysql56{}).StartReplicationCommands(%#v, %#v) = %#v, want %#v", params, status, got, want)
-	}
-}
-
-func TestMysql56StartReplicationCommandsSSL(t *testing.T) {
-	params := &sqldb.ConnParams{
-		Uname:     "username",
-		Pass:      "password",
-		SslCa:     "ssl-ca",
-		SslCaPath: "ssl-ca-path",
-		SslCert:   "ssl-cert",
-		SslKey:    "ssl-key",
-	}
-	mysql.EnableSSL(params)
-	pos, _ := (&mysql56{}).ParseReplicationPosition("00010203-0405-0607-0809-0a0b0c0d0e0f:1-2")
-	status := &proto.ReplicationStatus{
-		Position:           pos,
-		MasterHost:         "localhost",
-		MasterPort:         123,
-		MasterConnectRetry: 1234,
-	}
-	want := []string{
-		"RESET MASTER",
-		"SET GLOBAL gtid_purged = '00010203-0405-0607-0809-0a0b0c0d0e0f:1-2'",
-		`CHANGE MASTER TO
-  MASTER_HOST = 'localhost',
-  MASTER_PORT = 123,
-  MASTER_USER = 'username',
-  MASTER_PASSWORD = 'password',
-  MASTER_CONNECT_RETRY = 1234,
-  MASTER_SSL = 1,
-  MASTER_SSL_CA = 'ssl-ca',
-  MASTER_SSL_CAPATH = 'ssl-ca-path',
-  MASTER_SSL_CERT = 'ssl-cert',
-  MASTER_SSL_KEY = 'ssl-key',
-  MASTER_AUTO_POSITION = 1`,
-		"START SLAVE",
-	}
-
-	got, err := (&mysql56{}).StartReplicationCommands(params, status)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mysql56{}).StartReplicationCommands(%#v, %#v) = %#v, want %#v", params, status, got, want)
+		t.Errorf("(&mysql56{}).SetSlavePositionCommands(%#v) = %#v, want %#v", pos, got, want)
 	}
 }
 

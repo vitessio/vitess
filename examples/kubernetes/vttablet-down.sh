@@ -28,9 +28,11 @@ for shard in `seq 1 $num_shards`; do
       printf -v alias '%s-%010d' $cell $uid
 
       if [ -n "$server" ]; then
+        set +e
         echo "Removing tablet $alias from Vitess topology..."
         vtctlclient -server $server ScrapTablet -force $alias
         vtctlclient -server $server DeleteTablet $alias
+        set -e
       fi
 
       echo "Deleting pod for tablet $alias..."
