@@ -277,6 +277,8 @@ class TestUpdateStream(unittest.TestCase):
       )
     logging.debug('run_test_stream_parity starting @ %s',
                   master_start_position)
+    master_txn_count = 0
+    replica_txn_count = 0
     self._exec_vt_txn(self._populate_vt_a(15))
     self._exec_vt_txn(self._populate_vt_b(14))
     self._exec_vt_txn(['delete from vt_a'])
