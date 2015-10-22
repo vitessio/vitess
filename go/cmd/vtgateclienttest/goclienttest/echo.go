@@ -344,8 +344,12 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
+	q, err := tproto.BoundQueryToProto3(echoPrefix+query+":split_column:123", bindVars)
+	if err != nil {
+		t.Fatalf("BoundQueryToProto3 error: %v", err)
+	}
 	want := &pbg.SplitQueryResponse_Part{
-		Query:        tproto.BoundQueryToProto3(echoPrefix+query+":split_column:123", bindVars),
+		Query:        q,
 		KeyRangePart: &pbg.SplitQueryResponse_KeyRangePart{Keyspace: keyspace},
 	}
 	got, err := conn.SplitQuery(context.Background(), keyspace, echoPrefix+query, bindVars, "split_column", 123)
