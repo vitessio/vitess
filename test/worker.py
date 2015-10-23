@@ -140,8 +140,7 @@ class TestBaseSplitClone(unittest.TestCase):
   """Abstract test base class for testing the SplitClone worker."""
 
   def run_shard_tablets(
-      self, shard_name, shard_tablets, create_db=True, create_table=True,
-      wait_state='SERVING'):
+      self, shard_name, shard_tablets, create_table=True):
     """Handles all the necessary work for initially running a shard's tablets.
 
     This encompasses the following steps:
@@ -155,15 +154,8 @@ class TestBaseSplitClone(unittest.TestCase):
     Args:
       shard_name: the name of the shard to start tablets in
       shard_tablets: an instance of ShardTablets for the given shard
-      create_db: boolean, True iff we should create a db on the tablets
       create_table: boolean, True iff we should create a table on the tablets
-      wait_state: string, the vttablet state that we should wait for
     """
-    # If requested, create databases.
-    for tablet in shard_tablets.all_tablets:
-      if create_db:
-        tablet.create_db('vt_test_keyspace')
-
     # Start tablets.
     #
     # Specifying 'target_tablet_type' enables the health check
@@ -182,9 +174,9 @@ class TestBaseSplitClone(unittest.TestCase):
       tablet.start_vttablet(
           wait_for_state=None, target_tablet_type='rdonly',
           init_keyspace='test_keyspace', init_shard=shard_name)
+
     # Block until tablets are up and we can enable replication.
-    # We don't care about the tablets' state which may have been changed by the
-    # health check from SERVING to NOT_SERVING anyway.
+    # All tables should be NOT_SERVING until we run InitShardMaster.
     for tablet in shard_tablets.all_tablets:
       tablet.wait_for_vttablet_state('NOT_SERVING')
 
@@ -193,20 +185,20 @@ class TestBaseSplitClone(unittest.TestCase):
         ['InitShardMaster', '-force', 'test_keyspace/%s' % shard_name,
          shard_tablets.master.tablet_alias], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+
     # Enforce a health check instead of waiting for the next periodic one.
     # (saves up to 1 second execution time on average)
-    if wait_state == 'SERVING':
-      for tablet in shard_tablets.replicas:
-        utils.run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'replica'])
-      for tablet in shard_tablets.rdonlys:
-        utils.run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'])
+    for tablet in shard_tablets.replicas:
+      utils.run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'replica'])
+    for tablet in shard_tablets.rdonlys:
+      utils.run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'])
 
     # Wait for tablet state to change after starting all tablets. This allows
     # us to start all tablets at once, instead of sequentially waiting.
     # NOTE: Replication has to be enabled first or the health check will
     #       set a a replica or rdonly tablet back to NOT_SERVING.
     for tablet in shard_tablets.all_tablets:
-      tablet.wait_for_vttablet_state(wait_state)
+      tablet.wait_for_vttablet_state('SERVING')
 
     create_table_sql = (
         'create table worker_test('
@@ -336,22 +328,23 @@ class TestBaseSplitClone(unittest.TestCase):
 
   def setUp(self):
     """Creates shards, starts the tablets, and inserts some data."""
-    self.run_shard_tablets('0', all_shard_tablets)
-    # create the split shards
-    self.run_shard_tablets(
-        '-80', shard_0_tablets, create_db=False,
-        create_table=False, wait_state='NOT_SERVING')
-    self.run_shard_tablets(
-        '80-', shard_1_tablets, create_db=False,
-        create_table=False, wait_state='NOT_SERVING')
+    try:
+      self.run_shard_tablets('0', all_shard_tablets)
+      # create the split shards
+      self.run_shard_tablets(
+          '-80', shard_0_tablets, create_table=False)
+      self.run_shard_tablets(
+          '80-', shard_1_tablets, create_table=False)
 
-    logging.debug(
-        'Start inserting initial data: %s rows', utils.options.num_insert_rows)
-    self.insert_values(shard_master, utils.options.num_insert_rows, 2)
-    logging.debug(
-        'Done inserting initial data, waiting for replication to catch up')
-    utils.wait_for_replication_pos(shard_master, shard_rdonly1)
-    logging.debug('Replication on source rdonly tablet is caught up')
+      logging.debug(
+          'Start inserting initial data: %s rows', utils.options.num_insert_rows)
+      self.insert_values(shard_master, utils.options.num_insert_rows, 2)
+      logging.debug(
+          'Done inserting initial data, waiting for replication to catch up')
+      utils.wait_for_replication_pos(shard_master, shard_rdonly1)
+      logging.debug('Replication on source rdonly tablet is caught up')
+    except:
+      self.tearDown()
 
   def tearDown(self):
     """Does the minimum to reset topology and tablets to their initial states.
@@ -376,8 +369,11 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
   """Tests that the SplitClone worker is resilient to particular failures."""
 
   def setUp(self):
-    super(TestBaseSplitCloneResiliency, self).setUp()
-    self.copy_schema_to_destination_shards()
+    try:
+      super(TestBaseSplitCloneResiliency, self).setUp()
+      self.copy_schema_to_destination_shards()
+    except:
+      self.tearDown()
 
   def verify_successful_worker_copy_with_reparent(self, mysql_down=False):
     """Verifies that vtworker can successfully copy data for a SplitClone.
@@ -509,14 +505,17 @@ class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
 
     Also runs base setup.
     """
-    logging.debug('Starting base setup for MysqlDownDuringWorkerCopy')
-    super(TestMysqlDownDuringWorkerCopy, self).setUp()
+    try:
+      logging.debug('Starting base setup for MysqlDownDuringWorkerCopy')
+      super(TestMysqlDownDuringWorkerCopy, self).setUp()
 
-    logging.debug('Starting MysqlDownDuringWorkerCopy-specific setup')
-    utils.wait_procs(
-        [shard_0_master.shutdown_mysql(),
-         shard_1_master.shutdown_mysql()])
-    logging.debug('Finished MysqlDownDuringWorkerCopy-specific setup')
+      logging.debug('Starting MysqlDownDuringWorkerCopy-specific setup')
+      utils.wait_procs(
+          [shard_0_master.shutdown_mysql(),
+           shard_1_master.shutdown_mysql()])
+      logging.debug('Finished MysqlDownDuringWorkerCopy-specific setup')
+    except:
+      self.tearDown()
 
   def tearDown(self):
     """Restarts the MySQL processes that were killed during the setup."""
