@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"flag"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,14 +16,11 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
@@ -246,7 +244,7 @@ func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
 func testSplitClone(t *testing.T, strategy string) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wi := NewInstance(ts, "cell1", time.Second, time.Second)
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
 		ShardingColumnName: "keyspace_id",
@@ -255,25 +253,25 @@ func testSplitClone(t *testing.T, strategy string) {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
+	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
 		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
-	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
+	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
 		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
-	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
+	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
 		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
-	leftMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
+	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
 		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
-	leftRdonly := testlib.NewFakeTablet(t, wr, "cell1", 11,
+	leftRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
 		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
-	rightMaster := testlib.NewFakeTablet(t, wr, "cell1", 20,
+	rightMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 20,
 		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
-	rightRdonly := testlib.NewFakeTablet(t, wr, "cell1", 21,
+	rightRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 21,
 		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, rightMaster, rightRdonly} {
-		ft.StartActionLoop(t, wr)
+		ft.StartActionLoop(t, wi.wr)
 		defer ft.StopActionLoop(t)
 	}
 
@@ -282,14 +280,22 @@ func testSplitClone(t *testing.T, strategy string) {
 	if err := ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
-	if err := wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", pbt.KeyspaceIdType_UINT64, 4, false); err != nil {
+	if err := wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", pbt.KeyspaceIdType_UINT64, 4, false); err != nil {
 		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
-	if err := wr.RebuildKeyspaceGraph(ctx, "ks", nil, true); err != nil {
+	if err := wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	gwrk, err := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, strategy, 10 /*sourceReaderCount*/, 4 /*destinationPackCount*/, 1 /*minTableSizeForSplit*/, 10 /*destinationWriterCount*/)
+	subFlags := flag.NewFlagSet("SplitClone", flag.ContinueOnError)
+	gwrk, err := commandSplitClone(wi, wi.wr, subFlags, []string{
+		"-strategy", strategy,
+		"-source_reader_count", "10",
+		"-destination_pack_count", "4",
+		"-min_table_size_for_split", "1",
+		"-destination_writer_count", "10",
+		"ks/-80",
+	})
 	if err != nil {
 		t.Errorf("Worker creation failed: %v", err)
 	}
