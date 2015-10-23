@@ -54,32 +54,32 @@ var _ = math.Inf
 type Flag int32
 
 const (
-	Flag_None       Flag = 0
-	Flag_IsNumber   Flag = 256
-	Flag_IsUnsigned Flag = 512
-	Flag_IsFloat    Flag = 1024
-	Flag_IsQuoted   Flag = 2048
-	Flag_IsText     Flag = 4096
-	Flag_IsBinary   Flag = 8192
+	Flag_NONE       Flag = 0
+	Flag_ISNUMBER   Flag = 256
+	Flag_ISUNSIGNED Flag = 512
+	Flag_ISFLOAT    Flag = 1024
+	Flag_ISQUOTED   Flag = 2048
+	Flag_ISTEXT     Flag = 4096
+	Flag_ISBINARY   Flag = 8192
 )
 
 var Flag_name = map[int32]string{
-	0:    "None",
-	256:  "IsNumber",
-	512:  "IsUnsigned",
-	1024: "IsFloat",
-	2048: "IsQuoted",
-	4096: "IsText",
-	8192: "IsBinary",
+	0:    "NONE",
+	256:  "ISNUMBER",
+	512:  "ISUNSIGNED",
+	1024: "ISFLOAT",
+	2048: "ISQUOTED",
+	4096: "ISTEXT",
+	8192: "ISBINARY",
 }
 var Flag_value = map[string]int32{
-	"None":       0,
-	"IsNumber":   256,
-	"IsUnsigned": 512,
-	"IsFloat":    1024,
-	"IsQuoted":   2048,
-	"IsText":     4096,
-	"IsBinary":   8192,
+	"NONE":       0,
+	"ISNUMBER":   256,
+	"ISUNSIGNED": 512,
+	"ISFLOAT":    1024,
+	"ISQUOTED":   2048,
+	"ISTEXT":     4096,
+	"ISBINARY":   8192,
 }
 
 func (x Flag) String() string {
@@ -91,155 +91,150 @@ func (x Flag) String() string {
 type Type int32
 
 const (
-	// Null specifies a NULL type.
-	Type_Null Type = 0
-	// TinyInt specifies a TINYINT type.
+	// NULL specifies a NULL type.
+	Type_NULL Type = 0
+	// TINYINT specifies a TINYINT type.
 	// Properties: 1, IsNumber.
-	Type_TinyInt Type = 257
-	// TinyUint specifies a TINYINT UNSIGNED type.
+	Type_TINYINT Type = 257
+	// TINYUINT specifies a TINYINT UNSIGNED type.
 	// Properties: 2, IsNumber, IsUnsigned.
-	Type_TinyUint Type = 770
-	// ShortInt specifies a SMALLINT type.
+	Type_TINYUINT Type = 770
+	// SHORTINT specifies a SMALLINT type.
 	// Properties: 3, IsNumber.
-	Type_ShortInt Type = 259
-	// ShortUint specifies a SMALLINT UNSIGNED type.
+	Type_SHORTINT Type = 259
+	// SHORTUINT specifies a SMALLINT UNSIGNED type.
 	// Properties: 4, IsNumber, IsUnsigned.
-	Type_ShortUint Type = 772
-	// Int24 specifies a MEDIUMINT type.
+	Type_SHORTUINT Type = 772
+	// INT24 specifies a MEDIUMINT type.
 	// Properties: 5, IsNumber.
-	Type_Int24 Type = 261
-	// Uint24 specifies a MEDIUMINT UNSIGNED type.
+	Type_INT24 Type = 261
+	// UINT24 specifies a MEDIUMINT UNSIGNED type.
 	// Properties: 6, IsNumber, IsUnsigned.
-	Type_Uint24 Type = 774
-	// Long specifies a INTEGER type.
+	Type_UINT24 Type = 774
+	// LONG specifies a INTEGER type.
 	// Properties: 7, IsNumber.
-	Type_Long Type = 263
-	// Ulong specifies a INTEGER UNSIGNED type.
+	Type_LONG Type = 263
+	// ULONG specifies a INTEGER UNSIGNED type.
 	// Properties: 8, IsNumber, IsUnsigned.
-	Type_Ulong Type = 776
-	// Longlong specifies a BIGINT type.
+	Type_ULONG Type = 776
+	// LONGLONG specifies a BIGINT type.
 	// Properties: 9, IsNumber.
-	Type_Longlong Type = 265
-	// Ulonglong specifies a BIGINT UNSIGNED type.
+	Type_LONGLONG Type = 265
+	// ULONGLONG specifies a BIGINT UNSIGNED type.
 	// Properties: 10, IsNumber, IsUnsigned.
-	Type_Ulonglong Type = 778
-	// Float specifies a FLOAT type.
+	Type_ULONGLONG Type = 778
+	// FLOAT specifies a FLOAT type.
 	// Properties: 11, IsFloat.
-	Type_Float Type = 1035
-	// Double specifies a DOUBLE or REAL type.
+	Type_FLOAT Type = 1035
+	// DOUBLE specifies a DOUBLE or REAL type.
 	// Properties: 12, IsFloat.
-	Type_Double Type = 1036
-	// Timestamp specifies a TIMESTAMP type.
+	Type_DOUBLE Type = 1036
+	// TIMESTAMP specifies a TIMESTAMP type.
 	// Properties: 13, IsQuoted.
-	Type_Timestamp Type = 2061
-	// Date specifies a DATE type.
+	Type_TIMESTAMP Type = 2061
+	// DATE specifies a DATE type.
 	// Properties: 14, IsQuoted.
-	Type_Date Type = 2062
-	// Time specifies a TIME type.
+	Type_DATE Type = 2062
+	// TIME specifies a TIME type.
 	// Properties: 15, IsQuoted.
-	Type_Time Type = 2063
-	// Datetime specifies a DATETIME type.
+	Type_TIME Type = 2063
+	// DATETIME specifies a DATETIME type.
 	// Properties: 16, IsQuoted.
-	Type_Datetime Type = 2064
-	// Year specifies a YEAR type.
+	Type_DATETIME Type = 2064
+	// YEAR specifies a YEAR type.
 	// Properties: 17, IsNumber, IsUnsigned.
-	Type_Year Type = 785
-	// Decimal specifies a DECIMAL or NUMERIC type.
+	Type_YEAR Type = 785
+	// DECIMAL specifies a DECIMAL or NUMERIC type.
 	// Properties: 18, None.
-	Type_Decimal Type = 18
-	// Text specifies a TEXT type.
+	Type_DECIMAL Type = 18
+	// TEXT specifies a TEXT type.
 	// Properties: 19, IsQuoted, IsText.
-	Type_Text Type = 6163
-	// Blob specifies a BLOB type.
+	Type_TEXT Type = 6163
+	// BLOB specifies a BLOB type.
 	// Properties: 20, IsQuoted, IsBinary.
-	Type_Blob Type = 10260
-	// VarChar specifies a VARCHAR type.
+	Type_BLOB Type = 10260
+	// VARCHAR specifies a VARCHAR type.
 	// Properties: 21, IsQuoted, IsText.
-	Type_VarChar Type = 6165
-	// VarBinary specifies a VARBINARY type.
+	Type_VARCHAR Type = 6165
+	// VARBINARY specifies a VARBINARY type.
 	// Properties: 22, IsQuoted, IsBinary.
-	Type_VarBinary Type = 10262
-	// Char specifies a CHAR type.
+	Type_VARBINARY Type = 10262
+	// CHAR specifies a CHAR type.
 	// Properties: 23, IsQuoted, IsText.
-	Type_Char Type = 6167
-	// Binary specifies a BINARY type.
+	Type_CHAR Type = 6167
+	// BINARY specifies a BINARY type.
 	// Properties: 24, IsQuoted, IsBinary.
-	Type_Binary Type = 10264
-	// Bit specifies a BIT type.
+	Type_BINARY Type = 10264
+	// BIT specifies a BIT type.
 	// Properties: 25, IsQuoted.
-	Type_Bit Type = 2073
-	// Enum specifies an ENUM type.
+	Type_BIT Type = 2073
+	// ENUM specifies an ENUM type.
 	// Properties: 26, IsQuoted.
-	Type_Enum Type = 2074
-	// Set specifies a SET type.
+	Type_ENUM Type = 2074
+	// SET specifies a SET type.
 	// Properties: 27, IsQuoted.
-	Type_Set Type = 2075
-	// Geometry specifies a Spatial field.
-	// Properties: 28, IsQuoted.
-	Type_Geometry Type = 2076
+	Type_SET Type = 2075
 )
 
 var Type_name = map[int32]string{
-	0:     "Null",
-	257:   "TinyInt",
-	770:   "TinyUint",
-	259:   "ShortInt",
-	772:   "ShortUint",
-	261:   "Int24",
-	774:   "Uint24",
-	263:   "Long",
-	776:   "Ulong",
-	265:   "Longlong",
-	778:   "Ulonglong",
-	1035:  "Float",
-	1036:  "Double",
-	2061:  "Timestamp",
-	2062:  "Date",
-	2063:  "Time",
-	2064:  "Datetime",
-	785:   "Year",
-	18:    "Decimal",
-	6163:  "Text",
-	10260: "Blob",
-	6165:  "VarChar",
-	10262: "VarBinary",
-	6167:  "Char",
-	10264: "Binary",
-	2073:  "Bit",
-	2074:  "Enum",
-	2075:  "Set",
-	2076:  "Geometry",
+	0:     "NULL",
+	257:   "TINYINT",
+	770:   "TINYUINT",
+	259:   "SHORTINT",
+	772:   "SHORTUINT",
+	261:   "INT24",
+	774:   "UINT24",
+	263:   "LONG",
+	776:   "ULONG",
+	265:   "LONGLONG",
+	778:   "ULONGLONG",
+	1035:  "FLOAT",
+	1036:  "DOUBLE",
+	2061:  "TIMESTAMP",
+	2062:  "DATE",
+	2063:  "TIME",
+	2064:  "DATETIME",
+	785:   "YEAR",
+	18:    "DECIMAL",
+	6163:  "TEXT",
+	10260: "BLOB",
+	6165:  "VARCHAR",
+	10262: "VARBINARY",
+	6167:  "CHAR",
+	10264: "BINARY",
+	2073:  "BIT",
+	2074:  "ENUM",
+	2075:  "SET",
 }
 var Type_value = map[string]int32{
-	"Null":      0,
-	"TinyInt":   257,
-	"TinyUint":  770,
-	"ShortInt":  259,
-	"ShortUint": 772,
-	"Int24":     261,
-	"Uint24":    774,
-	"Long":      263,
-	"Ulong":     776,
-	"Longlong":  265,
-	"Ulonglong": 778,
-	"Float":     1035,
-	"Double":    1036,
-	"Timestamp": 2061,
-	"Date":      2062,
-	"Time":      2063,
-	"Datetime":  2064,
-	"Year":      785,
-	"Decimal":   18,
-	"Text":      6163,
-	"Blob":      10260,
-	"VarChar":   6165,
-	"VarBinary": 10262,
-	"Char":      6167,
-	"Binary":    10264,
-	"Bit":       2073,
-	"Enum":      2074,
-	"Set":       2075,
-	"Geometry":  2076,
+	"NULL":      0,
+	"TINYINT":   257,
+	"TINYUINT":  770,
+	"SHORTINT":  259,
+	"SHORTUINT": 772,
+	"INT24":     261,
+	"UINT24":    774,
+	"LONG":      263,
+	"ULONG":     776,
+	"LONGLONG":  265,
+	"ULONGLONG": 778,
+	"FLOAT":     1035,
+	"DOUBLE":    1036,
+	"TIMESTAMP": 2061,
+	"DATE":      2062,
+	"TIME":      2063,
+	"DATETIME":  2064,
+	"YEAR":      785,
+	"DECIMAL":   18,
+	"TEXT":      6163,
+	"BLOB":      10260,
+	"VARCHAR":   6165,
+	"VARBINARY": 10262,
+	"CHAR":      6167,
+	"BINARY":    10264,
+	"BIT":       2073,
+	"ENUM":      2074,
+	"SET":       2075,
 }
 
 func (x Type) String() string {

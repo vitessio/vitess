@@ -13,48 +13,49 @@ import (
 // These bit flags can be used to query on the
 // common properties of types.
 const (
-	IsNumber   = int(query.Flag_IsNumber)
-	IsUnsigned = int(query.Flag_IsUnsigned)
-	IsFloat    = int(query.Flag_IsFloat)
-	IsQuoted   = int(query.Flag_IsQuoted)
-	IsText     = int(query.Flag_IsText)
-	IsBinary   = int(query.Flag_IsBinary)
+	IsNumber   = int(query.Flag_ISNUMBER)
+	IsUnsigned = int(query.Flag_ISUNSIGNED)
+	IsFloat    = int(query.Flag_ISFLOAT)
+	IsQuoted   = int(query.Flag_ISQUOTED)
+	IsText     = int(query.Flag_ISTEXT)
+	IsBinary   = int(query.Flag_ISBINARY)
 )
 
 // Vitess data types. These are idiomatically
 // named synonyms for the query.Type values.
 const (
-	Null      = query.Type_Null
-	TinyInt   = query.Type_TinyInt
-	TinyUint  = query.Type_TinyUint
-	ShortInt  = query.Type_ShortInt
-	ShortUint = query.Type_ShortUint
-	Int24     = query.Type_Int24
-	Uint24    = query.Type_Uint24
-	Long      = query.Type_Long
-	Ulong     = query.Type_Ulong
-	Longlong  = query.Type_Longlong
-	Ulonglong = query.Type_Ulonglong
-	Float     = query.Type_Float
-	Double    = query.Type_Double
-	Timestamp = query.Type_Timestamp
-	Date      = query.Type_Date
-	Time      = query.Type_Time
-	Datetime  = query.Type_Datetime
-	Year      = query.Type_Year
-	Decimal   = query.Type_Decimal
-	Text      = query.Type_Text
-	Blob      = query.Type_Blob
-	VarChar   = query.Type_VarChar
-	VarBinary = query.Type_VarBinary
-	Char      = query.Type_Char
-	Binary    = query.Type_Binary
-	Bit       = query.Type_Bit
-	Enum      = query.Type_Enum
-	Set       = query.Type_Set
-	Geometry  = query.Type_Geometry
+	Null      = query.Type_NULL
+	TinyInt   = query.Type_TINYINT
+	TinyUint  = query.Type_TINYUINT
+	ShortInt  = query.Type_SHORTINT
+	ShortUint = query.Type_SHORTUINT
+	Int24     = query.Type_INT24
+	Uint24    = query.Type_UINT24
+	Long      = query.Type_LONG
+	Ulong     = query.Type_ULONG
+	Longlong  = query.Type_LONGLONG
+	Ulonglong = query.Type_ULONGLONG
+	Float     = query.Type_FLOAT
+	Double    = query.Type_DOUBLE
+	Timestamp = query.Type_TIMESTAMP
+	Date      = query.Type_DATE
+	Time      = query.Type_TIME
+	Datetime  = query.Type_DATETIME
+	Year      = query.Type_YEAR
+	Decimal   = query.Type_DECIMAL
+	Text      = query.Type_TEXT
+	Blob      = query.Type_BLOB
+	VarChar   = query.Type_VARCHAR
+	VarBinary = query.Type_VARBINARY
+	Char      = query.Type_CHAR
+	Binary    = query.Type_BINARY
+	Bit       = query.Type_BIT
+	Enum      = query.Type_ENUM
+	Set       = query.Type_SET
 )
 
+// bit-shift the mysql flags by one byte so we
+// can merge them with the mysql types.
 const (
 	mysqlUnsigned = 32 << 8
 	mysqlBinary   = 128 << 8
@@ -101,7 +102,7 @@ var mysqlToType = map[int]query.Type{
 	254 | mysqlSet:     Set,
 }
 
-// TypeFromMySQL computes the vitess from the mysql type and flags.
+// TypeFromMySQL computes the vitess type from mysql type and flags.
 func TypeFromMySQL(mysqlType, flags int) (query.Type, error) {
 	converted := (flags << 8) & relevantFlags
 

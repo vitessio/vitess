@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='query.proto',
   package='query',
   syntax='proto3',
-  serialized_pb=b'\n\x0bquery.proto\x12\x05query\x1a\x0etopodata.proto\x1a\x0bvtrpc.proto\"T\n\x06Target\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\x12)\n\x0btablet_type\x18\x03 \x01(\x0e\x32\x14.topodata.TabletType\"\"\n\x0eVTGateCallerID\x12\x10\n\x08username\x18\x01 \x01(\t\"\x92\x03\n\x0c\x42indVariable\x12&\n\x04type\x18\x01 \x01(\x0e\x32\x18.query.BindVariable.Type\x12\x13\n\x0bvalue_bytes\x18\x02 \x01(\x0c\x12\x11\n\tvalue_int\x18\x03 \x01(\x03\x12\x12\n\nvalue_uint\x18\x04 \x01(\x04\x12\x13\n\x0bvalue_float\x18\x05 \x01(\x01\x12\x18\n\x10value_bytes_list\x18\x06 \x03(\x0c\x12\x16\n\x0evalue_int_list\x18\x07 \x03(\x03\x12\x17\n\x0fvalue_uint_list\x18\x08 \x03(\x04\x12\x18\n\x10value_float_list\x18\t \x03(\x01\"\xa3\x01\n\x04Type\x12\r\n\tTYPE_NULL\x10\x00\x12\x0e\n\nTYPE_BYTES\x10\x01\x12\x0c\n\x08TYPE_INT\x10\x02\x12\r\n\tTYPE_UINT\x10\x03\x12\x0e\n\nTYPE_FLOAT\x10\x04\x12\x13\n\x0fTYPE_BYTES_LIST\x10\x05\x12\x11\n\rTYPE_INT_LIST\x10\x06\x12\x12\n\x0eTYPE_UINT_LIST\x10\x07\x12\x13\n\x0fTYPE_FLOAT_LIST\x10\x08\"\xa2\x01\n\nBoundQuery\x12\x0b\n\x03sql\x18\x01 \x01(\t\x12<\n\x0e\x62ind_variables\x18\x02 \x03(\x0b\x32$.query.BoundQuery.BindVariablesEntry\x1aI\n\x12\x42indVariablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\"\n\x05value\x18\x02 \x01(\x0b\x32\x13.query.BindVariable:\x02\x38\x01\"\xa1\x07\n\x05\x46ield\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1f\n\x04type\x18\x02 \x01(\x0e\x32\x11.query.Field.Type\x12\r\n\x05\x66lags\x18\x03 \x01(\x03\"\xe1\x03\n\x04Type\x12\x10\n\x0cTYPE_DECIMAL\x10\x00\x12\r\n\tTYPE_TINY\x10\x01\x12\x0e\n\nTYPE_SHORT\x10\x02\x12\r\n\tTYPE_LONG\x10\x03\x12\x0e\n\nTYPE_FLOAT\x10\x04\x12\x0f\n\x0bTYPE_DOUBLE\x10\x05\x12\r\n\tTYPE_NULL\x10\x06\x12\x12\n\x0eTYPE_TIMESTAMP\x10\x07\x12\x11\n\rTYPE_LONGLONG\x10\x08\x12\x0e\n\nTYPE_INT24\x10\t\x12\r\n\tTYPE_DATE\x10\n\x12\r\n\tTYPE_TIME\x10\x0b\x12\x11\n\rTYPE_DATETIME\x10\x0c\x12\r\n\tTYPE_YEAR\x10\r\x12\x10\n\x0cTYPE_NEWDATE\x10\x0e\x12\x10\n\x0cTYPE_VARCHAR\x10\x0f\x12\x0c\n\x08TYPE_BIT\x10\x10\x12\x14\n\x0fTYPE_NEWDECIMAL\x10\xf6\x01\x12\x0e\n\tTYPE_ENUM\x10\xf7\x01\x12\r\n\x08TYPE_SET\x10\xf8\x01\x12\x13\n\x0eTYPE_TINY_BLOB\x10\xf9\x01\x12\x15\n\x10TYPE_MEDIUM_BLOB\x10\xfa\x01\x12\x13\n\x0eTYPE_LONG_BLOB\x10\xfb\x01\x12\x0e\n\tTYPE_BLOB\x10\xfc\x01\x12\x14\n\x0fTYPE_VAR_STRING\x10\xfd\x01\x12\x10\n\x0bTYPE_STRING\x10\xfe\x01\x12\x12\n\rTYPE_GEOMETRY\x10\xff\x01\"\xf5\x02\n\x04\x46lag\x12\x15\n\x11VT_ZEROVALUE_FLAG\x10\x00\x12\x14\n\x10VT_NOT_NULL_FLAG\x10\x01\x12\x13\n\x0fVT_PRI_KEY_FLAG\x10\x02\x12\x16\n\x12VT_UNIQUE_KEY_FLAG\x10\x04\x12\x18\n\x14VT_MULTIPLE_KEY_FLAG\x10\x08\x12\x10\n\x0cVT_BLOB_FLAG\x10\x10\x12\x14\n\x10VT_UNSIGNED_FLAG\x10 \x12\x14\n\x10VT_ZEROFILL_FLAG\x10@\x12\x13\n\x0eVT_BINARY_FLAG\x10\x80\x01\x12\x11\n\x0cVT_ENUM_FLAG\x10\x80\x02\x12\x1b\n\x16VT_AUTO_INCREMENT_FLAG\x10\x80\x04\x12\x16\n\x11VT_TIMESTAMP_FLAG\x10\x80\x08\x12\x10\n\x0bVT_SET_FLAG\x10\x80\x10\x12\x1d\n\x18VT_NO_DEFAULT_VALUE_FLAG\x10\x80 \x12\x1a\n\x15VT_ON_UPDATE_NOW_FLAG\x10\x80@\x12\x11\n\x0bVT_NUM_FLAG\x10\x80\x80\x02\"\x15\n\x03Row\x12\x0e\n\x06values\x18\x01 \x03(\x0c\"o\n\x0bQueryResult\x12\x1c\n\x06\x66ields\x18\x01 \x03(\x0b\x32\x0c.query.Field\x12\x15\n\rrows_affected\x18\x02 \x01(\x04\x12\x11\n\tinsert_id\x18\x03 \x01(\x04\x12\x18\n\x04rows\x18\x04 \x03(\x0b\x32\n.query.Row\"\x98\x01\n\x13GetSessionIdRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x10\n\x08keyspace\x18\x03 \x01(\t\x12\r\n\x05shard\x18\x04 \x01(\t\"*\n\x14GetSessionIdResponse\x12\x12\n\nsession_id\x18\x01 \x01(\x03\"\xdf\x01\n\x0e\x45xecuteRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12 \n\x05query\x18\x04 \x01(\x0b\x32\x11.query.BoundQuery\x12\x16\n\x0etransaction_id\x18\x05 \x01(\x03\x12\x12\n\nsession_id\x18\x06 \x01(\x03\"5\n\x0f\x45xecuteResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"\xfe\x01\n\x13\x45xecuteBatchRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\"\n\x07queries\x18\x04 \x03(\x0b\x32\x11.query.BoundQuery\x12\x16\n\x0e\x61s_transaction\x18\x05 \x01(\x08\x12\x16\n\x0etransaction_id\x18\x06 \x01(\x03\x12\x12\n\nsession_id\x18\x07 \x01(\x03\";\n\x14\x45xecuteBatchResponse\x12#\n\x07results\x18\x01 \x03(\x0b\x32\x12.query.QueryResult\"\xcd\x01\n\x14StreamExecuteRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12 \n\x05query\x18\x04 \x01(\x0b\x32\x11.query.BoundQuery\x12\x12\n\nsession_id\x18\x05 \x01(\x03\";\n\x15StreamExecuteResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"\xa3\x01\n\x0c\x42\x65ginRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\x12\n\nsession_id\x18\x04 \x01(\x03\"\'\n\rBeginResponse\x12\x16\n\x0etransaction_id\x18\x01 \x01(\x03\"\xbc\x01\n\rCommitRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\x16\n\x0etransaction_id\x18\x04 \x01(\x03\x12\x12\n\nsession_id\x18\x05 \x01(\x03\"\x10\n\x0e\x43ommitResponse\"\xbe\x01\n\x0fRollbackRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\x16\n\x0etransaction_id\x18\x04 \x01(\x03\x12\x12\n\nsession_id\x18\x05 \x01(\x03\"\x12\n\x10RollbackResponse\"\xf5\x01\n\x11SplitQueryRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12 \n\x05query\x18\x04 \x01(\x0b\x32\x11.query.BoundQuery\x12\x14\n\x0csplit_column\x18\x05 \x01(\t\x12\x13\n\x0bsplit_count\x18\x06 \x01(\x03\x12\x12\n\nsession_id\x18\x07 \x01(\x03\"A\n\nQuerySplit\x12 \n\x05query\x18\x01 \x01(\x0b\x32\x11.query.BoundQuery\x12\x11\n\trow_count\x18\x02 \x01(\x03\"8\n\x12SplitQueryResponse\x12\"\n\x07queries\x18\x01 \x03(\x0b\x32\x11.query.QuerySplit\"\x15\n\x13StreamHealthRequest\"\xa9\x01\n\rRealtimeStats\x12\x14\n\x0chealth_error\x18\x01 \x01(\t\x12\x1d\n\x15seconds_behind_master\x18\x02 \x01(\r\x12\x1c\n\x14\x62inlog_players_count\x18\x03 \x01(\x05\x12\x32\n*seconds_behind_master_filtered_replication\x18\x04 \x01(\x03\x12\x11\n\tcpu_usage\x18\x05 \x01(\x01\"\xa4\x01\n\x14StreamHealthResponse\x12\x1d\n\x06target\x18\x01 \x01(\x0b\x32\r.query.Target\x12\x0f\n\x07serving\x18\x02 \x01(\x08\x12.\n&tablet_externally_reparented_timestamp\x18\x03 \x01(\x03\x12,\n\x0erealtime_stats\x18\x04 \x01(\x0b\x32\x14.query.RealtimeStats*i\n\x04\x46lag\x12\x08\n\x04None\x10\x00\x12\r\n\x08IsNumber\x10\x80\x02\x12\x0f\n\nIsUnsigned\x10\x80\x04\x12\x0c\n\x07IsFloat\x10\x80\x08\x12\r\n\x08IsQuoted\x10\x80\x10\x12\x0b\n\x06IsText\x10\x80 \x12\r\n\x08IsBinary\x10\x80@*\xfb\x02\n\x04Type\x12\x08\n\x04Null\x10\x00\x12\x0c\n\x07TinyInt\x10\x81\x02\x12\r\n\x08TinyUint\x10\x82\x06\x12\r\n\x08ShortInt\x10\x83\x02\x12\x0e\n\tShortUint\x10\x84\x06\x12\n\n\x05Int24\x10\x85\x02\x12\x0b\n\x06Uint24\x10\x86\x06\x12\t\n\x04Long\x10\x87\x02\x12\n\n\x05Ulong\x10\x88\x06\x12\r\n\x08Longlong\x10\x89\x02\x12\x0e\n\tUlonglong\x10\x8a\x06\x12\n\n\x05\x46loat\x10\x8b\x08\x12\x0b\n\x06\x44ouble\x10\x8c\x08\x12\x0e\n\tTimestamp\x10\x8d\x10\x12\t\n\x04\x44\x61te\x10\x8e\x10\x12\t\n\x04Time\x10\x8f\x10\x12\r\n\x08\x44\x61tetime\x10\x90\x10\x12\t\n\x04Year\x10\x91\x06\x12\x0b\n\x07\x44\x65\x63imal\x10\x12\x12\t\n\x04Text\x10\x93\x30\x12\t\n\x04\x42lob\x10\x94P\x12\x0c\n\x07VarChar\x10\x95\x30\x12\x0e\n\tVarBinary\x10\x96P\x12\t\n\x04\x43har\x10\x97\x30\x12\x0b\n\x06\x42inary\x10\x98P\x12\x08\n\x03\x42it\x10\x99\x10\x12\t\n\x04\x45num\x10\x9a\x10\x12\x08\n\x03Set\x10\x9b\x10\x12\r\n\x08Geometry\x10\x9c\x10\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3'
+  serialized_pb=b'\n\x0bquery.proto\x12\x05query\x1a\x0etopodata.proto\x1a\x0bvtrpc.proto\"T\n\x06Target\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\x12)\n\x0btablet_type\x18\x03 \x01(\x0e\x32\x14.topodata.TabletType\"\"\n\x0eVTGateCallerID\x12\x10\n\x08username\x18\x01 \x01(\t\"\x92\x03\n\x0c\x42indVariable\x12&\n\x04type\x18\x01 \x01(\x0e\x32\x18.query.BindVariable.Type\x12\x13\n\x0bvalue_bytes\x18\x02 \x01(\x0c\x12\x11\n\tvalue_int\x18\x03 \x01(\x03\x12\x12\n\nvalue_uint\x18\x04 \x01(\x04\x12\x13\n\x0bvalue_float\x18\x05 \x01(\x01\x12\x18\n\x10value_bytes_list\x18\x06 \x03(\x0c\x12\x16\n\x0evalue_int_list\x18\x07 \x03(\x03\x12\x17\n\x0fvalue_uint_list\x18\x08 \x03(\x04\x12\x18\n\x10value_float_list\x18\t \x03(\x01\"\xa3\x01\n\x04Type\x12\r\n\tTYPE_NULL\x10\x00\x12\x0e\n\nTYPE_BYTES\x10\x01\x12\x0c\n\x08TYPE_INT\x10\x02\x12\r\n\tTYPE_UINT\x10\x03\x12\x0e\n\nTYPE_FLOAT\x10\x04\x12\x13\n\x0fTYPE_BYTES_LIST\x10\x05\x12\x11\n\rTYPE_INT_LIST\x10\x06\x12\x12\n\x0eTYPE_UINT_LIST\x10\x07\x12\x13\n\x0fTYPE_FLOAT_LIST\x10\x08\"\xa2\x01\n\nBoundQuery\x12\x0b\n\x03sql\x18\x01 \x01(\t\x12<\n\x0e\x62ind_variables\x18\x02 \x03(\x0b\x32$.query.BoundQuery.BindVariablesEntry\x1aI\n\x12\x42indVariablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\"\n\x05value\x18\x02 \x01(\x0b\x32\x13.query.BindVariable:\x02\x38\x01\"\xa1\x07\n\x05\x46ield\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1f\n\x04type\x18\x02 \x01(\x0e\x32\x11.query.Field.Type\x12\r\n\x05\x66lags\x18\x03 \x01(\x03\"\xe1\x03\n\x04Type\x12\x10\n\x0cTYPE_DECIMAL\x10\x00\x12\r\n\tTYPE_TINY\x10\x01\x12\x0e\n\nTYPE_SHORT\x10\x02\x12\r\n\tTYPE_LONG\x10\x03\x12\x0e\n\nTYPE_FLOAT\x10\x04\x12\x0f\n\x0bTYPE_DOUBLE\x10\x05\x12\r\n\tTYPE_NULL\x10\x06\x12\x12\n\x0eTYPE_TIMESTAMP\x10\x07\x12\x11\n\rTYPE_LONGLONG\x10\x08\x12\x0e\n\nTYPE_INT24\x10\t\x12\r\n\tTYPE_DATE\x10\n\x12\r\n\tTYPE_TIME\x10\x0b\x12\x11\n\rTYPE_DATETIME\x10\x0c\x12\r\n\tTYPE_YEAR\x10\r\x12\x10\n\x0cTYPE_NEWDATE\x10\x0e\x12\x10\n\x0cTYPE_VARCHAR\x10\x0f\x12\x0c\n\x08TYPE_BIT\x10\x10\x12\x14\n\x0fTYPE_NEWDECIMAL\x10\xf6\x01\x12\x0e\n\tTYPE_ENUM\x10\xf7\x01\x12\r\n\x08TYPE_SET\x10\xf8\x01\x12\x13\n\x0eTYPE_TINY_BLOB\x10\xf9\x01\x12\x15\n\x10TYPE_MEDIUM_BLOB\x10\xfa\x01\x12\x13\n\x0eTYPE_LONG_BLOB\x10\xfb\x01\x12\x0e\n\tTYPE_BLOB\x10\xfc\x01\x12\x14\n\x0fTYPE_VAR_STRING\x10\xfd\x01\x12\x10\n\x0bTYPE_STRING\x10\xfe\x01\x12\x12\n\rTYPE_GEOMETRY\x10\xff\x01\"\xf5\x02\n\x04\x46lag\x12\x15\n\x11VT_ZEROVALUE_FLAG\x10\x00\x12\x14\n\x10VT_NOT_NULL_FLAG\x10\x01\x12\x13\n\x0fVT_PRI_KEY_FLAG\x10\x02\x12\x16\n\x12VT_UNIQUE_KEY_FLAG\x10\x04\x12\x18\n\x14VT_MULTIPLE_KEY_FLAG\x10\x08\x12\x10\n\x0cVT_BLOB_FLAG\x10\x10\x12\x14\n\x10VT_UNSIGNED_FLAG\x10 \x12\x14\n\x10VT_ZEROFILL_FLAG\x10@\x12\x13\n\x0eVT_BINARY_FLAG\x10\x80\x01\x12\x11\n\x0cVT_ENUM_FLAG\x10\x80\x02\x12\x1b\n\x16VT_AUTO_INCREMENT_FLAG\x10\x80\x04\x12\x16\n\x11VT_TIMESTAMP_FLAG\x10\x80\x08\x12\x10\n\x0bVT_SET_FLAG\x10\x80\x10\x12\x1d\n\x18VT_NO_DEFAULT_VALUE_FLAG\x10\x80 \x12\x1a\n\x15VT_ON_UPDATE_NOW_FLAG\x10\x80@\x12\x11\n\x0bVT_NUM_FLAG\x10\x80\x80\x02\"\x15\n\x03Row\x12\x0e\n\x06values\x18\x01 \x03(\x0c\"o\n\x0bQueryResult\x12\x1c\n\x06\x66ields\x18\x01 \x03(\x0b\x32\x0c.query.Field\x12\x15\n\rrows_affected\x18\x02 \x01(\x04\x12\x11\n\tinsert_id\x18\x03 \x01(\x04\x12\x18\n\x04rows\x18\x04 \x03(\x0b\x32\n.query.Row\"\x98\x01\n\x13GetSessionIdRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x10\n\x08keyspace\x18\x03 \x01(\t\x12\r\n\x05shard\x18\x04 \x01(\t\"*\n\x14GetSessionIdResponse\x12\x12\n\nsession_id\x18\x01 \x01(\x03\"\xdf\x01\n\x0e\x45xecuteRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12 \n\x05query\x18\x04 \x01(\x0b\x32\x11.query.BoundQuery\x12\x16\n\x0etransaction_id\x18\x05 \x01(\x03\x12\x12\n\nsession_id\x18\x06 \x01(\x03\"5\n\x0f\x45xecuteResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"\xfe\x01\n\x13\x45xecuteBatchRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\"\n\x07queries\x18\x04 \x03(\x0b\x32\x11.query.BoundQuery\x12\x16\n\x0e\x61s_transaction\x18\x05 \x01(\x08\x12\x16\n\x0etransaction_id\x18\x06 \x01(\x03\x12\x12\n\nsession_id\x18\x07 \x01(\x03\";\n\x14\x45xecuteBatchResponse\x12#\n\x07results\x18\x01 \x03(\x0b\x32\x12.query.QueryResult\"\xcd\x01\n\x14StreamExecuteRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12 \n\x05query\x18\x04 \x01(\x0b\x32\x11.query.BoundQuery\x12\x12\n\nsession_id\x18\x05 \x01(\x03\";\n\x15StreamExecuteResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"\xa3\x01\n\x0c\x42\x65ginRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\x12\n\nsession_id\x18\x04 \x01(\x03\"\'\n\rBeginResponse\x12\x16\n\x0etransaction_id\x18\x01 \x01(\x03\"\xbc\x01\n\rCommitRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\x16\n\x0etransaction_id\x18\x04 \x01(\x03\x12\x12\n\nsession_id\x18\x05 \x01(\x03\"\x10\n\x0e\x43ommitResponse\"\xbe\x01\n\x0fRollbackRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\x16\n\x0etransaction_id\x18\x04 \x01(\x03\x12\x12\n\nsession_id\x18\x05 \x01(\x03\"\x12\n\x10RollbackResponse\"\xf5\x01\n\x11SplitQueryRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12 \n\x05query\x18\x04 \x01(\x0b\x32\x11.query.BoundQuery\x12\x14\n\x0csplit_column\x18\x05 \x01(\t\x12\x13\n\x0bsplit_count\x18\x06 \x01(\x03\x12\x12\n\nsession_id\x18\x07 \x01(\x03\"A\n\nQuerySplit\x12 \n\x05query\x18\x01 \x01(\x0b\x32\x11.query.BoundQuery\x12\x11\n\trow_count\x18\x02 \x01(\x03\"8\n\x12SplitQueryResponse\x12\"\n\x07queries\x18\x01 \x03(\x0b\x32\x11.query.QuerySplit\"\x15\n\x13StreamHealthRequest\"\xa9\x01\n\rRealtimeStats\x12\x14\n\x0chealth_error\x18\x01 \x01(\t\x12\x1d\n\x15seconds_behind_master\x18\x02 \x01(\r\x12\x1c\n\x14\x62inlog_players_count\x18\x03 \x01(\x05\x12\x32\n*seconds_behind_master_filtered_replication\x18\x04 \x01(\x03\x12\x11\n\tcpu_usage\x18\x05 \x01(\x01\"\xa4\x01\n\x14StreamHealthResponse\x12\x1d\n\x06target\x18\x01 \x01(\x0b\x32\r.query.Target\x12\x0f\n\x07serving\x18\x02 \x01(\x08\x12.\n&tablet_externally_reparented_timestamp\x18\x03 \x01(\x03\x12,\n\x0erealtime_stats\x18\x04 \x01(\x0b\x32\x14.query.RealtimeStats*i\n\x04\x46lag\x12\x08\n\x04NONE\x10\x00\x12\r\n\x08ISNUMBER\x10\x80\x02\x12\x0f\n\nISUNSIGNED\x10\x80\x04\x12\x0c\n\x07ISFLOAT\x10\x80\x08\x12\r\n\x08ISQUOTED\x10\x80\x10\x12\x0b\n\x06ISTEXT\x10\x80 \x12\r\n\x08ISBINARY\x10\x80@*\xec\x02\n\x04Type\x12\x08\n\x04NULL\x10\x00\x12\x0c\n\x07TINYINT\x10\x81\x02\x12\r\n\x08TINYUINT\x10\x82\x06\x12\r\n\x08SHORTINT\x10\x83\x02\x12\x0e\n\tSHORTUINT\x10\x84\x06\x12\n\n\x05INT24\x10\x85\x02\x12\x0b\n\x06UINT24\x10\x86\x06\x12\t\n\x04LONG\x10\x87\x02\x12\n\n\x05ULONG\x10\x88\x06\x12\r\n\x08LONGLONG\x10\x89\x02\x12\x0e\n\tULONGLONG\x10\x8a\x06\x12\n\n\x05\x46LOAT\x10\x8b\x08\x12\x0b\n\x06\x44OUBLE\x10\x8c\x08\x12\x0e\n\tTIMESTAMP\x10\x8d\x10\x12\t\n\x04\x44\x41TE\x10\x8e\x10\x12\t\n\x04TIME\x10\x8f\x10\x12\r\n\x08\x44\x41TETIME\x10\x90\x10\x12\t\n\x04YEAR\x10\x91\x06\x12\x0b\n\x07\x44\x45\x43IMAL\x10\x12\x12\t\n\x04TEXT\x10\x93\x30\x12\t\n\x04\x42LOB\x10\x94P\x12\x0c\n\x07VARCHAR\x10\x95\x30\x12\x0e\n\tVARBINARY\x10\x96P\x12\t\n\x04\x43HAR\x10\x97\x30\x12\x0b\n\x06\x42INARY\x10\x98P\x12\x08\n\x03\x42IT\x10\x99\x10\x12\t\n\x04\x45NUM\x10\x9a\x10\x12\x08\n\x03SET\x10\x9b\x10\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3'
   ,
   dependencies=[topodata__pb2.DESCRIPTOR,vtrpc__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -32,31 +32,31 @@ _FLAG = _descriptor.EnumDescriptor(
   file=DESCRIPTOR,
   values=[
     _descriptor.EnumValueDescriptor(
-      name='None', index=0, number=0,
+      name='NONE', index=0, number=0,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='IsNumber', index=1, number=256,
+      name='ISNUMBER', index=1, number=256,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='IsUnsigned', index=2, number=512,
+      name='ISUNSIGNED', index=2, number=512,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='IsFloat', index=3, number=1024,
+      name='ISFLOAT', index=3, number=1024,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='IsQuoted', index=4, number=2048,
+      name='ISQUOTED', index=4, number=2048,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='IsText', index=5, number=4096,
+      name='ISTEXT', index=5, number=4096,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='IsBinary', index=6, number=8192,
+      name='ISBINARY', index=6, number=8192,
       options=None,
       type=None),
   ],
@@ -75,166 +75,161 @@ _TYPE = _descriptor.EnumDescriptor(
   file=DESCRIPTOR,
   values=[
     _descriptor.EnumValueDescriptor(
-      name='Null', index=0, number=0,
+      name='NULL', index=0, number=0,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='TinyInt', index=1, number=257,
+      name='TINYINT', index=1, number=257,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='TinyUint', index=2, number=770,
+      name='TINYUINT', index=2, number=770,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='ShortInt', index=3, number=259,
+      name='SHORTINT', index=3, number=259,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='ShortUint', index=4, number=772,
+      name='SHORTUINT', index=4, number=772,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Int24', index=5, number=261,
+      name='INT24', index=5, number=261,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Uint24', index=6, number=774,
+      name='UINT24', index=6, number=774,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Long', index=7, number=263,
+      name='LONG', index=7, number=263,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Ulong', index=8, number=776,
+      name='ULONG', index=8, number=776,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Longlong', index=9, number=265,
+      name='LONGLONG', index=9, number=265,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Ulonglong', index=10, number=778,
+      name='ULONGLONG', index=10, number=778,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Float', index=11, number=1035,
+      name='FLOAT', index=11, number=1035,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Double', index=12, number=1036,
+      name='DOUBLE', index=12, number=1036,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Timestamp', index=13, number=2061,
+      name='TIMESTAMP', index=13, number=2061,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Date', index=14, number=2062,
+      name='DATE', index=14, number=2062,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Time', index=15, number=2063,
+      name='TIME', index=15, number=2063,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Datetime', index=16, number=2064,
+      name='DATETIME', index=16, number=2064,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Year', index=17, number=785,
+      name='YEAR', index=17, number=785,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Decimal', index=18, number=18,
+      name='DECIMAL', index=18, number=18,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Text', index=19, number=6163,
+      name='TEXT', index=19, number=6163,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Blob', index=20, number=10260,
+      name='BLOB', index=20, number=10260,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='VarChar', index=21, number=6165,
+      name='VARCHAR', index=21, number=6165,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='VarBinary', index=22, number=10262,
+      name='VARBINARY', index=22, number=10262,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Char', index=23, number=6167,
+      name='CHAR', index=23, number=6167,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Binary', index=24, number=10264,
+      name='BINARY', index=24, number=10264,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Bit', index=25, number=2073,
+      name='BIT', index=25, number=2073,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Enum', index=26, number=2074,
+      name='ENUM', index=26, number=2074,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='Set', index=27, number=2075,
-      options=None,
-      type=None),
-    _descriptor.EnumValueDescriptor(
-      name='Geometry', index=28, number=2076,
+      name='SET', index=27, number=2075,
       options=None,
       type=None),
   ],
   containing_type=None,
   options=None,
   serialized_start=4350,
-  serialized_end=4729,
+  serialized_end=4714,
 )
 _sym_db.RegisterEnumDescriptor(_TYPE)
 
 Type = enum_type_wrapper.EnumTypeWrapper(_TYPE)
-None = 0
-IsNumber = 256
-IsUnsigned = 512
-IsFloat = 1024
-IsQuoted = 2048
-IsText = 4096
-IsBinary = 8192
-Null = 0
-TinyInt = 257
-TinyUint = 770
-ShortInt = 259
-ShortUint = 772
-Int24 = 261
-Uint24 = 774
-Long = 263
-Ulong = 776
-Longlong = 265
-Ulonglong = 778
-Float = 1035
-Double = 1036
-Timestamp = 2061
-Date = 2062
-Time = 2063
-Datetime = 2064
-Year = 785
-Decimal = 18
-Text = 6163
-Blob = 10260
-VarChar = 6165
-VarBinary = 10262
-Char = 6167
-Binary = 10264
-Bit = 2073
-Enum = 2074
-Set = 2075
-Geometry = 2076
+NONE = 0
+ISNUMBER = 256
+ISUNSIGNED = 512
+ISFLOAT = 1024
+ISQUOTED = 2048
+ISTEXT = 4096
+ISBINARY = 8192
+NULL = 0
+TINYINT = 257
+TINYUINT = 770
+SHORTINT = 259
+SHORTUINT = 772
+INT24 = 261
+UINT24 = 774
+LONG = 263
+ULONG = 776
+LONGLONG = 265
+ULONGLONG = 778
+FLOAT = 1035
+DOUBLE = 1036
+TIMESTAMP = 2061
+DATE = 2062
+TIME = 2063
+DATETIME = 2064
+YEAR = 785
+DECIMAL = 18
+TEXT = 6163
+BLOB = 10260
+VARCHAR = 6165
+VARBINARY = 10262
+CHAR = 6167
+BINARY = 10264
+BIT = 2073
+ENUM = 2074
+SET = 2075
 
 
 _BINDVARIABLE_TYPE = _descriptor.EnumDescriptor(
