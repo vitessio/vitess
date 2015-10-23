@@ -156,16 +156,16 @@ func TestInts(t *testing.T) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
 	wantTypes := []query.Type{
-		sqltypes.TinyInt,
-		sqltypes.TinyUint,
-		sqltypes.ShortInt,
-		sqltypes.ShortUint,
+		sqltypes.Int8,
+		sqltypes.Uint8,
+		sqltypes.Int16,
+		sqltypes.Uint16,
 		sqltypes.Int24,
 		sqltypes.Uint24,
-		sqltypes.Long,
-		sqltypes.Ulong,
-		sqltypes.Longlong,
-		sqltypes.Ulonglong,
+		sqltypes.Int32,
+		sqltypes.Uint32,
+		sqltypes.Int64,
+		sqltypes.Uint64,
 		sqltypes.Year,
 	}
 	for i, field := range qr.Fields {
@@ -242,7 +242,7 @@ func TestFractionals(t *testing.T) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
 	wantTypes := []query.Type{
-		sqltypes.Long,
+		sqltypes.Int32,
 		sqltypes.Decimal,
 		sqltypes.Decimal,
 		sqltypes.Float,
@@ -438,7 +438,7 @@ func TestMiscTypes(t *testing.T) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
 	wantTypes := []query.Type{
-		sqltypes.Long,
+		sqltypes.Int32,
 		sqltypes.Bit,
 		sqltypes.Date,
 		sqltypes.Datetime,

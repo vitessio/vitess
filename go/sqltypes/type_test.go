@@ -18,16 +18,16 @@ func TestTypeValues(t *testing.T) {
 		defined:  Null,
 		expected: 0,
 	}, {
-		defined:  TinyInt,
+		defined:  Int8,
 		expected: 1 | IsNumber,
 	}, {
-		defined:  TinyUint,
+		defined:  Uint8,
 		expected: 2 | IsNumber | IsUnsigned,
 	}, {
-		defined:  ShortInt,
+		defined:  Int16,
 		expected: 3 | IsNumber,
 	}, {
-		defined:  ShortUint,
+		defined:  Uint16,
 		expected: 4 | IsNumber | IsUnsigned,
 	}, {
 		defined:  Int24,
@@ -36,16 +36,16 @@ func TestTypeValues(t *testing.T) {
 		defined:  Uint24,
 		expected: 6 | IsNumber | IsUnsigned,
 	}, {
-		defined:  Long,
+		defined:  Int32,
 		expected: 7 | IsNumber,
 	}, {
-		defined:  Ulong,
+		defined:  Uint32,
 		expected: 8 | IsNumber | IsUnsigned,
 	}, {
-		defined:  Longlong,
+		defined:  Int64,
 		expected: 9 | IsNumber,
 	}, {
-		defined:  Ulonglong,
+		defined:  Uint64,
 		expected: 10 | IsNumber | IsUnsigned,
 	}, {
 		defined:  Float,
@@ -129,7 +129,7 @@ func TestTypeFlexibility(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if v != TinyInt {
-		t.Errorf("conversion: %v, want %v", v, TinyInt)
+	if v != Int8 {
+		t.Errorf("conversion: %v, want %v", v, Int8)
 	}
 }

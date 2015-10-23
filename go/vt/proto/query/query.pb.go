@@ -93,36 +93,36 @@ type Type int32
 const (
 	// NULL specifies a NULL type.
 	Type_NULL Type = 0
-	// TINYINT specifies a TINYINT type.
+	// INT8 specifies a TINYINT type.
 	// Properties: 1, IsNumber.
-	Type_TINYINT Type = 257
-	// TINYUINT specifies a TINYINT UNSIGNED type.
+	Type_INT8 Type = 257
+	// UINT8 specifies a TINYINT UNSIGNED type.
 	// Properties: 2, IsNumber, IsUnsigned.
-	Type_TINYUINT Type = 770
-	// SHORTINT specifies a SMALLINT type.
+	Type_UINT8 Type = 770
+	// INT16 specifies a SMALLINT type.
 	// Properties: 3, IsNumber.
-	Type_SHORTINT Type = 259
-	// SHORTUINT specifies a SMALLINT UNSIGNED type.
+	Type_INT16 Type = 259
+	// UINT16 specifies a SMALLINT UNSIGNED type.
 	// Properties: 4, IsNumber, IsUnsigned.
-	Type_SHORTUINT Type = 772
+	Type_UINT16 Type = 772
 	// INT24 specifies a MEDIUMINT type.
 	// Properties: 5, IsNumber.
 	Type_INT24 Type = 261
 	// UINT24 specifies a MEDIUMINT UNSIGNED type.
 	// Properties: 6, IsNumber, IsUnsigned.
 	Type_UINT24 Type = 774
-	// LONG specifies a INTEGER type.
+	// INT32 specifies a INTEGER type.
 	// Properties: 7, IsNumber.
-	Type_LONG Type = 263
-	// ULONG specifies a INTEGER UNSIGNED type.
+	Type_INT32 Type = 263
+	// UINT32 specifies a INTEGER UNSIGNED type.
 	// Properties: 8, IsNumber, IsUnsigned.
-	Type_ULONG Type = 776
-	// LONGLONG specifies a BIGINT type.
+	Type_UINT32 Type = 776
+	// INT64 specifies a BIGINT type.
 	// Properties: 9, IsNumber.
-	Type_LONGLONG Type = 265
-	// ULONGLONG specifies a BIGINT UNSIGNED type.
+	Type_INT64 Type = 265
+	// UINT64 specifies a BIGINT UNSIGNED type.
 	// Properties: 10, IsNumber, IsUnsigned.
-	Type_ULONGLONG Type = 778
+	Type_UINT64 Type = 778
 	// FLOAT specifies a FLOAT type.
 	// Properties: 11, IsFloat.
 	Type_FLOAT Type = 1035
@@ -178,16 +178,16 @@ const (
 
 var Type_name = map[int32]string{
 	0:     "NULL",
-	257:   "TINYINT",
-	770:   "TINYUINT",
-	259:   "SHORTINT",
-	772:   "SHORTUINT",
+	257:   "INT8",
+	770:   "UINT8",
+	259:   "INT16",
+	772:   "UINT16",
 	261:   "INT24",
 	774:   "UINT24",
-	263:   "LONG",
-	776:   "ULONG",
-	265:   "LONGLONG",
-	778:   "ULONGLONG",
+	263:   "INT32",
+	776:   "UINT32",
+	265:   "INT64",
+	778:   "UINT64",
 	1035:  "FLOAT",
 	1036:  "DOUBLE",
 	2061:  "TIMESTAMP",
@@ -208,16 +208,16 @@ var Type_name = map[int32]string{
 }
 var Type_value = map[string]int32{
 	"NULL":      0,
-	"TINYINT":   257,
-	"TINYUINT":  770,
-	"SHORTINT":  259,
-	"SHORTUINT": 772,
+	"INT8":      257,
+	"UINT8":     770,
+	"INT16":     259,
+	"UINT16":    772,
 	"INT24":     261,
 	"UINT24":    774,
-	"LONG":      263,
-	"ULONG":     776,
-	"LONGLONG":  265,
-	"ULONGLONG": 778,
+	"INT32":     263,
+	"UINT32":    776,
+	"INT64":     265,
+	"UINT64":    778,
 	"FLOAT":     1035,
 	"DOUBLE":    1036,
 	"TIMESTAMP": 2061,

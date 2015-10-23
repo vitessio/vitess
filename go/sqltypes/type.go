@@ -25,16 +25,16 @@ const (
 // named synonyms for the query.Type values.
 const (
 	Null      = query.Type_NULL
-	TinyInt   = query.Type_TINYINT
-	TinyUint  = query.Type_TINYUINT
-	ShortInt  = query.Type_SHORTINT
-	ShortUint = query.Type_SHORTUINT
+	Int8      = query.Type_INT8
+	Uint8     = query.Type_UINT8
+	Int16     = query.Type_INT16
+	Uint16    = query.Type_UINT16
 	Int24     = query.Type_INT24
 	Uint24    = query.Type_UINT24
-	Long      = query.Type_LONG
-	Ulong     = query.Type_ULONG
-	Longlong  = query.Type_LONGLONG
-	Ulonglong = query.Type_ULONGLONG
+	Int32     = query.Type_INT32
+	Uint32    = query.Type_UINT32
+	Int64     = query.Type_INT64
+	Uint64    = query.Type_UINT64
 	Float     = query.Type_FLOAT
 	Double    = query.Type_DOUBLE
 	Timestamp = query.Type_TIMESTAMP
@@ -71,14 +71,14 @@ const (
 // If you add to this map, make sure you add a test case
 // in tabletserver/endtoend.
 var mysqlToType = map[int64]query.Type{
-	1:   TinyInt,
-	2:   ShortInt,
-	3:   Long,
+	1:   Int8,
+	2:   Int16,
+	3:   Int32,
 	4:   Float,
 	5:   Double,
 	6:   Null,
 	7:   Timestamp,
-	8:   Longlong,
+	8:   Int64,
 	9:   Int24,
 	10:  Date,
 	11:  Time,
@@ -92,16 +92,16 @@ var mysqlToType = map[int64]query.Type{
 }
 
 var modifier = map[int64]query.Type{
-	int64(TinyInt) | mysqlUnsigned:  TinyUint,
-	int64(ShortInt) | mysqlUnsigned: ShortUint,
-	int64(Long) | mysqlUnsigned:     Ulong,
-	int64(Longlong) | mysqlUnsigned: Ulonglong,
-	int64(Int24) | mysqlUnsigned:    Uint24,
-	int64(Text) | mysqlBinary:       Blob,
-	int64(VarChar) | mysqlBinary:    VarBinary,
-	int64(Char) | mysqlBinary:       Binary,
-	int64(Char) | mysqlEnum:         Enum,
-	int64(Char) | mysqlSet:          Set,
+	int64(Int8) | mysqlUnsigned:  Uint8,
+	int64(Int16) | mysqlUnsigned: Uint16,
+	int64(Int32) | mysqlUnsigned: Uint32,
+	int64(Int64) | mysqlUnsigned: Uint64,
+	int64(Int24) | mysqlUnsigned: Uint24,
+	int64(Text) | mysqlBinary:    Blob,
+	int64(VarChar) | mysqlBinary: VarBinary,
+	int64(Char) | mysqlBinary:    Binary,
+	int64(Char) | mysqlEnum:      Enum,
+	int64(Char) | mysqlSet:       Set,
 }
 
 // typeToMySQL is the reverse of mysqlToType.
@@ -109,18 +109,18 @@ var typeToMySQL = map[query.Type]struct {
 	typ   int64
 	flags int64
 }{
-	TinyInt:   {typ: 1},
-	TinyUint:  {typ: 1, flags: mysqlUnsigned},
-	ShortInt:  {typ: 2},
-	ShortUint: {typ: 2, flags: mysqlUnsigned},
-	Long:      {typ: 3},
-	Ulong:     {typ: 3, flags: mysqlUnsigned},
+	Int8:      {typ: 1},
+	Uint8:     {typ: 1, flags: mysqlUnsigned},
+	Int16:     {typ: 2},
+	Uint16:    {typ: 2, flags: mysqlUnsigned},
+	Int32:     {typ: 3},
+	Uint32:    {typ: 3, flags: mysqlUnsigned},
 	Float:     {typ: 4},
 	Double:    {typ: 5},
 	Null:      {typ: 6, flags: mysqlBinary},
 	Timestamp: {typ: 7},
-	Longlong:  {typ: 8},
-	Ulonglong: {typ: 8, flags: mysqlUnsigned},
+	Int64:     {typ: 8},
+	Uint64:    {typ: 8, flags: mysqlUnsigned},
 	Int24:     {typ: 9},
 	Uint24:    {typ: 9, flags: mysqlUnsigned},
 	Date:      {typ: 10, flags: mysqlBinary},

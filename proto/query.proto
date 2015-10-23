@@ -46,36 +46,36 @@ enum Flag {
 enum Type {
   // NULL specifies a NULL type.
   NULL = 0;
-  // TINYINT specifies a TINYINT type.
+  // INT8 specifies a TINYINT type.
   // Properties: 1, IsNumber.
-  TINYINT = 257;
-  // TINYUINT specifies a TINYINT UNSIGNED type.
+  INT8 = 257;
+  // UINT8 specifies a TINYINT UNSIGNED type.
   // Properties: 2, IsNumber, IsUnsigned.
-  TINYUINT = 770;
-  // SHORTINT specifies a SMALLINT type.
+  UINT8 = 770;
+  // INT16 specifies a SMALLINT type.
   // Properties: 3, IsNumber.
-  SHORTINT = 259;
-  // SHORTUINT specifies a SMALLINT UNSIGNED type.
+  INT16 = 259;
+  // UINT16 specifies a SMALLINT UNSIGNED type.
   // Properties: 4, IsNumber, IsUnsigned.
-  SHORTUINT = 772;
+  UINT16 = 772;
   // INT24 specifies a MEDIUMINT type.
   // Properties: 5, IsNumber.
   INT24 = 261;
   // UINT24 specifies a MEDIUMINT UNSIGNED type.
   // Properties: 6, IsNumber, IsUnsigned.
   UINT24 = 774;
-  // LONG specifies a INTEGER type.
+  // INT32 specifies a INTEGER type.
   // Properties: 7, IsNumber.
-  LONG = 263;
-  // ULONG specifies a INTEGER UNSIGNED type.
+  INT32 = 263;
+  // UINT32 specifies a INTEGER UNSIGNED type.
   // Properties: 8, IsNumber, IsUnsigned.
-  ULONG = 776;
-  // LONGLONG specifies a BIGINT type.
+  UINT32 = 776;
+  // INT64 specifies a BIGINT type.
   // Properties: 9, IsNumber.
-  LONGLONG = 265;
-  // ULONGLONG specifies a BIGINT UNSIGNED type.
+  INT64 = 265;
+  // UINT64 specifies a BIGINT UNSIGNED type.
   // Properties: 10, IsNumber, IsUnsigned.
-  ULONGLONG = 778;
+  UINT64 = 778;
   // FLOAT specifies a FLOAT type.
   // Properties: 11, IsFloat.
   FLOAT = 1035;
