@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 	"testing"
@@ -84,16 +85,14 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *p
 func TestVerticalSplitDiff(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	// We need to use FakeTabletManagerClient because we don't have a good way to fake the binlog player yet,
-	// which is necessary for synchronizing replication.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient(), time.Second)
+	wi := NewInstance(ts, "cell1", time.Second, time.Second)
 	ctx := context.Background()
 
-	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
+	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
 		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
-	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
+	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
 		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
-	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
+	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
 		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
 	// Create the destination keyspace with the appropriate ServedFromMap
@@ -113,32 +112,43 @@ func TestVerticalSplitDiff(t *testing.T) {
 			},
 		},
 	}
-	wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
+	wi.wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
-	destMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
+	destMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
 		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
-	destRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 11,
+	destRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
 		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
-	destRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 12,
+	destRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 12,
 		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, destMaster, destRdonly1, destRdonly2} {
-		ft.StartActionLoop(t, wr)
+		ft.StartActionLoop(t, wi.wr)
 		defer ft.StopActionLoop(t)
 	}
 
-	wr.SetSourceShards(ctx, "destination_ks", "0", []*pbt.TabletAlias{sourceRdonly1.Tablet.Alias}, []string{"moving.*", "view1"})
+	wi.wr.SetSourceShards(ctx, "destination_ks", "0", []*pbt.TabletAlias{sourceRdonly1.Tablet.Alias}, []string{"moving.*", "view1"})
 
 	// add the topo and schema data we'll need
-	if err := wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, true); err != nil {
+	if err := wi.wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
-	if err := wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil, true); err != nil {
+	if err := wi.wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
+	// We need to use FakeTabletManagerClient because we don't
+	// have a good way to fake the binlog player yet, which is
+	// necessary for synchronizing replication.
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient(), time.Second)
 	excludedTable := "excludedTable1"
-	gwrk := NewVerticalSplitDiffWorker(wr, "cell1", "destination_ks", "0", []string{excludedTable})
+	subFlags := flag.NewFlagSet("VerticalSplitDiff", flag.ContinueOnError)
+	gwrk, err := commandVerticalSplitDiff(wi, wr, subFlags, []string{
+		"-exclude_tables", excludedTable,
+		"destination_ks/0",
+	})
+	if err != nil {
+		t.Fatalf("commandVerticalSplitDiff failed: %v", err)
+	}
 	wrk := gwrk.(*VerticalSplitDiffWorker)
 
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, destRdonly1, destRdonly2} {
@@ -167,7 +177,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffTabletServer{t: t, excludedTable: excludedTable})
 	}
 
-	err := wrk.Run(ctx)
+	err = wrk.Run(ctx)
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
 	if err != nil || wrk.State != WorkerStateDone {
