@@ -60,6 +60,7 @@ type UpdateStreamControl interface {
 // to be used in tests
 type UpdateStreamControlMock struct {
 	enabled bool
+	sync.Mutex
 }
 
 // NewUpdateStreamControlMock creates a new UpdateStreamControlMock
@@ -69,16 +70,22 @@ func NewUpdateStreamControlMock() *UpdateStreamControlMock {
 
 // Enable is part of UpdateStreamControl
 func (m *UpdateStreamControlMock) Enable() {
+	m.Lock()
 	m.enabled = true
+	m.Unlock()
 }
 
 // Disable is part of UpdateStreamControl
 func (m *UpdateStreamControlMock) Disable() {
+	m.Lock()
 	m.enabled = false
+	m.Unlock()
 }
 
 // IsEnabled is part of UpdateStreamControl
 func (m *UpdateStreamControlMock) IsEnabled() bool {
+	m.Lock()
+	defer m.Unlock()
 	return m.enabled
 }
 

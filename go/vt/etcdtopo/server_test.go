@@ -5,9 +5,12 @@
 package etcdtopo
 
 import (
+	"path"
 	"testing"
+	"time"
 
 	"github.com/youtube/vitess/go/flagutil"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
 	"golang.org/x/net/context"
 )
@@ -77,6 +80,55 @@ func TestKeyspaceLock(t *testing.T) {
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckKeyspaceLock(ctx, t, ts)
+
+	// Test etcd-specific heartbeat (TTL).
+
+	// Long TTL, unlock before timeout.
+	*lockTTL = 1000 * time.Second
+	actionPath, err := ts.LockKeyspaceForAction(ctx, "test_keyspace", "contents")
+	if err != nil {
+		t.Fatalf("LockKeyspaceForAction failed: %v", err)
+	}
+	if err := ts.UnlockKeyspaceForAction(ctx, "test_keyspace", actionPath, "results"); err != nil {
+		t.Fatalf("UnlockKeyspaceForAction failed: %v", err)
+	}
+
+	// Short TTL, make sure it doesn't expire.
+	*lockTTL = time.Second
+	actionPath, err = ts.LockKeyspaceForAction(ctx, "test_keyspace", "contents")
+	if err != nil {
+		t.Fatalf("LockKeyspaceForAction failed: %v", err)
+	}
+	time.Sleep(2 * time.Second)
+	if err := ts.UnlockKeyspaceForAction(ctx, "test_keyspace", actionPath, "results"); err != nil {
+		t.Fatalf("UnlockKeyspaceForAction failed: %v", err)
+	}
+
+	// Short TTL, lose the lock.
+	*lockTTL = time.Second
+	actionPath, err = ts.LockKeyspaceForAction(ctx, "test_keyspace", "contents")
+	if err != nil {
+		t.Fatalf("LockKeyspaceForAction failed: %v", err)
+	}
+	if _, err := ts.getGlobal().Delete(path.Join(keyspaceDirPath("test_keyspace"), lockFilename), false); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+	if err := ts.UnlockKeyspaceForAction(ctx, "test_keyspace", actionPath, "results"); err != topo.ErrNoNode {
+		t.Fatalf("UnlockKeyspaceForAction = %v, want %v", err, topo.ErrNoNode)
+	}
+
+	// Short TTL, force expiry.
+	*lockTTL = time.Second
+	ignoreTTLRefresh = true
+	actionPath, err = ts.LockKeyspaceForAction(ctx, "test_keyspace", "contents")
+	if err != nil {
+		t.Fatalf("LockKeyspaceForAction failed: %v", err)
+	}
+	time.Sleep(2 * time.Second)
+	if err := ts.UnlockKeyspaceForAction(ctx, "test_keyspace", actionPath, "results"); err != topo.ErrNoNode {
+		t.Fatalf("UnlockKeyspaceForAction = %v, want %v", err, topo.ErrNoNode)
+	}
+	ignoreTTLRefresh = false
 }
 
 func TestShardLock(t *testing.T) {
