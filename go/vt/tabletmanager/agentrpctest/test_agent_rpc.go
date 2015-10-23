@@ -497,8 +497,9 @@ var testExecuteFetchMaxRows = 100
 var testExecuteFetchResult = &mproto.QueryResult{
 	Fields: []mproto.Field{
 		mproto.Field{
-			Name: "column1",
-			Type: mproto.VT_TINY_BLOB,
+			Name:  "column1",
+			Type:  mproto.VT_BLOB,
+			Flags: mproto.VT_BINARY_FLAG,
 		},
 		mproto.Field{
 			Name: "column2",

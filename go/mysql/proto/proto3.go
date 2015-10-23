@@ -46,10 +46,11 @@ func FieldsToProto3(f []Field) []*pbq.Field {
 
 	result := make([]*pbq.Field, len(f))
 	for i, f := range f {
+		// TODO(sougou): handle error.
+		vitessType, _ := sqltypes.MySQLToType(f.Type, f.Flags)
 		result[i] = &pbq.Field{
-			Name:  f.Name,
-			Type:  pbq.Field_Type(f.Type),
-			Flags: int64(f.Flags),
+			Name: f.Name,
+			Type: vitessType,
 		}
 	}
 	return result
@@ -63,8 +64,7 @@ func Proto3ToFields(f []*pbq.Field) []Field {
 	result := make([]Field, len(f))
 	for i, f := range f {
 		result[i].Name = f.Name
-		result[i].Type = int64(f.Type)
-		result[i].Flags = int64(f.Flags)
+		result[i].Type, result[i].Flags = sqltypes.TypeToMySQL(f.Type)
 	}
 	return result
 }
@@ -77,11 +77,25 @@ func RowsToProto3(rows [][]sqltypes.Value) []*pbq.Row {
 
 	result := make([]*pbq.Row, len(rows))
 	for i, r := range rows {
-		result[i] = &pbq.Row{
-			Values: make([][]byte, len(r)),
+		row := &pbq.Row{}
+		result[i] = row
+		row.Lengths = make([]int64, 0, len(r))
+		total := 0
+		for _, c := range r {
+			if c.IsNull() {
+				row.Lengths = append(row.Lengths, -1)
+				continue
+			}
+			length := len(c.Raw())
+			row.Lengths = append(row.Lengths, int64(length))
+			total += length
 		}
-		for j, c := range r {
-			result[i].Values[j] = c.Raw()
+		row.Values = make([]byte, 0, total)
+		for _, c := range r {
+			if c.IsNull() {
+				continue
+			}
+			row.Values = append(row.Values, c.Raw()...)
 		}
 	}
 	return result
@@ -95,12 +109,14 @@ func Proto3ToRows(rows []*pbq.Row) [][]sqltypes.Value {
 
 	result := make([][]sqltypes.Value, len(rows))
 	for i, r := range rows {
-		result[i] = make([]sqltypes.Value, len(r.Values))
-		for j, c := range r.Values {
-			if c == nil {
+		index := 0
+		result[i] = make([]sqltypes.Value, len(r.Lengths))
+		for j, l := range r.Lengths {
+			if l == -1 {
 				result[i][j] = sqltypes.NULL
 			} else {
-				result[i][j] = sqltypes.MakeString(c)
+				result[i][j] = sqltypes.MakeString(r.Values[index : index+int(l)])
+				index += int(l)
 			}
 		}
 	}

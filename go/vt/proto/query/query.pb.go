@@ -282,170 +282,6 @@ func (x BindVariable_Type) String() string {
 	return proto.EnumName(BindVariable_Type_name, int32(x))
 }
 
-// Type follows enum_field_types from mysql.h.
-type Field_Type int32
-
-const (
-	Field_TYPE_DECIMAL     Field_Type = 0
-	Field_TYPE_TINY        Field_Type = 1
-	Field_TYPE_SHORT       Field_Type = 2
-	Field_TYPE_LONG        Field_Type = 3
-	Field_TYPE_FLOAT       Field_Type = 4
-	Field_TYPE_DOUBLE      Field_Type = 5
-	Field_TYPE_NULL        Field_Type = 6
-	Field_TYPE_TIMESTAMP   Field_Type = 7
-	Field_TYPE_LONGLONG    Field_Type = 8
-	Field_TYPE_INT24       Field_Type = 9
-	Field_TYPE_DATE        Field_Type = 10
-	Field_TYPE_TIME        Field_Type = 11
-	Field_TYPE_DATETIME    Field_Type = 12
-	Field_TYPE_YEAR        Field_Type = 13
-	Field_TYPE_NEWDATE     Field_Type = 14
-	Field_TYPE_VARCHAR     Field_Type = 15
-	Field_TYPE_BIT         Field_Type = 16
-	Field_TYPE_NEWDECIMAL  Field_Type = 246
-	Field_TYPE_ENUM        Field_Type = 247
-	Field_TYPE_SET         Field_Type = 248
-	Field_TYPE_TINY_BLOB   Field_Type = 249
-	Field_TYPE_MEDIUM_BLOB Field_Type = 250
-	Field_TYPE_LONG_BLOB   Field_Type = 251
-	Field_TYPE_BLOB        Field_Type = 252
-	Field_TYPE_VAR_STRING  Field_Type = 253
-	Field_TYPE_STRING      Field_Type = 254
-	Field_TYPE_GEOMETRY    Field_Type = 255
-)
-
-var Field_Type_name = map[int32]string{
-	0:   "TYPE_DECIMAL",
-	1:   "TYPE_TINY",
-	2:   "TYPE_SHORT",
-	3:   "TYPE_LONG",
-	4:   "TYPE_FLOAT",
-	5:   "TYPE_DOUBLE",
-	6:   "TYPE_NULL",
-	7:   "TYPE_TIMESTAMP",
-	8:   "TYPE_LONGLONG",
-	9:   "TYPE_INT24",
-	10:  "TYPE_DATE",
-	11:  "TYPE_TIME",
-	12:  "TYPE_DATETIME",
-	13:  "TYPE_YEAR",
-	14:  "TYPE_NEWDATE",
-	15:  "TYPE_VARCHAR",
-	16:  "TYPE_BIT",
-	246: "TYPE_NEWDECIMAL",
-	247: "TYPE_ENUM",
-	248: "TYPE_SET",
-	249: "TYPE_TINY_BLOB",
-	250: "TYPE_MEDIUM_BLOB",
-	251: "TYPE_LONG_BLOB",
-	252: "TYPE_BLOB",
-	253: "TYPE_VAR_STRING",
-	254: "TYPE_STRING",
-	255: "TYPE_GEOMETRY",
-}
-var Field_Type_value = map[string]int32{
-	"TYPE_DECIMAL":     0,
-	"TYPE_TINY":        1,
-	"TYPE_SHORT":       2,
-	"TYPE_LONG":        3,
-	"TYPE_FLOAT":       4,
-	"TYPE_DOUBLE":      5,
-	"TYPE_NULL":        6,
-	"TYPE_TIMESTAMP":   7,
-	"TYPE_LONGLONG":    8,
-	"TYPE_INT24":       9,
-	"TYPE_DATE":        10,
-	"TYPE_TIME":        11,
-	"TYPE_DATETIME":    12,
-	"TYPE_YEAR":        13,
-	"TYPE_NEWDATE":     14,
-	"TYPE_VARCHAR":     15,
-	"TYPE_BIT":         16,
-	"TYPE_NEWDECIMAL":  246,
-	"TYPE_ENUM":        247,
-	"TYPE_SET":         248,
-	"TYPE_TINY_BLOB":   249,
-	"TYPE_MEDIUM_BLOB": 250,
-	"TYPE_LONG_BLOB":   251,
-	"TYPE_BLOB":        252,
-	"TYPE_VAR_STRING":  253,
-	"TYPE_STRING":      254,
-	"TYPE_GEOMETRY":    255,
-}
-
-func (x Field_Type) String() string {
-	return proto.EnumName(Field_Type_name, int32(x))
-}
-
-// Flag contains the MySQL field flags bitset values e.g. to
-// distinguish between signed and unsigned integer.  These numbers
-// should exactly match values defined in
-// dist/mysql-5.1.52/include/mysql_com.h
-type Field_Flag int32
-
-const (
-	// ZEROVALUE_FLAG is not part of the MySQL specification and only
-	// used in unit tests.
-	Field_VT_ZEROVALUE_FLAG        Field_Flag = 0
-	Field_VT_NOT_NULL_FLAG         Field_Flag = 1
-	Field_VT_PRI_KEY_FLAG          Field_Flag = 2
-	Field_VT_UNIQUE_KEY_FLAG       Field_Flag = 4
-	Field_VT_MULTIPLE_KEY_FLAG     Field_Flag = 8
-	Field_VT_BLOB_FLAG             Field_Flag = 16
-	Field_VT_UNSIGNED_FLAG         Field_Flag = 32
-	Field_VT_ZEROFILL_FLAG         Field_Flag = 64
-	Field_VT_BINARY_FLAG           Field_Flag = 128
-	Field_VT_ENUM_FLAG             Field_Flag = 256
-	Field_VT_AUTO_INCREMENT_FLAG   Field_Flag = 512
-	Field_VT_TIMESTAMP_FLAG        Field_Flag = 1024
-	Field_VT_SET_FLAG              Field_Flag = 2048
-	Field_VT_NO_DEFAULT_VALUE_FLAG Field_Flag = 4096
-	Field_VT_ON_UPDATE_NOW_FLAG    Field_Flag = 8192
-	Field_VT_NUM_FLAG              Field_Flag = 32768
-)
-
-var Field_Flag_name = map[int32]string{
-	0:     "VT_ZEROVALUE_FLAG",
-	1:     "VT_NOT_NULL_FLAG",
-	2:     "VT_PRI_KEY_FLAG",
-	4:     "VT_UNIQUE_KEY_FLAG",
-	8:     "VT_MULTIPLE_KEY_FLAG",
-	16:    "VT_BLOB_FLAG",
-	32:    "VT_UNSIGNED_FLAG",
-	64:    "VT_ZEROFILL_FLAG",
-	128:   "VT_BINARY_FLAG",
-	256:   "VT_ENUM_FLAG",
-	512:   "VT_AUTO_INCREMENT_FLAG",
-	1024:  "VT_TIMESTAMP_FLAG",
-	2048:  "VT_SET_FLAG",
-	4096:  "VT_NO_DEFAULT_VALUE_FLAG",
-	8192:  "VT_ON_UPDATE_NOW_FLAG",
-	32768: "VT_NUM_FLAG",
-}
-var Field_Flag_value = map[string]int32{
-	"VT_ZEROVALUE_FLAG":        0,
-	"VT_NOT_NULL_FLAG":         1,
-	"VT_PRI_KEY_FLAG":          2,
-	"VT_UNIQUE_KEY_FLAG":       4,
-	"VT_MULTIPLE_KEY_FLAG":     8,
-	"VT_BLOB_FLAG":             16,
-	"VT_UNSIGNED_FLAG":         32,
-	"VT_ZEROFILL_FLAG":         64,
-	"VT_BINARY_FLAG":           128,
-	"VT_ENUM_FLAG":             256,
-	"VT_AUTO_INCREMENT_FLAG":   512,
-	"VT_TIMESTAMP_FLAG":        1024,
-	"VT_SET_FLAG":              2048,
-	"VT_NO_DEFAULT_VALUE_FLAG": 4096,
-	"VT_ON_UPDATE_NOW_FLAG":    8192,
-	"VT_NUM_FLAG":              32768,
-}
-
-func (x Field_Flag) String() string {
-	return proto.EnumName(Field_Flag_name, int32(x))
-}
-
 // Target describes what the client expects the tablet is.
 // If the tablet does not match, an error is returned.
 type Target struct {
@@ -514,10 +350,9 @@ func (m *BoundQuery) GetBindVariables() map[string]*BindVariable {
 // Field describes a single column returned by a query
 type Field struct {
 	// name of the field as returned by mysql C API
-	Name string     `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Type Field_Type `protobuf:"varint,2,opt,name=type,enum=query.Field_Type" json:"type,omitempty"`
-	// flags is essentially a bitset<Flag>.
-	Flags int64 `protobuf:"varint,3,opt,name=flags" json:"flags,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	// vitess-defined type. Conversion function is in sqltypes package.
+	Type Type `protobuf:"varint,2,opt,name=type,enum=query.Type" json:"type,omitempty"`
 }
 
 func (m *Field) Reset()         { *m = Field{} }
@@ -526,7 +361,13 @@ func (*Field) ProtoMessage()    {}
 
 // Row is a database row.
 type Row struct {
-	Values [][]byte `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
+	// lengths contains the length of each value in values.
+	// A length of -1 means that that fields is NULL. While
+	// reading values, you have to accummulate the length
+	// to know the offset where the next value begins in values.
+	Lengths []int64 `protobuf:"zigzag64,1,rep,name=lengths" json:"lengths,omitempty"`
+	// values contains a concatenation of all values in the row.
+	Values []byte `protobuf:"bytes,2,opt,name=values,proto3" json:"values,omitempty"`
 }
 
 func (m *Row) Reset()         { *m = Row{} }
@@ -1062,6 +903,4 @@ func init() {
 	proto.RegisterEnum("query.Flag", Flag_name, Flag_value)
 	proto.RegisterEnum("query.Type", Type_name, Type_value)
 	proto.RegisterEnum("query.BindVariable_Type", BindVariable_Type_name, BindVariable_Type_value)
-	proto.RegisterEnum("query.Field_Type", Field_Type_name, Field_Type_value)
-	proto.RegisterEnum("query.Field_Flag", Field_Flag_name, Field_Flag_value)
 }

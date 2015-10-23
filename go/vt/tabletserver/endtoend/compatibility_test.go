@@ -169,7 +169,7 @@ func TestInts(t *testing.T) {
 		sqltypes.Year,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.TypeFromMySQL(int(field.Type), int(field.Flags))
+		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
 		if err != nil {
 			t.Errorf("col: %d, err: %v", i, err)
 			continue
@@ -249,7 +249,7 @@ func TestFractionals(t *testing.T) {
 		sqltypes.Double,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.TypeFromMySQL(int(field.Type), int(field.Flags))
+		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
 		if err != nil {
 			t.Errorf("col: %d, err: %v", i, err)
 			continue
@@ -365,7 +365,7 @@ func TestStrings(t *testing.T) {
 		sqltypes.Set,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.TypeFromMySQL(int(field.Type), int(field.Flags))
+		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
 		if err != nil {
 			t.Errorf("col: %d, err: %v", i, err)
 			continue
@@ -445,7 +445,7 @@ func TestMiscTypes(t *testing.T) {
 		sqltypes.Time,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.TypeFromMySQL(int(field.Type), int(field.Flags))
+		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
 		if err != nil {
 			t.Errorf("col: %d, err: %v", i, err)
 			continue
@@ -485,7 +485,7 @@ func TestNull(t *testing.T) {
 		sqltypes.Null,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.TypeFromMySQL(int(field.Type), int(field.Flags))
+		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
 		if err != nil {
 			t.Errorf("col: %d, err: %v", i, err)
 			continue

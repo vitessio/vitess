@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -163,7 +164,6 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *pb.Target, session
 const beginTransactionID int64 = 9990
 
 func testBegin(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBegin")
 	ctx := context.Background()
 	transactionID, err := conn.Begin(ctx)
 	if err != nil {
@@ -175,14 +175,12 @@ func testBegin(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testBeginError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBeginError")
 	ctx := context.Background()
 	_, err := conn.Begin(ctx)
 	verifyError(t, err, "Begin")
 }
 
 func testBeginPanics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBeginPanics")
 	ctx := context.Background()
 	if _, err := conn.Begin(ctx); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -190,7 +188,6 @@ func testBeginPanics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testBegin2(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBegin2")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	transactionID, err := conn.Begin2(ctx)
@@ -203,14 +200,12 @@ func testBegin2(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testBegin2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBegin2Error")
 	ctx := context.Background()
 	_, err := conn.Begin2(ctx)
 	verifyError(t, err, "Begin2")
 }
 
 func testBegin2Panics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBegin2Panics")
 	ctx := context.Background()
 	if _, err := conn.Begin2(ctx); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -241,7 +236,6 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *pb.Target, sessio
 const commitTransactionID int64 = 999044
 
 func testCommit(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testCommit")
 	ctx := context.Background()
 	err := conn.Commit(ctx, commitTransactionID)
 	if err != nil {
@@ -250,14 +244,12 @@ func testCommit(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testCommitError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testCommitError")
 	ctx := context.Background()
 	err := conn.Commit(ctx, commitTransactionID)
 	verifyErrorExceptServerCode(t, err, "Commit")
 }
 
 func testCommitPanics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testCommitPanics")
 	ctx := context.Background()
 	if err := conn.Commit(ctx, commitTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -265,7 +257,6 @@ func testCommitPanics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testCommit2(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testCommit2")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	err := conn.Commit2(ctx, commitTransactionID)
@@ -275,14 +266,12 @@ func testCommit2(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testCommit2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testCommit2Error")
 	ctx := context.Background()
 	err := conn.Commit2(ctx, commitTransactionID)
 	verifyError(t, err, "Commit2")
 }
 
 func testCommit2Panics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testCommit2Panics")
 	ctx := context.Background()
 	if err := conn.Commit2(ctx, commitTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -313,7 +302,6 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *pb.Target, sess
 const rollbackTransactionID int64 = 999044
 
 func testRollback(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testRollback")
 	ctx := context.Background()
 	err := conn.Rollback(ctx, rollbackTransactionID)
 	if err != nil {
@@ -322,14 +310,12 @@ func testRollback(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testRollbackError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testRollbackError")
 	ctx := context.Background()
 	err := conn.Rollback(ctx, commitTransactionID)
 	verifyErrorExceptServerCode(t, err, "Rollback")
 }
 
 func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testRollbackPanics")
 	ctx := context.Background()
 	if err := conn.Rollback(ctx, rollbackTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -337,7 +323,6 @@ func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testRollback2(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testRollback2")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	err := conn.Rollback2(ctx, rollbackTransactionID)
@@ -347,14 +332,12 @@ func testRollback2(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testRollback2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testRollback2Error")
 	ctx := context.Background()
 	err := conn.Rollback2(ctx, commitTransactionID)
 	verifyError(t, err, "Rollback2")
 }
 
 func testRollback2Panics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testRollback2Panics")
 	ctx := context.Background()
 	if err := conn.Rollback2(ctx, rollbackTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -401,11 +384,11 @@ var executeQueryResult = mproto.QueryResult{
 	Fields: []mproto.Field{
 		mproto.Field{
 			Name: "field1",
-			Type: 42,
+			Type: mysql.TypeTiny,
 		},
 		mproto.Field{
 			Name: "field2",
-			Type: 73,
+			Type: mysql.TypeString,
 		},
 	},
 	RowsAffected: 123,
@@ -423,7 +406,6 @@ var executeQueryResult = mproto.QueryResult{
 }
 
 func testExecute(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecute")
 	ctx := context.Background()
 	qr, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
 	if err != nil {
@@ -435,7 +417,6 @@ func testExecute(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testExecute2(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecute2")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	qr, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID)
@@ -448,21 +429,18 @@ func testExecute2(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecuteError")
 	ctx := context.Background()
 	_, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
 	verifyError(t, err, "Execute")
 }
 
 func testExecute2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecute2Error")
 	ctx := context.Background()
 	_, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID)
 	verifyError(t, err, "Execute")
 }
 
 func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecutePanics")
 	ctx := context.Background()
 	if _, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -470,7 +448,6 @@ func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testExecute2Panics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecute2Panics")
 	ctx := context.Background()
 	if _, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -529,11 +506,11 @@ var streamExecuteQueryResult1 = mproto.QueryResult{
 	Fields: []mproto.Field{
 		mproto.Field{
 			Name: "field1",
-			Type: 42,
+			Type: mysql.TypeTiny,
 		},
 		mproto.Field{
 			Name: "field2",
-			Type: 73,
+			Type: mysql.TypeString,
 		},
 	},
 }
@@ -552,7 +529,6 @@ var streamExecuteQueryResult2 = mproto.QueryResult{
 }
 
 func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testStreamExecute")
 	ctx := context.Background()
 	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
@@ -588,7 +564,6 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
-	t.Log("testStreamExecuteError")
 	ctx := context.Background()
 	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
@@ -616,7 +591,6 @@ func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, fake *Fake
 }
 
 func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
-	t.Log("testStreamExecutePanics")
 	// early panic is before sending the Fields, that is returned
 	// by the StreamExecute call itself, or as the first error
 	// by ErrFunc
@@ -664,7 +638,6 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 }
 
 func testStreamExecute2(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testStreamExecute2")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	stream, errFunc, err := conn.StreamExecute2(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
@@ -701,7 +674,6 @@ func testStreamExecute2(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testStreamExecute2Error(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
-	t.Log("testStreamExecute2Error")
 	ctx := context.Background()
 	stream, errFunc, err := conn.StreamExecute2(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
@@ -729,7 +701,6 @@ func testStreamExecute2Error(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 }
 
 func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
-	t.Log("testStreamExecute2Panics")
 	// early panic is before sending the Fields, that is returned
 	// by the StreamExecute2 call itself, or as the first error
 	// by ErrFunc
@@ -828,7 +799,7 @@ var executeBatchQueryResultList = proto.QueryResultList{
 			Fields: []mproto.Field{
 				mproto.Field{
 					Name: "field1",
-					Type: 46,
+					Type: mysql.TypeTiny,
 				},
 			},
 			RowsAffected: 1232,
@@ -846,7 +817,7 @@ var executeBatchQueryResultList = proto.QueryResultList{
 			Fields: []mproto.Field{
 				mproto.Field{
 					Name: "field1",
-					Type: 42,
+					Type: mysql.TypeTiny,
 				},
 			},
 			RowsAffected: 12333,
@@ -862,7 +833,6 @@ var executeBatchQueryResultList = proto.QueryResultList{
 }
 
 func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecuteBatch")
 	ctx := context.Background()
 	qrl, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID)
 	if err != nil {
@@ -874,14 +844,12 @@ func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testExecuteBatchError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBatchExecuteError")
 	ctx := context.Background()
 	_, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID)
 	verifyError(t, err, "ExecuteBatch")
 }
 
 func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecuteBatchPanics")
 	ctx := context.Background()
 	if _, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -889,7 +857,6 @@ func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecuteBatch2")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	qrl, err := conn.ExecuteBatch2(ctx, executeBatchQueries, true, executeBatchTransactionID)
@@ -902,14 +869,12 @@ func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testExecuteBatch2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBatchExecute2Error")
 	ctx := context.Background()
 	_, err := conn.ExecuteBatch2(ctx, executeBatchQueries, true, executeBatchTransactionID)
 	verifyError(t, err, "ExecuteBatch")
 }
 
 func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecuteBatch2Panics")
 	ctx := context.Background()
 	if _, err := conn.ExecuteBatch2(ctx, executeBatchQueries, true, executeBatchTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -964,7 +929,6 @@ var splitQueryQuerySplitList = []proto.QuerySplit{
 }
 
 func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testSplitQuery")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	qsl, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount)
@@ -977,14 +941,12 @@ func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testSplitQueryError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testSplitQueryError")
 	ctx := context.Background()
 	_, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount)
 	verifyError(t, err, "SplitQuery")
 }
 
 func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testSplitQueryPanics")
 	ctx := context.Background()
 	if _, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
@@ -1033,7 +995,6 @@ func (f *FakeQueryService) StreamHealthUnregister(int) error {
 }
 
 func testStreamHealth(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testStreamHealth")
 	streamHealthSynchronization = make(chan struct{})
 	ctx := context.Background()
 
@@ -1066,7 +1027,6 @@ func testStreamHealth(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testStreamHealthPanics(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testStreamHealthPanics")
 	ctx := context.Background()
 
 	c, errFunc, err := conn.StreamHealth(ctx)

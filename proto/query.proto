@@ -170,69 +170,19 @@ message Field {
   // name of the field as returned by mysql C API
   string name = 1;
 
-  // Type follows enum_field_types from mysql.h.
-  enum Type {
-    TYPE_DECIMAL = 0;
-    TYPE_TINY = 1;
-    TYPE_SHORT = 2;
-    TYPE_LONG = 3;
-    TYPE_FLOAT = 4;
-    TYPE_DOUBLE = 5;
-    TYPE_NULL = 6;
-    TYPE_TIMESTAMP = 7;
-    TYPE_LONGLONG = 8;
-    TYPE_INT24 = 9;
-    TYPE_DATE = 10;
-    TYPE_TIME = 11;
-    TYPE_DATETIME = 12;
-    TYPE_YEAR = 13;
-    TYPE_NEWDATE = 14;
-    TYPE_VARCHAR = 15;
-    TYPE_BIT = 16;
-    TYPE_NEWDECIMAL = 246;
-    TYPE_ENUM = 247;
-    TYPE_SET = 248;
-    TYPE_TINY_BLOB = 249;
-    TYPE_MEDIUM_BLOB = 250;
-    TYPE_LONG_BLOB = 251;
-    TYPE_BLOB = 252;
-    TYPE_VAR_STRING = 253;
-    TYPE_STRING = 254;
-    TYPE_GEOMETRY = 255;
-  }
+  // vitess-defined type. Conversion function is in sqltypes package.
   Type type = 2;
-
-  // Flag contains the MySQL field flags bitset values e.g. to
-  // distinguish between signed and unsigned integer.  These numbers
-  // should exactly match values defined in
-  // dist/mysql-5.1.52/include/mysql_com.h
-  enum Flag {
-    // ZEROVALUE_FLAG is not part of the MySQL specification and only
-    // used in unit tests.
-    VT_ZEROVALUE_FLAG        = 0;
-    VT_NOT_NULL_FLAG         = 1;
-    VT_PRI_KEY_FLAG          = 2;
-    VT_UNIQUE_KEY_FLAG       = 4;
-    VT_MULTIPLE_KEY_FLAG     = 8;
-    VT_BLOB_FLAG             = 16;
-    VT_UNSIGNED_FLAG         = 32;
-    VT_ZEROFILL_FLAG         = 64;
-    VT_BINARY_FLAG           = 128;
-    VT_ENUM_FLAG             = 256;
-    VT_AUTO_INCREMENT_FLAG   = 512;
-    VT_TIMESTAMP_FLAG        = 1024;
-    VT_SET_FLAG              = 2048;
-    VT_NO_DEFAULT_VALUE_FLAG = 4096;
-    VT_ON_UPDATE_NOW_FLAG    = 8192;
-    VT_NUM_FLAG              = 32768;
-  }
-  // flags is essentially a bitset<Flag>.
-  int64 flags = 3;
 }
 
 // Row is a database row.
 message Row {
-  repeated bytes values = 1;
+  // lengths contains the length of each value in values.
+  // A length of -1 means that that fields is NULL. While
+  // reading values, you have to accummulate the length
+  // to know the offset where the next value begins in values.
+  repeated sint64 lengths = 1;
+  // values contains a concatenation of all values in the row.
+  bytes values = 2;
 }
 
 // QueryResult is returned by Execute and ExecuteStream.

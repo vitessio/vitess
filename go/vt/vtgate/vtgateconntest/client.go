@@ -2704,11 +2704,11 @@ var result1 = mproto.QueryResult{
 	Fields: []mproto.Field{
 		mproto.Field{
 			Name: "field1",
-			Type: 42,
+			Type: 2,
 		},
 		mproto.Field{
 			Name: "field2",
-			Type: 73,
+			Type: 3,
 		},
 	},
 	RowsAffected: 123,
@@ -2729,11 +2729,11 @@ var streamResult1 = mproto.QueryResult{
 	Fields: []mproto.Field{
 		mproto.Field{
 			Name: "field1",
-			Type: 42,
+			Type: 2,
 		},
 		mproto.Field{
 			Name: "field2",
-			Type: 73,
+			Type: 3,
 		},
 	},
 	RowsAffected: 0,
