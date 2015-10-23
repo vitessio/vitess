@@ -30,6 +30,108 @@ message VTGateCallerID {
   string username = 1;
 }
 
+// Flag allows us to qualify types by their common properties.
+enum Flag {
+  None = 0;
+  IsNumber = 256;
+  IsUnsigned = 512;
+  IsFloat = 1024;
+  IsQuoted = 2048;
+  IsText = 4096;
+  IsBinary = 8192;
+}
+
+// Type defines the various supported data types in bind vars
+// and query results.
+enum Type {
+  // Null specifies a NULL type.
+  Null = 0;
+  // TinyInt specifies a TINYINT type.
+  // Properties: 1, IsNumber.
+  TinyInt = 257;
+  // TinyUint specifies a TINYINT UNSIGNED type.
+  // Properties: 2, IsNumber, IsUnsigned.
+  TinyUint = 770;
+  // ShortInt specifies a SMALLINT type.
+  // Properties: 3, IsNumber.
+  ShortInt = 259;
+  // ShortUint specifies a SMALLINT UNSIGNED type.
+  // Properties: 4, IsNumber, IsUnsigned.
+  ShortUint = 772;
+  // Int24 specifies a MEDIUMINT type.
+  // Properties: 5, IsNumber.
+  Int24 = 261;
+  // Uint24 specifies a MEDIUMINT UNSIGNED type.
+  // Properties: 6, IsNumber, IsUnsigned.
+  Uint24 = 774;
+  // Long specifies a INTEGER type.
+  // Properties: 7, IsNumber.
+  Long = 263;
+  // Ulong specifies a INTEGER UNSIGNED type.
+  // Properties: 8, IsNumber, IsUnsigned.
+  Ulong = 776;
+  // Longlong specifies a BIGINT type.
+  // Properties: 9, IsNumber.
+  Longlong = 265;
+  // Ulonglong specifies a BIGINT UNSIGNED type.
+  // Properties: 10, IsNumber, IsUnsigned.
+  Ulonglong = 778;
+  // Float specifies a FLOAT type.
+  // Properties: 11, IsFloat.
+  Float = 1035;
+  // Double specifies a DOUBLE or REAL type.
+  // Properties: 12, IsFloat.
+  Double = 1036;
+  // Timestamp specifies a TIMESTAMP type.
+  // Properties: 13, IsQuoted.
+  Timestamp = 2061;
+  // Date specifies a DATE type.
+  // Properties: 14, IsQuoted.
+  Date = 2062;
+  // Time specifies a TIME type.
+  // Properties: 15, IsQuoted.
+  Time = 2063;
+  // Datetime specifies a DATETIME type.
+  // Properties: 16, IsQuoted.
+  Datetime = 2064;
+  // Year specifies a YEAR type.
+  // Properties: 17, IsNumber, IsUnsigned.
+  Year = 785;
+  // Decimal specifies a DECIMAL or NUMERIC type.
+  // Properties: 18, None.
+  Decimal = 18;
+  // Text specifies a TEXT type.
+  // Properties: 19, IsQuoted, IsText.
+  Text = 6163;
+  // Blob specifies a BLOB type.
+  // Properties: 20, IsQuoted, IsBinary.
+  Blob = 10260;
+  // VarChar specifies a VARCHAR type.
+  // Properties: 21, IsQuoted, IsText.
+  VarChar = 6165;
+  // VarBinary specifies a VARBINARY type.
+  // Properties: 22, IsQuoted, IsBinary.
+  VarBinary = 10262;
+  // Char specifies a CHAR type.
+  // Properties: 23, IsQuoted, IsText.
+  Char = 6167;
+  // Binary specifies a BINARY type.
+  // Properties: 24, IsQuoted, IsBinary.
+  Binary = 10264;
+  // Bit specifies a BIT type.
+  // Properties: 25, IsQuoted.
+  Bit = 2073;
+  // Enum specifies an ENUM type.
+  // Properties: 26, IsQuoted.
+  Enum = 2074;
+  // Set specifies a SET type.
+  // Properties: 27, IsQuoted.
+  Set = 2075;
+  // Geometry specifies a Spatial field.
+  // Properties: 28, IsQuoted.
+  Geometry = 2076;
+}
+
 // BindVariable represents a single bind variable in a Query
 message BindVariable {
   enum Type {

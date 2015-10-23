@@ -695,7 +695,7 @@ type StrVal []byte
 // Format formats the node.
 func (node StrVal) Format(buf *TrackedBuffer) {
 	s := sqltypes.MakeString([]byte(node))
-	s.EncodeSql(buf)
+	s.EncodeSQL(buf)
 }
 
 // NumVal represents a number.

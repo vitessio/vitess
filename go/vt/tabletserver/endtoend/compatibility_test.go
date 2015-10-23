@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 )
 
@@ -154,6 +155,29 @@ func TestInts(t *testing.T) {
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
+	wantTypes := []query.Type{
+		sqltypes.TinyInt,
+		sqltypes.TinyUint,
+		sqltypes.ShortInt,
+		sqltypes.ShortUint,
+		sqltypes.Int24,
+		sqltypes.Uint24,
+		sqltypes.Long,
+		sqltypes.Ulong,
+		sqltypes.Longlong,
+		sqltypes.Ulonglong,
+		sqltypes.Year,
+	}
+	for i, field := range qr.Fields {
+		got, err := sqltypes.TypeFromMySQL(int(field.Type), int(field.Flags))
+		if err != nil {
+			t.Errorf("col: %d, err: %v", i, err)
+			continue
+		}
+		if got != wantTypes[i] {
+			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
+		}
+	}
 }
 
 func TestFractionals(t *testing.T) {
@@ -216,6 +240,23 @@ func TestFractionals(t *testing.T) {
 	}
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+	}
+	wantTypes := []query.Type{
+		sqltypes.Long,
+		sqltypes.Decimal,
+		sqltypes.Decimal,
+		sqltypes.Float,
+		sqltypes.Double,
+	}
+	for i, field := range qr.Fields {
+		got, err := sqltypes.TypeFromMySQL(int(field.Type), int(field.Flags))
+		if err != nil {
+			t.Errorf("col: %d, err: %v", i, err)
+			continue
+		}
+		if got != wantTypes[i] {
+			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
+		}
 	}
 }
 
@@ -311,6 +352,28 @@ func TestStrings(t *testing.T) {
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
+	wantTypes := []query.Type{
+		sqltypes.VarBinary,
+		sqltypes.Char,
+		sqltypes.VarChar,
+		sqltypes.Binary,
+		sqltypes.Blob,
+		sqltypes.Blob,
+		sqltypes.Text,
+		sqltypes.Text,
+		sqltypes.Enum,
+		sqltypes.Set,
+	}
+	for i, field := range qr.Fields {
+		got, err := sqltypes.TypeFromMySQL(int(field.Type), int(field.Flags))
+		if err != nil {
+			t.Errorf("col: %d, err: %v", i, err)
+			continue
+		}
+		if got != wantTypes[i] {
+			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
+		}
+	}
 }
 
 func TestMiscTypes(t *testing.T) {
@@ -374,6 +437,23 @@ func TestMiscTypes(t *testing.T) {
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
+	wantTypes := []query.Type{
+		sqltypes.Long,
+		sqltypes.Bit,
+		sqltypes.Date,
+		sqltypes.Datetime,
+		sqltypes.Time,
+	}
+	for i, field := range qr.Fields {
+		got, err := sqltypes.TypeFromMySQL(int(field.Type), int(field.Flags))
+		if err != nil {
+			t.Errorf("col: %d, err: %v", i, err)
+			continue
+		}
+		if got != wantTypes[i] {
+			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
+		}
+	}
 }
 
 func TestNull(t *testing.T) {
@@ -400,6 +480,19 @@ func TestNull(t *testing.T) {
 	}
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+	}
+	wantTypes := []query.Type{
+		sqltypes.Null,
+	}
+	for i, field := range qr.Fields {
+		got, err := sqltypes.TypeFromMySQL(int(field.Type), int(field.Flags))
+		if err != nil {
+			t.Errorf("col: %d, err: %v", i, err)
+			continue
+		}
+		if got != wantTypes[i] {
+			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
+		}
 	}
 }
 

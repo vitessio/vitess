@@ -429,7 +429,7 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 					value = sqltypes.MakeFractional(value.Raw())
 				}
 			}
-			value.EncodeSql(&buf)
+			value.EncodeSQL(&buf)
 		}
 		buf.WriteByte(')')
 	}

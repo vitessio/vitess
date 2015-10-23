@@ -226,7 +226,7 @@ func buildKey(row []sqltypes.Value) (key string) {
 		if pkValue.IsNull() {
 			return ""
 		}
-		pkValue.EncodeAscii(buf)
+		pkValue.EncodeASCII(buf)
 		if i != len(row)-1 {
 			buf.WriteByte('.')
 		}
@@ -253,7 +253,7 @@ func buildPKValueList(buf *bytes.Buffer, tableInfo *TableInfo, pkValueList [][]s
 	for _, pkValues := range pkValueList {
 		buf.WriteString(" (")
 		for _, pkValue := range pkValues {
-			pkValue.EncodeAscii(buf)
+			pkValue.EncodeASCII(buf)
 			buf.WriteString(" ")
 		}
 		buf.WriteString(")")
