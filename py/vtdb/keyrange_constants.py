@@ -27,17 +27,15 @@ PROTO3_KIT_TO_STRING = {
 # (Eventually we will use the proto3 version of this)
 PROTO3_TABLET_TYPE_TO_STRING = {
   0: 'unknown',
-  1: 'idle',
-  2: 'master',
-  3: 'replica',
-  4: 'rdonly',
-  5: 'spare',
-  6: 'experimental',
-  7: 'schema_upgrade',
-  8: 'backup',
-  9: 'restore',
-  10: 'worker',
-  11: 'scrap',
+  1: 'master',
+  2: 'replica',
+  3: 'rdonly',
+  4: 'spare',
+  5: 'experimental',
+  6: 'backup',
+  7: 'restore',
+  8: 'worker',
+  9: 'scrap',
 }
 
 # Converts a bson-encoded proto3 SrvKeyspace into the format

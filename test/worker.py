@@ -351,14 +351,22 @@ class TestBaseSplitClone(unittest.TestCase):
 
     When benchmarked, this seemed to take around 30% of the time of
     (setupModule + tearDownModule).
+
+    FIXME(aaijazi): doing this in parallel greatly reduces the time it takes.
+    See the kill_tablets method in tablet.py.
     """
+
+    utils.run_vtctl(['ListAllTablets', 'test_nj'])
+    
     for shard_tablet in [all_shard_tablets, shard_0_tablets, shard_1_tablets]:
       for tablet in shard_tablet.all_tablets:
         tablet.reset_replication()
         tablet.clean_dbs()
-        tablet.scrap(force=True, skip_rebuild=True)
-        utils.run_vtctl(['DeleteTablet', tablet.tablet_alias], auto_log=True)
         tablet.kill_vttablet()
+        # we allow failures here as some tablets will be gone sometimes
+        # (the master tablets after an emergency reparent)
+        utils.run_vtctl(['DeleteTablet', '-allow_master', tablet.tablet_alias],
+                        auto_log=True, raise_on_error=False)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     for shard in ['0', '-80', '80-']:
       utils.run_vtctl(

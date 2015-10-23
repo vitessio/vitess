@@ -48,7 +48,6 @@ type TabletManagerClient interface {
 	SetReadWrite(ctx context.Context, in *tabletmanagerdata.SetReadWriteRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReadWriteResponse, error)
 	// ChangeType asks the remote tablet to change its type
 	ChangeType(ctx context.Context, in *tabletmanagerdata.ChangeTypeRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ChangeTypeResponse, error)
-	Scrap(ctx context.Context, in *tabletmanagerdata.ScrapRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ScrapResponse, error)
 	RefreshState(ctx context.Context, in *tabletmanagerdata.RefreshStateRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RefreshStateResponse, error)
 	RunHealthCheck(ctx context.Context, in *tabletmanagerdata.RunHealthCheckRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RunHealthCheckResponse, error)
 	ReloadSchema(ctx context.Context, in *tabletmanagerdata.ReloadSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReloadSchemaResponse, error)
@@ -207,15 +206,6 @@ func (c *tabletManagerClient) SetReadWrite(ctx context.Context, in *tabletmanage
 func (c *tabletManagerClient) ChangeType(ctx context.Context, in *tabletmanagerdata.ChangeTypeRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ChangeTypeResponse, error) {
 	out := new(tabletmanagerdata.ChangeTypeResponse)
 	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ChangeType", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *tabletManagerClient) Scrap(ctx context.Context, in *tabletmanagerdata.ScrapRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ScrapResponse, error) {
-	out := new(tabletmanagerdata.ScrapResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/Scrap", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -541,7 +531,6 @@ type TabletManagerServer interface {
 	SetReadWrite(context.Context, *tabletmanagerdata.SetReadWriteRequest) (*tabletmanagerdata.SetReadWriteResponse, error)
 	// ChangeType asks the remote tablet to change its type
 	ChangeType(context.Context, *tabletmanagerdata.ChangeTypeRequest) (*tabletmanagerdata.ChangeTypeResponse, error)
-	Scrap(context.Context, *tabletmanagerdata.ScrapRequest) (*tabletmanagerdata.ScrapResponse, error)
 	RefreshState(context.Context, *tabletmanagerdata.RefreshStateRequest) (*tabletmanagerdata.RefreshStateResponse, error)
 	RunHealthCheck(context.Context, *tabletmanagerdata.RunHealthCheckRequest) (*tabletmanagerdata.RunHealthCheckResponse, error)
 	ReloadSchema(context.Context, *tabletmanagerdata.ReloadSchemaRequest) (*tabletmanagerdata.ReloadSchemaResponse, error)
@@ -720,18 +709,6 @@ func _TabletManager_ChangeType_Handler(srv interface{}, ctx context.Context, dec
 		return nil, err
 	}
 	out, err := srv.(TabletManagerServer).ChangeType(ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func _TabletManager_Scrap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
-	in := new(tabletmanagerdata.ScrapRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	out, err := srv.(TabletManagerServer).Scrap(ctx, in)
 	if err != nil {
 		return nil, err
 	}
@@ -1154,10 +1131,6 @@ var _TabletManager_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ChangeType",
 			Handler:    _TabletManager_ChangeType_Handler,
-		},
-		{
-			MethodName: "Scrap",
-			Handler:    _TabletManager_Scrap_Handler,
 		},
 		{
 			MethodName: "RefreshState",

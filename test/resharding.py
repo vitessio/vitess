@@ -4,15 +4,14 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import base64
-import json
 import logging
 import struct
 import threading
 import time
 import unittest
 
-from vtdb import dbexceptions
+from vtproto import topodata_pb2
+
 from vtdb import keyrange_constants
 
 import environment
@@ -366,7 +365,6 @@ primary key (name)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
   def _check_lots_not_present(self, count, base=0):
-    found = 0
     for i in xrange(count):
       self._check_value(shard_3_replica, 'resharding1', 10000 + base + i,
                         'msg-range1-%d' % i, 0xA000000000000000 + base + i,
@@ -688,7 +686,6 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_rdonly1, False, True)
 
     # then serve replica from the split shards
-    source_tablet = shard_1_slave2
     destination_shards = ['test_keyspace/80-c0', 'test_keyspace/c0-']
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
@@ -708,8 +705,7 @@ primary key (name)
     # Destination tablets would have query service disabled for other reasons than the migration,
     # so check the shard record instead of the tablets directly
     utils.check_shard_query_services(self, destination_shards,
-                                     tablet.Tablet.tablet_type_value['REPLICA'],
-                                     False)
+                                     topodata_pb2.REPLICA, False)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
@@ -725,8 +721,7 @@ primary key (name)
     # reasons than the migration, so check the shard record instead of
     # the tablets directly
     utils.check_shard_query_services(self, destination_shards,
-                                     tablet.Tablet.tablet_type_value['REPLICA'],
-                                     True)
+                                     topodata_pb2.REPLICA, True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
@@ -794,15 +789,14 @@ primary key (name)
     self.assertIn('No binlog player is running', shard_2_master_status)
     self.assertIn('</html>', shard_2_master_status)
 
-    # scrap the original tablets in the original shard
-    for t in [shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
-              shard_1_rdonly1]:
-      utils.run_vtctl(['ScrapTablet', t.tablet_alias], auto_log=True)
+    # delete the original tablets in the original shard
     tablet.kill_tablets([shard_1_master, shard_1_slave1, shard_1_slave2,
                          shard_1_ny_rdonly, shard_1_rdonly1])
-    for t in [shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
+    for t in [shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
               shard_1_rdonly1]:
       utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
+    utils.run_vtctl(['DeleteTablet', '-allow_master',
+                     shard_1_master.tablet_alias], auto_log=True)
 
     # rebuild the serving graph, all mentions of the old shards shoud be gone
     utils.run_vtctl(

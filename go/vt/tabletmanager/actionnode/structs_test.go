@@ -17,7 +17,6 @@ type slaveWasRestartedTestArgs struct {
 	Parent               *pb.TabletAlias
 	ExpectedMasterAddr   string
 	ExpectedMasterIPAddr string
-	ScrapStragglers      bool
 }
 
 func TestMissingFieldsJson(t *testing.T) {
@@ -28,7 +27,6 @@ func TestMissingFieldsJson(t *testing.T) {
 		},
 		ExpectedMasterAddr:   "a1",
 		ExpectedMasterIPAddr: "i1",
-		ScrapStragglers:      true,
 	}
 	data, err := json.MarshalIndent(swra, "", "  ")
 	if err != nil {
@@ -67,7 +65,6 @@ func TestMissingFieldsBson(t *testing.T) {
 		},
 		ExpectedMasterAddr:   "a1",
 		ExpectedMasterIPAddr: "i1",
-		ScrapStragglers:      true,
 	}
 	data, err := bson.Marshal(swra)
 	if err != nil {

@@ -43,59 +43,8 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *pb.TabletAlias) {
 	hk.ExtraEnv["TABLET_ALIAS"] = topoproto.TabletAliasString(tabletAlias)
 }
 
-// Scrap will update the tablet type to 'Scrap', and remove it from
-// the serving graph.
-//
-// 'force' means we are not on the tablet being scrapped, so it is
-// probably dead. So if 'force' is true, we will also remove pending
-// remote actions.  And if 'force' is false, we also run an optional
-// hook.
-func Scrap(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, force bool) error {
-	// Update the tablet first, since that is canonical.
-	var wasAssigned bool
-	var tablet *pb.Tablet
-	err := ts.UpdateTabletFields(ctx, tabletAlias, func(t *pb.Tablet) error {
-		wasAssigned = topoproto.TabletIsAssigned(t)
-		t.Type = pb.TabletType_SCRAP
-		tablet = t
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	// If you are already scrap, skip updating replication data. It won't
-	// be there anyway.
-	if wasAssigned {
-		err = topo.DeleteTabletReplicationData(ctx, ts, tablet)
-		if err != nil {
-			if err == topo.ErrNoNode {
-				log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)
-				err = nil
-			}
-			if err != nil {
-				log.Warningf("remove replication data for %v failed: %v", tablet.Alias, err)
-			}
-		}
-	}
-
-	// run a hook for final cleanup, only in non-force mode.
-	// (force mode executes on the vtctl side, not on the vttablet side)
-	if !force {
-		hk := hook.NewSimpleHook("postflight_scrap")
-		ConfigureTabletHook(hk, tablet.Alias)
-		if hookErr := hk.ExecuteOptional(); hookErr != nil {
-			// we don't want to return an error, the server
-			// is already in bad shape probably.
-			log.Warningf("Scrap: postflight_scrap failed: %v", hookErr)
-		}
-	}
-
-	return nil
-}
-
 // ChangeType changes the type of the tablet and possibly also updates
-// the health informaton for it. Make this external, since these
+// the health information for it. Make this external, since these
 // transitions need to be forced from time to time.
 //
 // - if health is nil, we don't touch the Tablet's Health record.
@@ -108,12 +57,6 @@ func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias
 		}
 
 		tablet.Type = newType
-		if newType == pb.TabletType_IDLE {
-			tablet.Keyspace = ""
-			tablet.Shard = ""
-			tablet.KeyRange = nil
-			tablet.HealthMap = health
-		}
 		if health != nil {
 			if len(health) == 0 {
 				tablet.HealthMap = nil
@@ -123,4 +66,23 @@ func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias
 		}
 		return nil
 	})
+}
+
+// DeleteTablet removes a tablet record from the topology:
+// - the replication data record if any
+// - the tablet record
+func DeleteTablet(ctx context.Context, ts topo.Server, tablet *pb.Tablet) error {
+	// try to remove replication data, no fatal if we fail
+	if err := topo.DeleteTabletReplicationData(ctx, ts, tablet); err != nil {
+		if err == topo.ErrNoNode {
+			log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)
+			err = nil
+		}
+		if err != nil {
+			log.Warningf("remove replication data for %v failed: %v", topoproto.TabletAliasString(tablet.Alias), err)
+		}
+	}
+
+	// then delete the tablet record
+	return ts.DeleteTablet(ctx, tablet.Alias)
 }

@@ -61,10 +61,9 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			log.Fatalf("Invalid init tablet type %v: %v", *initTabletType, err)
 		}
 
-		if tabletType == pb.TabletType_MASTER || tabletType == pb.TabletType_SCRAP {
+		if tabletType == pb.TabletType_MASTER {
 			// We disallow TYPE_MASTER, so we don't have to change
 			// shard.MasterAlias, and deal with the corner cases.
-			// We also disallow TYPE_SCRAP, obviously.
 			log.Fatalf("init_tablet_type cannot be %v", tabletType)
 		}
 
@@ -85,60 +84,58 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
 	defer cancel()
 
-	// if we're assigned to a shard, make sure it exists, see if
+	// since we're assigned to a shard, make sure it exists, see if
 	// we are its master, and update its cells list if necessary
-	if tabletType != pb.TabletType_IDLE {
-		if *initKeyspace == "" || *initShard == "" {
-			log.Fatalf("if init tablet is enabled and the target type is not idle, init_keyspace and init_shard also need to be specified")
-		}
-		shard, _, err := topo.ValidateShardName(*initShard)
+	if *initKeyspace == "" || *initShard == "" {
+		log.Fatalf("if init tablet is enabled and the target type is not idle, init_keyspace and init_shard also need to be specified")
+	}
+	shard, _, err := topo.ValidateShardName(*initShard)
+	if err != nil {
+		log.Fatalf("cannot validate shard name: %v", err)
+	}
+
+	log.Infof("Reading shard record %v/%v", *initKeyspace, shard)
+
+	// read the shard, create it if necessary
+	si, err := topotools.GetOrCreateShard(ctx, agent.TopoServer, *initKeyspace, shard)
+	if err != nil {
+		return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
+	}
+	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, agent.TabletAlias) {
+		// we are the current master for this shard (probably
+		// means the master tablet process was just restarted),
+		// so InitTablet as master.
+		tabletType = pb.TabletType_MASTER
+	}
+
+	// See if we need to add the tablet's cell to the shard's cell
+	// list.  If we do, it has to be under the shard lock.
+	if !si.HasCell(agent.TabletAlias.Cell) {
+		actionNode := actionnode.UpdateShard()
+		lockPath, err := actionNode.LockShard(ctx, agent.TopoServer, *initKeyspace, shard)
 		if err != nil {
-			log.Fatalf("cannot validate shard name: %v", err)
+			return fmt.Errorf("LockShard(%v/%v) failed: %v", *initKeyspace, shard, err)
 		}
 
-		log.Infof("Reading shard record %v/%v", *initKeyspace, shard)
-
-		// read the shard, create it if necessary
-		si, err := topotools.GetOrCreateShard(ctx, agent.TopoServer, *initKeyspace, shard)
+		// re-read the shard with the lock
+		si, err = agent.TopoServer.GetShard(ctx, *initKeyspace, shard)
 		if err != nil {
-			return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
-		}
-		if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, agent.TabletAlias) {
-			// we are the current master for this shard (probably
-			// means the master tablet process was just restarted),
-			// so InitTablet as master.
-			tabletType = pb.TabletType_MASTER
+			return actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, err)
 		}
 
-		// See if we need to add the tablet's cell to the shard's cell
-		// list.  If we do, it has to be under the shard lock.
+		// see if we really need to update it now
 		if !si.HasCell(agent.TabletAlias.Cell) {
-			actionNode := actionnode.UpdateShard()
-			lockPath, err := actionNode.LockShard(ctx, agent.TopoServer, *initKeyspace, shard)
-			if err != nil {
-				return fmt.Errorf("LockShard(%v/%v) failed: %v", *initKeyspace, shard, err)
-			}
+			si.Cells = append(si.Cells, agent.TabletAlias.Cell)
 
-			// re-read the shard with the lock
-			si, err = agent.TopoServer.GetShard(ctx, *initKeyspace, shard)
-			if err != nil {
+			// write it back
+			if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
 				return actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, err)
 			}
+		}
 
-			// see if we really need to update it now
-			if !si.HasCell(agent.TabletAlias.Cell) {
-				si.Cells = append(si.Cells, agent.TabletAlias.Cell)
-
-				// write it back
-				if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
-					return actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, err)
-				}
-			}
-
-			// and unlock
-			if err := actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, nil); err != nil {
-				return err
-			}
+		// and unlock
+		if err := actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, nil); err != nil {
+			return err
 		}
 	}
 	log.Infof("Initializing the tablet for type %v", tabletType)
@@ -177,14 +174,12 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	}
 
 	// now try to create the record
-	err := agent.TopoServer.CreateTablet(ctx, tablet)
+	err = agent.TopoServer.CreateTablet(ctx, tablet)
 	switch err {
 	case nil:
 		// it worked, we're good, can update the replication graph
-		if topo.IsInReplicationGraph(tablet.Type) {
-			if err := topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet); err != nil {
-				return fmt.Errorf("UpdateTabletReplicationData failed: %v", err)
-			}
+		if err := topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet); err != nil {
+			return fmt.Errorf("UpdateTabletReplicationData failed: %v", err)
 		}
 
 	case topo.ErrNodeExists:
@@ -215,10 +210,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 	// and now update the serving graph. Note we do that in any case,
 	// to clean any inaccurate record from any part of the serving graph.
-	if tabletType != pb.TabletType_IDLE {
-		if err := topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, tablet); err != nil {
-			return fmt.Errorf("UpdateTabletEndpoints failed: %v", err)
-		}
+	if err := topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, tablet); err != nil {
+		return fmt.Errorf("UpdateTabletEndpoints failed: %v", err)
 	}
 
 	return nil

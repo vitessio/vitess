@@ -123,9 +123,9 @@ class TestSchema(unittest.TestCase):
     # them down now.
     if shard_2_master in tablets:
       for t in tablets_shard2:
-        t.scrap(force=True, skip_rebuild=True)
-        utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
         t.kill_vttablet()
+        utils.run_vtctl(['DeleteTablet', '-allow_master', t.tablet_alias],
+                        auto_log=True)
         tablets.remove(t)
       utils.run_vtctl(['DeleteShard', 'test_keyspace/2'], auto_log=True)
 

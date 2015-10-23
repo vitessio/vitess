@@ -20,8 +20,6 @@ app.controller('ShardCtrl', function($scope, $routeParams, $timeout, $route,
     {name: 'RefreshState', title: 'Refresh State', confirm: 'This will tell the tablet to re-read its topology record and adjust its state accordingly.'},
     {name: 'ReloadSchema', title: 'Reload Schema', confirm: 'This will tell the tablet to refresh its schema cache by querying mysqld.'},
 
-    {name: 'ScrapTablet', title: 'Scrap', confirm: 'This will tell the tablet to remove itself from serving.'},
-    {name: 'ScrapTabletForce', title: 'Scrap (force)', confirm: 'This will externally remove the tablet from serving, without telling the tablet.'},
     {name: 'DeleteTablet', title: 'Delete', confirm: 'This will delete the tablet record from topology.'},
   ];
 

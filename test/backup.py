@@ -153,9 +153,9 @@ class TestBackup(unittest.TestCase):
       timeout = utils.wait_step('new slave tablet getting data', timeout)
 
     # list the backups
-    backups, err = utils.run_vtctl(tablet.get_backup_storage_flags() +
-                                   ['ListBackups', 'test_keyspace/0'],
-                                   mode=utils.VTCTL_VTCTL, trap_output=True)
+    backups, _ = utils.run_vtctl(tablet.get_backup_storage_flags() +
+                                 ['ListBackups', 'test_keyspace/0'],
+                                 mode=utils.VTCTL_VTCTL, trap_output=True)
     backups = backups.splitlines()
     logging.debug('list of backups: %s', backups)
     self.assertEqual(len(backups), 1)

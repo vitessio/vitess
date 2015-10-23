@@ -9,7 +9,7 @@ update stream, binlog players, ...), and handles tabletmanager RPCs
 to update the state.
 
 The agent is responsible for maintaining the tablet record in the
-topology server. Only 'ScrapTablet -force' and 'DeleteTablet'
+topology server. Only 'vtctl DeleteTablet'
 should be run by other processes, everything else should ask
 the tablet server to make the change.
 

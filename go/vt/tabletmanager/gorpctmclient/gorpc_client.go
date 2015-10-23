@@ -139,11 +139,6 @@ func (client *GoRPCTabletManagerClient) ChangeType(ctx context.Context, tablet *
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionChangeType, &dbType, &rpc.Unused{})
 }
 
-// Scrap is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) Scrap(ctx context.Context, tablet *topo.TabletInfo) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionScrap, &rpc.Unused{}, &rpc.Unused{})
-}
-
 // RefreshState is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) RefreshState(ctx context.Context, tablet *topo.TabletInfo) error {
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionRefreshState, &rpc.Unused{}, &rpc.Unused{})

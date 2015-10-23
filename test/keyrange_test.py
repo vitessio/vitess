@@ -5,7 +5,6 @@ import unittest
 import utils
 
 from vtdb import dbexceptions
-from vtdb import keyspace
 from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtrouting
@@ -79,7 +78,7 @@ class TestKeyRange(unittest.TestCase):
   def test_incorrect_tasks(self):
     global_shard_count = 16
     with self.assertRaises(dbexceptions.ProgrammingError):
-      stm = vtrouting.create_parallel_task_keyrange_map(4, global_shard_count)
+      vtrouting.create_parallel_task_keyrange_map(4, global_shard_count)
 
   def test_keyranges_for_tasks(self):
     for shard_count in (16, 32, 64):

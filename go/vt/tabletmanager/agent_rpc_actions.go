@@ -45,8 +45,6 @@ type RPCAgent interface {
 
 	ChangeType(ctx context.Context, tabletType pb.TabletType) error
 
-	Scrap(ctx context.Context) error
-
 	Sleep(ctx context.Context, duration time.Duration)
 
 	ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult
@@ -158,12 +156,6 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType pb.TabletType) error {
 	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil)
-}
-
-// Scrap scraps the live running tablet
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) Scrap(ctx context.Context) error {
-	return topotools.Scrap(ctx, agent.TopoServer, agent.TabletAlias, false)
 }
 
 // Sleep sleeps for the duration
@@ -668,7 +660,7 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Con
 	}
 	// NOTE(msolomon) A serving graph update is required, but in
 	// order for the shard to be consistent the old master must be
-	// scrapped first. That is externally coordinated by the
+	// dealt with first. That is externally coordinated by the
 	// wrangler reparent action.
 
 	// Insert the new tablet location in the replication graph now that

@@ -30,7 +30,6 @@ type SlaveWasRestartedArgs struct {
 type ApplySchemaShardArgs struct {
 	MasterTabletAlias *pb.TabletAlias
 	Change            string
-	Simple            bool
 }
 
 // SetShardServedTypesArgs is the payload for SetShardServedTypes
@@ -49,7 +48,6 @@ type MigrateServedTypesArgs struct {
 // ApplySchemaKeyspaceArgs is the payload for ApplySchemaKeyspace
 type ApplySchemaKeyspaceArgs struct {
 	Change string
-	Simple bool
 }
 
 // MigrateServedFromArgs is the payload for MigrateServedFrom
@@ -99,13 +97,12 @@ func CheckShard() *ActionNode {
 }
 
 // ApplySchemaShard returns an ActionNode
-func ApplySchemaShard(masterTabletAlias *pb.TabletAlias, change string, simple bool) *ActionNode {
+func ApplySchemaShard(masterTabletAlias *pb.TabletAlias, change string) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionApplySchema,
 		Args: &ApplySchemaShardArgs{
 			MasterTabletAlias: masterTabletAlias,
 			Change:            change,
-			Simple:            simple,
 		},
 	}).SetGuid()
 }
@@ -162,12 +159,11 @@ func SetKeyspaceServedFrom() *ActionNode {
 }
 
 // ApplySchemaKeyspace returns an ActionNode
-func ApplySchemaKeyspace(change string, simple bool) *ActionNode {
+func ApplySchemaKeyspace(change string) *ActionNode {
 	return (&ActionNode{
 		Action: KeyspaceActionApplySchema,
 		Args: &ApplySchemaKeyspaceArgs{
 			Change: change,
-			Simple: simple,
 		},
 	}).SetGuid()
 }
