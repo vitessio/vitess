@@ -301,7 +301,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     # Creating vtctld pod...
     # pods/vtctld
     #
-    # vtctld address: http://2.3.4.5:30000
+    # vtctld web address: http://2.3.4.5:30000
     ```
 
     To let you access vtctld from outside Kubernetes, the
@@ -320,7 +320,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 1.  **Access vtctld**
 
     To access the `vtctld` service from outside
-    Kubernetes, you need to open port `30000` in your platform's firewall.
+    Kubernetes, you need to open ports `30000-30001` in your platform's firewall.
     (If you don't complete this step, the only way to issue commands
     to `vtctld` would be to SSH into a Kubernetes node
     and install and run `vtctlclient` there.)
@@ -328,7 +328,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     On Compute Engine, you can open the port like this:
 
     ``` sh
-    $ gcloud compute firewall-rules create vtctld --allow tcp:30000
+    $ gcloud compute firewall-rules create vtctld --allow tcp:30000-30001
     ```
 
     You can then access the vtctld web interface at the address printed
@@ -342,6 +342,9 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 
     When you call `vtctlclient`, the command requires
     the IP address and port for your `vtctld` service.
+    Note that the RPC service is on a different port than the web UI.
+    In this example, we've set the RPC port to `30001`.
+
     To avoid having to enter that for each command, you can use the
     provided `kvtctl.sh` script, which uses `kubectl` to discover the
     proper address.
