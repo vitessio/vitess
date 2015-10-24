@@ -20,7 +20,8 @@ done
 # Instantiate template and send to kubectl.
 cat vtctld-controller-template.yaml | sed -e "$sed_script" | $KUBECTL create -f -
 
-server=$(get_vtctld_addr)
+get_vtctld_addr
 echo
-echo "vtctld address: http://$server"
+echo "vtctld RPC address: $VTCTLD_ADDR"
+echo "vtctld web address: http://$VTCTLD_HOST:30000"
 

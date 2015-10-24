@@ -8,7 +8,7 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-server=$(get_vtctld_addr)
+get_vtctld_addr
 
 # Delete the pods for all shards
 CELLS=${CELLS:-'test'}
@@ -27,10 +27,10 @@ for shard in `seq 1 $num_shards`; do
       uid=$[$uid_base + $uid_index + $cell_index]
       printf -v alias '%s-%010d' $cell $uid
 
-      if [ -n "$server" ]; then
+      if [ -n "$VTCTLD_ADDR" ]; then
         set +e
         echo "Removing tablet $alias from Vitess topology..."
-        vtctlclient -server $server DeleteTablet -allow_master -skip_rebuild $alias
+        vtctlclient -server $VTCTLD_ADDR DeleteTablet -allow_master -skip_rebuild $alias
         set -e
       fi
 
