@@ -351,10 +351,10 @@ class TestCoreVTGateFunctions(BaseTestCase):
           'values (%(eid)s, %(id)s, %(keyspace_id)s)',
           {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       cursor.commit()
-    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                keyspace_ids=eid_map.values())
-    rowcount = cursor.execute_entity_ids('select * from vt_a', {}, eid_map,
-                                         'id')
+    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master', keyspace_ids=None)
+    rowcount = cursor.execute(
+        'select * from vt_a', {},
+        entity_keyspace_id_map=eid_map, entity_column_name='id')
     self.assertEqual(rowcount, count, 'entity_ids works')
 
   def test_batch_read(self):
