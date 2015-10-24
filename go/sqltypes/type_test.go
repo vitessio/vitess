@@ -19,39 +19,39 @@ func TestTypeValues(t *testing.T) {
 		expected: 0,
 	}, {
 		defined:  Int8,
-		expected: 1 | IsNumber,
+		expected: 1 | IsIntegral,
 	}, {
 		defined:  Uint8,
-		expected: 2 | IsNumber | IsUnsigned,
+		expected: 2 | IsIntegral | IsUnsigned,
 	}, {
 		defined:  Int16,
-		expected: 3 | IsNumber,
+		expected: 3 | IsIntegral,
 	}, {
 		defined:  Uint16,
-		expected: 4 | IsNumber | IsUnsigned,
+		expected: 4 | IsIntegral | IsUnsigned,
 	}, {
 		defined:  Int24,
-		expected: 5 | IsNumber,
+		expected: 5 | IsIntegral,
 	}, {
 		defined:  Uint24,
-		expected: 6 | IsNumber | IsUnsigned,
+		expected: 6 | IsIntegral | IsUnsigned,
 	}, {
 		defined:  Int32,
-		expected: 7 | IsNumber,
+		expected: 7 | IsIntegral,
 	}, {
 		defined:  Uint32,
-		expected: 8 | IsNumber | IsUnsigned,
+		expected: 8 | IsIntegral | IsUnsigned,
 	}, {
 		defined:  Int64,
-		expected: 9 | IsNumber,
+		expected: 9 | IsIntegral,
 	}, {
 		defined:  Uint64,
-		expected: 10 | IsNumber | IsUnsigned,
+		expected: 10 | IsIntegral | IsUnsigned,
 	}, {
-		defined:  Float,
+		defined:  Float32,
 		expected: 11 | IsFloat,
 	}, {
-		defined:  Double,
+		defined:  Float64,
 		expected: 12 | IsFloat,
 	}, {
 		defined:  Timestamp,
@@ -67,7 +67,7 @@ func TestTypeValues(t *testing.T) {
 		expected: 16 | IsQuoted,
 	}, {
 		defined:  Year,
-		expected: 17 | IsNumber | IsUnsigned,
+		expected: 17 | IsIntegral | IsUnsigned,
 	}, {
 		defined:  Decimal,
 		expected: 18,

@@ -245,8 +245,8 @@ func TestFractionals(t *testing.T) {
 		sqltypes.Int32,
 		sqltypes.Decimal,
 		sqltypes.Decimal,
-		sqltypes.Float,
-		sqltypes.Double,
+		sqltypes.Float32,
+		sqltypes.Float64,
 	}
 	for i, field := range qr.Fields {
 		got, err := sqltypes.MySQLToType(field.Type, field.Flags)

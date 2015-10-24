@@ -33,7 +33,7 @@ message VTGateCallerID {
 // Flag allows us to qualify types by their common properties.
 enum Flag {
   NONE = 0;
-  ISNUMBER = 256;
+  ISINTEGRAL = 256;
   ISUNSIGNED = 512;
   ISFLOAT = 1024;
   ISQUOTED = 2048;
@@ -76,12 +76,12 @@ enum Type {
   // UINT64 specifies a BIGINT UNSIGNED type.
   // Properties: 10, IsNumber, IsUnsigned.
   UINT64 = 778;
-  // FLOAT specifies a FLOAT type.
+  // FLOAT32 specifies a FLOAT type.
   // Properties: 11, IsFloat.
-  FLOAT = 1035;
-  // DOUBLE specifies a DOUBLE or REAL type.
+  FLOAT32 = 1035;
+  // FLOAT64 specifies a DOUBLE or REAL type.
   // Properties: 12, IsFloat.
-  DOUBLE = 1036;
+  FLOAT64 = 1036;
   // TIMESTAMP specifies a TIMESTAMP type.
   // Properties: 13, IsQuoted.
   TIMESTAMP = 2061;
@@ -169,7 +169,7 @@ message Field {
 // Row is a database row.
 message Row {
   // lengths contains the length of each value in values.
-  // A length of -1 means that that fields is NULL. While
+  // A length of -1 means that the field is NULL. While
   // reading values, you have to accummulate the length
   // to know the offset where the next value begins in values.
   repeated sint64 lengths = 1;

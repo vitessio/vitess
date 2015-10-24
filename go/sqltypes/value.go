@@ -187,7 +187,7 @@ func (v Value) IsFractional() (ok bool) {
 	return ok
 }
 
-// IsString returns true if Value a string, or needs
+// IsString returns true if Value is a string, or needs
 // to be quoted before sending to MySQL.
 func (v Value) IsString() (ok bool) {
 	if v.Inner != nil {

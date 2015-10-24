@@ -56,7 +56,7 @@ type Flag int32
 
 const (
 	Flag_NONE       Flag = 0
-	Flag_ISNUMBER   Flag = 256
+	Flag_ISINTEGRAL Flag = 256
 	Flag_ISUNSIGNED Flag = 512
 	Flag_ISFLOAT    Flag = 1024
 	Flag_ISQUOTED   Flag = 2048
@@ -66,7 +66,7 @@ const (
 
 var Flag_name = map[int32]string{
 	0:    "NONE",
-	256:  "ISNUMBER",
+	256:  "ISINTEGRAL",
 	512:  "ISUNSIGNED",
 	1024: "ISFLOAT",
 	2048: "ISQUOTED",
@@ -75,7 +75,7 @@ var Flag_name = map[int32]string{
 }
 var Flag_value = map[string]int32{
 	"NONE":       0,
-	"ISNUMBER":   256,
+	"ISINTEGRAL": 256,
 	"ISUNSIGNED": 512,
 	"ISFLOAT":    1024,
 	"ISQUOTED":   2048,
@@ -124,12 +124,12 @@ const (
 	// UINT64 specifies a BIGINT UNSIGNED type.
 	// Properties: 10, IsNumber, IsUnsigned.
 	Type_UINT64 Type = 778
-	// FLOAT specifies a FLOAT type.
+	// FLOAT32 specifies a FLOAT type.
 	// Properties: 11, IsFloat.
-	Type_FLOAT Type = 1035
-	// DOUBLE specifies a DOUBLE or REAL type.
+	Type_FLOAT32 Type = 1035
+	// FLOAT64 specifies a DOUBLE or REAL type.
 	// Properties: 12, IsFloat.
-	Type_DOUBLE Type = 1036
+	Type_FLOAT64 Type = 1036
 	// TIMESTAMP specifies a TIMESTAMP type.
 	// Properties: 13, IsQuoted.
 	Type_TIMESTAMP Type = 2061
@@ -194,8 +194,8 @@ var Type_name = map[int32]string{
 	776:   "UINT32",
 	265:   "INT64",
 	778:   "UINT64",
-	1035:  "FLOAT",
-	1036:  "DOUBLE",
+	1035:  "FLOAT32",
+	1036:  "FLOAT64",
 	2061:  "TIMESTAMP",
 	2062:  "DATE",
 	2063:  "TIME",
@@ -225,8 +225,8 @@ var Type_value = map[string]int32{
 	"UINT32":    776,
 	"INT64":     265,
 	"UINT64":    778,
-	"FLOAT":     1035,
-	"DOUBLE":    1036,
+	"FLOAT32":   1035,
+	"FLOAT64":   1036,
 	"TIMESTAMP": 2061,
 	"DATE":      2062,
 	"TIME":      2063,
@@ -340,7 +340,7 @@ func (*Field) ProtoMessage()    {}
 // Row is a database row.
 type Row struct {
 	// lengths contains the length of each value in values.
-	// A length of -1 means that that fields is NULL. While
+	// A length of -1 means that the field is NULL. While
 	// reading values, you have to accummulate the length
 	// to know the offset where the next value begins in values.
 	Lengths []int64 `protobuf:"zigzag64,1,rep,name=lengths" json:"lengths,omitempty"`

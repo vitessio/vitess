@@ -194,12 +194,12 @@ func buildValue(v interface{}) (pb.Value, error) {
 		}, nil
 	case float32:
 		return pb.Value{
-			Type:  sqltypes.Double,
+			Type:  sqltypes.Float64,
 			Value: strconv.AppendFloat(nil, float64(v), 'f', -1, 64),
 		}, nil
 	case float64:
 		return pb.Value{
-			Type:  sqltypes.Double,
+			Type:  sqltypes.Float64,
 			Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
 		}, nil
 	case sqltypes.Value:
@@ -209,7 +209,7 @@ func buildValue(v interface{}) (pb.Value, error) {
 		case v.IsNumeric():
 			return pb.Value{Type: sqltypes.Int64, Value: v.Raw()}, nil
 		case v.IsFractional():
-			return pb.Value{Type: sqltypes.Double, Value: v.Raw()}, nil
+			return pb.Value{Type: sqltypes.Float64, Value: v.Raw()}, nil
 		}
 		return pb.Value{Type: sqltypes.VarBinary, Value: v.Raw()}, nil
 	case nil:
@@ -267,7 +267,7 @@ func buildSQLValue(v *pb.BindVariable) (interface{}, error) {
 	// TODO(sougou): Revisit this when QueryResult gets revamped
 	if v == nil || v.Type == sqltypes.Null {
 		return nil, nil
-	} else if int(v.Type)&sqltypes.IsNumber != 0 {
+	} else if int(v.Type)&sqltypes.IsIntegral != 0 {
 		if int(v.Type)&sqltypes.IsUnsigned != 0 {
 			return strconv.ParseUint(string(v.Value), 0, 64)
 		}

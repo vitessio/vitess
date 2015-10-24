@@ -10,10 +10,13 @@ import (
 	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
+// This file provides wrappers and support
+// functions for query.Type.
+
 // These bit flags can be used to query on the
 // common properties of types.
 const (
-	IsNumber   = int(query.Flag_ISNUMBER)
+	IsIntegral = int(query.Flag_ISINTEGRAL)
 	IsUnsigned = int(query.Flag_ISUNSIGNED)
 	IsFloat    = int(query.Flag_ISFLOAT)
 	IsQuoted   = int(query.Flag_ISQUOTED)
@@ -35,8 +38,8 @@ const (
 	Uint32    = query.Type_UINT32
 	Int64     = query.Type_INT64
 	Uint64    = query.Type_UINT64
-	Float     = query.Type_FLOAT
-	Double    = query.Type_DOUBLE
+	Float32   = query.Type_FLOAT32
+	Float64   = query.Type_FLOAT64
 	Timestamp = query.Type_TIMESTAMP
 	Date      = query.Type_DATE
 	Time      = query.Type_TIME
@@ -55,13 +58,13 @@ const (
 	Tuple     = query.Type_TUPLE
 )
 
-// bit-shift the mysql flags by one byte so we
-// can merge them with the mysql types.
+// bit-shift the mysql flags by two byte so we
+// can merge them with the mysql or vitess types.
 const (
-	mysqlUnsigned = 32 << 8
-	mysqlBinary   = 128 << 8
-	mysqlEnum     = 256 << 8
-	mysqlSet      = 2048 << 8
+	mysqlUnsigned = 32 << 16
+	mysqlBinary   = 128 << 16
+	mysqlEnum     = 256 << 16
+	mysqlSet      = 2048 << 16
 
 	relevantFlags = mysqlUnsigned |
 		mysqlBinary |
@@ -75,8 +78,8 @@ var mysqlToType = map[int64]query.Type{
 	1:   Int8,
 	2:   Int16,
 	3:   Int32,
-	4:   Float,
-	5:   Double,
+	4:   Float32,
+	5:   Float64,
 	6:   Null,
 	7:   Timestamp,
 	8:   Int64,
@@ -116,8 +119,8 @@ var typeToMySQL = map[query.Type]struct {
 	Uint16:    {typ: 2, flags: mysqlUnsigned},
 	Int32:     {typ: 3},
 	Uint32:    {typ: 3, flags: mysqlUnsigned},
-	Float:     {typ: 4},
-	Double:    {typ: 5},
+	Float32:   {typ: 4},
+	Float64:   {typ: 5},
 	Null:      {typ: 6, flags: mysqlBinary},
 	Timestamp: {typ: 7},
 	Int64:     {typ: 8},
@@ -147,7 +150,7 @@ func MySQLToType(mysqlType, flags int64) (query.Type, error) {
 		return Null, fmt.Errorf("Could not map: %d to a vitess type", mysqlType)
 	}
 
-	converted := (flags << 8) & relevantFlags
+	converted := (flags << 16) & relevantFlags
 	modified, ok := modifier[int64(result)|converted]
 	if ok {
 		return modified, nil
@@ -158,5 +161,5 @@ func MySQLToType(mysqlType, flags int64) (query.Type, error) {
 // TypeToMySQL returns the equivalent mysql type and flag for a vitess type.
 func TypeToMySQL(typ query.Type) (mysqlType, flags int64) {
 	val := typeToMySQL[typ]
-	return val.typ, val.flags >> 8
+	return val.typ, val.flags >> 16
 }
