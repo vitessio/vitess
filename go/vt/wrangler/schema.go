@@ -22,7 +22,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools/events"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -205,12 +204,7 @@ func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias *pb.TabletAlias
 }
 
 // ApplySchemaShard applies a schema change on a shard.
-// Note for 'complex' mode (the 'simple' mode is easy enough that we
-// don't need to handle recovery that much): this method is able to
-// recover if interrupted in the middle, because it knows which server
-// has the schema change already applied, and will just pass through them
-// very quickly.
-func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, change string, newParentTabletAlias *pb.TabletAlias, simple, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
 	// read the shard
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
@@ -231,18 +225,18 @@ func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, chang
 		return nil, err
 	}
 
-	return wr.lockAndApplySchemaShard(ctx, shardInfo, preflight, keyspace, shard, shardInfo.MasterAlias, change, newParentTabletAlias, simple, force, waitSlaveTimeout)
+	return wr.lockAndApplySchemaShard(ctx, shardInfo, preflight, keyspace, shard, shardInfo.MasterAlias, change, newParentTabletAlias, force, waitSlaveTimeout)
 }
 
-func (wr *Wrangler) lockAndApplySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, keyspace, shard string, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, simple, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
+func (wr *Wrangler) lockAndApplySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, keyspace, shard string, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
 	// get a shard lock
-	actionNode := actionnode.ApplySchemaShard(masterTabletAlias, change, simple)
+	actionNode := actionnode.ApplySchemaShard(masterTabletAlias, change)
 	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
 	if err != nil {
 		return nil, err
 	}
 
-	scr, err := wr.applySchemaShard(ctx, shardInfo, preflight, masterTabletAlias, change, newParentTabletAlias, simple, force, waitSlaveTimeout)
+	scr, err := wr.applySchemaShard(ctx, shardInfo, preflight, masterTabletAlias, change, newParentTabletAlias, force, waitSlaveTimeout)
 	return scr, wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
@@ -253,7 +247,7 @@ type tabletStatus struct {
 	beforeSchema *myproto.SchemaDefinition
 }
 
-func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, simple, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
 
 	// find all the shards we need to handle
 	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, shardInfo.Keyspace(), shardInfo.ShardName())
@@ -295,15 +289,6 @@ func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardI
 		}
 	}
 
-	// simple or complex?
-	if simple {
-		return wr.applySchemaShardSimple(ctx, statusArray, preflight, masterTabletAlias, change, force)
-	}
-
-	return wr.applySchemaShardComplex(ctx, statusArray, shardInfo, preflight, masterTabletAlias, change, newParentTabletAlias, force, waitSlaveTimeout)
-}
-
-func (wr *Wrangler) applySchemaShardSimple(ctx context.Context, statusArray []*tabletStatus, preflight *myproto.SchemaChangeResult, masterTabletAlias *pb.TabletAlias, change string, force bool) (*myproto.SchemaChangeResult, error) {
 	// check all tablets have the same schema as the master's
 	// BeforeSchema. If not, we shouldn't proceed
 	log.Infof("Checking schema on all tablets")
@@ -319,93 +304,17 @@ func (wr *Wrangler) applySchemaShardSimple(ctx context.Context, statusArray []*t
 	}
 
 	// we're good, just send to the master
-	log.Infof("Applying schema change to master in simple mode")
+	log.Infof("Applying schema change to master")
 	sc := &myproto.SchemaChange{Sql: change, Force: force, AllowReplication: true, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
 	return wr.ApplySchema(ctx, masterTabletAlias, sc)
-}
-
-func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*tabletStatus, shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
-	// apply the schema change to all replica / slave tablets
-	for _, status := range statusArray {
-		// if already applied, we skip this guy
-		diffs := myproto.DiffSchemaToArray("after", preflight.AfterSchema, topoproto.TabletAliasString(status.ti.Alias), status.beforeSchema)
-		if len(diffs) == 0 {
-			log.Infof("Tablet %v already has the AfterSchema, skipping", status.ti.AliasString())
-			continue
-		}
-
-		// make sure the before schema matches
-		diffs = myproto.DiffSchemaToArray("master", preflight.BeforeSchema, topoproto.TabletAliasString(status.ti.Alias), status.beforeSchema)
-		if len(diffs) > 0 {
-			if force {
-				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.AliasString(), strings.Join(diffs, "\n"))
-			} else {
-				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.AliasString(), strings.Join(diffs, "\n"))
-			}
-		}
-
-		// take this guy out of the serving graph if necessary
-		ti, err := wr.ts.GetTablet(ctx, status.ti.Alias)
-		if err != nil {
-			return nil, err
-		}
-		typeChangeRequired := ti.IsInServingGraph()
-		if typeChangeRequired {
-			// note we want to update the serving graph there
-			err = wr.changeTypeInternal(ctx, ti.Alias, pb.TabletType_SCHEMA_UPGRADE)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		// apply the schema change
-		log.Infof("Applying schema change to slave %v in complex mode", status.ti.AliasString())
-		sc := &myproto.SchemaChange{Sql: change, Force: force, AllowReplication: false, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
-		_, err = wr.ApplySchema(ctx, status.ti.Alias, sc)
-		if err != nil {
-			return nil, err
-		}
-
-		// put this guy back into the serving graph
-		if typeChangeRequired {
-			err = wr.changeTypeInternal(ctx, ti.Alias, ti.Tablet.Type)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// if newParentTabletAlias is passed in, use that as the new master
-	if !topoproto.TabletAliasIsZero(newParentTabletAlias) {
-		log.Infof("Reparenting with new master set to %v", topoproto.TabletAliasString(newParentTabletAlias))
-		oldMasterAlias := shardInfo.MasterAlias
-
-		// Create reusable Reparent event with available info
-		ev := &events.Reparent{}
-
-		if err := wr.plannedReparentShardLocked(ctx, ev, shardInfo.Keyspace(), shardInfo.ShardName(), newParentTabletAlias, waitSlaveTimeout); err != nil {
-			return nil, err
-		}
-
-		// Here we would apply the schema change to the old
-		// master, but we just scrap it, to be consistent
-		// with the previous implementation of the reparent.
-		// (this code will be refactored at some point anyway)
-		if err := wr.Scrap(ctx, oldMasterAlias, false, false); err != nil {
-			wr.Logger().Warningf("Scrapping old master %v from shard %v/%v failed: %v", topoproto.TabletAliasString(oldMasterAlias), shardInfo.Keyspace(), shardInfo.ShardName(), err)
-		}
-	}
-	return &myproto.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
 }
 
 // ApplySchemaKeyspace applies a schema change to an entire keyspace.
 // take a keyspace lock to do this.
 // first we will validate the Preflight works the same on all shard masters
 // and fail if not (unless force is specified)
-// if simple, we just do it on all masters.
-// if complex, we do the shell game in parallel on all shards
-func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, change string, simple, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
-	actionNode := actionnode.ApplySchemaKeyspace(change, simple)
+func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, change string, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
+	actionNode := actionnode.ApplySchemaKeyspace(change)
 	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
 	if err != nil {
 		return nil, err

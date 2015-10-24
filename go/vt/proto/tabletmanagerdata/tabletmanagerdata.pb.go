@@ -32,8 +32,6 @@ It has these top-level messages:
 	SetReadWriteResponse
 	ChangeTypeRequest
 	ChangeTypeResponse
-	ScrapRequest
-	ScrapResponse
 	RefreshStateRequest
 	RefreshStateResponse
 	RunHealthCheckRequest
@@ -401,20 +399,6 @@ type ChangeTypeResponse struct {
 func (m *ChangeTypeResponse) Reset()         { *m = ChangeTypeResponse{} }
 func (m *ChangeTypeResponse) String() string { return proto.CompactTextString(m) }
 func (*ChangeTypeResponse) ProtoMessage()    {}
-
-type ScrapRequest struct {
-}
-
-func (m *ScrapRequest) Reset()         { *m = ScrapRequest{} }
-func (m *ScrapRequest) String() string { return proto.CompactTextString(m) }
-func (*ScrapRequest) ProtoMessage()    {}
-
-type ScrapResponse struct {
-}
-
-func (m *ScrapResponse) Reset()         { *m = ScrapResponse{} }
-func (m *ScrapResponse) String() string { return proto.CompactTextString(m) }
-func (*ScrapResponse) ProtoMessage()    {}
 
 type RefreshStateRequest struct {
 }

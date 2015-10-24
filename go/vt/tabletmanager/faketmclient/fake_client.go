@@ -104,11 +104,6 @@ func (client *FakeTabletManagerClient) ChangeType(ctx context.Context, tablet *t
 	return nil
 }
 
-// Scrap is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) Scrap(ctx context.Context, tablet *topo.TabletInfo) error {
-	return nil
-}
-
 // RefreshState is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) RefreshState(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil

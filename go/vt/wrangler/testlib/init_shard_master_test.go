@@ -5,10 +5,12 @@
 package testlib
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -31,6 +33,8 @@ func TestInitMasterShard(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
+	db.AddQuery("CREATE DATABASE IF NOT EXISTS `vt_test_keyspace`", &mproto.QueryResult{})
+
 	// Create a master, a couple good slaves
 	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
 	goodSlave1 := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
@@ -47,7 +51,8 @@ func TestInitMasterShard(t *testing.T) {
 	}
 	master.FakeMysqlDaemon.ReadOnly = true
 	master.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 1"}
-	master.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"new master shouldn't use this"}
+	master.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"new master shouldn't use this"}
+	master.FakeMysqlDaemon.SetMasterCommandsResult = []string{"new master shouldn't use this"}
 	master.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"reset rep 1",
 		"CREATE DATABASE IF NOT EXISTS _vt",
@@ -62,16 +67,15 @@ func TestInitMasterShard(t *testing.T) {
 	// Slave1: expect to be reset and re-parented
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
 	goodSlave1.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 1"}
-	goodSlave1.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
-		Position:           master.FakeMysqlDaemon.CurrentMasterPosition,
-		MasterHost:         master.Tablet.Hostname,
-		MasterPort:         int(master.Tablet.PortMap["mysql"]),
-		MasterConnectRetry: 10,
-	}
-	goodSlave1.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1"}
+	goodSlave1.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	goodSlave1.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
+	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
+	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"reset rep 1",
 		"cmd1",
+		"set master cmd 1",
+		"START SLAVE",
 	}
 	goodSlave1.StartActionLoop(t, wr)
 	defer goodSlave1.StopActionLoop(t)
@@ -79,17 +83,16 @@ func TestInitMasterShard(t *testing.T) {
 	// Slave2: expect to be re-parented
 	goodSlave2.FakeMysqlDaemon.ReadOnly = true
 	goodSlave2.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 2"}
-	goodSlave2.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
-		Position:           master.FakeMysqlDaemon.CurrentMasterPosition,
-		MasterHost:         master.Tablet.Hostname,
-		MasterPort:         int(master.Tablet.PortMap["mysql"]),
-		MasterConnectRetry: 10,
-	}
-	goodSlave2.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1", "cmd2"}
+	goodSlave2.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	goodSlave2.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1", "cmd2"}
+	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
+	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"reset rep 2",
 		"cmd1",
 		"cmd2",
+		"set master cmd 1",
+		"START SLAVE",
 	}
 	goodSlave2.StartActionLoop(t, wr)
 	defer goodSlave2.StopActionLoop(t)
@@ -193,26 +196,23 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 
 	// goodSlave: expect to be re-parented
 	goodSlave.FakeMysqlDaemon.ReadOnly = true
-	goodSlave.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
-		Position:           master.FakeMysqlDaemon.CurrentMasterPosition,
-		MasterHost:         master.Tablet.Hostname,
-		MasterPort:         int(master.Tablet.PortMap["mysql"]),
-		MasterConnectRetry: 10,
+	goodSlave.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	goodSlave.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
+	goodSlave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
+	goodSlave.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
+	goodSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"cmd1",
+		"set master cmd 1",
+		"START SLAVE",
 	}
-	goodSlave.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1"}
-	goodSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = goodSlave.FakeMysqlDaemon.StartReplicationCommandsResult
 	goodSlave.StartActionLoop(t, wr)
 	defer goodSlave.StopActionLoop(t)
 
-	// badSlave: insert an error by failing the ReplicationStatus input
+	// badSlave: insert an error by failing the master hostname input
 	// on purpose
 	badSlave.FakeMysqlDaemon.ReadOnly = true
-	badSlave.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
-		Position:           master.FakeMysqlDaemon.CurrentMasterPosition,
-		MasterHost:         "",
-		MasterPort:         0,
-		MasterConnectRetry: 10,
-	}
+	badSlave.FakeMysqlDaemon.SetSlavePositionCommandsPos = master.FakeMysqlDaemon.CurrentMasterPosition
+	badSlave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", "", master.Tablet.PortMap["mysql"])
 	badSlave.StartActionLoop(t, wr)
 	defer badSlave.StopActionLoop(t)
 
@@ -234,7 +234,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	}
 
 	// run InitShardMaster
-	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, true /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "wrong status for StartReplicationCommands") {
+	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, true /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "wrong input for SetMasterCommands") {
 		t.Errorf("InitShardMaster with one failed slave returned wrong error: %v", err)
 	}
 

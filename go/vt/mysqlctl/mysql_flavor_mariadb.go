@@ -100,20 +100,10 @@ func (*mariaDB10) PromoteSlaveCommands() []string {
 	}
 }
 
-// StartReplicationCommands implements MysqlFlavor.StartReplicationCommands().
-func (*mariaDB10) StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error) {
-	// Make SET gtid_slave_pos command.
-	setSlavePos := fmt.Sprintf("SET GLOBAL gtid_slave_pos = '%s'", status.Position)
-
-	// Make CHANGE MASTER TO command.
-	args := changeMasterArgs(params, status.MasterHost, status.MasterPort, status.MasterConnectRetry)
-	args = append(args, "MASTER_USE_GTID = slave_pos")
-	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
-
+// SetSlavePositionCommands implements MysqlFlavor.
+func (*mariaDB10) SetSlavePositionCommands(pos proto.ReplicationPosition) ([]string, error) {
 	return []string{
-		setSlavePos,
-		changeMasterTo,
-		"START SLAVE",
+		fmt.Sprintf("SET GLOBAL gtid_slave_pos = '%s'", pos),
 	}, nil
 }
 

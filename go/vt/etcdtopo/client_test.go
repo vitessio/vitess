@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/coreos/go-etcd/etcd"
 )
@@ -28,6 +29,9 @@ type fakeNode struct {
 	// The contract of Watch() specifies that it should replay all changes
 	// since the provided cluster index before subscribing to live updates.
 	history []nodeEvent
+
+	// expiration is the time at which the node should be deleted (TTL).
+	expiration time.Time
 }
 
 func newFakeNode(node *etcd.Node) *fakeNode {
@@ -76,6 +80,17 @@ func newTestClient(machines []string) Client {
 	}
 }
 
+func (c *fakeClient) expire() {
+	for _, n := range c.nodes {
+		if !n.expiration.IsZero() && time.Now().After(n.expiration) {
+			c.index++
+			n.node = nil
+			n.expiration = time.Time{}
+			n.notify(c.index, "expire")
+		}
+	}
+}
+
 func (c *fakeClient) createParentDirs(key string) {
 	dir := path.Dir(key)
 	for dir != "" {
@@ -95,6 +110,7 @@ func (c *fakeClient) createParentDirs(key string) {
 func (c *fakeClient) CompareAndDelete(key string, prevValue string, prevIndex uint64) (*etcd.Response, error) {
 	c.Lock()
 	defer c.Unlock()
+	c.expire()
 
 	if prevValue != "" {
 		panic("not implemented")
@@ -114,10 +130,13 @@ func (c *fakeClient) CompareAndDelete(key string, prevValue string, prevIndex ui
 	return &etcd.Response{}, nil
 }
 
+var ignoreTTLRefresh bool
+
 func (c *fakeClient) CompareAndSwap(key string, value string, ttl uint64,
 	prevValue string, prevIndex uint64) (*etcd.Response, error) {
 	c.Lock()
 	defer c.Unlock()
+	c.expire()
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
@@ -133,6 +152,9 @@ func (c *fakeClient) CompareAndSwap(key string, value string, ttl uint64,
 	c.index++
 	n.node.ModifiedIndex = c.index
 	n.node.Value = value
+	if ttl > 0 && !ignoreTTLRefresh {
+		n.expiration = time.Now().Add(time.Duration(ttl) * time.Second)
+	}
 	c.nodes[key] = n
 	node := *n.node
 	n.notify(c.index, "compareAndSwap")
@@ -142,6 +164,7 @@ func (c *fakeClient) CompareAndSwap(key string, value string, ttl uint64,
 func (c *fakeClient) Create(key string, value string, ttl uint64) (*etcd.Response, error) {
 	c.Lock()
 	defer c.Unlock()
+	c.expire()
 
 	n, ok := c.nodes[key]
 	if ok && n.node != nil {
@@ -160,6 +183,9 @@ func (c *fakeClient) Create(key string, value string, ttl uint64) (*etcd.Respons
 		CreatedIndex:  c.index,
 		ModifiedIndex: c.index,
 	}
+	if ttl > 0 {
+		n.expiration = time.Now().Add(time.Duration(ttl) * time.Second)
+	}
 	node := *n.node
 	n.notify(c.index, "create")
 	return &etcd.Response{Node: &node}, nil
@@ -168,6 +194,7 @@ func (c *fakeClient) Create(key string, value string, ttl uint64) (*etcd.Respons
 func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) {
 	c.Lock()
 	defer c.Unlock()
+	c.expire()
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
@@ -195,6 +222,7 @@ func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) 
 func (c *fakeClient) DeleteDir(key string) (*etcd.Response, error) {
 	c.Lock()
 	defer c.Unlock()
+	c.expire()
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
@@ -220,6 +248,7 @@ func (c *fakeClient) DeleteDir(key string) (*etcd.Response, error) {
 func (c *fakeClient) Get(key string, sortFiles, recursive bool) (*etcd.Response, error) {
 	c.Lock()
 	defer c.Unlock()
+	c.expire()
 
 	if recursive {
 		panic("not implemented")
@@ -256,6 +285,7 @@ func (c *fakeClient) Get(key string, sortFiles, recursive bool) (*etcd.Response,
 func (c *fakeClient) Set(key string, value string, ttl uint64) (*etcd.Response, error) {
 	c.Lock()
 	defer c.Unlock()
+	c.expire()
 
 	c.index++
 
@@ -270,6 +300,9 @@ func (c *fakeClient) Set(key string, value string, ttl uint64) (*etcd.Response, 
 		n.node.ModifiedIndex = c.index
 	} else {
 		n.node = &etcd.Node{Key: key, Value: value, CreatedIndex: c.index, ModifiedIndex: c.index}
+	}
+	if ttl > 0 {
+		n.expiration = time.Now().Add(time.Duration(ttl) * time.Second)
 	}
 	node := *n.node
 
@@ -299,13 +332,14 @@ func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 	// - We are waiting on forwarder and taking the mutex.
 	//   Callers of fakeNode.notify write to forwarder, and also take
 	//   the mutex. Both can deadlock each other. By buffering the
-	//   channel, we make sure 10 notify() call can finish and not
+	//   channel, we make sure multiple notify() calls can finish and not
 	//   deadlock. We do a few of them in the serial locking code
 	//   in tests.
-	forwarder := make(chan *etcd.Response, 10)
+	forwarder := make(chan *etcd.Response, 100)
 
 	// Fetch history and subscribe to live updates.
 	c.Lock()
+	c.expire()
 	c.createParentDirs(prefix)
 	n, ok := c.nodes[prefix]
 	if !ok {

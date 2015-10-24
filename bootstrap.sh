@@ -101,8 +101,11 @@ repos="github.com/golang/glog \
        github.com/golang/protobuf/protoc-gen-go \
        github.com/tools/godep \
        golang.org/x/net/context \
+       golang.org/x/oauth2/google \
        golang.org/x/tools/cmd/goimports \
        google.golang.org/grpc \
+       google.golang.org/cloud \
+       google.golang.org/cloud/storage \
 "
 
 # Packages for uploading code coverage to coveralls.io (used by Travis CI).

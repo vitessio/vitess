@@ -25,11 +25,12 @@ if [ -n "$VTDATAROOT_VOLUME" ]; then
 fi
 
 uid_base=$UID_BASE
+indices=${TASKS:-`seq 0 $(($TABLETS_PER_SHARD-1))`}
 for shard in $(echo $SHARDS | tr "," " "); do
   cell_index=0
   for cell in `echo $CELLS | tr ',' ' '`; do
     echo "Creating $keyspace.shard-$shard pods in cell $CELL..."
-    for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
+    for uid_index in $indices; do
       uid=$[$uid_base + $uid_index + $cell_index]
       printf -v alias '%s-%010d' $cell $uid
       printf -v tablet_subdir 'vt_%010d' $uid
@@ -47,7 +48,7 @@ for shard in $(echo $SHARDS | tr "," " "); do
 
       # Expand template variables
       sed_script=""
-      for var in alias cell uid keyspace shard shard_label port grpc_port tablet_subdir vtdataroot_volume tablet_type; do
+      for var in alias cell uid keyspace shard shard_label port grpc_port tablet_subdir vtdataroot_volume tablet_type backup_flags; do
         sed_script+="s,{{$var}},${!var},g;"
       done
 

@@ -116,7 +116,7 @@ func FixShardReplication(ctx context.Context, ts Server, logger logutil.Logger, 
 	}
 
 	for _, node := range sri.Nodes {
-		ti, err := ts.GetTablet(ctx, node.TabletAlias)
+		_, err := ts.GetTablet(ctx, node.TabletAlias)
 		if err == ErrNoNode {
 			logger.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", node.TabletAlias)
 			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, node.TabletAlias)
@@ -124,11 +124,6 @@ func FixShardReplication(ctx context.Context, ts Server, logger logutil.Logger, 
 		if err != nil {
 			// unknown error, we probably don't want to continue
 			return err
-		}
-
-		if ti.Type == pb.TabletType_SCRAP {
-			logger.Warningf("Tablet %v is in the replication graph, but is scrapped, removing it", node.TabletAlias)
-			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, node.TabletAlias)
 		}
 
 		logger.Infof("Keeping tablet %v in the replication graph", node.TabletAlias)

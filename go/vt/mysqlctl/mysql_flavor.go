@@ -40,10 +40,10 @@ type MysqlFlavor interface {
 	// a slave into a master.
 	PromoteSlaveCommands() []string
 
-	// StartReplicationCommands returns the commands to start
-	// replicating from a given master and position as specified
-	// in a ReplicationStatus. It should start replication.
-	StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error)
+	// SetSlavePositionCommands returns the commands to set the
+	// replication position at which the slave will resume
+	// when it is later reparented with SetMasterCommands.
+	SetSlavePositionCommands(pos proto.ReplicationPosition) ([]string, error)
 
 	// SetMasterCommands returns the commands to use the provided master
 	// as the new master (without changing any GTID position).

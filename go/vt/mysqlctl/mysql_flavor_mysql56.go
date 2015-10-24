@@ -95,21 +95,11 @@ func (*mysql56) PromoteSlaveCommands() []string {
 	}
 }
 
-// StartReplicationCommands implements MysqlFlavor.StartReplicationCommands().
-func (*mysql56) StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error) {
-	// Make SET position command.
-	setSlavePos := fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", status.Position)
-
-	// Make CHANGE MASTER TO command.
-	args := changeMasterArgs(params, status.MasterHost, status.MasterPort, status.MasterConnectRetry)
-	args = append(args, "MASTER_AUTO_POSITION = 1")
-	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
-
+// SetSlavePositionCommands implements MysqlFlavor.
+func (*mysql56) SetSlavePositionCommands(pos proto.ReplicationPosition) ([]string, error) {
 	return []string{
 		"RESET MASTER", // We must clear gtid_executed before setting gtid_purged.
-		setSlavePos,
-		changeMasterTo,
-		"START SLAVE",
+		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", pos),
 	}, nil
 }
 

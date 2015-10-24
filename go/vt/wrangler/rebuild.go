@@ -256,9 +256,6 @@ func (wr *Wrangler) RebuildReplicationGraph(ctx context.Context, cells []string,
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
 			defer wg.Done()
-			if !ti.IsInReplicationGraph() {
-				return
-			}
 			if !strInList(keyspaces, ti.Keyspace) {
 				return
 			}

@@ -87,13 +87,6 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		// Build up the serving graph from scratch.
 		serving := make(map[pb.TabletType]*pb.EndPoints)
 		for _, tablet := range tablets {
-			if !tablet.IsInReplicationGraph() {
-				// only valid case is a scrapped master in the
-				// catastrophic reparent case
-				log.Warningf("Tablet %v should not be in the replication graph, please investigate (it is being ignored in the rebuild)", tablet.Alias)
-				continue
-			}
-
 			// Only add serving types.
 			if !tablet.IsInServingGraph() {
 				continue

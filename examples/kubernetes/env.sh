@@ -2,7 +2,7 @@
 
 # Most clusters will just be accessed with 'kubectl' on $PATH.
 # However, some might require a different command. For example, GKE required
-# KUBECTL='gcloud beta container kubectl' for a while. Now that most of our
+# KUBECTL='gcloud container kubectl' for a while. Now that most of our
 # use cases just need KUBECTL=kubectl, we'll make that the default.
 KUBECTL=${KUBECTL:-kubectl}
 
@@ -24,4 +24,12 @@ get_vtctld_addr() {
   fi
   echo "$VTCTLD_ADDR"
 }
+
+config_file=`dirname "${BASH_SOURCE}"`/config.sh
+if [ ! -f $config_file ]; then
+  echo "Please run ./configure.sh first to generate config.sh file."
+  exit 1
+fi
+
+source $config_file
 

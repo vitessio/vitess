@@ -5,6 +5,8 @@ import unittest
 import urllib2
 import re
 
+from vtproto import topodata_pb2
+
 import environment
 import tablet
 import utils
@@ -17,12 +19,9 @@ shard_0_spare = tablet.Tablet()
 # range 80 - ''
 shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
-# not assigned
-idle = tablet.Tablet()
-scrap = tablet.Tablet()
 # all tablets
 tablets = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica,
-           idle, scrap, shard_0_spare]
+           shard_0_spare]
 
 
 def setUpModule():
@@ -71,8 +70,6 @@ class TestVtctld(unittest.TestCase):
     shard_0_spare.init_tablet('spare', 'test_keyspace', '-80')
     shard_1_master.init_tablet('master', 'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
-    idle.init_tablet('idle')
-    scrap.init_tablet('idle')
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'redirected_keyspace'],
@@ -88,20 +85,17 @@ class TestVtctld(unittest.TestCase):
                                    target_tablet_type='replica',
                                    wait_for_state=None)
 
-    for t in scrap, idle, shard_0_spare:
-      t.start_vttablet(wait_for_state=None,
-                       extra_args=utils.vtctld.process_args())
+    shard_0_spare.start_vttablet(wait_for_state=None,
+                                 extra_args=utils.vtctld.process_args())
 
     # wait for the right states
     for t in [shard_0_master, shard_1_master, shard_1_replica]:
       t.wait_for_vttablet_state('SERVING')
-    for t in [scrap, idle, shard_0_replica, shard_0_spare]:
+    for t in [shard_0_replica, shard_0_spare]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    scrap.scrap()
-
     for t in [shard_0_master, shard_0_replica, shard_0_spare,
-              shard_1_master, shard_1_replica, idle, scrap]:
+              shard_1_master, shard_1_replica]:
       t.reset_replication()
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)
@@ -142,8 +136,8 @@ class TestVtctld(unittest.TestCase):
     self._check_all_tablets(out)
 
     # python RPC client to vtctld
-    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
-                               mode=utils.VTCTL_RPC)
+    out, _ = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                             mode=utils.VTCTL_RPC)
     self._check_all_tablets(out)
 
   def test_assigned(self):
@@ -153,10 +147,6 @@ class TestVtctld(unittest.TestCase):
     self.assertItemsEqual(s0['Name'], '-80')
     s1 = self.data['Assigned']['test_keyspace']['ShardNodes'][1]
     self.assertItemsEqual(s1['Name'], '80-')
-
-  def test_not_assigned(self):
-    self.assertEqual(len(self.data['Idle']), 1)
-    self.assertEqual(len(self.data['Scrap']), 1)
 
   def test_partial(self):
     utils.pause(
@@ -221,11 +211,10 @@ class TestVtctld(unittest.TestCase):
     for tn in s0['TabletNodes']:
       tt = tn['TabletType']
       types.append(tt)
-      if tt == tablet.Tablet.tablet_type_value['MASTER']:
+      if tt == topodata_pb2.MASTER:
         self.assertEqual(len(tn['Nodes']), 1)
-    self.assertItemsEqual(sorted(types), [
-        tablet.Tablet.tablet_type_value['MASTER'],
-        tablet.Tablet.tablet_type_value['REPLICA']])
+    self.assertItemsEqual(sorted(types),
+                          sorted([topodata_pb2.MASTER, topodata_pb2.REPLICA]))
     self.assertEqual(
         self.serving_data['redirected_keyspace']['ServedFrom']['master'],
         'test_keyspace')

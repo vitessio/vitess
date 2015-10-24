@@ -8,6 +8,8 @@ import logging
 import time
 import unittest
 
+from vtproto import topodata_pb2
+
 from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtgate_client
@@ -170,7 +172,9 @@ index by_msg (msg)
     if 'served_from' in ks and ks['served_from']:
       a = []
       for served_from in sorted(ks['served_from']):
-        tt = keyrange_constants.PROTO3_TABLET_TYPE_TO_STRING[served_from['tablet_type']]
+        tt = topodata_pb2.TabletType.Name(served_from['tablet_type']).lower()
+        if tt == 'batch':
+          tt = 'rdonly'
         a.append('ServedFrom(%s): %s\n' % (tt, served_from['keyspace']))
       for line in sorted(a):
         result += line
@@ -214,7 +218,7 @@ index by_msg (msg)
                       qr['Rows'][0][0], t, tablet.tablet_alias)
 
   def _check_client_conn_redirection(
-      self, source_ks, destination_ks, db_types, servedfrom_db_types,
+      self, destination_ks, servedfrom_db_types,
       moved_tables=None):
     # check that the ServedFrom indirection worked correctly.
     if moved_tables is None:
@@ -427,7 +431,7 @@ index by_msg (msg)
         ['GetKeyspace', 'destination_keyspace'])
     found = False
     for ksf in keyspace_json['served_froms']:
-      if ksf['tablet_type'] == 4:
+      if ksf['tablet_type'] == topodata_pb2.RDONLY:
         found = True
         self.assertEqual(ksf['cells'], ['test_nj'])
     self.assertTrue(found)
@@ -438,7 +442,7 @@ index by_msg (msg)
         ['GetKeyspace', 'destination_keyspace'])
     found = False
     for ksf in keyspace_json['served_froms']:
-      if ksf['tablet_type'] == 4:
+      if ksf['tablet_type'] == topodata_pb2.RDONLY:
         found = True
     self.assertFalse(found)
     utils.run_vtctl(['SetKeyspaceServedFrom', '-source=source_keyspace',
@@ -448,7 +452,7 @@ index by_msg (msg)
         ['GetKeyspace', 'destination_keyspace'])
     found = False
     for ksf in keyspace_json['served_froms']:
-      if ksf['tablet_type'] == 4:
+      if ksf['tablet_type'] == topodata_pb2.RDONLY:
         found = True
         self.assertNotIn('cells', ksf)
     self.assertTrue(found)
@@ -463,7 +467,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
     self._check_client_conn_redirection(
-        'source_keyspace', 'destination_keyspace', ['rdonly'],
+        'destination_keyspace',
         ['master', 'replica'], ['moving1', 'moving2'])
 
     # then serve replica from the destination shards
@@ -475,7 +479,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
     self._check_client_conn_redirection(
-        'source_keyspace', 'destination_keyspace', ['replica', 'rdonly'],
+        'destination_keyspace',
         ['master'], ['moving1', 'moving2'])
 
     # move replica back and forth
@@ -495,7 +499,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
     self._check_client_conn_redirection(
-        'source_keyspace', 'destination_keyspace', ['replica', 'rdonly'],
+        'destination_keyspace',
         ['master'], ['moving1', 'moving2'])
 
     # then serve master from the destination shards
@@ -507,8 +511,8 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
     self._check_client_conn_redirection(
-        'source_keyspace', 'destination_keyspace',
-        ['replica', 'rdonly', 'master'], [], ['moving1', 'moving2'])
+        'destination_keyspace',
+        [], ['moving1', 'moving2'])
 
     # check 'vtctl SetShardTabletControl' command works as expected:
     # clear the rdonly entry, re-add it, and then clear all entries.
@@ -517,14 +521,13 @@ index by_msg (msg)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
     self.assertEqual(len(shard_json['tablet_controls']), 2)
     for tc in shard_json['tablet_controls']:
-      self.assertIn(tc['tablet_type'], [
-          tablet.Tablet.tablet_type_value['MASTER'],
-          tablet.Tablet.tablet_type_value['REPLICA']])
+      self.assertIn(tc['tablet_type'], [topodata_pb2.MASTER,
+                                        topodata_pb2.REPLICA])
     utils.run_vtctl(['SetShardTabletControl', '--tables=moving.*,view1',
                      'source_keyspace/0', 'rdonly'], auto_log=True)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
     for tc in shard_json['tablet_controls']:
-      if tc['tablet_type'] == 4:
+      if tc['tablet_type'] == topodata_pb2.RDONLY:
         break
     self.assertEqual(['moving.*', 'view1'], tc['blacklisted_tables'])
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',

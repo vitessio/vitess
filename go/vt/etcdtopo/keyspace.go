@@ -27,9 +27,6 @@ func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.
 	if _, err = global.Create(keyspaceFilePath(keyspace), string(data), 0 /* ttl */); err != nil {
 		return convertError(err)
 	}
-	if err = initLockFile(global, keyspaceDirPath(keyspace)); err != nil {
-		return err
-	}
 	return nil
 }
 

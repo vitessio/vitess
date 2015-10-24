@@ -12,6 +12,8 @@ import unittest
 import urllib
 import urllib2
 
+from vtproto import topodata_pb2
+
 import environment
 import utils
 import tablet
@@ -138,23 +140,6 @@ class TestTabletManager(unittest.TestCase):
 
     tablet_62344.kill_vttablet()
 
-    tablet_62344.init_tablet('idle')
-    tablet_62344.scrap(force=True)
-
-  def test_scrap(self):
-    # Start up a master mysql and vttablet
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-
-    tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    tablet_62044.init_tablet('replica', 'test_keyspace', '0')
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/*'])
-    utils.validate_topology()
-    self._check_srv_shard()
-
-    tablet_62044.scrap(force=True)
-    utils.validate_topology()
-    self._check_srv_shard()
-
   _create_vt_select_test = '''create table vt_select_test (
   id bigint auto_increment,
   msg varchar(64),
@@ -192,7 +177,7 @@ class TestTabletManager(unittest.TestCase):
 
     # try a frontend RefreshState that should timeout as the tablet is busy
     # running the other one
-    stdout, stderr = utils.run_vtctl(
+    _, stderr = utils.run_vtctl(
         ['-wait-time', '3s', 'RefreshState', tablet_62344.tablet_alias],
         expect_fail=True)
     self.assertIn(protocols_flavor().rpc_timeout_message(), stderr)
@@ -243,6 +228,7 @@ class TestTabletManager(unittest.TestCase):
         self.assertFail(
             'cannot find expected %s in %s' %
             (str(expectedStdout), hr['Stdout']))
+    self.assertEqual(hr['Stderr'], expectedStderr)
 
   def test_hook(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -315,8 +301,8 @@ class TestTabletManager(unittest.TestCase):
 
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     proc1 = tablet_62344.start_vttablet()
-    proc2 = tablet_62344.start_vttablet()
-    for timeout in xrange(20):
+    tablet_62344.start_vttablet()
+    for _ in xrange(20):
       logging.debug('Sleeping waiting for first process to die')
       time.sleep(1.0)
       proc1.poll()
@@ -326,7 +312,7 @@ class TestTabletManager(unittest.TestCase):
       self.fail('proc1 still running')
     tablet_62344.kill_vttablet()
 
-  def test_scrap_and_reinit(self):
+  def test_shard_replication_fix(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     tablet_62344.create_db('vt_test_keyspace')
@@ -337,21 +323,11 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.init_tablet('replica', 'test_keyspace', '0')
 
     # make sure the replica is in the replication graph
-    before_scrap = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
+    before_bogus = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                          'test_keyspace/0'])
-    self.assertEqual(2, len(before_scrap['nodes']),
+    self.assertEqual(2, len(before_bogus['nodes']),
                      'wrong shard replication nodes before: %s' %
-                     str(before_scrap))
-
-    # scrap and re-init
-    utils.run_vtctl(['ScrapTablet', '-force', tablet_62044.tablet_alias])
-    tablet_62044.init_tablet('replica', 'test_keyspace', '0')
-
-    after_scrap = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
-                                        'test_keyspace/0'])
-    self.assertEqual(2, len(after_scrap['nodes']),
-                     'wrong shard replication nodes after: %s' %
-                     str(after_scrap))
+                     str(before_bogus))
 
     # manually add a bogus entry to the replication graph, and check
     # it is removed by ShardReplicationFix
@@ -366,7 +342,7 @@ class TestTabletManager(unittest.TestCase):
                     auto_log=True)
     after_fix = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                       'test_keyspace/0'])
-    self.assertEqual(2, len(after_scrap['nodes']),
+    self.assertEqual(2, len(after_fix['nodes']),
                      'wrong shard replication nodes after fix: %s' %
                      str(after_fix))
 
@@ -378,7 +354,7 @@ class TestTabletManager(unittest.TestCase):
         tablet.get_healthz()
 
   def wait_for_tablet_type_change(self, tablet_alias, expected_type):
-    t = tablet.Tablet.tablet_type_value[expected_type.upper()]
+    t = topodata_pb2.TabletType.Value(expected_type.upper())
     timeout = 10
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_alias])
@@ -416,7 +392,7 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure the master is still master
     ti = utils.run_vtctl_json(['GetTablet', tablet_62344.tablet_alias])
-    self.assertEqual(ti['type'], tablet.Tablet.tablet_type_value['MASTER'],
+    self.assertEqual(ti['type'], topodata_pb2.MASTER,
                      'unexpected master type: %s' % ti['type'])
 
     # stop replication, make sure we go unhealthy.
@@ -479,7 +455,7 @@ class TestTabletManager(unittest.TestCase):
       self.assertNotIn('tablet_externally_reparented_timestamp', data)
       self.assertEqual('test_keyspace', data['target']['keyspace'])
       self.assertEqual('0', data['target']['shard'])
-      self.assertEqual(3, data['target']['tablet_type'])
+      self.assertEqual(topodata_pb2.REPLICA, data['target']['tablet_type'])
 
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])
@@ -488,7 +464,7 @@ class TestTabletManager(unittest.TestCase):
     # to reset its state to spare
     ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
     self.assertEqual(
-        ti['type'], tablet.Tablet.tablet_type_value['SPARE'],
+        ti['type'], topodata_pb2.SPARE,
         "tablet didn't go to spare while in lameduck mode: %s" % str(ti))
 
     # Also the replica should be gone from the serving graph.
@@ -684,7 +660,7 @@ class TestTabletManager(unittest.TestCase):
   def test_fallback_policy(self):
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    proc1 = tablet_62344.start_vttablet(security_policy='bogus')
+    tablet_62344.start_vttablet(security_policy='bogus')
     f = urllib.urlopen('http://localhost:%d/queryz' % int(tablet_62344.port))
     response = f.read()
     f.close()

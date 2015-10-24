@@ -715,7 +715,7 @@ class TestVTGateFunctions(unittest.TestCase):
         'update vt_user_extra set email=:v2 where user_id = :v1',
         bindvars=[10, 'test 1000'])
 
-    out, err = utils.vtgate.vtclient(
+    out, _ = utils.vtgate.vtclient(
         'select * from vt_user_extra where user_id = :v1', bindvars=[10],
         streaming=True)
     self.assertEqual(out, ['Index\tuser_id\temail', '0\t10\ttest 1000'])

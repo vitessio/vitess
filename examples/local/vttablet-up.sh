@@ -92,6 +92,7 @@ for uid_index in $uids; do
     -init_keyspace $keyspace \
     -init_shard $shard \
     -target_tablet_type $tablet_type \
+    -health_check_interval 5s \
     -enable-rowcache \
     -rowcache-bin $memcached_path \
     -rowcache-socket $VTDATAROOT/$tablet_dir/memcache.sock \
