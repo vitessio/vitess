@@ -98,6 +98,9 @@ func TestTypeValues(t *testing.T) {
 	}, {
 		defined:  Set,
 		expected: 27 | IsQuoted,
+	}, {
+		defined:  Tuple,
+		expected: 28,
 	}}
 	for _, tcase := range testcases {
 		if int(tcase.defined) != tcase.expected {

@@ -2212,20 +2212,8 @@ func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 	if len(qsl) == 1 && len(qsl[0].Query.BindVariables) == 1 {
 		bv := qsl[0].Query.BindVariables["bind1"]
-		if len(bv.ValueBytes) == 0 {
-			bv.ValueBytes = nil
-		}
-		if len(bv.ValueBytesList) == 0 {
-			bv.ValueBytesList = nil
-		}
-		if len(bv.ValueIntList) == 0 {
-			bv.ValueIntList = nil
-		}
-		if len(bv.ValueUintList) == 0 {
-			bv.ValueUintList = nil
-		}
-		if len(bv.ValueFloatList) == 0 {
-			bv.ValueFloatList = nil
+		if len(bv.Values) == 0 {
+			bv.Values = nil
 		}
 	}
 	if !reflect.DeepEqual(qsl, splitQueryResult) {
@@ -2774,8 +2762,8 @@ var splitQueryResult = []*pbg.SplitQueryResponse_Part{
 			Sql: "out for SplitQuery",
 			BindVariables: map[string]*pbq.BindVariable{
 				"bind1": &pbq.BindVariable{
-					Type:     pbq.BindVariable_TYPE_INT,
-					ValueInt: 1114444,
+					Type:  sqltypes.Int64,
+					Value: []byte("1114444"),
 				},
 			},
 		},

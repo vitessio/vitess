@@ -127,33 +127,25 @@ enum Type {
   // SET specifies a SET type.
   // Properties: 27, IsQuoted.
   SET = 2075;
+  // TUPLE specifies a a tuple. This cannot
+  // be returned in a QueryResult, but it can
+  // be sent as a bind var.
+  // Properties: 28, None.
+  TUPLE = 28;
 }
 
-// BindVariable represents a single bind variable in a Query
-message BindVariable {
-  enum Type {
-    TYPE_NULL = 0;
-    TYPE_BYTES = 1;
-    TYPE_INT = 2;
-    TYPE_UINT = 3;
-    TYPE_FLOAT = 4;
-    TYPE_BYTES_LIST = 5;
-    TYPE_INT_LIST = 6;
-    TYPE_UINT_LIST = 7;
-    TYPE_FLOAT_LIST = 8;
-
-  }
+// Value represents a typed value.
+message Value {
   Type type = 1;
+  bytes value = 2;
+}
 
-  // Depending on type, only one value below is set.
-  bytes value_bytes = 2;
-  int64 value_int = 3;
-  uint64 value_uint = 4;
-  double value_float = 5;
-  repeated bytes value_bytes_list = 6;
-  repeated int64 value_int_list = 7;
-  repeated uint64 value_uint_list = 8;
-  repeated double value_float_list = 9;
+// BindVariable represents a single bind variable in a Query.
+message BindVariable {
+  Type type = 1;
+  bytes value = 2;
+  // values are set if type is TUPLE.
+  repeated Value values = 3;
 }
 
 // BoundQuery is a query with its bind variables

@@ -11,6 +11,7 @@ It is generated from these files:
 It has these top-level messages:
 	Target
 	VTGateCallerID
+	Value
 	BindVariable
 	BoundQuery
 	Field
@@ -174,6 +175,11 @@ const (
 	// SET specifies a SET type.
 	// Properties: 27, IsQuoted.
 	Type_SET Type = 2075
+	// TUPLE specifies a a tuple. This cannot
+	// be returned in a QueryResult, but it can
+	// be sent as a bind var.
+	// Properties: 28, None.
+	Type_TUPLE Type = 28
 )
 
 var Type_name = map[int32]string{
@@ -205,6 +211,7 @@ var Type_name = map[int32]string{
 	2073:  "BIT",
 	2074:  "ENUM",
 	2075:  "SET",
+	28:    "TUPLE",
 }
 var Type_value = map[string]int32{
 	"NULL":      0,
@@ -235,51 +242,11 @@ var Type_value = map[string]int32{
 	"BIT":       2073,
 	"ENUM":      2074,
 	"SET":       2075,
+	"TUPLE":     28,
 }
 
 func (x Type) String() string {
 	return proto.EnumName(Type_name, int32(x))
-}
-
-type BindVariable_Type int32
-
-const (
-	BindVariable_TYPE_NULL       BindVariable_Type = 0
-	BindVariable_TYPE_BYTES      BindVariable_Type = 1
-	BindVariable_TYPE_INT        BindVariable_Type = 2
-	BindVariable_TYPE_UINT       BindVariable_Type = 3
-	BindVariable_TYPE_FLOAT      BindVariable_Type = 4
-	BindVariable_TYPE_BYTES_LIST BindVariable_Type = 5
-	BindVariable_TYPE_INT_LIST   BindVariable_Type = 6
-	BindVariable_TYPE_UINT_LIST  BindVariable_Type = 7
-	BindVariable_TYPE_FLOAT_LIST BindVariable_Type = 8
-)
-
-var BindVariable_Type_name = map[int32]string{
-	0: "TYPE_NULL",
-	1: "TYPE_BYTES",
-	2: "TYPE_INT",
-	3: "TYPE_UINT",
-	4: "TYPE_FLOAT",
-	5: "TYPE_BYTES_LIST",
-	6: "TYPE_INT_LIST",
-	7: "TYPE_UINT_LIST",
-	8: "TYPE_FLOAT_LIST",
-}
-var BindVariable_Type_value = map[string]int32{
-	"TYPE_NULL":       0,
-	"TYPE_BYTES":      1,
-	"TYPE_INT":        2,
-	"TYPE_UINT":       3,
-	"TYPE_FLOAT":      4,
-	"TYPE_BYTES_LIST": 5,
-	"TYPE_INT_LIST":   6,
-	"TYPE_UINT_LIST":  7,
-	"TYPE_FLOAT_LIST": 8,
-}
-
-func (x BindVariable_Type) String() string {
-	return proto.EnumName(BindVariable_Type_name, int32(x))
 }
 
 // Target describes what the client expects the tablet is.
@@ -310,23 +277,34 @@ func (m *VTGateCallerID) Reset()         { *m = VTGateCallerID{} }
 func (m *VTGateCallerID) String() string { return proto.CompactTextString(m) }
 func (*VTGateCallerID) ProtoMessage()    {}
 
-// BindVariable represents a single bind variable in a Query
+// Value represents a typed value.
+type Value struct {
+	Type  Type   `protobuf:"varint,1,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+}
+
+func (m *Value) Reset()         { *m = Value{} }
+func (m *Value) String() string { return proto.CompactTextString(m) }
+func (*Value) ProtoMessage()    {}
+
+// BindVariable represents a single bind variable in a Query.
 type BindVariable struct {
-	Type BindVariable_Type `protobuf:"varint,1,opt,name=type,enum=query.BindVariable_Type" json:"type,omitempty"`
-	// Depending on type, only one value below is set.
-	ValueBytes     []byte    `protobuf:"bytes,2,opt,name=value_bytes,proto3" json:"value_bytes,omitempty"`
-	ValueInt       int64     `protobuf:"varint,3,opt,name=value_int" json:"value_int,omitempty"`
-	ValueUint      uint64    `protobuf:"varint,4,opt,name=value_uint" json:"value_uint,omitempty"`
-	ValueFloat     float64   `protobuf:"fixed64,5,opt,name=value_float" json:"value_float,omitempty"`
-	ValueBytesList [][]byte  `protobuf:"bytes,6,rep,name=value_bytes_list,proto3" json:"value_bytes_list,omitempty"`
-	ValueIntList   []int64   `protobuf:"varint,7,rep,name=value_int_list" json:"value_int_list,omitempty"`
-	ValueUintList  []uint64  `protobuf:"varint,8,rep,name=value_uint_list" json:"value_uint_list,omitempty"`
-	ValueFloatList []float64 `protobuf:"fixed64,9,rep,name=value_float_list" json:"value_float_list,omitempty"`
+	Type  Type   `protobuf:"varint,1,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	// values are set if type is TUPLE.
+	Values []*Value `protobuf:"bytes,3,rep,name=values" json:"values,omitempty"`
 }
 
 func (m *BindVariable) Reset()         { *m = BindVariable{} }
 func (m *BindVariable) String() string { return proto.CompactTextString(m) }
 func (*BindVariable) ProtoMessage()    {}
+
+func (m *BindVariable) GetValues() []*Value {
+	if m != nil {
+		return m.Values
+	}
+	return nil
+}
 
 // BoundQuery is a query with its bind variables
 type BoundQuery struct {
@@ -902,5 +880,4 @@ func (m *StreamHealthResponse) GetRealtimeStats() *RealtimeStats {
 func init() {
 	proto.RegisterEnum("query.Flag", Flag_name, Flag_value)
 	proto.RegisterEnum("query.Type", Type_name, Type_value)
-	proto.RegisterEnum("query.BindVariable_Type", BindVariable_Type_name, BindVariable_Type_value)
 }

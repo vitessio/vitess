@@ -52,6 +52,7 @@ const (
 	Bit       = query.Type_BIT
 	Enum      = query.Type_ENUM
 	Set       = query.Type_SET
+	Tuple     = query.Type_TUPLE
 )
 
 // bit-shift the mysql flags by one byte so we
