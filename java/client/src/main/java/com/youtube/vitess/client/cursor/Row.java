@@ -43,10 +43,14 @@ public class Row {
   }
 
   public Object getObject(int columnIndex) throws SQLException {
-    if (columnIndex >= rawRow.getValuesCount()) {
+    if (columnIndex >= rawRow.getLengthsCount()) {
       throw new SQLDataException("invalid columnIndex: " + columnIndex);
     }
-    return convertFieldValue(fields.get(columnIndex), rawRow.getValues(columnIndex));
+    int index = 0;
+    for(int i=0; i<columnIndex; i++) {
+      index += rawRow.getLengths(i);
+    }
+    return convertFieldValue(fields.get(columnIndex), rawRow.getValues().substring(index, (int)rawRow.getLengths(columnIndex)));
   }
 
   public int getInt(String columnLabel) throws SQLException {
@@ -148,50 +152,47 @@ public class Row {
     // anything outside 7-bit ASCII, which (hopefully) is a subset of the actual charset.
     // For strings, we return byte[] and the application is responsible for using the right charset.
     switch (field.getType()) {
-      case TYPE_DECIMAL: // fall through
-      case TYPE_NEWDECIMAL:
+      case DECIMAL:
         return new BigDecimal(value.toStringUtf8());
-      case TYPE_TINY: // fall through
-      case TYPE_SHORT: // fall through
-      case TYPE_INT24:
+      case INT8: // fall through
+      case UINT8: // fall through
+      case INT16: // fall through
+      case UINT16: // fall through
+      case INT24:
+      case UINT24:
         return Integer.valueOf(value.toStringUtf8());
-      case TYPE_LONG:
+      case INT32:
         return Long.valueOf(value.toStringUtf8());
-      case TYPE_FLOAT:
+      case INT64:
+        return Long.valueOf(value.toStringUtf8());
+      case UINT32: // fall through
+      case UINT64:
+        return UnsignedLong.valueOf(value.toStringUtf8());
+      case FLOAT32:
         return Float.valueOf(value.toStringUtf8());
-      case TYPE_DOUBLE:
+      case FLOAT64:
         return Double.valueOf(value.toStringUtf8());
-      case TYPE_NULL:
+      case NULL:
         return null;
-      case TYPE_LONGLONG:
-        // This can be an unsigned or a signed long
-        if ((field.getFlags() & Field.Flag.VT_UNSIGNED_FLAG_VALUE) != 0) {
-          return UnsignedLong.valueOf(value.toStringUtf8());
-        } else {
-          return Long.valueOf(value.toStringUtf8());
-        }
-      case TYPE_DATE: // fall through
-      case TYPE_NEWDATE:
+      case DATE:
         return DateTime.parse(value.toStringUtf8(), ISODateTimeFormat.date());
-      case TYPE_TIME:
+      case TIME:
         return DateTime.parse(value.toStringUtf8(), DateTimeFormat.forPattern("HH:mm:ss"));
-      case TYPE_DATETIME: // fall through
-      case TYPE_TIMESTAMP:
+      case DATETIME:
+      case TIMESTAMP:
         return DateTime.parse(value.toStringUtf8().replace(' ', 'T'));
-      case TYPE_YEAR:
+      case YEAR:
         return Short.valueOf(value.toStringUtf8());
-      case TYPE_ENUM: // fall through
-      case TYPE_SET:
+      case ENUM: // fall through
+      case SET: // fall through
+      case BIT:
         return value.toStringUtf8();
-      case TYPE_VARCHAR: // fall through
-      case TYPE_BIT: // fall through
-      case TYPE_TINY_BLOB: // fall through
-      case TYPE_MEDIUM_BLOB: // fall through
-      case TYPE_LONG_BLOB: // fall through
-      case TYPE_BLOB: // fall through
-      case TYPE_VAR_STRING: // fall through
-      case TYPE_STRING: // fall through
-      case TYPE_GEOMETRY:
+      case TEXT: // fall through
+      case BLOB: // fall through
+      case VARCHAR: // fall through
+      case VARBINARY: // fall through
+      case CHAR: // fall through
+      case BINARY: // fall through
         return value.toByteArray();
       default:
         throw new SQLDataException("unknown field type: " + field.getType());
