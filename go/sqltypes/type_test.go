@@ -19,85 +19,85 @@ func TestTypeValues(t *testing.T) {
 		expected: 0,
 	}, {
 		defined:  Int8,
-		expected: 1 | IsIntegral,
+		expected: 1 | flagIsIntegral,
 	}, {
 		defined:  Uint8,
-		expected: 2 | IsIntegral | IsUnsigned,
+		expected: 2 | flagIsIntegral | flagIsUnsigned,
 	}, {
 		defined:  Int16,
-		expected: 3 | IsIntegral,
+		expected: 3 | flagIsIntegral,
 	}, {
 		defined:  Uint16,
-		expected: 4 | IsIntegral | IsUnsigned,
+		expected: 4 | flagIsIntegral | flagIsUnsigned,
 	}, {
 		defined:  Int24,
-		expected: 5 | IsIntegral,
+		expected: 5 | flagIsIntegral,
 	}, {
 		defined:  Uint24,
-		expected: 6 | IsIntegral | IsUnsigned,
+		expected: 6 | flagIsIntegral | flagIsUnsigned,
 	}, {
 		defined:  Int32,
-		expected: 7 | IsIntegral,
+		expected: 7 | flagIsIntegral,
 	}, {
 		defined:  Uint32,
-		expected: 8 | IsIntegral | IsUnsigned,
+		expected: 8 | flagIsIntegral | flagIsUnsigned,
 	}, {
 		defined:  Int64,
-		expected: 9 | IsIntegral,
+		expected: 9 | flagIsIntegral,
 	}, {
 		defined:  Uint64,
-		expected: 10 | IsIntegral | IsUnsigned,
+		expected: 10 | flagIsIntegral | flagIsUnsigned,
 	}, {
 		defined:  Float32,
-		expected: 11 | IsFloat,
+		expected: 11 | flagIsFloat,
 	}, {
 		defined:  Float64,
-		expected: 12 | IsFloat,
+		expected: 12 | flagIsFloat,
 	}, {
 		defined:  Timestamp,
-		expected: 13 | IsQuoted,
+		expected: 13 | flagIsQuoted,
 	}, {
 		defined:  Date,
-		expected: 14 | IsQuoted,
+		expected: 14 | flagIsQuoted,
 	}, {
 		defined:  Time,
-		expected: 15 | IsQuoted,
+		expected: 15 | flagIsQuoted,
 	}, {
 		defined:  Datetime,
-		expected: 16 | IsQuoted,
+		expected: 16 | flagIsQuoted,
 	}, {
 		defined:  Year,
-		expected: 17 | IsIntegral | IsUnsigned,
+		expected: 17 | flagIsIntegral | flagIsUnsigned,
 	}, {
 		defined:  Decimal,
 		expected: 18,
 	}, {
 		defined:  Text,
-		expected: 19 | IsQuoted | IsText,
+		expected: 19 | flagIsQuoted | flagIsText,
 	}, {
 		defined:  Blob,
-		expected: 20 | IsQuoted | IsBinary,
+		expected: 20 | flagIsQuoted | flagIsBinary,
 	}, {
 		defined:  VarChar,
-		expected: 21 | IsQuoted | IsText,
+		expected: 21 | flagIsQuoted | flagIsText,
 	}, {
 		defined:  VarBinary,
-		expected: 22 | IsQuoted | IsBinary,
+		expected: 22 | flagIsQuoted | flagIsBinary,
 	}, {
 		defined:  Char,
-		expected: 23 | IsQuoted | IsText,
+		expected: 23 | flagIsQuoted | flagIsText,
 	}, {
 		defined:  Binary,
-		expected: 24 | IsQuoted | IsBinary,
+		expected: 24 | flagIsQuoted | flagIsBinary,
 	}, {
 		defined:  Bit,
-		expected: 25 | IsQuoted,
+		expected: 25 | flagIsQuoted,
 	}, {
 		defined:  Enum,
-		expected: 26 | IsQuoted,
+		expected: 26 | flagIsQuoted,
 	}, {
 		defined:  Set,
-		expected: 27 | IsQuoted,
+		expected: 27 | flagIsQuoted,
 	}, {
 		defined:  Tuple,
 		expected: 28,
@@ -106,6 +106,51 @@ func TestTypeValues(t *testing.T) {
 		if int(tcase.defined) != tcase.expected {
 			t.Errorf("Type %s: %d, want: %d", tcase.defined, int(tcase.defined), tcase.expected)
 		}
+	}
+}
+
+func TestIsFunctions(t *testing.T) {
+	if IsIntegral(Null) {
+		t.Error("Null: IsIntegral, must be false")
+	}
+	if !IsIntegral(Int64) {
+		t.Error("Int64: !IsIntegral, must be true")
+	}
+	if IsSigned(Uint64) {
+		t.Error("Uint64: IsSigned, must be false")
+	}
+	if !IsSigned(Int64) {
+		t.Error("Int64: !IsSigned, must be true")
+	}
+	if IsUnsigned(Int64) {
+		t.Error("Int64: IsUnsigned, must be false")
+	}
+	if !IsUnsigned(Uint64) {
+		t.Error("Uint64: !IsUnsigned, must be true")
+	}
+	if IsFloat(Int64) {
+		t.Error("Int64: IsFloat, must be false")
+	}
+	if !IsFloat(Float64) {
+		t.Error("Uint64: !IsFloat, must be true")
+	}
+	if IsQuoted(Int64) {
+		t.Error("Int64: IsQuoted, must be false")
+	}
+	if !IsQuoted(Binary) {
+		t.Error("Binary: !IsQuoted, must be true")
+	}
+	if IsText(Int64) {
+		t.Error("Int64: IsText, must be false")
+	}
+	if !IsText(Char) {
+		t.Error("Char: !IsText, must be true")
+	}
+	if IsBinary(Int64) {
+		t.Error("Int64: IsBinary, must be false")
+	}
+	if !IsBinary(Binary) {
+		t.Error("Char: !IsBinary, must be true")
 	}
 }
 

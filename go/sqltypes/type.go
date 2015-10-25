@@ -16,13 +16,51 @@ import (
 // These bit flags can be used to query on the
 // common properties of types.
 const (
-	IsIntegral = int(query.Flag_ISINTEGRAL)
-	IsUnsigned = int(query.Flag_ISUNSIGNED)
-	IsFloat    = int(query.Flag_ISFLOAT)
-	IsQuoted   = int(query.Flag_ISQUOTED)
-	IsText     = int(query.Flag_ISTEXT)
-	IsBinary   = int(query.Flag_ISBINARY)
+	flagIsIntegral = int(query.Flag_ISINTEGRAL)
+	flagIsUnsigned = int(query.Flag_ISUNSIGNED)
+	flagIsFloat    = int(query.Flag_ISFLOAT)
+	flagIsQuoted   = int(query.Flag_ISQUOTED)
+	flagIsText     = int(query.Flag_ISTEXT)
+	flagIsBinary   = int(query.Flag_ISBINARY)
 )
+
+// IsIntegral returns true if query.Type is an integral
+// (signed/unsigned) that can be represented using
+// up to 64 binary bits.
+func IsIntegral(t query.Type) bool {
+	return int(t)&flagIsIntegral == flagIsIntegral
+}
+
+// IsSigned returns true if query.Type is a signed integral.
+func IsSigned(t query.Type) bool {
+	return int(t)&(flagIsIntegral|flagIsUnsigned) == flagIsIntegral
+}
+
+// IsUnsigned returns true if query.Type is an unsigned integral.
+// Caution: this is not the same as !IsSigned.
+func IsUnsigned(t query.Type) bool {
+	return int(t)&(flagIsIntegral|flagIsUnsigned) == flagIsIntegral|flagIsUnsigned
+}
+
+// IsFloat returns true is query.Type is a floating point.
+func IsFloat(t query.Type) bool {
+	return int(t)&flagIsFloat == flagIsFloat
+}
+
+// IsQuoted returns true if query.Type is a quoted text or binary.
+func IsQuoted(t query.Type) bool {
+	return int(t)&flagIsQuoted == flagIsQuoted
+}
+
+// IsText returns true if query.Type is a text.
+func IsText(t query.Type) bool {
+	return int(t)&flagIsText == flagIsText
+}
+
+// IsBinary returns true if query.Type is a binary.
+func IsBinary(t query.Type) bool {
+	return int(t)&flagIsBinary == flagIsBinary
+}
 
 // Vitess data types. These are idiomatically
 // named synonyms for the query.Type values.

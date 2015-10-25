@@ -278,15 +278,13 @@ func Proto3ToBindVariables(bv map[string]*pb.BindVariable) (map[string]interface
 }
 
 func buildSQLValue(v *pb.BindVariable) (interface{}, error) {
-	// TODO(sougou): Revisit this when QueryResult gets revamped
 	if v == nil || v.Type == sqltypes.Null {
 		return nil, nil
-	} else if int(v.Type)&sqltypes.IsIntegral != 0 {
-		if int(v.Type)&sqltypes.IsUnsigned != 0 {
-			return strconv.ParseUint(string(v.Value), 0, 64)
-		}
+	} else if sqltypes.IsSigned(v.Type) {
 		return strconv.ParseInt(string(v.Value), 0, 64)
-	} else if int(v.Type)&sqltypes.IsFloat != 0 {
+	} else if sqltypes.IsUnsigned(v.Type) {
+		return strconv.ParseUint(string(v.Value), 0, 64)
+	} else if sqltypes.IsFloat(v.Type) {
 		return strconv.ParseFloat(string(v.Value), 64)
 	}
 	return v.Value, nil
