@@ -65,7 +65,7 @@ func echoQueryResult(vals map[string]interface{}) *mproto.QueryResult {
 
 	var row []sqltypes.Value
 	for k, v := range vals {
-		qr.Fields = append(qr.Fields, mproto.Field{Name: k, Type: mproto.VT_VARCHAR})
+		qr.Fields = append(qr.Fields, mproto.Field{Name: k, Type: mproto.VT_VAR_STRING})
 
 		val := reflect.ValueOf(v)
 		if val.Kind() == reflect.Map {

@@ -45,7 +45,7 @@ func (sq *sqlDifferTabletServer) StreamExecute(ctx context.Context, target *pb.T
 			},
 			mproto.Field{
 				Name: "msg",
-				Type: mproto.VT_VARCHAR,
+				Type: mproto.VT_VAR_STRING,
 			},
 		},
 	}); err != nil {

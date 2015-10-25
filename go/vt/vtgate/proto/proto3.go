@@ -156,18 +156,22 @@ func BoundShardQueriesToProto(bsq []BoundShardQuery) ([]*pb.BoundShardQuery, err
 }
 
 // ProtoToBoundShardQueries transforms a list of BoundShardQuery from proto3
-func ProtoToBoundShardQueries(bsq []*pb.BoundShardQuery) []BoundShardQuery {
+func ProtoToBoundShardQueries(bsq []*pb.BoundShardQuery) ([]BoundShardQuery, error) {
 	if len(bsq) == 0 {
-		return nil
+		return nil, nil
 	}
 	result := make([]BoundShardQuery, len(bsq))
 	for i, q := range bsq {
 		result[i].Sql = string(q.Query.Sql)
-		result[i].BindVariables = tproto.Proto3ToBindVariables(q.Query.BindVariables)
+		bv, err := tproto.Proto3ToBindVariables(q.Query.BindVariables)
+		if err != nil {
+			return nil, err
+		}
+		result[i].BindVariables = bv
 		result[i].Keyspace = q.Keyspace
 		result[i].Shards = q.Shards
 	}
-	return result
+	return result, nil
 }
 
 // BoundKeyspaceIdQueriesToProto transforms a list of BoundKeyspaceIdQuery to proto3
@@ -191,16 +195,20 @@ func BoundKeyspaceIdQueriesToProto(bsq []BoundKeyspaceIdQuery) ([]*pb.BoundKeysp
 }
 
 // ProtoToBoundKeyspaceIdQueries transforms a list of BoundKeyspaceIdQuery from proto3
-func ProtoToBoundKeyspaceIdQueries(bsq []*pb.BoundKeyspaceIdQuery) []BoundKeyspaceIdQuery {
+func ProtoToBoundKeyspaceIdQueries(bsq []*pb.BoundKeyspaceIdQuery) ([]BoundKeyspaceIdQuery, error) {
 	if len(bsq) == 0 {
-		return nil
+		return nil, nil
 	}
 	result := make([]BoundKeyspaceIdQuery, len(bsq))
 	for i, q := range bsq {
+		bv, err := tproto.Proto3ToBindVariables(q.Query.BindVariables)
+		if err != nil {
+			return nil, err
+		}
 		result[i].Sql = string(q.Query.Sql)
-		result[i].BindVariables = tproto.Proto3ToBindVariables(q.Query.BindVariables)
+		result[i].BindVariables = bv
 		result[i].Keyspace = q.Keyspace
 		result[i].KeyspaceIds = key.ProtoToKeyspaceIds(q.KeyspaceIds)
 	}
-	return result
+	return result, nil
 }

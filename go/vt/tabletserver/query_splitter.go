@@ -217,7 +217,7 @@ func (qs *QuerySplitter) splitBoundaries(columnType int64, pkMinMax *mproto.Quer
 		return qs.splitBoundariesIntColumn(pkMinMax)
 	case mproto.VT_FLOAT, mproto.VT_DOUBLE:
 		return qs.splitBoundariesFloatColumn(pkMinMax)
-	case mproto.VT_VARCHAR, mproto.VT_BIT, mproto.VT_VAR_STRING, mproto.VT_STRING:
+	case mproto.VT_BIT, mproto.VT_VAR_STRING, mproto.VT_STRING:
 		return qs.splitBoundariesStringColumn()
 	}
 	return []sqltypes.Value{}, nil

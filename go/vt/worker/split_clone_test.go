@@ -64,7 +64,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *pb.Target
 			},
 			mproto.Field{
 				Name: "msg",
-				Type: mproto.VT_VARCHAR,
+				Type: mproto.VT_VAR_STRING,
 			},
 			mproto.Field{
 				Name: "keyspace_id",

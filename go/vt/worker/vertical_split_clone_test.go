@@ -64,7 +64,7 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *pb.Ta
 			},
 			mproto.Field{
 				Name: "msg",
-				Type: mproto.VT_VARCHAR,
+				Type: mproto.VT_VAR_STRING,
 			},
 		},
 	}); err != nil {

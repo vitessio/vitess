@@ -35,14 +35,20 @@ func (vtg *VTGate) Execute(ctx context.Context, request *pb.ExecuteRequest) (res
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.Execute(ctx, string(request.Query.Sql), tproto.Proto3ToBindVariables(request.Query.BindVariables), request.TabletType, proto.ProtoToSession(request.Session), request.NotInTransaction, reply)
+	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
+	executeErr := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.TabletType, proto.ProtoToSession(request.Session), request.NotInTransaction, reply)
 	response = &pb.ExecuteResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
 	if executeErr == nil {
-		response.Result = mproto.QueryResultToProto3(reply.Result)
-		response.Session = proto.SessionToProto(reply.Session)
-		return response, nil
+		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
+		if executeErr == nil {
+			response.Session = proto.SessionToProto(reply.Session)
+			return response, nil
+		}
 	}
 	return nil, vterrors.ToGRPCError(executeErr)
 }
@@ -54,9 +60,13 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsR
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
 	reply := new(proto.QueryResult)
+	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
 	executeErr := vtg.server.ExecuteShards(ctx,
 		string(request.Query.Sql),
-		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		bv,
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
@@ -67,9 +77,11 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsR
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
 	if executeErr == nil {
-		response.Result = mproto.QueryResultToProto3(reply.Result)
-		response.Session = proto.SessionToProto(reply.Session)
-		return response, nil
+		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
+		if executeErr == nil {
+			response.Session = proto.SessionToProto(reply.Session)
+			return response, nil
+		}
 	}
 	return nil, vterrors.ToGRPCError(executeErr)
 }
@@ -81,9 +93,13 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
 	reply := new(proto.QueryResult)
+	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
 	executeErr := vtg.server.ExecuteKeyspaceIds(ctx,
 		string(request.Query.Sql),
-		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		bv,
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
@@ -94,9 +110,11 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
 	if executeErr == nil {
-		response.Result = mproto.QueryResultToProto3(reply.Result)
-		response.Session = proto.SessionToProto(reply.Session)
-		return response, nil
+		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
+		if executeErr == nil {
+			response.Session = proto.SessionToProto(reply.Session)
+			return response, nil
+		}
 	}
 	return nil, vterrors.ToGRPCError(executeErr)
 }
@@ -108,9 +126,13 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
 	reply := new(proto.QueryResult)
+	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
 	executeErr := vtg.server.ExecuteKeyRanges(ctx,
 		string(request.Query.Sql),
-		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		bv,
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
@@ -121,9 +143,11 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
 	if executeErr == nil {
-		response.Result = mproto.QueryResultToProto3(reply.Result)
-		response.Session = proto.SessionToProto(reply.Session)
-		return response, nil
+		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
+		if executeErr == nil {
+			response.Session = proto.SessionToProto(reply.Session)
+			return response, nil
+		}
 	}
 	return nil, vterrors.ToGRPCError(executeErr)
 }
@@ -135,9 +159,13 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
 	reply := new(proto.QueryResult)
+	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
 	executeErr := vtg.server.ExecuteEntityIds(ctx,
 		string(request.Query.Sql),
-		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		bv,
 		request.Keyspace,
 		request.EntityColumnName,
 		request.EntityKeyspaceIds,
@@ -149,9 +177,11 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
 	if executeErr == nil {
-		response.Result = mproto.QueryResultToProto3(reply.Result)
-		response.Session = proto.SessionToProto(reply.Session)
-		return response, nil
+		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
+		if executeErr == nil {
+			response.Session = proto.SessionToProto(reply.Session)
+			return response, nil
+		}
 	}
 	return nil, vterrors.ToGRPCError(executeErr)
 }
@@ -163,8 +193,12 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBa
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
 	reply := new(proto.QueryResultList)
+	bsq, err := proto.ProtoToBoundShardQueries(request.Queries)
+	if err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
 	executeErr := vtg.server.ExecuteBatchShards(ctx,
-		proto.ProtoToBoundShardQueries(request.Queries),
+		bsq,
 		request.TabletType,
 		request.AsTransaction,
 		proto.ProtoToSession(request.Session),
@@ -173,9 +207,11 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBa
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
 	if executeErr == nil {
-		response.Results = tproto.QueryResultListToProto3(reply.List)
-		response.Session = proto.SessionToProto(reply.Session)
-		return response, nil
+		response.Results, executeErr = tproto.QueryResultListToProto3(reply.List)
+		if executeErr == nil {
+			response.Session = proto.SessionToProto(reply.Session)
+			return response, nil
+		}
 	}
 	return nil, vterrors.ToGRPCError(executeErr)
 }
@@ -188,8 +224,12 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.Exec
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
 	reply := new(proto.QueryResultList)
+	bq, err := proto.ProtoToBoundKeyspaceIdQueries(request.Queries)
+	if err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
 	executeErr := vtg.server.ExecuteBatchKeyspaceIds(ctx,
-		proto.ProtoToBoundKeyspaceIdQueries(request.Queries),
+		bq,
 		request.TabletType,
 		request.AsTransaction,
 		proto.ProtoToSession(request.Session),
@@ -198,9 +238,11 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.Exec
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
 	if executeErr == nil {
-		response.Results = tproto.QueryResultListToProto3(reply.List)
-		response.Session = proto.SessionToProto(reply.Session)
-		return response, nil
+		response.Results, executeErr = tproto.QueryResultListToProto3(reply.List)
+		if executeErr == nil {
+			response.Session = proto.SessionToProto(reply.Session)
+			return response, nil
+		}
 	}
 	return nil, vterrors.ToGRPCError(executeErr)
 }
@@ -211,14 +253,20 @@ func (vtg *VTGate) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Vi
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
+	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return vterrors.ToGRPCError(err)
+	}
 	vtgErr := vtg.server.StreamExecute(ctx,
 		string(request.Query.Sql),
-		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		bv,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
-			return stream.Send(&pb.StreamExecuteResponse{
-				Result: mproto.QueryResultToProto3(value.Result),
-			})
+			result, err := mproto.QueryResultToProto3(value.Result)
+			if err != nil {
+				return err
+			}
+			return stream.Send(&pb.StreamExecuteResponse{Result: result})
 		})
 	return vterrors.ToGRPCError(vtgErr)
 }
@@ -229,16 +277,22 @@ func (vtg *VTGate) StreamExecuteShards(request *pb.StreamExecuteShardsRequest, s
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
+	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return vterrors.ToGRPCError(err)
+	}
 	vtgErr := vtg.server.StreamExecuteShards(ctx,
 		string(request.Query.Sql),
-		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		bv,
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
-			return stream.Send(&pb.StreamExecuteShardsResponse{
-				Result: mproto.QueryResultToProto3(value.Result),
-			})
+			result, err := mproto.QueryResultToProto3(value.Result)
+			if err != nil {
+				return err
+			}
+			return stream.Send(&pb.StreamExecuteShardsResponse{Result: result})
 		})
 	return vterrors.ToGRPCError(vtgErr)
 }
@@ -250,16 +304,22 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *pb.StreamExecuteKeyspaceIds
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
+	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return vterrors.ToGRPCError(err)
+	}
 	vtgErr := vtg.server.StreamExecuteKeyspaceIds(ctx,
 		string(request.Query.Sql),
-		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		bv,
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
-			return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{
-				Result: mproto.QueryResultToProto3(value.Result),
-			})
+			result, err := mproto.QueryResultToProto3(value.Result)
+			if err != nil {
+				return err
+			}
+			return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{Result: result})
 		})
 	return vterrors.ToGRPCError(vtgErr)
 }
@@ -271,16 +331,22 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *pb.StreamExecuteKeyRangesRequ
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
+	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return vterrors.ToGRPCError(err)
+	}
 	vtgErr := vtg.server.StreamExecuteKeyRanges(ctx,
 		string(request.Query.Sql),
-		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		bv,
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
-			return stream.Send(&pb.StreamExecuteKeyRangesResponse{
-				Result: mproto.QueryResultToProto3(value.Result),
-			})
+			result, err := mproto.QueryResultToProto3(value.Result)
+			if err != nil {
+				return err
+			}
+			return stream.Send(&pb.StreamExecuteKeyRangesResponse{Result: result})
 		})
 	return vterrors.ToGRPCError(vtgErr)
 }
@@ -336,10 +402,14 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
+	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
 	splits, vtgErr := vtg.server.SplitQuery(ctx,
 		request.Keyspace,
 		string(request.Query.Sql),
-		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		bv,
 		request.SplitColumn,
 		int(request.SplitCount))
 	if vtgErr != nil {

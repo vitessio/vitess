@@ -31,8 +31,12 @@ func New(updateStream proto.UpdateStream) *UpdateStream {
 func (server *UpdateStream) StreamUpdate(req *pb.StreamUpdateRequest, stream pbs.UpdateStream_StreamUpdateServer) (err error) {
 	defer server.updateStream.HandlePanic(&err)
 	return server.updateStream.ServeUpdateStream(req.Position, func(reply *proto.StreamEvent) error {
+		event, err := proto.StreamEventToProto(reply)
+		if err != nil {
+			return err
+		}
 		return stream.Send(&pb.StreamUpdateResponse{
-			StreamEvent: proto.StreamEventToProto(reply),
+			StreamEvent: event,
 		})
 	})
 }

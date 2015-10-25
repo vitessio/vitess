@@ -190,9 +190,10 @@ func (s *server) ExecuteFetchAsDba(ctx context.Context, request *pb.ExecuteFetch
 	response := &pb.ExecuteFetchAsDbaResponse{}
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetchAsDba, request, response, func() error {
 		qr, err := s.agent.ExecuteFetchAsDba(ctx, request.Query, request.DbName, int(request.MaxRows), request.WantFields, request.DisableBinlogs, request.ReloadSchema)
-		if err == nil {
-			response.Result = mproto.QueryResultToProto3(qr)
+		if err != nil {
+			return err
 		}
+		response.Result, err = mproto.QueryResultToProto3(qr)
 		return err
 	})
 }
@@ -202,9 +203,10 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *pb.ExecuteFetch
 	response := &pb.ExecuteFetchAsAppResponse{}
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetchAsApp, request, response, func() error {
 		qr, err := s.agent.ExecuteFetchAsApp(ctx, request.Query, int(request.MaxRows), request.WantFields)
-		if err == nil {
-			response.Result = mproto.QueryResultToProto3(qr)
+		if err != nil {
+			return err
 		}
+		response.Result, err = mproto.QueryResultToProto3(qr)
 		return err
 	})
 }
