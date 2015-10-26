@@ -114,11 +114,17 @@ func Proto3ToRows(rows []*pbq.Row) [][]sqltypes.Value {
 		index := 0
 		result[i] = make([]sqltypes.Value, len(r.Lengths))
 		for j, l := range r.Lengths {
-			if l == -1 {
+			if l <= -1 {
 				result[i][j] = sqltypes.NULL
 			} else {
-				result[i][j] = sqltypes.MakeString(r.Values[index : index+int(l)])
-				index += int(l)
+				end := index + int(l)
+				if end > len(r.Values) {
+					result[i][j] = sqltypes.NULL
+					index = len(r.Values)
+				} else {
+					result[i][j] = sqltypes.MakeString(r.Values[index:end])
+					index = end
+				}
 			}
 		}
 	}

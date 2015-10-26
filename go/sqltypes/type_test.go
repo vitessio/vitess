@@ -160,24 +160,32 @@ func TestTypeToMySQL(t *testing.T) {
 		t.Errorf("Bit: %d, want 16", v)
 	}
 	if f != mysqlUnsigned>>16 {
-		t.Errorf("Bit flag: %x, want %x", f, mysqlUnsigned>>8)
+		t.Errorf("Bit flag: %x, want %x", f, mysqlUnsigned>>16)
 	}
 	v, f = TypeToMySQL(Date)
 	if v != 10 {
 		t.Errorf("Bit: %d, want 10", v)
 	}
 	if f != mysqlBinary>>16 {
-		t.Errorf("Bit flag: %x, want %x", f, mysqlBinary>>8)
+		t.Errorf("Bit flag: %x, want %x", f, mysqlBinary>>16)
 	}
 }
 
 func TestTypeFlexibility(t *testing.T) {
-	v, err := MySQLToType(1, mysqlBinary>>8)
+	v, err := MySQLToType(1, mysqlBinary>>16)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	if v != Int8 {
 		t.Errorf("conversion: %v, want %v", v, Int8)
+	}
+}
+
+func TestTypeError(t *testing.T) {
+	_, err := MySQLToType(15, 0)
+	want := "Could not map: 15 to a vitess type"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want %v", err, want)
 	}
 }
