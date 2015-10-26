@@ -123,7 +123,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 			bv.Values = make([]*pb.Value, len(v))
 			values := make([]pb.Value, len(v))
 			for i, lv := range v {
-				values[i].Type = sqltypes.Int64
+				values[i].Type = sqltypes.Uint64
 				values[i].Value = strconv.AppendUint(nil, lv, 10)
 				bv.Values[i] = &values[i]
 			}
@@ -157,6 +157,11 @@ func buildValue(v interface{}) (pb.Value, error) {
 			Type:  sqltypes.Int64,
 			Value: strconv.AppendInt(nil, int64(v), 10),
 		}, nil
+	case int8:
+		return pb.Value{
+			Type:  sqltypes.Int64,
+			Value: strconv.AppendInt(nil, int64(v), 10),
+		}, nil
 	case int16:
 		return pb.Value{
 			Type:  sqltypes.Int64,
@@ -173,6 +178,11 @@ func buildValue(v interface{}) (pb.Value, error) {
 			Value: strconv.AppendInt(nil, v, 10),
 		}, nil
 	case uint:
+		return pb.Value{
+			Type:  sqltypes.Uint64,
+			Value: strconv.AppendUint(nil, uint64(v), 10),
+		}, nil
+	case uint8:
 		return pb.Value{
 			Type:  sqltypes.Uint64,
 			Value: strconv.AppendUint(nil, uint64(v), 10),
@@ -207,6 +217,8 @@ func buildValue(v interface{}) (pb.Value, error) {
 		case v.IsNull():
 			return pb.Value{}, nil
 		case v.IsNumeric():
+			// TODO(sougou): This will fail for large uint64 values.
+			// Revisit after the QueryResult revamp.
 			return pb.Value{Type: sqltypes.Int64, Value: v.Raw()}, nil
 		case v.IsFractional():
 			return pb.Value{Type: sqltypes.Float64, Value: v.Raw()}, nil
@@ -254,7 +266,7 @@ func Proto3ToBindVariables(bv map[string]*pb.BindVariable) (map[string]interface
 	result := make(map[string]interface{})
 	var err error
 	for k, v := range bv {
-		if v.Type == sqltypes.Tuple {
+		if v != nil && v.Type == sqltypes.Tuple {
 			list := make([]interface{}, len(v.Values))
 			for i, lv := range v.Values {
 				asbind := &pb.BindVariable{
