@@ -7,14 +7,12 @@ package tabletmanager
 // This file handles the agent state changes.
 
 import (
-	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -26,13 +24,6 @@ import (
 )
 
 var (
-	// the stats exported by this module
-	statsType          = stats.NewString("TabletType")
-	statsKeyspace      = stats.NewString("TabletKeyspace")
-	statsShard         = stats.NewString("TabletShard")
-	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
-	statsKeyRangeEnd   = stats.NewString("TabletKeyRangeEnd")
-
 	// constants for this module
 	historyLength = 16
 )
@@ -104,6 +95,17 @@ func (agent *ActionAgent) broadcastHealth() {
 
 // changeCallback is run after every action that might
 // have changed something in the tablet record or in the topology.
+//
+// It owns making changes to the BinlogPlayerMap. The input for this is the
+// tablet type (have to be master), and the shard's SourceShards.
+//
+// It owns updating the blacklisted tables.
+//
+// It owns updating the stats record for 'TabletType'.
+//
+// It owns starting and stopping the update stream service.
+//
+// It owns reading the TabletControl for the current tablet, and storing it.
 func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *pbt.Tablet) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("ActionAgent.changeCallback")
@@ -171,16 +173,8 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		agent.UpdateStream.Disable()
 	}
 
+	// upate the stats to our current type
 	statsType.Set(strings.ToLower(newTablet.Type.String()))
-	statsKeyspace.Set(newTablet.Keyspace)
-	statsShard.Set(newTablet.Shard)
-	if newTablet.KeyRange != nil {
-		statsKeyRangeStart.Set(hex.EncodeToString(newTablet.KeyRange.Start))
-		statsKeyRangeEnd.Set(hex.EncodeToString(newTablet.KeyRange.End))
-	} else {
-		statsKeyRangeStart.Set("")
-		statsKeyRangeEnd.Set("")
-	}
 
 	// See if we need to start or stop any binlog player
 	if agent.BinlogPlayerMap != nil {

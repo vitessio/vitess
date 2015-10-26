@@ -22,6 +22,7 @@ and which run changeCallback.
 package tabletmanager
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -60,6 +61,15 @@ const keyrangeQueryRules string = "KeyrangeQueryRules"
 
 var (
 	tabletHostname = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+
+	// The stats exported by this module.
+	// Note they are meaningless if multiple tablets run in the same
+	// process, like inside vtcombo.
+	statsType          = stats.NewString("TabletType")
+	statsKeyspace      = stats.NewString("TabletKeyspace")
+	statsShard         = stats.NewString("TabletShard")
+	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
+	statsKeyRangeEnd   = stats.NewString("TabletKeyRangeEnd")
 )
 
 // ActionAgent is the main class for the agent.
@@ -537,6 +547,14 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		TabletType: tablet.Type,
 	}, agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon); err != nil {
 		return fmt.Errorf("failed to InitDBConfig: %v", err)
+	}
+
+	// set our variables
+	statsKeyspace.Set(tablet.Keyspace)
+	statsShard.Set(tablet.Shard)
+	if key.KeyRangeIsPartial(tablet.KeyRange) {
+		statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
+		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
 	}
 
 	// initialize the key range query rule

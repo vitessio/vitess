@@ -134,6 +134,12 @@ func (agent *ActionAgent) initHealthCheck() {
 //
 // Note we only update the topo record if we need to, that is if our type or
 // health details changed.
+//
+// This will not change the BinlogPlayerMap, but if it is not empty,
+// we will think we should not be running the query service.
+//
+// This will not change the TabletControl record, but will use it
+// to see if we should be running the query service.
 func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
@@ -156,11 +162,11 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	}
 
 	// run the health check
-	typeForHealthCheck := targetTabletType
+	isSlaveType := true
 	if tablet.Type == pbt.TabletType_MASTER {
-		typeForHealthCheck = pbt.TabletType_MASTER
+		isSlaveType = false
 	}
-	replicationDelay, err := agent.HealthReporter.Report(topo.IsSlaveType(typeForHealthCheck), shouldQueryServiceBeRunning)
+	replicationDelay, err := agent.HealthReporter.Report(isSlaveType, shouldQueryServiceBeRunning)
 	health := make(map[string]string)
 	if err == nil {
 		if replicationDelay > *unhealthyThreshold {
@@ -234,7 +240,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 				tablet.PortMap["mysql"] = int32(mysqlPort)
 				return nil
 			}); err != nil {
-				log.Infof("Error updating mysql port in tablet record: %v", err)
+				log.Infof("Error updating mysql port in tablet record, will try again: %v", err)
 				return
 			}
 
