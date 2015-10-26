@@ -244,7 +244,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 			// save the port so we don't update it again next time
 			// we do the health check.
 			agent.mutex.Lock()
-			agent._tablet.PortMap["mysql"] = int32(mysqlPort)
+			agent._tablet.PortMap["mysql"] = mysqlPort
 			agent._waitingForMysql = false
 			agent.mutex.Unlock()
 		}

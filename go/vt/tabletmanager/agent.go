@@ -58,15 +58,6 @@ const keyrangeQueryRules string = "KeyrangeQueryRules"
 
 var (
 	tabletHostname = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
-
-	// The stats exported by this module.
-	// Note they are meaningless if multiple tablets run in the same
-	// process, like inside vtcombo.
-	statsType          = stats.NewString("TabletType")
-	statsKeyspace      = stats.NewString("TabletKeyspace")
-	statsShard         = stats.NewString("TabletShard")
-	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
-	statsKeyRangeEnd   = stats.NewString("TabletKeyRangeEnd")
 )
 
 // ActionAgent is the main class for the agent.
@@ -82,14 +73,23 @@ type ActionAgent struct {
 	SchemaOverrides     []tabletserver.SchemaOverride
 	BinlogPlayerMap     *BinlogPlayerMap
 	LockTimeout         time.Duration
+
+	// exportStats is set only for production tablet.
+	exportStats bool
+
+	// statsTabletType is set to expose the current tablet type,
+	// only used if exportStats is true.
+	statsTabletType *stats.String
+
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
 	batchCtx context.Context
+
 	// finalizeReparentCtx represents the background finalize step of a
 	// TabletExternallyReparented call.
 	finalizeReparentCtx context.Context
 
-	// This is the History of the health checks, public so status
+	// History of the health checks, public so status
 	// pages can display it
 	History            *history.History
 	lastHealthMapCount *stats.Int
@@ -99,8 +99,8 @@ type ActionAgent struct {
 	// take actionMutex first.
 	actionMutex sync.Mutex
 
-	// initReplication remembers whether an action has initialized replication.
-	// It is protected by actionMutex.
+	// initReplication remembers whether an action has initialized
+	// replication.  It is protected by actionMutex.
 	initReplication bool
 
 	// mutex protects the following fields, only hold the mutex
@@ -188,6 +188,10 @@ func NewActionAgent(
 	// since it should never be changed.
 	statsTabletType := stats.NewString("TargetTabletType")
 	statsTabletType.Set(*targetTabletType)
+
+	// Create the TabletType stats
+	agent.exportStats = true
+	agent.statsTabletType = stats.NewString("TabletType")
 
 	// Start the binlog player services, not playing at start.
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.Filtered, mysqld)
@@ -496,12 +500,19 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		return fmt.Errorf("failed to InitDBConfig: %v", err)
 	}
 
-	// set our variables
-	statsKeyspace.Set(tablet.Keyspace)
-	statsShard.Set(tablet.Shard)
-	if key.KeyRangeIsPartial(tablet.KeyRange) {
-		statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
-		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
+	// export a few static variables
+	if agent.exportStats {
+		statsKeyspace := stats.NewString("TabletKeyspace")
+		statsShard := stats.NewString("TabletShard")
+		statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
+		statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
+
+		statsKeyspace.Set(tablet.Keyspace)
+		statsShard.Set(tablet.Shard)
+		if key.KeyRangeIsPartial(tablet.KeyRange) {
+			statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
+			statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
+		}
 	}
 
 	// initialize the key range query rule
