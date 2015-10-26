@@ -191,16 +191,13 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	if shouldQueryServiceBeRunning {
 		if !isQueryServiceRunning {
 			// send the type we want to be, not the type we are
-			currentType := tablet.Type
-			if tablet.Type == pbt.TabletType_SPARE {
-				tablet.Type = targetTabletType
+			desiredType := tablet.Type
+			if desiredType == pbt.TabletType_SPARE {
+				desiredType = targetTabletType
 			}
 
 			// we remember this new possible error
-			err = agent.allowQueries(tablet.Tablet)
-
-			// restore the current type
-			tablet.Type = currentType
+			err = agent.allowQueries(desiredType)
 		}
 	} else {
 		if isQueryServiceRunning {
@@ -208,7 +205,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 			// query service, shut it down.
 			// Note this is possibly sending 'spare' as
 			// the tablet type, we will clean it up later.
-			agent.disallowQueries(tablet.Tablet,
+			agent.disallowQueries(tablet.Tablet.Type,
 				fmt.Sprintf("health-check failure(%v)", err),
 			)
 		}
@@ -237,7 +234,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 		} else {
 			log.Infof("Updating tablet mysql port to %v", mysqlPort)
 			if err := agent.TopoServer.UpdateTabletFields(agent.batchCtx, tablet.Alias, func(tablet *pbt.Tablet) error {
-				tablet.PortMap["mysql"] = int32(mysqlPort)
+				tablet.PortMap["mysql"] = mysqlPort
 				return nil
 			}); err != nil {
 				log.Infof("Error updating mysql port in tablet record, will try again: %v", err)
@@ -344,7 +341,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType pbt.TabletType)
 		return
 	}
 	// The change above succeeded, so update our local copy.
-	tablet, err := agent.readTablet(agent.batchCtx)
+	tablet, err := agent.updateTabletFromTopo(agent.batchCtx)
 	if err != nil {
 		log.Infof("Error re-reading tablet record: %v", err)
 		return

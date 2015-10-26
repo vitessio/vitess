@@ -466,7 +466,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.Replication
 	// database. This will in effect close the connection pools to the
 	// database.
 	tablet := agent.Tablet()
-	agent.disallowQueries(tablet.Tablet, "DemoteMaster marks server rdonly")
+	agent.disallowQueries(tablet.Tablet.Type, "DemoteMaster marks server rdonly")
 
 	return agent.MysqlDaemon.DemoteMaster()
 	// There is no serving graph update - the master tablet will

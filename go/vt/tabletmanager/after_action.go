@@ -13,8 +13,10 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -55,14 +57,14 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *pbt.Tablet, blacklistedTabl
 	return nil
 }
 
-func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet) error {
-	return agent.QueryServiceControl.SetServingType(tablet.Type, true)
+func (agent *ActionAgent) allowQueries(tabletType pbt.TabletType) error {
+	return agent.QueryServiceControl.SetServingType(tabletType, true)
 }
 
-func (agent *ActionAgent) disallowQueries(tablet *pbt.Tablet, reason string) error {
+func (agent *ActionAgent) disallowQueries(tabletType pbt.TabletType, reason string) error {
 	log.Infof("Agent is going to disallow queries, reason: %v", reason)
 
-	return agent.QueryServiceControl.SetServingType(tablet.Type, false)
+	return agent.QueryServiceControl.SetServingType(tabletType, false)
 }
 
 func (agent *ActionAgent) broadcastHealth() {
@@ -91,6 +93,60 @@ func (agent *ActionAgent) broadcastHealth() {
 	defer func() {
 		agent.QueryServiceControl.BroadcastHealth(ts, stats)
 	}()
+}
+
+// refreshTablet needs to be run after an action may have changed the current
+// state of the tablet.
+func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
+	log.Infof("Executing post-action state refresh")
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("ActionAgent.refreshTablet")
+	span.Annotate("reason", reason)
+	defer span.Finish()
+	ctx = trace.NewContext(ctx, span)
+
+	// Save the old tablet so callbacks can have a better idea of
+	// the precise nature of the transition.
+	oldTablet := agent.Tablet().Tablet
+
+	// Actions should have side effects on the tablet, so reload the data.
+	ti, err := agent.updateTabletFromTopo(ctx)
+	if err != nil {
+		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
+		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
+	}
+
+	if updatedTablet := agent.checkTabletMysqlPort(ctx, ti); updatedTablet != nil {
+		agent.mutex.Lock()
+		agent._tablet = updatedTablet
+		agent.mutex.Unlock()
+	}
+
+	if err := agent.updateState(ctx, oldTablet, reason); err != nil {
+		return err
+	}
+	log.Infof("Done with post-action state refresh")
+	return nil
+}
+
+// updateState will use the provided tablet record as a base, the current
+// tablet record as the new one, run changeCallback, and dispatch the event.
+func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pbt.Tablet, reason string) error {
+	agent.mutex.Lock()
+	newTablet := agent._tablet.Tablet
+	agent.mutex.Unlock()
+	log.Infof("Running tablet callback because: %v", reason)
+	if err := agent.changeCallback(ctx, oldTablet, newTablet); err != nil {
+		return err
+	}
+
+	event.Dispatch(&events.StateChange{
+		OldTablet: *oldTablet,
+		NewTablet: *newTablet,
+		Reason:    reason,
+	})
+	return nil
 }
 
 // changeCallback is run after every action that might
@@ -155,11 +211,11 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	}
 
 	if allowQuery {
-		if err := agent.allowQueries(newTablet); err != nil {
+		if err := agent.allowQueries(newTablet.Type); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
-		agent.disallowQueries(newTablet, disallowQueryReason)
+		agent.disallowQueries(newTablet.Type, disallowQueryReason)
 	}
 
 	// save the tabletControl we've been using, so the background
