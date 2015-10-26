@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -356,8 +357,8 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		"kid",
 		[]*pbg.ExecuteEntityIdsRequest_EntityId{
 			&pbg.ExecuteEntityIdsRequest_EntityId{
-				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
-				XidBytes:   []byte("id1"),
+				XidType:    sqltypes.VarBinary,
+				XidValue:   []byte("id1"),
 				KeyspaceId: []byte{0x10},
 			},
 		},
@@ -392,8 +393,8 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		"kid",
 		[]*pbg.ExecuteEntityIdsRequest_EntityId{
 			&pbg.ExecuteEntityIdsRequest_EntityId{
-				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
-				XidBytes:   []byte("id1"),
+				XidType:    sqltypes.VarBinary,
+				XidValue:   []byte("id1"),
 				KeyspaceId: []byte{0x10},
 			},
 		},
@@ -425,13 +426,13 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		"kid",
 		[]*pbg.ExecuteEntityIdsRequest_EntityId{
 			&pbg.ExecuteEntityIdsRequest_EntityId{
-				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
-				XidBytes:   []byte("id1"),
+				XidType:    sqltypes.VarBinary,
+				XidValue:   []byte("id1"),
 				KeyspaceId: []byte{0x10},
 			},
 			&pbg.ExecuteEntityIdsRequest_EntityId{
-				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
-				XidBytes:   []byte("id2"),
+				XidType:    sqltypes.VarBinary,
+				XidValue:   []byte("id2"),
 				KeyspaceId: []byte{0x30},
 			},
 		},
@@ -902,13 +903,13 @@ func TestAnnotatingExecuteEntityIds(t *testing.T) {
 		"entity_column_name",
 		[]*pbg.ExecuteEntityIdsRequest_EntityId{
 			&pbg.ExecuteEntityIdsRequest_EntityId{
-				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
-				XidInt:     0,
+				XidType:    sqltypes.Int64,
+				XidValue:   []byte("0"),
 				KeyspaceId: []byte{0x10}, // First shard.
 			},
 			&pbg.ExecuteEntityIdsRequest_EntityId{
-				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
-				XidInt:     1,
+				XidType:    sqltypes.Int64,
+				XidValue:   []byte("1"),
 				KeyspaceId: []byte{0x25}, // Second shard.
 			},
 		},

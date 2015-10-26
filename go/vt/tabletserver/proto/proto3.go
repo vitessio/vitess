@@ -58,7 +58,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 			bv.Values = make([]*pb.Value, len(v))
 			values := make([]pb.Value, len(v))
 			for i, lv := range v {
-				val, err := buildValue(lv)
+				val, err := BindVariableToValue(lv)
 				if err != nil {
 					return nil, fmt.Errorf("key: %s: %v", k, err)
 				}
@@ -128,7 +128,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 				bv.Values[i] = &values[i]
 			}
 		default:
-			val, err := buildValue(v)
+			val, err := BindVariableToValue(v)
 			if err != nil {
 				return nil, fmt.Errorf("key: %s: %v", k, err)
 			}
@@ -140,7 +140,9 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 	return result, nil
 }
 
-func buildValue(v interface{}) (pb.Value, error) {
+// BindVariableToValue converts a native bind variable value
+// to a proto Value.
+func BindVariableToValue(v interface{}) (pb.Value, error) {
 	switch v := v.(type) {
 	case string:
 		return pb.Value{
@@ -273,14 +275,14 @@ func Proto3ToBindVariables(bv map[string]*pb.BindVariable) (map[string]interface
 					Type:  lv.Type,
 					Value: lv.Value,
 				}
-				list[i], err = buildSQLValue(asbind)
+				list[i], err = BindVariableToNative(asbind)
 				if err != nil {
 					return nil, err
 				}
 			}
 			result[k] = list
 		} else {
-			result[k], err = buildSQLValue(v)
+			result[k], err = BindVariableToNative(v)
 			if err != nil {
 				return nil, err
 			}
@@ -289,7 +291,8 @@ func Proto3ToBindVariables(bv map[string]*pb.BindVariable) (map[string]interface
 	return result, nil
 }
 
-func buildSQLValue(v *pb.BindVariable) (interface{}, error) {
+// BindVariableToNative converts a proto bind var to a native go type.
+func BindVariableToNative(v *pb.BindVariable) (interface{}, error) {
 	if v == nil || v.Type == sqltypes.Null {
 		return nil, nil
 	} else if sqltypes.IsSigned(v.Type) {

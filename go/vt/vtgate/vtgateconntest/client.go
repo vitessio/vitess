@@ -269,8 +269,8 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bi
 		Session:           session,
 		NotInTransaction:  notInTransaction,
 	}
-	if len(query.EntityKeyspaceIDs) == 1 && len(query.EntityKeyspaceIDs[0].XidBytes) == 0 {
-		query.EntityKeyspaceIDs[0].XidBytes = nil
+	if len(query.EntityKeyspaceIDs) == 1 && len(query.EntityKeyspaceIDs[0].XidValue) == 0 {
+		query.EntityKeyspaceIDs[0].XidValue = nil
 	}
 	if !reflect.DeepEqual(query, execCase.entityIdsQuery) {
 		f.t.Errorf("ExecuteEntityIds: %+v, want %+v", query, execCase.entityIdsQuery)
@@ -2328,8 +2328,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
 				&pbg.ExecuteEntityIdsRequest_EntityId{
-					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
-					XidBytes:   []byte{105, 100, 49},
+					XidType:    sqltypes.VarBinary,
+					XidValue:   []byte{105, 100, 49},
 					KeyspaceId: []byte{0x6B},
 				},
 			},
@@ -2429,8 +2429,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
 				&pbg.ExecuteEntityIdsRequest_EntityId{
-					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
-					XidBytes:   []byte{105, 100, 49},
+					XidType:    sqltypes.VarBinary,
+					XidValue:   []byte{105, 100, 49},
 					KeyspaceId: []byte{0x6B},
 				},
 			},
@@ -2534,8 +2534,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
 				&pbg.ExecuteEntityIdsRequest_EntityId{
-					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
-					XidInt:     -12345,
+					XidType:    sqltypes.Int64,
+					XidValue:   []byte("-12345"),
 					KeyspaceId: []byte{0x6B},
 				},
 			},
@@ -2639,8 +2639,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
 				&pbg.ExecuteEntityIdsRequest_EntityId{
-					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
-					XidInt:     123456,
+					XidType:    sqltypes.Int64,
+					XidValue:   []byte("123456"),
 					KeyspaceId: []byte{0x6B},
 				},
 			},

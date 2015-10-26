@@ -5,8 +5,6 @@
 package proto
 
 import (
-	"fmt"
-
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -67,46 +65,12 @@ func EntityIdsToProto(l []EntityId) []*pb.ExecuteEntityIdsRequest_EntityId {
 		result[i] = &pb.ExecuteEntityIdsRequest_EntityId{
 			KeyspaceId: []byte(e.KeyspaceID),
 		}
-		switch v := e.ExternalID.(type) {
-		case string:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES
-			result[i].XidBytes = []byte(v)
-		case []byte:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES
-			result[i].XidBytes = v
-		case int:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_INT
-			result[i].XidInt = int64(v)
-		case int16:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_INT
-			result[i].XidInt = int64(v)
-		case int32:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_INT
-			result[i].XidInt = int64(v)
-		case int64:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_INT
-			result[i].XidInt = v
-		case uint:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_UINT
-			result[i].XidUint = uint64(v)
-		case uint16:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_UINT
-			result[i].XidUint = uint64(v)
-		case uint32:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_UINT
-			result[i].XidUint = uint64(v)
-		case uint64:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_UINT
-			result[i].XidUint = v
-		case float32:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT
-			result[i].XidFloat = float64(v)
-		case float64:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT
-			result[i].XidFloat = v
-		default:
-			panic(fmt.Errorf("Unsupported value %v", v))
+		v, err := tproto.BindVariableToValue(e.ExternalID)
+		if err != nil {
+			panic(err)
 		}
+		result[i].XidType = v.Type
+		result[i].XidValue = v.Value
 	}
 	return result
 }
@@ -119,18 +83,15 @@ func ProtoToEntityIds(l []*pb.ExecuteEntityIdsRequest_EntityId) []EntityId {
 	result := make([]EntityId, len(l))
 	for i, e := range l {
 		result[i].KeyspaceID = key.KeyspaceId(e.KeyspaceId)
-		switch e.XidType {
-		case pb.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES:
-			result[i].ExternalID = e.XidBytes
-		case pb.ExecuteEntityIdsRequest_EntityId_TYPE_INT:
-			result[i].ExternalID = e.XidInt
-		case pb.ExecuteEntityIdsRequest_EntityId_TYPE_UINT:
-			result[i].ExternalID = e.XidUint
-		case pb.ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT:
-			result[i].ExternalID = e.XidFloat
-		default:
-			panic(fmt.Errorf("Unsupported XidType %v", e.XidType))
+		bv := &pbq.BindVariable{
+			Type:  e.XidType,
+			Value: e.XidValue,
 		}
+		v, err := tproto.BindVariableToNative(bv)
+		if err != nil {
+			panic(err)
+		}
+		result[i].ExternalID = v
 	}
 	return result
 }

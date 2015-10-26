@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -64,13 +65,13 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 			"col",
 			[]*pbg.ExecuteEntityIdsRequest_EntityId{
 				&pbg.ExecuteEntityIdsRequest_EntityId{
-					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
-					XidInt:     0,
+					XidType:    sqltypes.Int64,
+					XidValue:   []byte("0"),
 					KeyspaceId: []byte{0x10},
 				},
 				&pbg.ExecuteEntityIdsRequest_EntityId{
-					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
-					XidBytes:   []byte("1"),
+					XidType:    sqltypes.VarBinary,
+					XidValue:   []byte("1"),
 					KeyspaceId: []byte{0x25},
 				},
 			},
