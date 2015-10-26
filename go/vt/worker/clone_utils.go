@@ -50,8 +50,8 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 	ti, err = wr.TopoServer().GetTablet(shortCtx, si.MasterAlias)
 	cancel()
 	if err != nil {
-		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v",
-			topoproto.TabletAliasString(si.MasterAlias), keyspace, shard)
+		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v: %v",
+			topoproto.TabletAliasString(si.MasterAlias), keyspace, shard, err)
 	}
 	return ti, nil
 }
