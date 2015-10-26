@@ -151,12 +151,12 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	agent.mutex.Unlock()
 
 	// figure out if we should be running the query service
-	shouldQueryServiceBeRunning := false
+	shouldBeServing := false
 	if topo.IsRunningQueryService(targetTabletType) && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
-		shouldQueryServiceBeRunning = true
+		shouldBeServing = true
 		if tabletControl != nil {
 			if tabletControl.DisableQueryService {
-				shouldQueryServiceBeRunning = false
+				shouldBeServing = false
 			}
 		}
 	}
@@ -166,7 +166,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	if tablet.Type == pbt.TabletType_MASTER {
 		isSlaveType = false
 	}
-	replicationDelay, err := agent.HealthReporter.Report(isSlaveType, shouldQueryServiceBeRunning)
+	replicationDelay, err := agent.HealthReporter.Report(isSlaveType, shouldBeServing)
 	health := make(map[string]string)
 	if err == nil {
 		if replicationDelay > *unhealthyThreshold {
@@ -184,12 +184,12 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 			// We are not healthy and must shut down QueryService.
 			// At the moment, the only exception to this are "worker" tablets which
 			// still must serve queries e.g. as source tablet during a "SplitClone".
-			shouldQueryServiceBeRunning = false
+			shouldBeServing = false
 		}
 	}
-	isQueryServiceRunning := agent.QueryServiceControl.IsServing()
-	if shouldQueryServiceBeRunning {
-		if !isQueryServiceRunning {
+	isServing := agent.QueryServiceControl.IsServing()
+	if shouldBeServing {
+		if !isServing {
 			// send the type we want to be, not the type we are
 			desiredType := tablet.Type
 			if desiredType == pbt.TabletType_SPARE {
@@ -200,7 +200,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 			err = agent.allowQueries(desiredType)
 		}
 	} else {
-		if isQueryServiceRunning {
+		if isServing {
 			// We are not healthy or should not be running the
 			// query service, shut it down.
 			// Note this is possibly sending 'spare' as
