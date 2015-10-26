@@ -157,64 +157,38 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlia
 	return err
 }
 
-// ChangeType changes the type of tablet and recompute all necessary derived paths in the
-// serving graph. If force is true, it will bypass the RPC action
-// system and make the data change directly, and not run the remote
-// hooks.
+// ChangeSlaveType changes the type of tablet and recompute all
+// necessary derived paths in the serving graph, if necessary.
 //
 // Note we don't update the master record in the Shard here, as we
 // can't ChangeType from and out of master anyway.
-func (wr *Wrangler) ChangeType(ctx context.Context, tabletAlias *pb.TabletAlias, tabletType pb.TabletType, force bool) error {
-	rebuildRequired, cell, keyspace, shard, err := wr.ChangeTypeNoRebuild(ctx, tabletAlias, tabletType, force)
-	if err != nil {
-		return err
-	}
-	if rebuildRequired {
-		_, err = wr.RebuildShardGraph(ctx, keyspace, shard, []string{cell})
-		return err
-	}
-	return nil
-}
-
-// ChangeTypeNoRebuild changes a tablet's type, and returns whether
-// there's a shard that should be rebuilt, along with its cell,
-// keyspace, and shard. If force is true, it will bypass the RPC action
-// system and make the data change directly, and not run the remote
-// hooks.
-//
-// Note we don't update the master record in the Shard here, as we
-// can't ChangeType from and out of master anyway.
-func (wr *Wrangler) ChangeTypeNoRebuild(ctx context.Context, tabletAlias *pb.TabletAlias, tabletType pb.TabletType, force bool) (rebuildRequired bool, cell, keyspace, shard string, err error) {
-	// Load tablet to find keyspace and shard assignment.
-	// Don't load after the ChangeType which might have unassigned
-	// the tablet.
+func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *pb.TabletAlias, tabletType pb.TabletType) error {
+	// Load tablet to find endpoint, and keyspace and shard assignment.
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
-		return false, "", "", "", err
+		return err
 	}
 
-	if force {
-		if err := topotools.ChangeType(ctx, wr.ts, tabletAlias, tabletType, nil); err != nil {
-			return false, "", "", "", err
-		}
-	} else {
-		if err := wr.tmc.ChangeType(ctx, ti, tabletType); err != nil {
-			return false, "", "", "", err
-		}
+	// ask the tablet to make the change
+	if err := wr.tmc.ChangeType(ctx, ti, tabletType); err != nil {
+		return err
 	}
 
+	// if the tablet was not serving, see if it is now
 	if !ti.IsInServingGraph() {
 		// re-read the tablet, see if we become serving
 		ti, err = wr.ts.GetTablet(ctx, tabletAlias)
 		if err != nil {
-			return false, "", "", "", err
+			return err
 		}
 		if !ti.IsInServingGraph() {
-			return false, "", "", "", nil
+			return nil
 		}
 	}
-	return true, ti.Alias.Cell, ti.Keyspace, ti.Shard, nil
 
+	// the tablet was or is serving, so rebuild the serving graph
+	_, err = wr.RebuildShardGraph(ctx, ti.Tablet.Keyspace, ti.Tablet.Shard, []string{ti.Tablet.Alias.Cell})
+	return err
 }
 
 // same as ChangeType, but assume we already have the shard lock,

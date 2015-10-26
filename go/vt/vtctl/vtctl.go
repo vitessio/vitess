@@ -151,7 +151,7 @@ var commands = []commandGroup{
 				"<tablet alias>",
 				"Stops replication on the specified slave."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
-				"[-force] [-dry-run] <tablet alias> <tablet type>",
+				"[-dry-run] <tablet alias> <tablet type>",
 				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
 					"NOTE: This command automatically updates the serving graph.\n" +
 					"Valid <tablet type> values are:\n" +
@@ -793,7 +793,6 @@ func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 }
 
 func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "Changes the slave type in ZooKeeper or etcd without running hooks")
 	dryRun := subFlags.Bool("dry-run", false, "Lists the proposed change without actually executing it")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -824,7 +823,7 @@ func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		wr.Logger().Printf("+ %v\n", fmtTabletAwkable(ti))
 		return nil
 	}
-	return wr.ChangeType(ctx, tabletAlias, newType, *force)
+	return wr.ChangeSlaveType(ctx, tabletAlias, newType)
 }
 
 func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

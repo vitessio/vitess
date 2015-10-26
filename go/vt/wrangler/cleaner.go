@@ -164,7 +164,7 @@ func FindChangeSlaveTypeActionByTarget(cleaner *Cleaner, tabletAlias *pb.TabletA
 
 // CleanUp is part of CleanerAction interface.
 func (csta ChangeSlaveTypeAction) CleanUp(ctx context.Context, wr *Wrangler) error {
-	return wr.ChangeType(ctx, csta.TabletAlias, csta.TabletType, false)
+	return wr.ChangeSlaveType(ctx, csta.TabletAlias, csta.TabletType)
 }
 
 //
