@@ -18,16 +18,7 @@ get all shards with "keyspace.*.db_type".
 In zk, this is in /zk/local/vt/ns/<keyspace>/<shard>/<db type>
 */
 
-import (
-	"fmt"
-	"net"
-
-	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/netutil"
-	"golang.org/x/net/context"
-
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
-)
+import pb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 const (
 	// DefaultPortName is the port named used by SrvEntries
@@ -82,47 +73,4 @@ func EndPointEquality(left, right *pb.EndPoint) bool {
 // NewEndPoints creates a EndPoints with a pre-allocated slice for Entries.
 func NewEndPoints() *pb.EndPoints {
 	return &pb.EndPoints{Entries: make([]*pb.EndPoint, 0, 8)}
-}
-
-// LookupVtName gets the list of EndPoints for a
-// cell/keyspace/shard/tablet type and converts the list to net.SRV records
-func LookupVtName(ctx context.Context, ts Server, cell, keyspace, shard string, tabletType pb.TabletType, namedPort string) ([]*net.SRV, error) {
-	addrs, _, err := ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
-	if err != nil {
-		return nil, fmt.Errorf("LookupVtName(%v,%v,%v,%v) failed: %v", cell, keyspace, shard, tabletType, err)
-	}
-	srvs, err := SrvEntries(addrs, namedPort)
-	if err != nil {
-		return nil, fmt.Errorf("LookupVtName(%v,%v,%v,%v) failed: %v", cell, keyspace, shard, tabletType, err)
-	}
-	return srvs, err
-}
-
-// SrvEntries converts EndPoints to net.SRV for a given port.
-func SrvEntries(addrs *pb.EndPoints, namedPort string) (srvs []*net.SRV, err error) {
-	srvs = make([]*net.SRV, 0, len(addrs.Entries))
-	var srvErr error
-	for _, entry := range addrs.Entries {
-		host := entry.Host
-		port := 0
-		if namedPort == "" {
-			namedPort = DefaultPortName
-		}
-		port = int(entry.PortMap[namedPort])
-		if port == 0 {
-			log.Warningf("vtns: bad port %v %v", namedPort, entry)
-			continue
-		}
-		srvs = append(srvs, &net.SRV{Target: host, Port: uint16(port)})
-	}
-	netutil.SortRfc2782(srvs)
-	if srvErr != nil && len(srvs) == 0 {
-		return nil, fmt.Errorf("SrvEntries failed: no valid endpoints found")
-	}
-	return
-}
-
-// SrvAddr prints a net.SRV
-func SrvAddr(srv *net.SRV) string {
-	return fmt.Sprintf("%s:%d", srv.Target, srv.Port)
 }
