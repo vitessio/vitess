@@ -99,7 +99,6 @@ func LookupVtName(ctx context.Context, ts Server, cell, keyspace, shard string, 
 }
 
 // SrvEntries converts EndPoints to net.SRV for a given port.
-// FIXME(msolomon) merge with zkns
 func SrvEntries(addrs *pb.EndPoints, namedPort string) (srvs []*net.SRV, err error) {
 	srvs = make([]*net.SRV, 0, len(addrs.Entries))
 	var srvErr error
