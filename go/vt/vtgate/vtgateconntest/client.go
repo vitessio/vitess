@@ -2704,7 +2704,7 @@ var result1 = mproto.QueryResult{
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("row1 value1")),
-			sqltypes.MakeString([]byte("row1 value2")),
+			sqltypes.NULL,
 		},
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("row2 value1")),
