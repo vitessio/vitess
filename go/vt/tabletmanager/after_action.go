@@ -153,7 +153,7 @@ func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pbt.Tablet
 // have changed something in the tablet record or in the topology.
 //
 // It owns making changes to the BinlogPlayerMap. The input for this is the
-// tablet type (have to be master), and the shard's SourceShards.
+// tablet type (has to be master), and the shard's SourceShards.
 //
 // It owns updating the blacklisted tables.
 //

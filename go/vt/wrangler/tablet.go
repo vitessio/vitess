@@ -157,7 +157,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlia
 	return err
 }
 
-// ChangeSlaveType changes the type of tablet and recompute all
+// ChangeSlaveType changes the type of tablet and recomputes all
 // necessary derived paths in the serving graph, if necessary.
 //
 // Note we don't update the master record in the Shard here, as we
@@ -174,21 +174,14 @@ func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *pb.TabletA
 		return err
 	}
 
-	// if the tablet was not serving, see if it is now
-	if !ti.IsInServingGraph() {
-		// re-read the tablet, see if we become serving
-		ti, err = wr.ts.GetTablet(ctx, tabletAlias)
-		if err != nil {
+	// if the tablet was or is serving, rebuild the serving graph
+	if ti.IsInServingGraph() || topo.IsInServingGraph(tabletType) {
+		if _, err := wr.RebuildShardGraph(ctx, ti.Tablet.Keyspace, ti.Tablet.Shard, []string{ti.Tablet.Alias.Cell}); err != nil {
 			return err
-		}
-		if !ti.IsInServingGraph() {
-			return nil
 		}
 	}
 
-	// the tablet was or is serving, so rebuild the serving graph
-	_, err = wr.RebuildShardGraph(ctx, ti.Tablet.Keyspace, ti.Tablet.Shard, []string{ti.Tablet.Alias.Cell})
-	return err
+	return nil
 }
 
 // same as ChangeType, but assume we already have the shard lock,
