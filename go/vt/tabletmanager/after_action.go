@@ -40,15 +40,6 @@ var (
 // Query rules from blacklist
 const blacklistQueryRules string = "BlacklistQueryRules"
 
-func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet, blacklistedTables []string) error {
-	err := agent.loadBlacklistRules(tablet, blacklistedTables)
-	if err != nil {
-		return err
-	}
-
-	return agent.QueryServiceControl.SetServingType(tablet.Type, true)
-}
-
 // loadBlacklistRules loads and builds the blacklist query rules
 func (agent *ActionAgent) loadBlacklistRules(tablet *pbt.Tablet, blacklistedTables []string) (err error) {
 	blacklistRules := tabletserver.NewQueryRules()
@@ -71,6 +62,10 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *pbt.Tablet, blacklistedTabl
 		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
 	}
 	return nil
+}
+
+func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet) error {
+	return agent.QueryServiceControl.SetServingType(tablet.Type, true)
 }
 
 func (agent *ActionAgent) disallowQueries(tablet *pbt.Tablet, reason string) error {
@@ -120,13 +115,15 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// we're going to use it.
 	var shardInfo *topo.ShardInfo
 	var tabletControl *pbt.Shard_TabletControl
-	var blacklistedTables []string
 	var err error
 	var disallowQueryReason string
+	var blacklistedTables []string
+	updateBlacklistedTables := true
 	if allowQuery {
 		shardInfo, err = agent.TopoServer.GetShard(ctx, newTablet.Keyspace, newTablet.Shard)
 		if err != nil {
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
+			updateBlacklistedTables = false
 		} else {
 			if newTablet.Type == pbt.TabletType_MASTER {
 				if len(shardInfo.SourceShards) > 0 {
@@ -148,9 +145,15 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	} else {
 		disallowQueryReason = fmt.Sprintf("not a serving tablet type(%v)", newTablet.Type)
 	}
+	if updateBlacklistedTables {
+		if err := agent.loadBlacklistRules(newTablet, blacklistedTables); err != nil {
+			// FIXME(alainjobart) how to handle this error?
+			log.Errorf("Cannot update blacklisted tables rule: %v", err)
+		}
+	}
 
 	if allowQuery {
-		if err := agent.allowQueries(newTablet, blacklistedTables); err != nil {
+		if err := agent.allowQueries(newTablet); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {

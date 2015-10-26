@@ -146,11 +146,9 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 
 	// figure out if we should be running the query service
 	shouldQueryServiceBeRunning := false
-	var blacklistedTables []string
 	if topo.IsRunningQueryService(targetTabletType) && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
 		shouldQueryServiceBeRunning = true
 		if tabletControl != nil {
-			blacklistedTables = tabletControl.BlacklistedTables
 			if tabletControl.DisableQueryService {
 				shouldQueryServiceBeRunning = false
 			}
@@ -193,7 +191,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 			}
 
 			// we remember this new possible error
-			err = agent.allowQueries(tablet.Tablet, blacklistedTables)
+			err = agent.allowQueries(tablet.Tablet)
 
 			// restore the current type
 			tablet.Type = currentType
