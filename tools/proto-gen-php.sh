@@ -25,7 +25,10 @@ popd
 
 # Fix identifiers that are keywords in PHP.
 pushd proto/build/proto2
-sed -i -r -e 's/\bUNSET\b/UNSET_/g' *.proto
+sed -i -r \
+  -e 's/\bUNSET\b/UNSET_/g' \
+  -e 's/\bNULL\b/NULL_/g' \
+   *.proto
 popd
 
 # Generate PHP.
