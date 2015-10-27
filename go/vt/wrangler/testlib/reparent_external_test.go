@@ -205,9 +205,11 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, ""); err != nil {
+	waitID := makeWaitID()
+	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
+	waitForExternalReparent(t, waitID)
 }
 
 // TestTabletExternallyReparentedContinueOnUnexpectedMaster makes sure
@@ -248,9 +250,11 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, ""); err != nil {
+	waitID := makeWaitID()
+	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
+	waitForExternalReparent(t, waitID)
 }
 
 func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
