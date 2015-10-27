@@ -22,6 +22,7 @@ and which run changeCallback.
 package tabletmanager
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -33,17 +34,14 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
@@ -75,14 +73,23 @@ type ActionAgent struct {
 	SchemaOverrides     []tabletserver.SchemaOverride
 	BinlogPlayerMap     *BinlogPlayerMap
 	LockTimeout         time.Duration
+
+	// exportStats is set only for production tablet.
+	exportStats bool
+
+	// statsTabletType is set to expose the current tablet type,
+	// only used if exportStats is true.
+	statsTabletType *stats.String
+
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
 	batchCtx context.Context
+
 	// finalizeReparentCtx represents the background finalize step of a
 	// TabletExternallyReparented call.
 	finalizeReparentCtx context.Context
 
-	// This is the History of the health checks, public so status
+	// History of the health checks, public so status
 	// pages can display it
 	History            *history.History
 	lastHealthMapCount *stats.Int
@@ -92,8 +99,8 @@ type ActionAgent struct {
 	// take actionMutex first.
 	actionMutex sync.Mutex
 
-	// initReplication remembers whether an action has initialized replication.
-	// It is protected by actionMutex.
+	// initReplication remembers whether an action has initialized
+	// replication.  It is protected by actionMutex.
 	initReplication bool
 
 	// mutex protects the following fields, only hold the mutex
@@ -181,6 +188,10 @@ func NewActionAgent(
 	// since it should never be changed.
 	statsTabletType := stats.NewString("TargetTabletType")
 	statsTabletType.Set(*targetTabletType)
+
+	// Create the TabletType stats
+	agent.exportStats = true
+	agent.statsTabletType = stats.NewString("TabletType")
 
 	// Start the binlog player services, not playing at start.
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.Filtered, mysqld)
@@ -295,24 +306,9 @@ func (agent *ActionAgent) registerQueryRuleSources() {
 	agent.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
 }
 
-func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pb.Tablet, reason string) error {
-	agent.mutex.Lock()
-	newTablet := agent._tablet.Tablet
-	agent.mutex.Unlock()
-	log.Infof("Running tablet callback because: %v", reason)
-	if err := agent.changeCallback(ctx, oldTablet, newTablet); err != nil {
-		return err
-	}
-
-	event.Dispatch(&events.StateChange{
-		OldTablet: *oldTablet,
-		NewTablet: *newTablet,
-		Reason:    reason,
-	})
-	return nil
-}
-
-func (agent *ActionAgent) readTablet(ctx context.Context) (*topo.TabletInfo, error) {
+// updateTabletFromTopo will read the tablet record from the topology,
+// save it in the agent's tablet record, and return it.
+func (agent *ActionAgent) updateTabletFromTopo(ctx context.Context) (*topo.TabletInfo, error) {
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return nil, err
@@ -385,41 +381,6 @@ func (agent *ActionAgent) setTabletControl(tc *pb.Shard_TabletControl) {
 	agent.mutex.Unlock()
 }
 
-// refreshTablet needs to be run after an action may have changed the current
-// state of the tablet.
-func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
-	log.Infof("Executing post-action state refresh")
-
-	span := trace.NewSpanFromContext(ctx)
-	span.StartLocal("ActionAgent.refreshTablet")
-	span.Annotate("reason", reason)
-	defer span.Finish()
-	ctx = trace.NewContext(ctx, span)
-
-	// Save the old tablet so callbacks can have a better idea of
-	// the precise nature of the transition.
-	oldTablet := agent.Tablet().Tablet
-
-	// Actions should have side effects on the tablet, so reload the data.
-	ti, err := agent.readTablet(ctx)
-	if err != nil {
-		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
-		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
-	}
-
-	if updatedTablet := agent.checkTabletMysqlPort(ctx, ti); updatedTablet != nil {
-		agent.mutex.Lock()
-		agent._tablet = updatedTablet
-		agent.mutex.Unlock()
-	}
-
-	if err := agent.updateState(ctx, oldTablet, reason); err != nil {
-		return err
-	}
-	log.Infof("Done with post-action state refresh")
-	return nil
-}
-
 func (agent *ActionAgent) verifyTopology(ctx context.Context) error {
 	tablet := agent.Tablet()
 	if tablet == nil {
@@ -449,7 +410,7 @@ func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
 // If initUpdateStream is set, update stream service will also be registered.
 func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort int32, initUpdateStream bool) error {
 	var err error
-	if _, err = agent.readTablet(ctx); err != nil {
+	if _, err = agent.updateTabletFromTopo(ctx); err != nil {
 		return err
 	}
 
@@ -497,7 +458,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	}
 
 	// Reread to get the changes we just made
-	tablet, err := agent.readTablet(ctx)
+	tablet, err := agent.updateTabletFromTopo(ctx)
 	if err != nil {
 		return err
 	}
@@ -539,6 +500,21 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		return fmt.Errorf("failed to InitDBConfig: %v", err)
 	}
 
+	// export a few static variables
+	if agent.exportStats {
+		statsKeyspace := stats.NewString("TabletKeyspace")
+		statsShard := stats.NewString("TabletShard")
+		statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
+		statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
+
+		statsKeyspace.Set(tablet.Keyspace)
+		statsShard.Set(tablet.Shard)
+		if key.KeyRangeIsPartial(tablet.KeyRange) {
+			statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
+			statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
+		}
+	}
+
 	// initialize the key range query rule
 	if err := agent.initializeKeyRangeRule(ctx, tablet.Keyspace, tablet.KeyRange); err != nil {
 		return err
@@ -571,7 +547,8 @@ func (agent *ActionAgent) hookExtraEnv() map[string]string {
 }
 
 // checkTabletMysqlPort will check the mysql port for the tablet is good,
-// and if not will try to update it.
+// and if not will try to update it. It returns the modified Tablet record,
+// if it was changed.
 func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo.TabletInfo) *topo.TabletInfo {
 	mport, err := agent.MysqlDaemon.GetMysqlPort()
 	if err != nil {
@@ -584,12 +561,16 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	}
 
 	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.PortMap["mysql"], mport)
-	tablet.PortMap["mysql"] = mport
-	if err := agent.TopoServer.UpdateTablet(ctx, tablet); err != nil {
+	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
+		t.PortMap["mysql"] = mport
+		return nil
+	}); err != nil {
 		log.Warningf("Failed to update tablet record, may use old mysql port")
 		return nil
 	}
 
+	// update worked, return the new record
+	tablet.PortMap["mysql"] = mport
 	return tablet
 }
 

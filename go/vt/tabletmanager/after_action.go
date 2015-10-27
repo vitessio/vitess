@@ -7,16 +7,16 @@ package tabletmanager
 // This file handles the agent state changes.
 
 import (
-	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -26,28 +26,12 @@ import (
 )
 
 var (
-	// the stats exported by this module
-	statsType          = stats.NewString("TabletType")
-	statsKeyspace      = stats.NewString("TabletKeyspace")
-	statsShard         = stats.NewString("TabletShard")
-	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
-	statsKeyRangeEnd   = stats.NewString("TabletKeyRangeEnd")
-
 	// constants for this module
 	historyLength = 16
 )
 
 // Query rules from blacklist
 const blacklistQueryRules string = "BlacklistQueryRules"
-
-func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet, blacklistedTables []string) error {
-	err := agent.loadBlacklistRules(tablet, blacklistedTables)
-	if err != nil {
-		return err
-	}
-
-	return agent.QueryServiceControl.SetServingType(tablet.Type, true)
-}
 
 // loadBlacklistRules loads and builds the blacklist query rules
 func (agent *ActionAgent) loadBlacklistRules(tablet *pbt.Tablet, blacklistedTables []string) (err error) {
@@ -73,10 +57,14 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *pbt.Tablet, blacklistedTabl
 	return nil
 }
 
-func (agent *ActionAgent) disallowQueries(tablet *pbt.Tablet, reason string) error {
+func (agent *ActionAgent) allowQueries(tabletType pbt.TabletType) error {
+	return agent.QueryServiceControl.SetServingType(tabletType, true)
+}
+
+func (agent *ActionAgent) disallowQueries(tabletType pbt.TabletType, reason string) error {
 	log.Infof("Agent is going to disallow queries, reason: %v", reason)
 
-	return agent.QueryServiceControl.SetServingType(tablet.Type, false)
+	return agent.QueryServiceControl.SetServingType(tabletType, false)
 }
 
 func (agent *ActionAgent) broadcastHealth() {
@@ -107,8 +95,73 @@ func (agent *ActionAgent) broadcastHealth() {
 	}()
 }
 
+// refreshTablet needs to be run after an action may have changed the current
+// state of the tablet.
+func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
+	log.Infof("Executing post-action state refresh")
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("ActionAgent.refreshTablet")
+	span.Annotate("reason", reason)
+	defer span.Finish()
+	ctx = trace.NewContext(ctx, span)
+
+	// Save the old tablet so callbacks can have a better idea of
+	// the precise nature of the transition.
+	oldTablet := agent.Tablet().Tablet
+
+	// Actions should have side effects on the tablet, so reload the data.
+	ti, err := agent.updateTabletFromTopo(ctx)
+	if err != nil {
+		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
+		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
+	}
+
+	if updatedTablet := agent.checkTabletMysqlPort(ctx, ti); updatedTablet != nil {
+		agent.mutex.Lock()
+		agent._tablet = updatedTablet
+		agent.mutex.Unlock()
+	}
+
+	if err := agent.updateState(ctx, oldTablet, reason); err != nil {
+		return err
+	}
+	log.Infof("Done with post-action state refresh")
+	return nil
+}
+
+// updateState will use the provided tablet record as a base, the current
+// tablet record as the new one, run changeCallback, and dispatch the event.
+func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pbt.Tablet, reason string) error {
+	agent.mutex.Lock()
+	newTablet := agent._tablet.Tablet
+	agent.mutex.Unlock()
+	log.Infof("Running tablet callback because: %v", reason)
+	if err := agent.changeCallback(ctx, oldTablet, newTablet); err != nil {
+		return err
+	}
+
+	event.Dispatch(&events.StateChange{
+		OldTablet: *oldTablet,
+		NewTablet: *newTablet,
+		Reason:    reason,
+	})
+	return nil
+}
+
 // changeCallback is run after every action that might
 // have changed something in the tablet record or in the topology.
+//
+// It owns making changes to the BinlogPlayerMap. The input for this is the
+// tablet type (has to be master), and the shard's SourceShards.
+//
+// It owns updating the blacklisted tables.
+//
+// It owns updating the stats record for 'TabletType'.
+//
+// It owns starting and stopping the update stream service.
+//
+// It owns reading the TabletControl for the current tablet, and storing it.
 func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *pbt.Tablet) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("ActionAgent.changeCallback")
@@ -120,13 +173,15 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// we're going to use it.
 	var shardInfo *topo.ShardInfo
 	var tabletControl *pbt.Shard_TabletControl
-	var blacklistedTables []string
 	var err error
 	var disallowQueryReason string
+	var blacklistedTables []string
+	updateBlacklistedTables := true
 	if allowQuery {
 		shardInfo, err = agent.TopoServer.GetShard(ctx, newTablet.Keyspace, newTablet.Shard)
 		if err != nil {
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
+			updateBlacklistedTables = false
 		} else {
 			if newTablet.Type == pbt.TabletType_MASTER {
 				if len(shardInfo.SourceShards) > 0 {
@@ -148,13 +203,19 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	} else {
 		disallowQueryReason = fmt.Sprintf("not a serving tablet type(%v)", newTablet.Type)
 	}
+	if updateBlacklistedTables {
+		if err := agent.loadBlacklistRules(newTablet, blacklistedTables); err != nil {
+			// FIXME(alainjobart) how to handle this error?
+			log.Errorf("Cannot update blacklisted tables rule: %v", err)
+		}
+	}
 
 	if allowQuery {
-		if err := agent.allowQueries(newTablet, blacklistedTables); err != nil {
+		if err := agent.allowQueries(newTablet.Type); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
-		agent.disallowQueries(newTablet, disallowQueryReason)
+		agent.disallowQueries(newTablet.Type, disallowQueryReason)
 	}
 
 	// save the tabletControl we've been using, so the background
@@ -168,15 +229,9 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		agent.UpdateStream.Disable()
 	}
 
-	statsType.Set(strings.ToLower(newTablet.Type.String()))
-	statsKeyspace.Set(newTablet.Keyspace)
-	statsShard.Set(newTablet.Shard)
-	if newTablet.KeyRange != nil {
-		statsKeyRangeStart.Set(hex.EncodeToString(newTablet.KeyRange.Start))
-		statsKeyRangeEnd.Set(hex.EncodeToString(newTablet.KeyRange.End))
-	} else {
-		statsKeyRangeStart.Set("")
-		statsKeyRangeEnd.Set("")
+	// upate the stats to our current type
+	if agent.exportStats {
+		agent.statsTabletType.Set(strings.ToLower(newTablet.Type.String()))
 	}
 
 	// See if we need to start or stop any binlog player

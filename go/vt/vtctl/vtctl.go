@@ -90,7 +90,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/netutil"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -151,7 +150,7 @@ var commands = []commandGroup{
 				"<tablet alias>",
 				"Stops replication on the specified slave."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
-				"[-force] [-dry-run] <tablet alias> <tablet type>",
+				"[-dry-run] <tablet alias> <tablet type>",
 				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
 					"NOTE: This command automatically updates the serving graph.\n" +
 					"Valid <tablet type> values are:\n" +
@@ -275,9 +274,6 @@ var commands = []commandGroup{
 	},
 	commandGroup{
 		"Generic", []command{
-			command{"Resolve", commandResolve,
-				"<keyspace>.<shard>.<db type>:<port name>",
-				"Reads a list of addresses that can answer this query. The port name can be mysql, vt, or grpc. Vitess uses this name to retrieve the actual port number from the topology server (ZooKeeper or etcd)."},
 			command{"RebuildReplicationGraph", commandRebuildReplicationGraph,
 				"<cell1>,<cell2>... <keyspace1>,<keyspace2>,...",
 				"HIDDEN This takes the Thor's hammer approach of recovery and should only be used in emergencies.  cell1,cell2,... are the canonical source of data for the system. This function uses that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
@@ -793,7 +789,6 @@ func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 }
 
 func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "Changes the slave type in ZooKeeper or etcd without running hooks")
 	dryRun := subFlags.Bool("dry-run", false, "Lists the proposed change without actually executing it")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -824,7 +819,7 @@ func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		wr.Logger().Printf("+ %v\n", fmtTabletAwkable(ti))
 		return nil
 	}
-	return wr.ChangeType(ctx, tabletAlias, newType, *force)
+	return wr.ChangeSlaveType(ctx, tabletAlias, newType)
 }
 
 func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1673,38 +1668,6 @@ func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 		return err
 	}
 	return printJSON(wr, result)
-}
-
-func commandResolve(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The Resolve command requires a single argument, the value of which must be in the format <keyspace>.<shard>.<db type>:<port name>.")
-	}
-	parts := strings.Split(subFlags.Arg(0), ":")
-	if len(parts) != 2 {
-		return fmt.Errorf("The Resolve command requires a single argument, the value of which must be in the format <keyspace>.<shard>.<db type>:<port name>.")
-	}
-	namedPort := parts[1]
-
-	parts = strings.Split(parts[0], ".")
-	if len(parts) != 3 {
-		return fmt.Errorf("The Resolve command requires a single argument, the value of which must be in the format <keyspace>.<shard>.<db type>:<port name>.")
-	}
-
-	tabletType, err := parseTabletType(parts[2], topoproto.AllTabletTypes)
-	if err != nil {
-		return err
-	}
-	addrs, err := topo.LookupVtName(ctx, wr.TopoServer(), "local", parts[0], parts[1], tabletType, namedPort)
-	if err != nil {
-		return err
-	}
-	for _, addr := range addrs {
-		wr.Logger().Printf("%v\n", netutil.JoinHostPort(addr.Target, int32(addr.Port)))
-	}
-	return nil
 }
 
 func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

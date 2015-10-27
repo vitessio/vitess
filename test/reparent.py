@@ -128,8 +128,6 @@ class TestReparent(unittest.TestCase):
 
     utils.run_vtctl(['ChangeSlaveType', tablet_62344.tablet_alias, 'spare'],
                     expect_fail=True)
-    utils.run_vtctl(['ChangeSlaveType', '--force', tablet_62344.tablet_alias,
-                     'spare'], expect_fail=True)
     tablet_62344.kill_vttablet()
 
   def test_reparent_down_master(self):
