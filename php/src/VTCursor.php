@@ -31,7 +31,7 @@ class VTCursor {
 
 	public function next() {
 		if ($this->rows && ++ $this->pos < count($this->rows)) {
-			return $this->rows[$this->pos]->getValuesList();
+			return VTProto::RowValues($this->rows[$this->pos]);
 		} else {
 			return FALSE;
 		}
@@ -68,14 +68,14 @@ class VTStreamCursor {
 	public function next() {
 		// Get the next row from the current QueryResult.
 		if ($this->rows && ++ $this->pos < count($this->rows)) {
-			return $this->rows[$this->pos]->getValuesList();
+			return VTProto::RowValues($this->rows[$this->pos]);
 		}
 		
 		// Get the next QueryResult. Loop in case we get a QueryResult with no rows (e.g. only fields).
 		while ($this->nextQueryResult()) {
 			// Get the first row from the new QueryResult.
 			if ($this->rows && ++ $this->pos < count($this->rows)) {
-				return $this->rows[$this->pos]->getValuesList();
+				return VTProto::RowValues($this->rows[$this->pos]);
 			}
 		}
 		
