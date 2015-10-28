@@ -3,9 +3,9 @@ package com.youtube.vitess.client.cursor;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Query.QueryResult;
-import com.youtube.vitess.proto.Query;
 
 import org.joda.time.DateTime;
 import org.junit.Assert;
@@ -37,14 +37,17 @@ public class CursorTest {
 
   @Test
   public void testGetInt() throws Exception {
-    List<Field.Type> types =
-        Arrays.asList(Field.Type.TYPE_TINY, Field.Type.TYPE_SHORT, Field.Type.TYPE_INT24);
-    for (Field.Type type : types) {
+    List<Query.Type> types = Arrays.asList(Query.Type.INT8, Query.Type.UINT8, Query.Type.INT16,
+        Query.Type.UINT16, Query.Type.INT24, Query.Type.UINT24, Query.Type.INT32);
+    for (Query.Type type : types) {
       try (
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("12345")))
+                  .addRows(
+                      Query.Row.newBuilder()
+                          .addLengths("12345".length())
+                          .setValues(ByteString.copyFromUtf8("12345")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
@@ -58,14 +61,11 @@ public class CursorTest {
     try (
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
-                .addFields(
-                    Field.newBuilder()
-                        .setName("col0")
-                        .setType(Field.Type.TYPE_LONGLONG)
-                        .setFlags(Field.Flag.VT_UNSIGNED_FLAG_VALUE)
-                        .build())
+                .addFields(Field.newBuilder().setName("col0").setType(Query.Type.UINT64).build())
                 .addRows(
-                    Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("18446744073709551615")))
+                    Query.Row.newBuilder()
+                        .addLengths("18446744073709551615".length())
+                        .setValues(ByteString.copyFromUtf8("18446744073709551615")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
@@ -75,13 +75,16 @@ public class CursorTest {
 
   @Test
   public void testGetString() throws Exception {
-    List<Field.Type> types = Arrays.asList(Field.Type.TYPE_ENUM, Field.Type.TYPE_SET);
-    for (Field.Type type : types) {
+    List<Query.Type> types = Arrays.asList(Query.Type.ENUM, Query.Type.SET, Query.Type.BIT);
+    for (Query.Type type : types) {
       try (
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("val123")))
+                  .addRows(
+                      Query.Row.newBuilder()
+                          .addLengths("val123".length())
+                          .setValues(ByteString.copyFromUtf8("val123")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
@@ -92,13 +95,16 @@ public class CursorTest {
 
   @Test
   public void testGetLong() throws Exception {
-    List<Field.Type> types = Arrays.asList(Field.Type.TYPE_LONG, Field.Type.TYPE_LONGLONG);
-    for (Field.Type type : types) {
+    List<Query.Type> types = Arrays.asList(Query.Type.UINT32, Query.Type.INT64);
+    for (Query.Type type : types) {
       try (
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("12345")))
+                  .addRows(
+                      Query.Row.newBuilder()
+                          .addLengths("12345".length())
+                          .setValues(ByteString.copyFromUtf8("12345")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
@@ -112,9 +118,11 @@ public class CursorTest {
     try (
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
-                .addFields(
-                    Field.newBuilder().setName("col0").setType(Field.Type.TYPE_DOUBLE).build())
-                .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("2.5")))
+                .addFields(Field.newBuilder().setName("col0").setType(Query.Type.FLOAT64).build())
+                .addRows(
+                    Query.Row.newBuilder()
+                        .addLengths("2.5".length())
+                        .setValues(ByteString.copyFromUtf8("2.5")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
@@ -127,9 +135,11 @@ public class CursorTest {
     try (
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
-                .addFields(
-                    Field.newBuilder().setName("col0").setType(Field.Type.TYPE_FLOAT).build())
-                .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("2.5")))
+                .addFields(Field.newBuilder().setName("col0").setType(Query.Type.FLOAT32).build())
+                .addRows(
+                    Query.Row.newBuilder()
+                        .addLengths("2.5".length())
+                        .setValues(ByteString.copyFromUtf8("2.5")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
@@ -139,14 +149,16 @@ public class CursorTest {
 
   @Test
   public void testGetDateTime() throws Exception {
-    List<Field.Type> types = Arrays.asList(Field.Type.TYPE_DATETIME, Field.Type.TYPE_TIMESTAMP);
-    for (Field.Type type : types) {
+    List<Query.Type> types = Arrays.asList(Query.Type.DATETIME, Query.Type.TIMESTAMP);
+    for (Query.Type type : types) {
       try (
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
                   .addRows(
-                      Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("2008-01-02 14:15:16")))
+                      Query.Row.newBuilder()
+                          .addLengths("2008-01-02 14:15:16".length())
+                          .setValues(ByteString.copyFromUtf8("2008-01-02 14:15:16")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
@@ -154,13 +166,16 @@ public class CursorTest {
       }
     }
 
-    types = Arrays.asList(Field.Type.TYPE_DATE, Field.Type.TYPE_NEWDATE);
-    for (Field.Type type : types) {
+    types = Arrays.asList(Query.Type.DATE);
+    for (Query.Type type : types) {
       try (
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("2008-01-02")))
+                  .addRows(
+                      Query.Row.newBuilder()
+                          .addLengths("2008-01-02".length())
+                          .setValues(ByteString.copyFromUtf8("2008-01-02")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
@@ -171,8 +186,11 @@ public class CursorTest {
     try (
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
-                .addFields(Field.newBuilder().setName("col0").setType(Field.Type.TYPE_TIME).build())
-                .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("12:34:56")))
+                .addFields(Field.newBuilder().setName("col0").setType(Query.Type.TIME).build())
+                .addRows(
+                    Query.Row.newBuilder()
+                        .addLengths("12:34:56".length())
+                        .setValues(ByteString.copyFromUtf8("12:34:56")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
@@ -182,16 +200,17 @@ public class CursorTest {
 
   @Test
   public void testGetBytes() throws Exception {
-    List<Field.Type> types =
-        Arrays.asList(Field.Type.TYPE_VARCHAR, Field.Type.TYPE_BIT, Field.Type.TYPE_TINY_BLOB,
-            Field.Type.TYPE_MEDIUM_BLOB, Field.Type.TYPE_LONG_BLOB, Field.Type.TYPE_BLOB,
-            Field.Type.TYPE_VAR_STRING, Field.Type.TYPE_STRING, Field.Type.TYPE_GEOMETRY);
-    for (Field.Type type : types) {
+    List<Query.Type> types = Arrays.asList(Query.Type.TEXT, Query.Type.BLOB, Query.Type.VARCHAR,
+        Query.Type.VARBINARY, Query.Type.CHAR, Query.Type.BINARY);
+    for (Query.Type type : types) {
       try (
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("hello world")))
+                  .addRows(
+                      Query.Row.newBuilder()
+                          .addLengths("hello world".length())
+                          .setValues(ByteString.copyFromUtf8("hello world")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
@@ -202,13 +221,16 @@ public class CursorTest {
 
   @Test
   public void testGetBigDecimal() throws Exception {
-    List<Field.Type> types = Arrays.asList(Field.Type.TYPE_DECIMAL, Field.Type.TYPE_NEWDECIMAL);
-    for (Field.Type type : types) {
+    List<Query.Type> types = Arrays.asList(Query.Type.DECIMAL);
+    for (Query.Type type : types) {
       try (
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                  .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("1234.56789")))
+                  .addRows(
+                      Query.Row.newBuilder()
+                          .addLengths("1234.56789".length())
+                          .setValues(ByteString.copyFromUtf8("1234.56789")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
@@ -223,8 +245,11 @@ public class CursorTest {
     try (
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
-                .addFields(Field.newBuilder().setName("col0").setType(Field.Type.TYPE_YEAR).build())
-                .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("1234")))
+                .addFields(Field.newBuilder().setName("col0").setType(Query.Type.YEAR).build())
+                .addRows(
+                    Query.Row.newBuilder()
+                        .addLengths("1234".length())
+                        .setValues(ByteString.copyFromUtf8("1234")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
@@ -237,8 +262,11 @@ public class CursorTest {
     try (
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
-                .addFields(Field.newBuilder().setName("col0").setType(Field.Type.TYPE_NULL).build())
-                .addRows(Query.Row.newBuilder().addValues(ByteString.copyFromUtf8("1234")))
+                .addFields(Field.newBuilder().setName("col0").setType(Query.Type.NULL).build())
+                .addRows(
+                    Query.Row.newBuilder()
+                        .addLengths("1234".length())
+                        .setValues(ByteString.copyFromUtf8("1234")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);

@@ -2,8 +2,10 @@ package com.youtube.vitess.client.cursor;
 
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
+
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
+
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.ISODateTimeFormat;
@@ -11,25 +13,34 @@ import org.joda.time.format.ISODateTimeFormat;
 import java.math.BigDecimal;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public class Row {
   private Map<String, Integer> fieldMap;
   private List<Field> fields;
+  private List<ByteString> values;
   private Query.Row rawRow;
 
   public Row(List<Field> fields, Query.Row rawRow, Map<String, Integer> fieldMap) {
     this.fields = fields;
     this.rawRow = rawRow;
     this.fieldMap = fieldMap;
+    this.values = extractValues(rawRow.getLengthsList(), rawRow.getValues());
   }
 
-  public List<Field> getFields() { return fields; }
+  public List<Field> getFields() {
+    return fields;
+  }
 
-  public Query.Row getRowProto() { return rawRow; }
+  public Query.Row getRowProto() {
+    return rawRow;
+  }
 
-  public Map<String, Integer> getFieldMap() { return fieldMap; }
+  public Map<String, Integer> getFieldMap() {
+    return fieldMap;
+  }
 
   public int findColumn(String columnLabel) throws SQLException {
     if (!fieldMap.containsKey(columnLabel)) {
@@ -43,14 +54,10 @@ public class Row {
   }
 
   public Object getObject(int columnIndex) throws SQLException {
-    if (columnIndex >= rawRow.getLengthsCount()) {
+    if (columnIndex >= values.size()) {
       throw new SQLDataException("invalid columnIndex: " + columnIndex);
     }
-    int index = 0;
-    for(int i=0; i<columnIndex; i++) {
-      index += rawRow.getLengths(i);
-    }
-    return convertFieldValue(fields.get(columnIndex), rawRow.getValues().substring(index, (int)rawRow.getLengths(columnIndex)));
+    return convertFieldValue(fields.get(columnIndex), values.get(columnIndex));
   }
 
   public int getInt(String columnLabel) throws SQLException {
@@ -137,13 +144,15 @@ public class Row {
     Object o = getObject(columnIndex);
     if (o != null && !cls.isInstance(o)) {
       throw new SQLDataException(
-              "type mismatch, expected:" + cls.getName() + ", actual: " + o.getClass().getName());
+          "type mismatch, expected:" + cls.getName() + ", actual: " + o.getClass().getName());
     }
     return o;
   }
 
-  Object convertFieldValue(Field field, ByteString value) throws SQLException {
-    if (value == null || value.size() == 0) {
+  private static Object convertFieldValue(Field field, ByteString value) throws SQLException {
+    if (value == null) {
+      // Only a MySQL NULL value should return null.
+      // A zero-length value should return the appropriate type.
       return null;
     }
 
@@ -158,14 +167,13 @@ public class Row {
       case UINT8: // fall through
       case INT16: // fall through
       case UINT16: // fall through
-      case INT24:
-      case UINT24:
-        return Integer.valueOf(value.toStringUtf8());
+      case INT24: // fall through
+      case UINT24: // fall through
       case INT32:
-        return Long.valueOf(value.toStringUtf8());
+        return Integer.valueOf(value.toStringUtf8());
+      case UINT32: // fall through
       case INT64:
         return Long.valueOf(value.toStringUtf8());
-      case UINT32: // fall through
       case UINT64:
         return UnsignedLong.valueOf(value.toStringUtf8());
       case FLOAT32:
@@ -178,7 +186,7 @@ public class Row {
         return DateTime.parse(value.toStringUtf8(), ISODateTimeFormat.date());
       case TIME:
         return DateTime.parse(value.toStringUtf8(), DateTimeFormat.forPattern("HH:mm:ss"));
-      case DATETIME:
+      case DATETIME: // fall through
       case TIMESTAMP:
         return DateTime.parse(value.toStringUtf8().replace(' ', 'T'));
       case YEAR:
@@ -192,10 +200,33 @@ public class Row {
       case VARCHAR: // fall through
       case VARBINARY: // fall through
       case CHAR: // fall through
-      case BINARY: // fall through
+      case BINARY:
         return value.toByteArray();
       default:
         throw new SQLDataException("unknown field type: " + field.getType());
     }
+  }
+
+  /**
+   * Extract cell values from the single-buffer wire format.
+   *
+   * <p>See the docs for the {@code Row} message in {@code query.proto}.
+   */
+  private static List<ByteString> extractValues(List<Long> lengths, ByteString buf) {
+    List<ByteString> list = new ArrayList<ByteString>(lengths.size());
+
+    int start = 0;
+    for (long len : lengths) {
+      if (len < 0) {
+        // This indicates a MySQL NULL value, to distinguish it from a zero-length string.
+        list.add((ByteString) null);
+      } else {
+        // Lengths are returned as long, but ByteString.substring() only supports int.
+        list.add(buf.substring(start, start + (int) len));
+        start += len;
+      }
+    }
+
+    return list;
   }
 }

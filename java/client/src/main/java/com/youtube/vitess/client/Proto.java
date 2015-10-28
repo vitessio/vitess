@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString;
 
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.SimpleCursor;
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.BindVariable;
 import com.youtube.vitess.proto.Query.BoundQuery;
 import com.youtube.vitess.proto.Query.QueryResult;
@@ -58,129 +59,40 @@ public class Proto {
     }
   }
 
-  @SuppressWarnings("unchecked")
-  private static void buildListBindVariable(BindVariable.Builder builder, Iterable<?> list) {
-    Iterator<?> itr = list.iterator();
-
-    if (itr.hasNext()) {
-      // Check the type of the first item to determine the type of list.
-      Object item = itr.next();
-
-      if (item instanceof byte[]) {
-        // List of Bytes
-        builder.setType(BindVariable.Type.TYPE_BYTES_LIST);
-        builder.addAllValueBytesList(
-            Iterables.transform((Iterable<? extends byte[]>) list, BYTE_ARRAY_TO_BYTE_STRING));
-      } else if (item instanceof Integer) {
-        // List of Int32
-        builder.setType(BindVariable.Type.TYPE_INT_LIST);
-        builder.addValueIntList((Integer) item);
-        while (itr.hasNext()) {
-          builder.addValueIntList((Integer) itr.next());
-        }
-      } else if (item instanceof Long) {
-        // List of Int64
-        builder.setType(BindVariable.Type.TYPE_INT_LIST);
-        builder.addAllValueIntList((Iterable<? extends Long>) list);
-      } else if (item instanceof UnsignedLong) {
-        // List of Uint64
-        builder.setType(BindVariable.Type.TYPE_UINT_LIST);
-        builder.addValueUintList(((UnsignedLong) item).longValue());
-        while (itr.hasNext()) {
-          builder.addValueUintList(((UnsignedLong) itr.next()).longValue());
-        }
-      } else if (item instanceof Float) {
-        // List of Float
-        builder.setType(BindVariable.Type.TYPE_FLOAT_LIST);
-        builder.addValueFloatList((Float) item);
-        while (itr.hasNext()) {
-          builder.addValueFloatList((Float) itr.next());
-        }
-      } else if (item instanceof Double) {
-        // List of Double
-        builder.setType(BindVariable.Type.TYPE_FLOAT_LIST);
-        builder.addAllValueFloatList((Iterable<? extends Double>) list);
-      } else {
-        throw new IllegalArgumentException("unsupported list bind var type");
-      }
-    } else {
-      // The list bind var is empty. Due to type erasure, we have no way
-      // of knowing what type of list it was meant to be. VTTablet will
-      // reject an empty list anyway, so we'll just pretend it was a
-      // List of Bytes.
-      builder.setType(BindVariable.Type.TYPE_BYTES_LIST);
-    }
-  }
-
   public static BindVariable buildBindVariable(Object value) {
     BindVariable.Builder builder = BindVariable.newBuilder();
 
-    if (value instanceof byte[]) {
-      // Bytes
-      builder.setType(BindVariable.Type.TYPE_BYTES);
-      builder.setValueBytes(ByteString.copyFrom((byte[]) value));
-    } else if (value instanceof Integer) {
-      // Int32
-      builder.setType(BindVariable.Type.TYPE_INT);
-      builder.setValueInt((int) value);
-    } else if (value instanceof Long) {
-      // Int64
-      builder.setType(BindVariable.Type.TYPE_INT);
-      builder.setValueInt((long) value);
-    } else if (value instanceof UnsignedLong) {
-      // Uint64
-      builder.setType(BindVariable.Type.TYPE_UINT);
-      builder.setValueUint(((UnsignedLong) value).longValue());
-    } else if (value instanceof Float) {
-      // Float
-      builder.setType(BindVariable.Type.TYPE_FLOAT);
-      builder.setValueFloat((float) value);
-    } else if (value instanceof Double) {
-      // Double
-      builder.setType(BindVariable.Type.TYPE_FLOAT);
-      builder.setValueFloat((double) value);
-    } else if (value instanceof Iterable<?>) {
+    if (value instanceof Iterable<?>) {
       // List Bind Vars
-      buildListBindVariable(builder, (Iterable<?>) value);
+      Iterator<?> itr = ((Iterable<?>) value).iterator();
+
+      if (!itr.hasNext()) {
+        throw new IllegalArgumentException("Can't pass empty list as list bind variable.");
+      }
+
+      builder.setType(Query.Type.TUPLE);
+
+      while (itr.hasNext()) {
+        TypedValue tval = new TypedValue(itr.next());
+        builder.addValues(Query.Value.newBuilder().setType(tval.type).setValue(tval.value).build());
+      }
     } else {
-      throw new IllegalArgumentException("unsupported bind var type");
+      TypedValue tval = new TypedValue(value);
+      builder.setType(tval.type);
+      builder.setValue(tval.value);
     }
 
     return builder.build();
   }
 
   public static EntityId buildEntityId(byte[] keyspaceId, Object value) {
-    EntityId.Builder builder = EntityId.newBuilder().setKeyspaceId(ByteString.copyFrom(keyspaceId));
+    TypedValue tval = new TypedValue(value);
 
-    if (value instanceof byte[]) {
-      // Bytes
-      builder.setXidType(EntityId.Type.TYPE_BYTES);
-      builder.setXidBytes(ByteString.copyFrom((byte[]) value));
-    } else if (value instanceof Integer) {
-      // Int32
-      builder.setXidType(EntityId.Type.TYPE_INT);
-      builder.setXidInt((int) value);
-    } else if (value instanceof Long) {
-      // Int64
-      builder.setXidType(EntityId.Type.TYPE_INT);
-      builder.setXidInt((long) value);
-    } else if (value instanceof UnsignedLong) {
-      // Uint64
-      builder.setXidType(EntityId.Type.TYPE_UINT);
-      builder.setXidUint(((UnsignedLong) value).longValue());
-    } else if (value instanceof Float) {
-      // Float
-      builder.setXidType(EntityId.Type.TYPE_FLOAT);
-      builder.setXidFloat((float) value);
-    } else if (value instanceof Double) {
-      // Double
-      builder.setXidType(EntityId.Type.TYPE_FLOAT);
-      builder.setXidFloat((double) value);
-    } else {
-      throw new IllegalArgumentException("unsupported entity ID type");
-    }
-
-    return builder.build();
+    return EntityId.newBuilder()
+        .setKeyspaceId(ByteString.copyFrom(keyspaceId))
+        .setXidType(tval.type)
+        .setXidValue(tval.value)
+        .build();
   }
 
   /**
@@ -260,4 +172,41 @@ public class Proto {
           return buildEntityId(entry.getKey(), entry.getValue());
         }
       };
+
+  /**
+   * Represents a type and value in the type system used in query.proto.
+   */
+  protected static class TypedValue {
+    Query.Type type;
+    ByteString value;
+
+    TypedValue(Object value) {
+      if (value == null) {
+        this.type = Query.Type.NULL;
+      } else if (value instanceof String) {
+        // String
+        this.type = Query.Type.VARCHAR;
+        this.value = ByteString.copyFromUtf8((String) value);
+      } else if (value instanceof byte[]) {
+        // Bytes
+        this.type = Query.Type.VARBINARY;
+        this.value = ByteString.copyFrom((byte[]) value);
+      } else if (value instanceof Integer || value instanceof Long) {
+        // Int32, Int64
+        this.type = Query.Type.INT64;
+        this.value = ByteString.copyFromUtf8(value.toString());
+      } else if (value instanceof UnsignedLong) {
+        // Uint64
+        this.type = Query.Type.UINT64;
+        this.value = ByteString.copyFromUtf8(value.toString());
+      } else if (value instanceof Float || value instanceof Double) {
+        // Float, Double
+        this.type = Query.Type.FLOAT64;
+        this.value = ByteString.copyFromUtf8(value.toString());
+      } else {
+        throw new IllegalArgumentException(
+            "unsupported type for Query.Value proto: " + value.getClass());
+      }
+    }
+  }
 }
