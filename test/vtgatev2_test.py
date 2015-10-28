@@ -19,8 +19,8 @@ from vtdb import dbexceptions
 from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtdb_logger
-from vtdb import vtgate_cursor
 from vtdb import vtgate_client
+from vtdb import vtgate_cursor
 
 shard_0_master = tablet.Tablet()
 shard_0_replica1 = tablet.Tablet()
@@ -239,6 +239,7 @@ class BaseTestCase(unittest.TestCase):
   def setUp(self):
     super(BaseTestCase, self).setUp()
     logging.info('Start: %s.', '.'.join(self.id().split('.')[-2:]))
+
 
 class TestCoreVTGateFunctions(BaseTestCase):
 
@@ -682,7 +683,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     query = 'select * from vt_field_types where str_val in %(str_val_1)s'
     rowcount = cursor.execute(query, {'str_val_1': str_val_list})
     self.assertEqual(rowcount, len(str_val_list), "rowcount doesn't match")
-    for i, r in enumerate(cursor.results):
+    for r in cursor.results:
       row = DBRow(field_names, r)
       self.assertIsInstance(row.str_val, str)
 
@@ -692,7 +693,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     rowcount = cursor.execute(query, {'unicode_val_1': unicode_val_list})
     self.assertEqual(
         rowcount, len(unicode_val_list), "rowcount doesn't match")
-    for i, r in enumerate(cursor.results):
+    for r in cursor.results:
       row = DBRow(field_names, r)
       self.assertIsInstance(row.unicode_val, basestring)
 
@@ -727,9 +728,9 @@ class TestFailures(BaseTestCase):
     utils.vtgate.kill()
     utils.VtGate(port=port).start()
 
-  def tablet_start(self, tablet, tablet_type, lameduck_period='0.5s'):
+  def tablet_start(self, tablet_obj, tablet_type, lameduck_period='0.5s'):
     _ = tablet_type
-    return tablet.start_vttablet(lameduck_period=lameduck_period)
+    return tablet_obj.start_vttablet(lameduck_period=lameduck_period)
 
   def test_status_with_error(self):
     """Tests that the status page loads correctly after a VTGate error."""

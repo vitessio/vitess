@@ -11,8 +11,8 @@ import utils
 
 
 class BaseTestCase(unittest.TestCase):
-
   pass
+
 
 class TestBuildValuesClause(BaseTestCase):
   """Test sql_builder.build_values_clause."""
