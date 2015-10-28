@@ -263,8 +263,8 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []mprot
 			switch fields[index].Type {
 			case mproto.VT_DECIMAL:
 				// we haven't updated the type yet
-				fields[index].Type = mproto.VT_VARCHAR
-			case mproto.VT_VARCHAR:
+				fields[index].Type = mproto.VT_VAR_STRING
+			case mproto.VT_VAR_STRING:
 				// nothing to do there
 			default:
 				// we already set this to something incompatible!

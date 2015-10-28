@@ -27,7 +27,6 @@ const (
 	VT_DATETIME    = 12
 	VT_YEAR        = 13
 	VT_NEWDATE     = 14
-	VT_VARCHAR     = 15
 	VT_BIT         = 16
 	VT_NEWDECIMAL  = 246
 	VT_ENUM        = 247

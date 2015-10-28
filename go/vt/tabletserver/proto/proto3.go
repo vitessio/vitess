@@ -6,8 +6,10 @@ package proto
 
 import (
 	"fmt"
+	"strconv"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -50,308 +52,257 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 		case []interface{}:
 			// This is how the list variables will normally appear.
 			if len(v) == 0 {
-				continue
+				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
-
-			// This assumes homogenous types, but that is what we support.
-			val := v[0]
-			switch valt := val.(type) {
-			// string and []byte are TYPE_BYTES_LIST
-			case string:
-				bv.Type = pb.BindVariable_TYPE_BYTES_LIST
-				listArg := make([][]byte, len(v))
-				for i, lv := range v {
-					listArg[i] = []byte(lv.(string))
+			bv.Type = sqltypes.Tuple
+			bv.Values = make([]*pb.Value, len(v))
+			values := make([]pb.Value, len(v))
+			for i, lv := range v {
+				val, err := BindVariableToValue(lv)
+				if err != nil {
+					return nil, fmt.Errorf("key: %s: %v", k, err)
 				}
-				bv.ValueBytesList = listArg
-			case []byte:
-				bv.Type = pb.BindVariable_TYPE_BYTES_LIST
-				listArg := make([][]byte, len(v))
-				for i, lv := range v {
-					listArg[i] = lv.([]byte)
+				if val.Type != sqltypes.Null {
+					values[i] = val
+					bv.Values[i] = &values[i]
 				}
-				bv.ValueBytesList = listArg
-
-			// int, int16, int32, int64 are TYPE_INT_LIST
-			case int:
-				bv.Type = pb.BindVariable_TYPE_INT_LIST
-				listArg := make([]int64, len(v))
-				for i, lv := range v {
-					listArg[i] = int64(lv.(int))
-				}
-				bv.ValueIntList = listArg
-			case int16:
-				bv.Type = pb.BindVariable_TYPE_INT_LIST
-				listArg := make([]int64, len(v))
-				for i, lv := range v {
-					listArg[i] = int64(lv.(int16))
-				}
-				bv.ValueIntList = listArg
-			case int32:
-				bv.Type = pb.BindVariable_TYPE_INT_LIST
-				listArg := make([]int64, len(v))
-				for i, lv := range v {
-					listArg[i] = int64(lv.(int32))
-				}
-				bv.ValueIntList = listArg
-			case int64:
-				bv.Type = pb.BindVariable_TYPE_INT_LIST
-				listArg := make([]int64, len(v))
-				for i, lv := range v {
-					listArg[i] = lv.(int64)
-				}
-				bv.ValueIntList = listArg
-
-			// uint, uint16, uint32, uint64 are TYPE_UINT_LIST
-			case uint:
-				bv.Type = pb.BindVariable_TYPE_UINT_LIST
-				listArg := make([]uint64, len(v))
-				for i, lv := range v {
-					listArg[i] = uint64(lv.(uint))
-				}
-				bv.ValueUintList = listArg
-			case uint16:
-				bv.Type = pb.BindVariable_TYPE_UINT_LIST
-				listArg := make([]uint64, len(v))
-				for i, lv := range v {
-					listArg[i] = uint64(lv.(uint16))
-				}
-				bv.ValueUintList = listArg
-			case uint32:
-				bv.Type = pb.BindVariable_TYPE_UINT_LIST
-				listArg := make([]uint64, len(v))
-				for i, lv := range v {
-					listArg[i] = uint64(lv.(uint32))
-				}
-				bv.ValueUintList = listArg
-			case uint64:
-				bv.Type = pb.BindVariable_TYPE_UINT_LIST
-				listArg := make([]uint64, len(v))
-				for i, lv := range v {
-					listArg[i] = lv.(uint64)
-				}
-				bv.ValueUintList = listArg
-
-			// float32, float64 are TYPE_FLOAT_LIST
-			case float32:
-				bv.Type = pb.BindVariable_TYPE_FLOAT_LIST
-				listArg := make([]float64, len(v))
-				for i, lv := range v {
-					listArg[i] = float64(lv.(float32))
-				}
-				bv.ValueFloatList = listArg
-			case float64:
-				bv.Type = pb.BindVariable_TYPE_FLOAT_LIST
-				listArg := make([]float64, len(v))
-				for i, lv := range v {
-					listArg[i] = lv.(float64)
-				}
-				bv.ValueFloatList = listArg
-			case nil:
-				// do nothing
-			default:
-				return nil, fmt.Errorf("unexpected type %T for variable %q", valt, k)
 			}
-		case string:
-			bv.Type = pb.BindVariable_TYPE_BYTES
-			bv.ValueBytes = []byte(v)
 		case []string:
-			bv.Type = pb.BindVariable_TYPE_BYTES_LIST
-			listArg := make([][]byte, len(v))
-			for i, lv := range v {
-				listArg[i] = []byte(lv)
+			if len(v) == 0 {
+				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
-			bv.ValueBytesList = listArg
-		case []byte:
-			bv.Type = pb.BindVariable_TYPE_BYTES
-			bv.ValueBytes = v
+			bv.Type = sqltypes.Tuple
+			bv.Values = make([]*pb.Value, len(v))
+			values := make([]pb.Value, len(v))
+			for i, lv := range v {
+				values[i].Type = sqltypes.VarChar
+				values[i].Value = []byte(lv)
+				bv.Values[i] = &values[i]
+			}
 		case [][]byte:
-			bv.Type = pb.BindVariable_TYPE_BYTES_LIST
-			listArg := make([][]byte, len(v))
-			for i, lv := range v {
-				listArg[i] = lv
+			if len(v) == 0 {
+				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
-			bv.ValueBytesList = listArg
-		case int:
-			bv.Type = pb.BindVariable_TYPE_INT
-			bv.ValueInt = int64(v)
-		case int16:
-			bv.Type = pb.BindVariable_TYPE_INT
-			bv.ValueInt = int64(v)
-		case int32:
-			bv.Type = pb.BindVariable_TYPE_INT
-			bv.ValueInt = int64(v)
-		case int64:
-			bv.Type = pb.BindVariable_TYPE_INT
-			bv.ValueInt = v
+			bv.Type = sqltypes.Tuple
+			bv.Values = make([]*pb.Value, len(v))
+			values := make([]pb.Value, len(v))
+			for i, lv := range v {
+				values[i].Type = sqltypes.VarBinary
+				values[i].Value = lv
+				bv.Values[i] = &values[i]
+			}
 		case []int:
-			bv.Type = pb.BindVariable_TYPE_INT_LIST
-			listArg := make([]int64, len(v))
-			for i, lv := range v {
-				listArg[i] = int64(lv)
+			if len(v) == 0 {
+				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
-			bv.ValueIntList = listArg
-		case []int16:
-			bv.Type = pb.BindVariable_TYPE_INT_LIST
-			listArg := make([]int64, len(v))
+			bv.Type = sqltypes.Tuple
+			bv.Values = make([]*pb.Value, len(v))
+			values := make([]pb.Value, len(v))
 			for i, lv := range v {
-				listArg[i] = int64(lv)
+				values[i].Type = sqltypes.Int64
+				values[i].Value = strconv.AppendInt(nil, int64(lv), 10)
+				bv.Values[i] = &values[i]
 			}
-			bv.ValueIntList = listArg
-		case []int32:
-			bv.Type = pb.BindVariable_TYPE_INT_LIST
-			listArg := make([]int64, len(v))
-			for i, lv := range v {
-				listArg[i] = int64(lv)
-			}
-			bv.ValueIntList = listArg
 		case []int64:
-			bv.Type = pb.BindVariable_TYPE_INT_LIST
-			listArg := make([]int64, len(v))
-			for i, lv := range v {
-				listArg[i] = lv
+			if len(v) == 0 {
+				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
-			bv.ValueIntList = listArg
-		case uint:
-			bv.Type = pb.BindVariable_TYPE_UINT
-			bv.ValueUint = uint64(v)
-		case uint16:
-			bv.Type = pb.BindVariable_TYPE_UINT
-			bv.ValueUint = uint64(v)
-		case uint32:
-			bv.Type = pb.BindVariable_TYPE_UINT
-			bv.ValueUint = uint64(v)
-		case uint64:
-			bv.Type = pb.BindVariable_TYPE_UINT
-			bv.ValueUint = v
-		case []uint:
-			bv.Type = pb.BindVariable_TYPE_UINT_LIST
-			listArg := make([]uint64, len(v))
+			bv.Type = sqltypes.Tuple
+			bv.Values = make([]*pb.Value, len(v))
+			values := make([]pb.Value, len(v))
 			for i, lv := range v {
-				listArg[i] = uint64(lv)
+				values[i].Type = sqltypes.Int64
+				values[i].Value = strconv.AppendInt(nil, lv, 10)
+				bv.Values[i] = &values[i]
 			}
-			bv.ValueUintList = listArg
-		case []uint16:
-			bv.Type = pb.BindVariable_TYPE_UINT_LIST
-			listArg := make([]uint64, len(v))
-			for i, lv := range v {
-				listArg[i] = uint64(lv)
-			}
-			bv.ValueUintList = listArg
-		case []uint32:
-			bv.Type = pb.BindVariable_TYPE_UINT_LIST
-			listArg := make([]uint64, len(v))
-			for i, lv := range v {
-				listArg[i] = uint64(lv)
-			}
-			bv.ValueUintList = listArg
 		case []uint64:
-			bv.Type = pb.BindVariable_TYPE_UINT_LIST
-			listArg := make([]uint64, len(v))
-			for i, lv := range v {
-				listArg[i] = lv
+			if len(v) == 0 {
+				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
-			bv.ValueUintList = listArg
-		case float32:
-			bv.Type = pb.BindVariable_TYPE_FLOAT
-			bv.ValueFloat = float64(v)
-		case float64:
-			bv.Type = pb.BindVariable_TYPE_FLOAT
-			bv.ValueFloat = float64(v)
-		case []float32:
-			bv.Type = pb.BindVariable_TYPE_FLOAT_LIST
-			listArg := make([]float64, len(v))
+			bv.Type = sqltypes.Tuple
+			bv.Values = make([]*pb.Value, len(v))
+			values := make([]pb.Value, len(v))
 			for i, lv := range v {
-				listArg[i] = float64(lv)
+				values[i].Type = sqltypes.Uint64
+				values[i].Value = strconv.AppendUint(nil, lv, 10)
+				bv.Values[i] = &values[i]
 			}
-			bv.ValueFloatList = listArg
-		case []float64:
-			bv.Type = pb.BindVariable_TYPE_FLOAT_LIST
-			listArg := make([]float64, len(v))
-			for i, lv := range v {
-				listArg[i] = lv
-			}
-			bv.ValueFloatList = listArg
-		case nil:
-			// do nothing
 		default:
-			return nil, fmt.Errorf("unexpected type %T for variable %q", v, k)
+			val, err := BindVariableToValue(v)
+			if err != nil {
+				return nil, fmt.Errorf("key: %s: %v", k, err)
+			}
+			bv.Type = val.Type
+			bv.Value = val.Value
 		}
 		result[k] = bv
 	}
 	return result, nil
 }
 
+// BindVariableToValue converts a native bind variable value
+// to a proto Value.
+func BindVariableToValue(v interface{}) (pb.Value, error) {
+	switch v := v.(type) {
+	case string:
+		return pb.Value{
+			Type:  sqltypes.VarChar,
+			Value: []byte(v),
+		}, nil
+	case []byte:
+		return pb.Value{
+			Type:  sqltypes.VarBinary,
+			Value: v,
+		}, nil
+	case int:
+		return pb.Value{
+			Type:  sqltypes.Int64,
+			Value: strconv.AppendInt(nil, int64(v), 10),
+		}, nil
+	case int8:
+		return pb.Value{
+			Type:  sqltypes.Int64,
+			Value: strconv.AppendInt(nil, int64(v), 10),
+		}, nil
+	case int16:
+		return pb.Value{
+			Type:  sqltypes.Int64,
+			Value: strconv.AppendInt(nil, int64(v), 10),
+		}, nil
+	case int32:
+		return pb.Value{
+			Type:  sqltypes.Int64,
+			Value: strconv.AppendInt(nil, int64(v), 10),
+		}, nil
+	case int64:
+		return pb.Value{
+			Type:  sqltypes.Int64,
+			Value: strconv.AppendInt(nil, v, 10),
+		}, nil
+	case uint:
+		return pb.Value{
+			Type:  sqltypes.Uint64,
+			Value: strconv.AppendUint(nil, uint64(v), 10),
+		}, nil
+	case uint8:
+		return pb.Value{
+			Type:  sqltypes.Uint64,
+			Value: strconv.AppendUint(nil, uint64(v), 10),
+		}, nil
+	case uint16:
+		return pb.Value{
+			Type:  sqltypes.Uint64,
+			Value: strconv.AppendUint(nil, uint64(v), 10),
+		}, nil
+	case uint32:
+		return pb.Value{
+			Type:  sqltypes.Uint64,
+			Value: strconv.AppendUint(nil, uint64(v), 10),
+		}, nil
+	case uint64:
+		return pb.Value{
+			Type:  sqltypes.Uint64,
+			Value: strconv.AppendUint(nil, v, 10),
+		}, nil
+	case float32:
+		return pb.Value{
+			Type:  sqltypes.Float64,
+			Value: strconv.AppendFloat(nil, float64(v), 'f', -1, 64),
+		}, nil
+	case float64:
+		return pb.Value{
+			Type:  sqltypes.Float64,
+			Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
+		}, nil
+	case sqltypes.Value:
+		switch {
+		case v.IsNull():
+			return pb.Value{}, nil
+		case v.IsNumeric():
+			// TODO(sougou): This will fail for large uint64 values.
+			// Revisit after the QueryResult revamp.
+			return pb.Value{Type: sqltypes.Int64, Value: v.Raw()}, nil
+		case v.IsFractional():
+			return pb.Value{Type: sqltypes.Float64, Value: v.Raw()}, nil
+		}
+		return pb.Value{Type: sqltypes.VarBinary, Value: v.Raw()}, nil
+	case nil:
+		return pb.Value{}, nil
+	}
+	return pb.Value{}, fmt.Errorf("unexpected type %T", v)
+}
+
 // Proto3ToBoundQuery converts a proto.BoundQuery to the internal data structure
-func Proto3ToBoundQuery(query *pb.BoundQuery) *BoundQuery {
+func Proto3ToBoundQuery(query *pb.BoundQuery) (*BoundQuery, error) {
+	bv, err := Proto3ToBindVariables(query.BindVariables)
+	if err != nil {
+		return nil, err
+	}
 	return &BoundQuery{
 		Sql:           string(query.Sql),
-		BindVariables: Proto3ToBindVariables(query.BindVariables),
-	}
+		BindVariables: bv,
+	}, nil
 }
 
 // Proto3ToBoundQueryList converts am array of proto.BoundQuery to the internal data structure
-func Proto3ToBoundQueryList(queries []*pb.BoundQuery) []BoundQuery {
+func Proto3ToBoundQueryList(queries []*pb.BoundQuery) ([]BoundQuery, error) {
 	if len(queries) == 0 {
-		return nil
+		return nil, nil
 	}
 	result := make([]BoundQuery, len(queries))
 	for i, q := range queries {
-		result[i] = *Proto3ToBoundQuery(q)
+		res, err := Proto3ToBoundQuery(q)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = *res
 	}
-	return result
+	return result, nil
 }
 
 // Proto3ToBindVariables converts a proto.BinVariable map to internal data structure
-func Proto3ToBindVariables(bv map[string]*pb.BindVariable) map[string]interface{} {
+func Proto3ToBindVariables(bv map[string]*pb.BindVariable) (map[string]interface{}, error) {
 	if len(bv) == 0 {
-		return nil
+		return nil, nil
 	}
-
 	result := make(map[string]interface{})
+	var err error
 	for k, v := range bv {
-		switch v.Type {
-		case pb.BindVariable_TYPE_BYTES:
-			result[k] = v.ValueBytes
-		case pb.BindVariable_TYPE_INT:
-			result[k] = v.ValueInt
-		case pb.BindVariable_TYPE_UINT:
-			result[k] = v.ValueUint
-		case pb.BindVariable_TYPE_FLOAT:
-			result[k] = v.ValueFloat
-		case pb.BindVariable_TYPE_BYTES_LIST:
-			bytesList := v.ValueBytesList
-			interfaceList := make([]interface{}, len(bytesList))
-			for i, lv := range bytesList {
-				interfaceList[i] = []byte(lv)
+		if v != nil && v.Type == sqltypes.Tuple {
+			list := make([]interface{}, len(v.Values))
+			for i, lv := range v.Values {
+				asbind := &pb.BindVariable{
+					Type:  lv.Type,
+					Value: lv.Value,
+				}
+				list[i], err = BindVariableToNative(asbind)
+				if err != nil {
+					return nil, err
+				}
 			}
-			result[k] = interfaceList
-		case pb.BindVariable_TYPE_INT_LIST:
-			intList := v.ValueIntList
-			interfaceList := make([]interface{}, len(intList))
-			for i, lv := range intList {
-				interfaceList[i] = lv
+			result[k] = list
+		} else {
+			result[k], err = BindVariableToNative(v)
+			if err != nil {
+				return nil, err
 			}
-			result[k] = interfaceList
-		case pb.BindVariable_TYPE_UINT_LIST:
-			uintList := v.ValueUintList
-			interfaceList := make([]interface{}, len(uintList))
-			for i, lv := range uintList {
-				interfaceList[i] = lv
-			}
-			result[k] = interfaceList
-		case pb.BindVariable_TYPE_FLOAT_LIST:
-			floatList := v.ValueFloatList
-			interfaceList := make([]interface{}, len(floatList))
-			for i, lv := range floatList {
-				interfaceList[i] = lv
-			}
-			result[k] = interfaceList
-		default:
-			result[k] = nil
 		}
 	}
-	return result
+	return result, nil
+}
+
+// BindVariableToNative converts a proto bind var to a native go type.
+func BindVariableToNative(v *pb.BindVariable) (interface{}, error) {
+	if v == nil || v.Type == sqltypes.Null {
+		return nil, nil
+	} else if sqltypes.IsSigned(v.Type) {
+		return strconv.ParseInt(string(v.Value), 0, 64)
+	} else if sqltypes.IsUnsigned(v.Type) {
+		return strconv.ParseUint(string(v.Value), 0, 64)
+	} else if sqltypes.IsFloat(v.Type) {
+		return strconv.ParseFloat(string(v.Value), 64)
+	}
+	return v.Value, nil
 }
 
 // Proto3ToQueryResultList converts a proto3 QueryResult to an internal data structure.
@@ -366,30 +317,38 @@ func Proto3ToQueryResultList(results []*pb.QueryResult) *QueryResultList {
 }
 
 // QueryResultListToProto3 changes the internal array of QueryResult to the proto3 version
-func QueryResultListToProto3(results []mproto.QueryResult) []*pb.QueryResult {
+func QueryResultListToProto3(results []mproto.QueryResult) ([]*pb.QueryResult, error) {
 	if len(results) == 0 {
-		return nil
+		return nil, nil
 	}
 	result := make([]*pb.QueryResult, len(results))
+	var err error
 	for i := range results {
-		result[i] = mproto.QueryResultToProto3(&results[i])
+		result[i], err = mproto.QueryResultToProto3(&results[i])
+		if err != nil {
+			return nil, err
+		}
 	}
-	return result
+	return result, nil
 }
 
 // Proto3ToQuerySplits converts a proto3 QuerySplit array to a native QuerySplit array
-func Proto3ToQuerySplits(queries []*pb.QuerySplit) []QuerySplit {
+func Proto3ToQuerySplits(queries []*pb.QuerySplit) ([]QuerySplit, error) {
 	if len(queries) == 0 {
-		return nil
+		return nil, nil
 	}
 	result := make([]QuerySplit, len(queries))
 	for i, qs := range queries {
+		res, err := Proto3ToBoundQuery(qs.Query)
+		if err != nil {
+			return nil, err
+		}
 		result[i] = QuerySplit{
-			Query:    *Proto3ToBoundQuery(qs.Query),
+			Query:    *res,
 			RowCount: qs.RowCount,
 		}
 	}
-	return result
+	return result, nil
 }
 
 // QuerySplitsToProto3 converts a native QuerySplit array to the proto3 version

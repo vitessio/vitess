@@ -19,10 +19,14 @@ import (
 // structures internally, and this will be obsolete.
 
 // StreamEventToProto converts a StreamEvent to a proto3
-func StreamEventToProto(s *StreamEvent) *pb.StreamEvent {
+func StreamEventToProto(s *StreamEvent) (*pb.StreamEvent, error) {
+	fields, err := mproto.FieldsToProto3(s.PrimaryKeyFields)
+	if err != nil {
+		return nil, err
+	}
 	result := &pb.StreamEvent{
 		TableName:        s.TableName,
-		PrimaryKeyFields: mproto.FieldsToProto3(s.PrimaryKeyFields),
+		PrimaryKeyFields: fields,
 		PrimaryKeyValues: mproto.RowsToProto3(s.PrimaryKeyValues),
 		Sql:              s.Sql,
 		Timestamp:        s.Timestamp,
@@ -38,7 +42,7 @@ func StreamEventToProto(s *StreamEvent) *pb.StreamEvent {
 	default:
 		result.Category = pb.StreamEvent_SE_ERR
 	}
-	return result
+	return result, nil
 }
 
 // ProtoToStreamEvent converts a proto to a StreamEvent

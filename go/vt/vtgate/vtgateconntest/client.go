@@ -269,8 +269,8 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bi
 		Session:           session,
 		NotInTransaction:  notInTransaction,
 	}
-	if len(query.EntityKeyspaceIDs) == 1 && len(query.EntityKeyspaceIDs[0].XidBytes) == 0 {
-		query.EntityKeyspaceIDs[0].XidBytes = nil
+	if len(query.EntityKeyspaceIDs) == 1 && len(query.EntityKeyspaceIDs[0].XidValue) == 0 {
+		query.EntityKeyspaceIDs[0].XidValue = nil
 	}
 	if !reflect.DeepEqual(query, execCase.entityIdsQuery) {
 		f.t.Errorf("ExecuteEntityIds: %+v, want %+v", query, execCase.entityIdsQuery)
@@ -2212,20 +2212,8 @@ func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 	if len(qsl) == 1 && len(qsl[0].Query.BindVariables) == 1 {
 		bv := qsl[0].Query.BindVariables["bind1"]
-		if len(bv.ValueBytes) == 0 {
-			bv.ValueBytes = nil
-		}
-		if len(bv.ValueBytesList) == 0 {
-			bv.ValueBytesList = nil
-		}
-		if len(bv.ValueIntList) == 0 {
-			bv.ValueIntList = nil
-		}
-		if len(bv.ValueUintList) == 0 {
-			bv.ValueUintList = nil
-		}
-		if len(bv.ValueFloatList) == 0 {
-			bv.ValueFloatList = nil
+		if len(bv.Values) == 0 {
+			bv.Values = nil
 		}
 	}
 	if !reflect.DeepEqual(qsl, splitQueryResult) {
@@ -2340,8 +2328,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
 				&pbg.ExecuteEntityIdsRequest_EntityId{
-					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
-					XidBytes:   []byte{105, 100, 49},
+					XidType:    sqltypes.VarBinary,
+					XidValue:   []byte{105, 100, 49},
 					KeyspaceId: []byte{0x6B},
 				},
 			},
@@ -2441,8 +2429,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
 				&pbg.ExecuteEntityIdsRequest_EntityId{
-					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
-					XidBytes:   []byte{105, 100, 49},
+					XidType:    sqltypes.VarBinary,
+					XidValue:   []byte{105, 100, 49},
 					KeyspaceId: []byte{0x6B},
 				},
 			},
@@ -2546,8 +2534,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
 				&pbg.ExecuteEntityIdsRequest_EntityId{
-					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
-					XidInt:     -12345,
+					XidType:    sqltypes.Int64,
+					XidValue:   []byte("-12345"),
 					KeyspaceId: []byte{0x6B},
 				},
 			},
@@ -2651,8 +2639,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
 				&pbg.ExecuteEntityIdsRequest_EntityId{
-					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
-					XidInt:     123456,
+					XidType:    sqltypes.Int64,
+					XidValue:   []byte("123456"),
 					KeyspaceId: []byte{0x6B},
 				},
 			},
@@ -2704,11 +2692,11 @@ var result1 = mproto.QueryResult{
 	Fields: []mproto.Field{
 		mproto.Field{
 			Name: "field1",
-			Type: 42,
+			Type: 2,
 		},
 		mproto.Field{
 			Name: "field2",
-			Type: 73,
+			Type: 3,
 		},
 	},
 	RowsAffected: 123,
@@ -2716,7 +2704,7 @@ var result1 = mproto.QueryResult{
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("row1 value1")),
-			sqltypes.MakeString([]byte("row1 value2")),
+			sqltypes.NULL,
 		},
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("row2 value1")),
@@ -2729,11 +2717,11 @@ var streamResult1 = mproto.QueryResult{
 	Fields: []mproto.Field{
 		mproto.Field{
 			Name: "field1",
-			Type: 42,
+			Type: 2,
 		},
 		mproto.Field{
 			Name: "field2",
-			Type: 73,
+			Type: 3,
 		},
 	},
 	RowsAffected: 0,
@@ -2774,8 +2762,8 @@ var splitQueryResult = []*pbg.SplitQueryResponse_Part{
 			Sql: "out for SplitQuery",
 			BindVariables: map[string]*pbq.BindVariable{
 				"bind1": &pbq.BindVariable{
-					Type:     pbq.BindVariable_TYPE_INT,
-					ValueInt: 1114444,
+					Type:  sqltypes.Int64,
+					Value: []byte("1114444"),
 				},
 			},
 		},

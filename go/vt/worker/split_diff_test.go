@@ -57,7 +57,7 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *pb
 			},
 			mproto.Field{
 				Name: "msg",
-				Type: mproto.VT_VARCHAR,
+				Type: mproto.VT_VAR_STRING,
 			},
 			mproto.Field{
 				Name: "keyspace_id",
@@ -116,7 +116,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pb.Targ
 			},
 			mproto.Field{
 				Name: "msg",
-				Type: mproto.VT_VARCHAR,
+				Type: mproto.VT_VAR_STRING,
 			},
 			mproto.Field{
 				Name: "keyspace_id",

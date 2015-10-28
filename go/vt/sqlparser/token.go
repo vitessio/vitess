@@ -379,7 +379,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 			if tkn.lastChar == eofChar {
 				return LEX_ERROR, buffer.Bytes()
 			}
-			if decodedChar := sqltypes.SqlDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DONTESCAPE {
+			if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DontEscape {
 				ch = tkn.lastChar
 			} else {
 				ch = uint16(decodedChar)

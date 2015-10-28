@@ -15,15 +15,38 @@ require_once (dirname(__FILE__) . '/proto/vtrpc.php');
  * encode as unsigned int.
  *
  * This is necessary because PHP doesn't have a real unsigned int type.
+ *
+ * You can pass in a signed int value, in which case the re-interpreted
+ * 64-bit 2's complement value will be sent as an unsigned int.
+ * For example:
+ * new VTUnsignedInt(42) // will send 42
+ * new VTUnsignedInt(-1) // will send 0xFFFFFFFFFFFFFFFF
+ *
+ * You can also pass in a string consisting of only decimal digits.
+ * For example:
+ * new VTUnsignedInt('12345') // will send 12345
  */
 class VTUnsignedInt {
-	public $value;
+	private $value;
 
 	public function __construct($value) {
 		if (is_int($value)) {
 			$this->value = $value;
+		} else if (is_string($value)) {
+			if (! ctype_digit($value)) {
+				throw new VTBadInputException('Invalid string value given for VTUnsignedInt: ' . $value);
+			}
+			$this->value = $value;
 		} else {
-			throw new VTException('Unsupported type for VTUnsignedInt');
+			throw new VTBadInputException('Unsupported type for VTUnsignedInt');
+		}
+	}
+
+	public function __toString() {
+		if (is_int($this->value)) {
+			return sprintf('%u', $this->value);
+		} else {
+			return strval($this->value);
 		}
 	}
 }
@@ -69,69 +92,62 @@ class VTProto {
 	public static function BindVariable($value) {
 		$bind_var = new \query\BindVariable();
 		
-		if (is_null($value)) {
-			$bind_var->setType(\query\BindVariable\Type::TYPE_NULL);
-		} else if (is_string($value)) {
-			$bind_var->setType(\query\BindVariable\Type::TYPE_BYTES);
-			$bind_var->setValueBytes($value);
-		} else if (is_int($value)) {
-			$bind_var->setType(\query\BindVariable\Type::TYPE_INT);
-			$bind_var->setValueInt($value);
-		} else if (is_float($value)) {
-			$bind_var->setType(\query\BindVariable\Type::TYPE_FLOAT);
-			$bind_var->setValueFloat($value);
-		} else if (is_object($value)) {
-			switch (get_class($value)) {
-				case 'VTUnsignedInt':
-					$bind_var->setType(\query\BindVariable\Type::TYPE_UINT);
-					$bind_var->setValueUint($value->value);
-					break;
-				default:
-					throw new VTException('Unknown bind variable class: ' . get_class($value));
+		if (is_array($value)) {
+			if (count($value) == 0) {
+				throw new VTBadInputException('Empty list not allowed for list bind variable');
 			}
-		} else if (is_array($value)) {
-			self::ListBindVariable($bind_var, $value);
+			
+			$bind_var->setType(\query\Type::TUPLE);
+			
+			foreach ($value as $elem) {
+				list ( $type, $tval ) = self::TypedValue($elem);
+				$bind_var->addValues((new \query\Value())->setType($type)->setValue($tval));
+			}
 		} else {
-			throw new VTException('Unknown bind variable type.');
+			list ( $type, $tval ) = self::TypedValue($value);
+			$bind_var->setType($type);
+			$bind_var->setValue($tval);
 		}
 		
 		return $bind_var;
 	}
 
-	protected static function ListBindVariable(&$bind_var, array $list) {
-		if (count($list) == 0) {
-			// The list is empty, so it has no type. VTTablet will reject an empty
-			// list anyway, so we'll just pretend it was a list of bytes.
-			$bind_var->setType(\query\BindVariable\Type::TYPE_BYTES_LIST);
-			return;
-		}
-		
-		// Check type of first item to determine type of list.
-		// We only support lists whose elements have uniform types.
-		if (is_string($list[0])) {
-			$bind_var->setType(\query\BindVariable\Type::TYPE_BYTES_LIST);
-			$bind_var->setValueBytesList($list);
-		} else if (is_int($list[0])) {
-			$bind_var->setType(\query\BindVariable\Type::TYPE_INT_LIST);
-			$bind_var->setValueIntList($list);
-		} else if (is_float($list[0])) {
-			$bind_var->setType(\query\BindVariable\Type::TYPE_FLOAT_LIST);
-			$bind_var->setValueFloatList($list);
-		} else if (is_object($list[0])) {
-			switch (get_class($list[0])) {
+	/**
+	 * Returns a tuple of detected \query\Type and string value compatible with \query\Value.
+	 */
+	protected static function TypedValue($value) {
+		if (is_null($value)) {
+			return array(
+					\query\Type::NULL_,
+					'' 
+			);
+		} else if (is_string($value)) {
+			return array(
+					\query\Type::VARBINARY,
+					$value 
+			);
+		} else if (is_int($value)) {
+			return array(
+					\query\Type::INT64,
+					strval($value) 
+			);
+		} else if (is_float($value)) {
+			return array(
+					\query\Type::FLOAT64,
+					strval($value) 
+			);
+		} else if (is_object($value)) {
+			switch (get_class($value)) {
 				case 'VTUnsignedInt':
-					$bind_var->setType(\query\BindVariable\Type::TYPE_UINT_LIST);
-					$value = array();
-					foreach ($list as $val) {
-						$value[] = $val->value;
-					}
-					$bind_var->setValueUintList($value);
-					break;
+					return array(
+							\query\Type::UINT64,
+							strval($value) 
+					);
 				default:
-					throw new VTException('Unknown list bind variable class: ' . get_class($list[0]));
+					throw new VTBadInputException('Unknown \query\Value variable class: ' . get_class($value));
 			}
 		} else {
-			throw new VTException('Unknown list bind variable type.');
+			throw new VTBadInputException('Unknown type for \query\Value proto:' . gettype($value));
 		}
 	}
 
@@ -162,27 +178,9 @@ class VTProto {
 		$eid = new \vtgate\ExecuteEntityIdsRequest\EntityId();
 		$eid->setKeyspaceId($keyspace_id);
 		
-		if (is_string($value)) {
-			$eid->setXidType(\vtgate\ExecuteEntityIdsRequest\EntityId\Type::TYPE_BYTES);
-			$eid->setXidBytes($value);
-		} else if (is_int($value)) {
-			$eid->setXidType(\vtgate\ExecuteEntityIdsRequest\EntityId\Type::TYPE_INT);
-			$eid->setXidInt($value);
-		} else if (is_float($value)) {
-			$eid->setXidType(\vtgate\ExecuteEntityIdsRequest\EntityId\Type::TYPE_FLOAT);
-			$eid->setXidFloat($value);
-		} else if (is_object($value)) {
-			switch (get_class($value)) {
-				case 'VTUnsignedInt':
-					$eid->setXidType(\vtgate\ExecuteEntityIdsRequest\EntityId\Type::TYPE_UINT);
-					$eid->setXidUint($value->value);
-					break;
-				default:
-					throw new VTException('Unknown entity ID class: ' . get_class($value));
-			}
-		} else {
-			throw new VTException('Unknown entity ID type.');
-		}
+		list ( $type, $tval ) = self::TypedValue($value);
+		$eid->setXidType($type);
+		$eid->setXidValue($tval);
 		
 		return $eid;
 	}
@@ -207,6 +205,32 @@ class VTProto {
 		$value->setKeyspace($keyspace);
 		$value->setKeyspaceIds($keyspace_ids);
 		return $value;
+	}
+
+	public function RowValues($row) {
+		$values = array();
+		
+		// Row values are packed into a single buffer.
+		// See the docs for the Row message in query.proto.
+		$start = 0;
+		$buf = $row->getValues();
+		$lengths = $row->getLengths();
+		foreach ($lengths as $len) {
+			if ($len < 0) {
+				// This indicates a MySQL NULL value,
+				// to distinguish it from a zero-length string.
+				$values[] = NULL;
+			} else {
+				$val = substr($buf, $start, $len);
+				if ($val === FALSE || strlen($val) != $len) {
+					throw new VTException('Index out of bounds while decoding Row values');
+				}
+				$values[] = $val;
+				$start += $len;
+			}
+		}
+		
+		return $values;
 	}
 }
 

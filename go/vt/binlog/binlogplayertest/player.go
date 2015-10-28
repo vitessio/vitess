@@ -64,7 +64,7 @@ var testStreamEvent = &proto.StreamEvent{
 		mproto.Field{
 			Name:  "id",
 			Type:  254,
-			Flags: 16515,
+			Flags: 128,
 		},
 	},
 	PrimaryKeyValues: [][]sqltypes.Value{
@@ -99,7 +99,7 @@ func testServeUpdateStream(t *testing.T, bpc binlogplayer.Client) {
 		t.Fatalf("got no response")
 	} else {
 		if !reflect.DeepEqual(*se, *testStreamEvent) {
-			t.Errorf("got wrong result, got %v expected %v", *se, *testBinlogTransaction)
+			t.Errorf("got wrong result, got \n%#v expected \n%#v", *se, *testStreamEvent)
 		}
 	}
 	if se, ok := <-c; ok {

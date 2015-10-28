@@ -5,6 +5,7 @@ import static org.junit.Assert.assertEquals;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.BindVariable;
 
 import org.junit.Test;
@@ -23,76 +24,150 @@ public class BindVarTest {
   @Parameters
   public static Collection<Object[]> testParams() {
     Object[][] params = {
+        // String
+        {"hello world", BindVariable.newBuilder()
+                            .setType(Query.Type.VARCHAR)
+                            .setValue(ByteString.copyFromUtf8("hello world"))
+                            .build()},
         // Bytes
         {new byte[] {1, 2, 3}, BindVariable.newBuilder()
-                                   .setType(BindVariable.Type.TYPE_BYTES)
-                                   .setValueBytes(ByteString.copyFrom(new byte[] {1, 2, 3}))
+                                   .setType(Query.Type.VARBINARY)
+                                   .setValue(ByteString.copyFrom(new byte[] {1, 2, 3}))
                                    .build()},
         // Int
         {123, BindVariable.newBuilder()
-                  .setType(BindVariable.Type.TYPE_INT)
-                  .setValueInt(123)
+                  .setType(Query.Type.INT64)
+                  .setValue(ByteString.copyFromUtf8("123"))
                   .build()},
         {123L, BindVariable.newBuilder()
-                   .setType(BindVariable.Type.TYPE_INT)
-                   .setValueInt(123)
+                   .setType(Query.Type.INT64)
+                   .setValue(ByteString.copyFromUtf8("123"))
                    .build()},
         // Uint
         {UnsignedLong.fromLongBits(-1), BindVariable.newBuilder()
-                                            .setType(BindVariable.Type.TYPE_UINT)
-                                            .setValueUint(-1)
+                                            .setType(Query.Type.UINT64)
+                                            .setValue(
+                                                ByteString.copyFromUtf8("18446744073709551615"))
                                             .build()},
         // Float
         {1.23f, BindVariable.newBuilder()
-                    .setType(BindVariable.Type.TYPE_FLOAT)
-                    .setValueFloat(1.23f)
+                    .setType(Query.Type.FLOAT64)
+                    .setValue(ByteString.copyFromUtf8("1.23"))
                     .build()},
         {1.23, BindVariable.newBuilder()
-                   .setType(BindVariable.Type.TYPE_FLOAT)
-                   .setValueFloat(1.23)
+                   .setType(Query.Type.FLOAT64)
+                   .setValue(ByteString.copyFromUtf8("1.23"))
                    .build()},
         // List of Bytes
         {Arrays.asList(new byte[] {1, 2, 3}, new byte[] {4, 5, 6}),
          BindVariable.newBuilder()
-             .setType(BindVariable.Type.TYPE_BYTES_LIST)
-             .addValueBytesList(ByteString.copyFrom(new byte[] {1, 2, 3}))
-             .addValueBytesList(ByteString.copyFrom(new byte[] {4, 5, 6}))
+             .setType(Query.Type.TUPLE)
+             .addValues(
+                 Query.Value.newBuilder()
+                     .setType(Query.Type.VARBINARY)
+                     .setValue(ByteString.copyFrom(new byte[] {1, 2, 3}))
+                     .build())
+             .addValues(
+                 Query.Value.newBuilder()
+                     .setType(Query.Type.VARBINARY)
+                     .setValue(ByteString.copyFrom(new byte[] {4, 5, 6}))
+                     .build())
              .build()},
         // List of Int
         {Arrays.asList(1, 2, 3), BindVariable.newBuilder()
-                                     .setType(BindVariable.Type.TYPE_INT_LIST)
-                                     .addValueIntList(1)
-                                     .addValueIntList(2)
-                                     .addValueIntList(3)
+                                     .setType(Query.Type.TUPLE)
+                                     .addValues(
+                                         Query.Value.newBuilder()
+                                             .setType(Query.Type.INT64)
+                                             .setValue(ByteString.copyFromUtf8("1"))
+                                             .build())
+                                     .addValues(
+                                         Query.Value.newBuilder()
+                                             .setType(Query.Type.INT64)
+                                             .setValue(ByteString.copyFromUtf8("2"))
+                                             .build())
+                                     .addValues(
+                                         Query.Value.newBuilder()
+                                             .setType(Query.Type.INT64)
+                                             .setValue(ByteString.copyFromUtf8("3"))
+                                             .build())
                                      .build()},
         {Arrays.asList(1L, 2L, 3L), BindVariable.newBuilder()
-                                        .setType(BindVariable.Type.TYPE_INT_LIST)
-                                        .addAllValueIntList(Arrays.asList(1L, 2L, 3L))
+                                        .setType(Query.Type.TUPLE)
+                                        .addValues(
+                                            Query.Value.newBuilder()
+                                                .setType(Query.Type.INT64)
+                                                .setValue(ByteString.copyFromUtf8("1"))
+                                                .build())
+                                        .addValues(
+                                            Query.Value.newBuilder()
+                                                .setType(Query.Type.INT64)
+                                                .setValue(ByteString.copyFromUtf8("2"))
+                                                .build())
+                                        .addValues(
+                                            Query.Value.newBuilder()
+                                                .setType(Query.Type.INT64)
+                                                .setValue(ByteString.copyFromUtf8("3"))
+                                                .build())
                                         .build()},
         // List of Uint
         {Arrays.asList(UnsignedLong.fromLongBits(1), UnsignedLong.fromLongBits(2),
              UnsignedLong.fromLongBits(3)),
          BindVariable.newBuilder()
-             .setType(BindVariable.Type.TYPE_UINT_LIST)
-             .addAllValueUintList(Arrays.asList(1L, 2L, 3L))
+             .setType(Query.Type.TUPLE)
+             .addValues(
+                 Query.Value.newBuilder()
+                     .setType(Query.Type.UINT64)
+                     .setValue(ByteString.copyFromUtf8("1"))
+                     .build())
+             .addValues(
+                 Query.Value.newBuilder()
+                     .setType(Query.Type.UINT64)
+                     .setValue(ByteString.copyFromUtf8("2"))
+                     .build())
+             .addValues(
+                 Query.Value.newBuilder()
+                     .setType(Query.Type.UINT64)
+                     .setValue(ByteString.copyFromUtf8("3"))
+                     .build())
              .build()},
         // List of Float
         {Arrays.asList(1.2f, 3.4f, 5.6f), BindVariable.newBuilder()
-                                              .setType(BindVariable.Type.TYPE_FLOAT_LIST)
-                                              .addValueFloatList(1.2f)
-                                              .addValueFloatList(3.4f)
-                                              .addValueFloatList(5.6f)
+                                              .setType(Query.Type.TUPLE)
+                                              .addValues(
+                                                  Query.Value.newBuilder()
+                                                      .setType(Query.Type.FLOAT64)
+                                                      .setValue(ByteString.copyFromUtf8("1.2"))
+                                                      .build())
+                                              .addValues(
+                                                  Query.Value.newBuilder()
+                                                      .setType(Query.Type.FLOAT64)
+                                                      .setValue(ByteString.copyFromUtf8("3.4"))
+                                                      .build())
+                                              .addValues(
+                                                  Query.Value.newBuilder()
+                                                      .setType(Query.Type.FLOAT64)
+                                                      .setValue(ByteString.copyFromUtf8("5.6"))
+                                                      .build())
                                               .build()},
         {Arrays.asList(1.2, 3.4, 5.6), BindVariable.newBuilder()
-                                           .setType(BindVariable.Type.TYPE_FLOAT_LIST)
-                                           .addAllValueFloatList(Arrays.asList(1.2, 3.4, 5.6))
-                                           .build()},
-        // Empty List
-        {Arrays.asList(), BindVariable.newBuilder()
-                              .setType(BindVariable.Type.TYPE_BYTES_LIST)
-                              .build()
-
-        }};
+                                           .setType(Query.Type.TUPLE)
+                                           .addValues(
+                                               Query.Value.newBuilder()
+                                                   .setType(Query.Type.FLOAT64)
+                                                   .setValue(ByteString.copyFromUtf8("1.2"))
+                                                   .build())
+                                           .addValues(
+                                               Query.Value.newBuilder()
+                                                   .setType(Query.Type.FLOAT64)
+                                                   .setValue(ByteString.copyFromUtf8("3.4"))
+                                                   .build())
+                                           .addValues(
+                                               Query.Value.newBuilder()
+                                                   .setType(Query.Type.FLOAT64)
+                                                   .setValue(ByteString.copyFromUtf8("5.6"))
+                                                   .build())
+                                           .build()}};
     return Arrays.asList(params);
   }
 

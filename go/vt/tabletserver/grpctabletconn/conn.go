@@ -288,7 +288,7 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 
 	q, err := tproto.BoundQueryToProto3(query.Sql, query.BindVariables)
 	if err != nil {
-		return nil, err
+		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
 	req := &pb.SplitQueryRequest{
 		Target:            conn.target,
@@ -303,7 +303,11 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
-	return tproto.Proto3ToQuerySplits(sqr.Queries), nil
+	split, err := tproto.Proto3ToQuerySplits(sqr.Queries)
+	if err != nil {
+		return nil, tabletconn.TabletErrorFromGRPC(err)
+	}
+	return split, nil
 }
 
 // StreamHealth is the stub for TabletServer.StreamHealth RPC

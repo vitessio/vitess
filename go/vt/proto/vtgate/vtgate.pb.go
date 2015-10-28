@@ -59,35 +59,6 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
-type ExecuteEntityIdsRequest_EntityId_Type int32
-
-const (
-	ExecuteEntityIdsRequest_EntityId_TYPE_NULL  ExecuteEntityIdsRequest_EntityId_Type = 0
-	ExecuteEntityIdsRequest_EntityId_TYPE_BYTES ExecuteEntityIdsRequest_EntityId_Type = 1
-	ExecuteEntityIdsRequest_EntityId_TYPE_INT   ExecuteEntityIdsRequest_EntityId_Type = 2
-	ExecuteEntityIdsRequest_EntityId_TYPE_UINT  ExecuteEntityIdsRequest_EntityId_Type = 3
-	ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT ExecuteEntityIdsRequest_EntityId_Type = 4
-)
-
-var ExecuteEntityIdsRequest_EntityId_Type_name = map[int32]string{
-	0: "TYPE_NULL",
-	1: "TYPE_BYTES",
-	2: "TYPE_INT",
-	3: "TYPE_UINT",
-	4: "TYPE_FLOAT",
-}
-var ExecuteEntityIdsRequest_EntityId_Type_value = map[string]int32{
-	"TYPE_NULL":  0,
-	"TYPE_BYTES": 1,
-	"TYPE_INT":   2,
-	"TYPE_UINT":  3,
-	"TYPE_FLOAT": 4,
-}
-
-func (x ExecuteEntityIdsRequest_EntityId_Type) String() string {
-	return proto.EnumName(ExecuteEntityIdsRequest_EntityId_Type_name, int32(x))
-}
-
 // Session objects are session cookies and are invalidated on
 // use. Query results will contain updated session values.
 // Their content should be opaque to the user.
@@ -445,12 +416,9 @@ func (m *ExecuteEntityIdsRequest) GetEntityKeyspaceIds() []*ExecuteEntityIdsRequ
 }
 
 type ExecuteEntityIdsRequest_EntityId struct {
-	XidType    ExecuteEntityIdsRequest_EntityId_Type `protobuf:"varint,1,opt,name=xid_type,enum=vtgate.ExecuteEntityIdsRequest_EntityId_Type" json:"xid_type,omitempty"`
-	XidBytes   []byte                                `protobuf:"bytes,2,opt,name=xid_bytes,proto3" json:"xid_bytes,omitempty"`
-	XidInt     int64                                 `protobuf:"varint,3,opt,name=xid_int" json:"xid_int,omitempty"`
-	XidUint    uint64                                `protobuf:"varint,4,opt,name=xid_uint" json:"xid_uint,omitempty"`
-	XidFloat   float64                               `protobuf:"fixed64,5,opt,name=xid_float" json:"xid_float,omitempty"`
-	KeyspaceId []byte                                `protobuf:"bytes,6,opt,name=keyspace_id,proto3" json:"keyspace_id,omitempty"`
+	XidType    query.Type `protobuf:"varint,1,opt,name=xid_type,enum=query.Type" json:"xid_type,omitempty"`
+	XidValue   []byte     `protobuf:"bytes,2,opt,name=xid_value,proto3" json:"xid_value,omitempty"`
+	KeyspaceId []byte     `protobuf:"bytes,3,opt,name=keyspace_id,proto3" json:"keyspace_id,omitempty"`
 }
 
 func (m *ExecuteEntityIdsRequest_EntityId) Reset()         { *m = ExecuteEntityIdsRequest_EntityId{} }
@@ -1057,8 +1025,4 @@ func (m *GetSrvKeyspaceResponse) GetSrvKeyspace() *topodata.SrvKeyspace {
 		return m.SrvKeyspace
 	}
 	return nil
-}
-
-func init() {
-	proto.RegisterEnum("vtgate.ExecuteEntityIdsRequest_EntityId_Type", ExecuteEntityIdsRequest_EntityId_Type_name, ExecuteEntityIdsRequest_EntityId_Type_value)
 }

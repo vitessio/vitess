@@ -101,19 +101,9 @@ message ExecuteEntityIdsRequest {
   string keyspace = 4;
   string entity_column_name = 5;
   message EntityId {
-    enum Type {
-      TYPE_NULL = 0;
-      TYPE_BYTES = 1;
-      TYPE_INT = 2;
-      TYPE_UINT = 3;
-      TYPE_FLOAT = 4;
-    }
-    Type xid_type = 1;
-    bytes xid_bytes = 2;
-    int64 xid_int = 3;
-    uint64 xid_uint = 4;
-    double xid_float = 5;
-    bytes keyspace_id = 6;
+    query.Type xid_type = 1;
+    bytes xid_value = 2;
+    bytes keyspace_id = 3;
   }
   repeated EntityId entity_keyspace_ids = 6;
   topodata.TabletType tablet_type = 7;

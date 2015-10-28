@@ -41,7 +41,7 @@ func TestStreamEvent(t *testing.T) {
 		PrimaryKeyFields: []mproto.Field{
 			mproto.Field{
 				Name: "str2",
-				Type: mproto.VT_VARCHAR,
+				Type: mproto.VT_VAR_STRING,
 			},
 			mproto.Field{
 				Name: "str3",
@@ -78,7 +78,7 @@ func TestStreamEvent(t *testing.T) {
 		PrimaryKeyFields: []mproto.Field{
 			mproto.Field{
 				Name: "str2",
-				Type: mproto.VT_VARCHAR,
+				Type: mproto.VT_VAR_STRING,
 			},
 			mproto.Field{
 				Name: "str3",

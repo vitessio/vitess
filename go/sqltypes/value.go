@@ -20,8 +20,10 @@ import (
 )
 
 var (
-	NULL       = Value{}
-	DONTESCAPE = byte(255)
+	// NULL represents the NULL value.
+	NULL = Value{}
+	// DontEscape tells you if a character should not be escaped.
+	DontEscape = byte(255)
 	nullstr    = []byte("null")
 )
 
@@ -116,28 +118,29 @@ func (v Value) ParseFloat64() (val float64, err error) {
 	return strconv.ParseFloat(string(n.raw()), 64)
 }
 
-// EncodeSql encodes the value into an SQL statement. Can be binary.
-func (v Value) EncodeSql(b BinWriter) {
+// EncodeSQL encodes the value into an SQL statement. Can be binary.
+func (v Value) EncodeSQL(b BinWriter) {
 	if v.Inner == nil {
 		if _, err := b.Write(nullstr); err != nil {
 			panic(err)
 		}
 	} else {
-		v.Inner.encodeSql(b)
+		v.Inner.encodeSQL(b)
 	}
 }
 
-// EncodeAscii encodes the value using 7-bit clean ascii bytes.
-func (v Value) EncodeAscii(b BinWriter) {
+// EncodeASCII encodes the value using 7-bit clean ascii bytes.
+func (v Value) EncodeASCII(b BinWriter) {
 	if v.Inner == nil {
 		if _, err := b.Write(nullstr); err != nil {
 			panic(err)
 		}
 	} else {
-		v.Inner.encodeAscii(b)
+		v.Inner.encodeASCII(b)
 	}
 }
 
+// MarshalBson marshals Value into bson.
 func (v Value) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	if key == "" {
 		lenWriter := bson.NewLenWriter(buf)
@@ -151,6 +154,7 @@ func (v Value) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	}
 }
 
+// UnmarshalBson unmarshals from bson.
 func (v *Value) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	if kind == bson.EOO {
 		bson.Next(buf, 4)
@@ -162,10 +166,12 @@ func (v *Value) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	}
 }
 
+// IsNull returns true if Value is null.
 func (v Value) IsNull() bool {
 	return v.Inner == nil
 }
 
+// IsNumeric returns true if Value is numeric.
 func (v Value) IsNumeric() (ok bool) {
 	if v.Inner != nil {
 		_, ok = v.Inner.(Numeric)
@@ -173,6 +179,7 @@ func (v Value) IsNumeric() (ok bool) {
 	return ok
 }
 
+// IsFractional returns true if Value is fractional.
 func (v Value) IsFractional() (ok bool) {
 	if v.Inner != nil {
 		_, ok = v.Inner.(Fractional)
@@ -180,6 +187,8 @@ func (v Value) IsFractional() (ok bool) {
 	return ok
 }
 
+// IsString returns true if Value is a string, or needs
+// to be quoted before sending to MySQL.
 func (v Value) IsString() (ok bool) {
 	if v.Inner != nil {
 		_, ok = v.Inner.(String)
@@ -227,10 +236,12 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 // InnerValue defines methods that need to be supported by all non-null value types.
 type InnerValue interface {
 	raw() []byte
-	encodeSql(BinWriter)
-	encodeAscii(BinWriter)
+	encodeSQL(BinWriter)
+	encodeASCII(BinWriter)
 }
 
+// BuildValue builds a value from any go type. sqltype.Value is
+// also allowed.
 func BuildValue(goval interface{}) (v Value, err error) {
 	switch bindVal := goval.(type) {
 	case nil:
@@ -289,18 +300,19 @@ func (n Numeric) raw() []byte {
 	return []byte(n)
 }
 
-func (n Numeric) encodeSql(b BinWriter) {
+func (n Numeric) encodeSQL(b BinWriter) {
 	if _, err := b.Write(n.raw()); err != nil {
 		panic(err)
 	}
 }
 
-func (n Numeric) encodeAscii(b BinWriter) {
+func (n Numeric) encodeASCII(b BinWriter) {
 	if _, err := b.Write(n.raw()); err != nil {
 		panic(err)
 	}
 }
 
+// MarshalJSON marshals Numeric into JSON.
 func (n Numeric) MarshalJSON() ([]byte, error) {
 	return n.raw(), nil
 }
@@ -309,18 +321,19 @@ func (f Fractional) raw() []byte {
 	return []byte(f)
 }
 
-func (f Fractional) encodeSql(b BinWriter) {
+func (f Fractional) encodeSQL(b BinWriter) {
 	if _, err := b.Write(f.raw()); err != nil {
 		panic(err)
 	}
 }
 
-func (f Fractional) encodeAscii(b BinWriter) {
+func (f Fractional) encodeASCII(b BinWriter) {
 	if _, err := b.Write(f.raw()); err != nil {
 		panic(err)
 	}
 }
 
+// MarshalJSON marshals String into JSON.
 func (s String) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(s.raw()))
 }
@@ -329,10 +342,10 @@ func (s String) raw() []byte {
 	return []byte(s)
 }
 
-func (s String) encodeSql(b BinWriter) {
+func (s String) encodeSQL(b BinWriter) {
 	writebyte(b, '\'')
 	for _, ch := range s.raw() {
-		if encodedChar := SqlEncodeMap[ch]; encodedChar == DONTESCAPE {
+		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
 			writebyte(b, ch)
 		} else {
 			writebyte(b, '\\')
@@ -342,7 +355,7 @@ func (s String) encodeSql(b BinWriter) {
 	writebyte(b, '\'')
 }
 
-func (s String) encodeAscii(b BinWriter) {
+func (s String) encodeASCII(b BinWriter) {
 	writebyte(b, '\'')
 	encoder := base64.NewEncoder(base64.StdEncoding, b)
 	encoder.Write(s.raw())
@@ -356,12 +369,12 @@ func writebyte(b BinWriter, c byte) {
 	}
 }
 
-// SqlEncodeMap specifies how to escape binary data with '\'.
+// SQLEncodeMap specifies how to escape binary data with '\'.
 // Complies to http://dev.mysql.com/doc/refman/5.1/en/string-syntax.html
-var SqlEncodeMap [256]byte
+var SQLEncodeMap [256]byte
 
-// SqlDecodeMap is the reverse of SqlEncodeMap
-var SqlDecodeMap [256]byte
+// SQLDecodeMap is the reverse of SQLEncodeMap
+var SQLDecodeMap [256]byte
 
 var encodeRef = map[byte]byte{
 	'\x00': '0',
@@ -376,14 +389,14 @@ var encodeRef = map[byte]byte{
 }
 
 func init() {
-	for i := range SqlEncodeMap {
-		SqlEncodeMap[i] = DONTESCAPE
-		SqlDecodeMap[i] = DONTESCAPE
+	for i := range SQLEncodeMap {
+		SQLEncodeMap[i] = DontEscape
+		SQLDecodeMap[i] = DontEscape
 	}
-	for i := range SqlEncodeMap {
+	for i := range SQLEncodeMap {
 		if to, ok := encodeRef[byte(i)]; ok {
-			SqlEncodeMap[byte(i)] = to
-			SqlDecodeMap[to] = byte(i)
+			SQLEncodeMap[byte(i)] = to
+			SQLDecodeMap[to] = byte(i)
 		}
 	}
 	gob.Register(Numeric(nil))

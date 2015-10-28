@@ -4,6 +4,7 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+import base64
 import unittest
 
 import environment
@@ -202,7 +203,8 @@ primary key (id)
     for q in s:
       bindvars = {}
       for name, value in q['query']['bind_variables'].iteritems():
-        bindvars[name] = value['value_int']
+        # vtctl encodes bytes as base64.
+        bindvars[name] = int(base64.standard_b64decode(value['value']))
       qr = utils.vtgate.execute_shards(
           q['query']['sql'],
           'test_keyspace', ','.join(q['shard_part']['shards']),

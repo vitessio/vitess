@@ -53,17 +53,23 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 		request.ImmediateCallerId,
 	)
 	reply := new(mproto.QueryResult)
+	bv, err := proto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return nil, tabletserver.ToGRPCError(err)
+	}
 	if err := q.server.Execute(ctx, request.Target, &proto.Query{
 		Sql:           request.Query.Sql,
-		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
+		BindVariables: bv,
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
 	}, reply); err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	return &pb.ExecuteResponse{
-		Result: mproto.QueryResultToProto3(reply),
-	}, nil
+	result, err := mproto.QueryResultToProto3(reply)
+	if err != nil {
+		return nil, tabletserver.ToGRPCError(err)
+	}
+	return &pb.ExecuteResponse{Result: result}, nil
 }
 
 // ExecuteBatch is part of the queryservice.QueryServer interface
@@ -74,17 +80,23 @@ func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 		request.ImmediateCallerId,
 	)
 	reply := new(proto.QueryResultList)
+	bql, err := proto.Proto3ToBoundQueryList(request.Queries)
+	if err != nil {
+		return nil, tabletserver.ToGRPCError(err)
+	}
 	if err := q.server.ExecuteBatch(ctx, request.Target, &proto.QueryList{
-		Queries:       proto.Proto3ToBoundQueryList(request.Queries),
+		Queries:       bql,
 		SessionId:     request.SessionId,
 		AsTransaction: request.AsTransaction,
 		TransactionId: request.TransactionId,
 	}, reply); err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	return &pb.ExecuteBatchResponse{
-		Results: proto.QueryResultListToProto3(reply.List),
-	}, nil
+	results, err := proto.QueryResultListToProto3(reply.List)
+	if err != nil {
+		return nil, tabletserver.ToGRPCError(err)
+	}
+	return &pb.ExecuteBatchResponse{Results: results}, nil
 }
 
 // StreamExecute is part of the queryservice.QueryServer interface
@@ -94,14 +106,20 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	bv, err := proto.Proto3ToBindVariables(request.Query.BindVariables)
+	if err != nil {
+		return tabletserver.ToGRPCError(err)
+	}
 	if err := q.server.StreamExecute(ctx, request.Target, &proto.Query{
 		Sql:           request.Query.Sql,
-		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
+		BindVariables: bv,
 		SessionId:     request.SessionId,
 	}, func(reply *mproto.QueryResult) error {
-		return stream.Send(&pb.StreamExecuteResponse{
-			Result: mproto.QueryResultToProto3(reply),
-		})
+		result, err := mproto.QueryResultToProto3(reply)
+		if err != nil {
+			return err
+		}
+		return stream.Send(&pb.StreamExecuteResponse{Result: result})
 	}); err != nil {
 		return tabletserver.ToGRPCError(err)
 	}
@@ -168,8 +186,12 @@ func (q *query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (
 		request.ImmediateCallerId,
 	)
 	reply := &proto.SplitQueryResult{}
+	bq, err := proto.Proto3ToBoundQuery(request.Query)
+	if err != nil {
+		return nil, tabletserver.ToGRPCError(err)
+	}
 	if err := q.server.SplitQuery(ctx, request.Target, &proto.SplitQueryRequest{
-		Query:       *proto.Proto3ToBoundQuery(request.Query),
+		Query:       *bq,
 		SplitColumn: request.SplitColumn,
 		SplitCount:  int(request.SplitCount),
 		SessionID:   request.SessionId,
@@ -178,7 +200,7 @@ func (q *query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (
 	}
 	qs, err := proto.QuerySplitsToProto3(reply.Queries)
 	if err != nil {
-		return nil, err
+		return nil, tabletserver.ToGRPCError(err)
 	}
 	return &pb.SplitQueryResponse{Queries: qs}, nil
 }

@@ -193,7 +193,10 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 	if err != nil {
 		return nil, err
 	}
-	bindVars = tproto.Proto3ToBindVariables(bv)
+	bindVars, err = tproto.Proto3ToBindVariables(bv)
+	if err != nil {
+		return nil, err
+	}
 	reply := &mproto.QueryResult{}
 	if err := itc.tablet.qsc.QueryService().Execute(ctx, &pbq.Target{
 		Keyspace:   itc.tablet.keyspace,
@@ -218,8 +221,12 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tprot
 		if err != nil {
 			return nil, err
 		}
+		bindVars, err := tproto.Proto3ToBindVariables(bv)
+		if err != nil {
+			return nil, err
+		}
 		q[i].Sql = query.Sql
-		q[i].BindVariables = tproto.Proto3ToBindVariables(bv)
+		q[i].BindVariables = bindVars
 	}
 	reply := &tproto.QueryResultList{}
 	if err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &pbq.Target{
@@ -243,7 +250,10 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 	if err != nil {
 		return nil, nil, err
 	}
-	bindVars = tproto.Proto3ToBindVariables(bv)
+	bindVars, err = tproto.Proto3ToBindVariables(bv)
+	if err != nil {
+		return nil, nil, err
+	}
 	result := make(chan *mproto.QueryResult, 10)
 	var finalErr error
 

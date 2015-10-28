@@ -7,32 +7,34 @@ class VTProtoTest extends PHPUnit_Framework_TestCase {
 	public function testBoundQuery() {
 		$expected = new \query\BoundQuery();
 		$expected->setSql('test query');
-		add_bind_var($expected, \query\BindVariable\Type::TYPE_BYTES, 'setValueBytes', 'bytes', 'hello');
-		add_bind_var($expected, \query\BindVariable\Type::TYPE_INT, 'setValueInt', 'int', 123);
-		add_bind_var($expected, \query\BindVariable\Type::TYPE_UINT, 'setValueUint', 'uint_from_int', - 123);
-		add_bind_var($expected, \query\BindVariable\Type::TYPE_FLOAT, 'setValueFloat', 'float', 1.5);
-		add_bind_var($expected, \query\BindVariable\Type::TYPE_BYTES_LIST, 'setValueBytesList', 'bytes_list', array(
+		add_bind_var($expected, \query\Type::VARBINARY, 'bytes', 'hello');
+		add_bind_var($expected, \query\Type::INT64, 'int', '123');
+		add_bind_var($expected, \query\Type::UINT64, 'uint_from_int', '18446744073709551493'); // 18446744073709551493 = uint64(-123)
+		add_bind_var($expected, \query\Type::UINT64, 'uint_from_string', '456');
+		add_bind_var($expected, \query\Type::FLOAT64, 'float', '1.5');
+		add_list_bind_var($expected, \query\Type::VARBINARY, 'bytes_list', array(
 				'one',
 				'two' 
 		));
-		add_bind_var($expected, \query\BindVariable\Type::TYPE_INT_LIST, 'setValueIntList', 'int_list', array(
-				1,
-				2,
-				3 
+		add_list_bind_var($expected, \query\Type::INT64, 'int_list', array(
+				'1',
+				'2',
+				'3' 
 		));
-		add_bind_var($expected, \query\BindVariable\Type::TYPE_UINT_LIST, 'setValueUintList', 'uint_list', array(
-				123,
-				456 
+		add_list_bind_var($expected, \query\Type::UINT64, 'uint_list', array(
+				'123',
+				'456' 
 		));
-		add_bind_var($expected, \query\BindVariable\Type::TYPE_FLOAT_LIST, 'setValueFloatList', 'float_list', array(
-				2.0,
-				4.0 
+		add_list_bind_var($expected, \query\Type::FLOAT64, 'float_list', array(
+				'2.0',
+				'4.0' 
 		));
 		
 		$actual = VTProto::BoundQuery('test query', array(
 				'bytes' => 'hello',
 				'int' => 123,
 				'uint_from_int' => new VTUnsignedInt(- 123),
+				'uint_from_string' => new VTUnsignedInt('456'),
 				'float' => 1.5,
 				'bytes_list' => array(
 						'one',
@@ -45,7 +47,7 @@ class VTProtoTest extends PHPUnit_Framework_TestCase {
 				),
 				'uint_list' => array(
 						new VTUnsignedInt(123),
-						new VTUnsignedInt(456) 
+						new VTUnsignedInt('456') 
 				),
 				'float_list' => array(
 						2.0,

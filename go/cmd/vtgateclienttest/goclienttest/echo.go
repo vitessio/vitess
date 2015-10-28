@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -45,21 +46,21 @@ var (
 	entityKeyspaceIDs = []*pbg.ExecuteEntityIdsRequest_EntityId{
 		&pbg.ExecuteEntityIdsRequest_EntityId{
 			KeyspaceId: []byte{1, 2, 3},
-			XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
-			XidInt:     123,
+			XidType:    sqltypes.Int64,
+			XidValue:   []byte("123"),
 		},
 		&pbg.ExecuteEntityIdsRequest_EntityId{
 			KeyspaceId: []byte{4, 5, 6},
-			XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT,
-			XidFloat:   2.0,
+			XidType:    sqltypes.Float64,
+			XidValue:   []byte("2"),
 		},
 		&pbg.ExecuteEntityIdsRequest_EntityId{
 			KeyspaceId: []byte{7, 8, 9},
-			XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
-			XidBytes:   []byte{1, 2, 3},
+			XidType:    sqltypes.VarBinary,
+			XidValue:   []byte{1, 2, 3},
 		},
 	}
-	entityKeyspaceIDsEcho = "[xid_type:TYPE_INT xid_int:123 keyspace_id:\"\\001\\002\\003\"  xid_type:TYPE_FLOAT xid_float:2 keyspace_id:\"\\004\\005\\006\"  xid_type:TYPE_BYTES xid_bytes:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]"
+	entityKeyspaceIDsEcho = "[xid_type:INT64 xid_value:\"123\" keyspace_id:\"\\001\\002\\003\"  xid_type:FLOAT64 xid_value:\"2\" keyspace_id:\"\\004\\005\\006\"  xid_type:VARBINARY xid_value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]"
 
 	tabletType     = pbt.TabletType_REPLICA
 	tabletTypeEcho = pbt.TabletType_name[int32(tabletType)]
@@ -365,10 +366,10 @@ func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 // getEcho extracts the echoed field values from a query result.
-func getEcho(qr *mproto.QueryResult) map[string]string {
-	values := map[string]string{}
+func getEcho(qr *mproto.QueryResult) map[string]sqltypes.Value {
+	values := map[string]sqltypes.Value{}
 	for i, field := range qr.Fields {
-		values[field.Name] = qr.Rows[0][i].String()
+		values[field.Name] = qr.Rows[0][i]
 	}
 	return values
 }
@@ -381,8 +382,16 @@ func checkEcho(t *testing.T, name string, qr *mproto.QueryResult, err error, wan
 	}
 	got := getEcho(qr)
 	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("%v: %v = %q, want %q", name, k, got[k], v)
+		if got[k].String() != v {
+			t.Errorf("%v: %v = \n%q, want \n%q", name, k, got[k], v)
 		}
+	}
+
+	// Check NULL and empty string.
+	if !got["null"].IsNull() {
+		t.Errorf("MySQL NULL value wasn't preserved")
+	}
+	if !got["emptyString"].IsString() || got["emptyString"].String() != "" {
+		t.Errorf("Empty string value wasn't preserved")
 	}
 }

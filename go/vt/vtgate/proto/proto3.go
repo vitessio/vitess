@@ -5,8 +5,6 @@
 package proto
 
 import (
-	"fmt"
-
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -67,46 +65,12 @@ func EntityIdsToProto(l []EntityId) []*pb.ExecuteEntityIdsRequest_EntityId {
 		result[i] = &pb.ExecuteEntityIdsRequest_EntityId{
 			KeyspaceId: []byte(e.KeyspaceID),
 		}
-		switch v := e.ExternalID.(type) {
-		case string:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES
-			result[i].XidBytes = []byte(v)
-		case []byte:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES
-			result[i].XidBytes = v
-		case int:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_INT
-			result[i].XidInt = int64(v)
-		case int16:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_INT
-			result[i].XidInt = int64(v)
-		case int32:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_INT
-			result[i].XidInt = int64(v)
-		case int64:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_INT
-			result[i].XidInt = v
-		case uint:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_UINT
-			result[i].XidUint = uint64(v)
-		case uint16:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_UINT
-			result[i].XidUint = uint64(v)
-		case uint32:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_UINT
-			result[i].XidUint = uint64(v)
-		case uint64:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_UINT
-			result[i].XidUint = v
-		case float32:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT
-			result[i].XidFloat = float64(v)
-		case float64:
-			result[i].XidType = pb.ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT
-			result[i].XidFloat = v
-		default:
-			panic(fmt.Errorf("Unsupported value %v", v))
+		v, err := tproto.BindVariableToValue(e.ExternalID)
+		if err != nil {
+			panic(err)
 		}
+		result[i].XidType = v.Type
+		result[i].XidValue = v.Value
 	}
 	return result
 }
@@ -119,18 +83,15 @@ func ProtoToEntityIds(l []*pb.ExecuteEntityIdsRequest_EntityId) []EntityId {
 	result := make([]EntityId, len(l))
 	for i, e := range l {
 		result[i].KeyspaceID = key.KeyspaceId(e.KeyspaceId)
-		switch e.XidType {
-		case pb.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES:
-			result[i].ExternalID = e.XidBytes
-		case pb.ExecuteEntityIdsRequest_EntityId_TYPE_INT:
-			result[i].ExternalID = e.XidInt
-		case pb.ExecuteEntityIdsRequest_EntityId_TYPE_UINT:
-			result[i].ExternalID = e.XidUint
-		case pb.ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT:
-			result[i].ExternalID = e.XidFloat
-		default:
-			panic(fmt.Errorf("Unsupported XidType %v", e.XidType))
+		bv := &pbq.BindVariable{
+			Type:  e.XidType,
+			Value: e.XidValue,
 		}
+		v, err := tproto.BindVariableToNative(bv)
+		if err != nil {
+			panic(err)
+		}
+		result[i].ExternalID = v
 	}
 	return result
 }
@@ -156,18 +117,22 @@ func BoundShardQueriesToProto(bsq []BoundShardQuery) ([]*pb.BoundShardQuery, err
 }
 
 // ProtoToBoundShardQueries transforms a list of BoundShardQuery from proto3
-func ProtoToBoundShardQueries(bsq []*pb.BoundShardQuery) []BoundShardQuery {
+func ProtoToBoundShardQueries(bsq []*pb.BoundShardQuery) ([]BoundShardQuery, error) {
 	if len(bsq) == 0 {
-		return nil
+		return nil, nil
 	}
 	result := make([]BoundShardQuery, len(bsq))
 	for i, q := range bsq {
 		result[i].Sql = string(q.Query.Sql)
-		result[i].BindVariables = tproto.Proto3ToBindVariables(q.Query.BindVariables)
+		bv, err := tproto.Proto3ToBindVariables(q.Query.BindVariables)
+		if err != nil {
+			return nil, err
+		}
+		result[i].BindVariables = bv
 		result[i].Keyspace = q.Keyspace
 		result[i].Shards = q.Shards
 	}
-	return result
+	return result, nil
 }
 
 // BoundKeyspaceIdQueriesToProto transforms a list of BoundKeyspaceIdQuery to proto3
@@ -191,16 +156,20 @@ func BoundKeyspaceIdQueriesToProto(bsq []BoundKeyspaceIdQuery) ([]*pb.BoundKeysp
 }
 
 // ProtoToBoundKeyspaceIdQueries transforms a list of BoundKeyspaceIdQuery from proto3
-func ProtoToBoundKeyspaceIdQueries(bsq []*pb.BoundKeyspaceIdQuery) []BoundKeyspaceIdQuery {
+func ProtoToBoundKeyspaceIdQueries(bsq []*pb.BoundKeyspaceIdQuery) ([]BoundKeyspaceIdQuery, error) {
 	if len(bsq) == 0 {
-		return nil
+		return nil, nil
 	}
 	result := make([]BoundKeyspaceIdQuery, len(bsq))
 	for i, q := range bsq {
+		bv, err := tproto.Proto3ToBindVariables(q.Query.BindVariables)
+		if err != nil {
+			return nil, err
+		}
 		result[i].Sql = string(q.Query.Sql)
-		result[i].BindVariables = tproto.Proto3ToBindVariables(q.Query.BindVariables)
+		result[i].BindVariables = bv
 		result[i].Keyspace = q.Keyspace
 		result[i].KeyspaceIds = key.ProtoToKeyspaceIds(q.KeyspaceIds)
 	}
-	return result
+	return result, nil
 }

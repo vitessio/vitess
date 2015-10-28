@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -103,18 +104,12 @@ func mapEntityIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 		if err != nil {
 			return "", nil, err
 		}
-		switch eid.XidType {
-		case pbg.ExecuteEntityIdsRequest_EntityId_TYPE_NULL:
-			shards[shard] = append(shards[shard], nil)
-		case pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES:
-			shards[shard] = append(shards[shard], eid.XidBytes)
-		case pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT:
-			shards[shard] = append(shards[shard], eid.XidInt)
-		case pbg.ExecuteEntityIdsRequest_EntityId_TYPE_UINT:
-			shards[shard] = append(shards[shard], eid.XidUint)
-		case pbg.ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT:
-			shards[shard] = append(shards[shard], eid.XidFloat)
+		bv := &query.BindVariable{
+			Type:  eid.XidType,
+			Value: eid.XidValue,
 		}
+		v, _ := tproto.BindVariableToNative(bv)
+		shards[shard] = append(shards[shard], v)
 	}
 	return keyspace, shards, nil
 }

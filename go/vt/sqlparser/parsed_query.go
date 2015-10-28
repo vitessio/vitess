@@ -98,7 +98,7 @@ func EncodeValue(buf *bytes.Buffer, value interface{}) error {
 		if err != nil {
 			return err
 		}
-		v.EncodeSql(buf)
+		v.EncodeSQL(buf)
 	}
 	return nil
 }

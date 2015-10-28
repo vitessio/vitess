@@ -19,7 +19,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 			'unknown error' => 'VTException' 
 	);
 	private static $BIND_VARS; // initialized in setUpBeforeClass()
-	private static $BIND_VARS_ECHO = 'map[bytes:[104 101 108 108 111] float:1.5 int:123 uint_from_int:18446744073709551493]'; // 18446744073709551493 = uint64(-123)
+	private static $BIND_VARS_ECHO = 'map[bytes:[104 101 108 108 111] float:1.5 int:123 uint_from_int:18446744073709551493 uint_from_string:456]'; // 18446744073709551493 = uint64(-123)
 	private static $CALLER_ID; // initialized in setUpBeforeClass()
 	private static $CALLER_ID_ECHO = 'principal:"test_principal" component:"test_component" subcomponent:"test_subcomponent" ';
 	private static $TABLET_TYPE = \topodata\TabletType::REPLICA;
@@ -37,7 +37,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 	private static $KEY_RANGES_ECHO = '[end:"\200\000\000\000\000\000\000\000"  start:"\200\000\000\000\000\000\000\000" ]';
 	private static $ENTITY_COLUMN_NAME = 'test_column';
 	private static $ENTITY_KEYSPACE_IDS; // initialized in setUpBeforeClass()
-	private static $ENTITY_KEYSPACE_IDS_ECHO = '[xid_type:TYPE_FLOAT xid_float:1.5 keyspace_id:"\0224Vx\000\000\000\002"  xid_type:TYPE_INT xid_int:123 keyspace_id:"\0224Vx\000\000\000\000"  xid_type:TYPE_UINT xid_uint:456 keyspace_id:"\0224Vx\000\000\000\001" ]';
+	private static $ENTITY_KEYSPACE_IDS_ECHO = '[xid_type:FLOAT64 xid_value:"1.5" keyspace_id:"\0224Vx\000\000\000\002"  xid_type:INT64 xid_value:"123" keyspace_id:"\0224Vx\000\000\000\000"  xid_type:UINT64 xid_value:"456" keyspace_id:"\0224Vx\000\000\000\001" ]';
 	private static $SESSION_ECHO = 'InTransaction: true, ShardSession: []';
 
 	public static function setUpBeforeClass() {
@@ -82,6 +82,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 				'bytes' => 'hello',
 				'int' => 123,
 				'uint_from_int' => new VTUnsignedInt(- 123),
+				'uint_from_string' => new VTUnsignedInt('456'),
 				'float' => 1.5 
 		);
 		self::$CALLER_ID = new \vtrpc\CallerID();
@@ -144,6 +145,11 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
+		
+		// Check NULL vs. empty string.
+		$this->assertEquals(true, is_null($echo['null']));
+		$this->assertEquals(true, is_string($echo['emptyString']));
+		$this->assertEquals('', $echo['emptyString']);
 		
 		$echo = self::getEcho($conn->executeShards($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$SHARDS, self::$BIND_VARS, self::$TABLET_TYPE));
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
@@ -333,17 +339,12 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 				'bytes' => 'hello',
 				'float' => 1.5,
 				'int' => 123,
-				'uint_from_int' => new VTUnsignedInt(345) 
-		);
-		$expected_bind_vars = array(
-				'bytes' => 'hello',
-				'float' => 1.5,
-				'int' => 123,
-				'uint_from_int' => new VTUnsignedInt(345) 
+				'uint_from_int' => new VTUnsignedInt(345),
+				'uint_from_string' => new VTUnsignedInt('678') 
 		);
 		
 		$expected = new \vtgate\SplitQueryResponse\Part();
-		$expected->setQuery(VTProto::BoundQuery(self::$ECHO_QUERY . ':split_column:123', $expected_bind_vars));
+		$expected->setQuery(VTProto::BoundQuery(self::$ECHO_QUERY . ':split_column:123', $input_bind_vars));
 		$krpart = new \vtgate\SplitQueryResponse\KeyRangePart();
 		$krpart->setKeyspace(self::$KEYSPACE);
 		$expected->setKeyRangePart($krpart);

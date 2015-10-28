@@ -2,6 +2,7 @@ package com.youtube.vitess.client;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
+
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
 import com.youtube.vitess.proto.Query.Field;
@@ -13,6 +14,7 @@ import com.youtube.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
 import com.youtube.vitess.proto.Topodata.TabletType;
 import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
 import com.youtube.vitess.proto.Vtrpc.CallerID;
+
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Before;
@@ -86,11 +88,11 @@ public abstract class RpcClientTest {
   private static final Map<byte[], Object> ENTITY_KEYSPACE_IDS =
       new ImmutableMap.Builder<byte[], Object>()
           .put(new byte[] {1, 2, 3}, 123)
-          .put(new byte[] {4, 5, 6}, 2.0)
+          .put(new byte[] {4, 5, 6}, 2.5)
           .put(new byte[] {7, 8, 9}, new byte[] {1, 2, 3})
           .build();
   private static final String ENTITY_KEYSPACE_IDS_ECHO =
-      "[xid_type:TYPE_INT xid_int:123 keyspace_id:\"\\001\\002\\003\"  xid_type:TYPE_FLOAT xid_float:2 keyspace_id:\"\\004\\005\\006\"  xid_type:TYPE_BYTES xid_bytes:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]";
+      "[xid_type:INT64 xid_value:\"123\" keyspace_id:\"\\001\\002\\003\"  xid_type:FLOAT64 xid_value:\"2.5\" keyspace_id:\"\\004\\005\\006\"  xid_type:VARBINARY xid_value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]";
 
   private static final TabletType TABLET_TYPE = TabletType.REPLICA;
   private static final String TABLET_TYPE_ECHO = TABLET_TYPE.toString();
@@ -98,10 +100,10 @@ public abstract class RpcClientTest {
   private static final Map<String, Object> BIND_VARS =
       new ImmutableMap.Builder<String, Object>()
           .put("int", 123)
-          .put("float", 2.0)
+          .put("float", 2.5)
           .put("bytes", new byte[] {1, 2, 3})
           .build();
-  private static final String BIND_VARS_ECHO = "map[bytes:[1 2 3] float:2 int:123]";
+  private static final String BIND_VARS_ECHO = "map[bytes:[1 2 3] float:2.5 int:123]";
 
   private static final String SESSION_ECHO = "InTransaction: true, ShardSession: []";
 
@@ -116,16 +118,27 @@ public abstract class RpcClientTest {
 
   private static Map<String, String> getEcho(Cursor cursor) throws Exception {
     Map<String, String> values = new HashMap<String, String>();
+    Map<String, Object> rawValues = new HashMap<String, Object>();
 
     // Echo values are stored as columns in the first row of the result.
     List<Field> fields = cursor.getFields();
     Row row = cursor.next();
     Assert.assertNotNull(row);
     for (int i = 0; i < fields.size(); i++) {
-      values.put(fields.get(i).getName(), new String(row.getBytes(i), StandardCharsets.UTF_8));
+      byte[] bytes = row.getBytes(i);
+      if (bytes != null) {
+        values.put(fields.get(i).getName(), new String(row.getBytes(i), StandardCharsets.UTF_8));
+      }
+      rawValues.put(fields.get(i).getName(), row.getObject(i));
     }
     Assert.assertNull(cursor.next()); // There should only be one row.
     cursor.close();
+
+    // Check NULL vs. empty string.
+    Assert.assertTrue(rawValues.containsKey("null"));
+    Assert.assertNull(rawValues.get("null"));
+    Assert.assertTrue(values.containsKey("emptyString"));
+    Assert.assertEquals("", values.get("emptyString"));
 
     return values;
   }
