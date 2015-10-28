@@ -579,11 +579,6 @@ class TestSqlWhereExprs(BaseTestCase):
         dict(x_5=3, y_4=5, z_3=7),
         column_name=None)
 
-  def test_like(self):
-    self._check_build_where_sql(
-        sql_builder.Like('FOO%'),
-        'col_a LIKE %(col_a_3)s', dict(col_a_3='FOO%'))
-
   def test_greater_than(self):
     self._check_build_where_sql(
         sql_builder.Greater(5),
@@ -604,11 +599,21 @@ class TestSqlWhereExprs(BaseTestCase):
         sql_builder.LessEqual(5),
         'col_a <= %(col_a_3)s', dict(col_a_3=5))
 
+  def test_like(self):
+    self._check_build_where_sql(
+        sql_builder.Like('FOO%'),
+        'col_a LIKE %(col_a_3)s', dict(col_a_3='FOO%'))
+
   def test_modulo_equals(self):
     self._check_build_where_sql(
         sql_builder.ModuloEquals(modulus=5, value=3),
         '(col_a %% %(modulus_3)s) = %(col_a_4)s',
         dict(modulus_3=5, col_a_4=3))
+
+  def test_not_like(self):
+    self._check_build_where_sql(
+        sql_builder.NotLike('FOO%'),
+        'col_a NOT LIKE %(col_a_3)s', dict(col_a_3='FOO%'))
 
   def test_expression(self):
     self._check_build_where_sql(

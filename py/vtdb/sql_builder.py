@@ -796,10 +796,6 @@ class OrExprs(SQLOperator):
     return or_clause, bind_vars
 
 
-class Like(SQLOperator):
-  op = 'LIKE'
-
-
 class Greater(SQLOperator):
   op = '>'
 
@@ -814,6 +810,14 @@ class Less(SQLOperator):
 
 class LessEqual(SQLOperator):
   op = '<='
+
+
+class Like(SQLOperator):
+  op = 'LIKE'
+
+
+class NotLike(SQLOperator):
+  op = 'NOT LIKE'
 
 
 class ModuloEquals(SQLOperator):
