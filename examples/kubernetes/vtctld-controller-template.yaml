@@ -40,7 +40,8 @@ spec:
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
               -port 15000
-              -service_map 'bsonrpc-vt-vtctl'
+              -grpc_port 15001
+              -service_map 'grpc-vtctl'
               -topo_implementation etcd
               -tablet_protocol grpc
               -tablet_manager_protocol grpc

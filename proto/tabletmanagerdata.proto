@@ -152,12 +152,6 @@ message ChangeTypeRequest {
 message ChangeTypeResponse {
 }
 
-message ScrapRequest {
-}
-
-message ScrapResponse {
-}
-
 message RefreshStateRequest {
 }
 

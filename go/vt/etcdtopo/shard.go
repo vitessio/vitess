@@ -24,9 +24,6 @@ func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value 
 	if _, err = global.Create(shardFilePath(keyspace, shard), string(data), 0 /* ttl */); err != nil {
 		return convertError(err)
 	}
-	if err = initLockFile(global, shardDirPath(keyspace, shard)); err != nil {
-		return err
-	}
 	return nil
 }
 

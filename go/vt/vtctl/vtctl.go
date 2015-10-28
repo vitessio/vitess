@@ -54,23 +54,14 @@ COMMAND ARGUMENT DEFINITIONS
                    the tablet that indicates the tablet should not be
                    considered a potential master. Vitess also does not
                    worry about lag for experimental tablets when reparenting.
-  -- idle: An idle vttablet that does not have a keyspace, shard
-           or type assigned
-  -- lag: A slaved copy of data intentionally lagged for pseudo-backup.
-  -- lag_orphan: A tablet in the midst of a reparenting process. During that
-                 process, the tablet goes into a <code>lag_orphan</code> state
-                 until it is reparented properly.
   -- master: A primary copy of data
   -- rdonly: A slaved copy of data for OLAP load patterns
   -- replica: A slaved copy of data ready to be promoted to master
-  -- restore: A tablet that has not been in the replication graph and is
-              restoring from a snapshot. Typically, a tablet progresses from
-              the <code>idle</code> state to the <code>restore</code> state
-              and then to the <code>spare</code> state.
+  -- restore: A tablet that is restoring from a snapshot. Typically, this
+              happens at tablet startup, then it goes to its right state..
   -- schema_apply: A slaved copy of data that had been serving query traffic
                    but that is not applying a schema change. Following the
                    change, the tablet will revert to its serving type.
-  -- scrap: A tablet that contains data that needs to be wiped.
   -- snapshot_source: A slaved copy of data where mysqld is <b>not</b>
                       running and where Vitess is serving data files to
                       clone slaves. Use this command to enter this mode:
@@ -99,7 +90,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/netutil"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -134,7 +124,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Tablets", []command{
 			command{"InitTablet", commandInitTablet,
-				"[-force] [-parent] [-update] [-db-name-override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] [-keyspace=<keyspace>] [-shard=<shard>] [-parent_alias=<parent alias>] <tablet alias> <tablet type>",
+				"[-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
 				"Initializes a tablet in the topology.\n" +
 					"Valid <tablet type> values are:\n" +
 					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.AllTabletTypes), " ")},
@@ -144,12 +134,9 @@ var commands = []commandGroup{
 			command{"UpdateTabletAddrs", commandUpdateTabletAddrs,
 				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-grpc-port <grpc port>] <tablet alias> ",
 				"Updates the IP address and port numbers of a tablet."},
-			command{"ScrapTablet", commandScrapTablet,
-				"[-force] [-skip-rebuild] <tablet alias>",
-				"Scraps a tablet."},
 			command{"DeleteTablet", commandDeleteTablet,
-				"<tablet alias> ...",
-				"Deletes scrapped tablet(s) from the topology."},
+				"[-allow_master] [-skip_rebuild] <tablet alias> ...",
+				"Deletes tablet(s) from the topology."},
 			command{"SetReadOnly", commandSetReadOnly,
 				"<tablet alias>",
 				"Sets the tablet as read-only."},
@@ -163,7 +150,7 @@ var commands = []commandGroup{
 				"<tablet alias>",
 				"Stops replication on the specified slave."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
-				"[-force] [-dry-run] <tablet alias> <tablet type>",
+				"[-dry-run] <tablet alias> <tablet type>",
 				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
 					"NOTE: This command automatically updates the serving graph.\n" +
 					"Valid <tablet type> values are:\n" +
@@ -287,9 +274,6 @@ var commands = []commandGroup{
 	},
 	commandGroup{
 		"Generic", []command{
-			command{"Resolve", commandResolve,
-				"<keyspace>.<shard>.<db type>:<port name>",
-				"Reads a list of addresses that can answer this query. The port name can be mysql, vt, or grpc. Vitess uses this name to retrieve the actual port number from the topology server (ZooKeeper or etcd)."},
 			command{"RebuildReplicationGraph", commandRebuildReplicationGraph,
 				"<cell1>,<cell2>... <keyspace1>,<keyspace2>,...",
 				"HIDDEN This takes the Thor's hammer approach of recovery and should only be used in emergencies.  cell1,cell2,... are the canonical source of data for the system. This function uses that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
@@ -587,19 +571,19 @@ func parseServingTabletType3(param string) (pb.TabletType, error) {
 }
 
 func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	var (
-		dbNameOverride = subFlags.String("db-name-override", "", "Overrides the name of the database that the vttablet uses")
-		force          = subFlags.Bool("force", false, "Overwrites the node if the node already exists")
-		parent         = subFlags.Bool("parent", false, "Creates the parent shard and keyspace if they don't yet exist")
-		update         = subFlags.Bool("update", false, "Performs update if a tablet with the provided alias already exists")
-		hostname       = subFlags.String("hostname", "", "The server on which the tablet is running")
-		mysqlPort      = subFlags.Int("mysql_port", 0, "The mysql port for the mysql daemon")
-		port           = subFlags.Int("port", 0, "The main port for the vttablet process")
-		grpcPort       = subFlags.Int("grpc_port", 0, "The gRPC port for the vttablet process")
-		keyspace       = subFlags.String("keyspace", "", "The keyspace to which this tablet belongs")
-		shard          = subFlags.String("shard", "", "The shard to which this tablet belongs")
-		tags           flagutil.StringMapValue
-	)
+	dbNameOverride := subFlags.String("db_name_override", "", "Overrides the name of the database that the vttablet uses")
+	allowUpdate := subFlags.Bool("allow_update", false, "Use this flag to force initialization if a tablet with the same name already exists. Use with caution.")
+	allowDifferentShard := subFlags.Bool("allow_different_shard", false, "Use this flag to force initialization if a tablet with the same name but a different keyspace/shard already exists. Use with caution.")
+	allowMasterOverride := subFlags.Bool("allow_master_override", false, "Use this flag to force initialization if a tablet is created as master, and a master for the keyspace/shard already exists. Use with caution.")
+	createShardAndKeyspace := subFlags.Bool("parent", false, "Creates the parent shard and keyspace if they don't yet exist")
+	hostname := subFlags.String("hostname", "", "The server on which the tablet is running")
+	mysqlPort := subFlags.Int("mysql_port", 0, "The mysql port for the mysql daemon")
+	port := subFlags.Int("port", 0, "The main port for the vttablet process")
+	grpcPort := subFlags.Int("grpc_port", 0, "The gRPC port for the vttablet process")
+	keyspace := subFlags.String("keyspace", "", "The keyspace to which this tablet belongs")
+	shard := subFlags.String("shard", "", "The shard to which this tablet belongs")
+
+	var tags flagutil.StringMapValue
 	subFlags.Var(&tags, "tags", "A comma-separated list of key:value pairs that are used to tag the tablet")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -638,7 +622,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		tablet.PortMap["grpc"] = int32(*grpcPort)
 	}
 
-	return wr.InitTablet(ctx, tablet, *force, *parent, *update)
+	return wr.InitTablet(ctx, tablet, *allowMasterOverride, *allowDifferentShard, *createShardAndKeyspace, *allowUpdate)
 }
 
 func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -706,24 +690,9 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	})
 }
 
-func commandScrapTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "Changes the tablet type to <code>scrap</code> in ZooKeeper or etcd if a tablet is offline")
-	skipRebuild := subFlags.Bool("skip-rebuild", false, "Skips rebuilding the shard graph after scrapping the tablet")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the ScrapTablet command.")
-	}
-
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	return wr.Scrap(ctx, tabletAlias, *force, *skipRebuild)
-}
-
 func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	allowMaster := subFlags.Bool("allow_master", false, "Allows for the master tablet of a shard to be deleted. Use with caution.")
+	skipRebuild := subFlags.Bool("skip_rebuild", false, "Skips rebuilding the shard serving graph after deleting the tablet")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -736,7 +705,7 @@ func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	for _, tabletAlias := range tabletAliases {
-		if err := wr.DeleteTablet(ctx, tabletAlias); err != nil {
+		if err := wr.DeleteTablet(ctx, tabletAlias, *allowMaster, *skipRebuild); err != nil {
 			return err
 		}
 	}
@@ -820,7 +789,6 @@ func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 }
 
 func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "Changes the slave type in ZooKeeper or etcd without running hooks")
 	dryRun := subFlags.Bool("dry-run", false, "Lists the proposed change without actually executing it")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -851,7 +819,7 @@ func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		wr.Logger().Printf("+ %v\n", fmtTabletAwkable(ti))
 		return nil
 	}
-	return wr.ChangeType(ctx, tabletAlias, newType, *force)
+	return wr.ChangeSlaveType(ctx, tabletAlias, newType)
 }
 
 func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1702,38 +1670,6 @@ func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 	return printJSON(wr, result)
 }
 
-func commandResolve(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The Resolve command requires a single argument, the value of which must be in the format <keyspace>.<shard>.<db type>:<port name>.")
-	}
-	parts := strings.Split(subFlags.Arg(0), ":")
-	if len(parts) != 2 {
-		return fmt.Errorf("The Resolve command requires a single argument, the value of which must be in the format <keyspace>.<shard>.<db type>:<port name>.")
-	}
-	namedPort := parts[1]
-
-	parts = strings.Split(parts[0], ".")
-	if len(parts) != 3 {
-		return fmt.Errorf("The Resolve command requires a single argument, the value of which must be in the format <keyspace>.<shard>.<db type>:<port name>.")
-	}
-
-	tabletType, err := parseTabletType(parts[2], topoproto.AllTabletTypes)
-	if err != nil {
-		return err
-	}
-	addrs, err := topo.LookupVtName(ctx, wr.TopoServer(), "local", parts[0], parts[1], tabletType, namedPort)
-	if err != nil {
-		return err
-	}
-	for _, addr := range addrs {
-		wr.Logger().Printf("%v\n", netutil.JoinHostPort(addr.Target, int32(addr.Port)))
-	}
-	return nil
-}
-
 func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	pingTablets := subFlags.Bool("ping-tablets", false, "Indicates whether all tablets should be pinged during the validation process")
 	if err := subFlags.Parse(args); err != nil {
@@ -1903,7 +1839,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, true, *force, *waitSlaveTimeout)
+	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, *force, *waitSlaveTimeout)
 	if err != nil {
 		return err
 	}

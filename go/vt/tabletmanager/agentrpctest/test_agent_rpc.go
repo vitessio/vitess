@@ -293,27 +293,6 @@ func agentRPCTestChangeTypePanic(ctx context.Context, t *testing.T, client tmcli
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var errTestScrap = fmt.Errorf("Scrap Failed!")
-
-func (fra *fakeRPCAgent) Scrap(ctx context.Context) error {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	return errTestScrap
-}
-
-func agentRPCTestScrap(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.Scrap(ctx, ti)
-	if strings.Index(err.Error(), errTestScrap.Error()) == -1 {
-		t.Errorf("Unexpected Scrap result: got %v expected %v", err, errTestScrap)
-	}
-}
-
-func agentRPCTestScrapPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.Scrap(ctx, ti)
-	expectRPCWrapLockActionPanic(t, err)
-}
-
 var testSleepDuration = time.Minute
 
 func (fra *fakeRPCAgent) Sleep(ctx context.Context, duration time.Duration) {
@@ -1138,7 +1117,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	// Various read-write methods
 	agentRPCTestSetReadOnly(ctx, t, client, ti)
 	agentRPCTestChangeType(ctx, t, client, ti)
-	agentRPCTestScrap(ctx, t, client, ti)
 	agentRPCTestSleep(ctx, t, client, ti)
 	agentRPCTestExecuteHook(ctx, t, client, ti)
 	agentRPCTestRefreshState(ctx, t, client, ti)
@@ -1190,7 +1168,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	// Various read-write methods
 	agentRPCTestSetReadOnlyPanic(ctx, t, client, ti)
 	agentRPCTestChangeTypePanic(ctx, t, client, ti)
-	agentRPCTestScrapPanic(ctx, t, client, ti)
 	agentRPCTestSleepPanic(ctx, t, client, ti)
 	agentRPCTestExecuteHookPanic(ctx, t, client, ti)
 	agentRPCTestRefreshStatePanic(ctx, t, client, ti)

@@ -133,9 +133,11 @@ func TestTabletExternallyReparented(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, ""); err != nil {
+	waitID := makeWaitID()
+	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(slave) error: %v", err)
 	}
+	waitForExternalReparent(t, waitID)
 
 	// This tests the good case, where everything works as planned
 	t.Logf("TabletExternallyReparented(new master) expecting success")
@@ -143,7 +145,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	waitID := makeWaitID()
+	waitID = makeWaitID()
 	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
@@ -203,9 +205,11 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, ""); err != nil {
+	waitID := makeWaitID()
+	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
+	waitForExternalReparent(t, waitID)
 }
 
 // TestTabletExternallyReparentedContinueOnUnexpectedMaster makes sure
@@ -246,9 +250,11 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, ""); err != nil {
+	waitID := makeWaitID()
+	if err := tmc.TabletExternallyReparented(context.Background(), ti, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
+	waitForExternalReparent(t, waitID)
 }
 
 func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {

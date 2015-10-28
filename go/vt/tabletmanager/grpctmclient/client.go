@@ -195,17 +195,6 @@ func (client *Client) ChangeType(ctx context.Context, tablet *topo.TabletInfo, d
 	return err
 }
 
-// Scrap is part of the tmclient.TabletManagerClient interface
-func (client *Client) Scrap(ctx context.Context, tablet *topo.TabletInfo) error {
-	cc, c, err := client.dial(ctx, tablet)
-	if err != nil {
-		return err
-	}
-	defer cc.Close()
-	_, err = c.Scrap(ctx, &pb.ScrapRequest{})
-	return err
-}
-
 // RefreshState is part of the tmclient.TabletManagerClient interface
 func (client *Client) RefreshState(ctx context.Context, tablet *topo.TabletInfo) error {
 	cc, c, err := client.dial(ctx, tablet)

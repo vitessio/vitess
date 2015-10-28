@@ -58,22 +58,18 @@ A *tablet* is a single server that runs:
 
 * a MySQL instance
 * a <code>vttablet</code> instance
-* a local row cache instance
+* (optionally) a local row cache instance
 * any other database-specific process necessary for operational purposes
 
-A tablet has a status as well as a type. Common statuses and types are listed below:
+A tablet has a type. Common types are listed below:
 
-* **status**
-  * idle - not assigned to a keyspace
-  * assigned - designated to a particular shard within a keyspace
-  * scrap - unhealthy
 * **type**
   * master - The read-write database that is the MySQL master
   * replica - A MySQL slave that serves read-only traffic with guaranteed low replication latency
   * rdonly - A MySQL slave that serves read-only traffic for backend processing jobs, such as MapReduce-type jobs. This type of table does not have guaranteed replication latency.
   * spare - A MySQL slave that is not currently in use.
 
-There are several other tablet types that each serve a specific purpose, including <code>experimental</code>, <code>schema</code>, <code>lag</code>, <code>backup</code>, <code>restore</code>, <code>worker</code>.
+There are several other tablet types that each serve a specific purpose, including <code>experimental</code>, <code>schema</code>, <code>backup</code>, <code>restore</code>, <code>worker</code>.
 
 Only <code>master</code>, <code>replica</code>, and <code>rdonly</code> tablets are included in the [serving graph](#serving-graph).
 

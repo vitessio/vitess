@@ -9,6 +9,8 @@ import logging
 import time
 import unittest
 
+from vtproto import topodata_pb2
+
 import environment
 import utils
 import tablet
@@ -126,8 +128,6 @@ class TestReparent(unittest.TestCase):
 
     utils.run_vtctl(['ChangeSlaveType', tablet_62344.tablet_alias, 'spare'],
                     expect_fail=True)
-    utils.run_vtctl(['ChangeSlaveType', '--force', tablet_62344.tablet_alias,
-                     'spare'], expect_fail=True)
     tablet_62344.kill_vttablet()
 
   def test_reparent_down_master(self):
@@ -183,20 +183,7 @@ class TestReparent(unittest.TestCase):
                                 expect_fail=True)
     self.assertIn('DemoteMaster failed', stderr)
 
-    # Should fail to connect and fail
-    _, stderr = utils.run_vtctl(['-wait-time', '10s', 'ScrapTablet',
-                                 tablet_62344.tablet_alias],
-                                expect_fail=True)
-    logging.debug('Failed ScrapTablet output:\n' + stderr)
-    if ('connection refused' not in stderr and
-        protocols_flavor().rpc_timeout_message() not in stderr):
-      self.fail("didn't find the right error strings in failed ScrapTablet: " +
-                stderr)
-
-    # Force the scrap action in zk even though tablet is not accessible.
-    tablet_62344.scrap(force=True)
-
-    # Re-run forced reparent operation, this should now proceed unimpeded.
+    # Run forced reparent operation, this should now proceed unimpeded.
     utils.run_vtctl(['EmergencyReparentShard', 'test_keyspace/0',
                      tablet_62044.tablet_alias], auto_log=True)
 
@@ -207,14 +194,6 @@ class TestReparent(unittest.TestCase):
     self._populate_vt_insert_test(tablet_62044, 2)
     self._check_vt_insert_test(tablet_41983, 2)
     self._check_vt_insert_test(tablet_31981, 2)
-
-    utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias,
-                     'idle'])
-
-    idle_tablets, _ = utils.run_vtctl(['ListAllTablets', 'test_nj'],
-                                      trap_output=True)
-    if '0000062344 <null> <null> idle' not in idle_tablets:
-      self.fail('idle tablet not found: %s' % idle_tablets)
 
     tablet.kill_tablets([tablet_62044, tablet_41983, tablet_31981])
 
@@ -458,7 +437,7 @@ class TestReparent(unittest.TestCase):
     and we'll call TabletExternallyReparented.
 
     Args:
-      brutal: scraps the old master first
+      brutal: kills the old master first
     """
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
@@ -511,9 +490,12 @@ class TestReparent(unittest.TestCase):
                         changeMasterCmds +
                         ['START SLAVE'])
 
-    # in brutal mode, we scrap the old master first
+    # in brutal mode, we kill the old master first
+    # and delete its tablet record
     if brutal:
-      tablet_62344.scrap(force=True)
+      tablet_62344.kill_vttablet()
+      utils.run_vtctl(['DeleteTablet', '-allow_master',
+                       tablet_62344.tablet_alias], auto_log=True)
 
     base_time = time.time()
 
@@ -529,8 +511,9 @@ class TestReparent(unittest.TestCase):
 
     self._test_reparent_from_outside_check(brutal, base_time)
 
-    tablet.kill_tablets([tablet_31981, tablet_62344, tablet_62044,
-                         tablet_41983])
+    if not brutal:
+      tablet_62344.kill_vttablet()
+    tablet.kill_tablets([tablet_31981, tablet_62044, tablet_41983])
 
   def _test_reparent_from_outside_check(self, brutal, base_time):
 
@@ -563,8 +546,7 @@ class TestReparent(unittest.TestCase):
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                    '-count', '1',
                                    tablet_62044.tablet_alias])
-    self.assertEqual(health['target']['tablet_type'],
-                     tablet.Tablet.tablet_type_value['MASTER'])
+    self.assertEqual(health['target']['tablet_type'], topodata_pb2.MASTER)
     # have to compare the int version, or the rounding errors can break
     self.assertTrue(
         health['tablet_externally_reparented_timestamp'] >= int(base_time))

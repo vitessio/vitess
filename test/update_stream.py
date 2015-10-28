@@ -10,6 +10,8 @@ import traceback
 import threading
 import unittest
 
+from vtproto import topodata_pb2
+
 import environment
 import tablet
 import utils
@@ -167,11 +169,11 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(['delete from vt_insert_test'])
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
     utils.wait_for_tablet_type(
-        replica_tablet.tablet_alias, tablet.Tablet.tablet_type_value['SPARE'])
+        replica_tablet.tablet_alias, topodata_pb2.SPARE)
     logging.debug('dialing replica update stream service')
     replica_conn = self._get_replica_stream_conn()
     try:
-      for stream_event in replica_conn.stream_update(start_position):
+      for _ in replica_conn.stream_update(start_position):
         break
     except Exception as e:
       self.assertIn('update stream service is not enabled', str(e))
@@ -183,7 +185,7 @@ class TestUpdateStream(unittest.TestCase):
                 v['UpdateStreamState'])
 
   def perform_writes(self, count):
-    for i in xrange(count):
+    for _ in xrange(count):
       self._exec_vt_txn(self._populate_vt_insert_test)
       self._exec_vt_txn(['delete from vt_insert_test'])
 
@@ -193,9 +195,8 @@ class TestUpdateStream(unittest.TestCase):
     utils.run_vtctl(
         ['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
     logging.debug('sleeping a bit for the replica action to complete')
-    utils.wait_for_tablet_type(
-        replica_tablet.tablet_alias,
-        tablet.Tablet.tablet_type_value['REPLICA'], 30)
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias,
+                               topodata_pb2.REPLICA, 30)
     thd = threading.Thread(target=self.perform_writes, name='write_thd',
                            args=(100,))
     thd.daemon = True
@@ -230,9 +231,8 @@ class TestUpdateStream(unittest.TestCase):
         if first:
           utils.run_vtctl(
               ['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-          utils.wait_for_tablet_type(
-              replica_tablet.tablet_alias,
-              tablet.Tablet.tablet_type_value['SPARE'], 30)
+          utils.wait_for_tablet_type(replica_tablet.tablet_alias,
+                                     topodata_pb2.SPARE, 30)
           first = False
         else:
           if stream_event.category == update_stream.StreamEvent.POS:
@@ -362,9 +362,8 @@ class TestUpdateStream(unittest.TestCase):
     # The above tests leaves the service in disabled state, hence enabling it.
     utils.run_vtctl(
         ['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
-    utils.wait_for_tablet_type(
-        replica_tablet.tablet_alias,
-        tablet.Tablet.tablet_type_value['REPLICA'], 30)
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias,
+                               topodata_pb2.REPLICA, 30)
 
   def test_log_rotation(self):
     start_position = _get_master_current_position()

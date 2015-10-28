@@ -172,22 +172,6 @@ class TestSharded(unittest.TestCase):
     utils.run_vtctl(['ValidatePermissionsKeyspace', 'test_keyspace'],
                     auto_log=True)
 
-    if environment.topo_server().flavor() == 'zookeeper':
-      # and create zkns on this complex keyspace, make sure a few
-      # files are created
-      utils.run_vtctl(['ExportZknsForKeyspace', 'test_keyspace'])
-      out, err = utils.run(
-          environment.binary_argstr('zk') +
-          ' ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)
-      lines = out.splitlines()
-      for base in ['-80', '80-']:
-        for db_type in ['master', 'replica']:
-          for sub_path in ['', '.vdns', '/0', '/vt.vdns']:
-            expected = ('/zk/test_nj/zkns/vt/test_keyspace/' + base + '/' +
-                        db_type + sub_path)
-            if expected not in lines:
-              self.fail('missing zkns part:\n%s\nin:%s' %(expected, out))
-
     # connect to the tablets directly, make sure they know / validate
     # their own shard
     sql = 'select id, msg from vt_select_test order by id'

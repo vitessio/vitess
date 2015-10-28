@@ -70,13 +70,17 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     self._clear_batch_state()
     if self._handle_transaction_sql(sql):
       return
+    entity_keyspace_id_map = kargs.get('entity_keyspace_id_map')
+    entity_column_name = kargs.get('entity_column_name')
     write_query = bool(write_sql_pattern.match(sql))
     # NOTE: This check may also be done at higher layers but adding it
     # here for completion.
     if write_query:
       if not self.is_writable():
         raise dbexceptions.DatabaseError('DML on a non-writable cursor', sql)
-
+      if entity_keyspace_id_map:
+        raise dbexceptions.DatabaseError(
+            'entity_keyspace_id_map is not allowed for write queries')
     self.results, self.rowcount, self.lastrowid, self.description = (
         self.connection._execute(
             sql,
@@ -85,28 +89,8 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
             self.tablet_type,
             keyspace_ids=self.keyspace_ids,
             keyranges=self.keyranges,
-            not_in_transaction=not self.is_writable(),
-            effective_caller_id=self.effective_caller_id))
-    return self.rowcount
-
-  def execute_entity_ids(
-      self, sql, bind_variables, entity_keyspace_id_map, entity_column_name):
-    self._clear_list_state()
-    self._clear_batch_state()
-
-    # This is by definition a scatter query, so raise exception.
-    write_query = bool(write_sql_pattern.match(sql))
-    if write_query:
-      raise dbexceptions.DatabaseError(
-          'execute_entity_ids is not allowed for write queries')
-    self.results, self.rowcount, self.lastrowid, self.description = (
-        self.connection._execute_entity_ids(
-            sql,
-            bind_variables,
-            self.keyspace,
-            self.tablet_type,
-            entity_keyspace_id_map,
-            entity_column_name,
+            entity_keyspace_id_map=entity_keyspace_id_map,
+            entity_column_name=entity_column_name,
             not_in_transaction=not self.is_writable(),
             effective_caller_id=self.effective_caller_id))
     return self.rowcount

@@ -1,8 +1,8 @@
 app = angular.module('vtctld', ['ngMaterial', 'ngRoute', 'ngResource', 'ngMessages']);
 
 vtTabletTypes = [
-  'unknown', 'idle', 'master', 'replica', 'rdonly', 'spare', 'experimental',
-  'schema_upgrade', 'backup', 'restore', 'worker', 'scrap'
+  'unknown', 'master', 'replica', 'rdonly', 'spare', 'experimental',
+  'backup', 'restore', 'worker'
 ];
 
 app.constant('routes', [

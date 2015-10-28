@@ -118,14 +118,6 @@ func (s *server) ChangeType(ctx context.Context, request *pb.ChangeTypeRequest) 
 	})
 }
 
-func (s *server) Scrap(ctx context.Context, request *pb.ScrapRequest) (*pb.ScrapResponse, error) {
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response := &pb.ScrapResponse{}
-	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionScrap, request, response, true, func() error {
-		return s.agent.Scrap(ctx)
-	})
-}
-
 func (s *server) RefreshState(ctx context.Context, request *pb.RefreshStateRequest) (*pb.RefreshStateResponse, error) {
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.RefreshStateResponse{}

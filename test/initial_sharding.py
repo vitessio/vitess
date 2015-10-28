@@ -11,14 +11,11 @@
 # - we clone into 2 instances
 # - we enable filtered replication
 # - we move all serving types
-# - we scrap the source tablets
+# - we remove the source tablets
 # - we remove the original shard
 
-import base64
 import logging
-import threading
 import struct
-import time
 import unittest
 
 from vtdb import keyrange_constants
@@ -168,7 +165,8 @@ index by_msg (msg)
         'vt_test_keyspace',
         ['begin',
          'insert into %s(id, msg, keyspace_id) '
-         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
+         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
+         '/* user_id:%d */' %
          (table, id, msg, keyspace_id, k, id),
          'commit'],
         write=True)
@@ -472,13 +470,13 @@ index by_msg (msg)
     # make sure we can't delete a shard with tablets
     utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], expect_fail=True)
 
-    # scrap the original tablets in the original shard
-    for t in [shard_master, shard_replica, shard_rdonly1]:
-      utils.run_vtctl(['ScrapTablet', t.tablet_alias], auto_log=True)
+    # remove the original tablets in the original shard
     tablet.kill_tablets([shard_master, shard_replica, shard_rdonly1])
-    for t in [shard_master, shard_replica, shard_rdonly1]:
+    for t in [shard_replica, shard_rdonly1]:
       utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
-
+    utils.run_vtctl(['DeleteTablet', '-allow_master',
+                     shard_master.tablet_alias], auto_log=True)
+      
     # rebuild the serving graph, all mentions of the old shards shoud be gone
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 

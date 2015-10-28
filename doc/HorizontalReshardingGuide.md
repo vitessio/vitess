@@ -359,11 +359,10 @@ shard, which should no longer be in use.
 
 ### Step 6.1: Remove source shard tablets
 
-Run the following commands for each tablet in the source shard:
+Run the following command for each tablet in the source shard:
 
 ``` sh
-vtctlclient -server <vtctld host:port> ScrapTablet <source tablet alias>
-vtctlclient -server <vtctld host:port> DeleteTablet <source tablet alias>
+vtctlclient -server <vtctld host:port> DeleteTablet -allow_master <source tablet alias>
 ```
 
 ### Step 6.2: Delete source shard

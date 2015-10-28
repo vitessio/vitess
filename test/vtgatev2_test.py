@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import hmac
-import json
 import logging
 from multiprocessing.pool import ThreadPool
-import os
 import pprint
 import struct
 import threading
@@ -354,10 +351,10 @@ class TestCoreVTGateFunctions(BaseTestCase):
           'values (%(eid)s, %(id)s, %(keyspace_id)s)',
           {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       cursor.commit()
-    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                keyspace_ids=eid_map.values())
-    rowcount = cursor.execute_entity_ids('select * from vt_a', {}, eid_map,
-                                         'id')
+    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master', keyspace_ids=None)
+    rowcount = cursor.execute(
+        'select * from vt_a', {},
+        entity_keyspace_id_map=eid_map, entity_column_name='id')
     self.assertEqual(rowcount, count, 'entity_ids works')
 
   def test_batch_read(self):
@@ -473,7 +470,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
         KEYSPACE_NAME, 'master',
         keyranges=[self.keyrange])
     self.assertEqual(rowcount, count)
-    results, rowcount, _, _ = vtgate_conn._execute(
+    _, rowcount, _, _ = vtgate_conn._execute(
         'select * from vt_a', {},
         KEYSPACE_NAME, 'master',
         keyranges=[self.keyrange])
@@ -675,7 +672,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     query = 'select * from vt_field_types where uint_val in %(uint_val_1)s'
     rowcount = cursor.execute(query, {'uint_val_1': uint_val_list})
     self.assertEqual(rowcount, len(uint_val_list), "rowcount doesn't match")
-    for i, r in enumerate(cursor.results):
+    for _, r in enumerate(cursor.results):
       row = DBRow(field_names, r)
       self.assertIsInstance(row.uint_val, long)
       self.assertGreaterEqual(

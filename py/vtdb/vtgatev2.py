@@ -187,23 +187,65 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _execute(
-      self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None,
-      keyranges=None, not_in_transaction=False, effective_caller_id=None):
+      self, sql, bind_variables, keyspace, tablet_type,
+      keyspace_ids=None, keyranges=None,
+      entity_keyspace_id_map=None, entity_column_name=None,
+      not_in_transaction=False, effective_caller_id=None):
+
+    routing_kwargs = {}
     exec_method = None
     req = None
     if keyspace_ids is not None:
+      routing_kwargs['keyspace_ids'] = keyspace_ids
       req = _create_req_with_keyspace_ids(
           sql, bind_variables, keyspace, tablet_type, keyspace_ids,
           not_in_transaction)
       exec_method = 'VTGate.ExecuteKeyspaceIds'
     elif keyranges is not None:
+      routing_kwargs['keyranges'] = keyranges
       req = _create_req_with_keyranges(
           sql, bind_variables, keyspace, tablet_type, keyranges,
           not_in_transaction)
       exec_method = 'VTGate.ExecuteKeyRanges'
+    elif entity_keyspace_id_map is not None:
+      routing_kwargs['entity_keyspace_id_map'] = entity_keyspace_id_map
+      routing_kwargs['entity_column_name'] = entity_column_name
+      if entity_column_name is None:
+        raise dbexceptions.ProgrammingError(
+            '_execute called with entity_keyspace_id_map and no '
+            'entity_column_name')
+      sql, new_binds = dbapi.prepare_query_bind_vars(sql, bind_variables)
+      new_binds = field_types.convert_bind_vars(new_binds)
+      req = {
+          'Sql': sql,
+          'BindVariables': new_binds,
+          'Keyspace': keyspace,
+          'TabletType': tablet_type,
+          'EntityKeyspaceIDs': [
+              {'ExternalID': xid, 'KeyspaceID': kid}
+              for xid, kid in entity_keyspace_id_map.iteritems()],
+          'EntityColumnName': entity_column_name,
+          'NotInTransaction': not_in_transaction,
+      }
+      exec_method = 'VTGate.ExecuteEntityIds'
     else:
       raise dbexceptions.ProgrammingError(
-          '_execute called without specifying keyspace_ids or keyranges')
+          '_execute called with no keyspace_ids, keyranges, or '
+          'entity_keyspace_id_map')
+
+    def check_incompatible_args(arg_name):
+      if arg_name not in routing_kwargs:
+        raise dbexceptions.ProgrammingError(
+            '_execute called with routing_args=%s, '
+            'incompatible routing arg=%s' % (
+                sorted(routing_kwargs), arg_name))
+
+    if keyranges is not None:
+      check_incompatible_args('keyranges')
+    if entity_column_name is not None:
+      check_incompatible_args('entity_column_name')
+    if entity_keyspace_id_map is not None:
+      check_incompatible_args('entity_keyspace_id_map')
 
     self._add_caller_id(req, effective_caller_id)
     self._add_session(req)
@@ -216,45 +258,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     except (gorpc.GoRpcError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
       raise self._convert_exception(
-          e, sql, keyspace_ids, keyranges,
-          keyspace=keyspace, tablet_type=tablet_type)
-    except Exception:
-      logging.exception('gorpc low-level error')
-      raise
-
-  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
-  def _execute_entity_ids(
-      self, sql, bind_variables, keyspace, tablet_type,
-      entity_keyspace_id_map, entity_column_name, not_in_transaction=False,
-      effective_caller_id=None):
-    sql, new_binds = dbapi.prepare_query_bind_vars(sql, bind_variables)
-    new_binds = field_types.convert_bind_vars(new_binds)
-    req = {
-        'Sql': sql,
-        'BindVariables': new_binds,
-        'Keyspace': keyspace,
-        'TabletType': tablet_type,
-        'EntityKeyspaceIDs': [
-            {'ExternalID': xid, 'KeyspaceID': kid}
-            for xid, kid in entity_keyspace_id_map.iteritems()],
-        'EntityColumnName': entity_column_name,
-        'NotInTransaction': not_in_transaction,
-        }
-
-    self._add_caller_id(req, effective_caller_id)
-    self._add_session(req)
-    try:
-      exec_method = 'VTGate.ExecuteEntityIds'
-      response = self._get_client().call(exec_method, req)
-      self._update_session(response)
-      vtgate_utils.extract_rpc_error(exec_method, response)
-      reply = response.reply
-      return self._get_rowset_from_query_result(reply.get('Result'))
-    except (gorpc.GoRpcError, vtgate_utils.VitessError) as e:
-      self.logger_object.log_private_data(bind_variables)
-      raise self._convert_exception(
-          e, sql, entity_keyspace_id_map,
-          keyspace=keyspace, tablet_type=tablet_type)
+          e, sql, keyspace=keyspace, tablet_type=tablet_type, **routing_kwargs)
     except Exception:
       logging.exception('gorpc low-level error')
       raise
@@ -510,7 +514,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
     new_args = exc.args + (str(self),) + args
     if kwargs:
-      new_args += tuple(kwargs.itervalues())
+      new_args += tuple(sorted(kwargs.itervalues()))
     new_exc = exc
 
     if isinstance(exc, gorpc.TimeoutError):

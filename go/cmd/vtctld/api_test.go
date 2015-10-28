@@ -131,7 +131,7 @@ func TestAPI(t *testing.T) {
 				"keyspace": "ks1",
 				"shard": "-80",
 				"key_range": {"end": "gA=="},
-				"type": 3
+				"type": 2
 			}`},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", `{
 				"Name": "TestTabletAction",
@@ -141,7 +141,7 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		// EndPoints
-		{"GET", "endpoints/cell1/ks1/-80/", `[3]`},
+		{"GET", "endpoints/cell1/ks1/-80/", `[2]`},
 		{"GET", "endpoints/cell1/ks1/-80/replica", `{
 				"entries": [{
 						"uid": 100,

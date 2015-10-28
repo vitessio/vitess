@@ -119,9 +119,6 @@ command to determine the current replication positions of a shard's slaves.
 
 This command performs the following actions:
 
-1. Scraps the current master if it is still alive. That operation
-   makes the tablet stop whatever it is doing, stops its query service,
-   and makes it unusable.
 1. Determines the current replication position on all of the slave
    tablets and confirms that the master-elect tablet has the most
    advanced replication position.
@@ -184,7 +181,7 @@ by starting <code>vtctld</code> with the
 ## Reparenting And Serving Graph
 
 During the reparenting process, Vitess shuffles servers such that servers
-might be demoted, promoted, or scrapped. The **serving graph** should
+might be demoted, or promoted. The **serving graph** should
 reflect the latest state of the service.
 
 A tablet can be orphaned after a reparenting if it is unavailable

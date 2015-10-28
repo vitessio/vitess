@@ -15,18 +15,15 @@ namespace topodata {
 
   class TabletType extends \DrSlump\Protobuf\Enum {
     const UNKNOWN = 0;
-    const IDLE = 1;
-    const MASTER = 2;
-    const REPLICA = 3;
-    const RDONLY = 4;
-    const BATCH = 4;
-    const SPARE = 5;
-    const EXPERIMENTAL = 6;
-    const SCHEMA_UPGRADE = 7;
-    const BACKUP = 8;
-    const RESTORE = 9;
-    const WORKER = 10;
-    const SCRAP = 11;
+    const MASTER = 1;
+    const REPLICA = 2;
+    const RDONLY = 3;
+    const BATCH = 3;
+    const SPARE = 4;
+    const EXPERIMENTAL = 5;
+    const BACKUP = 6;
+    const RESTORE = 7;
+    const WORKER = 8;
   }
 }
 namespace topodata {

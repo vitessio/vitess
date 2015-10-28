@@ -134,6 +134,12 @@ func (agent *ActionAgent) initHealthCheck() {
 //
 // Note we only update the topo record if we need to, that is if our type or
 // health details changed.
+//
+// This will not change the BinlogPlayerMap, but if it is not empty,
+// we will think we should not be running the query service.
+//
+// This will not change the TabletControl record, but will use it
+// to see if we should be running the query service.
 func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
@@ -145,24 +151,22 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	agent.mutex.Unlock()
 
 	// figure out if we should be running the query service
-	shouldQueryServiceBeRunning := false
-	var blacklistedTables []string
+	shouldBeServing := false
 	if topo.IsRunningQueryService(targetTabletType) && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
-		shouldQueryServiceBeRunning = true
+		shouldBeServing = true
 		if tabletControl != nil {
-			blacklistedTables = tabletControl.BlacklistedTables
 			if tabletControl.DisableQueryService {
-				shouldQueryServiceBeRunning = false
+				shouldBeServing = false
 			}
 		}
 	}
 
 	// run the health check
-	typeForHealthCheck := targetTabletType
+	isSlaveType := true
 	if tablet.Type == pbt.TabletType_MASTER {
-		typeForHealthCheck = pbt.TabletType_MASTER
+		isSlaveType = false
 	}
-	replicationDelay, err := agent.HealthReporter.Report(topo.IsSlaveType(typeForHealthCheck), shouldQueryServiceBeRunning)
+	replicationDelay, err := agent.HealthReporter.Report(isSlaveType, shouldBeServing)
 	health := make(map[string]string)
 	if err == nil {
 		if replicationDelay > *unhealthyThreshold {
@@ -180,31 +184,28 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 			// We are not healthy and must shut down QueryService.
 			// At the moment, the only exception to this are "worker" tablets which
 			// still must serve queries e.g. as source tablet during a "SplitClone".
-			shouldQueryServiceBeRunning = false
+			shouldBeServing = false
 		}
 	}
-	isQueryServiceRunning := agent.QueryServiceControl.IsServing()
-	if shouldQueryServiceBeRunning {
-		if !isQueryServiceRunning {
+	isServing := agent.QueryServiceControl.IsServing()
+	if shouldBeServing {
+		if !isServing {
 			// send the type we want to be, not the type we are
-			currentType := tablet.Type
-			if tablet.Type == pbt.TabletType_SPARE {
-				tablet.Type = targetTabletType
+			desiredType := tablet.Type
+			if desiredType == pbt.TabletType_SPARE {
+				desiredType = targetTabletType
 			}
 
 			// we remember this new possible error
-			err = agent.allowQueries(tablet.Tablet, blacklistedTables)
-
-			// restore the current type
-			tablet.Type = currentType
+			err = agent.allowQueries(desiredType)
 		}
 	} else {
-		if isQueryServiceRunning {
+		if isServing {
 			// We are not healthy or should not be running the
 			// query service, shut it down.
 			// Note this is possibly sending 'spare' as
 			// the tablet type, we will clean it up later.
-			agent.disallowQueries(tablet.Tablet,
+			agent.disallowQueries(tablet.Tablet.Type,
 				fmt.Sprintf("health-check failure(%v)", err),
 			)
 		}
@@ -233,17 +234,17 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 		} else {
 			log.Infof("Updating tablet mysql port to %v", mysqlPort)
 			if err := agent.TopoServer.UpdateTabletFields(agent.batchCtx, tablet.Alias, func(tablet *pbt.Tablet) error {
-				tablet.PortMap["mysql"] = int32(mysqlPort)
+				tablet.PortMap["mysql"] = mysqlPort
 				return nil
 			}); err != nil {
-				log.Infof("Error updating mysql port in tablet record: %v", err)
+				log.Infof("Error updating mysql port in tablet record, will try again: %v", err)
 				return
 			}
 
 			// save the port so we don't update it again next time
 			// we do the health check.
 			agent.mutex.Lock()
-			agent._tablet.PortMap["mysql"] = int32(mysqlPort)
+			agent._tablet.PortMap["mysql"] = mysqlPort
 			agent._waitingForMysql = false
 			agent.mutex.Unlock()
 		}
@@ -340,7 +341,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType pbt.TabletType)
 		return
 	}
 	// The change above succeeded, so update our local copy.
-	tablet, err := agent.readTablet(agent.batchCtx)
+	tablet, err := agent.updateTabletFromTopo(agent.batchCtx)
 	if err != nil {
 		log.Infof("Error re-reading tablet record: %v", err)
 		return

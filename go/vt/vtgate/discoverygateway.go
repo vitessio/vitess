@@ -316,7 +316,7 @@ func WrapError(in error, keyspace, shard string, tabletType pbt.TabletType, endP
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
 		Err:             in,
-		endpointCode:    vterrors.RecoverVtErrorCode(in),
+		EndPointCode:    vterrors.RecoverVtErrorCode(in),
 	}
 	return shardConnErr
 }
