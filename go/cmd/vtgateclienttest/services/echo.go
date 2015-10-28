@@ -64,6 +64,15 @@ func echoQueryResult(vals map[string]interface{}) *mproto.QueryResult {
 	qr := &mproto.QueryResult{}
 
 	var row []sqltypes.Value
+
+	// The first two returned fields are always a field with a MySQL NULL value,
+	// and another field with a zero-length string.
+	// Client tests can use this to check that they correctly distinguish the two.
+	qr.Fields = append(qr.Fields, mproto.Field{Name: "null", Type: mproto.VT_VAR_STRING})
+	row = append(row, sqltypes.NULL)
+	qr.Fields = append(qr.Fields, mproto.Field{Name: "emptyString", Type: mproto.VT_VAR_STRING})
+	row = append(row, sqltypes.MakeString(nil))
+
 	for k, v := range vals {
 		qr.Fields = append(qr.Fields, mproto.Field{Name: k, Type: mproto.VT_VAR_STRING})
 

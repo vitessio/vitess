@@ -366,10 +366,10 @@ func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 // getEcho extracts the echoed field values from a query result.
-func getEcho(qr *mproto.QueryResult) map[string]string {
-	values := map[string]string{}
+func getEcho(qr *mproto.QueryResult) map[string]sqltypes.Value {
+	values := map[string]sqltypes.Value{}
 	for i, field := range qr.Fields {
-		values[field.Name] = qr.Rows[0][i].String()
+		values[field.Name] = qr.Rows[0][i]
 	}
 	return values
 }
@@ -382,8 +382,16 @@ func checkEcho(t *testing.T, name string, qr *mproto.QueryResult, err error, wan
 	}
 	got := getEcho(qr)
 	for k, v := range want {
-		if got[k] != v {
+		if got[k].String() != v {
 			t.Errorf("%v: %v = \n%q, want \n%q", name, k, got[k], v)
 		}
+	}
+
+	// Check NULL and empty string.
+	if !got["null"].IsNull() {
+		t.Errorf("MySQL NULL value wasn't preserved")
+	}
+	if !got["emptyString"].IsString() || got["emptyString"].String() != "" {
+		t.Errorf("Empty string value wasn't preserved")
 	}
 }

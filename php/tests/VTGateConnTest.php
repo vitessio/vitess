@@ -146,6 +146,11 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 		
+		// Check NULL vs. empty string.
+		$this->assertEquals(true, is_null($echo['null']));
+		$this->assertEquals(true, is_string($echo['emptyString']));
+		$this->assertEquals('', $echo['emptyString']);
+		
 		$echo = self::getEcho($conn->executeShards($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$SHARDS, self::$BIND_VARS, self::$TABLET_TYPE));
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
