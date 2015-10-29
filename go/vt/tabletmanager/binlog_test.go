@@ -51,17 +51,17 @@ func (fbc *fakeBinlogClient) Dial(endPoint *pb.EndPoint, connTimeout time.Durati
 func (fbc *fakeBinlogClient) Close() {
 }
 
-// Dial is part of the binlogplayer.Client interface
+// ServeUpdateStream is part of the binlogplayer.Client interface
 func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("NYI")
+	return nil, nil, fmt.Errorf("Should never be called")
 }
 
-// Dial is part of the binlogplayer.Client interface
+// StreamTables is part of the binlogplayer.Client interface
 func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, tables []string, charset *mproto.Charset) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("NYI")
+	return nil, nil, fmt.Errorf("NYI, will add a vertical split test")
 }
 
-// Dial is part of the binlogplayer.Client interface
+// StreamKeyRange is part of the binlogplayer.Client interface
 func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyspaceIDType key.KeyspaceIdType, keyRange *pb.KeyRange, charset *mproto.Charset) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	c := make(chan *proto.BinlogTransaction)
 	var finalErr error
