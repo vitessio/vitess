@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
@@ -240,6 +241,43 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 		t.Errorf("Got wrong SQL: %#v", sql)
 	}
 
+	// ask for status, make sure we got what we expect
+	s := bpm.Status()
+	if s.State != "Running" ||
+		len(s.Controllers) != 1 ||
+		s.Controllers[0].Index != 1 ||
+		s.Controllers[0].State != "Running" ||
+		s.Controllers[0].SourceShard.Keyspace != keyspace ||
+		s.Controllers[0].SourceShard.Shard != "-80" ||
+		s.Controllers[0].LastError != "" {
+		t.Errorf("unexpected state: %v", s)
+	}
+
+	// ask for BlpPositionList, make sure we got what we expect
+	go func() {
+		vtcm := binlogplayer.NewVtClientMock()
+		vtcm.Result = &mproto.QueryResult{
+			Fields:       nil,
+			RowsAffected: 1,
+			InsertId:     0,
+			Rows: [][]sqltypes.Value{
+				[]sqltypes.Value{
+					sqltypes.MakeString([]byte("MariaDB/0-1-1235")),
+					sqltypes.MakeString([]byte("")),
+				},
+			},
+		}
+		vtClientSyncChannel <- vtcm
+	}()
+	bpl, err := bpm.BlpPositionList()
+	if len(bpl.Entries) != 1 ||
+		bpl.Entries[0].Uid != 1 ||
+		bpl.Entries[0].Position.GTIDSet.(myproto.MariadbGTID).Domain != 0 ||
+		bpl.Entries[0].Position.GTIDSet.(myproto.MariadbGTID).Server != 1 ||
+		bpl.Entries[0].Position.GTIDSet.(myproto.MariadbGTID).Sequence != 1235 {
+		t.Errorf("unexpected BlpPositionList: %v", bpl)
+	}
+
 	// now stop the binlog player map, by removing the source shard.
 	// this will stop the player, which will cancel its context,
 	// and exit the fake streaming connection.
@@ -247,5 +285,18 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	bpm.RefreshMap(ctx, tablet, ki, si)
 	if bpm.isRunningFilteredReplication() {
 		t.Errorf("isRunningFilteredReplication should be false")
+	}
+	s = bpm.Status()
+	if s.State != "Running" ||
+		len(s.Controllers) != 0 {
+		t.Errorf("unexpected state: %v", s)
+	}
+
+	// now just stop the map
+	bpm.Stop()
+	s = bpm.Status()
+	if s.State != "Stopped" ||
+		len(s.Controllers) != 0 {
+		t.Errorf("unexpected state: %v", s)
 	}
 }
