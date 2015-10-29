@@ -13,10 +13,8 @@ port_base=15100
 grpc_port_base=16100
 mysql_port_base=33100
 
-hostname=`hostname -f`
-
-# We expect to find zk-client-conf.json in the same folder as this script.
 script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
 
 dbconfig_flags="\
     -db-config-app-uname vt_app \
@@ -31,10 +29,6 @@ dbconfig_flags="\
     -db-config-filtered-dbname vt_$keyspace \
     -db-config-filtered-charset utf8"
 
-# Set up environment.
-export LD_LIBRARY_PATH=$VTROOT/dist/vt-zookeeper-3.3.5/lib:$LD_LIBRARY_PATH
-export ZK_CLIENT_CONFIG=$script_root/zk-client-conf.json
-
 case "$MYSQL_FLAVOR" in
   "MySQL56")
     bootstrap_archive=mysql-db-dir_5.6.24.tbz
@@ -46,18 +40,7 @@ case "$MYSQL_FLAVOR" in
     ;;
 esac
 
-mkdir -p $VTDATAROOT/tmp
 mkdir -p $VTDATAROOT/backups
-
-# Try to find mysqld_safe on PATH.
-if [ -z "$VT_MYSQL_ROOT" ]; then
-  mysql_path=`which mysqld_safe`
-  if [ -z "$mysql_path" ]; then
-    echo "Can't guess location of mysqld_safe. Please set VT_MYSQL_ROOT so it can be found at \$VT_MYSQL_ROOT/bin/mysqld_safe."
-    exit 1
-  fi
-  export VT_MYSQL_ROOT=$(dirname `dirname $mysql_path`)
-fi
 
 # Look for memcached.
 memcached_path=`which memcached`
@@ -79,15 +62,21 @@ for uid_index in $uids; do
   printf -v tablet_dir 'vt_%010d' $uid
 
   echo "Starting MySQL for tablet $alias..."
-  $VTROOT/bin/mysqlctl -log_dir $VTDATAROOT/tmp -tablet_uid $uid $dbconfig_flags \
+  action="init -bootstrap_archive $bootstrap_archive"
+  if [ -d $VTDATAROOT/$tablet_dir ]; then
+    echo "Resuming from existing vttablet dir:"
+    echo "    $VTDATAROOT/$tablet_dir"
+    action='start'
+  fi
+  $VTROOT/bin/mysqlctl \
+    -log_dir $VTDATAROOT/tmp \
+    -tablet_uid $uid $dbconfig_flags \
     -mysql_port $mysql_port \
-    init -bootstrap_archive $bootstrap_archive
-
-  $VT_MYSQL_ROOT/bin/mysql -u vt_dba -S $VTDATAROOT/$tablet_dir/mysql.sock \
-    -e "CREATE DATABASE IF NOT EXISTS vt_$keyspace"
+    $action
 
   echo "Starting vttablet for $alias..."
-  $VTROOT/bin/vttablet -log_dir $VTDATAROOT/tmp -port $port $dbconfig_flags \
+  $VTROOT/bin/vttablet \
+    -log_dir $VTDATAROOT/tmp \
     -tablet-path $alias \
     -init_keyspace $keyspace \
     -init_shard $shard \
@@ -99,9 +88,12 @@ for uid_index in $uids; do
     -backup_storage_implementation file \
     -file_backup_storage_root $VTDATAROOT/backups \
     -restore_from_backup \
+    -port $port \
     -grpc_port $grpc_port \
     -binlog_player_protocol grpc \
     -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
+    -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
+    $dbconfig_flags \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
   echo "Access tablet $alias at http://$hostname:$port/debug/status"
