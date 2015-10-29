@@ -38,6 +38,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog"
+	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/key"
@@ -194,7 +195,9 @@ func NewActionAgent(
 	agent.statsTabletType = stats.NewString("TabletType")
 
 	// Start the binlog player services, not playing at start.
-	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.Filtered, mysqld)
+	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, mysqld, func() binlogplayer.VtClient {
+		return binlogplayer.NewDbClient(&agent.DBConfigs.Filtered)
+	})
 	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
 
 	// try to figure out the mysql port
@@ -477,6 +480,9 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		// Update our DB config to match the info we have in the tablet
 		if agent.DBConfigs.App.DbName == "" {
 			agent.DBConfigs.App.DbName = topoproto.TabletDbName(tablet.Tablet)
+		}
+		if agent.DBConfigs.Filtered.DbName == "" {
+			agent.DBConfigs.Filtered.DbName = topoproto.TabletDbName(tablet.Tablet)
 		}
 		agent.DBConfigs.App.Keyspace = tablet.Keyspace
 		agent.DBConfigs.App.Shard = tablet.Shard

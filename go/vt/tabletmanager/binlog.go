@@ -17,7 +17,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
@@ -40,9 +39,9 @@ func init() {
 // BinlogPlayerController controls one player.
 type BinlogPlayerController struct {
 	// Configuration parameters (set at construction, immutable).
-	ts       topo.Server
-	dbConfig *sqldb.ConnParams
-	mysqld   mysqlctl.MysqlDaemon
+	ts              topo.Server
+	vtClientFactory func() binlogplayer.VtClient
+	mysqld          mysqlctl.MysqlDaemon
 
 	// Information about us (set at construction, immutable).
 	cell           string
@@ -78,10 +77,10 @@ type BinlogPlayerController struct {
 	lastError error
 }
 
-func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange *pb.KeyRange, sourceShard *pb.Shard_SourceShard, dbName string) *BinlogPlayerController {
+func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange *pb.KeyRange, sourceShard *pb.Shard_SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
 		ts:                ts,
-		dbConfig:          dbConfig,
+		vtClientFactory:   vtClientFactory,
 		mysqld:            mysqld,
 		cell:              cell,
 		keyspaceIDType:    keyspaceIDType,
@@ -225,7 +224,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// create the db connection, connect it
-	vtClient := binlogplayer.NewDbClient(bpc.dbConfig)
+	vtClient := bpc.vtClientFactory()
 	if err := vtClient.Connect(); err != nil {
 		return fmt.Errorf("can't connect to database: %v", err)
 	}
@@ -295,7 +294,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 }
 
 // BlpPosition returns the current position for a controller, as read from the database.
-func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) (*blproto.BlpPosition, string, error) {
+func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.VtClient) (*blproto.BlpPosition, string, error) {
 	return binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 }
 
@@ -303,9 +302,9 @@ func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) 
 // It can be stopped and restarted.
 type BinlogPlayerMap struct {
 	// Immutable, set at construction time.
-	ts       topo.Server
-	dbConfig *sqldb.ConnParams
-	mysqld   mysqlctl.MysqlDaemon
+	ts              topo.Server
+	vtClientFactory func() binlogplayer.VtClient
+	mysqld          mysqlctl.MysqlDaemon
 
 	// This mutex protects the map and the state.
 	mu      sync.Mutex
@@ -321,13 +320,13 @@ const (
 )
 
 // NewBinlogPlayerMap creates a new map of players.
-func NewBinlogPlayerMap(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld mysqlctl.MysqlDaemon) *BinlogPlayerMap {
+func NewBinlogPlayerMap(ts topo.Server, mysqld mysqlctl.MysqlDaemon, vtClientFactory func() binlogplayer.VtClient) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
-		ts:       ts,
-		dbConfig: dbConfig,
-		mysqld:   mysqld,
-		players:  make(map[uint32]*BinlogPlayerController),
-		state:    BpmStateRunning,
+		ts:              ts,
+		vtClientFactory: vtClientFactory,
+		mysqld:          mysqld,
+		players:         make(map[uint32]*BinlogPlayerController),
+		state:           BpmStateRunning,
 	}
 }
 
@@ -404,7 +403,7 @@ func (blm *BinlogPlayerMap) addPlayer(ctx context.Context, cell string, keyspace
 		return
 	}
 
-	bpc = newBinlogPlayerController(blm.ts, blm.dbConfig, blm.mysqld, cell, keyspaceIDType, keyRange, sourceShard, dbName)
+	bpc = newBinlogPlayerController(blm.ts, blm.vtClientFactory, blm.mysqld, cell, keyspaceIDType, keyRange, sourceShard, dbName)
 	blm.players[sourceShard.Uid] = bpc
 	if blm.state == BpmStateRunning {
 		bpc.Start(ctx)
@@ -445,9 +444,6 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *pb.Tablet, k
 	}
 
 	blm.mu.Lock()
-	if blm.dbConfig.DbName == "" {
-		blm.dbConfig.DbName = topoproto.TabletDbName(tablet)
-	}
 
 	// get the existing sources and build a map of sources to remove
 	toRemove := make(map[uint32]bool)
@@ -512,7 +508,7 @@ func (blm *BinlogPlayerMap) Start(ctx context.Context) {
 // BlpPositionList returns the current position of all the players.
 func (blm *BinlogPlayerMap) BlpPositionList() (*blproto.BlpPositionList, error) {
 	// create a db connection for this purpose
-	vtClient := binlogplayer.NewDbClient(blm.dbConfig)
+	vtClient := blm.vtClientFactory()
 	if err := vtClient.Connect(); err != nil {
 		return nil, fmt.Errorf("can't connect to database: %v", err)
 	}
