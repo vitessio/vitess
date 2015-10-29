@@ -22,6 +22,22 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+// The tests in this file test the BinlogPlayerMap object.
+//
+// The BinlogPlayerMap object is configured using the SourceShards of a Shard
+// object. So we have to create the right topology entries for that.
+//
+// BinlogPlayerMap will create BinlogPlayerController objects
+// to talk to the source remote tablets. They will use the topology to
+// find valid endpoints, so we have to update the EndPoints.
+//
+// We fake the communication between the BinlogPlayerController objects and
+// the remote tablets by registering our own binlogplayer.Client.
+//
+// BinlogPlayerController objects will then play the received events
+// through a binlogplayer.VtClient. Again, we mock that one to record
+// what is being sent to it and make sure it's correct.
+
 // fakeBinlogClient implements binlogplayer.Client
 type fakeBinlogClient struct {
 	t               *testing.T
