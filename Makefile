@@ -74,10 +74,10 @@ SHELL = /bin/bash
 # Run the following tests after making worker changes.
 worker_test:
 	godep go test ./go/vt/worker/
-	go run test.go -docker=false binlog resharding resharding_bytes vertical_split initial_sharding initial_sharding_bytes worker
+	go run test.go -docker=false -tag=worker_test
 
 site_integration_test:
-	go run test.go -docker=false keyrange keyspace mysqlctl tabletmanager vtdb vtgatev2
+	go run test.go -docker=false -tag=site_test
 
 java_test:
 	godep go install ./go/cmd/vtgateclienttest

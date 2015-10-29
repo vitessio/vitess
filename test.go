@@ -71,6 +71,7 @@ var (
 	pull     = flag.Bool("pull", true, "re-pull the bootstrap image, in case it's been updated")
 	docker   = flag.Bool("docker", true, "run tests with Docker")
 	shard    = flag.Int("shard", -1, "if N>=0, run the tests whose Shard field matches N")
+	tag      = flag.String("tag", "", "if provided, only run tests with the given tag. Can't be combined with -shard or explicit test list")
 	reshard  = flag.Int("rebalance", 0, "if N>0, check the stats and group tests into N similarly-sized bins by average run time")
 	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
 	printLog = flag.Bool("print-log", false, "print the log of each failed test (or all tests if -log-pass) to the console")
@@ -106,13 +107,26 @@ type Test struct {
 	// Shard is used to split tests among workers.
 	Shard int
 
-	// Maximum number of times a test will be retried. If 0, flag *retryMax is used.
+	// RetryMax is the maximum number of times a test will be retried.
+	// If 0, flag *retryMax is used.
 	RetryMax int
+
+	// Tags is a list of tags that can be used to filter tests.
+	Tags []string
 
 	name     string
 	runIndex int
 
 	pass, fail int
+}
+
+func (t *Test) hasTag(want string) bool {
+	for _, got := range t.Tags {
+		if got == want {
+			return true
+		}
+	}
+	return false
 }
 
 // run executes a single try.
@@ -197,10 +211,15 @@ func main() {
 	}
 	flag.Parse()
 
+	outDirBaseName := "local"
+	if *docker {
+		outDirBaseName = *flavor
+	}
+
 	startTime := time.Now()
 
 	// Make output directory.
-	outDir := path.Join("_test", fmt.Sprintf("%v.%v.%v", *flavor, startTime.Format("20060102-150405"), os.Getpid()))
+	outDir := path.Join("_test", fmt.Sprintf("%v.%v.%v", outDirBaseName, startTime.Format("20060102-150405"), os.Getpid()))
 	if err := os.MkdirAll(outDir, os.FileMode(0755)); err != nil {
 		log.Fatalf("Can't create output directory: %v", err)
 	}
@@ -622,6 +641,15 @@ firstPass:
 				continue
 			}
 			ct.Shard = i
+			if ct.Args == nil {
+				ct.Args = []string{}
+			}
+			if ct.Command == nil {
+				ct.Command = []string{}
+			}
+			if ct.Tags == nil {
+				ct.Tags = []string{}
+			}
 			log.Printf("% 32v:\t%v\n", t.name, t.PassTime)
 		}
 		log.Printf("Shard %v total: %v\n", i, time.Duration(sums[i]))
@@ -675,8 +703,8 @@ func selectedTests(args []string, config *Config) []*Test {
 	if len(args) == 0 && *shard < 0 {
 		// Run all tests.
 		var names []string
-		for name := range config.Tests {
-			if !config.Tests[name].Manual {
+		for name, t := range config.Tests {
+			if !t.Manual && (*tag == "" || t.hasTag(*tag)) {
 				names = append(names, name)
 			}
 		}
