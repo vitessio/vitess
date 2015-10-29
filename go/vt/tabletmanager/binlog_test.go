@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
@@ -129,6 +131,34 @@ func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string
 	}, nil
 }
 
+func createSourceTablet(t *testing.T, ts topo.Server, keyspace, shard string) {
+	vshard, kr, err := topo.ValidateShardName(shard)
+	if err != nil {
+		t.Fatalf("ValidateShardName(%v) failed: %v", shard, err)
+	}
+
+	ctx := context.Background()
+	tablet := &pb.Tablet{
+		Alias: &pb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Type:     pb.TabletType_REPLICA,
+		KeyRange: kr,
+		Keyspace: keyspace,
+		Shard:    vshard,
+		PortMap: map[string]int32{
+			"vt": 80,
+		},
+	}
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
+		t.Fatalf("CreateTablet failed: %v", err)
+	}
+	if err := topotools.UpdateTabletEndpoints(ctx, ts, tablet); err != nil {
+		t.Fatalf("topotools.UpdateTabletEndpoints failed: %v", err)
+	}
+}
+
 // checkBlpPositionList will ask the BinlogPlayerMap for its BlpPositionList,
 // and check it contains one entry with the right data.
 func checkBlpPositionList(t *testing.T, bpm *BinlogPlayerMap, vtClientSyncChannel chan *binlogplayer.VtClientMock) {
@@ -168,42 +198,21 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 
 	// create the keyspace, a full set of covering shards,
 	// and a new split destination shard.
-	keyspace := "ks"
-	if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{
+	if err := ts.CreateKeyspace(ctx, "ks", &pb.Keyspace{
 		ShardingColumnType: pb.KeyspaceIdType_UINT64,
 		ShardingColumnName: "sharding_key",
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 	for _, shard := range []string{"-80", "80-", "40-60"} {
-		if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
+		if err := ts.CreateShard(ctx, "ks", shard); err != nil {
 			t.Fatalf("CreateShard failed: %v", err)
 		}
 	}
 
 	// create one replica remote tablet in source shard, we will
 	// use it as a source for filtered replication.
-	tablet := &pb.Tablet{
-		Alias: &pb.TabletAlias{
-			Cell: "cell1",
-			Uid:  100,
-		},
-		Type: pb.TabletType_REPLICA,
-		KeyRange: &pb.KeyRange{
-			End: []byte{0x80},
-		},
-		Keyspace: keyspace,
-		Shard:    "-80",
-		PortMap: map[string]int32{
-			"vt": 80,
-		},
-	}
-	if err := ts.CreateTablet(ctx, tablet); err != nil {
-		t.Fatalf("CreateTablet failed: %v", err)
-	}
-	if err := topotools.UpdateTabletEndpoints(ctx, ts, tablet); err != nil {
-		t.Fatalf("topotools.UpdateTabletEndpoints failed: %v", err)
-	}
+	createSourceTablet(t, ts, "ks", "-80")
 
 	// register a binlog player factory that will return the instances
 	// we want
@@ -222,7 +231,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 		return <-vtClientSyncChannel
 	})
 
-	tablet = &pb.Tablet{
+	tablet := &pb.Tablet{
 		Alias: &pb.TabletAlias{
 			Cell: "cell1",
 			Uid:  1,
@@ -231,15 +240,15 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 			Start: []byte{0x40},
 			End:   []byte{0x60},
 		},
-		Keyspace: keyspace,
+		Keyspace: "ks",
 		Shard:    "40-60",
 	}
 
-	ki, err := ts.GetKeyspace(ctx, keyspace)
+	ki, err := ts.GetKeyspace(ctx, "ks")
 	if err != nil {
 		t.Fatalf("GetKeyspace failed: %v", err)
 	}
-	si, err := ts.GetShard(ctx, keyspace, "40-60")
+	si, err := ts.GetShard(ctx, "ks", "40-60")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
@@ -257,7 +266,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	si.SourceShards = []*pb.Shard_SourceShard{
 		&pb.Shard_SourceShard{
 			Uid:      1,
-			Keyspace: keyspace,
+			Keyspace: "ks",
 			Shard:    "-80",
 			KeyRange: &pb.KeyRange{
 				End: []byte{0x80},
@@ -278,7 +287,6 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	// start position at first. Note this also synchronizes the player,
 	// so we can then check mysqlDaemon.BinlogPlayerEnabled.
 	vtClientMock := binlogplayer.NewVtClientMock()
-	vtClientMock.CommitChannel = make(chan []string)
 	vtClientMock.Result = &mproto.QueryResult{
 		Fields:       nil,
 		RowsAffected: 1,
@@ -302,6 +310,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	clientSyncChannel <- fbc
 
 	// now we can feed an event through the fake connection
+	vtClientMock.CommitChannel = make(chan []string)
 	fbc.keyRangeChannel <- &proto.BinlogTransaction{
 		Statements: []proto.Statement{
 			proto.Statement{
@@ -331,7 +340,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 		len(s.Controllers) != 1 ||
 		s.Controllers[0].Index != 1 ||
 		s.Controllers[0].State != "Running" ||
-		s.Controllers[0].SourceShard.Keyspace != keyspace ||
+		s.Controllers[0].SourceShard.Keyspace != "ks" ||
 		s.Controllers[0].SourceShard.Shard != "-80" ||
 		s.Controllers[0].LastError != "" {
 		t.Errorf("unexpected state: %v", s)
@@ -363,6 +372,199 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	}
 }
 
+func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
+	ts := zktopo.NewTestServer(t, []string{"cell1"})
+	ctx := context.Background()
+
+	// create the keyspace, a full set of covering shards,
+	// and a new split destination shard.
+	if err := ts.CreateKeyspace(ctx, "ks", &pb.Keyspace{
+		ShardingColumnType: pb.KeyspaceIdType_UINT64,
+		ShardingColumnName: "sharding_key",
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+	for _, shard := range []string{"-80", "80-", "40-60"} {
+		if err := ts.CreateShard(ctx, "ks", shard); err != nil {
+			t.Fatalf("CreateShard failed: %v", err)
+		}
+	}
+
+	// create one replica remote tablet in source shard, we will
+	// use it as a source for filtered replication.
+	createSourceTablet(t, ts, "ks", "-80")
+
+	// register a binlog player factory that will return the instances
+	// we want
+	clientSyncChannel := make(chan *fakeBinlogClient)
+	binlogplayer.RegisterClientFactory("test_horizontal_until", func() binlogplayer.Client {
+		return <-clientSyncChannel
+	})
+	flag.Lookup("binlog_player_protocol").Value.Set("test_horizontal_until")
+
+	// create the BinlogPlayerMap on the local tablet
+	// (note that local tablet is never in the topology, we don't
+	// need it there at all)
+	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{MysqlPort: 3306}
+	vtClientSyncChannel := make(chan *binlogplayer.VtClientMock)
+	bpm := NewBinlogPlayerMap(ts, mysqlDaemon, func() binlogplayer.VtClient {
+		return <-vtClientSyncChannel
+	})
+
+	tablet := &pb.Tablet{
+		Alias: &pb.TabletAlias{
+			Cell: "cell1",
+			Uid:  1,
+		},
+		KeyRange: &pb.KeyRange{
+			Start: []byte{0x40},
+			End:   []byte{0x60},
+		},
+		Keyspace: "ks",
+		Shard:    "40-60",
+	}
+
+	ki, err := ts.GetKeyspace(ctx, "ks")
+	if err != nil {
+		t.Fatalf("GetKeyspace failed: %v", err)
+	}
+	si, err := ts.GetShard(ctx, "ks", "40-60")
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	si.SourceShards = []*pb.Shard_SourceShard{
+		&pb.Shard_SourceShard{
+			Uid:      1,
+			Keyspace: "ks",
+			Shard:    "-80",
+			KeyRange: &pb.KeyRange{
+				End: []byte{0x80},
+			},
+		},
+	}
+	if err := ts.UpdateShard(ctx, si); err != nil {
+		t.Fatalf("UpdateShard failed: %v", err)
+	}
+
+	// now we have a source, adding players
+	bpm.RefreshMap(ctx, tablet, ki, si)
+	if !bpm.isRunningFilteredReplication() {
+		t.Errorf("isRunningFilteredReplication should be true")
+	}
+
+	// write a mocked vtClientMock that will be used to read the
+	// start position at first. Note this also synchronizes the player,
+	// so we can then check mysqlDaemon.BinlogPlayerEnabled.
+	vtClientMock := binlogplayer.NewVtClientMock()
+	vtClientMock.Result = &mproto.QueryResult{
+		Fields:       nil,
+		RowsAffected: 1,
+		InsertId:     0,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
+				sqltypes.MakeString([]byte("")),
+			},
+		},
+	}
+	vtClientSyncChannel <- vtClientMock
+	if !mysqlDaemon.BinlogPlayerEnabled {
+		t.Errorf("mysqlDaemon.BinlogPlayerEnabled should be true")
+	}
+
+	// the client will then try to connect to the remote tablet.
+	// give it what it needs.
+	fbc := newFakeBinlogClient(t, 100)
+	fbc.expectedKeyRange = "40-60"
+	clientSyncChannel <- fbc
+
+	// now stop the map
+	bpm.Stop()
+	s := bpm.Status()
+	if s.State != "Stopped" ||
+		len(s.Controllers) != 1 ||
+		s.Controllers[0].State != "Stopped" {
+		t.Errorf("unexpected state: %v", s)
+	}
+
+	// in the background, start a function that will do what's needed
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		// the client will first try to read the current position again
+		vtClientSyncChannel <- vtClientMock
+
+		// the client will then try to connect to the remote tablet.
+		// give it what it needs.
+		fbc := newFakeBinlogClient(t, 100)
+		fbc.expectedKeyRange = "40-60"
+		clientSyncChannel <- fbc
+
+		// feed an event through the fake connection
+		vtClientMock.CommitChannel = make(chan []string)
+		fbc.keyRangeChannel <- &proto.BinlogTransaction{
+			Statements: []proto.Statement{
+				proto.Statement{
+					Category: proto.BL_DML,
+					Sql:      "INSERT INTO tablet VALUES(1)",
+				},
+			},
+			Timestamp:     72,
+			TransactionID: "MariaDB/0-1-1235",
+		}
+
+		// and make sure it results in a committed statement
+		sql := <-vtClientMock.CommitChannel
+		if len(sql) != 6 ||
+			sql[0] != "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
+			sql[1] != "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
+			sql[2] != "BEGIN" ||
+			!strings.HasPrefix(sql[3], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
+			!strings.HasSuffix(sql[3], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
+			sql[4] != "INSERT INTO tablet VALUES(1)" ||
+			sql[5] != "COMMIT" {
+			t.Errorf("Got wrong SQL: %#v", sql)
+		}
+		wg.Done()
+	}()
+
+	// now restart the map until we get the right BlpPosition
+	mysqlDaemon.BinlogPlayerEnabled = false
+	ctx1, _ := context.WithTimeout(ctx, 5*time.Second)
+	if err := bpm.RunUntil(ctx1, &proto.BlpPositionList{
+		Entries: []proto.BlpPosition{
+			proto.BlpPosition{
+				Uid: 1,
+				Position: myproto.ReplicationPosition{
+					GTIDSet: myproto.MariadbGTID{
+						Domain:   0,
+						Server:   1,
+						Sequence: 1235,
+					},
+				},
+			},
+		},
+	}, 5*time.Second); err != nil {
+		t.Fatalf("RunUntil failed: %v", err)
+	}
+
+	// make sure the background function is done
+	wg.Wait()
+
+	// ask for status, make sure we got what we expect
+	s = bpm.Status()
+	if s.State != "Stopped" ||
+		len(s.Controllers) != 1 ||
+		s.Controllers[0].Index != 1 ||
+		s.Controllers[0].State != "Stopped" ||
+		s.Controllers[0].LastError != "" {
+		t.Errorf("unexpected state: %v", s)
+	}
+
+	// check BlpPositionList API from BinlogPlayerMap
+	checkBlpPositionList(t, bpm, vtClientSyncChannel)
+}
+
 func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
 	ctx := context.Background()
@@ -382,24 +584,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 
 	// create one replica remote tablet in source keyspace, we will
 	// use it as a source for filtered replication.
-	tablet := &pb.Tablet{
-		Alias: &pb.TabletAlias{
-			Cell: "cell1",
-			Uid:  100,
-		},
-		Type:     pb.TabletType_REPLICA,
-		Keyspace: "source",
-		Shard:    "0",
-		PortMap: map[string]int32{
-			"vt": 80,
-		},
-	}
-	if err := ts.CreateTablet(ctx, tablet); err != nil {
-		t.Fatalf("CreateTablet failed: %v", err)
-	}
-	if err := topotools.UpdateTabletEndpoints(ctx, ts, tablet); err != nil {
-		t.Fatalf("topotools.UpdateTabletEndpoints failed: %v", err)
-	}
+	createSourceTablet(t, ts, "source", "0")
 
 	// register a binlog player factory that will return the instances
 	// we want
@@ -444,14 +629,10 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		return <-vtClientSyncChannel
 	})
 
-	tablet = &pb.Tablet{
+	tablet := &pb.Tablet{
 		Alias: &pb.TabletAlias{
 			Cell: "cell1",
 			Uid:  1,
-		},
-		KeyRange: &pb.KeyRange{
-			Start: []byte{0x40},
-			End:   []byte{0x60},
 		},
 		Keyspace: "destination",
 		Shard:    "0",
@@ -490,7 +671,6 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	// start position at first. Note this also synchronizes the player,
 	// so we can then check mysqlDaemon.BinlogPlayerEnabled.
 	vtClientMock := binlogplayer.NewVtClientMock()
-	vtClientMock.CommitChannel = make(chan []string)
 	vtClientMock.Result = &mproto.QueryResult{
 		Fields:       nil,
 		RowsAffected: 1,
@@ -514,6 +694,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	clientSyncChannel <- fbc
 
 	// now we can feed an event through the fake connection
+	vtClientMock.CommitChannel = make(chan []string)
 	fbc.tablesChannel <- &proto.BinlogTransaction{
 		Statements: []proto.Statement{
 			proto.Statement{
