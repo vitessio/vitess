@@ -343,14 +343,23 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 				'uint_from_string' => new VTUnsignedInt('678') 
 		);
 		
-		$expected = new \vtgate\SplitQueryResponse\Part();
-		$expected->setQuery(VTProto::BoundQuery(self::$ECHO_QUERY . ':split_column:123', $input_bind_vars));
-		$krpart = new \vtgate\SplitQueryResponse\KeyRangePart();
-		$krpart->setKeyspace(self::$KEYSPACE);
-		$expected->setKeyRangePart($krpart);
+		$splits = $conn->splitQuery($ctx, self::$KEYSPACE, self::$ECHO_QUERY, $input_bind_vars, 'split_column', 123);
+		$actual = $splits[0];
+		$bound_query = $actual->getQuery();
 		
-		$actual = $conn->splitQuery($ctx, self::$KEYSPACE, self::$ECHO_QUERY, $input_bind_vars, 'split_column', 123);
-		$this->assertEquals($expected, $actual[0]);
+		$this->assertEquals(self::$KEYSPACE, $actual->getKeyRangePart()->getKeyspace());
+		$this->assertEquals(self::$ECHO_QUERY . ':split_column:123', $bound_query->getSql());
+		
+		// The map of bind vars is implemented as a repeated field, and the order of
+		// the entries is arbitrary. First load them into a map.
+		$actual_bind_vars = array();
+		foreach ($bound_query->getBindVariablesList() as $bind_var_entry) {
+			$actual_bind_vars[$bind_var_entry->getKey()] = $bind_var_entry->getValue();
+		}
+		// Then check that all the expected values exist and are correct.
+		foreach ($input_bind_vars as $name => $value) {
+			$this->assertEquals(VTProto::BindVariable($value), $actual_bind_vars[$name]);
+		}
 	}
 
 	public function testGetSrvKeyspace() {
