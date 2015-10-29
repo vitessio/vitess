@@ -483,7 +483,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 
     The SQL to create the table is shown below:
 
-    ```
+    ``` sql
     CREATE TABLE messages (
       page BIGINT(20) UNSIGNED,
       time_created_ns BIGINT(20) UNSIGNED,
