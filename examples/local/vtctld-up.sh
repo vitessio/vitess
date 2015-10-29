@@ -4,7 +4,8 @@
 
 set -e
 
-port=15000
+web_port=15000
+grpc_port=15999
 
 hostname=`hostname -f`
 
@@ -25,7 +26,11 @@ $VTROOT/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates \
   -service_map 'grpc-vtctl' \
   -backup_storage_implementation file \
   -file_backup_storage_root $VTDATAROOT/backups \
-  -log_dir $VTDATAROOT/tmp -port $port > $VTDATAROOT/tmp/vtctld.out 2>&1 &
+  -log_dir $VTDATAROOT/tmp \
+  -port $web_port \
+  -grpc_port $grpc_port \
+  > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 disown -a
 
-echo "Access vtctld at http://$hostname:$port"
+echo "Access vtctld web UI at http://$hostname:$web_port"
+echo "Send commands with: vtctlclient -server $hostname:$grpc_port ..."
