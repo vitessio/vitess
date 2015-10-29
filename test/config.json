@@ -1,47 +1,47 @@
 {
 	"Tests": {
-		"automation_horizontal_resharding": {
-			"File": "automation_horizontal_resharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0
-		},
-		"backup": {
-			"File": "backup.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0
-		},
-		"binlog": {
-			"File": "binlog.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0
-		},
-		"custom_sharding": {
-			"File": "custom_sharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0
-		},
-		"goveralls": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"travis/goveralls.sh"
-			],
-			"Manual": true,
-			"Shard": 0,
-			"RetryMax": 0
-		},
+	 	"automation_horizontal_resharding": {
+	 		"File": "automation_horizontal_resharding.py",
+	 		"Args": [],
+	 		"Command": [],
+	 		"Manual": false,
+	 		"Shard": 4,
+	 		"RetryMax": 0
+	 	},
+	 	"backup": {
+	 		"File": "backup.py",
+	 		"Args": [],
+	 		"Command": [],
+	 		"Manual": false,
+	 		"Shard": 4,
+	 		"RetryMax": 0
+	 	},
+	 	"binlog": {
+	 		"File": "binlog.py",
+	 		"Args": [],
+	 		"Command": [],
+	 		"Manual": false,
+	 		"Shard": 0,
+	 		"RetryMax": 0
+	 	},
+	 	"custom_sharding": {
+	 		"File": "custom_sharding.py",
+	 		"Args": [],
+	 		"Command": [],
+	 		"Manual": false,
+	 		"Shard": 4,
+	 		"RetryMax": 0
+	 	},
+	 	"goveralls": {
+	 		"File": "",
+	 		"Args": [],
+	 		"Command": [
+	 			"travis/goveralls.sh"
+	 		],
+	 		"Manual": true,
+	 		"Shard": 0,
+	 		"RetryMax": 0
+	 	},
 		"initial_sharding": {
 			"File": "initial_sharding.py",
 			"Args": [],

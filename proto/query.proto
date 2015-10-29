@@ -44,8 +44,8 @@ enum Flag {
 // Type defines the various supported data types in bind vars
 // and query results.
 enum Type {
-  // NULL specifies a NULL type.
-  NULL = 0;
+  // NULL_TYPE specifies a NULL type.
+  NULL_TYPE = 0;
   // INT8 specifies a TINYINT type.
   // Properties: 1, IsNumber.
   INT8 = 257;
