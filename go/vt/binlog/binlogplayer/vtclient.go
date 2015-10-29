@@ -4,12 +4,7 @@
 
 package binlogplayer
 
-import (
-	"bufio"
-	"os"
-
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-)
+import mproto "github.com/youtube/vitess/go/mysql/proto"
 
 // VtClient is a high level interface to the database
 type VtClient interface {
@@ -21,38 +16,60 @@ type VtClient interface {
 	ExecuteFetch(query string, maxrows int, wantfields bool) (qr *mproto.QueryResult, err error)
 }
 
-// DummyVtClient is a VtClient that writes to a writer instead of executing
+// VtClientMock is a VtClient that writes to a writer instead of executing
 // anything
-type DummyVtClient struct {
-	stdout *bufio.Writer
+type VtClientMock struct {
+	Stdout        []string
+	Result        *mproto.QueryResult
+	CommitChannel chan []string
 }
 
-func NewDummyVtClient() *DummyVtClient {
-	stdout := bufio.NewWriterSize(os.Stdout, 16*1024)
-	return &DummyVtClient{stdout}
+// NewVtClientMock returns a new VtClientMock
+func NewVtClientMock() *VtClientMock {
+	return &VtClientMock{
+		Result: &mproto.QueryResult{
+			Fields:       nil,
+			RowsAffected: 1,
+			InsertId:     0,
+			Rows:         nil,
+		},
+	}
 }
 
-func (dc DummyVtClient) Connect() error {
+// Connect is part of the VtClient interface
+func (dc *VtClientMock) Connect() error {
 	return nil
 }
 
-func (dc DummyVtClient) Begin() error {
-	dc.stdout.WriteString("BEGIN;\n")
+// Begin is part of the VtClient interface
+func (dc *VtClientMock) Begin() error {
+	dc.Stdout = append(dc.Stdout, "BEGIN")
 	return nil
 }
-func (dc DummyVtClient) Commit() error {
-	dc.stdout.WriteString("COMMIT;\n")
+
+// Commit is part of the VtClient interface
+func (dc *VtClientMock) Commit() error {
+	dc.Stdout = append(dc.Stdout, "COMMIT")
+	if dc.CommitChannel != nil {
+		dc.CommitChannel <- dc.Stdout
+		dc.Stdout = nil
+	}
 	return nil
 }
-func (dc DummyVtClient) Rollback() error {
-	dc.stdout.WriteString("ROLLBACK;\n")
+
+// Rollback is part of the VtClient interface
+func (dc *VtClientMock) Rollback() error {
+	dc.Stdout = append(dc.Stdout, "ROLLBACK")
 	return nil
 }
-func (dc DummyVtClient) Close() {
+
+// Close is part of the VtClient interface
+func (dc *VtClientMock) Close() {
 	return
 }
 
-func (dc DummyVtClient) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *mproto.QueryResult, err error) {
-	dc.stdout.WriteString(string(query) + ";\n")
-	return &mproto.QueryResult{Fields: nil, RowsAffected: 1, InsertId: 0, Rows: nil}, nil
+// ExecuteFetch is part of the VtClient interface
+func (dc *VtClientMock) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *mproto.QueryResult, err error) {
+	dc.Stdout = append(dc.Stdout, query)
+	return dc.Result, nil
 }
