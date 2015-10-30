@@ -13,6 +13,12 @@ spec:
       containers:
         - name: vtgate
           image: vitess/lite
+          livenessProbe:
+            httpGet:
+              path: /debug/vars
+              port: 15001
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
           volumeMounts:
             - name: syslog
               mountPath: /dev/log

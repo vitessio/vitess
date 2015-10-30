@@ -23,6 +23,12 @@ spec:
       containers:
         - name: etcd
           image: vitess/etcd:v2.0.13-lite
+          livenessProbe:
+            httpGet:
+              path: /v2/keys/
+              port: 4001
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
           volumeMounts:
             - name: certs
               readOnly: true
