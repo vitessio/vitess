@@ -18,6 +18,7 @@ func TestCellTabletsWatcher(t *testing.T) {
 	ctw := NewCellTabletsWatcher(topo.Server{Impl: ft}, fhc, "aa", 10*time.Minute, 5)
 	t.Logf(`ctw = CellTabletsWatcher(topo.Server{ft}, fhc, "aa", 10ms, 5)`)
 
+	// add a tablet to the topology
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 123})
 	ctw.loadTablets()
 	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 123}); ctw.loadTablets()`)
@@ -31,6 +32,8 @@ func TestCellTabletsWatcher(t *testing.T) {
 		t.Errorf("fhc.endPoints[key] = %+v; want %+v", ep, want)
 	}
 
+	// same tablet, different port, should update (previous
+	// one should go away, new one be added).
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 456})
 	ctw.loadTablets()
 	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 456}); ctw.loadTablets()`)
