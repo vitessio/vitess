@@ -12,10 +12,23 @@ import (
 )
 
 func TestCellTabletsWatcher(t *testing.T) {
+	checkWatcher(t, true)
+}
+
+func TestShardReplicationWatcher(t *testing.T) {
+	checkWatcher(t, false)
+}
+
+func checkWatcher(t *testing.T, cellTablets bool) {
 	ft := newFakeTopo()
 	fhc := newFakeHealthCheck()
 	t.Logf(`ft = FakeTopo(); fhc = FakeHealthCheck()`)
-	ctw := NewCellTabletsWatcher(topo.Server{Impl: ft}, fhc, "aa", 10*time.Minute, 5)
+	var ctw *TopologyWatcher
+	if cellTablets {
+		ctw = NewCellTabletsWatcher(topo.Server{Impl: ft}, fhc, "aa", 10*time.Minute, 5)
+	} else {
+		ctw = NewShardReplicationWatcher(topo.Server{Impl: ft}, fhc, "aa", "keyspace", "shard", 10*time.Minute, 5)
+	}
 	t.Logf(`ctw = CellTabletsWatcher(topo.Server{ft}, fhc, "aa", 10ms, 5)`)
 
 	// add a tablet to the topology
@@ -98,6 +111,25 @@ func (ft *fakeTopo) GetTabletsByCell(ctx context.Context, cell string) ([]*pbt.T
 		}
 	}
 	return res, nil
+}
+
+// GetShardReplication should return all the nodes in a shard,
+// but instead we cheat for this test and just return all the
+// tablets in the cell.
+func (ft *fakeTopo) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
+	ft.mu.RLock()
+	defer ft.mu.RUnlock()
+	nodes := make([]*pbt.ShardReplication_Node, 0, 1)
+	for alias, tablet := range ft.tablets {
+		if tablet.Alias.Cell == cell {
+			nodes = append(nodes, &pbt.ShardReplication_Node{
+				TabletAlias: &alias,
+			})
+		}
+	}
+	return topo.NewShardReplicationInfo(&pbt.ShardReplication{
+		Nodes: nodes,
+	}, cell, keyspace, shard), nil
 }
 
 func (ft *fakeTopo) GetTablet(ctx context.Context, alias *pbt.TabletAlias) (*pbt.Tablet, int64, error) {
