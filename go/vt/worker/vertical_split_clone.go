@@ -208,7 +208,9 @@ func (vscw *VerticalSplitCloneWorker) init(ctx context.Context) error {
 	vscw.setState(WorkerStateInit)
 
 	// read the keyspace and validate it
-	destinationKeyspaceInfo, err := vscw.wr.TopoServer().GetKeyspace(ctx, vscw.destinationKeyspace)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	destinationKeyspaceInfo, err := vscw.wr.TopoServer().GetKeyspace(shortCtx, vscw.destinationKeyspace)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot read destination keyspace %v: %v", vscw.destinationKeyspace, err)
 	}
@@ -253,13 +255,15 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	vscw.wr.Logger().Infof("Using tablet %v as the source", topoproto.TabletAliasString(vscw.sourceAlias))
 
 	// get the tablet info for it
-	vscw.sourceTablet, err = vscw.wr.TopoServer().GetTablet(ctx, vscw.sourceAlias)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	vscw.sourceTablet, err = vscw.wr.TopoServer().GetTablet(shortCtx, vscw.sourceAlias)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(vscw.sourceAlias), err)
 	}
 
 	// stop replication on it
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet)
 	cancel()
 	if err != nil {

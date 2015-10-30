@@ -111,7 +111,9 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 // keyspacesWithServedFrom returns all the keyspaces that have ServedFrom set
 // to one value.
 func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]string, error) {
-	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +126,9 @@ func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]stri
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			ki, err := wr.TopoServer().GetKeyspace(ctx, keyspace)
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+			ki, err := wr.TopoServer().GetKeyspace(shortCtx, keyspace)
+			cancel()
 			if err != nil {
 				rec.RecordError(err)
 				return

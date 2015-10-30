@@ -219,13 +219,17 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	var err error
 
 	// read the keyspace and validate it
-	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(ctx, scw.keyspace)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(shortCtx, scw.keyspace)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", scw.keyspace, err)
 	}
 
 	// find the OverlappingShards in the keyspace
-	osList, err := topotools.FindOverlappingShards(ctx, scw.wr.TopoServer(), scw.keyspace)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	osList, err := topotools.FindOverlappingShards(shortCtx, scw.wr.TopoServer(), scw.keyspace)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot FindOverlappingShards in %v: %v", scw.keyspace, err)
 	}
@@ -286,12 +290,14 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	// get the tablet info for them, and stop their replication
 	scw.sourceTablets = make([]*topo.TabletInfo, len(scw.sourceAliases))
 	for i, alias := range scw.sourceAliases {
-		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(ctx, alias)
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(shortCtx, alias)
+		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 
-		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
