@@ -433,13 +433,13 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	mu := sync.Mutex{}
 	var firstError error
 
-	ctx, cancel = context.WithCancel(ctx)
+	ctx, cancelCopy := context.WithCancel(ctx)
 	processError := func(format string, args ...interface{}) {
 		scw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
 		if firstError == nil {
 			firstError = fmt.Errorf(format, args...)
-			cancel()
+			cancelCopy()
 		}
 		mu.Unlock()
 	}
