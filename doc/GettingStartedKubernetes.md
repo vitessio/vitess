@@ -718,6 +718,23 @@ Post the logs somewhere and send a link to the [Vitess
 mailing list](https://groups.google.com/forum/#!forum/vitess)
 to get more help.
 
+### Shell access
+
+If you want to poke around inside a container, you can use `kubectl exec` to run
+a shell.
+
+For example, to launch a shell inside the `vttablet` container of the
+`vttablet-100` pod:
+
+``` sh
+$ kubectl exec vttablet-100 -c vttablet -t -i -- bash -il
+root@vttablet-100:/# ls /vt/vtdataroot/vt_0000000100
+### example output:
+# bin-logs   innodb                  my.cnf      relay-logs
+# data       memcache.sock764383635  mysql.pid   slow-query.log
+# error.log  multi-master.info       mysql.sock  tmp
+```
+
 ### Root certificates
 
 If you see in the logs a message like this:
@@ -744,8 +761,8 @@ within Kubernetes.
 As a workaround, you can access tablet status pages through the
 [apiserver proxy](http://kubernetes.io/v1.0/docs/user-guide/accessing-the-cluster.html#accessing-services-running-on-the-cluster),
 provided by the Kubernetes master. For example, to see the status
-page for the tablet with ID 100 (recall that our Kubernetes master is
-on public IP 1.2.3.4), you could navigate to:
+page for the tablet with ID 100 (recall that our Kubernetes master is assumed to
+be on public IP 1.2.3.4), you could navigate to:
 
 ```
 https://1.2.3.4/api/v1/proxy/namespaces/default/pods/vttablet-100:15002/debug/status
@@ -780,30 +797,13 @@ vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELEC
 # }
 ```
 
-If you need a truly direct connection to mysqld for bulk operations,
-you can SSH to the Kubernetes node on which the pod is running.
-Then use
-[docker exec](https://docs.docker.com/reference/commandline/exec/)
-to launch a bash shell inside the mysql container, and connect with the
-`mysql` command-line client:
+If you need a truly direct connection to mysqld, you can [launch a shell]
+(#shell-access) inside the mysql container, and then connect with the `mysql`
+command-line client:
 
 ``` sh
-# For example, to connect to the mysql container within the vttablet-100 pod:
-$ kubectl get pods -o wide | grep vttablet-100
-### example output:
-# vttablet-100   2/2   Running   0   17m   gke-example-960176fd-node-3mkd
-$ gcloud compute ssh gke-example-960176fd-node-3mkd
-gke-example-960176fd-node-3mkd:~$ sudo docker ps | grep vttablet-100 | grep k8s_mysql
-### example output:
-# ef40b4ff08fa   vitess/lite:latest [...]  k8s_mysql.16e2a810_vttablet-100[...]
-k8s-example-3c0115e4-node-x6jc:~$ sudo docker exec -ti ef40b4ff08fa bash
-# Now you're in a shell inside the mysql container.
-# We need to tell the mysql client the username and socket file to use.
-vttablet-100:/# TERM=ansi mysql -u vt_dba -S /vt/vtdataroot/vt_0000000100/mysql.sock
+$ kubectl exec vttablet-100 -c mysql -t -i -- bash -il
+root@vttablet-100:/# export TERM=ansi
+root@vttablet-100:/# mysql -S /vt/vtdataroot/vt_0000000100/mysql.sock -u vt_dba
 ```
-
-**Note:** `gcloud compute ssh` uses an SSH key to login to the Kubernetes
-node. If you haven't done yet, `gcloud` will create an SSH key for
-you and ask you for a passphrase for the SSH key.
-For subsequent logins via SSH, it may prompt you for the passphrase again.
 
