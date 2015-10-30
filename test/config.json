@@ -6,7 +6,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"backup": {
 			"File": "backup.py",
@@ -14,15 +15,19 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"binlog": {
 			"File": "binlog.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
 		},
 		"custom_sharding": {
 			"File": "custom_sharding.py",
@@ -30,7 +35,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"goveralls": {
 			"File": "",
@@ -40,7 +46,8 @@
 			],
 			"Manual": true,
 			"Shard": 0,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"initial_sharding": {
 			"File": "initial_sharding.py",
@@ -48,7 +55,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 2,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
 		},
 		"initial_sharding_bytes": {
 			"File": "initial_sharding_bytes.py",
@@ -56,7 +66,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 3,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
 		},
 		"java": {
 			"File": "",
@@ -66,16 +79,20 @@
 				"java_test"
 			],
 			"Manual": false,
-			"Shard": 2,
-			"RetryMax": 0
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"keyrange": {
 			"File": "keyrange_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
 		},
 		"keyspace": {
 			"File": "keyspace_test.py",
@@ -83,7 +100,21 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"local_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/local_example.sh"
+			],
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"mysqlctl": {
 			"File": "mysqlctl.py",
@@ -91,7 +122,10 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
 		},
 		"php": {
 			"File": "",
@@ -101,16 +135,18 @@
 				"php_test"
 			],
 			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"python_client": {
 			"File": "python_client_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0
+			"Shard": 2,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"reparent": {
 			"File": "reparent.py",
@@ -118,7 +154,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"resharding": {
 			"File": "resharding.py",
@@ -126,15 +163,21 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 2,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
 		},
 		"resharding_bytes": {
 			"File": "resharding_bytes.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0
+			"Shard": 2,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
 		},
 		"rowcache_invalidator": {
 			"File": "rowcache_invalidator.py",
@@ -142,7 +185,8 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"schema": {
 			"File": "schema.py",
@@ -150,39 +194,46 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"secure": {
 			"File": "secure.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
-			"RetryMax": 0
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"sharded": {
 			"File": "sharded.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0
+			"Shard": 0,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"sql_builder": {
 			"File": "sql_builder_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0
+			"Shard": 2,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"tabletmanager": {
 			"File": "tabletmanager.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
 		},
 		"unit": {
 			"File": "",
@@ -192,7 +243,8 @@
 			],
 			"Manual": false,
 			"Shard": 0,
-			"RetryMax": 1
+			"RetryMax": 1,
+			"Tags": []
 		},
 		"unit_race": {
 			"File": "",
@@ -203,7 +255,8 @@
 			],
 			"Manual": false,
 			"Shard": 3,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"update_stream": {
 			"File": "update_stream.py",
@@ -211,15 +264,19 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"vertical_split": {
 			"File": "vertical_split.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
 		},
 		"vtctld": {
 			"File": "vtctld_test.py",
@@ -227,15 +284,17 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"vtgate_utils": {
 			"File": "vtgate_utils_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"vtgatev2": {
 			"File": "vtgatev2_test.py",
@@ -243,31 +302,39 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 1,
-			"RetryMax": 0
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
 		},
 		"vtgatev3": {
 			"File": "vtgatev3_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"vttest_sample": {
 			"File": "vttest_sample_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"worker": {
 			"File": "worker.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
 		}
 	}
 }
