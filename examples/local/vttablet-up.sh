@@ -78,6 +78,7 @@ for uid_index in $uids; do
   $VTROOT/bin/vttablet \
     -log_dir $VTDATAROOT/tmp \
     -tablet-path $alias \
+    -tablet_hostname `hostname -i` \
     -init_keyspace $keyspace \
     -init_shard $shard \
     -target_tablet_type $tablet_type \

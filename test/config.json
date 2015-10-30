@@ -105,6 +105,17 @@
 				"site_test"
 			]
 		},
+		"local_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/local_example.sh"
+			],
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"mysqlctl": {
 			"File": "mysqlctl.py",
 			"Args": [],

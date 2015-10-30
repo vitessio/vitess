@@ -34,3 +34,4 @@ for zkid in $zkids; do
   fi
 done
 
+echo "Started zk servers."
