@@ -88,15 +88,7 @@ func TestHealthRecordClass(t *testing.T) {
 	}
 }
 
-// constants used for tests
-const (
-	keyspace        = "test_keyspace"
-	shard           = "0"
-	cell            = "cell1"
-	uid      uint32 = 42
-)
-
-var tabletAlias = &pb.TabletAlias{Cell: cell, Uid: uid}
+var tabletAlias = &pb.TabletAlias{Cell: "cell1", Uid: 42}
 
 // fakeHealthCheck implements health.Reporter interface
 type fakeHealthCheck struct {
@@ -113,13 +105,13 @@ func (fhc *fakeHealthCheck) HTMLName() template.HTML {
 }
 
 func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
-	ts := zktopo.NewTestServer(t, []string{cell})
+	ts := zktopo.NewTestServer(t, []string{"cell1"})
 
-	if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 
@@ -131,8 +123,8 @@ func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 			"vt": port,
 		},
 		Ip:       "1.0.0.1",
-		Keyspace: keyspace,
-		Shard:    shard,
+		Keyspace: "test_keyspace",
+		Shard:    "0",
 		Type:     pb.TabletType_SPARE,
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
@@ -360,7 +352,7 @@ func TestTabletControl(t *testing.T) {
 	}
 
 	// now update the shard
-	si, err := agent.TopoServer.GetShard(ctx, keyspace, shard)
+	si, err := agent.TopoServer.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
