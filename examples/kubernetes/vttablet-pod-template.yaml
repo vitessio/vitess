@@ -44,7 +44,7 @@ spec:
 
           su -p -s /bin/bash -c "/vt/bin/vttablet
           -topo_implementation etcd
-          -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
+          -etcd_global_addrs http://etcd-global:4001
           -log_dir $VTDATAROOT/tmp
           -alsologtostderr
           -port {{port}}

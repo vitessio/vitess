@@ -45,16 +45,9 @@ spec:
             - >-
               ipaddr=$(hostname -i)
 
-              global_etcd=$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
-
-              cell="{{cell}}" &&
-              local_etcd_host_var="ETCD_${cell^^}_SERVICE_HOST" &&
-              local_etcd_port_var="ETCD_${cell^^}_SERVICE_PORT" &&
-              local_etcd=${!local_etcd_host_var}:${!local_etcd_port_var}
-
               if [ "{{cell}}" != "global" ]; then
-              until etcdctl -C "http://$global_etcd"
-              set "/vt/cells/{{cell}}" "http://$local_etcd"; do
+              until etcdctl -C "http://etcd-global:4001"
+              set "/vt/cells/{{cell}}" "http://etcd-{{cell}}:4001"; do
               echo "[$(date)] waiting for global etcd to register cell '{{cell}}'";
               sleep 1;
               done;

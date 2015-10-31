@@ -51,7 +51,7 @@ spec:
               -topo_implementation etcd
               -tablet_protocol grpc
               -tablet_manager_protocol grpc
-              -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
+              -etcd_global_addrs http://etcd-global:4001
               {{backup_flags}}" vitess
       volumes:
         - name: syslog
