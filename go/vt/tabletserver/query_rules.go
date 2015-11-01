@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -84,7 +85,9 @@ func (qrs *QueryRules) Delete(name string) (qr *QueryRule) {
 // UnmarshalJSON unmarshals QueryRules.
 func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
 	var rulesInfo []map[string]interface{}
-	err = json.Unmarshal(data, &rulesInfo)
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	err = dec.Decode(&rulesInfo)
 	if err != nil {
 		// TODO(aaijazi): There doesn't seem to be a better error code for this, but
 		// we consider InternalErrors to be retriable (which this error shouldn't be).
@@ -101,6 +104,20 @@ func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
 		qrs.Add(qr)
 	}
 	return nil
+}
+
+// MarshalJSON marshals to JSON.
+func (qrs *QueryRules) MarshalJSON() ([]byte, error) {
+	b := bytes.NewBuffer(nil)
+	_, _ = b.WriteString("[")
+	for i, rule := range qrs.rules {
+		if i != 0 {
+			_, _ = b.WriteString(",")
+		}
+		safeEncode(b, "", rule)
+	}
+	_, _ = b.WriteString("]")
+	return b.Bytes(), nil
 }
 
 // filterByPlan creates a new QueryRules by prefiltering on the query and planId. This allows
@@ -142,7 +159,7 @@ type QueryRule struct {
 	// All defined conditions must match for the rule to fire (AND).
 
 	// Regexp conditions. nil conditions are ignored (TRUE).
-	requestIP, user, query *regexp.Regexp
+	requestIP, user, query namedRegexp
 
 	// Any matched plan will make this condition true (OR)
 	plans []planbuilder.PlanType
@@ -155,6 +172,16 @@ type QueryRule struct {
 
 	// Action to be performed on trigger
 	act Action
+}
+
+type namedRegexp struct {
+	name string
+	*regexp.Regexp
+}
+
+// MarshalJSON marshals to JSON.
+func (nr namedRegexp) MarshalJSON() ([]byte, error) {
+	return json.Marshal(nr.name)
 }
 
 // NewQueryRule creates a new QueryRule.
@@ -188,17 +215,49 @@ func (qr *QueryRule) Copy() (newqr *QueryRule) {
 	return newqr
 }
 
+// MarshalJSON marshals to JSON.
+func (qr *QueryRule) MarshalJSON() ([]byte, error) {
+	b := bytes.NewBuffer(nil)
+	safeEncode(b, `{"Description":`, qr.Description)
+	safeEncode(b, `,"Name":`, qr.Name)
+	if qr.requestIP.Regexp != nil {
+		safeEncode(b, `,"RequestIP":`, qr.requestIP)
+	}
+	if qr.user.Regexp != nil {
+		safeEncode(b, `,"User":`, qr.user)
+	}
+	if qr.query.Regexp != nil {
+		safeEncode(b, `,"Query":`, qr.query)
+	}
+	if qr.plans != nil {
+		safeEncode(b, `,"Plans":`, qr.plans)
+	}
+	if qr.tableNames != nil {
+		safeEncode(b, `,"TableNames":`, qr.tableNames)
+	}
+	if qr.bindVarConds != nil {
+		safeEncode(b, `,"BindVarConds":`, qr.bindVarConds)
+	}
+	if qr.act != QRContinue {
+		safeEncode(b, `,"Action":`, qr.act)
+	}
+	_, _ = b.WriteString("}")
+	return b.Bytes(), nil
+}
+
 // SetIPCond adds a regular expression condition for the client IP.
 // It has to be a full match (not substring).
 func (qr *QueryRule) SetIPCond(pattern string) (err error) {
-	qr.requestIP, err = regexp.Compile(makeExact(pattern))
-	return
+	qr.requestIP.name = pattern
+	qr.requestIP.Regexp, err = regexp.Compile(makeExact(pattern))
+	return err
 }
 
 // SetUserCond adds a regular expression condition for the user name
 // used by the client.
 func (qr *QueryRule) SetUserCond(pattern string) (err error) {
-	qr.user, err = regexp.Compile(makeExact(pattern))
+	qr.user.name = pattern
+	qr.user.Regexp, err = regexp.Compile(makeExact(pattern))
 	return
 }
 
@@ -218,7 +277,8 @@ func (qr *QueryRule) AddTableCond(tableName string) {
 
 // SetQueryCond adds a regular expression condition for the query.
 func (qr *QueryRule) SetQueryCond(pattern string) (err error) {
-	qr.query, err = regexp.Compile(makeExact(pattern))
+	qr.query.name = pattern
+	qr.query.Regexp, err = regexp.Compile(makeExact(pattern))
 	return
 }
 
@@ -239,10 +299,10 @@ func makeExact(pattern string) string {
 // in the condition is the right operand: bindVar Operator value.
 // Value & operator rules
 // Type     Operators                              Bindvar
-// nil      NOOP                                   any type
-// uint64   EQ, NE, LT, GE, GT, LE                 whole numbers
-// int64    EQ, NE, LT, GE, GT, LE                 whole numbers
-// string   EQ, NE, LT, GE, GT, LE, MATCH, NOMATCH []byte, string
+// nil      ""                                     any type
+// uint64   ==, !=, <, >=, >, <=                   whole numbers
+// int64    ==, !=, <, >=, >, <=                   whole numbers
+// string   ==, !=, <, >=, >, <=, MATCH, NOMATCH   []byte, string
 // KeyRange IN, NOTIN                              whole numbers
 // whole numbers can be: int, int8, int16, int32, int64, uint64
 func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op Operator, value interface{}) error {
@@ -297,7 +357,7 @@ Error:
 // than the plan and query. If the plan and query don't match the QueryRule,
 // then it returns nil.
 func (qr *QueryRule) filterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *QueryRule) {
-	if !reMatch(qr.query, query) {
+	if !reMatch(qr.query.Regexp, query) {
 		return nil
 	}
 	if !planMatch(qr.plans, planid) {
@@ -307,17 +367,17 @@ func (qr *QueryRule) filterByPlan(query string, planid planbuilder.PlanType, tab
 		return nil
 	}
 	newqr = qr.Copy()
-	newqr.query = nil
+	newqr.query = namedRegexp{}
 	newqr.plans = nil
 	newqr.tableNames = nil
 	return newqr
 }
 
 func (qr *QueryRule) getAction(ip, user string, bindVars map[string]interface{}) Action {
-	if !reMatch(qr.requestIP, ip) {
+	if !reMatch(qr.requestIP.Regexp, ip) {
 		return QRContinue
 	}
-	if !reMatch(qr.user, user) {
+	if !reMatch(qr.user.Regexp, user) {
 		return QRContinue
 	}
 	for _, bvcond := range qr.bindVarConds {
@@ -381,6 +441,21 @@ const (
 	QRFailRetry
 )
 
+// MarshalJSON marshals to JSON.
+func (act Action) MarshalJSON() ([]byte, error) {
+	// If we add more actions, we'll need to use a map.
+	var str string
+	switch act {
+	case QRFail:
+		str = "FAIL"
+	case QRFailRetry:
+		str = "FAIL_RETRY"
+	default:
+		str = "INVALID"
+	}
+	return json.Marshal(str)
+}
+
 // BindVarCond represents a bind var condition.
 type BindVarCond struct {
 	name       string
@@ -388,6 +463,22 @@ type BindVarCond struct {
 	onMismatch bool
 	op         Operator
 	value      bvcValue
+}
+
+// MarshalJSON marshals to JSON.
+func (bvc BindVarCond) MarshalJSON() ([]byte, error) {
+	b := bytes.NewBuffer(nil)
+	safeEncode(b, `{"Name":`, bvc.name)
+	safeEncode(b, `,"OnAbsent":`, bvc.onAbsent)
+	if bvc.op != QRNoOp {
+		safeEncode(b, `,"OnMismatch":`, bvc.onMismatch)
+	}
+	safeEncode(b, `,"Operator":`, bvc.op)
+	if bvc.op != QRNoOp {
+		safeEncode(b, `,"Value":`, bvc.value)
+	}
+	_, _ = b.WriteString("}")
+	return b.Bytes(), nil
 }
 
 // Operator represents the list of operators.
@@ -406,32 +497,30 @@ const (
 	QRNoMatch
 	QRIn
 	QRNotIn
+	QRNumOp
 )
 
 var opmap = map[string]Operator{
-	"NOOP":    QRNoOp,
-	"UEQ":     QREqual,
-	"UNE":     QRNotEqual,
-	"ULT":     QRLessThan,
-	"UGE":     QRGreaterEqual,
-	"UGT":     QRGreaterThan,
-	"ULE":     QRLessEqual,
-	"IEQ":     QREqual,
-	"INE":     QRNotEqual,
-	"ILT":     QRLessThan,
-	"IGE":     QRGreaterEqual,
-	"IGT":     QRGreaterThan,
-	"ILE":     QRLessEqual,
-	"SEQ":     QREqual,
-	"SNE":     QRNotEqual,
-	"SLT":     QRLessThan,
-	"SGE":     QRGreaterEqual,
-	"SGT":     QRGreaterThan,
-	"SLE":     QRLessEqual,
+	"":        QRNoOp,
+	"==":      QREqual,
+	"!=":      QRNotEqual,
+	"<":       QRLessThan,
+	">=":      QRGreaterEqual,
+	">":       QRGreaterThan,
+	"<=":      QRLessEqual,
 	"MATCH":   QRMatch,
 	"NOMATCH": QRNoMatch,
 	"IN":      QRIn,
 	"NOTIN":   QRNotIn,
+}
+
+var opnames []string
+
+func init() {
+	opnames = make([]string, QRNumOp)
+	for k, v := range opmap {
+		opnames[v] = k
+	}
 }
 
 // These are return statii.
@@ -440,6 +529,11 @@ const (
 	QRMismatch
 	QROutOfRange
 )
+
+// MarshalJSON marshals to JSON.
+func (op Operator) MarshalJSON() ([]byte, error) {
+	return json.Marshal(opnames[op])
+}
 
 // bvcValue defines the common interface
 // for all bind var condition values
@@ -850,27 +944,22 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 		return
 	}
 	if op >= QREqual && op <= QRLessEqual {
-		strvalue, ok := v.(string)
-		if !ok {
-			err = NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "want string: %v", v)
+		switch v := v.(type) {
+		case json.Number:
+			value, err = v.Int64()
+			if err != nil {
+				// Maybe uint64
+				value, err = strconv.ParseUint(string(v), 10, 64)
+				if err != nil {
+					err = NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "want int64/uint64: %s", string(v))
+					return
+				}
+			}
+		case string:
+			value = v
+		default:
+			err = NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "want string or number: %v", v)
 			return
-		}
-		if strop[0] == 'U' {
-			value, err = strconv.ParseUint(strvalue, 0, 64)
-			if err != nil {
-				err = NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "want uint64: %s", strvalue)
-				return
-			}
-		} else if strop[0] == 'I' {
-			value, err = strconv.ParseInt(strvalue, 0, 64)
-			if err != nil {
-				err = NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "want int64: %s", strvalue)
-				return
-			}
-		} else if strop[0] == 'S' {
-			value = strvalue
-		} else {
-			panic("unexpected")
 		}
 	} else if op == QRMatch || op == QRNoMatch {
 		strvalue, ok := v.(string)
@@ -923,4 +1012,12 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 		return
 	}
 	return
+}
+
+func safeEncode(b *bytes.Buffer, prefix string, v interface{}) {
+	enc := json.NewEncoder(b)
+	_, _ = b.WriteString(prefix)
+	if err := enc.Encode(v); err != nil {
+		_ = enc.Encode(err.Error())
+	}
 }

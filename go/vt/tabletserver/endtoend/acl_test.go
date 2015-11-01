@@ -115,7 +115,7 @@ var rulesJSON = []byte(`[{
 	"BindVarConds":[{
 		"Name": "asdfg",
 		"OnAbsent": false,
-		"Operator": "NOOP"
+		"Operator": ""
 	}]
 }]`)
 

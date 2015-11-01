@@ -5,7 +5,9 @@
 package tabletserver
 
 import (
+	"bytes"
 	"encoding/json"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -63,42 +65,25 @@ func TestQueryRules(t *testing.T) {
 
 // TestCopy tests for deep copy
 func TestCopy(t *testing.T) {
-	qrs := NewQueryRules()
+	qrs1 := NewQueryRules()
 	qr1 := NewQueryRule("rule 1", "r1", QRFail)
 	qr1.AddPlanCond(planbuilder.PlanPassSelect)
 	qr1.AddTableCond("aa")
 	qr1.AddBindVarCond("a", true, false, QRNoOp, nil)
 
 	qr2 := NewQueryRule("rule 2", "r2", QRFail)
-	qrs.Add(qr1)
-	qrs.Add(qr2)
+	qrs1.Add(qr1)
+	qrs1.Add(qr2)
 
-	qrs1 := qrs.Copy()
-	if l := len(qrs1.rules); l != 2 {
-		t.Errorf("want 2, got %d", l)
+	qrs2 := qrs1.Copy()
+	if !reflect.DeepEqual(qrs2, qrs1) {
+		t.Errorf("qrs1: %+v, not equal to %+v", qrs2, qrs1)
 	}
 
-	qrf1 := qrs1.Find("r1")
-	if qr1 == qrf1 {
-		t.Errorf("want false, got true")
-	}
-
-	qr1.plans[0] = planbuilder.PlanInsertPK
-	if qr1.plans[0] == qrf1.plans[0] {
-		t.Errorf("want false, got true")
-	}
-
-	if qrf1.tableNames[0] != "aa" {
-		t.Errorf("want aa, got %s", qrf1.tableNames[0])
-	}
-
-	if qrf1.bindVarConds[0].name != "a" {
-		t.Errorf("want a, got %s", qrf1.bindVarConds[1].name)
-	}
-
-	qrs2 := NewQueryRules()
-	if qrs3 := qrs2.Copy(); qrs3.rules != nil {
-		t.Errorf("want nil, got non-nil")
+	qrs1 = NewQueryRules()
+	qrs2 = qrs1.Copy()
+	if !reflect.DeepEqual(qrs2, qrs1) {
+		t.Errorf("qrs1: %+v, not equal to %+v", qrs2, qrs1)
 	}
 }
 
@@ -130,41 +115,76 @@ func TestFilterByPlan(t *testing.T) {
 	qrs.Add(qr4)
 
 	qrs1 := qrs.filterByPlan("select", planbuilder.PlanPassSelect, "a")
-	if l := len(qrs1.rules); l != 3 {
-		t.Errorf("want 3, got %d", l)
-	}
-	if qrs1.rules[0].Name != "r1" {
-		t.Errorf("want r1, got %s", qrs1.rules[0].Name)
-	}
-	if qrs1.rules[0].requestIP == nil {
-		t.Errorf("want non-nil, got nil")
-	}
-	if qrs1.rules[0].plans != nil {
-		t.Errorf("want nil, got non-nil")
+	want := compacted(`[{
+		"Description":"rule 1",
+		"Name":"r1",
+		"RequestIP":"123",
+		"BindVarConds":[{
+			"Name":"a",
+			"OnAbsent":true,
+			"Operator":""
+		}],
+		"Action":"FAIL"
+	},{
+		"Description":"rule 2",
+		"Name":"r2",
+		"BindVarConds":[{
+			"Name":"a",
+			"OnAbsent":true,
+			"Operator":""
+		}],
+		"Action":"FAIL"
+	},{
+		"Description":"rule 3",
+		"Name":"r3",
+		"BindVarConds":[{
+			"Name":"a",
+			"OnAbsent":true,
+			"Operator":""
+		}],
+		"Action":"FAIL"
+	}]`)
+	got := marshalled(qrs1)
+	if got != want {
+		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
 	qrs1 = qrs.filterByPlan("insert", planbuilder.PlanPassSelect, "a")
-	if l := len(qrs1.rules); l != 1 {
-		t.Errorf("want 1, got %d", l)
-	}
-	if qrs1.rules[0].Name != "r2" {
-		t.Errorf("want r2, got %s", qrs1.rules[0].Name)
+	want = compacted(`[{
+		"Description":"rule 2",
+		"Name":"r2",
+		"BindVarConds":[{
+			"Name":"a",
+			"OnAbsent":true,
+			"Operator":""
+		}],
+		"Action":"FAIL"
+	}]`)
+	got = marshalled(qrs1)
+	if got != want {
+		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
 	qrs1 = qrs.filterByPlan("insert", planbuilder.PlanPKIn, "a")
-	if l := len(qrs1.rules); l != 1 {
-		t.Errorf("want 1, got %d", l)
-	}
-	if qrs1.rules[0].Name != "r2" {
-		t.Errorf("want r2, got %s", qrs1.rules[0].Name)
+	got = marshalled(qrs1)
+	if got != want {
+		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
 	qrs1 = qrs.filterByPlan("select", planbuilder.PlanInsertPK, "a")
-	if l := len(qrs1.rules); l != 1 {
-		t.Errorf("want 1, got %d", l)
-	}
-	if qrs1.rules[0].Name != "r3" {
-		t.Errorf("want r3, got %s", qrs1.rules[0].Name)
+	want = compacted(`[{
+		"Description":"rule 3",
+		"Name":"r3",
+		"BindVarConds":[{
+			"Name":"a",
+			"OnAbsent":true,
+			"Operator":""
+		}],
+		"Action":"FAIL"
+	}]`)
+	got = marshalled(qrs1)
+	if got != want {
+		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
 	qrs1 = qrs.filterByPlan("sel", planbuilder.PlanInsertPK, "a")
@@ -173,22 +193,28 @@ func TestFilterByPlan(t *testing.T) {
 	}
 
 	qrs1 = qrs.filterByPlan("table", planbuilder.PlanPassDML, "b")
-	if l := len(qrs1.rules); l != 1 {
-		t.Errorf("want 1, got %#v, %#v", qrs1.rules[0], qrs1.rules[1])
-	}
-	if qrs1.rules[0].Name != "r4" {
-		t.Errorf("want r4, got %s", qrs1.rules[0].Name)
+	want = compacted(`[{
+		"Description":"rule 4",
+		"Name":"r4",
+		"Action":"FAIL"
+	}]`)
+	got = marshalled(qrs1)
+	if got != want {
+		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
 	qr5 := NewQueryRule("rule 5", "r5", QRFail)
 	qrs.Add(qr5)
 
 	qrs1 = qrs.filterByPlan("sel", planbuilder.PlanInsertPK, "a")
-	if l := len(qrs1.rules); l != 1 {
-		t.Errorf("want 1, got %d", l)
-	}
-	if qrs1.rules[0].Name != "r5" {
-		t.Errorf("want r5, got %s", qrs1.rules[0].Name)
+	want = compacted(`[{
+		"Description":"rule 5",
+		"Name":"r5",
+		"Action":"FAIL"
+	}]`)
+	got = marshalled(qrs1)
+	if got != want {
+		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
 	qrsnil1 := NewQueryRules()
@@ -252,7 +278,7 @@ func TestBindVarStruct(t *testing.T) {
 		t.Errorf("want false, got true")
 	}
 	if qr.bindVarConds[1].op != QRNoOp {
-		t.Errorf("exepecting NOOP, got %v", qr.bindVarConds[1])
+		t.Errorf("exepecting no-op, got %v", qr.bindVarConds[1])
 	}
 	if qr.bindVarConds[1].value != nil {
 		t.Errorf("want nil, got %#v", qr.bindVarConds[1].value)
@@ -539,117 +565,42 @@ func TestAction(t *testing.T) {
 	}
 }
 
-var jsondata = `[{
-	"Description": "desc1",
-	"Name": "name1",
-	"RequestIP": "123.123.123",
-	"User": "user",
-	"Query": "query",
-	"Plans": ["PASS_SELECT", "INSERT_PK"],
-	"TableNames":["a", "b"],
-	"BindVarConds": [{
-		"Name": "bvname1",
-		"OnAbsent": true,
-		"Operator": "NOOP"
-	},{
-		"Name": "bvname2",
-		"OnAbsent": true,
-		"OnMismatch": true,
-		"Operator": "UEQ",
-		"Value": "123"
-	}],
-	"Action": "FAIL_RETRY"
-},{
-	"Description": "desc2",
-	"Name": "name2"
-}]`
-
 func TestImport(t *testing.T) {
 	var qrs = NewQueryRules()
+	jsondata := `[{
+		"Description": "desc1",
+		"Name": "name1",
+		"RequestIP": "123.123.123",
+		"User": "user",
+		"Query": "query",
+		"Plans": ["PASS_SELECT", "INSERT_PK"],
+		"TableNames":["a", "b"],
+		"BindVarConds": [{
+			"Name": "bvname1",
+			"OnAbsent": true,
+			"Operator": ""
+		},{
+			"Name": "bvname2",
+			"OnAbsent": true,
+			"OnMismatch": true,
+			"Operator": "==",
+			"Value": 123
+		}],
+		"Action": "FAIL_RETRY"
+	},{
+		"Description": "desc2",
+		"Name": "name2",
+		"Action": "FAIL"
+	}]`
 	err := qrs.UnmarshalJSON([]byte(jsondata))
 	if err != nil {
-		t.Errorf("Unexptected: %v", err)
+		t.Error(err)
 		return
 	}
-	if qrs.rules[0].Description != "desc1" {
-		t.Errorf("want desc1, got %s", qrs.rules[0].Description)
-	}
-	if qrs.rules[0].Name != "name1" {
-		t.Errorf("want name1, got %s", qrs.rules[0].Name)
-	}
-	if qrs.rules[0].requestIP == nil {
-		t.Errorf("want non-nil")
-	}
-	if qrs.rules[0].user == nil {
-		t.Errorf("want non-nil")
-	}
-	if qrs.rules[0].query == nil {
-		t.Errorf("want non-nil")
-	}
-	if qrs.rules[0].plans[0] != planbuilder.PlanPassSelect {
-		t.Errorf("want PASS_SELECT, got %s", qrs.rules[0].plans[0].String())
-	}
-	if qrs.rules[0].plans[1] != planbuilder.PlanInsertPK {
-		t.Errorf("want PASS_INSERT_PK, got %s", qrs.rules[0].plans[0].String())
-	}
-	if qrs.rules[0].tableNames[0] != "a" {
-		t.Errorf("want a, got %s", qrs.rules[0].tableNames[0])
-	}
-	if qrs.rules[0].tableNames[1] != "b" {
-		t.Errorf("want b, got %s", qrs.rules[0].tableNames[1])
-	}
-	bvc := qrs.rules[0].bindVarConds[0]
-	if bvc.name != "bvname1" {
-		t.Errorf("want bvname1, got %v", bvc.name)
-	}
-	if !bvc.onAbsent {
-		t.Errorf("want true")
-	}
-	if bvc.op != QRNoOp {
-		t.Errorf("want NOOP, got %v", bvc.op)
-	}
-	bvc = qrs.rules[0].bindVarConds[1]
-	if bvc.name != "bvname2" {
-		t.Errorf("want bvname2, got %v", bvc.name)
-	}
-	if !bvc.onAbsent {
-		t.Errorf("want true")
-	}
-	if !bvc.onMismatch {
-		t.Errorf("want true")
-	}
-	if qrs.rules[0].act != QRFailRetry {
-		t.Errorf("want FAIL_RETRY")
-	}
-	if bvc.op != QREqual {
-		t.Errorf("want %v, got %v", QREqual, bvc.op)
-	}
-	if bvc.value.(bvcuint64) != 123 {
-		t.Errorf("want 123, got %v", bvc.value.(bvcuint64))
-	}
-	if qrs.rules[1].Description != "desc2" {
-		t.Errorf("want desc2, got %s", qrs.rules[0].Description)
-	}
-	if qrs.rules[1].Name != "name2" {
-		t.Errorf("want name2, got %s", qrs.rules[0].Name)
-	}
-	if qrs.rules[1].requestIP != nil {
-		t.Errorf("want nil")
-	}
-	if qrs.rules[1].user != nil {
-		t.Errorf("want nil")
-	}
-	if qrs.rules[1].query != nil {
-		t.Errorf("want nil")
-	}
-	if qrs.rules[1].plans != nil {
-		t.Errorf("want nil")
-	}
-	if qrs.rules[1].bindVarConds != nil {
-		t.Errorf("want nil")
-	}
-	if qrs.rules[1].act != QRFail {
-		t.Errorf("want FAIL")
+	got := marshalled(qrs)
+	want := compacted(jsondata)
+	if got != want {
+		t.Errorf("qrs:\n%s, want\n%s", got, want)
 	}
 }
 
@@ -668,26 +619,26 @@ const (
 )
 
 var validjsons = []ValidJSONCase{
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "UEQ", "Value": "123"}]}]`, QREqual, UINT},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "UNE", "Value": "123"}]}]`, QRNotEqual, UINT},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "ULT", "Value": "123"}]}]`, QRLessThan, UINT},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "UGE", "Value": "123"}]}]`, QRGreaterEqual, UINT},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "UGT", "Value": "123"}]}]`, QRGreaterThan, UINT},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "ULE", "Value": "123"}]}]`, QRLessEqual, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "==", "Value": 18446744073709551615}]}]`, QREqual, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "!=", "Value": 18446744073709551615}]}]`, QRNotEqual, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<", "Value": 18446744073709551615}]}]`, QRLessThan, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">=", "Value": 18446744073709551615}]}]`, QRGreaterEqual, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">", "Value": 18446744073709551615}]}]`, QRGreaterThan, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<=", "Value": 18446744073709551615}]}]`, QRLessEqual, UINT},
 
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "IEQ", "Value": "123"}]}]`, QREqual, INT},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "INE", "Value": "123"}]}]`, QRNotEqual, INT},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "ILT", "Value": "123"}]}]`, QRLessThan, INT},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "IGE", "Value": "123"}]}]`, QRGreaterEqual, INT},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "IGT", "Value": "123"}]}]`, QRGreaterThan, INT},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "ILE", "Value": "123"}]}]`, QRLessEqual, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "==", "Value": -123}]}]`, QREqual, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "!=", "Value": -123}]}]`, QRNotEqual, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<", "Value": -123}]}]`, QRLessThan, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">=", "Value": -123}]}]`, QRGreaterEqual, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">", "Value": -123}]}]`, QRGreaterThan, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<=", "Value": -123}]}]`, QRLessEqual, INT},
 
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SEQ", "Value": "123"}]}]`, QREqual, STR},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SNE", "Value": "123"}]}]`, QRNotEqual, STR},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SLT", "Value": "123"}]}]`, QRLessThan, STR},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SGE", "Value": "123"}]}]`, QRGreaterEqual, STR},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SGT", "Value": "123"}]}]`, QRGreaterThan, STR},
-	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SLE", "Value": "123"}]}]`, QRLessEqual, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "==", "Value": "123"}]}]`, QREqual, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "!=", "Value": "123"}]}]`, QRNotEqual, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<", "Value": "123"}]}]`, QRLessThan, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">=", "Value": "123"}]}]`, QRGreaterEqual, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": ">", "Value": "123"}]}]`, QRGreaterThan, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "<=", "Value": "123"}]}]`, QRLessEqual, STR},
 
 	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "MATCH", "Value": "123"}]}]`, QRMatch, REGEXP},
 	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "NOMATCH", "Value": "123"}]}]`, QRNoMatch, REGEXP},
@@ -709,12 +660,12 @@ func TestValidJSON(t *testing.T) {
 		}
 		switch tcase.typ {
 		case UINT:
-			if bvc.value.(bvcuint64) != 123 {
-				t.Errorf("want %v, got %v", 123, bvc.value.(bvcuint64))
+			if bvc.value.(bvcuint64) != bvcuint64(18446744073709551615) {
+				t.Errorf("want %v, got %v", uint64(18446744073709551615), bvc.value.(bvcuint64))
 			}
 		case INT:
-			if bvc.value.(bvcint64) != 123 {
-				t.Errorf("want %v, got %v", 123, bvc.value.(bvcint64))
+			if bvc.value.(bvcint64) != -123 {
+				t.Errorf("want %v, got %v", -123, bvc.value.(bvcint64))
 			}
 		case STR:
 			if bvc.value.(bvcstring) != "123" {
@@ -758,38 +709,14 @@ var invalidjsons = []InvalidJSONCase{
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": 1}] }]`, "want bool for OnAbsent"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true}]}]`, "Operator missing in BindVarConds"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "a"}]}]`, "invalid Operator a"},
-
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UEQ"}]}]`, "Value missing in BindVarConds"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UEQ", "Value": "a"}]}]`, "want uint64: a"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UEQ", "Value": "-1"}]}]`, "want uint64: -1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UNE", "Value": "-1"}]}]`, "want uint64: -1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ULT", "Value": "-1"}]}]`, "want uint64: -1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UGE", "Value": "-1"}]}]`, "want uint64: -1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UGT", "Value": "-1"}]}]`, "want uint64: -1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ULE", "Value": "-1"}]}]`, "want uint64: -1"},
-
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "IEQ"}]}]`, "Value missing in BindVarConds"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "IEQ", "Value": "a"}]}]`, "want int64: a"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "IEQ", "Value": "0x8000000000000000"}]}]`, "want int64: 0x8000000000000000"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "INE", "Value": "0x8000000000000000"}]}]`, "want int64: 0x8000000000000000"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ILT", "Value": "0x8000000000000000"}]}]`, "want int64: 0x8000000000000000"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "IGE", "Value": "0x8000000000000000"}]}]`, "want int64: 0x8000000000000000"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "IGT", "Value": "0x8000000000000000"}]}]`, "want int64: 0x8000000000000000"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ILE", "Value": "0x8000000000000000"}]}]`, "want int64: 0x8000000000000000"},
-
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SEQ"}]}]`, "Value missing in BindVarConds"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SEQ", "Value": 1}]}]`, "want string: 1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SEQ", "Value": 1}]}]`, "want string: 1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SNE", "Value": 1}]}]`, "want string: 1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SLT", "Value": 1}]}]`, "want string: 1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SGE", "Value": 1}]}]`, "want string: 1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SGT", "Value": 1}]}]`, "want string: 1"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SLE", "Value": 1}]}]`, "want string: 1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "=="}]}]`, "Value missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "==", "Value": 1.2}]}]`, "want int64/uint64: 1.2"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "==", "Value": {}}]}]`, "want string or number: map[]"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "MATCH", "Value": 1}]}]`, "want string: 1"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "NOMATCH", "Value": 1}]}]`, "want string: 1"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": 123, "Value": "1"}]}]`, "want string for Operator"},
 	{`[{"Unknown": [{"Name": "a"}]}]`, "unrecognized tag Unknown"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ILE", "Value": "1"}]}]`, "OnMismatch missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "<=", "Value": "1"}]}]`, "OnMismatch missing in BindVarConds"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "MATCH", "Value": "["}]}]`, "processing [: error parsing regexp: missing closing ]: `[$`"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "NOMATCH", "Value": "["}]}]`, "processing [: error parsing regexp: missing closing ]: `[$`"},
 	{`[{"Action": 1 }]`, "want string for Action"},
@@ -931,4 +858,40 @@ func TestBadAddBindVarCond(t *testing.T) {
 	if err == nil {
 		t.Fatalf("invalid op: QRLessThan for value type: key.KeyRange")
 	}
+}
+
+func TestOpNames(t *testing.T) {
+	want := []string{
+		"",
+		"==",
+		"!=",
+		"<",
+		">=",
+		">",
+		"<=",
+		"MATCH",
+		"NOMATCH",
+		"IN",
+		"NOTIN",
+	}
+	if !reflect.DeepEqual(opnames, want) {
+		t.Errorf("opnames: \n%v, want \n%v", opnames, want)
+	}
+}
+
+func compacted(in string) string {
+	dst := bytes.NewBuffer(nil)
+	err := json.Compact(dst, []byte(in))
+	if err != nil {
+		panic(err)
+	}
+	return dst.String()
+}
+
+func marshalled(in *QueryRules) string {
+	b, err := json.Marshal(in)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }
