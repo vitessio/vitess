@@ -112,11 +112,7 @@ func TestTableACLNoAccess(t *testing.T) {
 var rulesJSON = []byte(`[{
 	"Name": "r1",
 	"Description": "disallow bindvar 'asdfg'",
-	"BindVarConds":[{
-		"Name": "asdfg",
-		"OnAbsent": false,
-		"Operator": "NOOP"
-	}]
+	"Query": "select \\*.*"
 }]`)
 
 func TestQueryRules(t *testing.T) {
