@@ -134,6 +134,7 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
 			debugTableStatsKey: config.DebugURLPrefix + "/table_stats",
 			debugSchemaKey:     config.DebugURLPrefix + "/schema",
+			debugQueryRulesKey: config.DebugURLPrefix + "/query_rules",
 		},
 		config.EnablePublishStats,
 		qe.queryServiceStats,

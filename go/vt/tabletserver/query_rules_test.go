@@ -888,7 +888,7 @@ func compacted(in string) string {
 	return dst.String()
 }
 
-func marshalled(in *QueryRules) string {
+func marshalled(in interface{}) string {
 	b, err := json.Marshal(in)
 	if err != nil {
 		panic(err)

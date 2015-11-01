@@ -36,6 +36,7 @@ const (
 	debugQueryStatsKey = "query_stats"
 	debugTableStatsKey = "table_stats"
 	debugSchemaKey     = "schema"
+	debugQueryRulesKey = "query_rules"
 )
 
 // ExecPlan wraps the planbuilder's exec plan to enforce additional rules
@@ -691,6 +692,8 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		si.handleHTTPTableStats(response, request)
 	} else if ep, ok := si.endpoints[debugSchemaKey]; ok && request.URL.Path == ep {
 		si.handleHTTPSchema(response, request)
+	} else if ep, ok := si.endpoints[debugQueryRulesKey]; ok && request.URL.Path == ep {
+		si.handleHTTPQueryRules(response, request)
 	} else {
 		response.WriteHeader(http.StatusNotFound)
 	}
@@ -764,6 +767,18 @@ func (si *SchemaInfo) handleHTTPSchema(response http.ResponseWriter, request *ht
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	tables := si.GetSchema()
 	b, err := json.MarshalIndent(tables, "", " ")
+	if err != nil {
+		response.Write([]byte(err.Error()))
+		return
+	}
+	buf := bytes.NewBuffer(nil)
+	json.HTMLEscape(buf, b)
+	response.Write(buf.Bytes())
+}
+
+func (si *SchemaInfo) handleHTTPQueryRules(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("Content-Type", "application/json; charset=utf-8")
+	b, err := json.MarshalIndent(si.queryRuleSources, "", " ")
 	if err != nil {
 		response.Write([]byte(err.Error()))
 		return

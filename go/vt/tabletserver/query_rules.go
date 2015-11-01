@@ -872,7 +872,6 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 					return nil, err
 				}
 				err = qr.AddBindVarCond(name, onAbsent, onMismatch, op, value)
-				// Shouldn't happen, but check anyway
 				if err != nil {
 					return nil, err
 				}
