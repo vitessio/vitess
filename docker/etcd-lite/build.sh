@@ -12,7 +12,7 @@ set -e
 
 # Extract files from vitess/etcd image
 mkdir base
-sudo docker run -ti --rm -v $PWD/base:/base -u root vitess/etcd:$version bash -c 'cp -R /go/bin/etcd /go/bin/etcdctl /base/'
+sudo docker run -ti --rm -v $PWD/base:/base -u root vitess/etcd:$version bash -c 'cp -R /go/bin/* /base/'
 
 # Build vitess/etcd-lite image
 sudo docker build -t vitess/etcd:$version-lite .

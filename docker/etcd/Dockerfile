@@ -6,6 +6,9 @@
 # etcd Docker image on quay.io doesn't have any shell in it.
 FROM golang:1.5
 
+ADD getsrv.go /go/
+RUN GOBIN=/go/bin go install /go/getsrv.go
+
 RUN mkdir -p src/github.com/coreos && \
     cd src/github.com/coreos && \
     curl -sL https://github.com/coreos/etcd/archive/v2.0.13.tar.gz | tar -xz && \
