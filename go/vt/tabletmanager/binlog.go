@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -29,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -56,9 +58,23 @@ type BinlogPlayerController struct {
 	// (pointer is set at construction, immutable, values are thread-safe).
 	binlogPlayerStats *binlogplayer.BinlogPlayerStats
 
+	// healthCheck handles the connections to the sources (set at
+	// construction, immutable).
+	healthCheck discovery.HealthCheck
+
+	// shardReplicationWatcher watches the addresses of the sources, and
+	// feeds the HealthCheck (set at construction, immutable).
+	shardReplicationWatcher *discovery.TopologyWatcher
+
 	// playerMutex is used to protect the next fields in this structure.
 	// They will change depending on our state.
 	playerMutex sync.Mutex
+
+	// initialEndpointFound is a channel created with the controller,
+	// that will be closed the first time we receive an endPoint.
+	// It is meant to let the healthcheck module figure out the
+	// first endpoint we can use before our first iteration.
+	initialEndpointFound chan struct{}
 
 	// ctx is the context to cancel to stop the playback.
 	ctx    context.Context
@@ -79,21 +95,35 @@ type BinlogPlayerController struct {
 
 func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange *pb.KeyRange, sourceShard *pb.Shard_SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
-		ts:                ts,
-		vtClientFactory:   vtClientFactory,
-		mysqld:            mysqld,
-		cell:              cell,
-		keyspaceIDType:    keyspaceIDType,
-		keyRange:          keyRange,
-		dbName:            dbName,
-		sourceShard:       sourceShard,
-		binlogPlayerStats: binlogplayer.NewBinlogPlayerStats(),
+		ts:                   ts,
+		vtClientFactory:      vtClientFactory,
+		mysqld:               mysqld,
+		cell:                 cell,
+		keyspaceIDType:       keyspaceIDType,
+		keyRange:             keyRange,
+		dbName:               dbName,
+		sourceShard:          sourceShard,
+		binlogPlayerStats:    binlogplayer.NewBinlogPlayerStats(),
+		healthCheck:          discovery.NewHealthCheck(30*time.Second, 5*time.Second),
+		initialEndpointFound: make(chan struct{}),
 	}
+	blc.healthCheck.SetListener(blc)
+	blc.shardReplicationWatcher = discovery.NewShardReplicationWatcher(ts, blc.healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, 30*time.Second, 5)
 	return blc
 }
 
 func (bpc *BinlogPlayerController) String() string {
 	return "BinlogPlayerController(" + topoproto.SourceShardString(bpc.sourceShard) + ")"
+}
+
+// StatsUpdate is part of the discover.HealthCheckStatsListener interface
+func (bpc *BinlogPlayerController) StatsUpdate(endPoint *pb.EndPoint, cell, name string, target *pbq.Target, serving bool, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats) {
+	bpc.playerMutex.Lock()
+	if bpc.initialEndpointFound != nil {
+		close(bpc.initialEndpointFound)
+		bpc.initialEndpointFound = nil
+	}
+	bpc.playerMutex.Unlock()
 }
 
 // Start will start the player in the background and run forever.
@@ -241,31 +271,34 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("not starting because flag '%v' is set", binlogplayer.BlpFlagDontStart)
 	}
 
-	// Find the server list for the source shard in our cell
-	addrs, _, err := bpc.ts.GetEndPoints(bpc.ctx, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, pb.TabletType_REPLICA)
-	if err != nil {
-		// If this calls fails because the context was canceled,
-		// we need to return nil.
+	// wait for the initial endpoint set if this is the first run
+	bpc.playerMutex.Lock()
+	ief := bpc.initialEndpointFound
+	bpc.playerMutex.Unlock()
+	if ief != nil {
+		t := time.NewTimer(5 * time.Second)
 		select {
-		case <-bpc.ctx.Done():
-			if bpc.ctx.Err() == context.Canceled {
-				return nil
-			}
-		default:
+		case <-ief:
+			t.Stop()
+			break
+		case <-t.C:
+			return fmt.Errorf("healthcheck has no endpoint for %v %v %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA)
 		}
-		return fmt.Errorf("can't find any source tablet for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA, err)
 	}
-	if len(addrs.Entries) == 0 {
-		return fmt.Errorf("empty source tablet list for %v %v %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA)
+
+	// Find the server list from the health check
+	addrs := bpc.healthCheck.GetEndPointStatsFromTarget(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, pb.TabletType_REPLICA)
+	if len(addrs) == 0 {
+		return fmt.Errorf("can't find any source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA)
 	}
-	newServerIndex := rand.Intn(len(addrs.Entries))
-	endPoint := addrs.Entries[newServerIndex]
+	newServerIndex := rand.Intn(len(addrs))
+	endPoint := addrs[newServerIndex].EndPoint
 
 	// save our current server
 	bpc.playerMutex.Lock()
 	bpc.sourceTablet = &pb.TabletAlias{
 		Cell: bpc.cell,
-		Uid:  addrs.Entries[newServerIndex].Uid,
+		Uid:  endPoint.Uid,
 	}
 	bpc.lastError = nil
 	bpc.playerMutex.Unlock()
