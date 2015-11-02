@@ -2,9 +2,10 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+"""A vtgate v3 client."""
+
 from itertools import izip
 import logging
-import re
 
 from net import bsonrpc
 from net import gorpc
@@ -13,7 +14,6 @@ from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import vtdb_logger
 from vtdb import vtgate_utils
-
 
 
 def log_exception(method):
@@ -45,6 +45,7 @@ def log_exception(method):
 
 @log_exception
 def convert_exception(exc, *args):
+  """Return an exception object expected by callers."""
   new_args = exc.args + args
   if isinstance(exc, gorpc.TimeoutError):
     return dbexceptions.TimeoutError(new_args)
@@ -73,7 +74,6 @@ class VTGateConnection(object):
 
   def __init__(self, addr, timeout, user=None, password=None,
                keyfile=None, certfile=None):
-    # TODO: Merge. This is very similar to vtgatev2.
     self.session = None
     self.addr = addr
     self.user = user
@@ -85,14 +85,12 @@ class VTGateConnection(object):
     self.logger_object = vtdb_logger.get_logger()
 
   def _create_client(self):
-    # TODO: Merge. This is very similar to vtgatev2.
     return bsonrpc.BsonRpcClient(
         self.addr, self.timeout, self.user, self.password,
         keyfile=self.keyfile, certfile=self.certfile)
 
   def _get_client(self):
     """Get current client or create a new one and connect."""
-    # TODO: Merge. This is very similar to vtgatev2.
     if not self.client:
       self.client = self._create_client()
       try:
@@ -105,7 +103,6 @@ class VTGateConnection(object):
     return '<VTGateConnection %s >' % self.addr
 
   def dial(self):
-    # TODO: Merge. This is very similar to vtgatev2.
     try:
       if not self.is_closed():
         self.close()
@@ -114,14 +111,12 @@ class VTGateConnection(object):
       raise convert_exception(e, str(self))
 
   def close(self):
-    # TODO: Merge. This is very similar to vtgatev2.
     if self.session:
       self.rollback()
     if self.client:
       self.client.close()
 
   def is_closed(self):
-    # TODO: Merge. This is very similar to vtgatev2.
     return not self.client or self.client.is_closed()
 
   def cursor(self, *pargs, **kwargs):
@@ -187,6 +182,7 @@ class VTGateConnection(object):
 
   def _execute(
       self, sql, bind_variables, tablet_type, not_in_transaction=False):
+    """Send query and variables to VTGate.Execute."""
     req = _create_req(sql, bind_variables, tablet_type, not_in_transaction)
     self._add_session(req)
 
@@ -222,6 +218,7 @@ class VTGateConnection(object):
 
   def _execute_batch(
       self, sql_list, bind_variables_list, tablet_type, as_transaction):
+    """Send a list of queries and variables to VTGate.ExecuteBatch."""
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
       query = {}
@@ -267,6 +264,7 @@ class VTGateConnection(object):
 
   def _stream_execute(
       self, sql, bind_variables, tablet_type, not_in_transaction=False):
+    """Start a streaming query via VTGate.StreamExecute2."""
     req = _create_req(sql, bind_variables, tablet_type, not_in_transaction)
     self._add_session(req)
 
@@ -298,12 +296,13 @@ class VTGateConnection(object):
             ' after streaming app error in RPC response.')
 
     try:
-      rpc_client.stream_call('VTGate.StreamExecute2', req)
+      method_name = 'VTGate.StreamExecute2'
+      rpc_client.stream_call(method_name, req)
       first_response = rpc_client.stream_next()
       if first_response.reply.get('Err'):
         drain_conn_after_streaming_app_error()
-        raise vtgate_utils.VitessError(exec_method,
-          first_response.reply['Err'])
+        raise vtgate_utils.VitessError(
+            method_name, first_response.reply['Err'])
       reply = first_response.reply['Result']
 
       for field in reply['Fields']:
@@ -323,7 +322,6 @@ class VTGateConnection(object):
     self.client = None
 
     def row_generator():
-      # TODO: Merge. This is very similar to vtgatev2.
       try:
         while True:
           try:
@@ -349,7 +347,7 @@ class VTGateConnection(object):
 
 
 def _make_row(row, conversions):
-  # TODO: Merge. This is very similar to vtgatev2.
+  """Return a list by calling conversion(cell) for each cell in row."""
   converted_row = []
   for conversion_func, field_data in izip(conversions, row):
     if field_data is None:
