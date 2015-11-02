@@ -32,6 +32,11 @@ spec:
         limits:
           memory: "1Gi"
           cpu: "500m"
+      ports:
+        - name: web
+          containerPort: {{port}}
+        - name: grpc
+          containerPort: {{grpc_port}}
       command:
         - bash
         - "-c"

@@ -143,41 +143,6 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     [built-in backup/restore](http://vitess.io/user-guide/backup-and-restore.html)
     to access [Google Cloud Storage](https://cloud.google.com/storage/).
 
-1.  The command's output includes the IP of the Kubernetes master server:
-
-    ```
-    NAME     ZONE           MASTER_VERSION  MASTER_IP     MACHINE_TYPE   STATUS
-    example  us-central1-b  1.0.6           1.2.3.4       n1-standard-4  RUNNING
-    ```
-
-    1.  Open /ui on the MASTER_IP in a browser over *HTTPS*
-        (e.g. `https://1.2.3.4/ui`) to see the Kubernetes
-        dashboard, where you can monitor nodes, services, pods, etc.
-
-        **Note:** Your browser will likely complain that the HTTPS certificate
-        is invalid. This is normal, since the Kubernetes master uses a test
-        certificate by default. Follow your browser's instructions to enter
-        advanced settings and allow you to proceed to the site.
-
-    1.  You should be prompted to enter a username and password to
-        access the requested page. You can find the randomly-generated password
-        with `kubectl config view`:
-
-        ``` sh
-        $ kubectl config view
-        ### example output:
-        # apiVersion: v1
-        # clusters:
-        # - cluster:
-        #     server: https://1.2.3.4
-        # ...
-        # users:
-        # - name: gke_project_us-central1-b_example
-        #   user:
-        #     password: gr8j0Rb11
-        #     username: admin
-        ```
-
 1.  Create a Cloud Storage bucket:
 
     To use the Cloud Storage plugin for built-in backups, first create a
@@ -300,54 +265,47 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     # services/vtctld
     # Creating vtctld pod...
     # pods/vtctld
-    #
-    # vtctld web address: http://2.3.4.5:30000
     ```
 
-    To let you access vtctld from outside Kubernetes, the
-    `vtctld` service is created with the `type: NodePort`
-    option. This creates an [external service]
-    (http://kubernetes.io/v1.0/docs/user-guide/services.html#external-services)
-    by exposing a port on each node that forwards to the vtctld service.
+1.  **Access vtctld web UI**
 
-    The **vtctld address** printed by `vtctld-up.sh` is thus the external IP
-    of one of the nodes, combined with the `nodePort` assigned for vtctld.
+    To access vtctld from outside Kubernetes, use [kubectl proxy]
+    (http://kubernetes.io/v1.0/docs/user-guide/kubectl/kubectl_proxy.html)
+    to create an authenticated tunnel on your workstation:
 
-    **Note:** For simplicity, the firewall rule above opens the port on **all**
-    GCE instances in your project. In a production system, you would likely
-    limit it to a specific instance.
-
-1.  **Access vtctld**
-
-    To access the `vtctld` service from outside
-    Kubernetes, you need to open ports `30000-30001` in your platform's firewall.
-    (If you don't complete this step, the only way to issue commands
-    to `vtctld` would be to SSH into a Kubernetes node
-    and install and run `vtctlclient` there.)
-
-    On Compute Engine, you can open the port like this:
+    **Note:** The proxy command runs in the foreground,
+    so you may want to run it in a separate terminal.
 
     ``` sh
-    $ gcloud compute firewall-rules create vtctld --allow tcp:30000-30001
+    $ kubectl proxy --port=8001
+    ### example output:
+    # Starting to serve on localhost:8001
     ```
 
-    You can then access the vtctld web interface at the address printed
-    by `vtctld-up.sh` above. In this example, the web UI would be at
-    `http://2.3.4.5:30000`.
+    You can then load the vtctld web UI on `localhost`:
 
-1.  **Use vtctlclient to call vtctld**
+    http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/
+
+    You can also use this proxy to access the [Kubernetes Dashboard]
+    (http://kubernetes.io/v1.0/docs/user-guide/ui.html),
+    where you can monitor nodes, pods, and services:
+
+    http://localhost:8001/api/v1/proxy/namespaces/kube-system/services/kube-ui/
+
+1.  **Use vtctlclient to send commands to vtctld**
 
     You can now run `vtctlclient` locally to issue commands
     to the `vtctld` service on your Kubernetes cluster.
 
-    When you call `vtctlclient`, the command requires
-    the IP address and port for your `vtctld` service.
-    Note that the RPC service is on a different port than the web UI.
-    In this example, we've set the RPC port to `30001`.
+    To enable RPC access into the Kubernetes cluster, we'll again use
+    `kubectl` to set up an authenticated tunnel. Unlike the HTTP proxy
+    we used for the web UI, this time we need raw [port forwarding]
+    (http://kubernetes.io/v1.0/docs/user-guide/kubectl/kubectl_port-forward.html)
+    for vtctld's [gRPC](http://grpc.io) port.
 
-    To avoid having to enter that for each command, you can use the
-    provided `kvtctl.sh` script, which uses `kubectl` to discover the
-    proper address.
+    Since the tunnel needs to target a particular vtctld pod name,
+    we've provided the `kvtctl.sh` script, which uses `kubectl` to
+    discover the pod name and set up the tunnel before running `vtctlclient`.
 
     Now, running `kvtctl.sh help` will test your connection to
     `vtctld` and also list the `vtctlclient`
@@ -366,7 +324,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     You can also use the `help` command to get more details about each command:
 
     ``` sh
-    vitess/examples/kubernetes$ ./kvtctl.sh help InitTablet
+    vitess/examples/kubernetes$ ./kvtctl.sh help ListAllTablets
     ```
 
     See the [vtctl reference](http://vitess.io/reference/vtctl.html) for a
@@ -575,16 +533,15 @@ vitess/examples/kubernetes$ ./guestbook-up.sh
 # replicationcontrollers/guestbook
 ```
 
-As with the `vtctld` service, to access the GuestBook
-app from outside Kubernetes, we need to set the `type` field in the
-service definition to something that generates an external service.
-
-In this case, since this is a user-facing frontend, we use
-`type: LoadBalancer`, which tells Kubernetes to create a public
+As with the `vtctld` service, by default the GuestBook app is not accessible
+from outside Kubernetes. In this case, since this is a user-facing frontend,
+we set `type: LoadBalancer` in the GuestBook service definition,
+which tells Kubernetes to create a public
 [load balancer](http://kubernetes.io/v1.0/docs/user-guide/services.html#type-loadbalancer)
 using the API for whatever platform your Kubernetes cluster is in.
 
-As before, you also need to allow access through your platform's firewall:
+You also need to [allow access through your platform's firewall]
+(http://kubernetes.io/v1.0/docs/user-guide/services-firewalls.html).
 
 ``` sh
 # For example, to open port 80 in the GCE firewall:
@@ -593,7 +550,7 @@ $ gcloud compute firewall-rules create guestbook --allow tcp:80
 
 **Note:** For simplicity, the firewall rule above opens the port on **all**
 GCE instances in your project. In a production system, you would likely
-limit it to a specific instance.
+limit it to specific instances.
 
 Then, get the external IP of the load balancer for the GuestBook service:
 
@@ -691,11 +648,11 @@ machines running on Compute Engine:
 $ gcloud container clusters delete example
 ```
 
-It's also a good idea to remove the firewall rules you created, unless you plan
+It's also a good idea to remove any firewall rules you created, unless you plan
 to use them again soon:
 
 ``` sh
-$ gcloud compute firewall-rules delete vtctld guestbook
+$ gcloud compute firewall-rules delete guestbook
 ```
 
 ## Troubleshooting

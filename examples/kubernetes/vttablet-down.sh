@@ -8,7 +8,10 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-get_vtctld_addr
+echo "Starting port forwarding to vtctld..."
+start_vtctld_forward
+trap stop_vtctld_forward EXIT
+VTCTLD_ADDR="localhost:$vtctld_forward_port"
 
 # Delete the pods for all shards
 CELLS=${CELLS:-'test'}

@@ -24,6 +24,31 @@ get_vtctld_addr() {
   fi
 }
 
+# Find the name of a vtctld pod.
+get_vtctld_pod() {
+  $KUBECTL get -o template -t "{{if ge (len .items) 1 }}{{(index .items 0).metadata.name}}{{end}}" -l 'app=vitess,component=vtctld' pods
+}
+
+start_vtctld_forward() {
+  pod=`get_vtctld_pod`
+  if [ -z "$pod" ]; then
+    >&2 echo "ERROR: Can't get vtctld pod name. Is vtctld running?"
+    return 1
+  fi
+
+  tmpfile=`mktemp`
+  $KUBECTL port-forward -p $pod 0:15999 &> $tmpfile &
+  vtctld_forward_pid=$!
+
+  until [[ `cat $tmpfile` =~ :([0-9]+)\ -\> ]]; do :; done
+  vtctld_forward_port=${BASH_REMATCH[1]}
+  rm $tmpfile
+}
+
+stop_vtctld_forward() {
+  kill $vtctld_forward_pid
+}
+
 config_file=`dirname "${BASH_SOURCE}"`/config.sh
 if [ ! -f $config_file ]; then
   echo "Please run ./configure.sh first to generate config.sh file."
