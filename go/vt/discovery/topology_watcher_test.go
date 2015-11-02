@@ -27,10 +27,11 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	var ctw *TopologyWatcher
 	if cellTablets {
 		ctw = NewCellTabletsWatcher(topo.Server{Impl: ft}, fhc, "aa", 10*time.Minute, 5)
+		t.Logf(`ctw = CellTabletsWatcher(topo.Server{ft}, fhc, "aa", 10ms, 5)`)
 	} else {
 		ctw = NewShardReplicationWatcher(topo.Server{Impl: ft}, fhc, "aa", "keyspace", "shard", 10*time.Minute, 5)
+		t.Logf(`ctw = ShardReplicationWatcher(topo.Server{ft}, fhc, "aa", "keyspace", "shard", 10ms, 5)`)
 	}
-	t.Logf(`ctw = CellTabletsWatcher(topo.Server{ft}, fhc, "aa", 10ms, 5)`)
 
 	// add a tablet to the topology
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 123})
