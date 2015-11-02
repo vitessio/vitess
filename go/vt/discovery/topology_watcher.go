@@ -103,7 +103,7 @@ func (ctw *TopologyWatcher) watch() {
 func (ctw *TopologyWatcher) loadTablets() {
 	var wg sync.WaitGroup
 	newEndPoints := make(map[string]*tabletEndPoint)
-	tabletAlias, err := ctw.topoServer.GetTabletsByCell(ctw.ctx, ctw.cell)
+	tabletAlias, err := ctw.getTablets(ctw)
 	if err != nil {
 		select {
 		case <-ctw.ctx.Done():

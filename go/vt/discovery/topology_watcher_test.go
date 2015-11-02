@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func TestShardReplicationWatcher(t *testing.T) {
 }
 
 func checkWatcher(t *testing.T, cellTablets bool) {
-	ft := newFakeTopo()
+	ft := newFakeTopo(cellTablets)
 	fhc := newFakeHealthCheck()
 	t.Logf(`ft = FakeTopo(); fhc = FakeHealthCheck()`)
 	var ctw *TopologyWatcher
@@ -63,14 +64,18 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	ctw.Stop()
 }
 
-func newFakeTopo() *fakeTopo {
-	return &fakeTopo{tablets: make(map[pbt.TabletAlias]*pbt.Tablet)}
+func newFakeTopo(expectGetTabletsByCell bool) *fakeTopo {
+	return &fakeTopo{
+		expectGetTabletsByCell: expectGetTabletsByCell,
+		tablets:                make(map[pbt.TabletAlias]*pbt.Tablet),
+	}
 }
 
 type fakeTopo struct {
 	faketopo.FakeTopo
-	mu      sync.RWMutex
-	tablets map[pbt.TabletAlias]*pbt.Tablet
+	expectGetTabletsByCell bool
+	mu                     sync.RWMutex
+	tablets                map[pbt.TabletAlias]*pbt.Tablet
 }
 
 func (ft *fakeTopo) AddTablet(cell string, uid uint32, host string, ports map[string]int32) {
@@ -102,6 +107,9 @@ func (ft *fakeTopo) RemoveTablet(cell string, uid uint32) {
 }
 
 func (ft *fakeTopo) GetTabletsByCell(ctx context.Context, cell string) ([]*pbt.TabletAlias, error) {
+	if !ft.expectGetTabletsByCell {
+		return nil, fmt.Errorf("unexpected GetTabletsByCell")
+	}
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
 	res := make([]*pbt.TabletAlias, 0, 1)
@@ -117,6 +125,10 @@ func (ft *fakeTopo) GetTabletsByCell(ctx context.Context, cell string) ([]*pbt.T
 // but instead we cheat for this test and just return all the
 // tablets in the cell.
 func (ft *fakeTopo) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
+	if ft.expectGetTabletsByCell {
+		return nil, fmt.Errorf("unexpected GetShardReplication")
+	}
+
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
 	nodes := make([]*pbt.ShardReplication_Node, 0, 1)
