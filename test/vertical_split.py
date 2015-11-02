@@ -337,6 +337,9 @@ index by_msg (msg)
     self._check_values(source_master, 'vt_source_keyspace', 'view1',
                        moving1_first, 100)
 
+    # run a health check on source replica so it responds to discovery
+    utils.run_vtctl(['RunHealthCheck', source_replica.tablet_alias, 'replica'])
+
     # the worker will do everything. We test with source_reader_count=10
     # (down from default=20) as connection pool is not big enough for 20.
     # min_table_size_for_split is set to 1 as to force a split even on the

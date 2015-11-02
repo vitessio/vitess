@@ -262,7 +262,7 @@ index by_msg (msg)
     while True:
       value = self._check_lots(count, base=base)
       if value >= threshold:
-        return
+        return value
       timeout = utils.wait_step('enough data went through', timeout)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
@@ -310,6 +310,9 @@ index by_msg (msg)
     self._add_sharding_key_to_schema()
     self._backfill_keyspace_id(shard_master)
     self._mark_sharding_key_not_null()
+
+    # run a health check on source replica so it responds to discovery
+    utils.run_vtctl(['RunHealthCheck', shard_replica.tablet_alias, 'replica'])
 
     # create the split shards
     shard_0_master.init_tablet('master', 'test_keyspace', '-80')
@@ -378,9 +381,10 @@ index by_msg (msg)
     logging.debug('Inserting lots of data on source shard')
     self._insert_lots(1000)
     logging.debug('Checking 80 percent of data is sent quickly')
-    self._check_lots_timeout(1000, 80, 5)
-    logging.debug('Checking all data goes through eventually')
-    self._check_lots_timeout(1000, 100, 20)
+    v = self._check_lots_timeout(1000, 80, 5)
+    if v != 100:
+      logging.debug('Checking all data goes through eventually')
+      self._check_lots_timeout(1000, 100, 20)
     logging.debug('Checking no data was sent the wrong way')
     self._check_lots_not_present(1000)
 

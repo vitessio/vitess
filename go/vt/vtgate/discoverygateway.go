@@ -43,7 +43,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		topoServer:      topoServer,
 		localCell:       cell,
 		retryCount:      retryCount,
-		tabletsWatchers: make([]*discovery.CellTabletsWatcher, 0, 1),
+		tabletsWatchers: make([]*discovery.TopologyWatcher, 0, 1),
 	}
 }
 
@@ -53,7 +53,7 @@ type discoveryGateway struct {
 	localCell  string
 	retryCount int
 
-	tabletsWatchers []*discovery.CellTabletsWatcher
+	tabletsWatchers []*discovery.TopologyWatcher
 }
 
 // InitializeConnections creates connections to VTTablets.

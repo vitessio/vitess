@@ -83,6 +83,9 @@ def setUpModule():
                      '-sql=' + create_table,
                      'test_keyspace'], auto_log=True)
 
+    # run a health check on source replica so it responds to discovery
+    utils.run_vtctl(['RunHealthCheck', src_replica.tablet_alias, 'replica'])
+
     # Create destination shard.
     dst_master.init_tablet('master', 'test_keyspace', '-')
     dst_replica.init_tablet('replica', 'test_keyspace', '-')

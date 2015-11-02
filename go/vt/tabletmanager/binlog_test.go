@@ -17,10 +17,13 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -131,7 +134,122 @@ func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string
 	}, nil
 }
 
-func createSourceTablet(t *testing.T, ts topo.Server, keyspace, shard string) {
+// fakeTabletConn implement TabletConn interface. We only care about the
+// health check part.
+type fakeTabletConn struct {
+	endPoint   *pb.EndPoint
+	keyspace   string
+	shard      string
+	tabletType pb.TabletType
+}
+
+// Execute is part of the TabletConn interface
+func (ftc *fakeTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+	return nil, fmt.Errorf("not implemented in this test")
+}
+
+// Execute is part of the TabletConn interface
+func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+	return nil, fmt.Errorf("not implemented in this test")
+}
+
+// StreamExecute is part of the TabletConn interface
+func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+	return nil, nil, fmt.Errorf("not implemented in this test")
+}
+
+// Begin is part of the TabletConn interface
+func (ftc *fakeTabletConn) Begin(ctx context.Context) (transactionID int64, err error) {
+	return 0, fmt.Errorf("not implemented in this test")
+}
+
+// Commit is part of the TabletConn interface
+func (ftc *fakeTabletConn) Commit(ctx context.Context, transactionID int64) error {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// Rollback is part of the TabletConn interface
+func (ftc *fakeTabletConn) Rollback(ctx context.Context, transactionID int64) error {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// Execute2 is part of the TabletConn interface
+func (ftc *fakeTabletConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+	return nil, fmt.Errorf("not implemented in this test")
+}
+
+// ExecuteBatch2 is part of the TabletConn interface
+func (ftc *fakeTabletConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+	return nil, fmt.Errorf("not implemented in this test")
+}
+
+// Begin2 is part of the TabletConn interface
+func (ftc *fakeTabletConn) Begin2(ctx context.Context) (transactionID int64, err error) {
+	return 0, fmt.Errorf("not implemented in this test")
+}
+
+// Commit2 is part of the TabletConn interface
+func (ftc *fakeTabletConn) Commit2(ctx context.Context, transactionID int64) error {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// Rollback2 is part of the TabletConn interface
+func (ftc *fakeTabletConn) Rollback2(ctx context.Context, transactionID int64) error {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// StreamExecute2 is part of the TabletConn interface
+func (ftc *fakeTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+	return nil, nil, fmt.Errorf("not implemented in this test")
+}
+
+// Close is part of the TabletConn interface
+func (ftc *fakeTabletConn) Close() {
+}
+
+// SetTarget is part of the TabletConn interface
+func (ftc *fakeTabletConn) SetTarget(keyspace, shard string, tabletType pb.TabletType) error {
+	return fmt.Errorf("not implemented in this test")
+}
+
+// EndPoint is part of the TabletConn interface
+func (ftc *fakeTabletConn) EndPoint() *pb.EndPoint {
+	return ftc.endPoint
+}
+
+// SplitQuery is part of the TabletConn interface
+func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
+	return nil, fmt.Errorf("not implemented in this test")
+}
+
+// StreamHealth is part of the TabletConn interface
+func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	c := make(chan *pbq.StreamHealthResponse)
+	var finalErr error
+	go func() {
+		c <- &pbq.StreamHealthResponse{
+			Serving: true,
+			Target: &pbq.Target{
+				Keyspace:   ftc.keyspace,
+				Shard:      ftc.shard,
+				TabletType: ftc.tabletType,
+			},
+			RealtimeStats: &pbq.RealtimeStats{},
+		}
+		select {
+		case <-ctx.Done():
+			finalErr = ctx.Err()
+			close(c)
+		}
+	}()
+	return c, func() error {
+		return finalErr
+	}, nil
+}
+
+// createSourceTablet is a helper method to create the source tablet
+// in the given keyspace/shard.
+func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, shard string) {
 	vshard, kr, err := topo.ValidateShardName(shard)
 	if err != nil {
 		t.Fatalf("ValidateShardName(%v) failed: %v", shard, err)
@@ -157,6 +275,18 @@ func createSourceTablet(t *testing.T, ts topo.Server, keyspace, shard string) {
 	if err := topotools.UpdateTabletEndpoints(ctx, ts, tablet); err != nil {
 		t.Fatalf("topotools.UpdateTabletEndpoints failed: %v", err)
 	}
+
+	// register a tablet conn dialer that will return the instance
+	// we want
+	tabletconn.RegisterDialer(name, func(ctx context.Context, endPoint *pb.EndPoint, k, s string, tabletType pb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+		return &fakeTabletConn{
+			endPoint:   endPoint,
+			keyspace:   keyspace,
+			shard:      vshard,
+			tabletType: pb.TabletType_REPLICA,
+		}, nil
+	})
+	flag.Lookup("tablet_protocol").Value.Set(name)
 }
 
 // checkBlpPositionList will ask the BinlogPlayerMap for its BlpPositionList,
@@ -212,7 +342,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 
 	// create one replica remote tablet in source shard, we will
 	// use it as a source for filtered replication.
-	createSourceTablet(t, ts, "ks", "-80")
+	createSourceTablet(t, "test_horizontal", ts, "ks", "-80")
 
 	// register a binlog player factory that will return the instances
 	// we want
@@ -392,7 +522,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 
 	// create one replica remote tablet in source shard, we will
 	// use it as a source for filtered replication.
-	createSourceTablet(t, ts, "ks", "-80")
+	createSourceTablet(t, "test_horizontal_until", ts, "ks", "-80")
 
 	// register a binlog player factory that will return the instances
 	// we want
@@ -584,7 +714,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 
 	// create one replica remote tablet in source keyspace, we will
 	// use it as a source for filtered replication.
-	createSourceTablet(t, ts, "source", "0")
+	createSourceTablet(t, "test_vertical", ts, "source", "0")
 
 	// register a binlog player factory that will return the instances
 	// we want
