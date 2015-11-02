@@ -23,7 +23,7 @@ var customRule1 = `[
 					"BindVarConds":[{
 						"Name": "asdfg",
 						"OnAbsent": false,
-						"Operator": "NOOP"
+						"Operator": ""
 					}]
 				}
 			]`

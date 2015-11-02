@@ -240,3 +240,31 @@ func TestQueryRuleInfoFilterByPlan(t *testing.T) {
 	t.Errorf("Insert into t_test matches rule[0] '%s' and rule[1] '%s', but we expect rule[0] with prefix '%s' and rule[1] with prefix '%s'",
 		qrs.rules[0].Name, qrs.rules[1].Name, "keyspace_id_not_in_range", "customrule_ban_bindvar")
 }
+
+func TestQueryRuleInfoJSON(t *testing.T) {
+	setupQueryRules()
+	qri := NewQueryRuleInfo()
+	qri.RegisterQueryRuleSource(blacklistQueryRules)
+	_ = qri.SetRules(blacklistQueryRules, blacklistRules)
+	qri.RegisterQueryRuleSource(customQueryRules)
+	_ = qri.SetRules(customQueryRules, otherRules)
+	got := marshalled(qri)
+	want := compacted(`{
+		"BLACKLIST_QUERY_RULES":[{
+			"Description":"enforce blacklisted tables",
+			"Name":"blacklisted_table",
+			"TableNames":["bannedtable1","bannedtable2","bannedtable3"],
+			"Action":"FAIL_RETRY"
+		}],
+		"CUSTOM_QUERY_RULES":[{
+			"Description":"sample custom rule",
+			"Name":"customrule_ban_bindvar",
+			"TableNames":["t_customer"],
+			"BindVarConds":[{"Name":"bindvar1","OnAbsent":true,"Operator":""}],
+			"Action":"FAIL"
+		}]
+	}`)
+	if got != want {
+		t.Errorf("keyrangeRules:\n%v, want\n%v", got, want)
+	}
+}

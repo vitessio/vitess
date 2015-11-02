@@ -5,6 +5,8 @@
 package endtoend
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -115,7 +117,7 @@ var rulesJSON = []byte(`[{
 	"BindVarConds":[{
 		"Name": "asdfg",
 		"OnAbsent": false,
-		"Operator": "NOOP"
+		"Operator": ""
 	}]
 }]`)
 
@@ -138,6 +140,23 @@ func TestQueryRules(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
+	}
+
+	rulesJSON := compacted(framework.FetchURL("/debug/query_rules"))
+	want = compacted(`{
+		"endtoend":[{
+			"Description": "disallow bindvar 'asdfg'",
+			"Name": "r1",
+			"BindVarConds":[{
+				"Name": "asdfg",
+				"OnAbsent": false,
+				"Operator": ""
+			}],
+			"Action": "FAIL"
+		}]
+	}`)
+	if rulesJSON != want {
+		t.Errorf("/debug/query_rules:\n%v, want\n%s", rulesJSON, want)
 	}
 
 	client := framework.NewClient()
@@ -164,4 +183,13 @@ func TestQueryRules(t *testing.T) {
 		t.Error(err)
 		return
 	}
+}
+
+func compacted(in string) string {
+	dst := bytes.NewBuffer(nil)
+	err := json.Compact(dst, []byte(in))
+	if err != nil {
+		panic(err)
+	}
+	return dst.String()
 }

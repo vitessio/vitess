@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"encoding/json"
 	"errors"
 	"sync"
 
@@ -81,4 +82,11 @@ func (qri *QueryRuleInfo) filterByPlan(query string, planid planbuilder.PlanType
 		newqrs.Append(rules.filterByPlan(query, planid, tableName))
 	}
 	return newqrs
+}
+
+// MarshalJSON marshals to JSON.
+func (qri *QueryRuleInfo) MarshalJSON() ([]byte, error) {
+	qri.mu.Lock()
+	defer qri.mu.Unlock()
+	return json.Marshal(qri.queryRulesMap)
 }
