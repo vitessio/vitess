@@ -711,22 +711,16 @@ You'll also need to adjust the same certificate path settings in the
 ### Status pages for vttablets
 
 Each `vttablet` serves a set of HTML status pages on its primary port.
-The `vtctld` interface provides a **STATUS** link for each tablet, but the
-links are actually to internal, per-pod IPs that can only be accessed from
-within Kubernetes.
+The `vtctld` interface provides a **STATUS** link for each tablet.
 
-As a workaround, you can access tablet status pages through the
-[apiserver proxy](http://kubernetes.io/v1.0/docs/user-guide/accessing-the-cluster.html#accessing-services-running-on-the-cluster),
-provided by the Kubernetes master. For example, to see the status
-page for the tablet with ID 100 (recall that our Kubernetes master is assumed to
-be on public IP 1.2.3.4), you could navigate to:
+If you access the vtctld web UI through the kubectl proxy as described above,
+it will automatically link to the vttablets through that same proxy,
+giving you access from outside the cluster.
 
-```
-https://1.2.3.4/api/v1/proxy/namespaces/default/pods/vttablet-100:15002/debug/status
-```
+You can also use the proxy to go directly to a tablet. For example,
+to see the status page for the tablet with ID `100`, you could navigate to:
 
-In the future, we plan to have vtctld directly link through this proxy from
-the **STATUS** link.
+http://localhost:8001/api/v1/proxy/namespaces/default/pods/vttablet-100:15002/debug/status
 
 ### Direct connection to mysqld
 
