@@ -8,6 +8,7 @@ package tabletmanager
 // replication
 
 import (
+	"flag"
 	"fmt"
 	"html/template"
 	"math/rand" // not crypto-safe is OK here
@@ -32,6 +33,12 @@ import (
 
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+)
+
+var (
+	healthcheckTopologyRefresh = flag.Duration("binlog_player_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology when filtered replication is running")
+
+	retryDelay = flag.Duration("binlog_player_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck or a failed binlog connection")
 )
 
 func init() {
@@ -104,11 +111,11 @@ func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplay
 		dbName:               dbName,
 		sourceShard:          sourceShard,
 		binlogPlayerStats:    binlogplayer.NewBinlogPlayerStats(),
-		healthCheck:          discovery.NewHealthCheck(30*time.Second, 5*time.Second),
+		healthCheck:          discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *retryDelay),
 		initialEndpointFound: make(chan struct{}),
 	}
 	blc.healthCheck.SetListener(blc)
-	blc.shardReplicationWatcher = discovery.NewShardReplicationWatcher(ts, blc.healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, 30*time.Second, 5)
+	blc.shardReplicationWatcher = discovery.NewShardReplicationWatcher(ts, blc.healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthcheckTopologyRefresh, 5)
 	return blc
 }
 
@@ -229,7 +236,7 @@ func (bpc *BinlogPlayerController) Loop() {
 		bpc.playerMutex.Unlock()
 
 		// sleep for a bit before retrying to connect
-		time.Sleep(5 * time.Second)
+		time.Sleep(*retryDelay)
 	}
 
 	log.Infof("%v: exited main binlog player loop", bpc)
@@ -276,7 +283,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	ief := bpc.initialEndpointFound
 	bpc.playerMutex.Unlock()
 	if ief != nil {
-		t := time.NewTimer(5 * time.Second)
+		t := time.NewTimer(*retryDelay)
 		select {
 		case <-ief:
 			t.Stop()

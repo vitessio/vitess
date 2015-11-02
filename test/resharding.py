@@ -356,7 +356,7 @@ primary key (name)
     while True:
       value = self._check_lots(count, base=base)
       if value >= threshold:
-        return
+        return value
       if timeout == 0:
         self.fail('timeout waiting for %d%% of the data' % threshold)
       logging.debug('sleeping until we get %d%%', threshold)
@@ -501,6 +501,10 @@ primary key (name)
     self._insert_startup_values()
     self._test_keyrange_constraints()
 
+    # run a health check on source replicas so they respond to discovery
+    utils.run_vtctl(['RunHealthCheck', shard_0_replica.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', shard_1_slave1.tablet_alias, 'replica'])
+
     # create the split shards
     shard_2_master.init_tablet('master', 'test_keyspace', '80-c0')
     shard_2_replica1.init_tablet('spare', 'test_keyspace', '80-c0')
@@ -582,9 +586,12 @@ primary key (name)
     logging.debug('Inserting lots of data on source shard')
     self._insert_lots(1000)
     logging.debug('Checking 80 percent of data is sent quickly')
-    self._check_lots_timeout(1000, 80, 5)
-    logging.debug('Checking all data goes through eventually')
-    self._check_lots_timeout(1000, 100, 20)
+    v = self._check_lots_timeout(1000, 80, 5)
+    if v != 100:
+      # small optimization: only do this check if we don't have all the data
+      # already anyway.
+      logging.debug('Checking all data goes through eventually')
+      self._check_lots_timeout(1000, 100, 20)
     logging.debug('Checking no data was sent the wrong way')
     self._check_lots_not_present(1000)
     self._check_binlog_player_vars(shard_2_master, seconds_behind_master_max=30)
@@ -622,6 +629,7 @@ primary key (name)
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave1.tablet_alias, 'spare'])
     shard_1_slave2.wait_for_vttablet_state('SERVING')
     shard_1_slave1.wait_for_vttablet_state('NOT_SERVING')
+    utils.run_vtctl(['RunHealthCheck', shard_1_slave2.tablet_alias, 'replica'])
 
     # test data goes through again
     logging.debug('Inserting lots of data on source shard')

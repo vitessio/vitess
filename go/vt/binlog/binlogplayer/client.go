@@ -23,7 +23,6 @@ This file contains the API and registration mechanism for binlog player client.
 */
 
 var binlogPlayerProtocol = flag.String("binlog_player_protocol", "grpc", "the protocol to download binlogs from a vttablet")
-var binlogPlayerConnTimeout = flag.Duration("binlog_player_conn_timeout", 5*time.Second, "binlog player connection timeout")
 
 // ErrFunc is a return value for streaming events
 type ErrFunc func() error

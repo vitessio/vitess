@@ -376,6 +376,9 @@ class Tablet(object):
                  protocols_flavor().binlog_player_protocol()])
     args.extend(['-tablet_manager_protocol',
                  protocols_flavor().tablet_manager_protocol()])
+    args.extend(['-tablet_protocol', protocols_flavor().tabletconn_protocol()])
+    args.extend(['-binlog_player_healthcheck_topology_refresh', '1s'])
+    args.extend(['-binlog_player_retry_delay', '1s'])
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
     if self.use_mysqlctld:
       args.extend(
@@ -383,7 +386,7 @@ class Tablet(object):
 
     if full_mycnf_args:
       # this flag is used to specify all the mycnf_ flags, to make
-      # sure that code works and can fork actions.
+      # sure that code works.
       relay_log_path = os.path.join(self.tablet_dir, 'relay-logs',
                                     'vt-%010d-relay-bin' % self.tablet_uid)
       args.extend([
