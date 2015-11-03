@@ -17,9 +17,9 @@ class BasePEP0249Cursor(object):
     """For PEP 0249."""
     raise dbexceptions.NotSupportedError
 
-  def executemany(self, *pargs):
+  def executemany(self, sql, params_list):
     """For PEP 0249."""
-    _ = pargs
+    _ = sql, params_list
     raise dbexceptions.NotSupportedError
 
   def nextset(self):
