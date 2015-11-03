@@ -27,11 +27,11 @@ func (agent *ActionAgent) maybeRebuildKeyspace(cell, keyspace string) {
 		log.Infof("SrvKeyspace(%v,%v) doesn't exist, rebuilding it", cell, keyspace)
 		// SrvKeyspace doesn't exist, we'll try to rebuild it
 	default:
-		log.Warningf("Cannot read SrvKeyspace(%v,%v), skipping rebuild: %v", cell, keyspace, err)
+		log.Warningf("Cannot read SrvKeyspace(%v,%v) (may need to run 'vtctl RebuildKeyspaceGraph %v'), skipping rebuild: %v", cell, keyspace, keyspace, err)
 		return
 	}
 
 	if err := topotools.RebuildKeyspace(agent.batchCtx, logutil.NewConsoleLogger(), agent.TopoServer, keyspace, []string{cell}, false); err != nil {
-		log.Warningf("RebuildKeyspace(%v,%v) failed: %v", cell, keyspace, err)
+		log.Warningf("RebuildKeyspace(%v,%v) failed: %v, may need to run 'vtctl RebuildKeyspaceGraph %v')", cell, keyspace, err, keyspace)
 	}
 }

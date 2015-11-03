@@ -26,7 +26,7 @@ message Session {
 // ExecuteRequest is the payload to Execute.
 message ExecuteRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data. It is returned by Begin.
@@ -60,7 +60,7 @@ message ExecuteResponse {
 // ExecuteShardsRequest is the payload to ExecuteShards.
 message ExecuteShardsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data. It is returned by Begin.
@@ -100,7 +100,7 @@ message ExecuteShardsResponse {
 // ExecuteKeyspaceIdsRequest is the payload to ExecuteKeyspaceIds.
 message ExecuteKeyspaceIdsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data. It is returned by Begin.
@@ -141,7 +141,7 @@ message ExecuteKeyspaceIdsResponse {
 // ExecuteKeyRangesRequest is the payload to ExecuteKeyRanges.
 message ExecuteKeyRangesRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data. It is returned by Begin.
@@ -182,7 +182,7 @@ message ExecuteKeyRangesResponse {
 // ExecuteEntityIdsRequest is the payload to ExecuteEntityIds.
 message ExecuteEntityIdsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data. It is returned by Begin.
@@ -251,7 +251,7 @@ message BoundShardQuery {
 // ExecuteBatchShardsRequest is the payload to ExecuteBatchShards
 message ExecuteBatchShardsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data. It is returned by Begin.
@@ -300,7 +300,7 @@ message BoundKeyspaceIdQuery {
 // ExecuteBatchKeyspaceIdsRequest is the payload to ExecuteBatchKeyspaceId.
 message ExecuteBatchKeyspaceIdsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data. It is returned by Begin.
@@ -333,7 +333,7 @@ message ExecuteBatchKeyspaceIdsResponse {
 // StreamExecuteRequest is the payload to StreamExecute.
 message StreamExecuteRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // query is the query and bind variables to execute.
@@ -354,7 +354,7 @@ message StreamExecuteResponse {
 // StreamExecuteShardsRequest is the payload to StreamExecuteShards.
 message StreamExecuteShardsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // query is the query and bind variables to execute.
@@ -381,7 +381,7 @@ message StreamExecuteShardsResponse {
 // StreamExecuteKeyspaceIdsRequest is the payload to StreamExecuteKeyspaceIds.
 message StreamExecuteKeyspaceIdsRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // query is the query and bind variables to execute.
@@ -409,7 +409,7 @@ message StreamExecuteKeyspaceIdsResponse {
 // StreamExecuteKeyRangesRequest is the payload to StreamExecuteKeyRanges.
 message StreamExecuteKeyRangesRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // query is the query and bind variables to execute.
@@ -437,7 +437,7 @@ message StreamExecuteKeyRangesResponse {
 // BeginRequest is the payload to Begin.
 message BeginRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 }
 
@@ -450,7 +450,7 @@ message BeginResponse {
 // CommitRequest is the payload to Commit.
 message CommitRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data to commit.
@@ -464,7 +464,7 @@ message CommitResponse {
 // RollbackRequest is the payload to Rollback.
 message RollbackRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // session carries the current transaction data to rollback.
@@ -478,7 +478,7 @@ message RollbackResponse {
 // SplitQueryRequest is the payload to SplitQuery.
 message SplitQueryRequest {
   // caller_id identifies the caller. This is the effective caller ID,
-  // set by the application to further identifies the caller.
+  // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
   // keyspace to target the query to.

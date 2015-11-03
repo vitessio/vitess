@@ -97,7 +97,7 @@ func (m *Session_ShardSession) GetTarget() *query.Target {
 // ExecuteRequest is the payload to Execute.
 type ExecuteRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
@@ -175,7 +175,7 @@ func (m *ExecuteResponse) GetResult() *query.QueryResult {
 // ExecuteShardsRequest is the payload to ExecuteShards.
 type ExecuteShardsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
@@ -257,7 +257,7 @@ func (m *ExecuteShardsResponse) GetResult() *query.QueryResult {
 // ExecuteKeyspaceIdsRequest is the payload to ExecuteKeyspaceIds.
 type ExecuteKeyspaceIdsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
@@ -340,7 +340,7 @@ func (m *ExecuteKeyspaceIdsResponse) GetResult() *query.QueryResult {
 // ExecuteKeyRangesRequest is the payload to ExecuteKeyRanges.
 type ExecuteKeyRangesRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
@@ -430,7 +430,7 @@ func (m *ExecuteKeyRangesResponse) GetResult() *query.QueryResult {
 // ExecuteEntityIdsRequest is the payload to ExecuteEntityIds.
 type ExecuteEntityIdsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
@@ -558,7 +558,7 @@ func (m *BoundShardQuery) GetQuery() *query.BoundQuery {
 // ExecuteBatchShardsRequest is the payload to ExecuteBatchShards
 type ExecuteBatchShardsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
@@ -660,7 +660,7 @@ func (m *BoundKeyspaceIdQuery) GetQuery() *query.BoundQuery {
 // ExecuteBatchKeyspaceIdsRequest is the payload to ExecuteBatchKeyspaceId.
 type ExecuteBatchKeyspaceIdsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
@@ -737,7 +737,7 @@ func (m *ExecuteBatchKeyspaceIdsResponse) GetResults() []*query.QueryResult {
 // StreamExecuteRequest is the payload to StreamExecute.
 type StreamExecuteRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
 	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
@@ -785,7 +785,7 @@ func (m *StreamExecuteResponse) GetResult() *query.QueryResult {
 // StreamExecuteShardsRequest is the payload to StreamExecuteShards.
 type StreamExecuteShardsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
 	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
@@ -837,7 +837,7 @@ func (m *StreamExecuteShardsResponse) GetResult() *query.QueryResult {
 // StreamExecuteKeyspaceIdsRequest is the payload to StreamExecuteKeyspaceIds.
 type StreamExecuteKeyspaceIdsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
 	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
@@ -890,7 +890,7 @@ func (m *StreamExecuteKeyspaceIdsResponse) GetResult() *query.QueryResult {
 // StreamExecuteKeyRangesRequest is the payload to StreamExecuteKeyRanges.
 type StreamExecuteKeyRangesRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
 	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
@@ -950,7 +950,7 @@ func (m *StreamExecuteKeyRangesResponse) GetResult() *query.QueryResult {
 // BeginRequest is the payload to Begin.
 type BeginRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 }
 
@@ -985,7 +985,7 @@ func (m *BeginResponse) GetSession() *Session {
 // CommitRequest is the payload to Commit.
 type CommitRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// session carries the current transaction data to commit.
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
@@ -1020,7 +1020,7 @@ func (*CommitResponse) ProtoMessage()    {}
 // RollbackRequest is the payload to Rollback.
 type RollbackRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// session carries the current transaction data to rollback.
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
@@ -1055,7 +1055,7 @@ func (*RollbackResponse) ProtoMessage()    {}
 // SplitQueryRequest is the payload to SplitQuery.
 type SplitQueryRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
-	// set by the application to further identifies the caller.
+	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
