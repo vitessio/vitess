@@ -227,14 +227,16 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	vsdw.SetState(WorkerStateSyncReplication)
 
-	masterInfo, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.shardInfo.MasterAlias)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	masterInfo, err := vsdw.wr.TopoServer().GetTablet(shortCtx, vsdw.shardInfo.MasterAlias)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
 
 	// 1 - stop the master binlog replication, get its current position
 	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias))
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(shortCtx, masterInfo)
 	cancel()
 	if err != nil {
@@ -256,7 +258,9 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 
 	// stop replication
 	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", topoproto.TabletAliasString(vsdw.sourceAlias), pos.Position)
-	sourceTablet, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.sourceAlias)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	sourceTablet, err := vsdw.wr.TopoServer().GetTablet(shortCtx, vsdw.sourceAlias)
+	cancel()
 	if err != nil {
 		return err
 	}
@@ -291,7 +295,9 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	// 4 - wait until the destination tablet is equal or passed
 	//     that master binlog position, and stop its replication.
 	vsdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", topoproto.TabletAliasString(vsdw.destinationAlias), masterPos)
-	destinationTablet, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.destinationAlias)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	destinationTablet, err := vsdw.wr.TopoServer().GetTablet(shortCtx, vsdw.destinationAlias)
+	cancel()
 	if err != nil {
 		return err
 	}

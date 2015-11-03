@@ -111,7 +111,9 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 }
 
 func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]string, error) {
-	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +126,9 @@ func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) 
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			osList, err := topotools.FindOverlappingShards(ctx, wr.TopoServer(), keyspace)
+			shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+			osList, err := topotools.FindOverlappingShards(shortCtx, wr.TopoServer(), keyspace)
+			cancel()
 			if err != nil {
 				rec.RecordError(err)
 				return

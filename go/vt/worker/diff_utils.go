@@ -36,7 +36,9 @@ type QueryResultReader struct {
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
 // the provided tablet / sql query
 func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, sql string) (*QueryResultReader, error) {
-	tablet, err := ts.GetTablet(ctx, tabletAlias)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	tablet, err := ts.GetTablet(shortCtx, tabletAlias)
+	cancel()
 	if err != nil {
 		return nil, err
 	}

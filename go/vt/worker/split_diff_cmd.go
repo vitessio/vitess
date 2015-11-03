@@ -80,7 +80,9 @@ func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSe
 // shardsWithSources returns all the shards that have SourceShards set
 // with no Tables list.
 func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]string, error) {
-	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +95,9 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			shards, err := wr.TopoServer().GetShardNames(ctx, keyspace)
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+			shards, err := wr.TopoServer().GetShardNames(shortCtx, keyspace)
+			cancel()
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -102,7 +106,9 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 				wg.Add(1)
 				go func(keyspace, shard string) {
 					defer wg.Done()
-					si, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
+					shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+					si, err := wr.TopoServer().GetShard(shortCtx, keyspace, shard)
+					cancel()
 					if err != nil {
 						rec.RecordError(err)
 						return
