@@ -740,6 +740,10 @@ primary key (name)
     # see it flow through still
     utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/80-c0',
                      shard_2_replica1.tablet_alias])
+    # update our test variables to point at the new master
+    global shard_2_master, shard_2_replica1
+    shard_2_master, shard_2_replica1 = shard_2_replica1, shard_2_master
+
     logging.debug('Inserting lots of data on source shard after reparenting')
     self._insert_lots(3000, base=2000)
     logging.debug('Checking 80 percent of data was sent fairly quickly')
