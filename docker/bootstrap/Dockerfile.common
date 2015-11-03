@@ -62,9 +62,9 @@ ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
-ENV CGO_CFLAGS -I$VTROOT/dist/vt-zookeeper-3.3.5/include/c-client-src
-ENV CGO_LDFLAGS -L$VTROOT/dist/vt-zookeeper-3.3.5/lib
-ENV LD_LIBRARY_PATH $VTROOT/dist/vt-zookeeper-3.3.5/lib
+ENV CGO_CFLAGS -I$VTROOT/dist/vt-zookeeper-3.4.6/include/zookeeper
+ENV CGO_LDFLAGS -L$VTROOT/dist/vt-zookeeper-3.4.6/lib
+ENV LD_LIBRARY_PATH $VTROOT/dist/vt-zookeeper-3.4.6/lib
 
 # Copy files needed for bootstrap
 COPY bootstrap.sh dev.env /vt/src/github.com/youtube/vitess/

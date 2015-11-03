@@ -47,9 +47,9 @@ cache:
   - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
   - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
   - $HOME/gopath/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages
-  - $HOME/gopath/dist/vt-zookeeper-3.3.5/.build_finished
-  - $HOME/gopath/dist/vt-zookeeper-3.3.5/include
-  - $HOME/gopath/dist/vt-zookeeper-3.3.5/lib
+  - $HOME/gopath/dist/vt-zookeeper-3.4.6/.build_finished
+  - $HOME/gopath/dist/vt-zookeeper-3.4.6/include
+  - $HOME/gopath/dist/vt-zookeeper-3.4.6/lib
   # Maven repository for Java dependencies.
   - $HOME/.m2
   - $HOME/.phpenv
