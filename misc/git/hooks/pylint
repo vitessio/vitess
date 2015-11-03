@@ -19,7 +19,7 @@ PYLINT=/usr/bin/gpylint
 PYARGS="--mode style --disable g-bad-file-header"
 
 # This script does not handle file names that contain spaces.
-pyfiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.*\.py$')
+pyfiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.*\.py$' | grep -v '^py/vtproto/')
 if [ -z "$pyfiles" ] ; then
   msg "No python files changed."
   exit 0
