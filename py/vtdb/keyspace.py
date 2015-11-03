@@ -2,9 +2,10 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+"""A Vitess keyspace represents a sharded MySQL database."""
+
 import struct
 
-from vtdb import dbexceptions
 from vtdb import keyrange_constants
 
 
@@ -51,11 +52,15 @@ class Keyspace(object):
 
     WARNING: this only works for KIT_UINT64 keyspace ids.
 
+    Args:
+      keyspace_id: A uint64 keyspace_id.
+      db_type: Str tablet type (master, rdonly, or replica).
+
     Returns:
       Shard name.
 
     Raises:
-      ValueError on invalid keyspace_id.
+      ValueError: On invalid keyspace_id.
     """
     if not keyspace_id:
       raise ValueError('keyspace_id is not set')
