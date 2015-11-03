@@ -59,6 +59,11 @@ before_cache:
   # Delete this file because it keeps changing (having the latest timestamp of an update)
   # and triggers a lengthy update of the cache (~19 seconds).
   - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/resolver-status.properties
+  # Don't cache unnecessary PHP files.
+  - rm $HOME/.phpenv/versions/*/sbin/*
+  - rm $HOME/.phpenv/versions/*/bin/php-cgi
+  - find $HOME/.phpenv/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf
+  - find $HOME/.phpenv/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
 env:
   global:
     - MYSQL_FLAVOR=MariaDB
