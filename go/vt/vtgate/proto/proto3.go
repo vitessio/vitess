@@ -83,11 +83,7 @@ func ProtoToEntityIds(l []*pb.ExecuteEntityIdsRequest_EntityId) []EntityId {
 	result := make([]EntityId, len(l))
 	for i, e := range l {
 		result[i].KeyspaceID = key.KeyspaceId(e.KeyspaceId)
-		bv := &pbq.BindVariable{
-			Type:  e.XidType,
-			Value: e.XidValue,
-		}
-		v, err := tproto.BindVariableToNative(bv)
+		v, err := tproto.SQLToNative(e.XidType, e.XidValue)
 		if err != nil {
 			panic(err)
 		}
