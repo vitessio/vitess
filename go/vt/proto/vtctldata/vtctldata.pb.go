@@ -29,7 +29,6 @@ var _ = math.Inf
 type ExecuteVtctlCommandRequest struct {
 	Args          []string `protobuf:"bytes,1,rep,name=args" json:"args,omitempty"`
 	ActionTimeout int64    `protobuf:"varint,2,opt,name=action_timeout" json:"action_timeout,omitempty"`
-	LockTimeout   int64    `protobuf:"varint,3,opt,name=lock_timeout" json:"lock_timeout,omitempty"`
 }
 
 func (m *ExecuteVtctlCommandRequest) Reset()         { *m = ExecuteVtctlCommandRequest{} }
