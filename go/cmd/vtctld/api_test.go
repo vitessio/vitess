@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -66,7 +65,7 @@ func TestAPI(t *testing.T) {
 		KeyRange: &pb.KeyRange{Start: nil, End: []byte{0x80}},
 		PortMap:  map[string]int32{"vt": 200},
 	})
-	topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), ts, "ks1", "-80", cells, 10*time.Second)
+	topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), ts, "ks1", "-80", cells)
 
 	// Populate fake actions.
 	actionRepo.RegisterKeyspaceAction("TestKeyspaceAction",

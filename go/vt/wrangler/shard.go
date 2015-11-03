@@ -18,8 +18,6 @@ import (
 // shard related methods for Wrangler
 
 func (wr *Wrangler) lockShard(ctx context.Context, keyspace, shard string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
-	ctx, cancel := context.WithTimeout(ctx, wr.lockTimeout)
-	defer cancel()
 	return actionNode.LockShard(ctx, wr.ts, keyspace, shard)
 }
 

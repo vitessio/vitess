@@ -85,7 +85,7 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *p
 func TestVerticalSplitDiff(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wi := NewInstance(ts, "cell1", time.Second, time.Second)
+	wi := NewInstance(ts, "cell1", time.Second)
 	ctx := context.Background()
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
@@ -139,7 +139,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 	// We need to use FakeTabletManagerClient because we don't
 	// have a good way to fake the binlog player yet, which is
 	// necessary for synchronizing replication.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
 	excludedTable := "excludedTable1"
 	subFlags := flag.NewFlagSet("VerticalSplitDiff", flag.ContinueOnError)
 	gwrk, err := commandVerticalSplitDiff(wi, wr, subFlags, []string{

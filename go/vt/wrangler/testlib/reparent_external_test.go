@@ -33,7 +33,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
@@ -171,7 +171,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master, a new master, two good slaves, one bad slave
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
@@ -220,7 +220,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master, a new master, two good slaves, one bad slave
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
@@ -263,7 +263,7 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master, a new master, and a good slave.
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)

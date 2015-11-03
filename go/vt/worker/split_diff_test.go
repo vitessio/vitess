@@ -150,7 +150,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pb.Targ
 func TestSplitDiff(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wi := NewInstance(ts, "cell1", time.Second, time.Second)
+	wi := NewInstance(ts, "cell1", time.Second)
 	ctx := context.Background()
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
@@ -195,7 +195,7 @@ func TestSplitDiff(t *testing.T) {
 	// We need to use FakeTabletManagerClient because we don't
 	// have a good way to fake the binlog player yet, which is
 	// necessary for synchronizing replication.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
 	excludedTable := "excludedTable1"
 	gwrk, err := commandSplitDiff(wi, wr, subFlags, []string{
 		"-exclude_tables", excludedTable,

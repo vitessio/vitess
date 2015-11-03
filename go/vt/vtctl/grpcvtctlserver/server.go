@@ -10,7 +10,6 @@ package grpcvtctlserver
 
 import (
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 
@@ -60,7 +59,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 	}()
 
 	// create the wrangler
-	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient(), time.Duration(args.LockTimeout))
+	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient())
 
 	// execute the command
 	err = vtctl.RunCommand(stream.Context(), wr, args.Args)

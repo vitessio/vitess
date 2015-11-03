@@ -7,7 +7,6 @@ package testlib
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -25,7 +24,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
 	if err := ts.CreateShard(ctx, "test_keyspace", "0"); err != nil {
@@ -94,7 +93,7 @@ func TestReparentTablet(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
 	if err := ts.CreateShard(ctx, "test_keyspace", "0"); err != nil {

@@ -45,12 +45,11 @@ type Instance struct {
 
 	topoServer             topo.Server
 	cell                   string
-	lockTimeout            time.Duration
 	commandDisplayInterval time.Duration
 }
 
 // NewInstance creates a new Instance.
-func NewInstance(ts topo.Server, cell string, lockTimeout, commandDisplayInterval time.Duration) *Instance {
+func NewInstance(ts topo.Server, cell string, commandDisplayInterval time.Duration) *Instance {
 	wi := &Instance{topoServer: ts, cell: cell, commandDisplayInterval: commandDisplayInterval}
 	// Note: setAndStartWorker() also adds a MemoryLogger for the webserver.
 	wi.wr = wi.CreateWrangler(logutil.NewConsoleLogger())
@@ -59,7 +58,7 @@ func NewInstance(ts topo.Server, cell string, lockTimeout, commandDisplayInterva
 
 // CreateWrangler creates a new wrangler using the instance specific configuration.
 func (wi *Instance) CreateWrangler(logger logutil.Logger) *wrangler.Wrangler {
-	return wrangler.New(logger, wi.topoServer, tmclient.NewTabletManagerClient(), wi.lockTimeout)
+	return wrangler.New(logger, wi.topoServer, tmclient.NewTabletManagerClient())
 }
 
 // setAndStartWorker will set the current worker.

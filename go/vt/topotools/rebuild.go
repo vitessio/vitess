@@ -7,7 +7,6 @@ package topotools
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -25,7 +24,7 @@ import (
 //
 // This function will start each cell over from the beginning on ErrBadVersion,
 // so it doesn't need a lock on the shard.
-func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, lockTimeout time.Duration) (*topo.ShardInfo, error) {
+func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string) (*topo.ShardInfo, error) {
 	log.Infof("RebuildShard %v/%v", keyspace, shard)
 
 	span := trace.NewSpanFromContext(ctx)

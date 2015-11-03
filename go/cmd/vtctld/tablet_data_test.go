@@ -80,7 +80,7 @@ func (s *streamHealthTabletServer) BroadcastHealth(terTimestamp int64, stats *pb
 func TestTabletData(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
 		ShardingColumnName: "keyspace_id",

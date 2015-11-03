@@ -73,7 +73,6 @@ type ActionAgent struct {
 	DBConfigs           dbconfigs.DBConfigs
 	SchemaOverrides     []tabletserver.SchemaOverride
 	BinlogPlayerMap     *BinlogPlayerMap
-	LockTimeout         time.Duration
 
 	// exportStats is set only for production tablet.
 	exportStats bool
@@ -158,7 +157,6 @@ func NewActionAgent(
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
 	overridesFile string,
-	lockTimeout time.Duration,
 ) (agent *ActionAgent, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
@@ -173,7 +171,6 @@ func NewActionAgent(
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		SchemaOverrides:     schemaOverrides,
-		LockTimeout:         lockTimeout,
 		History:             history.New(historyLength),
 		lastHealthMapCount:  stats.NewInt("LastHealthMapCount"),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
