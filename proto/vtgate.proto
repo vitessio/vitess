@@ -264,7 +264,9 @@ message ExecuteBatchShardsRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 4;
 
-  // as_transaction will make all the requests inside its own transaction.
+  // as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose.
+  // (this can be seen as adding a 'begin' before and 'commit' after the queries).
+  // Only makes sense if tablet_type is master. If set, the Session is ignored.
   bool as_transaction = 5;
 }
 
@@ -312,7 +314,9 @@ message ExecuteBatchKeyspaceIdsRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 4;
 
-  // as_transaction will make all the requests inside its own transaction.
+  // as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose.
+  // (this can be seen as adding a 'begin' before and 'commit' after the queries).
+  // Only makes sense if tablet_type is master. If set, the Session is ignored.
   bool as_transaction = 5;
 }
 

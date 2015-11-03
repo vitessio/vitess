@@ -567,7 +567,9 @@ type ExecuteBatchShardsRequest struct {
 	Queries []*BoundShardQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
 	TabletType topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	// as_transaction will make all the requests inside its own transaction.
+	// as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose.
+	// (this can be seen as adding a 'begin' before and 'commit' after the queries).
+	// Only makes sense if tablet_type is master. If set, the Session is ignored.
 	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction" json:"as_transaction,omitempty"`
 }
 
@@ -668,7 +670,9 @@ type ExecuteBatchKeyspaceIdsRequest struct {
 	Queries []*BoundKeyspaceIdQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
 	TabletType topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	// as_transaction will make all the requests inside its own transaction.
+	// as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose.
+	// (this can be seen as adding a 'begin' before and 'commit' after the queries).
+	// Only makes sense if tablet_type is master. If set, the Session is ignored.
 	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction" json:"as_transaction,omitempty"`
 }
 
