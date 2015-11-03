@@ -523,11 +523,16 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		return err
 	}
 
-	// and update our state
+	// update our state
 	oldTablet := &pb.Tablet{}
 	if err = agent.updateState(ctx, oldTablet, "Start"); err != nil {
 		log.Warningf("Initial updateState failed, will need a state change before running properly: %v", err)
 	}
+
+	// run a background task to rebuild the SrvKeyspace in our cell/keyspace
+	// if it doesn't exist yet
+	go agent.maybeRebuildKeyspace(tablet.Alias.Cell, tablet.Keyspace)
+
 	return nil
 }
 

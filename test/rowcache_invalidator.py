@@ -42,7 +42,6 @@ def setUpModule():
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
     master_tablet.init_tablet('master', 'test_keyspace', '0')
     replica_tablet.init_tablet('replica', 'test_keyspace', '0')
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
     utils.validate_topology()
 
     master_tablet.populate('vt_test_keyspace', create_vt_insert_test)
@@ -139,10 +138,10 @@ class RowCacheInvalidator(unittest.TestCase):
   def test_cache_invalidation(self):
     self._wait_for_replica()
     invalidations = self.replica_stats()['Totals']['Invalidations']
-    invalidatorStats = self.replica_vars()
+    invalidator_stats = self.replica_vars()
     logging.debug(
         'Invalidations %d InvalidatorStats %s',
-        invalidations, invalidatorStats['RowcacheInvalidatorPosition'])
+        invalidations, invalidator_stats['RowcacheInvalidatorPosition'])
     self.assertTrue(
         invalidations > 0, 'Invalidations are not flowing through.')
 
@@ -150,19 +149,19 @@ class RowCacheInvalidator(unittest.TestCase):
                                 'select min(id) from vt_insert_test')
     self.assertNotEqual(res[0][0], None,
                         'Cannot proceed, no rows in vt_insert_test')
-    id = int(res[0][0])
+    mid = int(res[0][0])
     stats_dict = self.replica_stats()['vt_insert_test']
     logging.debug('vt_insert_test stats %s', stats_dict)
     misses = stats_dict['Misses']
     hits = stats_dict['Hits']
     replica_tablet.execute('select * from vt_insert_test where id=:id',
-                           bindvars={'id': id})
+                           bindvars={'id': mid})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1,
                      "This shouldn't have hit the cache")
 
     replica_tablet.execute('select * from vt_insert_test where id=:id',
-                           bindvars={'id': id})
+                           bindvars={'id': mid})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Hits'] - hits, 1,
                      'This should have hit the cache')
@@ -267,10 +266,10 @@ class RowCacheInvalidator(unittest.TestCase):
                                 (inv_count2, 200), timeout, sleep_time=0.1)
 
     # check and display some stats
-    invalidatorStats = self.replica_vars()
-    logging.debug('invalidatorStats %s',
-                  invalidatorStats['RowcacheInvalidatorPosition'])
-    self.assertEqual(invalidatorStats['RowcacheInvalidatorState'], 'Running',
+    invalidator_stats = self.replica_vars()
+    logging.debug('invalidator_stats %s',
+                  invalidator_stats['RowcacheInvalidatorPosition'])
+    self.assertEqual(invalidator_stats['RowcacheInvalidatorState'], 'Running',
                      'Row-cache invalidator should be enabled')
 
   def test_cache_hit(self):

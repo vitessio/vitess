@@ -77,13 +77,11 @@ class TestSharded(unittest.TestCase):
                      '--sharding_column_name', 'keyspace_id',
                      '--sharding_column_type', 'uint64',
                      'test_keyspace'])
-    
+
     shard_0_master.init_tablet('master', 'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
     shard_1_master.init_tablet('master', 'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
-
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # run checks now before we start the tablets
     utils.validate_topology()
@@ -152,8 +150,8 @@ class TestSharded(unittest.TestCase):
     # we created the schema differently, so it should show
     utils.run_vtctl(['ValidateSchemaShard', 'test_keyspace/-80'])
     utils.run_vtctl(['ValidateSchemaShard', 'test_keyspace/80-'])
-    out, err = utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'],
-                               trap_output=True, raise_on_error=False)
+    _, err = utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'],
+                             trap_output=True, raise_on_error=False)
     if ('test_nj-0000062344 and test_nj-0000062346 disagree on schema '
         'for table vt_select_test:\nCREATE TABLE' not in err or
         'test_nj-0000062344 and test_nj-0000062347 disagree on schema '
