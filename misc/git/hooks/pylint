@@ -2,6 +2,9 @@
 # Copyright 2012 The Go Authors, All rights reserved.
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
+#
+# This file is based on the Go linter precommit hook
+# "golint". Therefore, both files are very similar.
 
 # misc/git/hooks/pylint
 #
@@ -30,7 +33,7 @@ fi
 
 errors=
 
-# Run on one file at a time because a single invocation of golint
+# Run on one file at a time because a single invocation of $PYLINT
 # with multiple files requires the files to all be in one package.
 pyfiles_with_warnings=()
 for pyfile in $pyfiles
