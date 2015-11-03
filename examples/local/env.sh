@@ -16,7 +16,7 @@ zkids='1 2 3'
 
 # Set up environment.
 export VTTOP=$VTROOT/src/github.com/youtube/vitess
-export LD_LIBRARY_PATH=$VTROOT/dist/vt-zookeeper-3.3.5/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$VTROOT/dist/vt-zookeeper-3.4.6/lib:$LD_LIBRARY_PATH
 
 # Try to find mysqld_safe on PATH.
 if [ -z "$VT_MYSQL_ROOT" ]; then
