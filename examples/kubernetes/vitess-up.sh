@@ -118,7 +118,7 @@ wait_for_running_tasks vtgate $vtgate_count
 echo Creating firewall rule for vtctld...
 vtctld_port=30001
 gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtctld --allow tcp:$vtctld_port
-vtctld_ip=`kubectl get -o yaml nodes | grep 'type: ExternalIP' -B 1 | head -1 | awk '{print $NF}'`
+vtctld_ip=`$KUBECTL get -o yaml nodes | grep 'type: ExternalIP' -B 1 | head -1 | awk '{print $NF}'`
 vtctl_server="$vtctld_ip:$vtctld_port"
 kvtctl="$GOPATH/bin/vtctlclient -server $vtctl_server"
 

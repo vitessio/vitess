@@ -2,4 +2,4 @@
 FROM debian:jessie
 
 # Copy binaries (placed by build.sh)
-COPY base/etcd base/etcdctl /usr/bin/
+COPY base/* /usr/bin/

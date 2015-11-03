@@ -13,6 +13,12 @@ spec:
       containers:
         - name: vtctld
           image: vitess/lite
+          livenessProbe:
+            httpGet:
+              path: /debug/vars
+              port: 15000
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
           volumeMounts:
             - name: syslog
               mountPath: /dev/log
@@ -40,12 +46,12 @@ spec:
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
               -port 15000
-              -grpc_port 15001
+              -grpc_port 15999
               -service_map 'grpc-vtctl'
               -topo_implementation etcd
               -tablet_protocol grpc
               -tablet_manager_protocol grpc
-              -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
+              -etcd_global_addrs http://etcd-global:4001
               {{backup_flags}}" vitess
       volumes:
         - name: syslog

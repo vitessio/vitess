@@ -35,20 +35,6 @@ else
 	curl -sS https://getcomposer.org/installer | php -- --install-dir=$HOME/.phpenv/bin/ --filename=composer
 fi
 
-if [ -f $HOME/.phpenv/lib/mongo.so ]; then
-	echo "Using cached mongo.so"
-else
-	mkdir -p $HOME/mongo
-	git clone https://github.com/mongodb/mongo-php-driver.git $HOME/mongo
-	cd $HOME/mongo
-	phpize
-	./configure
-	make
-	mkdir -p $HOME/.phpenv/lib
-	mv modules/mongo.so $HOME/.phpenv/lib/
-	echo "extension=$HOME/.phpenv/lib/mongo.so" > ~/.phpenv/versions/$version/etc/conf.d/mongo.ini
-fi
-
 if [ ! -f $HOME/.phpenv/lib/grpc.so ]; then
 	echo "Forcing rebuild of gRPC so we can build PHP extension"
 	rm -rf $HOME/gopath/dist

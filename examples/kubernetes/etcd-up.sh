@@ -19,10 +19,6 @@ CELLS=${CELLS:-'test'}
 cells=`echo $CELLS | tr ',' ' '`
 
 for cell in 'global' $cells; do
-  # Generate a discovery token.
-  echo "Generating discovery token for $cell cell..."
-  discovery=$(curl -sL https://discovery.etcd.io/new?size=$replicas)
-
   # Create the client service, which will load-balance across all replicas.
   echo "Creating etcd service for $cell cell..."
   cat etcd-service-template.yaml | \
@@ -31,7 +27,7 @@ for cell in 'global' $cells; do
 
   # Expand template variables
   sed_script=""
-  for var in cell discovery replicas; do
+  for var in cell replicas; do
     sed_script+="s,{{$var}},${!var},g;"
   done
 

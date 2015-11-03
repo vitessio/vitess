@@ -43,7 +43,7 @@ spec:
 
           su -p -s /bin/bash -c "/vt/bin/vttablet
           -topo_implementation etcd
-          -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
+          -etcd_global_addrs http://etcd-global:4001
           -log_dir $VTDATAROOT/tmp
           -alsologtostderr
           -port {{port}}
@@ -112,10 +112,10 @@ spec:
           -db-config-filtered-uname vt_filtered
           -db-config-filtered-dbname vt_{{keyspace}}
           -db-config-filtered-charset utf8
-          -bootstrap_archive mysql-db-dir_10.0.13-MariaDB.tbz" vitess
+          -bootstrap_archive mysql-db-dir_5.6.24.tbz" vitess
       env:
         - name: EXTRA_MY_CNF
-          value: /vt/config/mycnf/benchmark.cnf:/vt/config/mycnf/master_mariadb.cnf
+          value: /vt/config/mycnf/benchmark.cnf:/vt/config/mycnf/master_mysql56.cnf
   volumes:
     - name: syslog
       hostPath: {path: /dev/log}
