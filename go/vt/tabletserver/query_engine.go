@@ -182,9 +182,20 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 	}
 	qe.strictTableAcl = config.StrictTableAcl
 	qe.enableTableAclDryRun = config.EnableTableAclDryRun
-	if exemptACL, err := tableacl.GetCurrentAclFactory().New([]string{config.TableAclExemptACL}); err != nil {
-		qe.exemptACL = exemptACL
+
+	if config.TableAclExemptACL != "" {
+		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
+			if exemptACL, err := f.New([]string{config.TableAclExemptACL}); err == nil {
+				log.Infof("Setting Table ACL exempt rule for %v", config.TableAclExemptACL)
+				qe.exemptACL = exemptACL
+			} else {
+				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
+			}
+		} else {
+			log.Infof("Cannot get current ACL Factory: %v", err)
+		}
 	}
+
 	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.MaxResultSize))
 	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))

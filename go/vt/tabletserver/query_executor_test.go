@@ -768,7 +768,10 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
-	tsv.qe.exemptACL = username
+	f, _ := tableacl.GetCurrentAclFactory()
+	if tsv.qe.exemptACL, err = f.New([]string{username}); err != nil {
+		t.Fatalf("Cannot load exempt ACL for Table ACL: %v", err)
+	}
 	callerID = &querypb.VTGateCallerID{
 		Username: username,
 	}
