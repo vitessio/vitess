@@ -39,11 +39,10 @@ class GoRpcVtctlClient(vtctl_client.VtctlClient):
   def is_closed(self):
     return self.client.is_closed()
 
-  def execute_vtctl_command(self, args, action_timeout=30.0, lock_timeout=5.0):
+  def execute_vtctl_command(self, args, action_timeout=30.0):
     req = {
         'Args': args,
         'ActionTimeout': long(action_timeout * 1e9),
-        'LockTimeout': long(lock_timeout * 1e9),
     }
     self.client.stream_call('VtctlServer.ExecuteVtctlCommand', req)
     while True:

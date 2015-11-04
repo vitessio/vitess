@@ -34,11 +34,10 @@ func goRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclien
 // ExecuteVtctlCommand is part of the VtctlClient interface.
 // Note the bson rpc version doesn't honor timeouts in the context
 // (but the server side will honor the actionTimeout)
-func (client *goRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc, error) {
+func (client *goRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc, error) {
 	req := &gorpcproto.ExecuteVtctlCommandArgs{
 		Args:          args,
 		ActionTimeout: actionTimeout,
-		LockTimeout:   lockTimeout,
 	}
 	sr := make(chan *logutil.LoggerEvent, 10)
 	c := client.rpcClient.StreamGo("VtctlServer.ExecuteVtctlCommand", req, sr)

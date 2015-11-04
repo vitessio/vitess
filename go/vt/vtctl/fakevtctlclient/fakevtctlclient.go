@@ -31,7 +31,7 @@ func (f *FakeVtctlClient) FakeVtctlClientFactory(addr string, dialTimeout time.D
 }
 
 // ExecuteVtctlCommand is part of the vtctlclient interface.
-func (f *FakeVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc, error) {
+func (f *FakeVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc, error) {
 	return f.FakeLoggerEventStreamingClient.StreamResult(args)
 }
 

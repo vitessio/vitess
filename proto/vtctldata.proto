@@ -12,7 +12,6 @@ import "logutil.proto";
 message ExecuteVtctlCommandRequest {
   repeated string args = 1;
   int64 action_timeout = 2;
-  int64 lock_timeout = 3;
 }
 
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.

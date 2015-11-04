@@ -36,18 +36,20 @@ var (
 // minHealthyEndPoints servers to be healthy.
 // May block up to -wait_for_healthy_rdonly_endpoints_timeout.
 func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string) (*pb.TabletAlias, error) {
-	newCtx, cancel := context.WithTimeout(ctx, *WaitForHealthyEndPointsTimeout)
-	defer cancel()
+	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, *WaitForHealthyEndPointsTimeout)
+	defer busywaitCancel()
 
 	var healthyEndpoints []*pb.EndPoint
 	for {
 		select {
-		case <-newCtx.Done():
-			return nil, fmt.Errorf("Not enough endpoints to choose from in (%v,%v/%v), have %v healthy ones, need at least %v Context Error: %v", cell, keyspace, shard, len(healthyEndpoints), *minHealthyEndPoints, newCtx.Err())
+		case <-busywaitCtx.Done():
+			return nil, fmt.Errorf("Not enough endpoints to choose from in (%v,%v/%v), have %v healthy ones, need at least %v Context Error: %v", cell, keyspace, shard, len(healthyEndpoints), *minHealthyEndPoints, busywaitCtx.Err())
 		default:
 		}
 
-		endPoints, _, err := wr.TopoServer().GetEndPoints(newCtx, cell, keyspace, shard, pb.TabletType_RDONLY)
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		endPoints, _, err := wr.TopoServer().GetEndPoints(shortCtx, cell, keyspace, shard, pb.TabletType_RDONLY)
+		cancel()
 		if err != nil {
 			if err == topo.ErrNoNode {
 				// If the node doesn't exist, count that as 0 available rdonly instances.
@@ -63,12 +65,12 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 			}
 		}
 		if len(healthyEndpoints) < *minHealthyEndPoints {
-			deadlineForLog, _ := newCtx.Deadline()
+			deadlineForLog, _ := busywaitCtx.Deadline()
 			wr.Logger().Infof("Waiting for enough endpoints to become available. available: %v required: %v Waiting up to %.1f more seconds.", len(healthyEndpoints), *minHealthyEndPoints, deadlineForLog.Sub(time.Now()).Seconds())
 			// Block for 1 second because 2 seconds is the -health_check_interval flag value in integration tests.
 			timer := time.NewTimer(1 * time.Second)
 			select {
-			case <-newCtx.Done():
+			case <-busywaitCtx.Done():
 				timer.Stop()
 			case <-timer.C:
 			}
@@ -99,22 +101,25 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	// vttablet reloads the worker URL when it reloads the tablet.
 	ourURL := servenv.ListeningURL.String()
 	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, topoproto.TabletAliasString(tabletAlias))
-	if err := wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *pb.Tablet) error {
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	err = wr.TopoServer().UpdateTabletFields(shortCtx, tabletAlias, func(tablet *pb.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
 		}
 		tablet.Tags["worker"] = ourURL
 		return nil
-	}); err != nil {
+	})
+	cancel()
+	if err != nil {
 		return nil, err
 	}
-	// we remove the tag *before* calling ChangeSlaveType back, so
-	// we need to record this tag change after the change slave
-	// type change in the cleaner.
+	// Using "defer" here because we remove the tag *before* calling
+	// ChangeSlaveType back, so we need to record this tag change after the change
+	// slave type change in the cleaner.
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 
 	wr.Logger().Infof("Changing tablet %v to '%v'", topoproto.TabletAliasString(tabletAlias), pb.TabletType_WORKER)
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = wr.ChangeSlaveType(shortCtx, tabletAlias, pb.TabletType_WORKER)
 	cancel()
 	if err != nil {

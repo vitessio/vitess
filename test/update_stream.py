@@ -79,8 +79,6 @@ def setUpModule():
     replica_tablet.create_db('vt_test_keyspace')
     replica_tablet.create_db('other_database')
 
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
-
     utils.VtGate().start()
 
     master_tablet.start_vttablet()
@@ -277,8 +275,6 @@ class TestUpdateStream(unittest.TestCase):
       )
     logging.debug('run_test_stream_parity starting @ %s',
                   master_start_position)
-    master_txn_count = 0
-    replica_txn_count = 0
     self._exec_vt_txn(self._populate_vt_a(15))
     self._exec_vt_txn(self._populate_vt_b(14))
     self._exec_vt_txn(['delete from vt_a'])
@@ -288,14 +284,12 @@ class TestUpdateStream(unittest.TestCase):
     for stream_event in master_conn.stream_update(master_start_position):
       master_events.append(stream_event)
       if stream_event.category == update_stream.StreamEvent.POS:
-        master_txn_count += 1
         break
     replica_events = []
     replica_conn = self._get_replica_stream_conn()
     for stream_event in replica_conn.stream_update(replica_start_position):
       replica_events.append(stream_event)
       if stream_event.category == update_stream.StreamEvent.POS:
-        replica_txn_count += 1
         break
     if len(master_events) != len(replica_events):
       logging.debug(
@@ -313,7 +307,6 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug('Test Writes: PASS')
 
   def test_ddl(self):
-    global master_start_position
     start_position = master_start_position
     logging.debug('test_ddl: starting @ %s', start_position)
     master_conn = self._get_master_stream_conn()

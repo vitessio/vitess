@@ -26,8 +26,6 @@ import (
 // keyspace related methods for Wrangler
 
 func (wr *Wrangler) lockKeyspace(ctx context.Context, keyspace string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
-	ctx, cancel := context.WithTimeout(ctx, wr.lockTimeout)
-	defer cancel()
 	return actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 }
 

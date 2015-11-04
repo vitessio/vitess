@@ -154,7 +154,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 
 	// Rebuild the SrvKeyspace objects, we we can support range-based
 	// sharding queries.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil, 30*time.Second /*lockTimeout*/)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
 	for keyspace := range keyspaceMap {
 		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, true); err != nil {
 			log.Fatalf("cannot rebuild %v: %v", keyspace, err)

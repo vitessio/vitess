@@ -279,7 +279,6 @@ index by_msg (msg)
 
     # rebuild destination keyspace to make sure there is a serving
     # graph entry, even though there is no tablet yet.
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'source_keyspace'], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'destination_keyspace'],
                     auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
@@ -291,7 +290,6 @@ index by_msg (msg)
     destination_rdonly1.init_tablet('rdonly', 'destination_keyspace', '0')
     destination_rdonly2.init_tablet('rdonly', 'destination_keyspace', '0')
 
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'source_keyspace'], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'destination_keyspace'],
                     auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'

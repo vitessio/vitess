@@ -17,8 +17,7 @@ import (
 type ExecuteVtctlCommandArgs struct {
 	Args []string
 
-	// Use wrangler.DefaultActionTimeout and actionnode.DefaultLockTimeout
-	// for decent default values here.
+	// ActionTimeout can be defaulted to wrangler.DefaultActionTimeout
+	// for a decent default value.
 	ActionTimeout time.Duration
-	LockTimeout   time.Duration
 }

@@ -7,7 +7,6 @@ package testlib
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -103,7 +102,7 @@ func TestCopySchemaShard_UseShardAsSource(t *testing.T) {
 func copySchema(t *testing.T, useShardAsSource bool) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 

@@ -7,7 +7,6 @@ package tabletmanager
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/stats"
@@ -43,7 +42,6 @@ func TestInitTablet(t *testing.T) {
 		DBConfigs:          dbconfigs.DBConfigs{},
 		SchemaOverrides:    nil,
 		BinlogPlayerMap:    nil,
-		LockTimeout:        10 * time.Second,
 		batchCtx:           ctx,
 		History:            history.New(historyLength),
 		lastHealthMapCount: new(stats.Int),

@@ -75,6 +75,15 @@ func (m *RunMysqlUpgradeResponse) Reset()         { *m = RunMysqlUpgradeResponse
 func (m *RunMysqlUpgradeResponse) String() string { return proto.CompactTextString(m) }
 func (*RunMysqlUpgradeResponse) ProtoMessage()    {}
 
+func init() {
+	proto.RegisterType((*StartRequest)(nil), "mysqlctl.StartRequest")
+	proto.RegisterType((*StartResponse)(nil), "mysqlctl.StartResponse")
+	proto.RegisterType((*ShutdownRequest)(nil), "mysqlctl.ShutdownRequest")
+	proto.RegisterType((*ShutdownResponse)(nil), "mysqlctl.ShutdownResponse")
+	proto.RegisterType((*RunMysqlUpgradeRequest)(nil), "mysqlctl.RunMysqlUpgradeRequest")
+	proto.RegisterType((*RunMysqlUpgradeResponse)(nil), "mysqlctl.RunMysqlUpgradeResponse")
+}
+
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
 var _ grpc.ClientConn

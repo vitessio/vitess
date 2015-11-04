@@ -33,18 +33,20 @@ mkdir -p $VTROOT/lib
 mkdir -p $VTROOT/vthook
 
 # install zookeeper
-zk_dist=$VTROOT/dist/vt-zookeeper-3.3.5
+zk_ver=3.4.6
+zk_dist=$VTROOT/dist/vt-zookeeper-$zk_ver
 if [ -f $zk_dist/.build_finished ]; then
   echo "skipping zookeeper build. remove $zk_dist to force rebuild."
 else
   rm -rf $zk_dist
-  (cd $VTTOP/third_party/zookeeper && \
-    tar -xjf zookeeper-3.3.5.tbz && \
+  (cd $VTROOT/dist && \
+    wget http://apache.cs.utah.edu/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
+    tar -xzf zookeeper-$zk_ver.tar.gz && \
     mkdir -p $zk_dist/lib && \
-    cp zookeeper-3.3.5/contrib/fatjar/zookeeper-3.3.5-fatjar.jar $zk_dist/lib && \
-    (cd zookeeper-3.3.5/src/c && \
+    cp zookeeper-$zk_ver/contrib/fatjar/zookeeper-$zk_ver-fatjar.jar $zk_dist/lib && \
+    (cd zookeeper-$zk_ver/src/c && \
     ./configure --prefix=$zk_dist && \
-    make -j3 install) && rm -rf zookeeper-3.3.5)
+    make install) && rm -rf zookeeper-$zk_ver zookeeper-$zk_ver.tar.gz)
   if [ $? -ne 0 ]; then
     echo "zookeeper build failed"
     exit 1

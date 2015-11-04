@@ -246,11 +246,12 @@ func (zkts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (
 		}
 		return nil, err
 	}
+	if len(data) == 0 {
+		return nil, topo.ErrNoNode
+	}
 	srvKeyspace := &pb.SrvKeyspace{}
-	if len(data) > 0 {
-		if err := json.Unmarshal([]byte(data), srvKeyspace); err != nil {
-			return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
-		}
+	if err := json.Unmarshal([]byte(data), srvKeyspace); err != nil {
+		return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
 	}
 	return srvKeyspace, nil
 }

@@ -4,8 +4,7 @@
 # Copyright 2015, Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
-"""
-This module allows you to bring up and tear down keyspaces.
+"""This module allows you to bring up and tear down keyspaces.
 """
 
 import os
@@ -16,9 +15,10 @@ import utils
 
 
 class TestEnv(object):
+  """Main class for this module."""
 
   def __init__(self):
-    self.tablet_map={}
+    self.tablet_map = {}
 
   def launch(
       self, keyspace, shards=None, replica_count=0, rdonly_count=0, ddls=None):
@@ -40,8 +40,6 @@ class TestEnv(object):
         procs.append(self._start_tablet(keyspace, shard, 'rdonly', i))
       utils.wait_procs(procs)
 
-    utils.run_vtctl(['RebuildKeyspaceGraph', keyspace], auto_log=True)
-
     for t in self.tablets:
       t.create_db('vt_' + keyspace)
       t.start_vttablet(
@@ -56,8 +54,6 @@ class TestEnv(object):
                          t.tablet_alias], auto_log=True)
         # Force read-write even if there are no replicas.
         utils.run_vtctl(['SetReadWrite', t.tablet_alias], auto_log=True)
-
-    utils.run_vtctl(['RebuildKeyspaceGraph', keyspace], auto_log=True)
 
     for ddl in ddls:
       fname = os.path.join(environment.tmproot, 'ddl.sql')

@@ -155,11 +155,15 @@ func (sdw *SplitDiffWorker) init(ctx context.Context) error {
 	sdw.SetState(WorkerStateInit)
 
 	var err error
-	sdw.keyspaceInfo, err = sdw.wr.TopoServer().GetKeyspace(ctx, sdw.keyspace)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	sdw.keyspaceInfo, err = sdw.wr.TopoServer().GetKeyspace(shortCtx, sdw.keyspace)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", sdw.keyspace, err)
 	}
-	sdw.shardInfo, err = sdw.wr.TopoServer().GetShard(ctx, sdw.keyspace, sdw.shard)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	sdw.shardInfo, err = sdw.wr.TopoServer().GetShard(shortCtx, sdw.keyspace, sdw.shard)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot read shard %v/%v: %v", sdw.keyspace, sdw.shard, err)
 	}
@@ -221,14 +225,16 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	sdw.SetState(WorkerStateSyncReplication)
 
-	masterInfo, err := sdw.wr.TopoServer().GetTablet(ctx, sdw.shardInfo.MasterAlias)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	masterInfo, err := sdw.wr.TopoServer().GetTablet(shortCtx, sdw.shardInfo.MasterAlias)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", sdw.shardInfo.MasterAlias, err)
 	}
 
 	// 1 - stop the master binlog replication, get its current position
 	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(shortCtx, masterInfo)
 	cancel()
 	if err != nil {
@@ -249,14 +255,16 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		}
 
 		// read the tablet
-		sourceTablet, err := sdw.wr.TopoServer().GetTablet(ctx, sdw.sourceAliases[i])
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		sourceTablet, err := sdw.wr.TopoServer().GetTablet(shortCtx, sdw.sourceAliases[i])
+		cancel()
 		if err != nil {
 			return err
 		}
 
 		// stop replication
 		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
-		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, blpPos.Position, *remoteActionsTimeout)
 		cancel()
 		if err != nil {
@@ -288,7 +296,9 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	// 4 - wait until the destination tablet is equal or passed
 	//     that master binlog position, and stop its replication.
 	sdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", sdw.destinationAlias, masterPos)
-	destinationTablet, err := sdw.wr.TopoServer().GetTablet(ctx, sdw.destinationAlias)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	destinationTablet, err := sdw.wr.TopoServer().GetTablet(shortCtx, sdw.destinationAlias)
+	cancel()
 	if err != nil {
 		return err
 	}

@@ -48,3 +48,8 @@ func (m *ExecuteVtworkerCommandResponse) GetEvent() *logutil.Event {
 	}
 	return nil
 }
+
+func init() {
+	proto.RegisterType((*ExecuteVtworkerCommandRequest)(nil), "vtworkerdata.ExecuteVtworkerCommandRequest")
+	proto.RegisterType((*ExecuteVtworkerCommandResponse)(nil), "vtworkerdata.ExecuteVtworkerCommandResponse")
+}

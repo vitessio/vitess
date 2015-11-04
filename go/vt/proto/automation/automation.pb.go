@@ -211,6 +211,15 @@ func (m *GetClusterOperationDetailsResponse) GetClusterOp() *ClusterOperation {
 }
 
 func init() {
+	proto.RegisterType((*ClusterOperation)(nil), "automation.ClusterOperation")
+	proto.RegisterType((*TaskContainer)(nil), "automation.TaskContainer")
+	proto.RegisterType((*Task)(nil), "automation.Task")
+	proto.RegisterType((*EnqueueClusterOperationRequest)(nil), "automation.EnqueueClusterOperationRequest")
+	proto.RegisterType((*EnqueueClusterOperationResponse)(nil), "automation.EnqueueClusterOperationResponse")
+	proto.RegisterType((*GetClusterOperationStateRequest)(nil), "automation.GetClusterOperationStateRequest")
+	proto.RegisterType((*GetClusterOperationStateResponse)(nil), "automation.GetClusterOperationStateResponse")
+	proto.RegisterType((*GetClusterOperationDetailsRequest)(nil), "automation.GetClusterOperationDetailsRequest")
+	proto.RegisterType((*GetClusterOperationDetailsResponse)(nil), "automation.GetClusterOperationDetailsResponse")
 	proto.RegisterEnum("automation.ClusterOperationState", ClusterOperationState_name, ClusterOperationState_value)
 	proto.RegisterEnum("automation.TaskState", TaskState_name, TaskState_value)
 }
