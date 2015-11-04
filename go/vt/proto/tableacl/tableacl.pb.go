@@ -51,3 +51,8 @@ func (m *Config) GetTableGroups() []*TableGroupSpec {
 	}
 	return nil
 }
+
+func init() {
+	proto.RegisterType((*TableGroupSpec)(nil), "tableacl.TableGroupSpec")
+	proto.RegisterType((*Config)(nil), "tableacl.Config")
+}

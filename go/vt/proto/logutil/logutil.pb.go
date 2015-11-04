@@ -86,5 +86,7 @@ func (m *Event) GetTime() *Time {
 }
 
 func init() {
+	proto.RegisterType((*Time)(nil), "logutil.Time")
+	proto.RegisterType((*Event)(nil), "logutil.Event")
 	proto.RegisterEnum("logutil.Level", Level_name, Level_value)
 }

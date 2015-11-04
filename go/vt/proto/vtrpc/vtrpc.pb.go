@@ -175,5 +175,7 @@ func (m *RPCError) String() string { return proto.CompactTextString(m) }
 func (*RPCError) ProtoMessage()    {}
 
 func init() {
+	proto.RegisterType((*CallerID)(nil), "vtrpc.CallerID")
+	proto.RegisterType((*RPCError)(nil), "vtrpc.RPCError")
 	proto.RegisterEnum("vtrpc.ErrorCode", ErrorCode_name, ErrorCode_value)
 }

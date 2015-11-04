@@ -51,3 +51,8 @@ func (m *ExecuteVtctlCommandResponse) GetEvent() *logutil.Event {
 	}
 	return nil
 }
+
+func init() {
+	proto.RegisterType((*ExecuteVtctlCommandRequest)(nil), "vtctldata.ExecuteVtctlCommandRequest")
+	proto.RegisterType((*ExecuteVtctlCommandResponse)(nil), "vtctldata.ExecuteVtctlCommandResponse")
+}

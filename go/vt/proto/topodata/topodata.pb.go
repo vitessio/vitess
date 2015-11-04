@@ -532,6 +532,24 @@ func (m *SrvKeyspace_ServedFrom) String() string { return proto.CompactTextStrin
 func (*SrvKeyspace_ServedFrom) ProtoMessage()    {}
 
 func init() {
+	proto.RegisterType((*KeyRange)(nil), "topodata.KeyRange")
+	proto.RegisterType((*TabletAlias)(nil), "topodata.TabletAlias")
+	proto.RegisterType((*Tablet)(nil), "topodata.Tablet")
+	proto.RegisterType((*Shard)(nil), "topodata.Shard")
+	proto.RegisterType((*Shard_ServedType)(nil), "topodata.Shard.ServedType")
+	proto.RegisterType((*Shard_SourceShard)(nil), "topodata.Shard.SourceShard")
+	proto.RegisterType((*Shard_TabletControl)(nil), "topodata.Shard.TabletControl")
+	proto.RegisterType((*Keyspace)(nil), "topodata.Keyspace")
+	proto.RegisterType((*Keyspace_ServedFrom)(nil), "topodata.Keyspace.ServedFrom")
+	proto.RegisterType((*ShardReplication)(nil), "topodata.ShardReplication")
+	proto.RegisterType((*ShardReplication_Node)(nil), "topodata.ShardReplication.Node")
+	proto.RegisterType((*EndPoint)(nil), "topodata.EndPoint")
+	proto.RegisterType((*EndPoints)(nil), "topodata.EndPoints")
+	proto.RegisterType((*SrvShard)(nil), "topodata.SrvShard")
+	proto.RegisterType((*ShardReference)(nil), "topodata.ShardReference")
+	proto.RegisterType((*SrvKeyspace)(nil), "topodata.SrvKeyspace")
+	proto.RegisterType((*SrvKeyspace_KeyspacePartition)(nil), "topodata.SrvKeyspace.KeyspacePartition")
+	proto.RegisterType((*SrvKeyspace_ServedFrom)(nil), "topodata.SrvKeyspace.ServedFrom")
 	proto.RegisterEnum("topodata.KeyspaceIdType", KeyspaceIdType_name, KeyspaceIdType_value)
 	proto.RegisterEnum("topodata.TabletType", TabletType_name, TabletType_value)
 }

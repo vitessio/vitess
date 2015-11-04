@@ -292,6 +292,16 @@ func (m *StreamTablesResponse) GetBinlogTransaction() *BinlogTransaction {
 }
 
 func init() {
+	proto.RegisterType((*Charset)(nil), "binlogdata.Charset")
+	proto.RegisterType((*BinlogTransaction)(nil), "binlogdata.BinlogTransaction")
+	proto.RegisterType((*BinlogTransaction_Statement)(nil), "binlogdata.BinlogTransaction.Statement")
+	proto.RegisterType((*StreamEvent)(nil), "binlogdata.StreamEvent")
+	proto.RegisterType((*StreamUpdateRequest)(nil), "binlogdata.StreamUpdateRequest")
+	proto.RegisterType((*StreamUpdateResponse)(nil), "binlogdata.StreamUpdateResponse")
+	proto.RegisterType((*StreamKeyRangeRequest)(nil), "binlogdata.StreamKeyRangeRequest")
+	proto.RegisterType((*StreamKeyRangeResponse)(nil), "binlogdata.StreamKeyRangeResponse")
+	proto.RegisterType((*StreamTablesRequest)(nil), "binlogdata.StreamTablesRequest")
+	proto.RegisterType((*StreamTablesResponse)(nil), "binlogdata.StreamTablesResponse")
 	proto.RegisterEnum("binlogdata.BinlogTransaction_Statement_Category", BinlogTransaction_Statement_Category_name, BinlogTransaction_Statement_Category_value)
 	proto.RegisterEnum("binlogdata.StreamEvent_Category", StreamEvent_Category_name, StreamEvent_Category_value)
 }
