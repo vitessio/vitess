@@ -62,7 +62,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		}
 
 		if tabletType == pb.TabletType_MASTER {
-			// We disallow TYPE_MASTER, so we don't have to change
+			// We disallow MASTER, so we don't have to change
 			// shard.MasterAlias, and deal with the corner cases.
 			log.Fatalf("init_tablet_type cannot be %v", tabletType)
 		}
