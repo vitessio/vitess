@@ -60,7 +60,7 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	wi = worker.NewInstance(ts, *cell, 30*time.Second, *commandDisplayInterval)
+	wi = worker.NewInstance(ts, *cell, *commandDisplayInterval)
 	wi.InstallSignalHandlers()
 	wi.InitStatusHandling()
 

@@ -25,7 +25,6 @@ func ExecuteVtctl(ctx context.Context, server string, args []string) (string, er
 		// TODO(mberlin): Should these values be configurable as flags?
 		30*time.Second, // dialTimeout
 		time.Hour,      // actionTimeout
-		10*time.Second, // lockWaitTimeout
 		CreateLoggerEventToBufferFunction(&output))
 
 	return output.String(), err

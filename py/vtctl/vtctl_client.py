@@ -95,13 +95,12 @@ class VtctlClient(object):
     """
     pass
 
-  def execute_vtctl_command(self, args, action_timeout=30.0, lock_timeout=5.0):
+  def execute_vtctl_command(self, args, action_timeout=30.0):
     """Executes a remote command on the vtctl server.
 
     Args:
       args: Command line to run.
       action_timeout: total timeout for the action (float, in seconds).
-      lock_timeout: timeout for locking topology (float, in seconds).
 
     Returns:
       This is a generator method that yields Event objects.
@@ -110,7 +109,7 @@ class VtctlClient(object):
 
 
 def execute_vtctl_command(client, args, action_timeout=30.0,
-                          lock_timeout=5.0, info_to_debug=False):
+                          info_to_debug=False):
   """This is a helper method that executes a remote vtctl command.
 
   It logs the output to the logging module, and returns the console output.
@@ -119,7 +118,6 @@ def execute_vtctl_command(client, args, action_timeout=30.0,
     client: VtctlClient object to use.
     args: Command line to run.
     action_timeout: total timeout for the action (float, in seconds).
-    lock_timeout: timeout for locking topology (float, in seconds).
     info_to_debug: if set, changes the info messages to debug.
 
   Returns:
@@ -127,8 +125,7 @@ def execute_vtctl_command(client, args, action_timeout=30.0,
   """
 
   console_result = ''
-  for e in client.execute_vtctl_command(args, action_timeout=action_timeout,
-                                        lock_timeout=lock_timeout):
+  for e in client.execute_vtctl_command(args, action_timeout=action_timeout):
     if e.level == Event.INFO:
       if info_to_debug:
         logging.debug('%s', e.value)

@@ -57,7 +57,7 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	}
 
 	// run a command that's gonna return something on the log channel
-	logs, errFunc, err := client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell1"}, 30*time.Second, 10*time.Second)
+	logs, errFunc, err := client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell1"}, 30*time.Second)
 	if err != nil {
 		t.Fatalf("Remote error: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	}
 
 	// run a command that's gonna fail
-	logs, errFunc, err = client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell2"}, 30*time.Second, 10*time.Second)
+	logs, errFunc, err = client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell2"}, 30*time.Second)
 	if err != nil {
 		t.Fatalf("Remote error: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	}
 
 	// run a command that's gonna panic
-	logs, errFunc, err = client.ExecuteVtctlCommand(ctx, []string{"Panic"}, 30*time.Second, 10*time.Second)
+	logs, errFunc, err = client.ExecuteVtctlCommand(ctx, []string{"Panic"}, 30*time.Second)
 	if err != nil {
 		t.Fatalf("Remote error: %v", err)
 	}

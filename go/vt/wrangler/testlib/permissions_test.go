@@ -7,7 +7,6 @@ package testlib
 import (
 	"strings"
 	"testing"
-	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -26,7 +25,7 @@ func TestPermissions(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 

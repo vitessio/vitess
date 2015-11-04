@@ -244,7 +244,7 @@ func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
 func testSplitClone(t *testing.T, strategy string) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wi := NewInstance(ts, "cell1", time.Second, time.Second)
+	wi := NewInstance(ts, "cell1", time.Second)
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
 		ShardingColumnName: "keyspace_id",

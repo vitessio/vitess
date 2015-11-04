@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -70,7 +69,7 @@ func TestRebuildShard(t *testing.T) {
 	replicaInfo := addTablet(ctx, t, ts, 2, cells[0], pb.TabletType_REPLICA)
 
 	// Do an initial rebuild.
-	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {
+	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 
@@ -95,7 +94,7 @@ func TestRebuildShard(t *testing.T) {
 	if err := ts.UpdateTablet(ctx, masterInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
-	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {
+	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 
@@ -104,7 +103,7 @@ func TestRebuildShard(t *testing.T) {
 	if err := ts.UpdateTablet(ctx, replicaInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
-	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {
+	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 

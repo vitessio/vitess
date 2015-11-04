@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -52,7 +51,7 @@ func TestVersion(t *testing.T) {
 	// Initialize our environment
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 

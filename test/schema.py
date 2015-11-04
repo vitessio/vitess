@@ -5,8 +5,8 @@ import unittest
 import os
 
 import environment
-import utils
 import tablet
+import utils
 
 shard_0_master = tablet.Tablet()
 shard_0_replica1 = tablet.Tablet()
@@ -40,8 +40,6 @@ def setUpModule():
     shard_0_backup.init_tablet('backup', test_keyspace, '0')
     shard_1_master.init_tablet('master', test_keyspace, '1')
     shard_1_replica1.init_tablet('replica', test_keyspace, '1')
-
-    utils.run_vtctl(['RebuildKeyspaceGraph', test_keyspace], auto_log=True)
 
     # run checks now before we start the tablets
     utils.validate_topology()
@@ -129,11 +127,11 @@ class TestSchema(unittest.TestCase):
         tablets.remove(t)
       utils.run_vtctl(['DeleteShard', 'test_keyspace/2'], auto_log=True)
 
-  def _check_tables(self, tablet, expectedCount):
+  def _check_tables(self, tablet, expected_count):
     tables = tablet.mquery(db_name, 'show tables')
-    self.assertEqual(len(tables), expectedCount,
+    self.assertEqual(len(tables), expected_count,
                      'Unexpected table count on %s (not %d): got tables: %s' %
-                     (tablet.tablet_alias, expectedCount, str(tables)))
+                     (tablet.tablet_alias, expected_count, str(tables)))
 
   def _check_db_not_created(self, tablet):
     # Broadly catch all exceptions, since the exception being raised
@@ -221,7 +219,7 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_0_master, 5)
     self._check_tables(shard_1_master, 5)
 
-  def _setUp_tablets_shard_2(self):
+  def _setup_tablets_shard_2(self):
     try:
       _init_mysql(tablets_shard2)
     finally:
@@ -253,7 +251,7 @@ class TestSchema(unittest.TestCase):
   def _test_vtctl_copyschemashard(self, source):
     self._apply_initial_schema()
 
-    self._setUp_tablets_shard_2()
+    self._setup_tablets_shard_2()
 
     # InitShardMaster creates the db, but there shouldn't be any tables yet.
     self._check_tables(shard_2_master, 0)
