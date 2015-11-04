@@ -18,7 +18,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
@@ -245,19 +244,18 @@ func (conn *FakeVTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 }
 
 // StreamExecute please see vtgateconn.Impl.StreamExecute
-func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
-	response, ok := conn.execMap[query]
+func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	response, ok := conn.execMap[sql]
 	if !ok {
-		return nil, nil, fmt.Errorf("no match for: %s", query)
+		return nil, nil, fmt.Errorf("no match for: %s", sql)
 	}
-	queryProto := &proto.Query{
-		Sql:           query,
+	query := &queryExecute{
+		SQL:           sql,
 		BindVariables: bindVars,
-		TabletType:    topo.ProtoToTabletType(tabletType),
-		Session:       nil,
+		TabletType:    tabletType,
 	}
-	if !reflect.DeepEqual(queryProto, response.execQuery) {
-		return nil, nil, fmt.Errorf("StreamExecute: %+v, want %+v", query, response.execQuery)
+	if !reflect.DeepEqual(query, response.execQuery) {
+		return nil, nil, fmt.Errorf("StreamExecute: %+v, want %+v", sql, response.execQuery)
 	}
 	if response.err != nil {
 		return nil, nil, response.err
