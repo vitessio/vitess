@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -32,7 +33,7 @@ type queryExecute struct {
 	SQL              string
 	BindVariables    map[string]interface{}
 	TabletType       pb.TabletType
-	Session          *proto.Session
+	Session          *pbg.Session
 	NotInTransaction bool
 }
 
@@ -43,7 +44,7 @@ type queryExecuteShards struct {
 	Keyspace         string
 	Shards           []string
 	TabletType       pb.TabletType
-	Session          *proto.Session
+	Session          *pbg.Session
 	NotInTransaction bool
 }
 
@@ -95,7 +96,7 @@ func (conn *FakeVTGateConn) AddQuery(
 	sql string,
 	bindVariables map[string]interface{},
 	tabletType pb.TabletType,
-	session *proto.Session,
+	session *pbg.Session,
 	notInTransaction bool,
 	expectedResult *mproto.QueryResult) {
 	conn.execMap[sql] = &queryResponse{
@@ -117,7 +118,7 @@ func (conn *FakeVTGateConn) AddShardQuery(
 	keyspace string,
 	shards []string,
 	tabletType pb.TabletType,
-	session *proto.Session,
+	session *pbg.Session,
 	notInTransaction bool,
 	expectedResult *mproto.QueryResult) {
 	conn.execMap[getShardQueryKey(sql, shards)] = &queryResponse{
@@ -160,9 +161,9 @@ func (conn *FakeVTGateConn) AddSplitQuery(
 
 // Execute please see vtgateconn.Impl.Execute
 func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
-	var s *proto.Session
+	var s *pbg.Session
 	if session != nil {
-		s = session.(*proto.Session)
+		s = session.(*pbg.Session)
 	}
 	response, ok := conn.execMap[sql]
 	if !ok {
@@ -189,9 +190,9 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 
 // ExecuteShards please see vtgateconn.Impl.ExecuteShard
 func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
-	var s *proto.Session
+	var s *pbg.Session
 	if session != nil {
-		s = session.(*proto.Session)
+		s = session.(*pbg.Session)
 	}
 	response, ok := conn.execMap[getShardQueryKey(sql, shards)]
 	if !ok {
@@ -318,7 +319,7 @@ func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query
 
 // Begin please see vtgateconn.Impl.Begin
 func (conn *FakeVTGateConn) Begin(ctx context.Context) (interface{}, error) {
-	return &proto.Session{
+	return &pbg.Session{
 		InTransaction: true,
 	}, nil
 }
@@ -386,17 +387,19 @@ func newSession(
 	inTransaction bool,
 	keyspace string,
 	shards []string,
-	tabletType pb.TabletType) *proto.Session {
-	shardSessions := make([]*proto.ShardSession, len(shards))
+	tabletType pb.TabletType) *pbg.Session {
+	shardSessions := make([]*pbg.Session_ShardSession, len(shards))
 	for _, shard := range shards {
-		shardSessions = append(shardSessions, &proto.ShardSession{
-			Keyspace:      keyspace,
-			Shard:         shard,
-			TabletType:    topo.ProtoToTabletType(tabletType),
+		shardSessions = append(shardSessions, &pbg.Session_ShardSession{
+			Target: &pbq.Target{
+				Keyspace:   keyspace,
+				Shard:      shard,
+				TabletType: tabletType,
+			},
 			TransactionId: rand.Int63(),
 		})
 	}
-	return &proto.Session{
+	return &pbg.Session{
 		InTransaction: inTransaction,
 		ShardSessions: shardSessions,
 	}

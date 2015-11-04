@@ -5,37 +5,13 @@
 package proto
 
 import (
-	"fmt"
-
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
-
-// Session represents the session state. It keeps track of
-// the shards on which transactions are in progress, along
-// with the corresponding transaction ids.
-type Session struct {
-	InTransaction bool
-	ShardSessions []*ShardSession
-}
-
-func (session *Session) String() string {
-	return fmt.Sprintf("InTransaction: %v, ShardSession: %+v", session.InTransaction, session.ShardSessions)
-}
-
-// ShardSession represents the session state for a shard.
-type ShardSession struct {
-	Keyspace      string
-	Shard         string
-	TabletType    topo.TabletType
-	TransactionId int64
-}
-
-func (shardSession *ShardSession) String() string {
-	return fmt.Sprintf("Keyspace: %v, Shard: %v, TabletType: %v, TransactionId: %v", shardSession.Keyspace, shardSession.Shard, shardSession.TabletType, shardSession.TransactionId)
-}
 
 // Query represents a keyspace agnostic query request.
 type Query struct {
@@ -43,7 +19,7 @@ type Query struct {
 	Sql              string
 	BindVariables    map[string]interface{}
 	TabletType       topo.TabletType
-	Session          *Session
+	Session          *pb.Session
 	NotInTransaction bool
 }
 
@@ -56,7 +32,7 @@ type QueryShard struct {
 	Keyspace         string
 	Shards           []string
 	TabletType       topo.TabletType
-	Session          *Session
+	Session          *pb.Session
 	NotInTransaction bool
 }
 
@@ -69,7 +45,7 @@ type KeyspaceIdQuery struct {
 	Keyspace         string
 	KeyspaceIds      []key.KeyspaceId
 	TabletType       topo.TabletType
-	Session          *Session
+	Session          *pb.Session
 	NotInTransaction bool
 }
 
@@ -82,7 +58,7 @@ type KeyRangeQuery struct {
 	Keyspace         string
 	KeyRanges        []key.KeyRange
 	TabletType       topo.TabletType
-	Session          *Session
+	Session          *pb.Session
 	NotInTransaction bool
 }
 
@@ -101,14 +77,14 @@ type EntityIdsQuery struct {
 	EntityColumnName  string
 	EntityKeyspaceIDs []EntityId
 	TabletType        topo.TabletType
-	Session           *Session
+	Session           *pb.Session
 	NotInTransaction  bool
 }
 
 // QueryResult is mproto.QueryResult+Session (for now).
 type QueryResult struct {
 	Result  *mproto.QueryResult
-	Session *Session
+	Session *pb.Session
 	// Error field is deprecated, as it only returns a string. New users should use the
 	// Err field below, which contains a string and an error code.
 	Error string
@@ -131,7 +107,7 @@ type BatchQueryShard struct {
 	Queries       []BoundShardQuery
 	TabletType    topo.TabletType
 	AsTransaction bool
-	Session       *Session
+	Session       *pb.Session
 }
 
 // BoundKeyspaceIdQuery represents a single query request for the
@@ -150,13 +126,13 @@ type KeyspaceIdBatchQuery struct {
 	Queries       []BoundKeyspaceIdQuery
 	TabletType    topo.TabletType
 	AsTransaction bool
-	Session       *Session
+	Session       *pb.Session
 }
 
 // QueryResultList is mproto.QueryResultList+Session
 type QueryResultList struct {
 	List    []mproto.QueryResult
-	Session *Session
+	Session *pb.Session
 	// Error field is deprecated, as it only returns a string. New users should use the
 	// Err field below, which contains a string and an error code.
 	Error string
@@ -182,13 +158,13 @@ type BeginResponse struct {
 	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
 	// consistent with other BSON structs.
 	Err     *mproto.RPCError
-	Session *Session
+	Session *pb.Session
 }
 
 // CommitRequest is the BSON implementation of the proto3 vtgate.CommitRequest
 type CommitRequest struct {
 	CallerID *tproto.CallerID // only used by BSON
-	Session  *Session
+	Session  *pb.Session
 }
 
 // CommitResponse is the BSON implementation of the proto3 vtgate.CommitResponse
@@ -201,7 +177,7 @@ type CommitResponse struct {
 // RollbackRequest is the BSON implementation of the proto3 vtgate.RollbackRequest
 type RollbackRequest struct {
 	CallerID *tproto.CallerID // only used by BSON
-	Session  *Session
+	Session  *pb.Session
 }
 
 // RollbackResponse is the BSON implementation of the proto3 vtgate.RollbackResponse

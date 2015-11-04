@@ -84,7 +84,7 @@ func isConnError(err error) (int, bool) {
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 // This throws an error if a dml spans multiple keyspace_ids. Resharding depends
 // on being able to uniquely route a write.
-func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *proto.Session, notInTransaction bool) (*mproto.QueryResult, error) {
+func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool) (*mproto.QueryResult, error) {
 	if isDml(sql) && len(keyspaceIds) > 1 {
 		return nil, vterrors.FromError(
 			vtrpc.ErrorCode_BAD_INPUT,
@@ -105,7 +105,7 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool) (*mproto.QueryResult, error) {
+func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool) (*mproto.QueryResult, error) {
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
@@ -126,7 +126,7 @@ func (res *Resolver) Execute(
 	bindVars map[string]interface{},
 	keyspace string,
 	tabletType pb.TabletType,
-	session *proto.Session,
+	session *pbg.Session,
 	mapToShards func(string) (string, []string, error),
 	notInTransaction bool,
 ) (*mproto.QueryResult, error) {
@@ -182,7 +182,7 @@ func (res *Resolver) ExecuteEntityIds(
 	entityColumnName string,
 	entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId,
 	tabletType pb.TabletType,
-	session *proto.Session,
+	session *pbg.Session,
 	notInTransaction bool,
 ) (*mproto.QueryResult, error) {
 	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
@@ -246,7 +246,7 @@ func (res *Resolver) ExecuteEntityIds(
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session) (*tproto.QueryResultList, error) {
+func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *pbg.Session) (*tproto.QueryResultList, error) {
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
 		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(ctx, res.toposerv, res.cell, tabletType, queries)
 		if err != nil {
@@ -263,7 +263,7 @@ func (res *Resolver) ExecuteBatch(
 	ctx context.Context,
 	tabletType pb.TabletType,
 	asTransaction bool,
-	session *proto.Session,
+	session *pbg.Session,
 	buildBatchRequest func() (*scatterBatchRequest, error),
 ) (*tproto.QueryResultList, error) {
 	batchRequest, err := buildBatchRequest()
@@ -366,12 +366,12 @@ func (res *Resolver) StreamExecute(
 }
 
 // Commit commits a transaction.
-func (res *Resolver) Commit(ctx context.Context, inSession *proto.Session) error {
+func (res *Resolver) Commit(ctx context.Context, inSession *pbg.Session) error {
 	return res.scatterConn.Commit(ctx, NewSafeSession(inSession))
 }
 
 // Rollback rolls back a transaction.
-func (res *Resolver) Rollback(ctx context.Context, inSession *proto.Session) error {
+func (res *Resolver) Rollback(ctx context.Context, inSession *pbg.Session) error {
 	return res.scatterConn.Rollback(ctx, NewSafeSession(inSession))
 }
 

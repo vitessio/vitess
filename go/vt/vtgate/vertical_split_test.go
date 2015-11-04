@@ -13,7 +13,9 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // This file uses the sandbox_test framework.
@@ -61,12 +63,14 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	s.MapTestConn("0", sbc)
 
 	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
-	session := NewSafeSession(&proto.Session{
+	session := NewSafeSession(&pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      KsTestUnshardedServedFrom,
-			Shard:         "0",
-			TabletType:    topo.TYPE_MASTER,
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   KsTestUnshardedServedFrom,
+				Shard:      "0",
+				TabletType: pb.TabletType_MASTER,
+			},
 			TransactionId: 1,
 		}},
 	})
