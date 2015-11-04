@@ -236,6 +236,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 
 	// Check for SuperUser calling directly to VTTablet (e.g. VTWorker)
 	if qre.qe.exemptACL != nil && qre.qe.exemptACL.IsMember(username) {
+		qre.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
 
