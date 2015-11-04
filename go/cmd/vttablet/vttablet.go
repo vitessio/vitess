@@ -83,16 +83,25 @@ func main() {
 	qsc.Register()
 
 	if *tableAclConfig != "" {
+		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
-		tableacl.Init(
-			*tableAclConfig,
-			func() {
-				qsc.ClearQueryPlanCache()
-			},
-		)
 	} else if *enforceTableACLConfig {
 		log.Error("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 		exit.Return(1)
+	}
+	// tabletacl.Init loads ACL from file if *tableAclConfig is not empty
+	err = tableacl.Init(
+		*tableAclConfig,
+		func() {
+			qsc.ClearQueryPlanCache()
+		},
+	)
+	if err != nil {
+		log.Errorf("Fail to initialize Table ACL: %v", err)
+		if *enforceTableACLConfig {
+			log.Error("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
+			exit.Return(1)
+		}
 	}
 
 	// Create mysqld and register the health reporter (needs to be done

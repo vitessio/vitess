@@ -32,13 +32,9 @@ func (acl *fakeACL) IsMember(principal string) bool {
 
 func TestInitWithInvalidFilePath(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
-	defer func() {
-		err := recover()
-		if err == nil {
-			t.Fatalf("init should fail for an invalid config file path")
-		}
-	}()
-	Init("/invalid_file_path", func() {})
+	if err := Init("/invalid_file_path", func() {}); err == nil {
+		t.Fatalf("init should fail for an invalid config file path")
+	}
 }
 
 var aclJSON = `{
@@ -265,17 +261,18 @@ func TestGetAclFactory(t *testing.T) {
 	name := fmt.Sprintf("tableacl-name-%d", rand.Int63())
 	aclFactory := &simpleacl.Factory{}
 	Register(name, aclFactory)
-	if !reflect.DeepEqual(aclFactory, GetCurrentAclFactory()) {
+	f, err := GetCurrentAclFactory()
+	if err != nil {
+		t.Errorf("Fail to get current ACL Factory: %v", err)
+	}
+	if !reflect.DeepEqual(aclFactory, f) {
 		t.Fatalf("should return registered acl factory even if default acl is not set.")
 	}
 	Register(name+"2", aclFactory)
-	defer func() {
-		err := recover()
-		if err == nil {
-			t.Fatalf("there are more than one acl factories, but the default is not set")
-		}
-	}()
-	GetCurrentAclFactory()
+	_, err = GetCurrentAclFactory()
+	if err == nil {
+		t.Fatalf("there are more than one acl factories, but the default is not set")
+	}
 }
 
 func TestGetAclFactoryWithWrongDefault(t *testing.T) {
@@ -286,13 +283,10 @@ func TestGetAclFactoryWithWrongDefault(t *testing.T) {
 	Register(name, aclFactory)
 	Register(name+"2", aclFactory)
 	SetDefaultACL("wrong_name")
-	defer func() {
-		err := recover()
-		if err == nil {
-			t.Fatalf("there are more than one acl factories, but the default given does not match any of these.")
-		}
-	}()
-	GetCurrentAclFactory()
+	_, err := GetCurrentAclFactory()
+	if err == nil {
+		t.Fatalf("there are more than one acl factories, but the default given does not match any of these.")
+	}
 }
 
 func setUpTableACL(factory acl.Factory) {
