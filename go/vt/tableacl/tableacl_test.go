@@ -90,7 +90,6 @@ func TestInitFromProto(t *testing.T) {
 	if err := InitFromProto(config); err != nil {
 		t.Fatalf("tableacl init should succeed, but got error: %v", err)
 	}
-	t.Logf("ACL entries: %v", currentACL)
 
 	if !reflect.DeepEqual(GetCurrentConfig(), config) {
 		t.Fatalf("GetCurrentConfig() = %v, want: %v", GetCurrentConfig(), config)
