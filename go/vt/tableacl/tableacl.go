@@ -254,18 +254,26 @@ func SetDefaultACL(name string) {
 func GetCurrentAclFactory() acl.Factory {
 	mu.Lock()
 	defer mu.Unlock()
-	if defaultACL == "" {
-		if len(acls) == 1 {
-			for _, aclFactory := range acls {
-				return aclFactory
-			}
-		}
-		panic("there are more than one AclFactory " +
-			"registered but no default has been given.")
+
+	if len(acls) == 0 {
+		panic("No AclFactory registered.")
 	}
+
+	// If no default ACL is explicitly specified, there must be exactly one
+	// registered AclFactory which we'll return.
+	if defaultACL == "" {
+		if len(acls) != 1 {
+			panic("There is more than one AclFactory registered but no default has been given.")
+		}
+		for _, aclFactory := range acls {
+			return aclFactory
+		}
+	}
+
+	// Otherwise, try to retrieve the specified default AclFactory.
 	aclFactory, ok := acls[defaultACL]
 	if !ok {
-		panic(fmt.Sprintf("aclFactory for given default: %s is not found.", defaultACL))
+		panic(fmt.Sprintf("AclFactory for given default: %s is not found.", defaultACL))
 	}
 	return aclFactory
 }
