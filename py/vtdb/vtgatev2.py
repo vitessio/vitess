@@ -9,8 +9,11 @@ from itertools import izip
 import logging
 import random
 
+from vtproto import topodata_pb2
+
 from net import bsonrpc
 from net import gorpc
+
 from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
@@ -46,7 +49,7 @@ def _create_req_with_keyspace_ids(
       'Sql': sql,
       'BindVariables': new_binds,
       'Keyspace': keyspace_name,
-      'TabletType': tablet_type,
+      'TabletType': topodata_pb2.TabletType.Value(tablet_type.upper()),
       'KeyspaceIds': keyspace_ids,
       'NotInTransaction': not_in_transaction,
   }
@@ -75,7 +78,7 @@ def _create_req_with_keyranges(
       'Sql': sql,
       'BindVariables': new_binds,
       'Keyspace': keyspace_name,
-      'TabletType': tablet_type,
+      'TabletType': topodata_pb2.TabletType.Value(tablet_type.upper()),
       'KeyRanges': keyranges,
       'NotInTransaction': not_in_transaction,
   }
@@ -259,7 +262,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
           'Sql': sql,
           'BindVariables': new_binds,
           'Keyspace': keyspace_name,
-          'TabletType': tablet_type,
+          'TabletType': topodata_pb2.TabletType.Value(tablet_type.upper()),
           'EntityKeyspaceIDs': [
               {'ExternalID': xid, 'KeyspaceID': kid}
               for xid, kid in entity_keyspace_id_map.iteritems()],
@@ -370,7 +373,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       try:
         req = {
             'Queries': filtered_query_list,
-            'TabletType': tablet_type,
+            'TabletType': topodata_pb2.TabletType.Value(tablet_type.upper()),
             'AsTransaction': as_transaction,
         }
         self._add_caller_id(req, effective_caller_id)

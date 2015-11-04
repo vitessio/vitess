@@ -15,7 +15,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -67,7 +66,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *proto.Query, reply *pro
 	vtgErr := vtg.server.Execute(ctx,
 		request.Sql,
 		request.BindVariables,
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		request.Session,
 		request.NotInTransaction,
 		reply)
@@ -90,7 +89,7 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, request *proto.QueryShard, 
 		request.BindVariables,
 		request.Keyspace,
 		request.Shards,
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		request.Session,
 		request.NotInTransaction,
 		reply)
@@ -113,7 +112,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *proto.Keyspa
 		request.BindVariables,
 		request.Keyspace,
 		key.KeyspaceIdsToProto(request.KeyspaceIds),
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		request.Session,
 		request.NotInTransaction,
 		reply)
@@ -136,7 +135,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *proto.KeyRange
 		request.BindVariables,
 		request.Keyspace,
 		key.KeyRangesToProto(request.KeyRanges),
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		request.Session,
 		request.NotInTransaction,
 		reply)
@@ -160,7 +159,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *proto.EntityId
 		request.Keyspace,
 		request.EntityColumnName,
 		proto.EntityIdsToProto(request.EntityKeyspaceIDs),
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		request.Session,
 		request.NotInTransaction,
 		reply)
@@ -180,7 +179,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, request *proto.BatchQu
 	sessionFromRPC(request.Session)
 	vtgErr := vtg.server.ExecuteBatchShards(ctx,
 		request.Queries,
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		request.AsTransaction,
 		request.Session,
 		reply)
@@ -201,7 +200,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *proto.K
 	sessionFromRPC(request.Session)
 	vtgErr := vtg.server.ExecuteBatchKeyspaceIds(ctx,
 		request.Queries,
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		request.AsTransaction,
 		request.Session,
 		reply)
@@ -219,7 +218,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, request *proto.Query, send
 	return vtg.server.StreamExecute(ctx,
 		request.Sql,
 		request.BindVariables,
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
 		})
@@ -234,7 +233,7 @@ func (vtg *VTGate) StreamExecute2(ctx context.Context, request *proto.Query, sen
 	vtgErr := vtg.server.StreamExecute(ctx,
 		request.Sql,
 		request.BindVariables,
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
 		})
@@ -258,7 +257,7 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, request *proto.QueryS
 		request.BindVariables,
 		request.Keyspace,
 		request.Shards,
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
 		})
@@ -275,7 +274,7 @@ func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *proto.Query
 		request.BindVariables,
 		request.Keyspace,
 		request.Shards,
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
 		})
@@ -300,7 +299,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *proto.
 		request.BindVariables,
 		request.Keyspace,
 		key.KeyspaceIdsToProto(request.KeyspaceIds),
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
 		})
@@ -318,7 +317,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *proto
 		request.BindVariables,
 		request.Keyspace,
 		key.KeyspaceIdsToProto(request.KeyspaceIds),
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
 		})
@@ -343,7 +342,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *proto.Ke
 		request.BindVariables,
 		request.Keyspace,
 		key.KeyRangesToProto(request.KeyRanges),
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
 		})
@@ -361,7 +360,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *proto.K
 		request.BindVariables,
 		request.Keyspace,
 		key.KeyRangesToProto(request.KeyRanges),
-		topo.TabletTypeToProto(request.TabletType),
+		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
 		})

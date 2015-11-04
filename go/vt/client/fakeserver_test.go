@@ -7,7 +7,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
@@ -30,7 +29,7 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	query := &proto.Query{
 		Sql:              sql,
 		BindVariables:    bindVariables,
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          session,
 		NotInTransaction: notInTransaction,
 	}
@@ -80,7 +79,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 	query := &proto.Query{
 		Sql:           sql,
 		BindVariables: bindVariables,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		return fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
@@ -181,7 +180,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"v1": int64(0),
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		shardQuery: &proto.QueryShard{
@@ -191,7 +190,7 @@ var execMap = map[string]struct {
 			},
 			Keyspace:   "ks",
 			Shards:     []string{"1", "2"},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		reply: &proto.QueryResult{
@@ -206,7 +205,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"v1": int64(0),
 			},
-			TabletType: "master",
+			TabletType: pb.TabletType_MASTER,
 			Session:    session1,
 		},
 		shardQuery: &proto.QueryShard{
@@ -214,7 +213,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"v1": int64(0),
 			},
-			TabletType: "master",
+			TabletType: pb.TabletType_MASTER,
 			Keyspace:   "",
 			Shards:     []string{},
 			Session:    session1,

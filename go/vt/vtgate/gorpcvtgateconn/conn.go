@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -90,7 +89,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 		CallerID:         getEffectiveCallerID(ctx),
 		Sql:              query,
 		BindVariables:    bindVars,
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -112,7 +111,7 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
 		Shards:           shards,
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -134,7 +133,7 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
 		KeyspaceIds:      key.ProtoToKeyspaceIds(keyspaceIds),
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -156,7 +155,7 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
 		KeyRanges:        key.ProtoToKeyRanges(keyRanges),
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -179,7 +178,7 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 		Keyspace:          keyspace,
 		EntityColumnName:  entityColumnName,
 		EntityKeyspaceIDs: proto.ProtoToEntityIds(entityKeyspaceIDs),
-		TabletType:        topo.ProtoToTabletType(tabletType),
+		TabletType:        tabletType,
 		Session:           s,
 		NotInTransaction:  notInTransaction,
 	}
@@ -198,7 +197,7 @@ func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []proto.
 	request := proto.BatchQueryShard{
 		CallerID:      getEffectiveCallerID(ctx),
 		Queries:       queries,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		AsTransaction: asTransaction,
 		Session:       s,
 	}
@@ -217,7 +216,7 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 	request := proto.KeyspaceIdBatchQuery{
 		CallerID:      getEffectiveCallerID(ctx),
 		Queries:       queries,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		AsTransaction: asTransaction,
 		Session:       s,
 	}
@@ -236,7 +235,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
 		BindVariables: bindVars,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -249,7 +248,7 @@ func (conn *vtgateConn) StreamExecute2(ctx context.Context, query string, bindVa
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
 		BindVariables: bindVars,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -264,7 +263,7 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		Shards:        shards,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -279,7 +278,7 @@ func (conn *vtgateConn) StreamExecuteShards2(ctx context.Context, query string, 
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		Shards:        shards,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -294,7 +293,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		KeyRanges:     key.ProtoToKeyRanges(keyRanges),
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -309,7 +308,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges2(ctx context.Context, query strin
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		KeyRanges:     key.ProtoToKeyRanges(keyRanges),
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -324,7 +323,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIds),
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -339,7 +338,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query str
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIds),
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
