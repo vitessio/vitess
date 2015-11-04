@@ -234,6 +234,11 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %s", desc)
 	}
 
+	// Check for SuperUser calling directly to VTTablet (e.g. VTWorker)
+	if qre.qe.exemptACL != nil && qre.qe.exemptACL.IsMember(username) {
+		return nil
+	}
+
 	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 	if callerID == nil {
 		if qre.qe.strictTableAcl {
@@ -243,7 +248,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	// a superuser that exempts from table ACL checking.
-	if qre.qe.exemptACL == callerID.Username {
+	if qre.qe.exemptACL != nil && qre.qe.exemptACL.IsMember(callerID.Username) {
 		qre.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
