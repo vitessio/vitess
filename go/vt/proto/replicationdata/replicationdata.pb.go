@@ -37,3 +37,7 @@ type Status struct {
 func (m *Status) Reset()         { *m = Status{} }
 func (m *Status) String() string { return proto.CompactTextString(m) }
 func (*Status) ProtoMessage()    {}
+
+func init() {
+	proto.RegisterType((*Status)(nil), "replicationdata.Status")
+}
