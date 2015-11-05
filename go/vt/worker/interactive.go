@@ -12,7 +12,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"golang.org/x/net/context"
 )
 
 const indexHTML = `
@@ -101,8 +100,7 @@ func (wi *Instance) InitInteractiveMode() {
 					return
 				}
 
-				ctx := context.Background()
-				wrk, template, data, err := pc.Interactive(ctx, wi, wi.wr, w, r)
+				wrk, template, data, err := pc.Interactive(wi.backgroundContext, wi, wi.wr, w, r)
 				if err != nil {
 					httpError(w, "%s", err)
 				} else if template != nil && data != nil {
