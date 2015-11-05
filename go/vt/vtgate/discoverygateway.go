@@ -16,7 +16,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/discovery"
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -153,7 +152,7 @@ func (dg *discoveryGateway) Close(ctx context.Context) error {
 }
 
 // StatsUpdate receives updates about target and realtime stats changes.
-func (dg *discoveryGateway) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, serving bool, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats) {
+func (dg *discoveryGateway) StatsUpdate(*discovery.EndPointStats) {
 }
 
 // withRetry gets available connections and executes the action. If there are retryable errors,
