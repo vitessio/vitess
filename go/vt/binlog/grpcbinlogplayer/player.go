@@ -15,7 +15,6 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbs "github.com/youtube/vitess/go/vt/proto/binlogservice"
@@ -72,11 +71,11 @@ func (client *client) ServeUpdateStream(ctx context.Context, position string) (c
 	}, nil
 }
 
-func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType key.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	response := make(chan *pb.BinlogTransaction, 10)
 	query := &pb.StreamKeyRangeRequest{
 		Position:       position,
-		KeyspaceIdType: key.KeyspaceIdTypeToProto(keyspaceIdType),
+		KeyspaceIdType: keyspaceIdType,
 		KeyRange:       keyRange,
 		Charset:        charset,
 	}

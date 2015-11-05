@@ -110,7 +110,7 @@ func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, 
 }
 
 // StreamKeyRange is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyspaceIDType key.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyspaceIDType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	actualKeyRange := key.KeyRangeString(keyRange)
 	if actualKeyRange != fbc.expectedKeyRange {
 		return nil, nil, fmt.Errorf("Got wrong keyrange %v, expected %v", actualKeyRange, fbc.expectedKeyRange)

@@ -26,7 +26,7 @@ import (
 // keyRangeRequest is used to make a request for StreamKeyRange.
 type keyRangeRequest struct {
 	Position       string
-	KeyspaceIdType key.KeyspaceIdType
+	KeyspaceIdType pbt.KeyspaceIdType
 	KeyRange       *pbt.KeyRange
 	Charset        *pb.Charset
 }
@@ -132,7 +132,7 @@ func testServeUpdateStreamPanics(t *testing.T, bpc binlogplayer.Client) {
 
 var testKeyRangeRequest = &keyRangeRequest{
 	Position:       "KeyRange starting position",
-	KeyspaceIdType: key.KIT_UINT64,
+	KeyspaceIdType: pbt.KeyspaceIdType_UINT64,
 	KeyRange: &pbt.KeyRange{
 		Start: key.Uint64Key(0x7000000000000000).Bytes(),
 		End:   key.Uint64Key(0x9000000000000000).Bytes(),
@@ -161,7 +161,7 @@ var testBinlogTransaction = &pb.BinlogTransaction{
 }
 
 // StreamKeyRange is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) StreamKeyRange(position string, keyspaceIdType key.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) error {
+func (fake *FakeBinlogStreamer) StreamKeyRange(position string, keyspaceIdType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

@@ -18,7 +18,7 @@ import (
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
 // TODO(erez): Remove 'KeyspaceIdType' from here: it's no longer used.
-func KeyRangeFilterFunc(unused key.KeyspaceIdType, keyrange *pbt.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+func KeyRangeFilterFunc(unused pbt.KeyspaceIdType, keyrange *pbt.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
 	return func(reply *pb.BinlogTransaction) error {
 		matched := false
 		filtered := make([]*pb.BinlogTransaction_Statement, 0, len(reply.Statements))
@@ -30,7 +30,7 @@ func KeyRangeFilterFunc(unused key.KeyspaceIdType, keyrange *pbt.KeyRange, sendR
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
 			case pb.BinlogTransaction_Statement_BL_DML:
-				keyspaceID, err := sqlannotation.ExtractKeySpaceID(string(statement.Sql))
+				keyspaceID, err := sqlannotation.ExtractKeySpaceID(statement.Sql)
 				if err != nil {
 					if handleExtractKeySpaceIDError(err) {
 						continue

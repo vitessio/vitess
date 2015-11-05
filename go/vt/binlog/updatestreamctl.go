@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
@@ -243,7 +242,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply f
 }
 
 // StreamKeyRange is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType key.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) (err error) {
 	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err

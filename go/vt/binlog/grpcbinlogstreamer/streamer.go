@@ -9,7 +9,6 @@ package grpcbinlogstreamer
 import (
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/servenv"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -43,7 +42,7 @@ func (server *UpdateStream) StreamUpdate(req *pb.StreamUpdateRequest, stream pbs
 // StreamKeyRange is part of the pbs.UpdateStreamServer interface
 func (server *UpdateStream) StreamKeyRange(req *pb.StreamKeyRangeRequest, stream pbs.UpdateStream_StreamKeyRangeServer) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.StreamKeyRange(req.Position, key.ProtoToKeyspaceIdType(req.KeyspaceIdType), req.KeyRange, req.Charset, func(reply *pb.BinlogTransaction) error {
+	return server.updateStream.StreamKeyRange(req.Position, req.KeyspaceIdType, req.KeyRange, req.Charset, func(reply *pb.BinlogTransaction) error {
 		return stream.Send(&pb.StreamKeyRangeResponse{
 			BinlogTransaction: reply,
 		})

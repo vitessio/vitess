@@ -5,8 +5,6 @@
 package proto
 
 import (
-	"github.com/youtube/vitess/go/vt/key"
-
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -18,7 +16,7 @@ type UpdateStream interface {
 	ServeUpdateStream(position string, sendReply func(reply *StreamEvent) error) error
 
 	// StreamKeyRange streams events related to a KeyRange only
-	StreamKeyRange(position string, keyspaceIdType key.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) error
+	StreamKeyRange(position string, keyspaceIdType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) error
 
 	// StreamTables streams events related to a set of Tables only
 	StreamTables(position string, tables []string, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) error
