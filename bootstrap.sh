@@ -9,30 +9,16 @@ if [ "$1" = "--skip_root_installs" ]; then
   SKIP_ROOT_INSTALLS=True
 fi
 
-# Exits if $1 is not 0 and prints $2 as error message.
-function fail_on_error() {
-  local rc=$1
-  local msg=$2
-  if [ -z "$msg" ]; then
-    rc=1
-    msg="missing arguments in fail_on_error() call in bootstrap.sh."
-  fi
-  if [ $rc -ne 0 ]; then
-    echo "ERROR: $msg"
-    exit $rc
-  fi
+function fail() {
+  echo "ERROR: $1"
+  exit 1
 }
 
-if [ ! -f bootstrap.sh ]; then
-  fail_on_error 1 "bootstrap.sh must be run from its current directory"
-fi
+[ -f bootstrap.sh ] || fail "bootstrap.sh must be run from its current directory"
 
-if [ "$USER" == "root" ]; then
-  fail_on_error 1 "Vitess cannot run as root. Please bootstrap with a non-root user."
-fi
+[ "$USER" != "root" ] || fail "Vitess cannot run as root. Please bootstrap with a non-root user."
 
-go version 2>&1 >/dev/null
-fail_on_error $? "Go is not installed or is not on \$PATH"
+go version 2>&1 >/dev/null || fail "Go is not installed or is not on \$PATH"
 
 . ./dev.env
 
@@ -56,7 +42,7 @@ else
     (cd zookeeper-$zk_ver/src/c && \
     ./configure --prefix=$zk_dist && \
     make install) && rm -rf zookeeper-$zk_ver zookeeper-$zk_ver.tar.gz)
-  fail_on_error $? "zookeeper build failed"
+  [ $? -eq 0 ] || "zookeeper build failed"
   touch $zk_dist/.build_finished
 fi
 
@@ -73,8 +59,7 @@ else
   # picked up by dev.env yet, but the install needs it to exist first,
   # and be in PYTHONPATH.
   export PYTHONPATH=$(prepend_path $PYTHONPATH $protobuf_dist/lib/python2.7/site-packages)
-  ./travis/install_protobuf.sh $protobuf_dist
-  fail_on_error $? "protobuf build failed"
+  ./travis/install_protobuf.sh $protobuf_dist || fail "protobuf build failed"
   touch $protobuf_dist/.build_finished
 fi
 
@@ -87,8 +72,7 @@ elif [ -f $grpc_dist/.build_finished ]; then
 else
   rm -rf $grpc_dist
   mkdir -p $grpc_dist
-  ./travis/install_grpc.sh $grpc_dist
-  fail_on_error $? "gRPC build failed"
+  ./travis/install_grpc.sh $grpc_dist || fail "gRPC build failed"
   touch $grpc_dist/.build_finished
 fi
 
@@ -121,8 +105,7 @@ else
   repos+=" code.google.com/p/go.tools/cmd/cover"
 fi
 
-go get -u $repos
-fail_on_error $? "Failed to download some Go dependencies with 'go get'. Please re-run bootstrap.sh in case of transient errors."
+go get -u $repos || fail "Failed to download some Go dependencies with 'go get'. Please re-run bootstrap.sh in case of transient errors."
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
@@ -137,22 +120,18 @@ fi
 case "$MYSQL_FLAVOR" in
   "MySQL56")
     myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep 'Distrib 5\.6'`
-    if [ "$myversion" == "" ]; then
-      fail_on_error 1 "Couldn't find MySQL 5.6 in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-    fi
+    [ "$myversion" != "" ] || fail "Couldn't find MySQL 5.6 in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
     echo "Found MySQL 5.6 installation in $VT_MYSQL_ROOT."
     ;;
 
   "MariaDB")
     myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep MariaDB`
-    if [ "$myversion" == "" ]; then
-      fail_on_error 1 "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-    fi
+    [ "$myversion" != "" ] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
     echo "Found MariaDB installation in $VT_MYSQL_ROOT."
     ;;
 
   *)
-    fail_on_error 1 "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
+    fail "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
     ;;
 
 esac
@@ -162,9 +141,7 @@ esac
 echo "$MYSQL_FLAVOR" > $VTROOT/dist/MYSQL_FLAVOR
 
 # generate pkg-config, so go can use mysql C client
-if [ ! -x $VT_MYSQL_ROOT/bin/mysql_config ]; then
-  fail_on_error 1 "Cannot execute $VT_MYSQL_ROOT/bin/mysql_config. Did you install a client dev package?"
-fi
+[ -x $VT_MYSQL_ROOT/bin/mysql_config ] || fail "Cannot execute $VT_MYSQL_ROOT/bin/mysql_config. Did you install a client dev package?"
 
 cp $VTTOP/config/gomysql.pc.tmpl $VTROOT/lib/gomysql.pc
 echo "Version:" "$($VT_MYSQL_ROOT/bin/mysql_config --version)" >> $VTROOT/lib/gomysql.pc
