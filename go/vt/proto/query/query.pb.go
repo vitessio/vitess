@@ -92,8 +92,8 @@ func (x Flag) String() string {
 type Type int32
 
 const (
-	// NULL specifies a NULL type.
-	Type_NULL Type = 0
+	// NULL_TYPE specifies a NULL type.
+	Type_NULL_TYPE Type = 0
 	// INT8 specifies a TINYINT type.
 	// Properties: 1, IsNumber.
 	Type_INT8 Type = 257
@@ -183,7 +183,7 @@ const (
 )
 
 var Type_name = map[int32]string{
-	0:     "NULL",
+	0:     "NULL_TYPE",
 	257:   "INT8",
 	770:   "UINT8",
 	259:   "INT16",
@@ -214,7 +214,7 @@ var Type_name = map[int32]string{
 	28:    "TUPLE",
 }
 var Type_value = map[string]int32{
-	"NULL":      0,
+	"NULL_TYPE": 0,
 	"INT8":      257,
 	"UINT8":     770,
 	"INT16":     259,

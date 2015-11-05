@@ -182,7 +182,7 @@ public class Proto {
 
     TypedValue(Object value) {
       if (value == null) {
-        this.type = Query.Type.NULL;
+        this.type = Query.Type.NULL_TYPE;
       } else if (value instanceof String) {
         // String
         this.type = Query.Type.VARCHAR;

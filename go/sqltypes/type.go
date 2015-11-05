@@ -65,7 +65,7 @@ func IsBinary(t query.Type) bool {
 // Vitess data types. These are idiomatically
 // named synonyms for the query.Type values.
 const (
-	Null      = query.Type_NULL
+	Null      = query.Type_NULL_TYPE
 	Int8      = query.Type_INT8
 	Uint8     = query.Type_UINT8
 	Int16     = query.Type_INT16
