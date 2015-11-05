@@ -23,8 +23,9 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // The tests in this file test the BinlogPlayerMap object.
@@ -49,10 +50,10 @@ type fakeBinlogClient struct {
 	expectedDialUID uint32
 
 	expectedTables string
-	tablesChannel  chan *proto.BinlogTransaction
+	tablesChannel  chan *pb.BinlogTransaction
 
 	expectedKeyRange string
-	keyRangeChannel  chan *proto.BinlogTransaction
+	keyRangeChannel  chan *pb.BinlogTransaction
 }
 
 func newFakeBinlogClient(t *testing.T, expectedDialUID uint32) *fakeBinlogClient {
@@ -60,13 +61,13 @@ func newFakeBinlogClient(t *testing.T, expectedDialUID uint32) *fakeBinlogClient
 		t:               t,
 		expectedDialUID: expectedDialUID,
 
-		tablesChannel:   make(chan *proto.BinlogTransaction),
-		keyRangeChannel: make(chan *proto.BinlogTransaction),
+		tablesChannel:   make(chan *pb.BinlogTransaction),
+		keyRangeChannel: make(chan *pb.BinlogTransaction),
 	}
 }
 
 // Dial is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) Dial(endPoint *pb.EndPoint, connTimeout time.Duration) error {
+func (fbc *fakeBinlogClient) Dial(endPoint *pbt.EndPoint, connTimeout time.Duration) error {
 	if fbc.expectedDialUID != endPoint.Uid {
 		fbc.t.Errorf("fakeBinlogClient.Dial expected uid %v got %v", fbc.expectedDialUID, endPoint.Uid)
 	}
@@ -83,13 +84,13 @@ func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position str
 }
 
 // StreamTables is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, tables []string, charset *mproto.Charset) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, tables []string, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	actualTables := strings.Join(tables, ",")
 	if actualTables != fbc.expectedTables {
 		return nil, nil, fmt.Errorf("Got wrong tables %v, expected %v", actualTables, fbc.expectedTables)
 	}
 
-	c := make(chan *proto.BinlogTransaction)
+	c := make(chan *pb.BinlogTransaction)
 	var finalErr error
 	go func() {
 		for {
@@ -109,13 +110,13 @@ func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, 
 }
 
 // StreamKeyRange is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyspaceIDType key.KeyspaceIdType, keyRange *pb.KeyRange, charset *mproto.Charset) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyspaceIDType key.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	actualKeyRange := key.KeyRangeString(keyRange)
 	if actualKeyRange != fbc.expectedKeyRange {
 		return nil, nil, fmt.Errorf("Got wrong keyrange %v, expected %v", actualKeyRange, fbc.expectedKeyRange)
 	}
 
-	c := make(chan *proto.BinlogTransaction)
+	c := make(chan *pb.BinlogTransaction)
 	var finalErr error
 	go func() {
 		for {
@@ -137,10 +138,10 @@ func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string
 // fakeTabletConn implement TabletConn interface. We only care about the
 // health check part.
 type fakeTabletConn struct {
-	endPoint   *pb.EndPoint
+	endPoint   *pbt.EndPoint
 	keyspace   string
 	shard      string
-	tabletType pb.TabletType
+	tabletType pbt.TabletType
 }
 
 // Execute is part of the TabletConn interface
@@ -208,12 +209,12 @@ func (ftc *fakeTabletConn) Close() {
 }
 
 // SetTarget is part of the TabletConn interface
-func (ftc *fakeTabletConn) SetTarget(keyspace, shard string, tabletType pb.TabletType) error {
+func (ftc *fakeTabletConn) SetTarget(keyspace, shard string, tabletType pbt.TabletType) error {
 	return fmt.Errorf("not implemented in this test")
 }
 
 // EndPoint is part of the TabletConn interface
-func (ftc *fakeTabletConn) EndPoint() *pb.EndPoint {
+func (ftc *fakeTabletConn) EndPoint() *pbt.EndPoint {
 	return ftc.endPoint
 }
 
@@ -256,12 +257,12 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 	}
 
 	ctx := context.Background()
-	tablet := &pb.Tablet{
-		Alias: &pb.TabletAlias{
+	tablet := &pbt.Tablet{
+		Alias: &pbt.TabletAlias{
 			Cell: "cell1",
 			Uid:  100,
 		},
-		Type:     pb.TabletType_REPLICA,
+		Type:     pbt.TabletType_REPLICA,
 		KeyRange: kr,
 		Keyspace: keyspace,
 		Shard:    vshard,
@@ -278,12 +279,12 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 
 	// register a tablet conn dialer that will return the instance
 	// we want
-	tabletconn.RegisterDialer(name, func(ctx context.Context, endPoint *pb.EndPoint, k, s string, tabletType pb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+	tabletconn.RegisterDialer(name, func(ctx context.Context, endPoint *pbt.EndPoint, k, s string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 		return &fakeTabletConn{
 			endPoint:   endPoint,
 			keyspace:   keyspace,
 			shard:      vshard,
-			tabletType: pb.TabletType_REPLICA,
+			tabletType: pbt.TabletType_REPLICA,
 		}, nil
 	})
 	flag.Lookup("tablet_protocol").Value.Set(name)
@@ -328,8 +329,8 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 
 	// create the keyspace, a full set of covering shards,
 	// and a new split destination shard.
-	if err := ts.CreateKeyspace(ctx, "ks", &pb.Keyspace{
-		ShardingColumnType: pb.KeyspaceIdType_UINT64,
+	if err := ts.CreateKeyspace(ctx, "ks", &pbt.Keyspace{
+		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
 		ShardingColumnName: "sharding_key",
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
@@ -361,12 +362,12 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 		return <-vtClientSyncChannel
 	})
 
-	tablet := &pb.Tablet{
-		Alias: &pb.TabletAlias{
+	tablet := &pbt.Tablet{
+		Alias: &pbt.TabletAlias{
 			Cell: "cell1",
 			Uid:  1,
 		},
-		KeyRange: &pb.KeyRange{
+		KeyRange: &pbt.KeyRange{
 			Start: []byte{0x40},
 			End:   []byte{0x60},
 		},
@@ -393,12 +394,12 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	}
 
 	// now add the source in shard
-	si.SourceShards = []*pb.Shard_SourceShard{
-		&pb.Shard_SourceShard{
+	si.SourceShards = []*pbt.Shard_SourceShard{
+		&pbt.Shard_SourceShard{
 			Uid:      1,
 			Keyspace: "ks",
 			Shard:    "-80",
-			KeyRange: &pb.KeyRange{
+			KeyRange: &pbt.KeyRange{
 				End: []byte{0x80},
 			},
 		},
@@ -441,15 +442,15 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 
 	// now we can feed an event through the fake connection
 	vtClientMock.CommitChannel = make(chan []string)
-	fbc.keyRangeChannel <- &proto.BinlogTransaction{
-		Statements: []proto.Statement{
-			proto.Statement{
-				Category: proto.BL_DML,
+	fbc.keyRangeChannel <- &pb.BinlogTransaction{
+		Statements: []*pb.BinlogTransaction_Statement{
+			{
+				Category: pb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "INSERT INTO tablet VALUES(1)",
 			},
 		},
 		Timestamp:     72,
-		TransactionID: "MariaDB/0-1-1235",
+		TransactionId: "MariaDB/0-1-1235",
 	}
 
 	// and make sure it results in a committed statement
@@ -508,8 +509,8 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 
 	// create the keyspace, a full set of covering shards,
 	// and a new split destination shard.
-	if err := ts.CreateKeyspace(ctx, "ks", &pb.Keyspace{
-		ShardingColumnType: pb.KeyspaceIdType_UINT64,
+	if err := ts.CreateKeyspace(ctx, "ks", &pbt.Keyspace{
+		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
 		ShardingColumnName: "sharding_key",
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
@@ -541,12 +542,12 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 		return <-vtClientSyncChannel
 	})
 
-	tablet := &pb.Tablet{
-		Alias: &pb.TabletAlias{
+	tablet := &pbt.Tablet{
+		Alias: &pbt.TabletAlias{
 			Cell: "cell1",
 			Uid:  1,
 		},
-		KeyRange: &pb.KeyRange{
+		KeyRange: &pbt.KeyRange{
 			Start: []byte{0x40},
 			End:   []byte{0x60},
 		},
@@ -562,12 +563,12 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	si.SourceShards = []*pb.Shard_SourceShard{
-		&pb.Shard_SourceShard{
+	si.SourceShards = []*pbt.Shard_SourceShard{
+		&pbt.Shard_SourceShard{
 			Uid:      1,
 			Keyspace: "ks",
 			Shard:    "-80",
-			KeyRange: &pb.KeyRange{
+			KeyRange: &pbt.KeyRange{
 				End: []byte{0x80},
 			},
 		},
@@ -632,15 +633,15 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 
 		// feed an event through the fake connection
 		vtClientMock.CommitChannel = make(chan []string)
-		fbc.keyRangeChannel <- &proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{
-					Category: proto.BL_DML,
+		fbc.keyRangeChannel <- &pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{
+					Category: pb.BinlogTransaction_Statement_BL_DML,
 					Sql:      "INSERT INTO tablet VALUES(1)",
 				},
 			},
 			Timestamp:     72,
-			TransactionID: "MariaDB/0-1-1235",
+			TransactionId: "MariaDB/0-1-1235",
 		}
 
 		// and make sure it results in a committed statement
@@ -700,10 +701,10 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	ctx := context.Background()
 
 	// create the keyspaces, with one shard each
-	if err := ts.CreateKeyspace(ctx, "source", &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "source", &pbt.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateKeyspace(ctx, "destination", &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "destination", &pbt.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 	for _, keyspace := range []string{"source", "destination"} {
@@ -759,8 +760,8 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		return <-vtClientSyncChannel
 	})
 
-	tablet := &pb.Tablet{
-		Alias: &pb.TabletAlias{
+	tablet := &pbt.Tablet{
+		Alias: &pbt.TabletAlias{
 			Cell: "cell1",
 			Uid:  1,
 		},
@@ -776,8 +777,8 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	si.SourceShards = []*pb.Shard_SourceShard{
-		&pb.Shard_SourceShard{
+	si.SourceShards = []*pbt.Shard_SourceShard{
+		&pbt.Shard_SourceShard{
 			Uid:      1,
 			Keyspace: "source",
 			Shard:    "0",
@@ -825,15 +826,15 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 
 	// now we can feed an event through the fake connection
 	vtClientMock.CommitChannel = make(chan []string)
-	fbc.tablesChannel <- &proto.BinlogTransaction{
-		Statements: []proto.Statement{
-			proto.Statement{
-				Category: proto.BL_DML,
+	fbc.tablesChannel <- &pb.BinlogTransaction{
+		Statements: []*pb.BinlogTransaction_Statement{
+			{
+				Category: pb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "INSERT INTO tablet VALUES(1)",
 			},
 		},
 		Timestamp:     72,
-		TransactionID: "MariaDB/0-1-1235",
+		TransactionId: "MariaDB/0-1-1235",
 	}
 
 	// and make sure it results in a committed statement

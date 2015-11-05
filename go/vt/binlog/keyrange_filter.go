@@ -6,11 +6,11 @@ package binlog
 
 import (
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // KeyRangeFilterFunc returns a function that calls sendReply only if statements
@@ -18,18 +18,18 @@ import (
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
 // TODO(erez): Remove 'KeyspaceIdType' from here: it's no longer used.
-func KeyRangeFilterFunc(unused key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
-	return func(reply *proto.BinlogTransaction) error {
+func KeyRangeFilterFunc(unused key.KeyspaceIdType, keyrange *pbt.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+	return func(reply *pb.BinlogTransaction) error {
 		matched := false
-		filtered := make([]proto.Statement, 0, len(reply.Statements))
+		filtered := make([]*pb.BinlogTransaction_Statement, 0, len(reply.Statements))
 		for _, statement := range reply.Statements {
 			switch statement.Category {
-			case proto.BL_SET:
+			case pb.BinlogTransaction_Statement_BL_SET:
 				filtered = append(filtered, statement)
-			case proto.BL_DDL:
+			case pb.BinlogTransaction_Statement_BL_DDL:
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
-			case proto.BL_DML:
+			case pb.BinlogTransaction_Statement_BL_DML:
 				keyspaceID, err := sqlannotation.ExtractKeySpaceID(string(statement.Sql))
 				if err != nil {
 					if handleExtractKeySpaceIDError(err) {
@@ -46,7 +46,7 @@ func KeyRangeFilterFunc(unused key.KeyspaceIdType, keyrange *pb.KeyRange, sendRe
 				}
 				filtered = append(filtered, statement)
 				matched = true
-			case proto.BL_UNRECOGNIZED:
+			case pb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("KeyRangeStream", 1)
 				log.Errorf("Error parsing keyspace id: %s", statement.Sql)
 				continue

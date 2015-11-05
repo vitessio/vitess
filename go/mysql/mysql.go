@@ -23,6 +23,8 @@ import (
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 const (
@@ -412,45 +414,46 @@ func (conn *Connection) Shutdown() {
 
 // GetCharset returns the current numerical values of the per-session character
 // set variables.
-func (conn *Connection) GetCharset() (cs proto.Charset, err error) {
+func (conn *Connection) GetCharset() (*pb.Charset, error) {
 	// character_set_client
 	row, err := conn.ExecuteFetchMap("SHOW COLLATION WHERE `charset`=@@session.character_set_client AND `default`='Yes'")
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	i, err := strconv.ParseInt(row["Id"], 10, 16)
+	client, err := strconv.ParseInt(row["Id"], 10, 16)
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	cs.Client = int(i)
 
 	// collation_connection
 	row, err = conn.ExecuteFetchMap("SHOW COLLATION WHERE `collation`=@@session.collation_connection")
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	i, err = strconv.ParseInt(row["Id"], 10, 16)
+	connection, err := strconv.ParseInt(row["Id"], 10, 16)
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	cs.Conn = int(i)
 
 	// collation_server
 	row, err = conn.ExecuteFetchMap("SHOW COLLATION WHERE `collation`=@@session.collation_server")
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	i, err = strconv.ParseInt(row["Id"], 10, 16)
+	server, err := strconv.ParseInt(row["Id"], 10, 16)
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	cs.Server = int(i)
 
-	return cs, nil
+	return &pb.Charset{
+		Client: int32(client),
+		Conn:   int32(connection),
+		Server: int32(server),
+	}, nil
 }
 
 // SetCharset changes the per-session character set variables.
-func (conn *Connection) SetCharset(cs proto.Charset) error {
+func (conn *Connection) SetCharset(cs *pb.Charset) error {
 	sql := fmt.Sprintf(
 		"SET @@session.character_set_client=%d, @@session.collation_connection=%d, @@session.collation_server=%d",
 		cs.Client, cs.Conn, cs.Server)

@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/binlog/proto"
+
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 var dmlErrorCases = []string{
@@ -35,10 +37,10 @@ func TestEventErrors(t *testing.T) {
 		},
 	}
 	for _, sql := range dmlErrorCases {
-		trans := &proto.BinlogTransaction{
-			Statements: []proto.Statement{
+		trans := &pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
 				{
-					Category: proto.BL_DML,
+					Category: pb.BinlogTransaction_Statement_BL_DML,
 					Sql:      sql,
 				},
 			},
@@ -64,10 +66,10 @@ func TestSetErrors(t *testing.T) {
 			return nil
 		},
 	}
-	trans := &proto.BinlogTransaction{
-		Statements: []proto.Statement{
+	trans := &pb.BinlogTransaction{
+		Statements: []*pb.BinlogTransaction_Statement{
 			{
-				Category: proto.BL_SET,
+				Category: pb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "SET INSERT_ID=abcd",
 			},
 		},
@@ -84,24 +86,24 @@ func TestSetErrors(t *testing.T) {
 }
 
 func TestDMLEvent(t *testing.T) {
-	trans := &proto.BinlogTransaction{
-		Statements: []proto.Statement{
+	trans := &pb.BinlogTransaction{
+		Statements: []*pb.BinlogTransaction_Statement{
 			{
-				Category: proto.BL_SET,
+				Category: pb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "SET TIMESTAMP=2",
 			}, {
-				Category: proto.BL_SET,
+				Category: pb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "SET INSERT_ID=10",
 			}, {
-				Category: proto.BL_DML,
+				Category: pb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "query /* _stream _table_ (eid id name)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */",
 			}, {
-				Category: proto.BL_DML,
+				Category: pb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "query",
 			},
 		},
 		Timestamp:     1,
-		TransactionID: "MariaDB/0-41983-20",
+		TransactionId: "MariaDB/0-41983-20",
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
@@ -137,18 +139,18 @@ func TestDMLEvent(t *testing.T) {
 }
 
 func TestDDLEvent(t *testing.T) {
-	trans := &proto.BinlogTransaction{
-		Statements: []proto.Statement{
+	trans := &pb.BinlogTransaction{
+		Statements: []*pb.BinlogTransaction_Statement{
 			{
-				Category: proto.BL_SET,
+				Category: pb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "SET TIMESTAMP=2",
 			}, {
-				Category: proto.BL_DDL,
+				Category: pb.BinlogTransaction_Statement_BL_DDL,
 				Sql:      "DDL",
 			},
 		},
 		Timestamp:     1,
-		TransactionID: "MariaDB/0-41983-20",
+		TransactionId: "MariaDB/0-41983-20",
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
