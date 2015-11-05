@@ -434,7 +434,7 @@ def poll_for_vars(
       continue
     if condition_fn is None:
       return v
-    elif condition_fn(_vars):
+    elif condition_fn(v):
       return v
 
 
@@ -1101,7 +1101,8 @@ class Vtctld(object):
     requires a dedicated port.
 
     Args:
-      python: is this for access with python, or go.
+      python: boolean, True iff this is for access with Python (as opposed to
+              Go).
 
     Returns:
       protocol - string e.g. 'grpc'
