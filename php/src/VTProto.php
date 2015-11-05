@@ -118,7 +118,7 @@ class VTProto {
 	protected static function TypedValue($value) {
 		if (is_null($value)) {
 			return array(
-					\query\Type::NULL_,
+					\query\Type::NULL_TYPE,
 					'' 
 			);
 		} else if (is_string($value)) {
