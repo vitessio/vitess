@@ -146,7 +146,7 @@ var testKeyRangeRequest = &keyRangeRequest{
 
 var testBinlogTransaction = &pb.BinlogTransaction{
 	Statements: []*pb.BinlogTransaction_Statement{
-		&pb.BinlogTransaction_Statement{
+		{
 			Category: pb.BinlogTransaction_Statement_BL_ROLLBACK,
 			Charset: &pb.Charset{
 				Client: 120,
