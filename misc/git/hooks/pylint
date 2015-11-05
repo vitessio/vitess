@@ -16,7 +16,14 @@ function msg() {
 }
 
 PYLINT=/usr/bin/gpylint
-PYARGS="--mode style --disable g-bad-file-header"
+
+function call_pylint {
+  $PYLINT --mode style \
+    --disable g-bad-file-header,g-bad-import-order,g-unknown-interpreter \
+    --module-header-template '' \
+    --msg-template '{path}:{line}:{msg_id}{obj_prefix}{obj}: {msg}{sym_separator}[{symbol}]' "$@"
+}
+
 
 # This script does not handle file names that contain spaces.
 pyfiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.*\.py$' | grep -v '^py/vtproto/')
@@ -38,7 +45,7 @@ errors=
 pyfiles_with_warnings=()
 for pyfile in $pyfiles
 do
-  errcount=$($PYLINT $PYARGS $pyfile | egrep '^[CWE][0-9]{4}:' | wc -l)
+  errcount=$(call_pylint $pyfile | egrep '^[^:]+:[^:]+:[CWE][0-9]{4}:' | wc -l)
   if [ "$errcount" -gt "0" ]; then
     if [ -z "$errors" ] ; then
       msg "$PYLINT found one or more issues:"
@@ -61,7 +68,7 @@ if [[ $? -eq 0 ]]; then
     echo
     msg "Press enter to show the warnings for $pyfile:"
     read
-    $PYLINT $PYARGS $pyfile
+    call_pylint $pyfile
   done
   read -r -p \
     'Type "ack" to ignore issues and commit anyway. Press enter to cancel: '
@@ -75,7 +82,7 @@ else
   # non-interactive shell (e.g. called from Eclipse). Just display the errors.
   for pyfile in "${pyfiles_with_warnings[@]}"
   do
-    $PYLINT $PYARGS $pyfile
+    call_pylint $pyfile
   done
 fi
 exit 1
