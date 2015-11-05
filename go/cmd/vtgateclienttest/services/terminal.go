@@ -28,34 +28,34 @@ func newTerminalClient() *terminalClient {
 	return &terminalClient{}
 }
 
-func (c *terminalClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *terminalClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if sql == "quit://" {
 		log.Fatal("Received quit:// query. Going down.")
 	}
 	return errTerminal
 }
 
-func (c *terminalClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *terminalClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return errTerminal
 }
 
-func (c *terminalClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *terminalClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return errTerminal
 }
 
-func (c *terminalClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *terminalClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return errTerminal
 }
 
-func (c *terminalClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *terminalClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return errTerminal
 }
 
-func (c *terminalClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
+func (c *terminalClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *pbg.Session, reply *proto.QueryResultList) error {
 	return errTerminal
 }
 
-func (c *terminalClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
+func (c *terminalClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *pbg.Session, reply *proto.QueryResultList) error {
 	return errTerminal
 }
 
@@ -75,15 +75,15 @@ func (c *terminalClient) StreamExecuteKeyRanges(ctx context.Context, sql string,
 	return errTerminal
 }
 
-func (c *terminalClient) Begin(ctx context.Context, outSession *proto.Session) error {
+func (c *terminalClient) Begin(ctx context.Context, outSession *pbg.Session) error {
 	return errTerminal
 }
 
-func (c *terminalClient) Commit(ctx context.Context, inSession *proto.Session) error {
+func (c *terminalClient) Commit(ctx context.Context, inSession *pbg.Session) error {
 	return errTerminal
 }
 
-func (c *terminalClient) Rollback(ctx context.Context, inSession *proto.Session) error {
+func (c *terminalClient) Rollback(ctx context.Context, inSession *pbg.Session) error {
 	return errTerminal
 }
 

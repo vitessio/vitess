@@ -18,6 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tableacl/acl"
 )
 
 // spotCheckMultiplier determines the precision of the
@@ -70,7 +72,7 @@ type QueryEngine struct {
 	tableaclPseudoDenied *stats.MultiCounters
 	strictTableAcl       bool
 	enableTableAclDryRun bool
-	exemptACL            string
+	exemptACL            acl.ACL
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
@@ -180,7 +182,20 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 	}
 	qe.strictTableAcl = config.StrictTableAcl
 	qe.enableTableAclDryRun = config.EnableTableAclDryRun
-	qe.exemptACL = config.TableAclExemptACL
+
+	if config.TableAclExemptACL != "" {
+		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
+			if exemptACL, err := f.New([]string{config.TableAclExemptACL}); err == nil {
+				log.Infof("Setting Table ACL exempt rule for %v", config.TableAclExemptACL)
+				qe.exemptACL = exemptACL
+			} else {
+				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
+			}
+		} else {
+			log.Infof("Cannot get current ACL Factory: %v", err)
+		}
+	}
+
 	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.MaxResultSize))
 	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))

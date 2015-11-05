@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -78,12 +77,12 @@ type queryExecute struct {
 	SQL              string
 	BindVariables    map[string]interface{}
 	TabletType       pb.TabletType
-	Session          *proto.Session
+	Session          *pbg.Session
 	NotInTransaction bool
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -117,12 +116,12 @@ type queryExecuteShards struct {
 	Keyspace         string
 	Shards           []string
 	TabletType       pb.TabletType
-	Session          *proto.Session
+	Session          *pbg.Session
 	NotInTransaction bool
 }
 
 // ExecuteShards is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -159,12 +158,12 @@ type queryExecuteKeyspaceIds struct {
 	Keyspace         string
 	KeyspaceIds      [][]byte
 	TabletType       pb.TabletType
-	Session          *proto.Session
+	Session          *pbg.Session
 	NotInTransaction bool
 }
 
 // ExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -200,12 +199,12 @@ type queryExecuteKeyRanges struct {
 	Keyspace         string
 	KeyRanges        []*pb.KeyRange
 	TabletType       pb.TabletType
-	Session          *proto.Session
+	Session          *pbg.Session
 	NotInTransaction bool
 }
 
 // ExecuteKeyRanges is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -242,12 +241,12 @@ type queryExecuteEntityIds struct {
 	EntityColumnName  string
 	EntityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId
 	TabletType        pb.TabletType
-	Session           *proto.Session
+	Session           *pbg.Session
 	NotInTransaction  bool
 }
 
 // ExecuteEntityIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -286,11 +285,11 @@ type queryExecuteBatchShards struct {
 	Queries       []proto.BoundShardQuery
 	TabletType    pb.TabletType
 	AsTransaction bool
-	Session       *proto.Session
+	Session       *pbg.Session
 }
 
 // ExecuteBatchShards is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
+func (f *fakeVTGateService) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *pbg.Session, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -327,11 +326,11 @@ type queryExecuteBatchKeyspaceIds struct {
 	Queries       []proto.BoundKeyspaceIdQuery
 	TabletType    pb.TabletType
 	AsTransaction bool
-	Session       *proto.Session
+	Session       *pbg.Session
 }
 
 // ExecuteBatchKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
+func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *pbg.Session, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -553,7 +552,7 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 }
 
 // Begin is part of the VTGateService interface
-func (f *fakeVTGateService) Begin(ctx context.Context, outSession *proto.Session) error {
+func (f *fakeVTGateService) Begin(ctx context.Context, outSession *pbg.Session) error {
 	f.checkCallerID(ctx, "Begin")
 	switch {
 	case f.forceBeginSuccess:
@@ -568,7 +567,7 @@ func (f *fakeVTGateService) Begin(ctx context.Context, outSession *proto.Session
 }
 
 // Commit is part of the VTGateService interface
-func (f *fakeVTGateService) Commit(ctx context.Context, inSession *proto.Session) error {
+func (f *fakeVTGateService) Commit(ctx context.Context, inSession *pbg.Session) error {
 	f.checkCallerID(ctx, "Commit")
 	if f.hasError {
 		return errTestVtGateError
@@ -583,7 +582,7 @@ func (f *fakeVTGateService) Commit(ctx context.Context, inSession *proto.Session
 }
 
 // Rollback is part of the VTGateService interface
-func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *proto.Session) error {
+func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *pbg.Session) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -2729,18 +2728,19 @@ var streamResult1 = mproto.QueryResult{
 	Rows:         [][]sqltypes.Value{},
 }
 
-var session1 = &proto.Session{
+var session1 = &pbg.Session{
 	InTransaction: true,
-	ShardSessions: []*proto.ShardSession{},
 }
 
-var session2 = &proto.Session{
+var session2 = &pbg.Session{
 	InTransaction: true,
-	ShardSessions: []*proto.ShardSession{
-		&proto.ShardSession{
-			Keyspace:      "ks",
-			Shard:         "1",
-			TabletType:    topo.TYPE_MASTER,
+	ShardSessions: []*pbg.Session_ShardSession{
+		&pbg.Session_ShardSession{
+			Target: &pbq.Target{
+				Keyspace:   "ks",
+				Shard:      "1",
+				TabletType: pb.TabletType_MASTER,
+			},
 			TransactionId: 1,
 		},
 	},

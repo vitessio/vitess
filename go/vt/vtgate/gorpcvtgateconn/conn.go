@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -57,16 +56,40 @@ func getEffectiveCallerID(ctx context.Context) *tproto.CallerID {
 	return nil
 }
 
-func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
-	var s *proto.Session
-	if session != nil {
-		s = session.(*proto.Session)
+func sessionToRPC(session interface{}) *pbg.Session {
+	if session == nil {
+		return nil
 	}
+	s := session.(*pbg.Session)
+	if s == nil {
+		return nil
+	}
+	if s.ShardSessions == nil {
+		return &pbg.Session{
+			InTransaction: s.InTransaction,
+			ShardSessions: []*pbg.Session_ShardSession{},
+		}
+	}
+	return s
+}
+
+func sessionFromRPC(session *pbg.Session) interface{} {
+	if session == nil {
+		return nil
+	}
+	if len(session.ShardSessions) == 0 {
+		session.ShardSessions = nil
+	}
+	return session
+}
+
+func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+	s := sessionToRPC(session)
 	request := proto.Query{
 		CallerID:         getEffectiveCallerID(ctx),
 		Sql:              query,
 		BindVariables:    bindVars,
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -75,23 +98,20 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 		return nil, session, err
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
-		return nil, result.Session, err
+		return nil, sessionFromRPC(result.Session), err
 	}
-	return result.Result, result.Session, nil
+	return result.Result, sessionFromRPC(result.Session), nil
 }
 
 func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
-	var s *proto.Session
-	if session != nil {
-		s = session.(*proto.Session)
-	}
+	s := sessionToRPC(session)
 	request := proto.QueryShard{
 		CallerID:         getEffectiveCallerID(ctx),
 		Sql:              query,
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
 		Shards:           shards,
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -100,23 +120,20 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 		return nil, session, err
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
-		return nil, result.Session, err
+		return nil, sessionFromRPC(result.Session), err
 	}
-	return result.Result, result.Session, nil
+	return result.Result, sessionFromRPC(result.Session), nil
 }
 
 func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
-	var s *proto.Session
-	if session != nil {
-		s = session.(*proto.Session)
-	}
+	s := sessionToRPC(session)
 	request := proto.KeyspaceIdQuery{
 		CallerID:         getEffectiveCallerID(ctx),
 		Sql:              query,
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
 		KeyspaceIds:      key.ProtoToKeyspaceIds(keyspaceIds),
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -125,23 +142,20 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 		return nil, session, err
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
-		return nil, result.Session, err
+		return nil, sessionFromRPC(result.Session), err
 	}
-	return result.Result, result.Session, nil
+	return result.Result, sessionFromRPC(result.Session), nil
 }
 
 func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
-	var s *proto.Session
-	if session != nil {
-		s = session.(*proto.Session)
-	}
+	s := sessionToRPC(session)
 	request := proto.KeyRangeQuery{
 		CallerID:         getEffectiveCallerID(ctx),
 		Sql:              query,
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
 		KeyRanges:        key.ProtoToKeyRanges(keyRanges),
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -150,16 +164,13 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 		return nil, session, err
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
-		return nil, result.Session, err
+		return nil, sessionFromRPC(result.Session), err
 	}
-	return result.Result, result.Session, nil
+	return result.Result, sessionFromRPC(result.Session), nil
 }
 
 func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
-	var s *proto.Session
-	if session != nil {
-		s = session.(*proto.Session)
-	}
+	s := sessionToRPC(session)
 	request := proto.EntityIdsQuery{
 		CallerID:          getEffectiveCallerID(ctx),
 		Sql:               query,
@@ -167,7 +178,7 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 		Keyspace:          keyspace,
 		EntityColumnName:  entityColumnName,
 		EntityKeyspaceIDs: proto.ProtoToEntityIds(entityKeyspaceIDs),
-		TabletType:        topo.ProtoToTabletType(tabletType),
+		TabletType:        tabletType,
 		Session:           s,
 		NotInTransaction:  notInTransaction,
 	}
@@ -176,20 +187,17 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 		return nil, session, err
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
-		return nil, result.Session, err
+		return nil, sessionFromRPC(result.Session), err
 	}
-	return result.Result, result.Session, nil
+	return result.Result, sessionFromRPC(result.Session), nil
 }
 
 func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
-	var s *proto.Session
-	if session != nil {
-		s = session.(*proto.Session)
-	}
+	s := sessionToRPC(session)
 	request := proto.BatchQueryShard{
 		CallerID:      getEffectiveCallerID(ctx),
 		Queries:       queries,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		AsTransaction: asTransaction,
 		Session:       s,
 	}
@@ -198,20 +206,17 @@ func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []proto.
 		return nil, session, err
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
-		return nil, result.Session, err
+		return nil, sessionFromRPC(result.Session), err
 	}
-	return result.List, result.Session, nil
+	return result.List, sessionFromRPC(result.Session), nil
 }
 
 func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
-	var s *proto.Session
-	if session != nil {
-		s = session.(*proto.Session)
-	}
+	s := sessionToRPC(session)
 	request := proto.KeyspaceIdBatchQuery{
 		CallerID:      getEffectiveCallerID(ctx),
 		Queries:       queries,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		AsTransaction: asTransaction,
 		Session:       s,
 	}
@@ -220,9 +225,9 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 		return nil, session, err
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
-		return nil, result.Session, err
+		return nil, sessionFromRPC(result.Session), err
 	}
-	return result.List, result.Session, nil
+	return result.List, sessionFromRPC(result.Session), nil
 }
 
 func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
@@ -230,7 +235,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
 		BindVariables: bindVars,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -243,7 +248,7 @@ func (conn *vtgateConn) StreamExecute2(ctx context.Context, query string, bindVa
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
 		BindVariables: bindVars,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -258,7 +263,7 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		Shards:        shards,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -273,7 +278,7 @@ func (conn *vtgateConn) StreamExecuteShards2(ctx context.Context, query string, 
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		Shards:        shards,
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -288,7 +293,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		KeyRanges:     key.ProtoToKeyRanges(keyRanges),
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -303,7 +308,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges2(ctx context.Context, query strin
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		KeyRanges:     key.ProtoToKeyRanges(keyRanges),
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -318,7 +323,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIds),
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -333,7 +338,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query str
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIds),
-		TabletType:    topo.ProtoToTabletType(tabletType),
+		TabletType:    tabletType,
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -369,7 +374,7 @@ func sendStreamResults(c *rpcplus.Call, sr chan *proto.QueryResult) (<-chan *mpr
 }
 
 func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
-	session := &proto.Session{}
+	session := &pbg.Session{}
 	if err := conn.rpcConn.Call(ctx, "VTGate.Begin", &rpc.Unused{}, session); err != nil {
 		return nil, err
 	}
@@ -377,12 +382,12 @@ func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
 }
 
 func (conn *vtgateConn) Commit(ctx context.Context, session interface{}) error {
-	s := session.(*proto.Session)
+	s := sessionToRPC(session)
 	return conn.rpcConn.Call(ctx, "VTGate.Commit", s, &rpc.Unused{})
 }
 
 func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error {
-	s := session.(*proto.Session)
+	s := sessionToRPC(session)
 	return conn.rpcConn.Call(ctx, "VTGate.Rollback", s, &rpc.Unused{})
 }
 
@@ -398,7 +403,7 @@ func (conn *vtgateConn) Begin2(ctx context.Context) (interface{}, error) {
 		return nil, err
 	}
 	// Return a non-nil pointer
-	session := &proto.Session{}
+	session := &pbg.Session{}
 	if reply.Session != nil {
 		session = reply.Session
 	}
@@ -406,7 +411,7 @@ func (conn *vtgateConn) Begin2(ctx context.Context) (interface{}, error) {
 }
 
 func (conn *vtgateConn) Commit2(ctx context.Context, session interface{}) error {
-	s := session.(*proto.Session)
+	s := sessionToRPC(session)
 	request := &proto.CommitRequest{
 		CallerID: getEffectiveCallerID(ctx),
 		Session:  s,
@@ -419,7 +424,7 @@ func (conn *vtgateConn) Commit2(ctx context.Context, session interface{}) error 
 }
 
 func (conn *vtgateConn) Rollback2(ctx context.Context, session interface{}) error {
-	s := session.(*proto.Session)
+	s := sessionToRPC(session)
 	request := &proto.RollbackRequest{
 		CallerID: getEffectiveCallerID(ctx),
 		Session:  s,

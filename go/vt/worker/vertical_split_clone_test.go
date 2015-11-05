@@ -229,7 +229,8 @@ func TestVerticalSplitClonePopulateBlpCheckpoint(t *testing.T) {
 func testVerticalSplitClone(t *testing.T, strategy string) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wi := NewInstance(ts, "cell1", time.Second)
+	ctx := context.Background()
+	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
 		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
@@ -255,7 +256,6 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 			},
 		},
 	}
-	ctx := context.Background()
 	wi.wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
 	destMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,

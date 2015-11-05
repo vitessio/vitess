@@ -174,9 +174,6 @@ func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangl
 
 	// start the diff job
 	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray)
-	if _, err := wi.setAndStartWorker(wrk, nil); err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot set worker: %s", err)
-	}
 	return wrk, nil, nil, nil
 }
 

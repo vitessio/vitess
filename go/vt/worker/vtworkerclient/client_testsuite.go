@@ -30,7 +30,7 @@ func init() {
 // CreateWorkerInstance returns a properly configured vtworker instance.
 func CreateWorkerInstance(t *testing.T) *worker.Instance {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	return worker.NewInstance(ts, "cell1", 1*time.Second)
+	return worker.NewInstance(context.Background(), ts, "cell1", 1*time.Second)
 }
 
 // TestSuite runs the test suite on the given vtworker and vtworkerclient

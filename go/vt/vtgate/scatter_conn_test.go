@@ -18,7 +18,9 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -274,7 +276,7 @@ func TestScatterCommitRollbackIncorrectSession(t *testing.T) {
 	}
 
 	// not in transaction
-	session := NewSafeSession(&proto.Session{})
+	session := NewSafeSession(&pbg.Session{})
 	err = stc.Commit(context.Background(), session)
 	verifyErrorCode(t, err, vtrpc.ErrorCode_NOT_IN_TX)
 }
@@ -288,14 +290,16 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 
 	// Sequence the executes to ensure commit order
-	session := NewSafeSession(&proto.Session{InTransaction: true})
+	session := NewSafeSession(&pbg.Session{InTransaction: true})
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0"}, pb.TabletType_REPLICA, session, false)
-	wantSession := proto.Session{
+	wantSession := pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestScatterConnCommitSuccess",
-			Shard:         "0",
-			TabletType:    topo.TYPE_REPLICA,
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   "TestScatterConnCommitSuccess",
+				Shard:      "0",
+				TabletType: pb.TabletType_REPLICA,
+			},
 			TransactionId: 1,
 		}},
 	}
@@ -303,17 +307,21 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 		t.Errorf("want\n%+v, got\n%+v", wantSession, *session.Session)
 	}
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0", "1"}, pb.TabletType_REPLICA, session, false)
-	wantSession = proto.Session{
+	wantSession = pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestScatterConnCommitSuccess",
-			Shard:         "0",
-			TabletType:    topo.TYPE_REPLICA,
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   "TestScatterConnCommitSuccess",
+				Shard:      "0",
+				TabletType: pb.TabletType_REPLICA,
+			},
 			TransactionId: 1,
 		}, {
-			Keyspace:      "TestScatterConnCommitSuccess",
-			Shard:         "1",
-			TabletType:    topo.TYPE_REPLICA,
+			Target: &pbq.Target{
+				Keyspace:   "TestScatterConnCommitSuccess",
+				Shard:      "1",
+				TabletType: pb.TabletType_REPLICA,
+			},
 			TransactionId: 1,
 		}},
 	}
@@ -325,7 +333,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	if err == nil {
 		t.Errorf("want error, got nil")
 	}
-	wantSession = proto.Session{}
+	wantSession = pbg.Session{}
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%+v, got\n%+v", wantSession, *session.Session)
 	}
@@ -346,14 +354,14 @@ func TestScatterConnRollback(t *testing.T) {
 	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 
 	// Sequence the executes to ensure commit order
-	session := NewSafeSession(&proto.Session{InTransaction: true})
+	session := NewSafeSession(&pbg.Session{InTransaction: true})
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0"}, pb.TabletType_REPLICA, session, false)
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0", "1"}, pb.TabletType_REPLICA, session, false)
 	err := stc.Rollback(context.Background(), session)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	wantSession := proto.Session{}
+	wantSession := pbg.Session{}
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%#v, got\n%#v", wantSession, *session.Session)
 	}
@@ -411,16 +419,18 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sbc1 := &sandboxConn{}
 	s.MapTestConn("1", sbc1)
 	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
-	session := NewSafeSession(&proto.Session{InTransaction: true})
+	session := NewSafeSession(&pbg.Session{InTransaction: true})
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, pb.TabletType_REPLICA, session, true)
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, pb.TabletType_REPLICA, session, false)
 
-	wantSession := proto.Session{
+	wantSession := pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestScatterConnQueryNotInTransaction",
-			Shard:         "1",
-			TabletType:    topo.TYPE_REPLICA,
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   "TestScatterConnQueryNotInTransaction",
+				Shard:      "1",
+				TabletType: pb.TabletType_REPLICA,
+			},
 			TransactionId: 1,
 		}},
 	}
@@ -449,16 +459,18 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sbc1 = &sandboxConn{}
 	s.MapTestConn("1", sbc1)
 	stc = NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
-	session = NewSafeSession(&proto.Session{InTransaction: true})
+	session = NewSafeSession(&pbg.Session{InTransaction: true})
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, pb.TabletType_REPLICA, session, false)
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, pb.TabletType_REPLICA, session, true)
 
-	wantSession = proto.Session{
+	wantSession = pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestScatterConnQueryNotInTransaction",
-			Shard:         "0",
-			TabletType:    topo.TYPE_REPLICA,
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   "TestScatterConnQueryNotInTransaction",
+				Shard:      "0",
+				TabletType: pb.TabletType_REPLICA,
+			},
 			TransactionId: 1,
 		}},
 	}
@@ -487,16 +499,18 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sbc1 = &sandboxConn{}
 	s.MapTestConn("1", sbc1)
 	stc = NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
-	session = NewSafeSession(&proto.Session{InTransaction: true})
+	session = NewSafeSession(&pbg.Session{InTransaction: true})
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, pb.TabletType_REPLICA, session, false)
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0", "1"}, pb.TabletType_REPLICA, session, true)
 
-	wantSession = proto.Session{
+	wantSession = pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestScatterConnQueryNotInTransaction",
-			Shard:         "0",
-			TabletType:    topo.TYPE_REPLICA,
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   "TestScatterConnQueryNotInTransaction",
+				Shard:      "0",
+				TabletType: pb.TabletType_REPLICA,
+			},
 			TransactionId: 1,
 		}},
 	}

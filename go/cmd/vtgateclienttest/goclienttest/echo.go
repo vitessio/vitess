@@ -72,7 +72,7 @@ var (
 	}
 	bindVarsEcho = "map[bytes:[1 2 3] float:2 int:123]"
 
-	sessionEcho = "InTransaction: true, ShardSession: []"
+	sessionEcho = "in_transaction:true "
 
 	callerID     = callerid.NewEffectiveCallerID("test_principal", "test_component", "test_subcomponent")
 	callerIDEcho = "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\" "
@@ -392,6 +392,6 @@ func checkEcho(t *testing.T, name string, qr *mproto.QueryResult, err error, wan
 		t.Errorf("MySQL NULL value wasn't preserved")
 	}
 	if !got["emptyString"].IsString() || got["emptyString"].String() != "" {
-		t.Errorf("Empty string value wasn't preserved")
+		t.Errorf("Empty string value wasn't preserved: %#v", got)
 	}
 }

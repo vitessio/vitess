@@ -38,7 +38,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 	private static $ENTITY_COLUMN_NAME = 'test_column';
 	private static $ENTITY_KEYSPACE_IDS; // initialized in setUpBeforeClass()
 	private static $ENTITY_KEYSPACE_IDS_ECHO = '[xid_type:FLOAT64 xid_value:"1.5" keyspace_id:"\0224Vx\000\000\000\002"  xid_type:INT64 xid_value:"123" keyspace_id:"\0224Vx\000\000\000\000"  xid_type:UINT64 xid_value:"456" keyspace_id:"\0224Vx\000\000\000\001" ]';
-	private static $SESSION_ECHO = 'InTransaction: true, ShardSession: []';
+	private static $SESSION_ECHO = 'in_transaction:true ';
 
 	public static function setUpBeforeClass() {
 		$VTROOT = getenv('VTROOT');

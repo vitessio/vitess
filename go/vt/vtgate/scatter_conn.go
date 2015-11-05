@@ -20,7 +20,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -407,12 +406,11 @@ func (stc *ScatterConn) Commit(ctx context.Context, session *SafeSession) (err e
 	}
 	committing := true
 	for _, shardSession := range session.ShardSessions {
-		tabletType := topo.TabletTypeToProto(shardSession.TabletType)
 		if !committing {
-			stc.gateway.Rollback(ctx, shardSession.Keyspace, shardSession.Shard, tabletType, shardSession.TransactionId)
+			stc.gateway.Rollback(ctx, shardSession.Target.Keyspace, shardSession.Target.Shard, shardSession.Target.TabletType, shardSession.TransactionId)
 			continue
 		}
-		if err = stc.gateway.Commit(ctx, shardSession.Keyspace, shardSession.Shard, tabletType, shardSession.TransactionId); err != nil {
+		if err = stc.gateway.Commit(ctx, shardSession.Target.Keyspace, shardSession.Target.Shard, shardSession.Target.TabletType, shardSession.TransactionId); err != nil {
 			committing = false
 		}
 	}
@@ -426,8 +424,7 @@ func (stc *ScatterConn) Rollback(ctx context.Context, session *SafeSession) (err
 		return nil
 	}
 	for _, shardSession := range session.ShardSessions {
-		tabletType := topo.TabletTypeToProto(shardSession.TabletType)
-		stc.gateway.Rollback(ctx, shardSession.Keyspace, shardSession.Shard, tabletType, shardSession.TransactionId)
+		stc.gateway.Rollback(ctx, shardSession.Target.Keyspace, shardSession.Target.Shard, shardSession.Target.TabletType, shardSession.TransactionId)
 	}
 	session.Reset()
 	return nil
@@ -474,7 +471,7 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 	for shard := range keyRangeByShard {
 		shards = append(shards, shard)
 	}
-	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&proto.Session{}), false, actionFunc)
+	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&pbg.Session{}), false, actionFunc)
 	splits := []*pbg.SplitQueryResponse_Part{}
 	for s := range allSplits {
 		splits = append(splits, s.([]*pbg.SplitQueryResponse_Part)...)
@@ -524,7 +521,7 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 		return nil
 	}
 
-	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&proto.Session{}), false, actionFunc)
+	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&pbg.Session{}), false, actionFunc)
 	splits := []*pbg.SplitQueryResponse_Part{}
 	for s := range allSplits {
 		splits = append(splits, s.([]*pbg.SplitQueryResponse_Part)...)
@@ -681,10 +678,12 @@ func (stc *ScatterConn) updateSession(
 	if err != nil {
 		return 0, err
 	}
-	session.Append(&proto.ShardSession{
-		Keyspace:      keyspace,
-		TabletType:    topo.ProtoToTabletType(tabletType),
-		Shard:         shard,
+	session.Append(&pbg.Session_ShardSession{
+		Target: &pbq.Target{
+			Keyspace:   keyspace,
+			Shard:      shard,
+			TabletType: tabletType,
+		},
 		TransactionId: transactionID,
 	})
 	return transactionID, nil
