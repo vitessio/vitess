@@ -316,7 +316,7 @@ type Keyspace struct {
 	// empty if the keyspace is not sharded
 	ShardingColumnName string `protobuf:"bytes,1,opt,name=sharding_column_name" json:"sharding_column_name,omitempty"`
 	// type of the column used for sharding
-	// KIT_UNSET if the keyspace is not sharded
+	// UNSET if the keyspace is not sharded
 	ShardingColumnType KeyspaceIdType `protobuf:"varint,2,opt,name=sharding_column_type,enum=topodata.KeyspaceIdType" json:"sharding_column_type,omitempty"`
 	// SplitShardCount stores the number of jobs to run to be sure to
 	// always have at most one job per shard (used during resharding).

@@ -88,44 +88,8 @@ func (hkid HexKeyspaceId) Unhex() (KeyspaceId, error) {
 }
 
 //
-// KeyspaceIdType definitions
+// KeyspaceIdType helper methods
 //
-
-// KeyspaceIdType represents the type of the KeyspaceId.
-// Usually we don't care, but some parts of the code will need that info.
-type KeyspaceIdType string
-
-//go:generate bsongen -file $GOFILE -type KeyspaceIdType -o keyspace_id_type_bson.go
-
-const (
-	// unset - no type for this KeyspaceId
-	KIT_UNSET = KeyspaceIdType("")
-
-	// uint64 - a uint64 value is used
-	// this is represented as 'unsigned bigint' in mysql
-	KIT_UINT64 = KeyspaceIdType("uint64")
-
-	// bytes - a string of bytes is used
-	// this is represented as 'varbinary' in mysql
-	KIT_BYTES = KeyspaceIdType("bytes")
-)
-
-var AllKeyspaceIdTypes = []KeyspaceIdType{
-	KIT_UNSET,
-	KIT_UINT64,
-	KIT_BYTES,
-}
-
-// IsKeyspaceIdTypeInList returns true if the given type is in the list.
-// Use it with AllKeyspaceIdTypes for instance.
-func IsKeyspaceIdTypeInList(typ KeyspaceIdType, types []KeyspaceIdType) bool {
-	for _, t := range types {
-		if typ == t {
-			return true
-		}
-	}
-	return false
-}
 
 // ParseKeyspaceIDType parses the keyspace id type into the enum
 func ParseKeyspaceIDType(param string) (pb.KeyspaceIdType, error) {
