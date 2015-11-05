@@ -70,7 +70,6 @@ class LoggingStream(object):
     pass
 
 
-
 def add_options(parser):
   environment.add_options(parser)
   parser.add_option('-d', '--debug', action='store_true',
@@ -108,6 +107,7 @@ def main(mod=None, test_options=None):
   """The replacement main method, which parses args and runs tests.
 
   Args:
+    mod: module that contains the test methods.
     test_options: a function which adds OptionParser options that are specific
       to a test file.
   """
@@ -361,7 +361,7 @@ def wait_step(msg, timeout, sleep_time=1.0):
 def get_vars(port):
   """Returns the dict for vars from a vtxxx process.
 
-  Returns None if we can't get them.
+  Returns: None if we can't get them.
   """
   try:
     url = 'http://localhost:%d/debug/vars' % int(port)
@@ -412,8 +412,8 @@ def poll_for_vars(
       already exited.
 
   Raises:
-    TestError, if the conditions aren't met within the given timeout
-    TestError, if vars are required and don't exist
+    TestError: if the conditions aren't met within the given timeout, or
+               if vars are required and don't exist.
 
   Returns:
     dict of debug variables
@@ -425,17 +425,17 @@ def poll_for_vars(
       raise TestError(
           'Timed out polling for vars from %s; condition "%s" not met' %
           (name, condition_msg))
-    _vars = get_vars(port)
-    if _vars is None:
+    v = get_vars(port)
+    if v is None:
       if require_vars:
         raise TestError(
             'Expected vars to exist on %s, but they do not; '
             'process probably exited earlier than expected.' % (name,))
       continue
     if condition_fn is None:
-      return _vars
+      return v
     elif condition_fn(_vars):
-      return _vars
+      return v
 
 
 def apply_vschema(vschema):
@@ -694,7 +694,7 @@ def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
 # run_vtctl_json runs the provided vtctl command and returns the result
 # parsed as json
 def run_vtctl_json(clargs, auto_log=True):
-  stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=auto_log)
+  stdout, _ = run_vtctl(clargs, trap_output=True, auto_log=auto_log)
   return json.loads(stdout)
 
 
@@ -893,7 +893,7 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
           e = base64.b64decode(e).encode('hex')
       r += ' %s-%s' % (s, e)
     pmap[tablet_type] = r + '\n'
-  for tablet_type in sorted(pmap.keys()):
+  for tablet_type in sorted(pmap):
     result += pmap[tablet_type]
   logging.debug('Cell %s keyspace %s has data:\n%s', cell, keyspace, result)
   if expected != result:
@@ -904,14 +904,15 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
   if 'keyspace_id' != ks.get('sharding_column_name'):
     raise Exception('Got wrong sharding_column_name in SrvKeyspace: %s' %
                     str(ks))
-  if keyspace_id_type != keyrange_constants.PROTO3_KIT_TO_STRING[ks.get('sharding_column_type')]:
+  if keyspace_id_type != keyrange_constants.PROTO3_KIT_TO_STRING[
+      ks.get('sharding_column_type')]:
     raise Exception('Got wrong sharding_column_type in SrvKeyspace: %s' %
                     str(ks))
 
 
 def check_shard_query_service(
     testcase, shard_name, tablet_type, expected_state):
-  """Makes assertions about the state of DisableQueryService in the shard record's TabletControlMap."""
+  """Checks DisableQueryService in the shard record's TabletControlMap."""
   # We assume that query service should be enabled unless
   # DisableQueryService is explicitly True
   query_service_enabled = True
@@ -1016,7 +1017,8 @@ def curl(url, request=None, data=None, background=False, retry_timeout=0,
   return run(args, trap_output=True, **kwargs)
 
 
-class VtctldError(Exception): pass
+class VtctldError(Exception):
+  pass
 
 # save the first running instance, and an RPC connection to it,
 # so we can use it to run remote vtctl commands
@@ -1078,6 +1080,8 @@ class Vtctld(object):
       v = get_vars(self.port)
       if v:
         break
+      if self.proc.poll() is not None:
+        raise TestError('vtctld died while starting')
       timeout = wait_step('waiting for vtctld to start', timeout,
                           sleep_time=0.2)
 
@@ -1095,6 +1099,9 @@ class Vtctld(object):
 
     The RPC endpoint may differ from the webinterface URL e.g. because gRPC
     requires a dedicated port.
+
+    Args:
+      python: is this for access with python, or go.
 
     Returns:
       protocol - string e.g. 'grpc'
@@ -1132,16 +1139,24 @@ class Vtctld(object):
         trap_output=True)
     return out
 
-def uint64_to_hex(integer):
-  """Returns the hexadecimal representation of integer treated as a 64-bit unsigned integer.
 
-  The result is padded by zeros if necessary to fill a 16 character string. Useful for converting
-  keyspace ids integers.
+def uint64_to_hex(integer):
+  """Returns the hex representation of an int treated as a 64-bit unsigned int.
+
+  The result is padded by zeros if necessary to fill a 16 character string.
+  Useful for converting keyspace ids integers.
+
   Example:
   uint64_to_hex(1) == "0000000000000001"
   uint64_to_hex(0xDEADBEAF) == "00000000DEADBEEF"
   uint64_to_hex(0xDEADBEAFDEADBEAFDEADBEAF) raises an out of range exception.
+
+  Args:
+    integer: the value to print.
+
+  Raises:
+    ValueError: if the integer is out of range.
   """
   if integer > (1<<64)-1 or integer < 0:
-    raise Exception('Integer out of range: %d' % integer)
-  return "%016X" % integer
+    raise ValueError('Integer out of range: %d' % integer)
+  return '%016X' % integer
