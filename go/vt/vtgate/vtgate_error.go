@@ -61,7 +61,8 @@ func aggregateVtGateErrorCodes(errors []error) vtrpc.ErrorCode {
 	return highCode
 }
 
-func aggregateVtGateErrors(errors []error) error {
+// AggregateVtGateErrors aggregates several VtErrors.
+func AggregateVtGateErrors(errors []error) error {
 	if len(errors) == 0 {
 		return nil
 	}

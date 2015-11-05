@@ -99,7 +99,7 @@ func (sg *shardGateway) InitializeConnections(ctx context.Context) error {
 	}
 	wg.Wait()
 	if errRecorder.HasErrors() {
-		return errRecorder.AggrError(aggregateVtGateErrors)
+		return errRecorder.AggrError(AggregateVtGateErrors)
 	}
 	return nil
 }
