@@ -856,7 +856,7 @@ func TestBadAddBindVarCond(t *testing.T) {
 	}
 	err = qr1.AddBindVarCond("a", true, false, QRLessThan, &pb.KeyRange{})
 	if err == nil {
-		t.Fatalf("invalid op: QRLessThan for value type: key.KeyRange")
+		t.Fatalf("invalid op: QRLessThan for value type: *pb.KeyRange")
 	}
 }
 

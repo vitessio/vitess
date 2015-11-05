@@ -37,7 +37,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	shard := &pb.Shard{
-		KeyRange: newKeyRange3("b0-c0"),
+		KeyRange: newKeyRange("b0-c0"),
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", shard); err != nil {
 		t.Fatalf("CreateShard: %v", err)
@@ -70,12 +70,12 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Errorf("GetShard: %v", err)
 	}
-	if want := newKeyRange3("b0-c0"); !key.KeyRangeEqual(shard.KeyRange, want) {
+	if want := newKeyRange("b0-c0"); !key.KeyRangeEqual(shard.KeyRange, want) {
 		t.Errorf("shard.KeyRange: want %v, got %v", want, shard.KeyRange)
 	}
 	master := &pb.TabletAlias{Cell: "ny", Uid: 1}
 	shard.MasterAlias = master
-	shard.KeyRange = newKeyRange3("b0-c0")
+	shard.KeyRange = newKeyRange("b0-c0")
 	shard.ServedTypes = []*pb.Shard_ServedType{
 		&pb.Shard_ServedType{
 			TabletType: pb.TabletType_MASTER,
@@ -93,7 +93,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 			Uid:      1,
 			Keyspace: "source_ks",
 			Shard:    "b8-c0",
-			KeyRange: newKeyRange3("b8-c0"),
+			KeyRange: newKeyRange("b8-c0"),
 			Tables:   []string{"table1", "table2"},
 		},
 	}

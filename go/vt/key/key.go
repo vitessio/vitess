@@ -152,10 +152,6 @@ type KeyRange struct {
 
 //go:generate bsongen -file $GOFILE -type KeyRange -o key_range_bson.go
 
-func (kr KeyRange) Contains(i KeyspaceId) bool {
-	return kr.Start <= i && (kr.End == MaxKey || i < kr.End)
-}
-
 // KeyRangeContains returns true if the provided id is in the keyrange.
 func KeyRangeContains(kr *pb.KeyRange, id []byte) bool {
 	if kr == nil {

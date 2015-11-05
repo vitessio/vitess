@@ -11,6 +11,8 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // RowSplitter is a helper class to split rows into multiple
@@ -18,7 +20,7 @@ import (
 type RowSplitter struct {
 	Type       key.KeyspaceIdType
 	ValueIndex int
-	KeyRanges  []key.KeyRange
+	KeyRanges  []*pb.KeyRange
 }
 
 // NewRowSplitter returns a new row splitter for the given shard distribution.
@@ -26,10 +28,10 @@ func NewRowSplitter(shardInfos []*topo.ShardInfo, typ key.KeyspaceIdType, valueI
 	result := &RowSplitter{
 		Type:       typ,
 		ValueIndex: valueIndex,
-		KeyRanges:  make([]key.KeyRange, len(shardInfos)),
+		KeyRanges:  make([]*pb.KeyRange, len(shardInfos)),
 	}
 	for i, si := range shardInfos {
-		result.KeyRanges[i] = key.ProtoToKeyRange(si.KeyRange)
+		result.KeyRanges[i] = si.KeyRange
 	}
 	return result
 }
@@ -48,9 +50,9 @@ func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Valu
 			if err != nil {
 				return fmt.Errorf("Non numerical value: %v", err)
 			}
-			k := key.Uint64Key(i).KeyspaceId()
+			k := key.Uint64Key(i).Bytes()
 			for i, kr := range rs.KeyRanges {
-				if kr.Contains(k) {
+				if key.KeyRangeContains(kr, k) {
 					result[i] = append(result[i], row)
 					break
 				}
@@ -58,9 +60,9 @@ func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Valu
 		}
 	} else {
 		for _, row := range rows {
-			k := key.KeyspaceId(row[rs.ValueIndex].Raw())
+			k := row[rs.ValueIndex].Raw()
 			for i, kr := range rs.KeyRanges {
-				if kr.Contains(k) {
+				if key.KeyRangeContains(kr, k) {
 					result[i] = append(result[i], row)
 					break
 				}
