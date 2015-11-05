@@ -262,7 +262,7 @@ public class CursorTest {
     try (
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
-                .addFields(Field.newBuilder().setName("col0").setType(Query.Type.NULL).build())
+                .addFields(Field.newBuilder().setName("col0").setType(Query.Type.NULL_TYPE).build())
                 .addRows(
                     Query.Row.newBuilder()
                         .addLengths("1234".length())

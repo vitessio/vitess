@@ -71,7 +71,7 @@ func echoQueryResult(vals map[string]interface{}) *mproto.QueryResult {
 	qr.Fields = append(qr.Fields, mproto.Field{Name: "null", Type: mproto.VT_VAR_STRING})
 	row = append(row, sqltypes.NULL)
 	qr.Fields = append(qr.Fields, mproto.Field{Name: "emptyString", Type: mproto.VT_VAR_STRING})
-	row = append(row, sqltypes.MakeString(nil))
+	row = append(row, sqltypes.MakeString([]byte("")))
 
 	for k, v := range vals {
 		qr.Fields = append(qr.Fields, mproto.Field{Name: k, Type: mproto.VT_VAR_STRING})

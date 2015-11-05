@@ -180,7 +180,7 @@ public class Row {
         return Float.valueOf(value.toStringUtf8());
       case FLOAT64:
         return Double.valueOf(value.toStringUtf8());
-      case NULL:
+      case NULL_TYPE:
         return null;
       case DATE:
         return DateTime.parse(value.toStringUtf8(), ISODateTimeFormat.date());
