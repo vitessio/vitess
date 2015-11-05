@@ -60,7 +60,7 @@ func requestToError(request string) error {
 // requestToPartialError fills reply for a partial error if requested.
 // It returns true if a partial error was requested, false otherwise.
 // This partial error should only be returned by Execute* calls.
-func requestToPartialError(request string, session *proto.Session, reply *proto.QueryResult) bool {
+func requestToPartialError(request string, session *pbg.Session, reply *proto.QueryResult) bool {
 	if !strings.HasPrefix(request, PartialErrorPrefix) {
 		return false
 	}
@@ -120,7 +120,7 @@ func trimmedRequestToError(received string) error {
 	}
 }
 
-func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if requestToPartialError(sql, session, reply) {
 		return nil
 	}
@@ -130,7 +130,7 @@ func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map
 	return c.fallbackClient.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
 }
 
-func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if requestToPartialError(sql, session, reply) {
 		return nil
 	}
@@ -140,7 +140,7 @@ func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariabl
 	return c.fallbackClient.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction, reply)
 }
 
-func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if requestToPartialError(sql, session, reply) {
 		return nil
 	}
@@ -150,7 +150,7 @@ func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVa
 	return c.fallbackClient.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction, reply)
 }
 
-func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if requestToPartialError(sql, session, reply) {
 		return nil
 	}
@@ -160,7 +160,7 @@ func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVari
 	return c.fallbackClient.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction, reply)
 }
 
-func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if requestToPartialError(sql, session, reply) {
 		return nil
 	}
@@ -170,7 +170,7 @@ func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVari
 	return c.fallbackClient.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, reply)
 }
 
-func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
+func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *pbg.Session, reply *proto.QueryResultList) error {
 	if len(queries) == 1 {
 		var partialReply proto.QueryResult
 		if requestToPartialError(queries[0].Sql, session, &partialReply) {
@@ -186,7 +186,7 @@ func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []proto.Bo
 	return c.fallbackClient.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, session, reply)
 }
 
-func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
+func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *pbg.Session, reply *proto.QueryResultList) error {
 	if len(queries) == 1 {
 		var partialReply proto.QueryResult
 		if requestToPartialError(queries[0].Sql, session, &partialReply) {
@@ -230,7 +230,7 @@ func (c *errorClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bi
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
 }
 
-func (c *errorClient) Begin(ctx context.Context, outSession *proto.Session) error {
+func (c *errorClient) Begin(ctx context.Context, outSession *pbg.Session) error {
 	// The client sends the error request through the callerid, as there are no other parameters
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)
@@ -240,7 +240,7 @@ func (c *errorClient) Begin(ctx context.Context, outSession *proto.Session) erro
 	return c.fallbackClient.Begin(ctx, outSession)
 }
 
-func (c *errorClient) Commit(ctx context.Context, inSession *proto.Session) error {
+func (c *errorClient) Commit(ctx context.Context, inSession *pbg.Session) error {
 	// The client sends the error request through the callerid, as there are no other parameters
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)
@@ -250,7 +250,7 @@ func (c *errorClient) Commit(ctx context.Context, inSession *proto.Session) erro
 	return c.fallbackClient.Commit(ctx, inSession)
 }
 
-func (c *errorClient) Rollback(ctx context.Context, inSession *proto.Session) error {
+func (c *errorClient) Rollback(ctx context.Context, inSession *pbg.Session) error {
 	// The client sends the error request through the callerid, as there are no other parameters
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)

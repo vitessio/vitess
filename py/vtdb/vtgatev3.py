@@ -7,14 +7,16 @@
 from itertools import izip
 import logging
 
+from vtproto import topodata_pb2
+
 from net import bsonrpc
 from net import gorpc
+
 from vtdb import cursorv3
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import vtdb_logger
 from vtdb import vtgate_utils
-
 
 def log_exception(method):
   """Decorator for logging the exception from vtgatev2.
@@ -63,7 +65,7 @@ def _create_req(sql, new_binds, tablet_type, not_in_transaction):
   req = {
       'Sql': sql,
       'BindVariables': new_binds,
-      'TabletType': tablet_type,
+      'TabletType': topodata_pb2.TabletType.Value(tablet_type.upper()),
       'NotInTransaction': not_in_transaction,
   }
   return req
@@ -231,7 +233,7 @@ class VTGateConnection(object):
     try:
       req = {
           'Queries': query_list,
-          'TabletType': tablet_type,
+          'TabletType': topodata_pb2.TabletType.Value(tablet_type.upper()),
           'AsTransaction': as_transaction,
       }
       self._add_session(req)

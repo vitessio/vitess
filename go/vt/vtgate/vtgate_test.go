@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -66,7 +67,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qr.Session)
 	}
 
-	session := new(proto.Session)
+	session := new(pbg.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
@@ -78,12 +79,14 @@ func TestVTGateExecute(t *testing.T) {
 		session,
 		false,
 		qr)
-	wantSession := &proto.Session{
+	wantSession := &pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      KsTestUnsharded,
-			Shard:         "0",
-			TabletType:    topo.TYPE_MASTER,
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   KsTestUnsharded,
+				Shard:      "0",
+				TabletType: pb.TabletType_MASTER,
+			},
 			TransactionId: 1,
 		}},
 	}
@@ -96,7 +99,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	session = new(proto.Session)
+	session = new(pbg.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	rpcVTGate.Execute(context.Background(),
 		"select * from t1",
@@ -134,7 +137,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qr.Session)
 	}
 
-	session := new(proto.Session)
+	session := new(pbg.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
@@ -148,12 +151,14 @@ func TestVTGateExecuteShards(t *testing.T) {
 		session,
 		false,
 		qr)
-	wantSession := &proto.Session{
+	wantSession := &pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestVTGateExecuteShards",
-			Shard:         "0",
-			TabletType:    topo.TYPE_REPLICA,
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   "TestVTGateExecuteShards",
+				Shard:      "0",
+				TabletType: pb.TabletType_REPLICA,
+			},
 			TransactionId: 1,
 		}},
 	}
@@ -166,7 +171,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	session = new(proto.Session)
+	session = new(pbg.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	rpcVTGate.ExecuteShards(context.Background(),
 		"query",
@@ -219,7 +224,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	session := new(proto.Session)
+	session := new(pbg.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
@@ -233,13 +238,15 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		session,
 		false,
 		qr)
-	wantSession := &proto.Session{
+	wantSession := &pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestVTGateExecuteKeyspaceIds",
-			Shard:         "-20",
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   "TestVTGateExecuteKeyspaceIds",
+				Shard:      "-20",
+				TabletType: pb.TabletType_MASTER,
+			},
 			TransactionId: 1,
-			TabletType:    topo.TYPE_MASTER,
 		}},
 	}
 	if !reflect.DeepEqual(wantSession, session) {
@@ -296,7 +303,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	session := new(proto.Session)
+	session := new(pbg.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
@@ -313,13 +320,15 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	wantSession := &proto.Session{
+	wantSession := &pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestVTGateExecuteKeyRanges",
-			Shard:         "-20",
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   "TestVTGateExecuteKeyRanges",
+				Shard:      "-20",
+				TabletType: pb.TabletType_MASTER,
+			},
 			TransactionId: 1,
-			TabletType:    topo.TYPE_MASTER,
 		}},
 	}
 	if !reflect.DeepEqual(wantSession, session) {
@@ -381,7 +390,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	session := new(proto.Session)
+	session := new(pbg.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
@@ -402,13 +411,15 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		session,
 		false,
 		qr)
-	wantSession := &proto.Session{
+	wantSession := &pbg.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestVTGateExecuteEntityIds",
-			Shard:         "-20",
+		ShardSessions: []*pbg.Session_ShardSession{{
+			Target: &pbq.Target{
+				Keyspace:   "TestVTGateExecuteEntityIds",
+				Shard:      "-20",
+				TabletType: pb.TabletType_MASTER,
+			},
 			TransactionId: 1,
-			TabletType:    topo.TYPE_MASTER,
 		}},
 	}
 	if !reflect.DeepEqual(wantSession, session) {
@@ -479,7 +490,7 @@ func TestVTGateExecuteBatchShards(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qrl.Session)
 	}
 
-	session := new(proto.Session)
+	session := new(pbg.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	rpcVTGate.ExecuteBatchShards(context.Background(),
 		[]proto.BoundShardQuery{{
@@ -544,7 +555,7 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qrl.Session)
 	}
 
-	session := new(proto.Session)
+	session := new(pbg.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
 		[]proto.BoundKeyspaceIdQuery{{

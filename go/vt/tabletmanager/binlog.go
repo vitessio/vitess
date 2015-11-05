@@ -289,14 +289,14 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 			t.Stop()
 			break
 		case <-t.C:
-			return fmt.Errorf("healthcheck has no endpoint for %v %v %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA)
+			return fmt.Errorf("healthcheck has no endpoint for %v %v %v", bpc.cell, bpc.sourceShard.String(), pb.TabletType_REPLICA)
 		}
 	}
 
 	// Find the server list from the health check
 	addrs := bpc.healthCheck.GetEndPointStatsFromTarget(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, pb.TabletType_REPLICA)
 	if len(addrs) == 0 {
-		return fmt.Errorf("can't find any source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA)
+		return fmt.Errorf("can't find any source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), pb.TabletType_REPLICA)
 	}
 	newServerIndex := rand.Intn(len(addrs))
 	endPoint := addrs[newServerIndex].EndPoint

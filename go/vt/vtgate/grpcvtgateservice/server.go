@@ -39,14 +39,14 @@ func (vtg *VTGate) Execute(ctx context.Context, request *pb.ExecuteRequest) (res
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	executeErr := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.TabletType, proto.ProtoToSession(request.Session), request.NotInTransaction, reply)
+	executeErr := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.TabletType, request.Session, request.NotInTransaction, reply)
 	response = &pb.ExecuteResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
 	if executeErr == nil {
 		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
 		if executeErr == nil {
-			response.Session = proto.SessionToProto(reply.Session)
+			response.Session = reply.Session
 			return response, nil
 		}
 	}
@@ -70,7 +70,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsR
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
-		proto.ProtoToSession(request.Session),
+		request.Session,
 		request.NotInTransaction,
 		reply)
 	response = &pb.ExecuteShardsResponse{
@@ -79,7 +79,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsR
 	if executeErr == nil {
 		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
 		if executeErr == nil {
-			response.Session = proto.SessionToProto(reply.Session)
+			response.Session = reply.Session
 			return response, nil
 		}
 	}
@@ -103,7 +103,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
-		proto.ProtoToSession(request.Session),
+		request.Session,
 		request.NotInTransaction,
 		reply)
 	response = &pb.ExecuteKeyspaceIdsResponse{
@@ -112,7 +112,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 	if executeErr == nil {
 		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
 		if executeErr == nil {
-			response.Session = proto.SessionToProto(reply.Session)
+			response.Session = reply.Session
 			return response, nil
 		}
 	}
@@ -136,7 +136,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
-		proto.ProtoToSession(request.Session),
+		request.Session,
 		request.NotInTransaction,
 		reply)
 	response = &pb.ExecuteKeyRangesResponse{
@@ -145,7 +145,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 	if executeErr == nil {
 		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
 		if executeErr == nil {
-			response.Session = proto.SessionToProto(reply.Session)
+			response.Session = reply.Session
 			return response, nil
 		}
 	}
@@ -170,7 +170,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 		request.EntityColumnName,
 		request.EntityKeyspaceIds,
 		request.TabletType,
-		proto.ProtoToSession(request.Session),
+		request.Session,
 		request.NotInTransaction,
 		reply)
 	response = &pb.ExecuteEntityIdsResponse{
@@ -179,7 +179,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 	if executeErr == nil {
 		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
 		if executeErr == nil {
-			response.Session = proto.SessionToProto(reply.Session)
+			response.Session = reply.Session
 			return response, nil
 		}
 	}
@@ -201,7 +201,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBa
 		bsq,
 		request.TabletType,
 		request.AsTransaction,
-		proto.ProtoToSession(request.Session),
+		request.Session,
 		reply)
 	response = &pb.ExecuteBatchShardsResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
@@ -209,7 +209,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBa
 	if executeErr == nil {
 		response.Results, executeErr = tproto.QueryResultListToProto3(reply.List)
 		if executeErr == nil {
-			response.Session = proto.SessionToProto(reply.Session)
+			response.Session = reply.Session
 			return response, nil
 		}
 	}
@@ -232,7 +232,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.Exec
 		bq,
 		request.TabletType,
 		request.AsTransaction,
-		proto.ProtoToSession(request.Session),
+		request.Session,
 		reply)
 	response = &pb.ExecuteBatchKeyspaceIdsResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
@@ -240,7 +240,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.Exec
 	if executeErr == nil {
 		response.Results, executeErr = tproto.QueryResultListToProto3(reply.List)
 		if executeErr == nil {
-			response.Session = proto.SessionToProto(reply.Session)
+			response.Session = reply.Session
 			return response, nil
 		}
 	}
@@ -357,11 +357,11 @@ func (vtg *VTGate) Begin(ctx context.Context, request *pb.BeginRequest) (respons
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	outSession := new(proto.Session)
+	outSession := new(pb.Session)
 	vtgErr := vtg.server.Begin(ctx, outSession)
 	response = &pb.BeginResponse{}
 	if vtgErr == nil {
-		response.Session = proto.SessionToProto(outSession)
+		response.Session = outSession
 		return response, nil
 	}
 	return nil, vterrors.ToGRPCError(vtgErr)
@@ -373,7 +373,7 @@ func (vtg *VTGate) Commit(ctx context.Context, request *pb.CommitRequest) (respo
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	vtgErr := vtg.server.Commit(ctx, proto.ProtoToSession(request.Session))
+	vtgErr := vtg.server.Commit(ctx, request.Session)
 	response = &pb.CommitResponse{}
 	if vtgErr == nil {
 		return response, nil
@@ -387,7 +387,7 @@ func (vtg *VTGate) Rollback(ctx context.Context, request *pb.RollbackRequest) (r
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	vtgErr := vtg.server.Rollback(ctx, proto.ProtoToSession(request.Session))
+	vtgErr := vtg.server.Rollback(ctx, request.Session)
 	response = &pb.RollbackResponse{}
 	if vtgErr == nil {
 		return response, nil

@@ -7,53 +7,10 @@ package proto
 import (
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
-
-// SessionToProto transforms a Session into proto3
-func SessionToProto(s *Session) *pb.Session {
-	if s == nil {
-		return nil
-	}
-	result := &pb.Session{
-		InTransaction: s.InTransaction,
-	}
-	result.ShardSessions = make([]*pb.Session_ShardSession, len(s.ShardSessions))
-	for i, ss := range s.ShardSessions {
-		result.ShardSessions[i] = &pb.Session_ShardSession{
-			Target: &pbq.Target{
-				Keyspace:   ss.Keyspace,
-				Shard:      ss.Shard,
-				TabletType: topo.TabletTypeToProto(ss.TabletType),
-			},
-			TransactionId: ss.TransactionId,
-		}
-	}
-	return result
-}
-
-// ProtoToSession transforms a proto3 Session into native types
-func ProtoToSession(s *pb.Session) *Session {
-	if s == nil {
-		return nil
-	}
-	result := &Session{
-		InTransaction: s.InTransaction,
-	}
-	result.ShardSessions = make([]*ShardSession, len(s.ShardSessions))
-	for i, ss := range s.ShardSessions {
-		result.ShardSessions[i] = &ShardSession{
-			Keyspace:      ss.Target.Keyspace,
-			Shard:         ss.Target.Shard,
-			TabletType:    topo.ProtoToTabletType(ss.Target.TabletType),
-			TransactionId: ss.TransactionId,
-		}
-	}
-	return result
-}
 
 // EntityIdsToProto converts an array of EntityId to proto3
 func EntityIdsToProto(l []EntityId) []*pb.ExecuteEntityIdsRequest_EntityId {

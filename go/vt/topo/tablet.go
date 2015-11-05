@@ -37,50 +37,6 @@ const (
 	ReplicationLagHigh = "high"
 )
 
-// TabletType is the main type for a tablet. It has an implication on:
-// - the replication graph
-// - the services run by vttablet on a tablet
-// - the uptime expectancy
-//
-// DEPRECATED: use the proto3 topodata.TabletType enum instead.
-type TabletType string
-
-//go:generate bsongen -file $GOFILE -type TabletType -o tablet_type_bson.go
-
-const (
-	// primary copy of data, accepts writes
-	TYPE_MASTER = TabletType("master")
-
-	// a slaved copy of the data ready to be promoted to master
-	TYPE_REPLICA = TabletType("replica")
-
-	// a slaved copy of the data for olap load patterns.
-	// too many aliases for olap - need to pick one
-	TYPE_RDONLY = TabletType("rdonly")
-	TYPE_BATCH  = TabletType("batch")
-
-	// a slaved copy of the data ready, but not serving query traffic
-	// could be a potential master.
-	TYPE_SPARE = TabletType("spare")
-
-	// a slaved copy of the data ready, but not serving query traffic
-	// implies something abnormal about the setup - don't consider it
-	// a potential master and don't worry about lag when reparenting.
-	TYPE_EXPERIMENTAL = TabletType("experimental")
-
-	// a slaved copy of the data, but offline to queries other than backup
-	// replication sql thread may be stopped
-	TYPE_BACKUP = TabletType("backup")
-
-	// A tablet that has not been in the replication graph and is restoring
-	// from a snapshot.
-	TYPE_RESTORE = TabletType("restore")
-
-	// A tablet that is used by a worker process. It is probably
-	// lagging in replication.
-	TYPE_WORKER = TabletType("worker")
-)
-
 // IsTrivialTypeChange returns if this db type be trivially reassigned
 // without changes to the replication graph
 func IsTrivialTypeChange(oldTabletType, newTabletType pb.TabletType) bool {
@@ -130,7 +86,7 @@ func IsRunningUpdateStream(tt pb.TabletType) bool {
 // IsSlaveType returns if this type should be connected to a master db
 // and actively replicating?
 // MASTER is not obviously (only support one level replication graph)
-// BACKUP, RESTORE, TYPE_WORKER may or may not be, but we don't know for sure
+// BACKUP, RESTORE, WORKER may or may not be, but we don't know for sure
 func IsSlaveType(tt pb.TabletType) bool {
 	switch tt {
 	case pb.TabletType_MASTER, pb.TabletType_BACKUP, pb.TabletType_RESTORE, pb.TabletType_WORKER:

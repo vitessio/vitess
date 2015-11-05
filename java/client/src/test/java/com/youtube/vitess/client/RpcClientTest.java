@@ -105,7 +105,7 @@ public abstract class RpcClientTest {
           .build();
   private static final String BIND_VARS_ECHO = "map[bytes:[1 2 3] float:2.5 int:123]";
 
-  private static final String SESSION_ECHO = "InTransaction: true, ShardSession: []";
+  private static final String SESSION_ECHO = "in_transaction:true ";
 
   private static final CallerID CALLER_ID =
       CallerID.newBuilder()
