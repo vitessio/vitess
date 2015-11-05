@@ -96,16 +96,6 @@ type RPCError struct {
 
 //go:generate bsongen -file $GOFILE -type RPCError -o rpcerror_bson.go
 
-// Charset contains the per-statement character set settings that accompany
-// binlog QUERY_EVENT entries.
-type Charset struct {
-	Client int // @@session.character_set_client
-	Conn   int // @@session.collation_connection
-	Server int // @@session.collation_server
-}
-
-//go:generate bsongen -file $GOFILE -type Charset -o charset_bson.go
-
 // Convert takes a type and a value, and returns the type:
 // - nil for NULL value
 // - uint64 for unsigned BIGINT values

@@ -10,8 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -50,7 +51,7 @@ func setupQueryRules() {
 			QRFail,
 		)
 		qr.AddPlanCond(plan.planID)
-		qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, QRNotIn, key.KeyRange{Start: "aa", End: "zz"})
+		qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, QRNotIn, &pb.KeyRange{Start: []byte{'a', 'a'}, End: []byte{'z', 'z'}})
 		keyrangeRules.Add(qr)
 	}
 

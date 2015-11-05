@@ -7,8 +7,9 @@ package gorpcbinlogstreamer
 import (
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/servenv"
+
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // UpdateStream is the go rpc UpdateStream server
@@ -27,7 +28,7 @@ func (server *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, se
 // StreamKeyRange is part of the gorpc UpdateStream service
 func (server *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.StreamKeyRange(req.Position, req.KeyspaceIdType, key.KeyRangeToProto(req.KeyRange), req.Charset, func(reply *proto.BinlogTransaction) error {
+	return server.updateStream.StreamKeyRange(req.Position, req.KeyspaceIdType, req.KeyRange, req.Charset, func(reply *pb.BinlogTransaction) error {
 		return sendReply(reply)
 	})
 }
@@ -35,7 +36,7 @@ func (server *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply
 // StreamTables is part of the gorpc UpdateStream service
 func (server *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.StreamTables(req.Position, req.Tables, req.Charset, func(reply *proto.BinlogTransaction) error {
+	return server.updateStream.StreamTables(req.Position, req.Tables, req.Charset, func(reply *pb.BinlogTransaction) error {
 		return sendReply(reply)
 	})
 }

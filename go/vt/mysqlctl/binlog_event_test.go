@@ -8,8 +8,9 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // sample event data
@@ -244,7 +245,7 @@ func TestBinlogEventQuery(t *testing.T) {
 	input := binlogEvent(googleQueryEvent)
 	want := blproto.Query{
 		Database: "vt_test_keyspace",
-		Charset:  &mproto.Charset{Client: 8, Conn: 8, Server: 33},
+		Charset:  &pb.Charset{Client: 8, Conn: 8, Server: 33},
 		Sql: `create table if not exists vt_a (
 eid bigint,
 id int,

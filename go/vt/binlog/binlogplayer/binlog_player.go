@@ -23,10 +23,10 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -89,12 +89,12 @@ func NewBinlogPlayerStats() *BinlogPlayerStats {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	endPoint *pb.EndPoint
+	endPoint *pbt.EndPoint
 	dbClient VtClient
 
 	// for key range base requests
-	keyspaceIdType pb.KeyspaceIdType
-	keyRange       *pb.KeyRange
+	keyspaceIdType pbt.KeyspaceIdType
+	keyRange       *pbt.KeyRange
 
 	// for table base requests
 	tables []string
@@ -103,15 +103,15 @@ type BinlogPlayer struct {
 	blpPos         proto.BlpPosition
 	stopPosition   myproto.ReplicationPosition
 	blplStats      *BinlogPlayerStats
-	defaultCharset mproto.Charset
-	currentCharset mproto.Charset
+	defaultCharset *pb.Charset
+	currentCharset *pb.Charset
 }
 
 // NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pb.EndPoint, keyspaceIdType pb.KeyspaceIdType, keyRange *pb.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pbt.EndPoint, keyspaceIdType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		endPoint:       endPoint,
 		dbClient:       dbClient,
@@ -127,7 +127,7 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pb.EndPoint, keyspaceI
 // replicating the provided tables, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient VtClient, endPoint *pb.EndPoint, tables []string, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerTables(dbClient VtClient, endPoint *pbt.EndPoint, tables []string, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		endPoint:     endPoint,
 		dbClient:     dbClient,
@@ -147,8 +147,8 @@ func NewBinlogPlayerTables(dbClient VtClient, endPoint *pb.EndPoint, tables []st
 // - otherwise (the statements are probably filtered out), we leave
 //   transaction_timestamp alone (keeping the old value), and we don't
 //   change SecondsBehindMaster
-func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) error {
-	gtid, err := myproto.DecodeGTID(tx.TransactionID)
+func (blp *BinlogPlayer) writeRecoveryPosition(tx *pb.BinlogTransaction) error {
+	gtid, err := myproto.DecodeGTID(tx.TransactionId)
 	if err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, strin
 	}, string(qr.Rows[0][1].Raw()), nil
 }
 
-func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok bool, err error) {
+func (blp *BinlogPlayer) processTransaction(tx *pb.BinlogTransaction) (ok bool, err error) {
 	txnStartTime := time.Now()
 	if err = blp.dbClient.Begin(); err != nil {
 		return false, fmt.Errorf("failed query BEGIN, err: %s", err)
@@ -204,15 +204,15 @@ func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok boo
 	for i, stmt := range tx.Statements {
 		// Make sure the statement is replayed in the proper charset.
 		if dbClient, ok := blp.dbClient.(*DBClient); ok {
-			var stmtCharset mproto.Charset
+			var stmtCharset *pb.Charset
 			if stmt.Charset != nil {
-				stmtCharset = *stmt.Charset
+				stmtCharset = stmt.Charset
 			} else {
 				// BinlogStreamer sends a nil Charset for statements that use the
 				// charset we specified in the request.
 				stmtCharset = blp.defaultCharset
 			}
-			if blp.currentCharset != stmtCharset {
+			if *blp.currentCharset != *stmtCharset {
 				// In regular MySQL replication, the charset is silently adjusted as
 				// needed during event playback. Here we also adjust so that playback
 				// proceeds, but in Vitess-land this usually means a misconfigured
@@ -321,12 +321,12 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		}()
 	}
 
-	var responseChan chan *proto.BinlogTransaction
+	var responseChan chan *pb.BinlogTransaction
 	var errFunc ErrFunc
 	if len(blp.tables) > 0 {
-		responseChan, errFunc, err = blplClient.StreamTables(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), blp.tables, &blp.defaultCharset)
+		responseChan, errFunc, err = blplClient.StreamTables(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), blp.tables, blp.defaultCharset)
 	} else {
-		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), key.ProtoToKeyspaceIdType(blp.keyspaceIdType), blp.keyRange, &blp.defaultCharset)
+		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), blp.keyspaceIdType, blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
 		log.Errorf("Error sending streaming query to binlog server: %v", err)

@@ -9,8 +9,9 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // binlogEvent wraps a raw packet buffer and provides methods to examine it
@@ -216,10 +217,10 @@ varsLoop:
 			if pos+6 > len(vars) {
 				return query, fmt.Errorf("Q_CHARSET_CODE status var overflows buffer (%v + 6 > %v)", pos, len(vars))
 			}
-			query.Charset = &mproto.Charset{
-				Client: int(binary.LittleEndian.Uint16(vars[pos : pos+2])),
-				Conn:   int(binary.LittleEndian.Uint16(vars[pos+2 : pos+4])),
-				Server: int(binary.LittleEndian.Uint16(vars[pos+4 : pos+6])),
+			query.Charset = &pb.Charset{
+				Client: int32(binary.LittleEndian.Uint16(vars[pos : pos+2])),
+				Conn:   int32(binary.LittleEndian.Uint16(vars[pos+2 : pos+4])),
+				Server: int32(binary.LittleEndian.Uint16(vars[pos+4 : pos+6])),
 			}
 			pos += 6
 		default:

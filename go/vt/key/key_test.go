@@ -148,21 +148,27 @@ func TestContains(t *testing.T) {
 	}
 
 	for _, el := range table {
-		s, err := HexKeyspaceId(el.start).Unhex()
+		s, err := hex.DecodeString(el.start)
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		e, err := HexKeyspaceId(el.end).Unhex()
+		e, err := hex.DecodeString(el.end)
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		kr := KeyRange{Start: s, End: e}
-		k, err := HexKeyspaceId(el.kid).Unhex()
+		kr := &pb.KeyRange{
+			Start: s,
+			End:   e,
+		}
+		k, err := hex.DecodeString(el.kid)
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		if c := kr.Contains(k); c != el.contained {
+		if c := KeyRangeContains(kr, k); c != el.contained {
 			t.Errorf("Unexpected result: contains for %v and (%v-%v) yields %v.", el.kid, el.start, el.end, c)
+		}
+		if !KeyRangeContains(nil, k) {
+			t.Errorf("KeyRangeContains(nil, x) should always be true")
 		}
 	}
 }

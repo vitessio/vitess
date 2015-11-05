@@ -134,7 +134,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 	// test cell/keyspace/shard entries (SrvShard)
 	srvShard := &pb.SrvShard{
 		Name:       "-10",
-		KeyRange:   newKeyRange3("-10"),
+		KeyRange:   newKeyRange("-10"),
 		MasterCell: "test",
 	}
 	if err := ts.UpdateSrvShard(ctx, cell, "test_keyspace", "-10", srvShard); err != nil {
@@ -145,7 +145,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 	if s, err := ts.GetSrvShard(ctx, cell, "test_keyspace", "-10"); err != nil ||
 		s.Name != "-10" ||
-		!key.KeyRangeEqual(s.KeyRange, newKeyRange3("-10")) ||
+		!key.KeyRangeEqual(s.KeyRange, newKeyRange("-10")) ||
 		s.MasterCell != "test" {
 		t.Errorf("GetSrvShard(valid): %v", err)
 	}

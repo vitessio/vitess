@@ -15,7 +15,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -114,11 +113,11 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange *pb.KeyRange, keyspaceIDType key.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange *pb.KeyRange, keyspaceIDType pb.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
 	if keyRange != nil {
 		switch keyspaceIDType {
-		case key.KIT_UINT64:
+		case pb.KeyspaceIdType_UINT64:
 			if len(keyRange.Start) > 0 {
 				if len(keyRange.End) > 0 {
 					// have start & end
@@ -133,7 +132,7 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 					where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceID(keyRange.End))
 				}
 			}
-		case key.KIT_BYTES:
+		case pb.KeyspaceIdType_BYTES:
 			if len(keyRange.Start) > 0 {
 				if len(keyRange.End) > 0 {
 					// have start & end

@@ -18,6 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 var (
@@ -50,12 +52,12 @@ func (evs *EventStreamer) Stream(ctx *sync2.ServiceContext) error {
 	return evs.bls.Stream(ctx)
 }
 
-func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) error {
+func (evs *EventStreamer) transactionToEvent(trans *pb.BinlogTransaction) error {
 	var err error
 	var insertid int64
 	for _, stmt := range trans.Statements {
 		switch stmt.Category {
-		case proto.BL_SET:
+		case pb.BinlogTransaction_Statement_BL_SET:
 			if strings.HasPrefix(stmt.Sql, binlogSetInsertID) {
 				insertid, err = strconv.ParseInt(stmt.Sql[binlogSetInsertIDLen:], 10, 64)
 				if err != nil {
@@ -63,7 +65,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 					log.Errorf("%v: %s", err, stmt.Sql)
 				}
 			}
-		case proto.BL_DML:
+		case pb.BinlogTransaction_Statement_BL_DML:
 			var dmlEvent *proto.StreamEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
@@ -76,7 +78,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 			if err = evs.sendEvent(dmlEvent); err != nil {
 				return err
 			}
-		case proto.BL_DDL:
+		case pb.BinlogTransaction_Statement_BL_DDL:
 			ddlEvent := &proto.StreamEvent{
 				Category:  "DDL",
 				Sql:       stmt.Sql,
@@ -85,7 +87,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 			if err = evs.sendEvent(ddlEvent); err != nil {
 				return err
 			}
-		case proto.BL_UNRECOGNIZED:
+		case pb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 			unrecognized := &proto.StreamEvent{
 				Category:  "ERR",
 				Sql:       stmt.Sql,
@@ -101,7 +103,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 	}
 	posEvent := &proto.StreamEvent{
 		Category:      "POS",
-		TransactionID: trans.TransactionID,
+		TransactionID: trans.TransactionId,
 		Timestamp:     trans.Timestamp,
 	}
 	if err = evs.sendEvent(posEvent); err != nil {
