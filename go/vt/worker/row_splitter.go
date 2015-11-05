@@ -18,17 +18,17 @@ import (
 // RowSplitter is a helper class to split rows into multiple
 // subsets targeted to different shards.
 type RowSplitter struct {
-	Type       key.KeyspaceIdType
-	ValueIndex int
-	KeyRanges  []*pb.KeyRange
+	KeyspaceIdType pb.KeyspaceIdType
+	ValueIndex     int
+	KeyRanges      []*pb.KeyRange
 }
 
 // NewRowSplitter returns a new row splitter for the given shard distribution.
-func NewRowSplitter(shardInfos []*topo.ShardInfo, typ key.KeyspaceIdType, valueIndex int) *RowSplitter {
+func NewRowSplitter(shardInfos []*topo.ShardInfo, keyspaceIdType pb.KeyspaceIdType, valueIndex int) *RowSplitter {
 	result := &RowSplitter{
-		Type:       typ,
-		ValueIndex: valueIndex,
-		KeyRanges:  make([]*pb.KeyRange, len(shardInfos)),
+		KeyspaceIdType: keyspaceIdType,
+		ValueIndex:     valueIndex,
+		KeyRanges:      make([]*pb.KeyRange, len(shardInfos)),
 	}
 	for i, si := range shardInfos {
 		result.KeyRanges[i] = si.KeyRange
@@ -43,7 +43,7 @@ func (rs *RowSplitter) StartSplit() [][][]sqltypes.Value {
 
 // Split will split the rows into subset for each distribution
 func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Value) error {
-	if rs.Type == key.KIT_UINT64 {
+	if rs.KeyspaceIdType == pb.KeyspaceIdType_UINT64 {
 		for _, row := range rows {
 			v := sqltypes.MakeNumeric(row[rs.ValueIndex].Raw())
 			i, err := v.ParseUint64()

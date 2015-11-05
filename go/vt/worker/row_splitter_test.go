@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -42,7 +41,7 @@ func TestRowSplitterUint64(t *testing.T) {
 		si("40", "c0"),
 		si("c0", ""),
 	}
-	rs := NewRowSplitter(shards, key.KIT_UINT64, 1)
+	rs := NewRowSplitter(shards, pb.KeyspaceIdType_UINT64, 1)
 
 	// rows in different shards
 	row0 := []sqltypes.Value{
@@ -95,7 +94,7 @@ func TestRowSplitterString(t *testing.T) {
 		siBytes("E", "L"),
 		siBytes("L", ""),
 	}
-	rs := NewRowSplitter(shards, key.KIT_BYTES, 1)
+	rs := NewRowSplitter(shards, pb.KeyspaceIdType_BYTES, 1)
 
 	// rows in different shards
 	row0 := []sqltypes.Value{
