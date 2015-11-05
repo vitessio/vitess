@@ -42,7 +42,7 @@ else
     (cd zookeeper-$zk_ver/src/c && \
     ./configure --prefix=$zk_dist && \
     make install) && rm -rf zookeeper-$zk_ver zookeeper-$zk_ver.tar.gz)
-  [ $? -eq 0 ] || "zookeeper build failed"
+  [ $? -eq 0 ] || fail "zookeeper build failed"
   touch $zk_dist/.build_finished
 fi
 
