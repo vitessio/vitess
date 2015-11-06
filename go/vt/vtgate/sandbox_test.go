@@ -592,7 +592,7 @@ var singleRowResult = &mproto.QueryResult{
 	RowsAffected: 1,
 	InsertId:     0,
 	Rows: [][]sqltypes.Value{{
-		{sqltypes.Numeric("1")},
-		{sqltypes.String("foo")},
+		sqltypes.MakeNumeric([]byte("1")),
+		sqltypes.MakeString([]byte("foo")),
 	}},
 }

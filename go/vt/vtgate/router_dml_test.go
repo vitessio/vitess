@@ -126,8 +126,8 @@ func TestDeleteEqual(t *testing.T) {
 		RowsAffected: 1,
 		InsertId:     0,
 		Rows: [][]sqltypes.Value{{
-			{sqltypes.Numeric("1")},
-			{sqltypes.String("myname")},
+			sqltypes.MakeNumeric([]byte("1")),
+			sqltypes.MakeString([]byte("myname")),
 		}},
 	}})
 	_, err := routerExec(router, "delete from user where id = 1", nil)
@@ -263,8 +263,8 @@ func TestDeleteVindexFail(t *testing.T) {
 		RowsAffected: 1,
 		InsertId:     0,
 		Rows: [][]sqltypes.Value{{
-			{sqltypes.String("foo")},
-			{sqltypes.String("myname")},
+			sqltypes.MakeString([]byte("foo")),
+			sqltypes.MakeString([]byte("myname")),
 		}},
 	}})
 	_, err = routerExec(router, "delete from user where id = 1", nil)
