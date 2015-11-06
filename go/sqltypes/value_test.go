@@ -169,21 +169,21 @@ func TestBuildValue(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 	if !v.IsNumeric() || v.String() != "-1" {
-		t.Errorf("Expecting -1, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting -1, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue(int32(-1))
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	if !v.IsNumeric() || v.String() != "-1" {
-		t.Errorf("Expecting -1, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting -1, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue(int64(-1))
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	if !v.IsNumeric() || v.String() != "-1" {
-		t.Errorf("Expecting -1, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting -1, received %T: %s", v.inner, v.String())
 	}
 	n64, err = v.ParseUint64()
 	if err == nil {
@@ -201,14 +201,14 @@ func TestBuildValue(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 	if !v.IsNumeric() || v.String() != "1" {
-		t.Errorf("Expecting 1, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting 1, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue(uint32(1))
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	if !v.IsNumeric() || v.String() != "1" {
-		t.Errorf("Expecting 1, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting 1, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue(uint64(1))
 	if err != nil {
@@ -222,14 +222,14 @@ func TestBuildValue(t *testing.T) {
 		t.Errorf("Expecting 1, got %v", n64)
 	}
 	if !v.IsNumeric() || v.String() != "1" {
-		t.Errorf("Expecting 1, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting 1, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue(1.23)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	if !v.IsFractional() || v.String() != "1.23" {
-		t.Errorf("Expecting 1.23, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting 1.23, received %T: %s", v.inner, v.String())
 	}
 	n64, err = v.ParseUint64()
 	if err == nil {
@@ -240,14 +240,14 @@ func TestBuildValue(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 	if !v.IsString() || v.String() != "abcd" {
-		t.Errorf("Expecting abcd, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting abcd, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue([]byte("abcd"))
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	if !v.IsString() || v.String() != "abcd" {
-		t.Errorf("Expecting abcd, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting abcd, received %T: %s", v.inner, v.String())
 	}
 	n64, err = v.ParseUint64()
 	if err == nil || err.Error() != "value is not Numeric" {
@@ -258,28 +258,28 @@ func TestBuildValue(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 	if !v.IsString() || v.String() != "2012-02-24 23:19:43" {
-		t.Errorf("Expecting 2012-02-24 23:19:43, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting 2012-02-24 23:19:43, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue(Numeric([]byte("123")))
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	if !v.IsNumeric() || v.String() != "123" {
-		t.Errorf("Expecting 123, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting 123, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue(Fractional([]byte("12.3")))
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	if !v.IsFractional() || v.String() != "12.3" {
-		t.Errorf("Expecting 12.3, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting 12.3, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue(String([]byte("abc")))
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	if !v.IsString() || v.String() != "abc" {
-		t.Errorf("Expecting abc, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting abc, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue(float32(1.23))
 	if err == nil {
@@ -291,7 +291,7 @@ func TestBuildValue(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 	if !v.IsString() || v.String() != "ab" {
-		t.Errorf("Expecting ab, received %T: %s", v.Inner, v.String())
+		t.Errorf("Expecting ab, received %T: %s", v.inner, v.String())
 	}
 	v, err = BuildValue(float32(1.23))
 	if err == nil {

@@ -45,10 +45,10 @@ func TestBatchRead(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("1")},
-				sqltypes.Value{Inner: sqltypes.Numeric("2")},
-				sqltypes.Value{Inner: sqltypes.String("bcde")},
-				sqltypes.Value{Inner: sqltypes.String("fghi")},
+				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeNumeric([]byte("2")),
+				sqltypes.MakeString([]byte("bcde")),
+				sqltypes.MakeString([]byte("fghi")),
 			},
 		},
 	}
@@ -65,8 +65,8 @@ func TestBatchRead(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("1")},
-				sqltypes.Value{Inner: sqltypes.Numeric("2")},
+				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeNumeric([]byte("2")),
 			},
 		},
 	}
@@ -96,7 +96,7 @@ func TestBatchTransaction(t *testing.T) {
 
 	wantRows := [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.Value{Inner: sqltypes.Numeric("4")},
+			sqltypes.MakeNumeric([]byte("4")),
 			sqltypes.Value{},
 			sqltypes.Value{},
 			sqltypes.Value{},
