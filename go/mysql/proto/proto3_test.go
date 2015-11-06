@@ -72,38 +72,3 @@ func TestRowsToProto3(t *testing.T) {
 		t.Errorf("reverse: \n%#v, want \n%#v", reverse, rows)
 	}
 }
-
-func TestInvalidRowsProto(t *testing.T) {
-	p3 := []*query.Row{
-		&query.Row{
-			Lengths: []int64{3, 5, -1, 6},
-			Values:  []byte("aa12"),
-		},
-	}
-	rows := Proto3ToRows(p3)
-	want := [][]sqltypes.Value{{
-		sqltypes.MakeString([]byte("aa1")),
-		sqltypes.NULL,
-		sqltypes.NULL,
-		sqltypes.NULL,
-	}}
-	if !reflect.DeepEqual(rows, want) {
-		t.Errorf("reverse: \n%#v, want \n%#v", rows, want)
-	}
-
-	p3 = []*query.Row{
-		&query.Row{
-			Lengths: []int64{2, -2, 2},
-			Values:  []byte("aa12"),
-		},
-	}
-	rows = Proto3ToRows(p3)
-	want = [][]sqltypes.Value{{
-		sqltypes.MakeString([]byte("aa")),
-		sqltypes.NULL,
-		sqltypes.MakeString([]byte("12")),
-	}}
-	if !reflect.DeepEqual(rows, want) {
-		t.Errorf("reverse: \n%#v, want \n%#v", rows, want)
-	}
-}
