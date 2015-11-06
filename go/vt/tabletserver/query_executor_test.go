@@ -1063,9 +1063,9 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 
 func getTestTableFields() []mproto.Field {
 	return []mproto.Field{
-		mproto.Field{Name: "pk", Type: mproto.VT_LONG},
-		mproto.Field{Name: "name", Type: mproto.VT_LONG},
-		mproto.Field{Name: "addr", Type: mproto.VT_LONG},
+		mproto.Field{Name: "pk", Type: mysql.TypeLong},
+		mproto.Field{Name: "name", Type: mysql.TypeLong},
+		mproto.Field{Name: "addr", Type: mysql.TypeLong},
 	}
 }
 
@@ -1124,6 +1124,18 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeNumeric([]byte("4")),
 				},
 			},
+		},
+		"select * from `test_table` where 1 != 1": &mproto.QueryResult{
+			Fields: []mproto.Field{{
+				Name: "pk",
+				Type: mysql.TypeLong,
+			}, {
+				Name: "name",
+				Type: mysql.TypeLong,
+			}, {
+				Name: "addr",
+				Type: mysql.TypeLong,
+			}},
 		},
 		"describe `test_table`": &mproto.QueryResult{
 			RowsAffected: 3,

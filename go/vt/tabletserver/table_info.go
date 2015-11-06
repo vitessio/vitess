@@ -10,7 +10,9 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"golang.org/x/net/context"
 )
@@ -46,12 +48,26 @@ func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
 }
 
 func (ti *TableInfo) fetchColumns(conn *DBConn) error {
+	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select * from `%s` where 1 != 1", ti.Name), 10000, true)
+	if err != nil {
+		return err
+	}
+	fieldTypes := make(map[string]query.Type, len(qr.Fields))
+	for _, field := range qr.Fields {
+		fieldTypes[field.Name] = sqltypes.MySQLToType(field.Type, field.Flags)
+	}
 	columns, err := conn.Exec(context.Background(), fmt.Sprintf("describe `%s`", ti.Name), 10000, false)
 	if err != nil {
 		return err
 	}
 	for _, row := range columns.Rows {
-		ti.AddColumn(row[0].String(), row[1].String(), row[4], row[5].String())
+		name := row[0].String()
+		columnType, ok := fieldTypes[name]
+		if !ok {
+			log.Warningf("Table: %s, column %s not found in select list, skipping.", ti.Name, name)
+			continue
+		}
+		ti.AddColumn(name, columnType, row[4], row[5].String())
 	}
 	return nil
 }
@@ -155,13 +171,14 @@ func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, comment string
 		return
 	}
 	for _, col := range ti.PKColumns {
-		if ti.Columns[col].Category == schema.CAT_OTHER {
-			log.Infof("Table %s pk has unsupported column types. Will not be cached.", ti.Name)
-			return
+		if sqltypes.IsIntegral(ti.Columns[col].Type) || ti.Columns[col].Type == sqltypes.VarBinary {
+			continue
 		}
+		log.Infof("Table %s pk has unsupported column types. Will not be cached.", ti.Name)
+		return
 	}
 
-	ti.CacheType = schema.CACHE_RW
+	ti.CacheType = schema.CacheRW
 	ti.Cache = NewRowCache(ti, cachePool)
 }
 

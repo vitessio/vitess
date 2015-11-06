@@ -268,21 +268,20 @@ func Proto3ToBindVariables(bv map[string]*pb.BindVariable) (map[string]interface
 	result := make(map[string]interface{})
 	var err error
 	for k, v := range bv {
-		if v != nil && v.Type == sqltypes.Tuple {
+		if v == nil {
+			continue
+		}
+		if v.Type == sqltypes.Tuple {
 			list := make([]interface{}, len(v.Values))
 			for i, lv := range v.Values {
-				asbind := &pb.BindVariable{
-					Type:  lv.Type,
-					Value: lv.Value,
-				}
-				list[i], err = BindVariableToNative(asbind)
+				list[i], err = SQLToNative(lv.Type, lv.Value)
 				if err != nil {
 					return nil, err
 				}
 			}
 			result[k] = list
 		} else {
-			result[k], err = BindVariableToNative(v)
+			result[k], err = SQLToNative(v.Type, v.Value)
 			if err != nil {
 				return nil, err
 			}
@@ -291,18 +290,19 @@ func Proto3ToBindVariables(bv map[string]*pb.BindVariable) (map[string]interface
 	return result, nil
 }
 
-// BindVariableToNative converts a proto bind var to a native go type.
-func BindVariableToNative(v *pb.BindVariable) (interface{}, error) {
-	if v == nil || v.Type == sqltypes.Null {
+// SQLToNative converts a SQL type & value to a native go type.
+// This does not work for sqltypes.Tuple.
+func SQLToNative(typ pb.Type, val []byte) (interface{}, error) {
+	if typ == sqltypes.Null {
 		return nil, nil
-	} else if sqltypes.IsSigned(v.Type) {
-		return strconv.ParseInt(string(v.Value), 0, 64)
-	} else if sqltypes.IsUnsigned(v.Type) {
-		return strconv.ParseUint(string(v.Value), 0, 64)
-	} else if sqltypes.IsFloat(v.Type) {
-		return strconv.ParseFloat(string(v.Value), 64)
+	} else if sqltypes.IsSigned(typ) {
+		return strconv.ParseInt(string(val), 0, 64)
+	} else if sqltypes.IsUnsigned(typ) {
+		return strconv.ParseUint(string(val), 0, 64)
+	} else if sqltypes.IsFloat(typ) {
+		return strconv.ParseFloat(string(val), 64)
 	}
-	return v.Value, nil
+	return val, nil
 }
 
 // Proto3ToQueryResultList converts a proto3 QueryResult to an internal data structure.
@@ -317,19 +317,15 @@ func Proto3ToQueryResultList(results []*pb.QueryResult) *QueryResultList {
 }
 
 // QueryResultListToProto3 changes the internal array of QueryResult to the proto3 version
-func QueryResultListToProto3(results []mproto.QueryResult) ([]*pb.QueryResult, error) {
+func QueryResultListToProto3(results []mproto.QueryResult) []*pb.QueryResult {
 	if len(results) == 0 {
-		return nil, nil
+		return nil
 	}
 	result := make([]*pb.QueryResult, len(results))
-	var err error
 	for i := range results {
-		result[i], err = mproto.QueryResultToProto3(&results[i])
-		if err != nil {
-			return nil, err
-		}
+		result[i] = mproto.QueryResultToProto3(&results[i])
 	}
-	return result, nil
+	return result
 }
 
 // Proto3ToQuerySplits converts a proto3 QuerySplit array to a native QuerySplit array

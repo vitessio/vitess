@@ -23,17 +23,17 @@ func TestSchamazHandler(t *testing.T) {
 	tableB := schema.NewTable("b")
 	tableC := schema.NewTable("c")
 
-	tableA.AddColumn("column1", "int", sqltypes.MakeNumeric([]byte("0")), "auto_increment")
+	tableA.AddColumn("column1", sqltypes.Int64, sqltypes.MakeNumeric([]byte("0")), "auto_increment")
 	tableA.AddIndex("index1").AddColumn("index_column", 1000)
-	tableA.CacheType = schema.CACHE_RW
+	tableA.CacheType = schema.CacheRW
 
-	tableB.AddColumn("column2", "string", sqltypes.MakeString([]byte("NULL")), "")
+	tableB.AddColumn("column2", sqltypes.VarChar, sqltypes.MakeString([]byte("NULL")), "")
 	tableB.AddIndex("index2").AddColumn("index_column2", 200)
-	tableB.CacheType = schema.CACHE_W
+	tableB.CacheType = schema.CacheW
 
-	tableC.AddColumn("column3", "string", sqltypes.MakeString([]byte("")), "")
+	tableC.AddColumn("column3", sqltypes.VarChar, sqltypes.MakeString([]byte("")), "")
 	tableC.AddIndex("index3").AddColumn("index_column3", 500)
-	tableC.CacheType = schema.CACHE_NONE
+	tableC.CacheType = schema.CacheNone
 
 	tables := []*schema.Table{
 		tableA, tableB, tableC,
@@ -42,7 +42,7 @@ func TestSchamazHandler(t *testing.T) {
 	body, _ := ioutil.ReadAll(resp.Body)
 	tableCPattern := []string{
 		`<td>c</td>`,
-		`<td>column3: other, , <br></td>`,
+		`<td>column3: VARCHAR, , <br></td>`,
 		`<td>index3: \(index_column3,\), \(500,\)<br></td>`,
 		`<td>none</td>`,
 	}
@@ -55,7 +55,7 @@ func TestSchamazHandler(t *testing.T) {
 	}
 	tableBPattern := []string{
 		`<td>b</td>`,
-		`<td>column2: other, , NULL<br></td>`,
+		`<td>column2: VARCHAR, , NULL<br></td>`,
 		`<td>index2: \(index_column2,\), \(200,\)<br></td>`,
 		`<td>write-only</td>`,
 	}
@@ -68,7 +68,7 @@ func TestSchamazHandler(t *testing.T) {
 	}
 	tableAPattern := []string{
 		`<td>a</td>`,
-		`<td>column1: number, autoinc, <br></td>`,
+		`<td>column1: INT64, autoinc, <br></td>`,
 		`<td>index1: \(index_column,\), \(1000,\)<br></td>`,
 		`<td>read-write</td>`,
 	}

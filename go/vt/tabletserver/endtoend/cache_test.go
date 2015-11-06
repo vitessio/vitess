@@ -42,8 +42,8 @@ func TestUncacheableTables(t *testing.T) {
 			t.Errorf("%s: table vitess_nocache not found in schema", tcase.create)
 			continue
 		}
-		if table.CacheType != schema.CACHE_NONE {
-			t.Errorf("CacheType: %d, want %d", table.CacheType, schema.CACHE_NONE)
+		if table.CacheType != schema.CacheNone {
+			t.Errorf("CacheType: %d, want %d", table.CacheType, schema.CacheNone)
 		}
 	}
 }
@@ -54,16 +54,16 @@ func TestOverrideTables(t *testing.T) {
 		cacheType int
 	}{{
 		table:     "vitess_cached2",
-		cacheType: schema.CACHE_RW,
+		cacheType: schema.CacheRW,
 	}, {
 		table:     "vitess_view",
-		cacheType: schema.CACHE_RW,
+		cacheType: schema.CacheRW,
 	}, {
 		table:     "vitess_part1",
-		cacheType: schema.CACHE_W,
+		cacheType: schema.CacheW,
 	}, {
 		table:     "vitess_part2",
-		cacheType: schema.CACHE_W,
+		cacheType: schema.CacheW,
 	}}
 	for _, tcase := range testCases {
 		table, ok := framework.DebugSchema()[tcase.table]

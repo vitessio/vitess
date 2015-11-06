@@ -8,7 +8,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
@@ -40,11 +39,7 @@ func ProtoToEntityIds(l []*pb.ExecuteEntityIdsRequest_EntityId) []EntityId {
 	result := make([]EntityId, len(l))
 	for i, e := range l {
 		result[i].KeyspaceID = key.KeyspaceId(e.KeyspaceId)
-		bv := &pbq.BindVariable{
-			Type:  e.XidType,
-			Value: e.XidValue,
-		}
-		v, err := tproto.BindVariableToNative(bv)
+		v, err := tproto.SQLToNative(e.XidType, e.XidValue)
 		if err != nil {
 			panic(err)
 		}

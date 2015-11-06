@@ -43,14 +43,12 @@ func (vtg *VTGate) Execute(ctx context.Context, request *pb.ExecuteRequest) (res
 	response = &pb.ExecuteResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
-	if executeErr == nil {
-		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
-		if executeErr == nil {
-			response.Session = reply.Session
-			return response, nil
-		}
+	if executeErr != nil {
+		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	return nil, vterrors.ToGRPCError(executeErr)
+	response.Result = mproto.QueryResultToProto3(reply.Result)
+	response.Session = reply.Session
+	return response, nil
 }
 
 // ExecuteShards is the RPC version of vtgateservice.VTGateService method
@@ -76,14 +74,12 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsR
 	response = &pb.ExecuteShardsResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
-	if executeErr == nil {
-		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
-		if executeErr == nil {
-			response.Session = reply.Session
-			return response, nil
-		}
+	if executeErr != nil {
+		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	return nil, vterrors.ToGRPCError(executeErr)
+	response.Result = mproto.QueryResultToProto3(reply.Result)
+	response.Session = reply.Session
+	return response, nil
 }
 
 // ExecuteKeyspaceIds is the RPC version of vtgateservice.VTGateService method
@@ -109,14 +105,12 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 	response = &pb.ExecuteKeyspaceIdsResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
-	if executeErr == nil {
-		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
-		if executeErr == nil {
-			response.Session = reply.Session
-			return response, nil
-		}
+	if executeErr != nil {
+		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	return nil, vterrors.ToGRPCError(executeErr)
+	response.Result = mproto.QueryResultToProto3(reply.Result)
+	response.Session = reply.Session
+	return response, nil
 }
 
 // ExecuteKeyRanges is the RPC version of vtgateservice.VTGateService method
@@ -142,14 +136,12 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 	response = &pb.ExecuteKeyRangesResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
-	if executeErr == nil {
-		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
-		if executeErr == nil {
-			response.Session = reply.Session
-			return response, nil
-		}
+	if executeErr != nil {
+		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	return nil, vterrors.ToGRPCError(executeErr)
+	response.Result = mproto.QueryResultToProto3(reply.Result)
+	response.Session = reply.Session
+	return response, nil
 }
 
 // ExecuteEntityIds is the RPC version of vtgateservice.VTGateService method
@@ -176,14 +168,12 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 	response = &pb.ExecuteEntityIdsResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
-	if executeErr == nil {
-		response.Result, executeErr = mproto.QueryResultToProto3(reply.Result)
-		if executeErr == nil {
-			response.Session = reply.Session
-			return response, nil
-		}
+	if executeErr != nil {
+		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	return nil, vterrors.ToGRPCError(executeErr)
+	response.Result = mproto.QueryResultToProto3(reply.Result)
+	response.Session = reply.Session
+	return response, nil
 }
 
 // ExecuteBatchShards is the RPC version of vtgateservice.VTGateService method
@@ -206,14 +196,12 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBa
 	response = &pb.ExecuteBatchShardsResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
-	if executeErr == nil {
-		response.Results, executeErr = tproto.QueryResultListToProto3(reply.List)
-		if executeErr == nil {
-			response.Session = reply.Session
-			return response, nil
-		}
+	if executeErr != nil {
+		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	return nil, vterrors.ToGRPCError(executeErr)
+	response.Results = tproto.QueryResultListToProto3(reply.List)
+	response.Session = reply.Session
+	return response, nil
 }
 
 // ExecuteBatchKeyspaceIds is the RPC version of
@@ -237,14 +225,12 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.Exec
 	response = &pb.ExecuteBatchKeyspaceIdsResponse{
 		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
 	}
-	if executeErr == nil {
-		response.Results, executeErr = tproto.QueryResultListToProto3(reply.List)
-		if executeErr == nil {
-			response.Session = reply.Session
-			return response, nil
-		}
+	if executeErr != nil {
+		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	return nil, vterrors.ToGRPCError(executeErr)
+	response.Results = tproto.QueryResultListToProto3(reply.List)
+	response.Session = reply.Session
+	return response, nil
 }
 
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
@@ -262,11 +248,9 @@ func (vtg *VTGate) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Vi
 		bv,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
-			result, err := mproto.QueryResultToProto3(value.Result)
-			if err != nil {
-				return err
-			}
-			return stream.Send(&pb.StreamExecuteResponse{Result: result})
+			return stream.Send(&pb.StreamExecuteResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
 		})
 	return vterrors.ToGRPCError(vtgErr)
 }
@@ -288,11 +272,9 @@ func (vtg *VTGate) StreamExecuteShards(request *pb.StreamExecuteShardsRequest, s
 		request.Shards,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
-			result, err := mproto.QueryResultToProto3(value.Result)
-			if err != nil {
-				return err
-			}
-			return stream.Send(&pb.StreamExecuteShardsResponse{Result: result})
+			return stream.Send(&pb.StreamExecuteShardsResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
 		})
 	return vterrors.ToGRPCError(vtgErr)
 }
@@ -315,11 +297,9 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *pb.StreamExecuteKeyspaceIds
 		request.KeyspaceIds,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
-			result, err := mproto.QueryResultToProto3(value.Result)
-			if err != nil {
-				return err
-			}
-			return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{Result: result})
+			return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
 		})
 	return vterrors.ToGRPCError(vtgErr)
 }
@@ -342,11 +322,9 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *pb.StreamExecuteKeyRangesRequ
 		request.KeyRanges,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
-			result, err := mproto.QueryResultToProto3(value.Result)
-			if err != nil {
-				return err
-			}
-			return stream.Send(&pb.StreamExecuteKeyRangesResponse{Result: result})
+			return stream.Send(&pb.StreamExecuteKeyRangesResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
 		})
 	return vterrors.ToGRPCError(vtgErr)
 }

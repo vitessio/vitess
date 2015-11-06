@@ -65,11 +65,9 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 	}, reply); err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	result, err := mproto.QueryResultToProto3(reply)
-	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
-	}
-	return &pb.ExecuteResponse{Result: result}, nil
+	return &pb.ExecuteResponse{
+		Result: mproto.QueryResultToProto3(reply),
+	}, nil
 }
 
 // ExecuteBatch is part of the queryservice.QueryServer interface
@@ -92,11 +90,9 @@ func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 	}, reply); err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	results, err := proto.QueryResultListToProto3(reply.List)
-	if err != nil {
-		return nil, tabletserver.ToGRPCError(err)
-	}
-	return &pb.ExecuteBatchResponse{Results: results}, nil
+	return &pb.ExecuteBatchResponse{
+		Results: proto.QueryResultListToProto3(reply.List),
+	}, nil
 }
 
 // StreamExecute is part of the queryservice.QueryServer interface
@@ -115,11 +111,9 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 		BindVariables: bv,
 		SessionId:     request.SessionId,
 	}, func(reply *mproto.QueryResult) error {
-		result, err := mproto.QueryResultToProto3(reply)
-		if err != nil {
-			return err
-		}
-		return stream.Send(&pb.StreamExecuteResponse{Result: result})
+		return stream.Send(&pb.StreamExecuteResponse{
+			Result: mproto.QueryResultToProto3(reply),
+		})
 	}); err != nil {
 		return tabletserver.ToGRPCError(err)
 	}

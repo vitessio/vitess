@@ -14,23 +14,19 @@ import (
 // defined here.
 
 // FieldsToProto3 converts an internal []Field to the proto3 version
-func FieldsToProto3(f []Field) ([]*pbq.Field, error) {
+func FieldsToProto3(f []Field) []*pbq.Field {
 	if len(f) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	result := make([]*pbq.Field, len(f))
 	for i, f := range f {
-		vitessType, err := sqltypes.MySQLToType(f.Type, f.Flags)
-		if err != nil {
-			return nil, err
-		}
 		result[i] = &pbq.Field{
 			Name: f.Name,
-			Type: vitessType,
+			Type: sqltypes.MySQLToType(f.Type, f.Flags),
 		}
 	}
-	return result, nil
+	return result
 }
 
 // Proto3ToFields converts a proto3 []Fields to an internal data structure.
@@ -89,17 +85,12 @@ func Proto3ToRows(rows []*pbq.Row) [][]sqltypes.Value {
 		index := 0
 		result[i] = make([]sqltypes.Value, len(r.Lengths))
 		for j, l := range r.Lengths {
-			if l <= -1 {
+			if l < 0 {
 				result[i][j] = sqltypes.NULL
 			} else {
 				end := index + int(l)
-				if end > len(r.Values) {
-					result[i][j] = sqltypes.NULL
-					index = len(r.Values)
-				} else {
-					result[i][j] = sqltypes.MakeString(r.Values[index:end])
-					index = end
-				}
+				result[i][j] = sqltypes.MakeString(r.Values[index:end])
+				index = end
 			}
 		}
 	}
@@ -107,20 +98,16 @@ func Proto3ToRows(rows []*pbq.Row) [][]sqltypes.Value {
 }
 
 // QueryResultToProto3 converts an internal QueryResult to the proto3 version
-func QueryResultToProto3(qr *QueryResult) (*pbq.QueryResult, error) {
+func QueryResultToProto3(qr *QueryResult) *pbq.QueryResult {
 	if qr == nil {
-		return nil, nil
-	}
-	fields, err := FieldsToProto3(qr.Fields)
-	if err != nil {
-		return nil, err
+		return nil
 	}
 	return &pbq.QueryResult{
-		Fields:       fields,
+		Fields:       FieldsToProto3(qr.Fields),
 		RowsAffected: qr.RowsAffected,
 		InsertId:     qr.InsertId,
 		Rows:         RowsToProto3(qr.Rows),
-	}, nil
+	}
 }
 
 // Proto3ToQueryResult converts a proto3 QueryResult to an internal data structure.

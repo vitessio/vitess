@@ -38,7 +38,7 @@ type BinWriter interface {
 
 // Value can store any SQL value. NULL is stored as nil.
 type Value struct {
-	Inner InnerValue
+	inner innerValue
 }
 
 // Numeric represents non-fractional SQL number.
@@ -68,26 +68,26 @@ func MakeString(b []byte) Value {
 
 // Raw returns the raw bytes. All types are currently implemented as []byte.
 func (v Value) Raw() []byte {
-	if v.Inner == nil {
+	if v.inner == nil {
 		return nil
 	}
-	return v.Inner.raw()
+	return v.inner.raw()
 }
 
 // String returns the raw value as a string
 func (v Value) String() string {
-	if v.Inner == nil {
+	if v.inner == nil {
 		return ""
 	}
-	return hack.String(v.Inner.raw())
+	return hack.String(v.inner.raw())
 }
 
 // ParseInt64 will parse a Numeric value into an int64
 func (v Value) ParseInt64() (val int64, err error) {
-	if v.Inner == nil {
+	if v.inner == nil {
 		return 0, fmt.Errorf("value is null")
 	}
-	n, ok := v.Inner.(Numeric)
+	n, ok := v.inner.(Numeric)
 	if !ok {
 		return 0, fmt.Errorf("value is not Numeric")
 	}
@@ -96,10 +96,10 @@ func (v Value) ParseInt64() (val int64, err error) {
 
 // ParseUint64 will parse a Numeric value into a uint64
 func (v Value) ParseUint64() (val uint64, err error) {
-	if v.Inner == nil {
+	if v.inner == nil {
 		return 0, fmt.Errorf("value is null")
 	}
-	n, ok := v.Inner.(Numeric)
+	n, ok := v.inner.(Numeric)
 	if !ok {
 		return 0, fmt.Errorf("value is not Numeric")
 	}
@@ -108,10 +108,10 @@ func (v Value) ParseUint64() (val uint64, err error) {
 
 // ParseFloat64 will parse a Fractional value into an float64
 func (v Value) ParseFloat64() (val float64, err error) {
-	if v.Inner == nil {
+	if v.inner == nil {
 		return 0, fmt.Errorf("value is null")
 	}
-	n, ok := v.Inner.(Fractional)
+	n, ok := v.inner.(Fractional)
 	if !ok {
 		return 0, fmt.Errorf("value is not Fractional")
 	}
@@ -120,23 +120,23 @@ func (v Value) ParseFloat64() (val float64, err error) {
 
 // EncodeSQL encodes the value into an SQL statement. Can be binary.
 func (v Value) EncodeSQL(b BinWriter) {
-	if v.Inner == nil {
+	if v.inner == nil {
 		if _, err := b.Write(nullstr); err != nil {
 			panic(err)
 		}
 	} else {
-		v.Inner.encodeSQL(b)
+		v.inner.encodeSQL(b)
 	}
 }
 
 // EncodeASCII encodes the value using 7-bit clean ascii bytes.
 func (v Value) EncodeASCII(b BinWriter) {
-	if v.Inner == nil {
+	if v.inner == nil {
 		if _, err := b.Write(nullstr); err != nil {
 			panic(err)
 		}
 	} else {
-		v.Inner.encodeASCII(b)
+		v.inner.encodeASCII(b)
 	}
 }
 
@@ -168,21 +168,21 @@ func (v *Value) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 
 // IsNull returns true if Value is null.
 func (v Value) IsNull() bool {
-	return v.Inner == nil
+	return v.inner == nil
 }
 
 // IsNumeric returns true if Value is numeric.
 func (v Value) IsNumeric() (ok bool) {
-	if v.Inner != nil {
-		_, ok = v.Inner.(Numeric)
+	if v.inner != nil {
+		_, ok = v.inner.(Numeric)
 	}
 	return ok
 }
 
 // IsFractional returns true if Value is fractional.
 func (v Value) IsFractional() (ok bool) {
-	if v.Inner != nil {
-		_, ok = v.Inner.(Fractional)
+	if v.inner != nil {
+		_, ok = v.inner.(Fractional)
 	}
 	return ok
 }
@@ -190,8 +190,8 @@ func (v Value) IsFractional() (ok bool) {
 // IsString returns true if Value is a string, or needs
 // to be quoted before sending to MySQL.
 func (v Value) IsString() (ok bool) {
-	if v.Inner != nil {
-		_, ok = v.Inner.(String)
+	if v.inner != nil {
+		_, ok = v.inner.(String)
 	}
 	return ok
 }
@@ -199,7 +199,7 @@ func (v Value) IsString() (ok bool) {
 // MarshalJSON should only be used for testing.
 // It's not a complete implementation.
 func (v Value) MarshalJSON() ([]byte, error) {
-	return json.Marshal(v.Inner)
+	return json.Marshal(v.inner)
 }
 
 // UnmarshalJSON should only be used for testing.
@@ -233,8 +233,8 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// InnerValue defines methods that need to be supported by all non-null value types.
-type InnerValue interface {
+// innerValue defines methods that need to be supported by all non-null value types.
+type innerValue interface {
 	raw() []byte
 	encodeSQL(BinWriter)
 	encodeASCII(BinWriter)
@@ -267,7 +267,7 @@ func BuildValue(goval interface{}) (v Value, err error) {
 	case time.Time:
 		v = Value{String([]byte(bindVal.Format("2006-01-02 15:04:05")))}
 	case Numeric, Fractional, String:
-		v = Value{bindVal.(InnerValue)}
+		v = Value{bindVal.(innerValue)}
 	case Value:
 		v = bindVal
 	default:

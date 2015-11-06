@@ -133,7 +133,7 @@ func (qs *QuerySplitter) split(columnType int64, pkMinMax *mproto.QueryResult) (
 				RowCount: qs.rowCount,
 			}
 			splits = append(splits, *split)
-			start.Inner = end.Inner
+			start = end
 		}
 		qs.sel.Where = whereClause // reset where clause
 	}

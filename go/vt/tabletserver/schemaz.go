@@ -30,7 +30,7 @@ var (
 	schemazTmpl = template.Must(template.New("example").Parse(`
 	{{$top := .}}{{with .Table}}<tr class="low">
 			<td>{{.Name}}</td>
-			<td>{{range .Columns}}{{.Name}}: {{index $top.ColumnCategory .Category}}, {{if .IsAuto}}autoinc{{end}}, {{.Default}}<br>{{end}}</td>
+			<td>{{range .Columns}}{{.Name}}: {{.Type}}, {{if .IsAuto}}autoinc{{end}}, {{.Default}}<br>{{end}}</td>
 			<td>{{range .Indexes}}{{.Name}}: ({{range .Columns}}{{.}},{{end}}), ({{range .Cardinality}}{{.}},{{end}})<br>{{end}}</td>
 			<td>{{index $top.CacheType .CacheType}}</td>
 			<td>{{.TableRows.Get}}</td>
@@ -75,12 +75,10 @@ func schemazHandler(tables []*schema.Table, w http.ResponseWriter, r *http.Reque
 	}
 	sort.Sort(&sorter)
 	envelope := struct {
-		ColumnCategory []string
-		CacheType      []string
-		Table          *schema.Table
+		CacheType []string
+		Table     *schema.Table
 	}{
-		ColumnCategory: []string{"other", "number", "varbinary"},
-		CacheType:      []string{"none", "read-write", "write-only"},
+		CacheType: []string{"none", "read-write", "write-only"},
 	}
 	for _, Value := range sorter.rows {
 		envelope.Table = Value

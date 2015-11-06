@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -102,6 +103,12 @@ func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 	fakecacheservice.Register()
 	db := fakesqldb.Register()
 	db.AddQuery("show index from `test_table`", &mproto.QueryResult{})
+	db.AddQuery("select * from `test_table` where 1 != 1", &mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name: "pk",
+			Type: mysql.TypeLong,
+		}},
+	})
 	db.AddQuery("describe `test_table`", &mproto.QueryResult{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -145,12 +152,18 @@ func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 			},
 		},
 	})
+	db.AddQuery("select * from `test_table` where 1 != 1", &mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name: "pk",
+			Type: mysql.TypeNewDecimal,
+		}},
+	})
 	db.AddQuery("describe `test_table`", &mproto.QueryResult{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
 				sqltypes.MakeString([]byte("pk")),
-				sqltypes.MakeString([]byte("unknown_type")),
+				sqltypes.MakeString([]byte("decimal")),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte("1")),
@@ -260,7 +273,7 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	defer cachePool.Close()
 	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
-		t.Fatalf("failed to create a table info")
+		t.Fatalf("failed to create a table info: %v", err)
 	}
 	if len(tableInfo.PKColumns) != 1 {
 		t.Fatalf("table should have one PK column although the cardinality is invalid")
@@ -309,6 +322,18 @@ func newTestTableInfoCachePool() *CachePool {
 
 func getTestTableInfoQueries() map[string]*mproto.QueryResult {
 	return map[string]*mproto.QueryResult{
+		"select * from `test_table` where 1 != 1": &mproto.QueryResult{
+			Fields: []mproto.Field{{
+				Name: "pk",
+				Type: mysql.TypeLong,
+			}, {
+				Name: "name",
+				Type: mysql.TypeLong,
+			}, {
+				Name: "addr",
+				Type: mysql.TypeLong,
+			}},
+		},
 		"describe `test_table`": &mproto.QueryResult{
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{

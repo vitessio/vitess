@@ -32,7 +32,7 @@ func TestQueryResult(t *testing.T) {
 		RowsAffected: 2,
 		InsertId:     3,
 		Rows: [][]sqltypes.Value{
-			{{sqltypes.Numeric("1")}, {sqltypes.String("aa")}},
+			{sqltypes.MakeNumeric([]byte("1")), sqltypes.MakeString([]byte("aa"))},
 		},
 		Err: &RPCError{1000, "failed due to err"},
 	}
