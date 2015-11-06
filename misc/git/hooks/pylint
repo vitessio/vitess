@@ -19,7 +19,7 @@ PYLINT=/usr/bin/gpylint
 
 function call_pylint {
   local file=$1
-  if echo "$file" | grep -q ^test/ ; then
+  if [[ "$file" =~ ^test/ ]] ; then 
     mode=style,test
   else
     mode=style

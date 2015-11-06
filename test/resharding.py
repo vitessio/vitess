@@ -152,8 +152,8 @@ class InsertThread(threading.Thread):
              'commit'],
             write=True, user='vt_app')
         time.sleep(0.2)
-    except Exception as e:
-      logging.error('InsertThread got exception: %s', e)
+    except Exception:
+      logging.exception('InsertThread got exception.')
 
 
 # MonitorLagThread will get values from a database, and compare the timestamp
@@ -174,7 +174,7 @@ class MonitorLagThread(threading.Thread):
   def run(self):
     try:
       while not self.done:
-        result = self.tablet_obj.mquery(
+        result = self.tablet.mquery(
             'vt_test_keyspace',
             'select time_milli from timestamps where name="%s"' %
             self.object_name)
@@ -186,8 +186,8 @@ class MonitorLagThread(threading.Thread):
           if lag > self.max_lag:
             self.max_lag = lag
         time.sleep(1.0)
-    except Exception as e:
-      logging.error('MonitorLagThread got exception: %s', e)
+    except Exception:
+      logging.exception('MonitorLagThread got exception.')
 
 
 class TestResharding(unittest.TestCase):
