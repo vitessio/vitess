@@ -12,7 +12,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vtgate"
@@ -111,7 +110,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *proto.Keyspa
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		key.KeyspaceIdsToProto(request.KeyspaceIds),
+		request.KeyspaceIds,
 		request.TabletType,
 		request.Session,
 		request.NotInTransaction,
@@ -134,7 +133,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *proto.KeyRange
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		key.KeyRangesToProto(request.KeyRanges),
+		request.KeyRanges,
 		request.TabletType,
 		request.Session,
 		request.NotInTransaction,
@@ -298,7 +297,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *proto.
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		key.KeyspaceIdsToProto(request.KeyspaceIds),
+		request.KeyspaceIds,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
@@ -316,7 +315,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *proto
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		key.KeyspaceIdsToProto(request.KeyspaceIds),
+		request.KeyspaceIds,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
@@ -341,7 +340,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *proto.Ke
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		key.KeyRangesToProto(request.KeyRanges),
+		request.KeyRanges,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
@@ -359,7 +358,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *proto.K
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		key.KeyRangesToProto(request.KeyRanges),
+		request.KeyRanges,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return sendReply(value)

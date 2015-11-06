@@ -5,7 +5,6 @@
 package proto
 
 import (
-	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/vtgate"
@@ -38,7 +37,7 @@ func ProtoToEntityIds(l []*pb.ExecuteEntityIdsRequest_EntityId) []EntityId {
 	}
 	result := make([]EntityId, len(l))
 	for i, e := range l {
-		result[i].KeyspaceID = key.KeyspaceId(e.KeyspaceId)
+		result[i].KeyspaceID = e.KeyspaceId
 		v, err := tproto.SQLToNative(e.XidType, e.XidValue)
 		if err != nil {
 			panic(err)
@@ -101,7 +100,7 @@ func BoundKeyspaceIdQueriesToProto(bsq []BoundKeyspaceIdQuery) ([]*pb.BoundKeysp
 		result[i] = &pb.BoundKeyspaceIdQuery{
 			Query:       qq,
 			Keyspace:    q.Keyspace,
-			KeyspaceIds: key.KeyspaceIdsToProto(q.KeyspaceIds),
+			KeyspaceIds: q.KeyspaceIds,
 		}
 	}
 	return result, nil
@@ -121,7 +120,7 @@ func ProtoToBoundKeyspaceIdQueries(bsq []*pb.BoundKeyspaceIdQuery) ([]BoundKeysp
 		result[i].Sql = string(q.Query.Sql)
 		result[i].BindVariables = bv
 		result[i].Keyspace = q.Keyspace
-		result[i].KeyspaceIds = key.ProtoToKeyspaceIds(q.KeyspaceIds)
+		result[i].KeyspaceIds = q.KeyspaceIds
 	}
 	return result, nil
 }

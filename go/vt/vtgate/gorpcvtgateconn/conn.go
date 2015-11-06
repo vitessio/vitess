@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -132,7 +131,7 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 		Sql:              query,
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
-		KeyspaceIds:      key.ProtoToKeyspaceIds(keyspaceIds),
+		KeyspaceIds:      keyspaceIds,
 		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
@@ -154,7 +153,7 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 		Sql:              query,
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
-		KeyRanges:        key.ProtoToKeyRanges(keyRanges),
+		KeyRanges:        keyRanges,
 		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
@@ -292,7 +291,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 		Sql:           query,
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
-		KeyRanges:     key.ProtoToKeyRanges(keyRanges),
+		KeyRanges:     keyRanges,
 		TabletType:    tabletType,
 		Session:       nil,
 	}
@@ -307,7 +306,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges2(ctx context.Context, query strin
 		Sql:           query,
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
-		KeyRanges:     key.ProtoToKeyRanges(keyRanges),
+		KeyRanges:     keyRanges,
 		TabletType:    tabletType,
 		Session:       nil,
 	}
@@ -322,7 +321,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 		Sql:           query,
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
-		KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIds),
+		KeyspaceIds:   keyspaceIds,
 		TabletType:    tabletType,
 		Session:       nil,
 	}
@@ -337,7 +336,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query str
 		Sql:           query,
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
-		KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIds),
+		KeyspaceIds:   keyspaceIds,
 		TabletType:    tabletType,
 		Session:       nil,
 	}

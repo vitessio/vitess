@@ -517,26 +517,20 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 	s := createSandbox("TestVTGateExecuteBatchKeyspaceIds")
 	s.MapTestConn("-20", &sandboxConn{})
 	s.MapTestConn("20-40", &sandboxConn{})
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	kid30, err := key.HexKeyspaceId("30").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	kid10 := []byte{0x10}
+	kid30 := []byte{0x30}
 	qrl := new(proto.QueryResultList)
-	err = rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
+	err := rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
 		[]proto.BoundKeyspaceIdQuery{{
 			Sql:           "query",
 			BindVariables: nil,
 			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
-			KeyspaceIds:   []key.KeyspaceId{kid10, kid30},
+			KeyspaceIds:   [][]byte{kid10, kid30},
 		}, {
 			Sql:           "query",
 			BindVariables: nil,
 			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
-			KeyspaceIds:   []key.KeyspaceId{kid10, kid30},
+			KeyspaceIds:   [][]byte{kid10, kid30},
 		}},
 		pb.TabletType_MASTER,
 		false,
@@ -562,12 +556,12 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 			Sql:           "query",
 			BindVariables: nil,
 			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
-			KeyspaceIds:   []key.KeyspaceId{kid10, kid30},
+			KeyspaceIds:   [][]byte{kid10, kid30},
 		}, {
 			Sql:           "query",
 			BindVariables: nil,
 			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
-			KeyspaceIds:   []key.KeyspaceId{kid10, kid30},
+			KeyspaceIds:   [][]byte{kid10, kid30},
 		}},
 		pb.TabletType_MASTER,
 		false,
@@ -963,17 +957,17 @@ func TestAnnotatingExecuteBatchKeyspaceIds(t *testing.T) {
 			proto.BoundKeyspaceIdQuery{
 				Sql:         "INSERT INTO table () VALUES();",
 				Keyspace:    keyspace,
-				KeyspaceIds: []key.KeyspaceId{key.KeyspaceId([]byte{0x10})},
+				KeyspaceIds: [][]byte{[]byte{0x10}},
 			},
 			proto.BoundKeyspaceIdQuery{
 				Sql:         "UPDATE table SET col1=1 WHERE col2>3;",
 				Keyspace:    keyspace,
-				KeyspaceIds: []key.KeyspaceId{key.KeyspaceId([]byte{0x15})},
+				KeyspaceIds: [][]byte{[]byte{0x15}},
 			},
 			proto.BoundKeyspaceIdQuery{
 				Sql:         "DELETE FROM table WHERE col1==4;",
 				Keyspace:    keyspace,
-				KeyspaceIds: []key.KeyspaceId{key.KeyspaceId([]byte{0x25})},
+				KeyspaceIds: [][]byte{[]byte{0x25}},
 			},
 		},
 		pb.TabletType_MASTER,
@@ -1002,9 +996,9 @@ func TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds(t *testing.T) {
 			proto.BoundKeyspaceIdQuery{
 				Sql:      "INSERT INTO table () VALUES();",
 				Keyspace: keyspace,
-				KeyspaceIds: []key.KeyspaceId{
-					key.KeyspaceId([]byte{0x10}),
-					key.KeyspaceId([]byte{0x15}),
+				KeyspaceIds: [][]byte{
+					[]byte{0x10},
+					[]byte{0x15},
 				},
 			},
 		},

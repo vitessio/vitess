@@ -212,14 +212,8 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 
 func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 	ts := new(sandboxTopo)
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Error(err)
-	}
-	kid25, err := key.HexKeyspaceId("25").Unhex()
-	if err != nil {
-		t.Error(err)
-	}
+	kid10 := []byte{0x10}
+	kid25 := []byte{0x25}
 	var testCases = []struct {
 		idQueries    []proto.BoundKeyspaceIdQuery
 		shardQueries []proto.BoundShardQuery
@@ -230,12 +224,12 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 					Sql:           "q1",
 					BindVariables: map[string]interface{}{"q1var": 1},
 					Keyspace:      KsTestSharded,
-					KeyspaceIds:   []key.KeyspaceId{kid10, kid25},
+					KeyspaceIds:   [][]byte{kid10, kid25},
 				}, {
 					Sql:           "q2",
 					BindVariables: map[string]interface{}{"q2var": 2},
 					Keyspace:      KsTestSharded,
-					KeyspaceIds:   []key.KeyspaceId{kid25, kid25},
+					KeyspaceIds:   [][]byte{kid25, kid25},
 				},
 			},
 			shardQueries: []proto.BoundShardQuery{

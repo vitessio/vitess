@@ -11,7 +11,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -35,8 +34,7 @@ var (
 		[]byte{1, 2, 3, 4},
 		[]byte{5, 6, 7, 8},
 	}
-	keyspaceIDsEcho    = "[[1 2 3 4] [5 6 7 8]]"
-	keyspaceIDsEchoOld = "[01020304 05060708]"
+	keyspaceIDsEcho = "[[1 2 3 4] [5 6 7 8]]"
 
 	keyRanges = []*pbt.KeyRange{
 		&pbt.KeyRange{Start: []byte{1, 2, 3, 4}, End: []byte{5, 6, 7, 8}},
@@ -165,7 +163,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		gproto.BoundKeyspaceIdQuery{
 			Sql:           echoPrefix + query,
 			Keyspace:      keyspace,
-			KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIDs),
+			KeyspaceIds:   keyspaceIDs,
 			BindVariables: bindVars,
 		},
 	}, tabletType, true)
@@ -173,7 +171,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"callerId":      callerIDEcho,
 		"query":         echoPrefix + query,
 		"keyspace":      keyspace,
-		"keyspaceIds":   keyspaceIDsEchoOld,
+		"keyspaceIds":   keyspaceIDsEcho,
 		"bindVars":      bindVarsEcho,
 		"tabletType":    tabletTypeEcho,
 		"asTransaction": "true",
@@ -328,7 +326,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		gproto.BoundKeyspaceIdQuery{
 			Sql:           echoPrefix + query,
 			Keyspace:      keyspace,
-			KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIDs),
+			KeyspaceIds:   keyspaceIDs,
 			BindVariables: bindVars,
 		},
 	}, tabletType, true)
@@ -336,7 +334,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"callerId":      callerIDEcho,
 		"query":         echoPrefix + query,
 		"keyspace":      keyspace,
-		"keyspaceIds":   keyspaceIDsEchoOld,
+		"keyspaceIds":   keyspaceIDsEcho,
 		"bindVars":      bindVarsEcho,
 		"tabletType":    tabletTypeEcho,
 		"session":       sessionEcho,

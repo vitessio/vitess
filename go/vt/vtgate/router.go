@@ -11,7 +11,6 @@ import (
 	"fmt"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"golang.org/x/net/context"
@@ -204,18 +203,18 @@ func (rtr *Router) paramsSelectKeyrange(vcursor *requestContext, plan *planbuild
 }
 
 func getKeyRange(keys []interface{}) (*pb.KeyRange, error) {
-	var ksids []key.KeyspaceId
+	var ksids [][]byte
 	for _, k := range keys {
 		switch k := k.(type) {
 		case string:
-			ksids = append(ksids, key.KeyspaceId(k))
+			ksids = append(ksids, []byte(k))
 		default:
 			return nil, fmt.Errorf("expecting strings for keyrange: %+v", keys)
 		}
 	}
 	return &pb.KeyRange{
-		Start: []byte(ksids[0]),
-		End:   []byte(ksids[1]),
+		Start: ksids[0],
+		End:   ksids[1],
 	}, nil
 }
 
