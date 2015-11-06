@@ -6,7 +6,6 @@ package key
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -14,83 +13,24 @@ import (
 )
 
 func TestKey(t *testing.T) {
-	k0 := Uint64Key(0).KeyspaceId()
-	k1 := Uint64Key(1).KeyspaceId()
-	k2 := Uint64Key(0x7FFFFFFFFFFFFFFF).KeyspaceId()
-	k3 := Uint64Key(0x8000000000000000).KeyspaceId()
-	k4 := Uint64Key(0xFFFFFFFFFFFFFFFF).KeyspaceId()
+	k0 := Uint64Key(0)
+	k1 := Uint64Key(1)
+	k2 := Uint64Key(0x7FFFFFFFFFFFFFFF)
+	k3 := Uint64Key(0x8000000000000000)
+	k4 := Uint64Key(0xFFFFFFFFFFFFFFFF)
 
-	f := func(k KeyspaceId, x string) {
-		if x != string(k) {
+	f := func(k Uint64Key, x string) {
+		hexK := hex.EncodeToString(k.Bytes())
+		if x != hexK {
 			t.Errorf("byte mismatch %#v != %#v", k, x)
 		}
-		data, err := json.MarshalIndent(k, "  ", "  ")
-		if err != nil {
-			t.Errorf("serialize error: %v", err)
-		} else {
-			t.Logf("json: %v", string(data))
-		}
-
-		kr := new(KeyspaceId)
-		err = json.Unmarshal(data, kr)
-		if err != nil {
-			t.Errorf("reserialize error: %v", err)
-		}
-
-		if k != *kr {
-			t.Errorf("keyspace compare failed: %#v != %#v", k, kr)
-		}
 	}
 
-	f(MinKey, "")
-	f(k0, "\x00\x00\x00\x00\x00\x00\x00\x00")
-	f(k1, "\x00\x00\x00\x00\x00\x00\x00\x01")
-	f(k2, "\x7f\xff\xff\xff\xff\xff\xff\xff")
-	f(k3, "\x80\x00\x00\x00\x00\x00\x00\x00")
-	f(k4, "\xff\xff\xff\xff\xff\xff\xff\xff")
-
-	hv := k4.Hex()
-	if hv != "ffffffffffffffff" {
-		t.Errorf("Was expecting ffffffffffffffff but got %v", hv)
-	}
-}
-
-func TestKeyUint64Sort(t *testing.T) {
-	k0 := Uint64Key(0).KeyspaceId()
-	k1 := Uint64Key(1).KeyspaceId()
-	k2 := Uint64Key(0x7FFFFFFFFFFFFFFF).KeyspaceId()
-	k3 := Uint64Key(0x8000000000000000).KeyspaceId()
-	k4 := Uint64Key(0xFFFFFFFFFFFFFFFF).KeyspaceId()
-	kl := make([]KeyspaceId, 0, 16)
-	klSorted := make([]KeyspaceId, 0, 16)
-	kl = append(kl, MinKey, MaxKey, k4, k3, k2, k1, k0)
-	klSorted = append(kl, MinKey, k0, k1, k2, k3, k4, MaxKey)
-	KeyspaceIdArray(kl).Sort()
-
-	for i, k := range kl {
-		if k != klSorted[i] {
-			t.Errorf("key order error: %d %v %v", i, k, klSorted[i])
-		}
-	}
-}
-
-func TestKeyStringSort(t *testing.T) {
-	k0 := KeyspaceId("0")
-	k1 := KeyspaceId("9")
-	k2 := KeyspaceId("Zzzz")
-	k3 := KeyspaceId("a")
-	k4 := KeyspaceId("z")
-	kl := make([]KeyspaceId, 0, 16)
-	klSorted := make([]KeyspaceId, 0, 16)
-	kl = append(kl, MinKey, MaxKey, k4, k3, k2, k1, k0)
-	klSorted = append(kl, MinKey, k0, k1, k2, k3, k4, MaxKey)
-	KeyspaceIdArray(kl).Sort()
-
-	for i, k := range kl {
-		if k != klSorted[i] {
-			t.Errorf("key order error: %d %v %v", i, k, klSorted[i])
-		}
-	}
+	f(k0, "0000000000000000")
+	f(k1, "0000000000000001")
+	f(k2, "7fffffffffffffff")
+	f(k3, "8000000000000000")
+	f(k4, "ffffffffffffffff")
 }
 
 func TestParseShardingSpec(t *testing.T) {
