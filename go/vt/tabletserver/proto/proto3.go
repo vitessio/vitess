@@ -317,19 +317,15 @@ func Proto3ToQueryResultList(results []*pb.QueryResult) *QueryResultList {
 }
 
 // QueryResultListToProto3 changes the internal array of QueryResult to the proto3 version
-func QueryResultListToProto3(results []mproto.QueryResult) ([]*pb.QueryResult, error) {
+func QueryResultListToProto3(results []mproto.QueryResult) []*pb.QueryResult {
 	if len(results) == 0 {
-		return nil, nil
+		return nil
 	}
 	result := make([]*pb.QueryResult, len(results))
-	var err error
 	for i := range results {
-		result[i], err = mproto.QueryResultToProto3(&results[i])
-		if err != nil {
-			return nil, err
-		}
+		result[i] = mproto.QueryResultToProto3(&results[i])
 	}
-	return result, nil
+	return result
 }
 
 // Proto3ToQuerySplits converts a proto3 QuerySplit array to a native QuerySplit array

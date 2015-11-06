@@ -169,11 +169,7 @@ func TestInts(t *testing.T) {
 		sqltypes.Year,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
-		if err != nil {
-			t.Errorf("col: %d, err: %v", i, err)
-			continue
-		}
+		got := sqltypes.MySQLToType(field.Type, field.Flags)
 		if got != wantTypes[i] {
 			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
 		}
@@ -249,11 +245,7 @@ func TestFractionals(t *testing.T) {
 		sqltypes.Float64,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
-		if err != nil {
-			t.Errorf("col: %d, err: %v", i, err)
-			continue
-		}
+		got := sqltypes.MySQLToType(field.Type, field.Flags)
 		if got != wantTypes[i] {
 			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
 		}
@@ -365,11 +357,7 @@ func TestStrings(t *testing.T) {
 		sqltypes.Set,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
-		if err != nil {
-			t.Errorf("col: %d, err: %v", i, err)
-			continue
-		}
+		got := sqltypes.MySQLToType(field.Type, field.Flags)
 		if got != wantTypes[i] {
 			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
 		}
@@ -445,11 +433,7 @@ func TestMiscTypes(t *testing.T) {
 		sqltypes.Time,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
-		if err != nil {
-			t.Errorf("col: %d, err: %v", i, err)
-			continue
-		}
+		got := sqltypes.MySQLToType(field.Type, field.Flags)
 		if got != wantTypes[i] {
 			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
 		}
@@ -485,11 +469,7 @@ func TestNull(t *testing.T) {
 		sqltypes.Null,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
-		if err != nil {
-			t.Errorf("col: %d, err: %v", i, err)
-			continue
-		}
+		got := sqltypes.MySQLToType(field.Type, field.Flags)
 		if got != wantTypes[i] {
 			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
 		}

@@ -185,8 +185,8 @@ func (s *server) ExecuteFetchAsDba(ctx context.Context, request *pb.ExecuteFetch
 		if err != nil {
 			return err
 		}
-		response.Result, err = mproto.QueryResultToProto3(qr)
-		return err
+		response.Result = mproto.QueryResultToProto3(qr)
+		return nil
 	})
 }
 
@@ -198,8 +198,8 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *pb.ExecuteFetch
 		if err != nil {
 			return err
 		}
-		response.Result, err = mproto.QueryResultToProto3(qr)
-		return err
+		response.Result = mproto.QueryResultToProto3(qr)
+		return nil
 	})
 }
 
