@@ -32,7 +32,6 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 	private static $SHARDS_ECHO = '[-80 80-]';
 	private static $KEYSPACE_IDS; // initialized in setUpBeforeClass()
 	private static $KEYSPACE_IDS_ECHO = '[[128 0 0 0 0 0 0 0] [255 0 0 0 0 0 0 239]]';
-	private static $KEYSPACE_IDS_ECHO_OLD = '[8000000000000000 ff000000000000ef]';
 	private static $KEY_RANGES; // initialized in setUpBeforeClass()
 	private static $KEY_RANGES_ECHO = '[end:"\200\000\000\000\000\000\000\000"  start:"\200\000\000\000\000\000\000\000" ]';
 	private static $ENTITY_COLUMN_NAME = 'test_column';
@@ -203,7 +202,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
-		$this->assertEquals(self::$KEYSPACE_IDS_ECHO_OLD, $echo['keyspaceIds']);
+		$this->assertEquals(self::$KEYSPACE_IDS_ECHO, $echo['keyspaceIds']);
 		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 		$this->assertEquals('true', $echo['asTransaction']);
@@ -322,7 +321,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
-		$this->assertEquals(self::$KEYSPACE_IDS_ECHO_OLD, $echo['keyspaceIds']);
+		$this->assertEquals(self::$KEYSPACE_IDS_ECHO, $echo['keyspaceIds']);
 		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 		$this->assertEquals(self::$SESSION_ECHO, $echo['session']);

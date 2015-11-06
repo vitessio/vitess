@@ -104,17 +104,8 @@ func ParseKeyspaceIDType(param string) (pb.KeyspaceIdType, error) {
 }
 
 //
-// KeyRange definitions
+// KeyRange helper methods
 //
-
-// KeyRange is an interval of KeyspaceId values. It contains Start,
-// but excludes End. In other words, it is: [Start, End)
-type KeyRange struct {
-	Start KeyspaceId
-	End   KeyspaceId
-}
-
-//go:generate bsongen -file $GOFILE -type KeyRange -o key_range_bson.go
 
 // KeyRangeContains returns true if the provided id is in the keyrange.
 func KeyRangeContains(kr *pb.KeyRange, id []byte) bool {
@@ -123,10 +114,6 @@ func KeyRangeContains(kr *pb.KeyRange, id []byte) bool {
 	}
 	return string(kr.Start) <= string(id) &&
 		(len(kr.End) == 0 || string(id) < string(kr.End))
-}
-
-func (kr KeyRange) String() string {
-	return fmt.Sprintf("{Start: %v, End: %v}", string(kr.Start.Hex()), string(kr.End.Hex()))
 }
 
 // ParseKeyRangeParts parses a start and end hex values and build a proto KeyRange
@@ -255,26 +242,6 @@ func (p KeyspaceIdArray) Swap(i, j int) {
 }
 
 func (p KeyspaceIdArray) Sort() { sort.Sort(p) }
-
-//
-// KeyRangeArray definitions
-//
-
-// KeyRangeArray is an array of KeyRange that can be sorted
-// We use it only if we need to sort []KeyRange
-type KeyRangeArray []KeyRange
-
-func (p KeyRangeArray) Len() int { return len(p) }
-
-func (p KeyRangeArray) Less(i, j int) bool {
-	return p[i].Start < p[j].Start
-}
-
-func (p KeyRangeArray) Swap(i, j int) {
-	p[i], p[j] = p[j], p[i]
-}
-
-func (p KeyRangeArray) Sort() { sort.Sort(p) }
 
 // ParseShardingSpec parses a string that describes a sharding
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty

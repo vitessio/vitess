@@ -6,7 +6,6 @@ package proto
 
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -43,7 +42,7 @@ type KeyspaceIdQuery struct {
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
-	KeyspaceIds      []key.KeyspaceId
+	KeyspaceIds      [][]byte
 	TabletType       pbt.TabletType
 	Session          *pb.Session
 	NotInTransaction bool
@@ -56,7 +55,7 @@ type KeyRangeQuery struct {
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
-	KeyRanges        []key.KeyRange
+	KeyRanges        []*pbt.KeyRange
 	TabletType       pbt.TabletType
 	Session          *pb.Session
 	NotInTransaction bool
@@ -65,7 +64,7 @@ type KeyRangeQuery struct {
 // EntityId represents a tuple of external_id and keyspace_id
 type EntityId struct {
 	ExternalID interface{}
-	KeyspaceID key.KeyspaceId
+	KeyspaceID []byte
 }
 
 // EntityIdsQuery represents a query request for the specified KeyspaceId map.
@@ -116,7 +115,7 @@ type BoundKeyspaceIdQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyspaceIds   []key.KeyspaceId
+	KeyspaceIds   [][]byte
 }
 
 // KeyspaceIdBatchQuery represents a batch query request

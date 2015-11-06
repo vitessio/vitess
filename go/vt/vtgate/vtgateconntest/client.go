@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -1114,7 +1113,7 @@ func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", ql, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteBatchKeyspaceIds(ctx, []proto.BoundKeyspaceIdQuery{proto.BoundKeyspaceIdQuery{Sql: "none", KeyspaceIds: []key.KeyspaceId{}}}, pb.TabletType_REPLICA, false)
+	_, err = conn.ExecuteBatchKeyspaceIds(ctx, []proto.BoundKeyspaceIdQuery{proto.BoundKeyspaceIdQuery{Sql: "none", KeyspaceIds: [][]byte{}}}, pb.TabletType_REPLICA, false)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -2358,8 +2357,8 @@ var execMap = map[string]struct {
 						"bind1": int64(0),
 					},
 					Keyspace: "ks",
-					KeyspaceIds: []key.KeyspaceId{
-						key.KeyspaceId("ki1"),
+					KeyspaceIds: [][]byte{
+						[]byte{'k', 'i', '1'},
 					},
 				},
 			},
@@ -2459,8 +2458,8 @@ var execMap = map[string]struct {
 						"bind1": int64(0),
 					},
 					Keyspace: "ks",
-					KeyspaceIds: []key.KeyspaceId{
-						key.KeyspaceId("ki1"),
+					KeyspaceIds: [][]byte{
+						[]byte{'k', 'i', '1'},
 					},
 				},
 			},
@@ -2564,8 +2563,8 @@ var execMap = map[string]struct {
 						"bind1": int64(0),
 					},
 					Keyspace: "ks",
-					KeyspaceIds: []key.KeyspaceId{
-						key.KeyspaceId("ki1"),
+					KeyspaceIds: [][]byte{
+						[]byte{'k', 'i', '1'},
 					},
 				},
 			},
@@ -2670,8 +2669,8 @@ var execMap = map[string]struct {
 						"bind1": int64(0),
 					},
 					Keyspace: "ks",
-					KeyspaceIds: []key.KeyspaceId{
-						key.KeyspaceId("ki1"),
+					KeyspaceIds: [][]byte{
+						[]byte{'k', 'i', '1'},
 					},
 				},
 			},

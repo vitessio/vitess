@@ -15,7 +15,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -83,21 +82,16 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 
 func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func() (*mproto.QueryResult, error) {
-		kid10, err := key.HexKeyspaceId("10").Unhex()
-		if err != nil {
-			return nil, err
-		}
-		kid25, err := key.HexKeyspaceId("25").Unhex()
-		if err != nil {
-			return nil, err
-		}
 		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(),
 			[]proto.BoundKeyspaceIdQuery{{
 				Sql:           "query",
 				BindVariables: nil,
 				Keyspace:      "TestResolverExecuteBatchKeyspaceIds",
-				KeyspaceIds:   []key.KeyspaceId{kid10, kid25},
+				KeyspaceIds: [][]byte{
+					[]byte{0x10},
+					[]byte{0x25},
+				},
 			}},
 			pb.TabletType_MASTER,
 			false,

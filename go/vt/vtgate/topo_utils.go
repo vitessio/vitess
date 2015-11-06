@@ -213,7 +213,7 @@ func boundShardQueriesToScatterBatchRequest(boundQueries []proto.BoundShardQuery
 func boundKeyspaceIDQueriesToBoundShardQueries(ctx context.Context, topoServ SrvTopoServer, cell string, tabletType pb.TabletType, idQueries []proto.BoundKeyspaceIdQuery) ([]proto.BoundShardQuery, error) {
 	shardQueries := make([]proto.BoundShardQuery, len(idQueries))
 	for i, idQuery := range idQueries {
-		keyspace, shards, err := mapKeyspaceIdsToShards(ctx, topoServ, cell, idQuery.Keyspace, tabletType, key.KeyspaceIdsToProto(idQuery.KeyspaceIds))
+		keyspace, shards, err := mapKeyspaceIdsToShards(ctx, topoServ, cell, idQuery.Keyspace, tabletType, idQuery.KeyspaceIds)
 		if err != nil {
 			return nil, err
 		}

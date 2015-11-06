@@ -75,7 +75,6 @@ public abstract class RpcClientTest {
   private static final List<byte[]> KEYSPACE_IDS =
       Arrays.asList(new byte[] {1, 2, 3, 4}, new byte[] {5, 6, 7, 8});
   private static final String KEYSPACE_IDS_ECHO = "[[1 2 3 4] [5 6 7 8]]";
-  private static final String KEYSPACE_IDS_ECHO_OLD = "[01020304 05060708]";
 
   private static final List<KeyRange> KEY_RANGES = Arrays.asList(
       KeyRange.newBuilder()
@@ -208,7 +207,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEYSPACE_IDS_ECHO_OLD, echo.get("keyspaceIds"));
+    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals("true", echo.get("asTransaction"));
@@ -333,7 +332,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEYSPACE_IDS_ECHO_OLD, echo.get("keyspaceIds"));
+    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
