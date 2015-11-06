@@ -187,7 +187,7 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
 	if tableInfo == nil {
 		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Table %s not found", event.TableName))
 	}
-	if tableInfo.CacheType == schema.CACHE_NONE {
+	if tableInfo.CacheType == schema.CacheNone {
 		return
 	}
 
@@ -251,7 +251,7 @@ func (rci *RowcacheInvalidator) handleUnrecognizedEvent(sql string) {
 		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
 		return
 	}
-	if tableInfo.CacheType == schema.CACHE_NONE {
+	if tableInfo.CacheType == schema.CacheNone {
 		return
 	}
 

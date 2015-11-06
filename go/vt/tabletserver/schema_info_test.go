@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -148,7 +149,7 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 			createTestTableBaseShowTable("test_table"),
 		},
 	})
-	db.AddQuery("describe `test_table`", &mproto.QueryResult{
+	db.AddQuery("select * from `test_table` where 1 != 1", &mproto.QueryResult{
 		// this will cause NewTableInfo error
 		RowsAffected: math.MaxUint64,
 	})
@@ -180,14 +181,14 @@ func TestSchemaInfoOpenWithSchemaOverride(t *testing.T) {
 	// test cache type RW
 	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	testTableInfo := schemaInfo.GetTable("test_table_01")
-	if testTableInfo.Table.CacheType != schema.CACHE_RW {
+	if testTableInfo.Table.CacheType != schema.CacheRW {
 		t.Fatalf("test_table_01's cache type should be RW")
 	}
 	schemaInfo.Close()
 	// test cache type W
 	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	testTableInfo = schemaInfo.GetTable("test_table_02")
-	if testTableInfo.Table.CacheType != schema.CACHE_W {
+	if testTableInfo.Table.CacheType != schema.CacheW {
 		t.Fatalf("test_table_02's cache type should be W")
 	}
 	schemaInfo.Close()
@@ -235,11 +236,16 @@ func TestSchemaInfoReload(t *testing.T) {
 		},
 	})
 
+	db.AddQuery("select * from `test_table_04` where 1 != 1", &mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name: "pk",
+			Type: mysql.TypeLong,
+		}},
+	})
 	db.AddQuery("describe `test_table_04`", &mproto.QueryResult{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
 	})
-
 	db.AddQuery("show index from `test_table_04`", &mproto.QueryResult{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
@@ -489,6 +495,13 @@ func TestUpdatedMysqlStats(t *testing.T) {
 		Rows: [][]sqltypes.Value{
 			createTestTableBaseShowTable(tableName),
 		},
+	})
+	q = fmt.Sprintf("select * from `%s` where 1 != 1", tableName)
+	db.AddQuery(q, &mproto.QueryResult{
+		Fields: []mproto.Field{{
+			Name: "pk",
+			Type: mysql.TypeLong,
+		}},
 	})
 	q = fmt.Sprintf("describe `%s`", tableName)
 	db.AddQuery(q, &mproto.QueryResult{
@@ -797,6 +810,12 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
+		"select * from `test_table_01` where 1 != 1": &mproto.QueryResult{
+			Fields: []mproto.Field{{
+				Name: "pk",
+				Type: mysql.TypeLong,
+			}},
+		},
 		"describe `test_table_01`": &mproto.QueryResult{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
@@ -810,6 +829,12 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
+		"select * from `test_table_02` where 1 != 1": &mproto.QueryResult{
+			Fields: []mproto.Field{{
+				Name: "pk",
+				Type: mysql.TypeLong,
+			}},
+		},
 		"describe `test_table_02`": &mproto.QueryResult{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
@@ -822,6 +847,12 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeString([]byte{}),
 				},
 			},
+		},
+		"select * from `test_table_03` where 1 != 1": &mproto.QueryResult{
+			Fields: []mproto.Field{{
+				Name: "pk",
+				Type: mysql.TypeLong,
+			}},
 		},
 		"describe `test_table_03`": &mproto.QueryResult{
 			RowsAffected: 1,

@@ -21,10 +21,7 @@ func TestFields(t *testing.T) {
 		Name: "bb",
 		Type: 2,
 	}}
-	p3, err := FieldsToProto3(fields)
-	if err != nil {
-		t.Error(err)
-	}
+	p3 := FieldsToProto3(fields)
 	wantp3 := []*query.Field{
 		&query.Field{
 			Name: "aa",
@@ -42,16 +39,6 @@ func TestFields(t *testing.T) {
 	reverse := Proto3ToFields(p3)
 	if !reflect.DeepEqual(reverse, fields) {
 		t.Errorf("reverse: %v, want %v", reverse, fields)
-	}
-
-	fields = []Field{{
-		Name: "aa",
-		Type: 15,
-	}}
-	_, err = FieldsToProto3(fields)
-	want := "Could not map: 15 to a vitess type"
-	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want %v", err, want)
 	}
 }
 
@@ -83,40 +70,5 @@ func TestRowsToProto3(t *testing.T) {
 	reverse := Proto3ToRows(p3)
 	if !reflect.DeepEqual(reverse, rows) {
 		t.Errorf("reverse: \n%#v, want \n%#v", reverse, rows)
-	}
-}
-
-func TestInvalidRowsProto(t *testing.T) {
-	p3 := []*query.Row{
-		&query.Row{
-			Lengths: []int64{3, 5, -1, 6},
-			Values:  []byte("aa12"),
-		},
-	}
-	rows := Proto3ToRows(p3)
-	want := [][]sqltypes.Value{{
-		sqltypes.MakeString([]byte("aa1")),
-		sqltypes.NULL,
-		sqltypes.NULL,
-		sqltypes.NULL,
-	}}
-	if !reflect.DeepEqual(rows, want) {
-		t.Errorf("reverse: \n%#v, want \n%#v", rows, want)
-	}
-
-	p3 = []*query.Row{
-		&query.Row{
-			Lengths: []int64{2, -2, 2},
-			Values:  []byte("aa12"),
-		},
-	}
-	rows = Proto3ToRows(p3)
-	want = [][]sqltypes.Value{{
-		sqltypes.MakeString([]byte("aa")),
-		sqltypes.NULL,
-		sqltypes.MakeString([]byte("12")),
-	}}
-	if !reflect.DeepEqual(rows, want) {
-		t.Errorf("reverse: \n%#v, want \n%#v", rows, want)
 	}
 }

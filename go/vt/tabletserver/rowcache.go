@@ -12,7 +12,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/schema"
 	"golang.org/x/net/context"
 )
 
@@ -170,7 +169,7 @@ func (rc *RowCache) decodeRow(b []byte) (row []sqltypes.Value) {
 			// Corrupt data
 			return nil
 		}
-		if rc.tableInfo.Columns[i].Category == schema.CAT_NUMBER {
+		if sqltypes.IsIntegral(rc.tableInfo.Columns[i].Type) {
 			row[i] = sqltypes.MakeNumeric(data[:length])
 		} else {
 			row[i] = sqltypes.MakeString(data[:length])

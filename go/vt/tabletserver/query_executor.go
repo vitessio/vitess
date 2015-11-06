@@ -84,7 +84,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 		defer conn.Recycle()
 		conn.RecordQuery(qre.query)
 		var invalidator CacheInvalidator
-		if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CACHE_NONE {
+		if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CacheNone {
 			invalidator = conn.DirtyKeys(qre.plan.TableName)
 		}
 		switch qre.plan.PlanID {
@@ -186,7 +186,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err er
 	defer conn.Recycle()
 	conn.RecordQuery(qre.query)
 	var invalidator CacheInvalidator
-	if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CACHE_NONE {
+	if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CacheNone {
 		invalidator = conn.DirtyKeys(qre.plan.TableName)
 	}
 	switch qre.plan.PlanID {

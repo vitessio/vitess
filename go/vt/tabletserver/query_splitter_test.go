@@ -19,9 +19,9 @@ func getSchemaInfo() *SchemaInfo {
 		Name: "test_table",
 	}
 	zero, _ := sqltypes.BuildValue(0)
-	table.AddColumn("id", "int", zero, "")
-	table.AddColumn("id2", "int", zero, "")
-	table.AddColumn("count", "int", zero, "")
+	table.AddColumn("id", sqltypes.Int64, zero, "")
+	table.AddColumn("id2", sqltypes.Int64, zero, "")
+	table.AddColumn("count", sqltypes.Int64, zero, "")
 	table.PKColumns = []int{0}
 	primaryIndex := table.AddIndex("PRIMARY")
 	primaryIndex.AddColumn("id", 12345)
@@ -35,7 +35,7 @@ func getSchemaInfo() *SchemaInfo {
 	tableNoPK := &schema.Table{
 		Name: "test_table_no_pk",
 	}
-	tableNoPK.AddColumn("id", "int", zero, "")
+	tableNoPK.AddColumn("id", sqltypes.Int64, zero, "")
 	tableNoPK.PKColumns = []int{}
 	tables["test_table_no_pk"] = &TableInfo{Table: tableNoPK}
 

@@ -187,7 +187,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	}
 
 	// Further improvements possible only if table is row-cached
-	if tableInfo.CacheType == schema.CACHE_NONE || tableInfo.CacheType == schema.CACHE_W {
+	if tableInfo.CacheType == schema.CacheNone || tableInfo.CacheType == schema.CacheW {
 		plan.Reason = ReasonNocache
 		return plan, nil
 	}

@@ -45,10 +45,10 @@ func TestCharaterSet(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("1")},
-				sqltypes.Value{Inner: sqltypes.Fractional("1.12345")},
-				sqltypes.Value{Inner: sqltypes.String("\xc2\xa2")},
-				sqltypes.Value{Inner: sqltypes.String("\x00\xff")},
+				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeFractional([]byte("1.12345")),
+				sqltypes.MakeString([]byte("\xc2\xa2")),
+				sqltypes.MakeString([]byte("\x00\xff")),
 			},
 		},
 	}
@@ -138,17 +138,17 @@ func TestInts(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("-128")},
-				sqltypes.Value{Inner: sqltypes.Numeric("255")},
-				sqltypes.Value{Inner: sqltypes.Numeric("-32768")},
-				sqltypes.Value{Inner: sqltypes.Numeric("65535")},
-				sqltypes.Value{Inner: sqltypes.Numeric("-8388608")},
-				sqltypes.Value{Inner: sqltypes.Numeric("16777215")},
-				sqltypes.Value{Inner: sqltypes.Numeric("-2147483648")},
-				sqltypes.Value{Inner: sqltypes.Numeric("4294967295")},
-				sqltypes.Value{Inner: sqltypes.Numeric("-9223372036854775808")},
-				sqltypes.Value{Inner: sqltypes.Numeric("18446744073709551615")},
-				sqltypes.Value{Inner: sqltypes.Numeric("2012")},
+				sqltypes.MakeNumeric([]byte("-128")),
+				sqltypes.MakeNumeric([]byte("255")),
+				sqltypes.MakeNumeric([]byte("-32768")),
+				sqltypes.MakeNumeric([]byte("65535")),
+				sqltypes.MakeNumeric([]byte("-8388608")),
+				sqltypes.MakeNumeric([]byte("16777215")),
+				sqltypes.MakeNumeric([]byte("-2147483648")),
+				sqltypes.MakeNumeric([]byte("4294967295")),
+				sqltypes.MakeNumeric([]byte("-9223372036854775808")),
+				sqltypes.MakeNumeric([]byte("18446744073709551615")),
+				sqltypes.MakeNumeric([]byte("2012")),
 			},
 		},
 	}
@@ -169,11 +169,7 @@ func TestInts(t *testing.T) {
 		sqltypes.Year,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
-		if err != nil {
-			t.Errorf("col: %d, err: %v", i, err)
-			continue
-		}
+		got := sqltypes.MySQLToType(field.Type, field.Flags)
 		if got != wantTypes[i] {
 			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
 		}
@@ -230,11 +226,11 @@ func TestFractionals(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("1")},
-				sqltypes.Value{Inner: sqltypes.Fractional("1.99")},
-				sqltypes.Value{Inner: sqltypes.Fractional("2.99")},
-				sqltypes.Value{Inner: sqltypes.Fractional("3.99")},
-				sqltypes.Value{Inner: sqltypes.Fractional("4.99")},
+				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeFractional([]byte("1.99")),
+				sqltypes.MakeFractional([]byte("2.99")),
+				sqltypes.MakeFractional([]byte("3.99")),
+				sqltypes.MakeFractional([]byte("4.99")),
 			},
 		},
 	}
@@ -249,11 +245,7 @@ func TestFractionals(t *testing.T) {
 		sqltypes.Float64,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
-		if err != nil {
-			t.Errorf("col: %d, err: %v", i, err)
-			continue
-		}
+		got := sqltypes.MySQLToType(field.Type, field.Flags)
 		if got != wantTypes[i] {
 			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
 		}
@@ -336,16 +328,16 @@ func TestStrings(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.String("a")},
-				sqltypes.Value{Inner: sqltypes.String("b")},
-				sqltypes.Value{Inner: sqltypes.String("c")},
-				sqltypes.Value{Inner: sqltypes.String("d\x00\x00\x00")},
-				sqltypes.Value{Inner: sqltypes.String("e")},
-				sqltypes.Value{Inner: sqltypes.String("f")},
-				sqltypes.Value{Inner: sqltypes.String("g")},
-				sqltypes.Value{Inner: sqltypes.String("h")},
-				sqltypes.Value{Inner: sqltypes.String("a")},
-				sqltypes.Value{Inner: sqltypes.String("a,b")},
+				sqltypes.MakeString([]byte("a")),
+				sqltypes.MakeString([]byte("b")),
+				sqltypes.MakeString([]byte("c")),
+				sqltypes.MakeString([]byte("d\x00\x00\x00")),
+				sqltypes.MakeString([]byte("e")),
+				sqltypes.MakeString([]byte("f")),
+				sqltypes.MakeString([]byte("g")),
+				sqltypes.MakeString([]byte("h")),
+				sqltypes.MakeString([]byte("a")),
+				sqltypes.MakeString([]byte("a,b")),
 			},
 		},
 	}
@@ -365,11 +357,7 @@ func TestStrings(t *testing.T) {
 		sqltypes.Set,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
-		if err != nil {
-			t.Errorf("col: %d, err: %v", i, err)
-			continue
-		}
+		got := sqltypes.MySQLToType(field.Type, field.Flags)
 		if got != wantTypes[i] {
 			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
 		}
@@ -426,11 +414,11 @@ func TestMiscTypes(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("1")},
-				sqltypes.Value{Inner: sqltypes.String("\x01")},
-				sqltypes.Value{Inner: sqltypes.String("2012-01-01")},
-				sqltypes.Value{Inner: sqltypes.String("2012-01-01 15:45:45")},
-				sqltypes.Value{Inner: sqltypes.String("15:45:45")},
+				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeString([]byte("\x01")),
+				sqltypes.MakeString([]byte("2012-01-01")),
+				sqltypes.MakeString([]byte("2012-01-01 15:45:45")),
+				sqltypes.MakeString([]byte("15:45:45")),
 			},
 		},
 	}
@@ -445,11 +433,7 @@ func TestMiscTypes(t *testing.T) {
 		sqltypes.Time,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
-		if err != nil {
-			t.Errorf("col: %d, err: %v", i, err)
-			continue
-		}
+		got := sqltypes.MySQLToType(field.Type, field.Flags)
 		if got != wantTypes[i] {
 			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
 		}
@@ -485,11 +469,7 @@ func TestNull(t *testing.T) {
 		sqltypes.Null,
 	}
 	for i, field := range qr.Fields {
-		got, err := sqltypes.MySQLToType(field.Type, field.Flags)
-		if err != nil {
-			t.Errorf("col: %d, err: %v", i, err)
-			continue
-		}
+		got := sqltypes.MySQLToType(field.Type, field.Flags)
 		if got != wantTypes[i] {
 			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
 		}

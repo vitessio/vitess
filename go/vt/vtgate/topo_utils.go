@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -104,11 +103,7 @@ func mapEntityIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 		if err != nil {
 			return "", nil, err
 		}
-		bv := &query.BindVariable{
-			Type:  eid.XidType,
-			Value: eid.XidValue,
-		}
-		v, _ := tproto.BindVariableToNative(bv)
+		v, _ := tproto.SQLToNative(eid.XidType, eid.XidValue)
 		shards[shard] = append(shards[shard], v)
 	}
 	return keyspace, shards, nil

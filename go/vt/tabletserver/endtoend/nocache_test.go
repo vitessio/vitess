@@ -69,7 +69,7 @@ func TestBinary(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.String(binaryData)},
+				sqltypes.MakeString([]byte(binaryData)),
 			},
 		},
 	}
@@ -299,7 +299,7 @@ func TestBindInSelect(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("1")},
+				sqltypes.MakeNumeric([]byte("1")),
 			},
 		},
 	}
@@ -325,7 +325,7 @@ func TestBindInSelect(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.String("abcd")},
+				sqltypes.MakeString([]byte("abcd")),
 			},
 		},
 	}
@@ -351,7 +351,7 @@ func TestBindInSelect(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.String("\x00\xff")},
+				sqltypes.MakeString([]byte("\x00\xff")),
 			},
 		},
 	}
@@ -449,7 +449,7 @@ func TestDBAStatements(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	wantCol := sqltypes.Value{Inner: sqltypes.String("version")}
+	wantCol := sqltypes.MakeString([]byte("version"))
 	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
 		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
 	}
