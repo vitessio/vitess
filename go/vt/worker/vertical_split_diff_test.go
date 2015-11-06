@@ -85,8 +85,8 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *p
 func TestVerticalSplitDiff(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wi := NewInstance(ts, "cell1", time.Second)
 	ctx := context.Background()
+	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
 		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))

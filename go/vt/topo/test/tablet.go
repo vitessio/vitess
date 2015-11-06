@@ -42,7 +42,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
 		Type:     pb.TabletType_MASTER,
-		KeyRange: newKeyRange3("-10"),
+		KeyRange: newKeyRange("-10"),
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)

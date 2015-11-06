@@ -150,8 +150,8 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pb.Targ
 func TestSplitDiff(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wi := NewInstance(ts, "cell1", time.Second)
 	ctx := context.Background()
+	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
 		ShardingColumnName: "keyspace_id",

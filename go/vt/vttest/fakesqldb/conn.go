@@ -15,6 +15,8 @@ import (
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // Conn provides a fake implementation of sqldb.Conn.
@@ -24,7 +26,7 @@ type Conn struct {
 	id             int64
 	curQueryResult *proto.QueryResult
 	curQueryRow    int64
-	charset        *proto.Charset
+	charset        *pb.Charset
 }
 
 // DB is a fake database and all its methods are thread safe.
@@ -258,13 +260,13 @@ func (conn *Conn) SendCommand(command uint32, data []byte) error {
 
 // GetCharset returns the current numerical values of the per-session character
 // set variables.
-func (conn *Conn) GetCharset() (cs proto.Charset, err error) {
-	return *conn.charset, nil
+func (conn *Conn) GetCharset() (cs *pb.Charset, err error) {
+	return conn.charset, nil
 }
 
 // SetCharset changes the per-session character set variables.
-func (conn *Conn) SetCharset(cs proto.Charset) error {
-	*conn.charset = cs
+func (conn *Conn) SetCharset(cs *pb.Charset) error {
+	conn.charset = cs
 	return nil
 }
 

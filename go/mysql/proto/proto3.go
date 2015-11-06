@@ -7,36 +7,11 @@ package proto
 import (
 	"github.com/youtube/vitess/go/sqltypes"
 
-	pbb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // This file contains the proto3 conversion functions for the structures
 // defined here.
-
-// CharsetToProto converts a Charset to a proto3
-func CharsetToProto(c *Charset) *pbb.Charset {
-	if c == nil {
-		return nil
-	}
-	return &pbb.Charset{
-		Client: int32(c.Client),
-		Conn:   int32(c.Conn),
-		Server: int32(c.Server),
-	}
-}
-
-// ProtoToCharset converts a proto to a Charset
-func ProtoToCharset(c *pbb.Charset) *Charset {
-	if c == nil {
-		return nil
-	}
-	return &Charset{
-		Client: int(c.Client),
-		Conn:   int(c.Conn),
-		Server: int(c.Server),
-	}
-}
 
 // FieldsToProto3 converts an internal []Field to the proto3 version
 func FieldsToProto3(f []Field) ([]*pbq.Field, error) {

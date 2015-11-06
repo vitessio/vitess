@@ -244,7 +244,8 @@ func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
 func testSplitClone(t *testing.T, strategy string) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wi := NewInstance(ts, "cell1", time.Second)
+	ctx := context.Background()
+	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
 		ShardingColumnName: "keyspace_id",
@@ -276,7 +277,6 @@ func testSplitClone(t *testing.T, strategy string) {
 	}
 
 	// add the topo and schema data we'll need
-	ctx := context.Background()
 	if err := ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}

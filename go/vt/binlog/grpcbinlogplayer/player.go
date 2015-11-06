@@ -12,11 +12,9 @@ import (
 
 	"google.golang.org/grpc"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbs "github.com/youtube/vitess/go/vt/proto/binlogservice"
@@ -73,13 +71,13 @@ func (client *client) ServeUpdateStream(ctx context.Context, position string) (c
 	}, nil
 }
 
-func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType key.KeyspaceIdType, keyRange *pbt.KeyRange, charset *mproto.Charset) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	response := make(chan *proto.BinlogTransaction, 10)
+func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+	response := make(chan *pb.BinlogTransaction, 10)
 	query := &pb.StreamKeyRangeRequest{
 		Position:       position,
-		KeyspaceIdType: key.KeyspaceIdTypeToProto(keyspaceIdType),
+		KeyspaceIdType: keyspaceIdType,
 		KeyRange:       keyRange,
-		Charset:        mproto.CharsetToProto(charset),
+		Charset:        charset,
 	}
 
 	stream, err := client.c.StreamKeyRange(ctx, query)
@@ -97,7 +95,7 @@ func (client *client) StreamKeyRange(ctx context.Context, position string, keysp
 				close(response)
 				return
 			}
-			response <- proto.ProtoToBinlogTransaction(r.BinlogTransaction)
+			response <- r.BinlogTransaction
 		}
 	}()
 	return response, func() error {
@@ -105,12 +103,12 @@ func (client *client) StreamKeyRange(ctx context.Context, position string, keysp
 	}, nil
 }
 
-func (client *client) StreamTables(ctx context.Context, position string, tables []string, charset *mproto.Charset) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	response := make(chan *proto.BinlogTransaction, 10)
+func (client *client) StreamTables(ctx context.Context, position string, tables []string, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+	response := make(chan *pb.BinlogTransaction, 10)
 	query := &pb.StreamTablesRequest{
 		Position: position,
 		Tables:   tables,
-		Charset:  mproto.CharsetToProto(charset),
+		Charset:  charset,
 	}
 
 	stream, err := client.c.StreamTables(ctx, query)
@@ -128,7 +126,7 @@ func (client *client) StreamTables(ctx context.Context, position string, tables 
 				close(response)
 				return
 			}
-			response <- proto.ProtoToBinlogTransaction(r.BinlogTransaction)
+			response <- r.BinlogTransaction
 		}
 	}()
 	return response, func() error {

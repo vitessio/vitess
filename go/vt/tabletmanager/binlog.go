@@ -31,7 +31,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -124,7 +123,7 @@ func (bpc *BinlogPlayerController) String() string {
 }
 
 // StatsUpdate is part of the discover.HealthCheckStatsListener interface
-func (bpc *BinlogPlayerController) StatsUpdate(endPoint *pb.EndPoint, cell, name string, target *pbq.Target, serving bool, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats) {
+func (bpc *BinlogPlayerController) StatsUpdate(*discovery.EndPointStats) {
 	bpc.playerMutex.Lock()
 	if bpc.initialEndpointFound != nil {
 		close(bpc.initialEndpointFound)

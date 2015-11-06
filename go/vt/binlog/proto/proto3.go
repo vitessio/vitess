@@ -68,55 +68,6 @@ func ProtoToStreamEvent(s *pb.StreamEvent) *StreamEvent {
 	return result
 }
 
-// StatementToProto converts a Statement to a proto3
-func StatementToProto(s *Statement) *pb.BinlogTransaction_Statement {
-	return &pb.BinlogTransaction_Statement{
-		Category: pb.BinlogTransaction_Statement_Category(s.Category),
-		Charset:  mproto.CharsetToProto(s.Charset),
-		Sql:      s.Sql,
-	}
-}
-
-// ProtoToStatement converts a proto to a Statement
-func ProtoToStatement(s *pb.BinlogTransaction_Statement) Statement {
-	return Statement{
-		Category: int(s.Category),
-		Charset:  mproto.ProtoToCharset(s.Charset),
-		Sql:      s.Sql,
-	}
-}
-
-// BinlogTransactionToProto converts a BinlogTransaction to a proto3
-func BinlogTransactionToProto(bt *BinlogTransaction) *pb.BinlogTransaction {
-	result := &pb.BinlogTransaction{
-		Timestamp:     bt.Timestamp,
-		TransactionId: bt.TransactionID,
-	}
-	if len(bt.Statements) > 0 {
-		result.Statements = make([]*pb.BinlogTransaction_Statement, len(bt.Statements))
-		for i, s := range bt.Statements {
-			result.Statements[i] = StatementToProto(&s)
-		}
-	}
-
-	return result
-}
-
-// ProtoToBinlogTransaction converts a proto to a BinlogTransaction
-func ProtoToBinlogTransaction(bt *pb.BinlogTransaction) *BinlogTransaction {
-	result := &BinlogTransaction{
-		Timestamp:     bt.Timestamp,
-		TransactionID: bt.TransactionId,
-	}
-	if len(bt.Statements) > 0 {
-		result.Statements = make([]Statement, len(bt.Statements))
-		for i, s := range bt.Statements {
-			result.Statements[i] = ProtoToStatement(s)
-		}
-	}
-	return result
-}
-
 // BlpPositionToProto converts a BlpPosition to a proto3
 func BlpPositionToProto(b *BlpPosition) *pbt.BlpPosition {
 	return &pbt.BlpPosition{

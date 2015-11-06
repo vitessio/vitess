@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -60,7 +61,7 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	wi = worker.NewInstance(ts, *cell, *commandDisplayInterval)
+	wi = worker.NewInstance(context.Background(), ts, *cell, *commandDisplayInterval)
 	wi.InstallSignalHandlers()
 	wi.InitStatusHandling()
 

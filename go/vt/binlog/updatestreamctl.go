@@ -9,16 +9,15 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /* API and config for UpdateStream Service */
@@ -243,7 +242,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply f
 }
 
 // StreamKeyRange is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType key.KeyspaceIdType, keyRange *pb.KeyRange, charset *mproto.Charset, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) (err error) {
 	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
@@ -264,7 +263,7 @@ func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
 	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
-	f := KeyRangeFilterFunc(keyspaceIDType, keyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(keyspaceIDType, keyRange, func(reply *pb.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
@@ -279,7 +278,7 @@ func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType
 }
 
 // StreamTables is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) StreamTables(position string, tables []string, charset *mproto.Charset, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStream) StreamTables(position string, tables []string, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) (err error) {
 	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
@@ -300,7 +299,7 @@ func (updateStream *UpdateStream) StreamTables(position string, tables []string,
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
 	// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*proto.BinlogTransaction)->sendReply
-	f := TablesFilterFunc(tables, func(reply *proto.BinlogTransaction) error {
+	f := TablesFilterFunc(tables, func(reply *pb.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)

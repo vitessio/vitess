@@ -5,8 +5,8 @@
 package proto
 
 import (
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the data structures used by bson rpc for update stream.
@@ -19,14 +19,14 @@ type UpdateStreamRequest struct {
 // KeyRangeRequest is used to make a request for StreamKeyRange.
 type KeyRangeRequest struct {
 	Position       string
-	KeyspaceIdType key.KeyspaceIdType
-	KeyRange       key.KeyRange
-	Charset        *mproto.Charset
+	KeyspaceIdType pbt.KeyspaceIdType
+	KeyRange       *pbt.KeyRange
+	Charset        *pb.Charset
 }
 
 // TablesRequest is used to make a request for StreamTables.
 type TablesRequest struct {
 	Position string
 	Tables   []string
-	Charset  *mproto.Charset
+	Charset  *pb.Charset
 }

@@ -13,11 +13,12 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // fakeEvent implements proto.BinlogEvent.
@@ -148,7 +149,7 @@ var (
 	mariadbInsertEvent         = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0x2, 0x88, 0xf3, 0x0, 0x0, 0xa8, 0x0, 0x0, 0x0, 0x79, 0xa, 0x0, 0x0, 0x0, 0x0, 0x27, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x20, 0x69, 0x6e, 0x74, 0x6f, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x28, 0x6d, 0x73, 0x67, 0x29, 0x20, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x20, 0x28, 0x27, 0x74, 0x65, 0x73, 0x74, 0x20, 0x30, 0x27, 0x29, 0x20, 0x2f, 0x2a, 0x20, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x20, 0x28, 0x69, 0x64, 0x20, 0x29, 0x20, 0x28, 0x6e, 0x75, 0x6c, 0x6c, 0x20, 0x29, 0x3b, 0x20, 0x2a, 0x2f})
 	mariadbXidEvent            = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0x10, 0x88, 0xf3, 0x0, 0x0, 0x1b, 0x0, 0x0, 0x0, 0xe0, 0xc, 0x0, 0x0, 0x0, 0x0, 0x85, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})
 
-	charset = &mproto.Charset{Client: 33, Conn: 33, Server: 33}
+	charset = &pb.Charset{Client: 33, Conn: 33, Server: 33}
 )
 
 func sendTestEvents(channel chan<- proto.BinlogEvent, events []proto.BinlogEvent) {
@@ -169,22 +170,22 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []pb.BinlogTransaction{
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []pb.BinlogTransaction
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -216,22 +217,22 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []pb.BinlogTransaction{
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []pb.BinlogTransaction
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -255,7 +256,7 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 func TestBinlogStreamerStop(t *testing.T) {
 	events := make(chan proto.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -295,7 +296,7 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return io.EOF
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -321,7 +322,7 @@ func TestBinlogStreamerParseEventsServerEOF(t *testing.T) {
 	events := make(chan proto.BinlogEvent)
 	close(events)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -352,7 +353,7 @@ func TestBinlogStreamerParseEventsSendErrorXID(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -385,7 +386,7 @@ func TestBinlogStreamerParseEventsSendErrorCommit(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -418,7 +419,7 @@ func TestBinlogStreamerParseEventsInvalid(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -451,7 +452,7 @@ func TestBinlogStreamerParseEventsInvalidFormat(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -484,7 +485,7 @@ func TestBinlogStreamerParseEventsNoFormat(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -517,7 +518,7 @@ func TestBinlogStreamerParseEventsInvalidQuery(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -553,31 +554,31 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
+	want := []pb.BinlogTransaction{
+		pb.BinlogTransaction{
 			Statements: nil,
 			Timestamp:  1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []pb.BinlogTransaction
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -608,31 +609,31 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []pb.BinlogTransaction{
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
-		proto.BinlogTransaction{
+		pb.BinlogTransaction{
 			Statements: nil,
 			Timestamp:  1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []pb.BinlogTransaction
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -664,31 +665,31 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []pb.BinlogTransaction{
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{},
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{},
 			Timestamp:  1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []pb.BinlogTransaction
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -721,23 +722,23 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: "SET INSERT_ID=101"},
-				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []pb.BinlogTransaction{
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET INSERT_ID=101"},
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []pb.BinlogTransaction
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -771,7 +772,7 @@ func TestBinlogStreamerParseEventsInvalidIntVar(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -804,22 +805,22 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []pb.BinlogTransaction{
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []pb.BinlogTransaction
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -852,22 +853,22 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []pb.BinlogTransaction{
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 0x0d,
 			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []pb.BinlogTransaction
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -899,7 +900,7 @@ func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
@@ -931,22 +932,22 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: charset, Sql: "SET TIMESTAMP=1409892744"},
-				proto.Statement{Category: proto.BL_DML, Charset: charset, Sql: "insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */"},
+	want := []pb.BinlogTransaction{
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Charset: charset, Sql: "SET TIMESTAMP=1409892744"},
+				{Category: pb.BinlogTransaction_Statement_BL_DML, Charset: charset, Sql: "insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */"},
 			},
 			Timestamp: 1409892744,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 10,
 			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []pb.BinlogTransaction
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -977,22 +978,22 @@ func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 
 	events := make(chan proto.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "SET TIMESTAMP=1409892744"},
-				proto.Statement{Category: proto.BL_DDL, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB"},
+	want := []pb.BinlogTransaction{
+		pb.BinlogTransaction{
+			Statements: []*pb.BinlogTransaction_Statement{
+				{Category: pb.BinlogTransaction_Statement_BL_SET, Charset: &pb.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "SET TIMESTAMP=1409892744"},
+				{Category: pb.BinlogTransaction_Statement_BL_DDL, Charset: &pb.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB"},
 			},
 			Timestamp: 1409892744,
-			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
+			TransactionId: myproto.EncodeGTID(myproto.MariadbGTID{
 				Domain:   0,
 				Server:   62344,
 				Sequence: 9,
 			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []pb.BinlogTransaction
+	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -1014,24 +1015,24 @@ func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 }
 
 func TestGetStatementCategory(t *testing.T) {
-	table := map[string]int{
-		"":  proto.BL_UNRECOGNIZED,
-		" ": proto.BL_UNRECOGNIZED,
-		" UPDATE we don't try to fix leading spaces": proto.BL_UNRECOGNIZED,
-		"FOOBAR unknown query prefix":                proto.BL_UNRECOGNIZED,
+	table := map[string]pb.BinlogTransaction_Statement_Category{
+		"":  pb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
+		" ": pb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
+		" UPDATE we don't try to fix leading spaces": pb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
+		"FOOBAR unknown query prefix":                pb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
 
-		"BEGIN":    proto.BL_BEGIN,
-		"COMMIT":   proto.BL_COMMIT,
-		"ROLLBACK": proto.BL_ROLLBACK,
-		"INSERT something (something, something)": proto.BL_DML,
-		"UPDATE something SET something=nothing":  proto.BL_DML,
-		"DELETE something":                        proto.BL_DML,
-		"CREATE something":                        proto.BL_DDL,
-		"ALTER something":                         proto.BL_DDL,
-		"DROP something":                          proto.BL_DDL,
-		"TRUNCATE something":                      proto.BL_DDL,
-		"RENAME something":                        proto.BL_DDL,
-		"SET something=nothing":                   proto.BL_SET,
+		"BEGIN":    pb.BinlogTransaction_Statement_BL_BEGIN,
+		"COMMIT":   pb.BinlogTransaction_Statement_BL_COMMIT,
+		"ROLLBACK": pb.BinlogTransaction_Statement_BL_ROLLBACK,
+		"INSERT something (something, something)": pb.BinlogTransaction_Statement_BL_DML,
+		"UPDATE something SET something=nothing":  pb.BinlogTransaction_Statement_BL_DML,
+		"DELETE something":                        pb.BinlogTransaction_Statement_BL_DML,
+		"CREATE something":                        pb.BinlogTransaction_Statement_BL_DDL,
+		"ALTER something":                         pb.BinlogTransaction_Statement_BL_DDL,
+		"DROP something":                          pb.BinlogTransaction_Statement_BL_DDL,
+		"TRUNCATE something":                      pb.BinlogTransaction_Statement_BL_DDL,
+		"RENAME something":                        pb.BinlogTransaction_Statement_BL_DDL,
+		"SET something=nothing":                   pb.BinlogTransaction_Statement_BL_SET,
 	}
 
 	for input, want := range table {

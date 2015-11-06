@@ -7,20 +7,20 @@ package proto
 import (
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 func TestQueryString(t *testing.T) {
 	input := Query{
 		Database: "test_database",
-		Charset: &mproto.Charset{
+		Charset: &pb.Charset{
 			Client: 12,
 			Conn:   34,
 			Server: 56,
 		},
 		Sql: "sql",
 	}
-	want := `{Database: "test_database", Charset: &{12 34 56}, Sql: "sql"}`
+	want := `{Database: "test_database", Charset: client:12 conn:34 server:56 , Sql: "sql"}`
 	if got := input.String(); got != want {
 		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
 	}

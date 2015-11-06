@@ -53,6 +53,7 @@ func TestHealthCheck(t *testing.T) {
 		EndPoint: ep,
 		Cell:     "cell",
 		Target:   &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+		Up:       true,
 		Serving:  true,
 		Stats:    &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 		TabletExternallyReparentedTimestamp: 10,
@@ -75,6 +76,7 @@ func TestHealthCheck(t *testing.T) {
 			EndPoint: ep,
 			Cell:     "cell",
 			Target:   &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+			Up:       true,
 			Serving:  true,
 			Stats:    &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 			TabletExternallyReparentedTimestamp: 10,
@@ -95,6 +97,7 @@ func TestHealthCheck(t *testing.T) {
 		EndPoint: ep,
 		Cell:     "cell",
 		Target:   &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Up:       true,
 		Serving:  true,
 		Stats:    &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
 		TabletExternallyReparentedTimestamp: 0,
@@ -110,9 +113,10 @@ func TestHealthCheck(t *testing.T) {
 		t.Errorf(`hc.GetEndPointStatsFromTarget("k", "s", REPLICA) = %+v; want %+v`, epsList, want)
 	}
 
-	// RealtimeStats changed
+	// Serving & RealtimeStats changed
 	shr = &pbq.StreamHealthResponse{
-		Target: &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Target:  &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Serving: false,
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
 	}
@@ -120,6 +124,8 @@ func TestHealthCheck(t *testing.T) {
 		EndPoint: ep,
 		Cell:     "cell",
 		Target:   &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Up:       true,
+		Serving:  false,
 		Stats:    &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
 		TabletExternallyReparentedTimestamp: 0,
 	}
@@ -130,9 +136,47 @@ func TestHealthCheck(t *testing.T) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
 
+	// HealthError
+	shr = &pbq.StreamHealthResponse{
+		Target:  &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Serving: true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &pbq.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+	}
+	want = &EndPointStats{
+		EndPoint: ep,
+		Cell:     "cell",
+		Target:   &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Up:       true,
+		Serving:  false,
+		Stats:    &pbq.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+		TabletExternallyReparentedTimestamp: 0,
+		LastError:                           fmt.Errorf("vttablet error: some error"),
+	}
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3}}`)
+	res = <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+
 	// remove endpoint
 	hc.deleteConn(ep)
 	t.Logf(`hc.RemoveEndPoint({Host: "a", PortMap: {"vt": 1}})`)
+	want = &EndPointStats{
+		EndPoint: ep,
+		Cell:     "cell",
+		Target:   &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Up:       false,
+		Serving:  false,
+		Stats:    &pbq.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+		TabletExternallyReparentedTimestamp: 0,
+		LastError:                           fmt.Errorf("context canceled"),
+	}
+	res = <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
 	epsList = hc.GetEndPointStatsFromKeyspaceShard("k", "s")
 	if len(epsList) != 0 {
 		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want empty`, epsList)
@@ -147,16 +191,8 @@ func newListener() *listener {
 	return &listener{output: make(chan *EndPointStats, 1)}
 }
 
-func (l *listener) StatsUpdate(endPoint *pbt.EndPoint, cell, name string, target *pbq.Target, serving bool, reparentTimestamp int64, stats *pbq.RealtimeStats) {
-	l.output <- &EndPointStats{
-		EndPoint: endPoint,
-		Cell:     cell,
-		Name:     name,
-		Target:   target,
-		Serving:  serving,
-		TabletExternallyReparentedTimestamp: reparentTimestamp,
-		Stats: stats,
-	}
+func (l *listener) StatsUpdate(eps *EndPointStats) {
+	l.output <- eps
 }
 
 func createFakeConn(endPoint *pbt.EndPoint, c chan *pbq.StreamHealthResponse) *fakeConn {

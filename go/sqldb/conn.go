@@ -11,6 +11,8 @@ import (
 
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // NewConnFunc is a factory method that creates a Conn instance
@@ -56,9 +58,9 @@ type Conn interface {
 	SendCommand(command uint32, data []byte) error
 	// GetCharset returns the current numerical values of the per-session character
 	// set variables.
-	GetCharset() (cs proto.Charset, err error)
+	GetCharset() (cs *pb.Charset, err error)
 	// SetCharset changes the per-session character set variables.
-	SetCharset(cs proto.Charset) error
+	SetCharset(cs *pb.Charset) error
 }
 
 // RegisterDefault registers the default connection function.

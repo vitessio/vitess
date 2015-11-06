@@ -91,7 +91,7 @@ func TestAggregateVtGateErrors(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
-		out := aggregateVtGateErrors(tc.input)
+		out := AggregateVtGateErrors(tc.input)
 		if !reflect.DeepEqual(out, tc.expected) {
 			t.Errorf("aggregateVtGateErrors(%+v) = %+v \nwant: %+v",
 				tc.input, out, tc.expected)
