@@ -6,6 +6,7 @@ package automation
 
 import (
 	"errors"
+	"testing"
 
 	pb "github.com/youtube/vitess/go/vt/proto/automation"
 )
@@ -99,4 +100,22 @@ func (t *TestingEmitEchoFailEchoTask) RequiredParameters() []string {
 
 func (t *TestingEmitEchoFailEchoTask) OptionalParameters() []string {
 	return nil
+}
+
+// testTask runs the given tasks and checks if it succeeds.
+// To make the task succeed you have to register the result with a fake first
+// e.g. see migrate_served_types_task_test.go for an example.
+func testTask(t *testing.T, test string, task Task, parameters map[string]string) {
+	err := validateParameters(task, parameters)
+	if err != nil {
+		t.Fatalf("%s: Not all required parameters were specified: %v", test, err)
+	}
+
+	newTasks, _ /* output */, err := task.Run(parameters)
+	if newTasks != nil {
+		t.Errorf("%s: Task should not emit new tasks: %v", test, newTasks)
+	}
+	if err != nil {
+		t.Errorf("%s: Task should not fail: %v", err, test)
+	}
 }

@@ -18,13 +18,14 @@ type SplitCloneTask struct {
 // Run is part of the Task interface.
 func (t *SplitCloneTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	keyspaceAndSourceShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
+
 	// TODO(mberlin): Add parameters for the following options?
 	//                        '--source_reader_count', '1',
 	//                        '--destination_pack_count', '1',
 	//                        '--destination_writer_count', '1',
 	//                        '--strategy=-populate_blp_checkpoint',
 	args := []string{"SplitClone", "--strategy=-populate_blp_checkpoint"}
-	if excludeTables, ok := parameters["exclude_tables"]; ok {
+	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
 	args = append(args, keyspaceAndSourceShard)

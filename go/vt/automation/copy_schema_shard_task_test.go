@@ -27,18 +27,13 @@ func TestCopySchemaShardTask(t *testing.T) {
 		"source_shard":    "0",
 		"dest_shard":      "2",
 		"vtctld_endpoint": "localhost:15000",
+		"exclude_tables":  "",
 	}
+	testTask(t, "CopySchemaShard", task, parameters)
 
-	err := validateParameters(task, parameters)
-	if err != nil {
-		t.Fatalf("Not all required parameters were specified: %v", err)
-	}
-
-	newTasks, _ /* output */, err := task.Run(parameters)
-	if newTasks != nil {
-		t.Errorf("Task should not emit new tasks: %v", newTasks)
-	}
-	if err != nil {
-		t.Errorf("Task should not fail: %v", err)
-	}
+	fake.RegisterResult([]string{"CopySchemaShard", "--exclude_tables=excluded_table1", "test_keyspace/0", "test_keyspace/2"},
+		"",  // No output.
+		nil) // No error.
+	parameters["exclude_tables"] = "excluded_table1"
+	testTask(t, "CopySchemaShard", task, parameters)
 }

@@ -19,12 +19,13 @@ type MigrateServedTypesTask struct {
 // Run is part of the Task interface.
 func (t *MigrateServedTypesTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	keyspaceAndShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
+
 	args := []string{"MigrateServedTypes"}
-	if parameters["cell"] != "" {
-		args = append(args, "--cell="+parameters["cell"])
+	if cell := parameters["cell"]; cell != "" {
+		args = append(args, "--cell="+cell)
 	}
-	if parameters["reverse"] != "" {
-		args = append(args, "--reverse="+parameters["reverse"])
+	if reverse := parameters["reverse"]; reverse != "" {
+		args = append(args, "--reverse="+reverse)
 	}
 	args = append(args, keyspaceAndShard, parameters["type"])
 	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"], args)

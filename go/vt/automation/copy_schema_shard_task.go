@@ -19,8 +19,13 @@ type CopySchemaShardTask struct {
 func (t *CopySchemaShardTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	keyspaceAndSourceShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
 	keyspaceAndDestShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["dest_shard"])
-	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"],
-		[]string{"CopySchemaShard", keyspaceAndSourceShard, keyspaceAndDestShard})
+
+	args := []string{"CopySchemaShard"}
+	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
+		args = append(args, "--exclude_tables="+excludeTables)
+	}
+	args = append(args, keyspaceAndSourceShard, keyspaceAndDestShard)
+	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"], args)
 	return nil, output, err
 }
 
@@ -31,5 +36,5 @@ func (t *CopySchemaShardTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *CopySchemaShardTask) OptionalParameters() []string {
-	return nil
+	return []string{"exclude_tables"}
 }

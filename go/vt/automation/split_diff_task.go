@@ -18,8 +18,9 @@ type SplitDiffTask struct {
 // Run is part of the Task interface.
 func (t *SplitDiffTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	keyspaceAndDestShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["dest_shard"])
+
 	args := []string{"SplitDiff"}
-	if excludeTables, ok := parameters["exclude_tables"]; ok {
+	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
 	args = append(args, keyspaceAndDestShard)
