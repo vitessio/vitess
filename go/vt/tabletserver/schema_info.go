@@ -233,10 +233,10 @@ func (si *SchemaInfo) override() {
 		}
 		switch override.Cache.Type {
 		case "RW":
-			table.CacheType = schema.CACHE_RW
+			table.CacheType = schema.CacheRW
 			table.Cache = NewRowCache(table, si.cachePool)
 		case "W":
-			table.CacheType = schema.CACHE_W
+			table.CacheType = schema.CacheW
 			if override.Cache.Table == "" {
 				log.Warningf("Incomplete cache specs: %v", override)
 				continue
@@ -381,7 +381,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 	}
 	si.tables[tableName] = tableInfo
 
-	if tableInfo.CacheType == schema.CACHE_NONE {
+	if tableInfo.CacheType == schema.CacheNone {
 		log.Infof("Initialized table: %s", tableName)
 	} else {
 		log.Infof("Initialized cached table: %s, prefix: %s", tableName, tableInfo.Cache.prefix)
@@ -555,7 +555,7 @@ func (si *SchemaInfo) getRowcacheStats() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		if v.CacheType != schema.CACHE_NONE {
+		if v.CacheType != schema.CacheNone {
 			hits, absent, misses, _ := v.Stats()
 			tstats[k+".Hits"] = hits
 			tstats[k+".Absent"] = absent
@@ -570,7 +570,7 @@ func (si *SchemaInfo) getRowcacheInvalidations() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		if v.CacheType != schema.CACHE_NONE {
+		if v.CacheType != schema.CacheNone {
 			_, _, _, invalidations := v.Stats()
 			tstats[k] = invalidations
 		}
@@ -745,7 +745,7 @@ func (si *SchemaInfo) handleHTTPTableStats(response http.ResponseWriter, request
 		si.mu.Lock()
 		defer si.mu.Unlock()
 		for k, v := range si.tables {
-			if v.CacheType != schema.CACHE_NONE {
+			if v.CacheType != schema.CacheNone {
 				temp.hits, temp.absent, temp.misses, temp.invalidations = v.Stats()
 				tstats[k] = temp
 				totals.hits += temp.hits

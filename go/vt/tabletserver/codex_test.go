@@ -11,13 +11,14 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
 func TestCodexBuildValuesList(t *testing.T) {
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]query.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 
 	// simple PK clause. e.g. where pk1 = 1
@@ -201,7 +202,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]query.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	key := "var"
 	bindVariables := make(map[string]interface{})
@@ -237,7 +238,7 @@ func TestCodexResolveListArg(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]query.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 
 	key := "var"
@@ -264,7 +265,7 @@ func TestCodexBuildSecondaryList(t *testing.T) {
 	pk2 := "pk2"
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]query.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{pk1, pk2})
 
 	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
@@ -295,7 +296,7 @@ func TestCodexBuildStreamComment(t *testing.T) {
 	pk2 := "pk2"
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]query.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{pk1, pk2})
 
 	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
@@ -318,7 +319,7 @@ func TestCodexResolveValueWithIncompatibleValueType(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]query.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	_, err := resolveValue(tableInfo.GetPKColumn(0), 0, nil)
 	testUtils.checkTabletError(t, err, ErrFail, "incompatible value type ")
@@ -328,7 +329,7 @@ func TestCodexValidateRow(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]query.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	// #columns and #rows do not match
 	err := validateRow(&tableInfo, []int{1}, []sqltypes.Value{})
@@ -414,7 +415,7 @@ func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]query.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	output := applyFilterWithPKDefaults(&tableInfo, []int{-1}, []sqltypes.Value{})
 	if len(output) != 1 {
@@ -432,7 +433,7 @@ func TestCodexValidateKey(t *testing.T) {
 	queryServiceStats := NewQueryServiceStats("", false)
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]query.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	// validate empty key
 	newKey := validateKey(&tableInfo, "", queryServiceStats)
@@ -473,14 +474,14 @@ func TestCodexUnicoded(t *testing.T) {
 }
 
 func createTableInfo(
-	name string, colNames []string, colTypes []string, pKeys []string) TableInfo {
+	name string, colNames []string, colTypes []query.Type, pKeys []string) TableInfo {
 	table := schema.NewTable(name)
 	for i, colName := range colNames {
 		colType := colTypes[i]
 		defaultVal := sqltypes.Value{}
-		if strings.Contains(colType, "int") {
+		if sqltypes.IsIntegral(colType) {
 			defaultVal = sqltypes.MakeNumeric([]byte("0"))
-		} else if strings.HasPrefix(colType, "varbinary") {
+		} else if colType == sqltypes.VarBinary {
 			defaultVal = sqltypes.MakeString([]byte(""))
 		}
 		table.AddColumn(colName, colType, defaultVal, "")

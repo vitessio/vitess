@@ -8,7 +8,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 

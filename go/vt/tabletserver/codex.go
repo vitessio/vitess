@@ -176,12 +176,11 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 	if value.IsNull() {
 		return nil
 	}
-	switch col.Category {
-	case schema.CAT_NUMBER:
+	if sqltypes.IsIntegral(col.Type) {
 		if !value.IsNumeric() {
 			return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "type mismatch, expecting numeric type for %v for column: %v", value, col)
 		}
-	case schema.CAT_VARBINARY:
+	} else if col.Type == sqltypes.VarBinary {
 		if !value.IsString() {
 			return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "type mismatch, expecting string type for %v for column: %v", value, col)
 		}

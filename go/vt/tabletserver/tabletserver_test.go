@@ -1490,6 +1490,9 @@ func getSupportedQueries() map[string]*mproto.QueryResult {
 		"select * from test_table where 1 != 1": &mproto.QueryResult{
 			Fields: getTestTableFields(),
 		},
+		"select * from `test_table` where 1 != 1": &mproto.QueryResult{
+			Fields: getTestTableFields(),
+		},
 		baseShowTables: &mproto.QueryResult{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
