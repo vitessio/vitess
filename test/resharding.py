@@ -4,10 +4,11 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import logging
 import struct
 import threading
 import time
+
+import logging
 import unittest
 
 from vtproto import topodata_pb2
@@ -15,8 +16,8 @@ from vtproto import topodata_pb2
 from vtdb import keyrange_constants
 
 import environment
-import utils
 import tablet
+import utils
 
 keyspace_id_type = keyrange_constants.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
@@ -117,9 +118,9 @@ def tearDownModule():
 # every 1/5s will update its value with the current timestamp
 class InsertThread(threading.Thread):
 
-  def __init__(self, tablet, object_name, user_id, keyspace_id):
+  def __init__(self, tablet_obj, object_name, user_id, keyspace_id):
     threading.Thread.__init__(self)
-    self.tablet = tablet
+    self.tablet = tablet_obj
     self.object_name = object_name
     self.user_id = user_id
     self.keyspace_id = keyspace_id
@@ -130,7 +131,8 @@ class InsertThread(threading.Thread):
         'vt_test_keyspace',
         ['begin',
          'insert into timestamps(name, time_milli, keyspace_id) '
-         "values('%s', %d, 0x%x) /* vtgate:: keyspace_id:%s */ /* user_id:%d */" %
+         "values('%s', %d, 0x%x) "
+         '/* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
          (self.object_name, long(time.time() * 1000), self.keyspace_id,
           self.str_keyspace_id, self.user_id),
          'commit'],
@@ -150,8 +152,8 @@ class InsertThread(threading.Thread):
              'commit'],
             write=True, user='vt_app')
         time.sleep(0.2)
-    except Exception as e:
-      logging.error('InsertThread got exception: %s', e)
+    except Exception:
+      logging.exception('InsertThread got exception.')
 
 
 # MonitorLagThread will get values from a database, and compare the timestamp
@@ -159,9 +161,9 @@ class InsertThread(threading.Thread):
 # the latency is pretty high (a few seconds).
 class MonitorLagThread(threading.Thread):
 
-  def __init__(self, tablet, object_name):
+  def __init__(self, tablet_obj, object_name):
     threading.Thread.__init__(self)
-    self.tablet = tablet
+    self.tablet = tablet_obj
     self.object_name = object_name
     self.done = False
     self.max_lag = 0
@@ -184,8 +186,8 @@ class MonitorLagThread(threading.Thread):
           if lag > self.max_lag:
             self.max_lag = lag
         time.sleep(1.0)
-    except Exception as e:
-      logging.error('MonitorLagThread got exception: %s', e)
+    except Exception:
+      logging.exception('MonitorLagThread got exception.')
 
 
 class TestResharding(unittest.TestCase):
@@ -204,7 +206,9 @@ keyspace_id ''' + t + ''' not null,
 primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
-    create_view_template = '''create view %s(id, msg, keyspace_id) as select id, msg, keyspace_id from %s'''
+    create_view_template = (
+        'create view %s(id, msg, keyspace_id) as select id, msg, keyspace_id '
+        'from %s')
     create_timestamp_table = '''create table timestamps(
 name varchar(64),
 time_milli bigint(20) unsigned not null,
@@ -239,25 +243,26 @@ primary key (name)
 
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
-  def _insert_value(self, tablet, table, id, msg, keyspace_id):
+  def _insert_value(self, tablet_obj, table, id, msg, keyspace_id):
     k = utils.uint64_to_hex(keyspace_id)
-    tablet.mquery(
+    tablet_obj.mquery(
         'vt_test_keyspace',
         ['begin',
          'insert into %s(id, msg, keyspace_id) '
-         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
+         'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
+         '/* user_id:%d */' %
          (table, id, msg, keyspace_id, k, id),
          'commit'],
         write=True)
 
-  def _get_value(self, tablet, table, id):
-    return tablet.mquery(
+  def _get_value(self, tablet_obj, table, id):
+    return tablet_obj.mquery(
         'vt_test_keyspace',
         'select id, msg, keyspace_id from %s where id=%d' % (table, id))
 
-  def _check_value(self, tablet, table, id, msg, keyspace_id,
+  def _check_value(self, tablet_obj, table, id, msg, keyspace_id,
                    should_be_here=True):
-    result = self._get_value(tablet, table, id)
+    result = self._get_value(tablet_obj, table, id)
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = '%s'
       keyspace_id = pack_keyspace_id(keyspace_id)
@@ -266,21 +271,23 @@ primary key (name)
     if should_be_here:
       self.assertEqual(result, ((id, msg, keyspace_id),),
                        ('Bad row in tablet %s for id=%d, keyspace_id=' +
-                        fmt + ', row=%s') % (tablet.tablet_alias, id,
+                        fmt + ', row=%s') % (tablet_obj.tablet_alias, id,
                                              keyspace_id, str(result)))
     else:
-      self.assertEqual(len(result), 0,
-                       ('Extra row in tablet %s for id=%d, keyspace_id=' +
-                        fmt + ': %s') % (tablet.tablet_alias, id, keyspace_id,
-                                         str(result)))
+      self.assertEqual(
+          len(result), 0,
+          ('Extra row in tablet %s for id=%d, keyspace_id=' +
+           fmt + ': %s') % (tablet_obj.tablet_alias, id, keyspace_id,
+                            str(result)))
 
   # _is_value_present_and_correct tries to read a value.
   # if it is there, it will check it is correct and return True if it is.
   # if not correct, it will self.fail.
   # if not there, it will return False.
-  def _is_value_present_and_correct(self, tablet, table, id, msg, keyspace_id):
-    result = self._get_value(tablet, table, id)
-    if len(result) == 0:
+  def _is_value_present_and_correct(
+      self, tablet_obj, table, id, msg, keyspace_id):
+    result = self._get_value(tablet_obj, table, id)
+    if not result:
       return False
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = '%s'
@@ -289,7 +296,7 @@ primary key (name)
       fmt = '%x'
     self.assertEqual(result, ((id, msg, keyspace_id),),
                      ('Bad row in tablet %s for id=%d, keyspace_id=' + fmt) % (
-                         tablet.tablet_alias, id, keyspace_id))
+                         tablet_obj.tablet_alias, id, keyspace_id))
     return True
 
   def _insert_startup_values(self):
@@ -373,13 +380,13 @@ primary key (name)
                         'msg-range2-%d' % i, 0xE000000000000000 + base + i,
                         should_be_here=False)
 
-  def _check_binlog_server_vars(self, tablet):
-    v = utils.get_vars(tablet.port)
+  def _check_binlog_server_vars(self, tablet_obj):
+    v = utils.get_vars(tablet_obj.port)
     self.assertIn('UpdateStreamKeyRangeStatements', v)
     self.assertIn('UpdateStreamKeyRangeTransactions', v)
 
-  def _check_binlog_player_vars(self, tablet, seconds_behind_master_max=0):
-    v = utils.get_vars(tablet.port)
+  def _check_binlog_player_vars(self, tablet_obj, seconds_behind_master_max=0):
+    v = utils.get_vars(tablet_obj.port)
     self.assertIn('BinlogPlayerMapSize', v)
     self.assertIn('BinlogPlayerSecondsBehindMaster', v)
     self.assertIn('BinlogPlayerSecondsBehindMasterMap', v)
@@ -403,14 +410,14 @@ primary key (name)
               v['BinlogPlayerSecondsBehindMasterMap']['0'],
               seconds_behind_master_max))
 
-  def _check_stream_health_equals_binlog_player_vars(self, tablet):
-    blp_stats = utils.get_vars(tablet.port)
+  def _check_stream_health_equals_binlog_player_vars(self, tablet_obj):
+    blp_stats = utils.get_vars(tablet_obj.port)
     # Enforce health check because it's not running by default as
     # tablets are not started with it.
-    utils.run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', tablet_obj.tablet_alias, 'replica'])
     stream_health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                           '-count', '1',
-                                          tablet.tablet_alias])
+                                          tablet_obj.tablet_alias])
     logging.debug('Got health: %s', str(stream_health))
     self.assertNotIn('serving', stream_health)
     self.assertIn('realtime_stats', stream_health)
@@ -531,11 +538,12 @@ primary key (name)
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
                     auto_log=True)
-    utils.check_srv_keyspace('test_nj', 'test_keyspace',
-                             'Partitions(master): -80 80-\n' +
-                             'Partitions(rdonly): -80 80-\n' +
-                             'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=keyspace_id_type)
+    utils.check_srv_keyspace(
+        'test_nj', 'test_keyspace',
+        'Partitions(master): -80 80-\n'
+        'Partitions(rdonly): -80 80-\n'
+        'Partitions(replica): -80 80-\n',
+        keyspace_id_type=keyspace_id_type)
 
     # the worker will do everything. We test with source_reader_count=10
     # (down from default=20) as connection pool is not big enough for 20.
@@ -612,7 +620,9 @@ primary key (name)
     # get status for a destination master tablet, make sure we have it all
     shard_2_master_status = shard_2_master.get_status()
     self.assertIn('Binlog player state: Running', shard_2_master_status)
-    self.assertIn('<td><b>All</b>: 6000<br><b>Query</b>: 4000<br><b>Transaction</b>: 2000<br></td>', shard_2_master_status)
+    self.assertIn(
+        '<td><b>All</b>: 6000<br><b>Query</b>: 4000<br>'
+        '<b>Transaction</b>: 2000<br></td>', shard_2_master_status)
     self.assertIn('</html>', shard_2_master_status)
 
     # start a thread to insert data into shard_1 in the background
@@ -706,12 +716,15 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_slave2, False, True)
 
     # move replica back and forth
-    utils.run_vtctl(['MigrateServedTypes', '-reverse', 'test_keyspace/80-', 'replica'],
-                    auto_log=True)
-    # After a backwards migration, queryservice should be enabled on source and disabled on destinations
+    utils.run_vtctl(
+        ['MigrateServedTypes', '-reverse', 'test_keyspace/80-', 'replica'],
+        auto_log=True)
+    # After a backwards migration, queryservice should be enabled on
+    # source and disabled on destinations
     utils.check_tablet_query_service(self, shard_1_slave2, True, False)
-    # Destination tablets would have query service disabled for other reasons than the migration,
-    # so check the shard record instead of the tablets directly
+    # Destination tablets would have query service disabled for other
+    # reasons than the migration, so check the shard record instead of
+    # the tablets directly.
     utils.check_shard_query_services(self, destination_shards,
                                      topodata_pb2.REPLICA, False)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',

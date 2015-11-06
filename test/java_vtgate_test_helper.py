@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-"""
-Script to set up a Vitess environment for Java client integration
-tests. Every shard gets a master instance. For extra instances,
-use the tablet-config option. Upon successful start up, the port for
-VtGate is written to stdout, and the program waits for a one line
-user input before shutting down.
+"""Set up a Vitess environment for Java client integration tests.
+
+Every shard gets a master instance. For extra instances, use the
+tablet-config option. Upon successful start up, the port for VtGate is
+written to stdout, and the program waits for a one line user input
+before shutting down.
 
 Start up steps include:
 - start MySQL instances
@@ -32,10 +32,10 @@ import tablet
 
 class Tablet(tablet.Tablet):
 
-  def __init__(self, shard, type):
+  def __init__(self, shard, tablet_type):
     super(Tablet, self).__init__()
     self.shard = shard
-    self.type = type
+    self.type = tablet_type
 
 
 class TestEnv(object):
@@ -93,7 +93,7 @@ class TestEnv(object):
         else:
           utils.run_vtctl(['ApplyVSchema', '-vschema_file', self.vschema])
       utils.VtGate(port=self.vtgate_port).start(
-        cache_ttl='500s',
+          cache_ttl='500s',
       )
     except:
       self.shutdown()

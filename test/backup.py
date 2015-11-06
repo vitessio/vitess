@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 
 import warnings
-# Dropping a table inexplicably produces a warning despite
-# the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter('ignore')
 
 import logging
 import unittest
@@ -11,6 +8,10 @@ import unittest
 import environment
 import tablet
 import utils
+
+# Dropping a table inexplicably produces a warning despite
+# the "IF EXISTS" clause. Squelch these warnings.
+warnings.simplefilter('ignore')
 
 use_mysqlctld = True
 
@@ -168,9 +169,9 @@ class TestBackup(unittest.TestCase):
         auto_log=True, mode=utils.VTCTL_VTCTL)
 
     # make sure the list of backups is empty now
-    backups, err = utils.run_vtctl(tablet.get_backup_storage_flags() +
-                                   ['ListBackups', 'test_keyspace/0'],
-                                   mode=utils.VTCTL_VTCTL, trap_output=True)
+    backups, _ = utils.run_vtctl(tablet.get_backup_storage_flags() +
+                                 ['ListBackups', 'test_keyspace/0'],
+                                 mode=utils.VTCTL_VTCTL, trap_output=True)
     backups = backups.splitlines()
     logging.debug('list of backups after remove: %s', backups)
     self.assertEqual(len(backups), 0)

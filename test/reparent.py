@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 
 import warnings
-# Dropping a table inexplicably produces a warning despite
-# the 'IF EXISTS' clause. Squelch these warnings.
-warnings.simplefilter('ignore')
 
 import logging
 import time
@@ -16,6 +13,10 @@ import utils
 import tablet
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
+
+# Dropping a table inexplicably produces a warning despite
+# the 'IF EXISTS' clause. Squelch these warnings.
+warnings.simplefilter('ignore')
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
@@ -84,17 +85,17 @@ class TestReparent(unittest.TestCase):
          (index, index))
     master_tablet.mquery('vt_test_keyspace', q, write=True)
 
-  def _check_vt_insert_test(self, tablet, index):
+  def _check_vt_insert_test(self, tablet_obj, index):
     # wait until it gets the data
     timeout = 10.0
     while True:
-      result = tablet.mquery('vt_test_keyspace',
-                             'select msg from vt_insert_test where id=%d' %
-                             index)
+      result = tablet_obj.mquery(
+          'vt_test_keyspace',
+          'select msg from vt_insert_test where id=%d' % index)
       if len(result) == 1:
         break
       timeout = utils.wait_step('waiting for replication to catch up on %s' %
-                                tablet.tablet_alias,
+                                tablet_obj.tablet_alias,
                                 timeout, sleep_time=0.1)
 
   def _check_db_addr(self, shard, db_type, expected_port, cell='test_nj'):
@@ -430,7 +431,9 @@ class TestReparent(unittest.TestCase):
     self._test_reparent_from_outside(brutal=True)
 
   def _test_reparent_from_outside(self, brutal=False):
-    """This test will start a master and 3 slaves. Then:
+    """This test will start a master and 3 slaves.
+
+    Then:
     - one slave will be the new master
     - one slave will be reparented to that new master
     - one slave will be busted and dead in the water

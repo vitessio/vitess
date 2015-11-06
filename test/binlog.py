@@ -12,13 +12,13 @@
 import logging
 import unittest
 
-from mysql_flavor import mysql_flavor
+from vtdb import keyrange_constants
+from vtdb import update_stream
+
 import environment
 import tablet
 import utils
-
-from vtdb import keyrange_constants
-from vtdb import update_stream
+from mysql_flavor import mysql_flavor
 
 src_master = tablet.Tablet()
 src_replica = tablet.Tablet()

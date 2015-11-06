@@ -14,15 +14,16 @@
 # - we remove the source tablets
 # - we remove the original shard
 
-import logging
 import struct
+
+import logging
 import unittest
 
 from vtdb import keyrange_constants
 
 import environment
-import utils
 import tablet
+import utils
 
 keyspace_id_type = keyrange_constants.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
@@ -136,8 +137,8 @@ index by_msg (msg)
 
   # _insert_startup_value inserts a value in the MySQL database before it
   # is sharded
-  def _insert_startup_value(self, tablet, table, mid, msg):
-    tablet.mquery('vt_test_keyspace', [
+  def _insert_startup_value(self, tablet_obj, table, mid, msg):
+    tablet_obj.mquery('vt_test_keyspace', [
         'begin',
         'insert into %s(id, msg) values(%d, "%s")' % (table, mid, msg),
         'commit'
@@ -148,8 +149,8 @@ index by_msg (msg)
     self._insert_startup_value(shard_master, 'resharding1', 2, 'msg2')
     self._insert_startup_value(shard_master, 'resharding1', 3, 'msg3')
 
-  def _backfill_keyspace_id(self, tablet):
-    tablet.mquery('vt_test_keyspace', [
+  def _backfill_keyspace_id(self, tablet_obj):
+    tablet_obj.mquery('vt_test_keyspace', [
         'begin',
         'update resharding1 set keyspace_id=0x1000000000000000 where id=1',
         'update resharding1 set keyspace_id=0x9000000000000000 where id=2',
@@ -159,9 +160,9 @@ index by_msg (msg)
 
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
-  def _insert_value(self, tablet, table, mid, msg, keyspace_id):
+  def _insert_value(self, tablet_obj, table, mid, msg, keyspace_id):
     k = utils.uint64_to_hex(keyspace_id)
-    tablet.mquery(
+    tablet_obj.mquery(
         'vt_test_keyspace',
         ['begin',
          'insert into %s(id, msg, keyspace_id) '
@@ -171,14 +172,14 @@ index by_msg (msg)
          'commit'],
         write=True)
 
-  def _get_value(self, tablet, table, mid):
-    return tablet.mquery(
+  def _get_value(self, tablet_obj, table, mid):
+    return tablet_obj.mquery(
         'vt_test_keyspace',
         'select id, msg, keyspace_id from %s where id=%d' % (table, mid))
 
-  def _check_value(self, tablet, table, mid, msg, keyspace_id,
+  def _check_value(self, tablet_obj, table, mid, msg, keyspace_id,
                    should_be_here=True):
-    result = self._get_value(tablet, table, mid)
+    result = self._get_value(tablet_obj, table, mid)
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = '%s'
       keyspace_id = pack_keyspace_id(keyspace_id)
@@ -187,21 +188,23 @@ index by_msg (msg)
     if should_be_here:
       self.assertEqual(result, ((mid, msg, keyspace_id),),
                        ('Bad row in tablet %s for id=%d, keyspace_id=' +
-                        fmt + ', row=%s') % (tablet.tablet_alias, mid,
+                        fmt + ', row=%s') % (tablet_obj.tablet_alias, mid,
                                              keyspace_id, str(result)))
     else:
-      self.assertEqual(len(result), 0,
-                       ('Extra row in tablet %s for id=%d, keyspace_id=' +
-                        fmt + ': %s') % (tablet.tablet_alias, mid, keyspace_id,
-                                         str(result)))
+      self.assertEqual(
+          len(result), 0,
+          ('Extra row in tablet %s for id=%d, keyspace_id=' +
+           fmt + ': %s') % (tablet_obj.tablet_alias, mid, keyspace_id,
+                            str(result)))
 
   # _is_value_present_and_correct tries to read a value.
   # if it is there, it will check it is correct and return True if it is.
   # if not correct, it will self.fail.
   # if not there, it will return False.
-  def _is_value_present_and_correct(self, tablet, table, mid, msg, keyspace_id):
-    result = self._get_value(tablet, table, mid)
-    if len(result) == 0:
+  def _is_value_present_and_correct(
+      self, tablet_obj, table, mid, msg, keyspace_id):
+    result = self._get_value(tablet_obj, table, mid)
+    if not result:
       return False
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = '%s'
@@ -210,7 +213,7 @@ index by_msg (msg)
       fmt = '%x'
     self.assertEqual(result, ((mid, msg, keyspace_id),),
                      ('Bad row in tablet %s for id=%d, keyspace_id=' + fmt) % (
-                         tablet.tablet_alias, mid, keyspace_id))
+                         tablet_obj.tablet_alias, mid, keyspace_id))
     return True
 
   def _check_startup_values(self):

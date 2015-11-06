@@ -8,8 +8,8 @@ import base64
 import unittest
 
 import environment
-import utils
 import tablet
+import utils
 
 # shards
 shard_0_master = tablet.Tablet()
@@ -60,7 +60,8 @@ def tearDownModule():
 
 
 class TestCustomSharding(unittest.TestCase):
-  """
+  """Test a custom-shared keyspace.
+
   Warning: this test only works with BSON RPC, only area where the
   SplitQuery client is implemented.
   """

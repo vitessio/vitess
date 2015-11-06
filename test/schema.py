@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
+import os
+
 import logging
 import unittest
-import os
 
 import environment
 import tablet
@@ -18,8 +19,9 @@ shard_1_replica1 = tablet.Tablet()
 shard_2_master = tablet.Tablet()
 shard_2_replica1 = tablet.Tablet()
 # shard_2 tablets are not used by all tests and not included by default.
-tablets = [shard_0_master, shard_0_replica1, shard_0_replica2, shard_0_rdonly,
-           shard_0_backup, shard_1_master, shard_1_replica1]
+all_tablets = [
+    shard_0_master, shard_0_replica1, shard_0_replica2, shard_0_rdonly,
+    shard_0_backup, shard_1_master, shard_1_replica1]
 tablets_shard2 = [shard_2_master, shard_2_replica1]
 test_keyspace = 'test_keyspace'
 db_name = 'vt_' + test_keyspace
@@ -29,7 +31,7 @@ def setUpModule():
   try:
     environment.topo_server().setup()
 
-    _init_mysql(tablets)
+    _init_mysql(all_tablets)
 
     utils.run_vtctl(['CreateKeyspace', test_keyspace])
 
@@ -47,7 +49,7 @@ def setUpModule():
     utils.Vtctld().start()
 
     # create databases, start the tablets
-    for t in tablets:
+    for t in all_tablets:
       t.create_db(db_name)
       t.start_vttablet(wait_for_state=None)
 
@@ -61,7 +63,7 @@ def setUpModule():
     shard_1_replica1.wait_for_vttablet_state('SERVING')
 
     # make sure all replication is good
-    for t in tablets:
+    for t in all_tablets:
       t.reset_replication()
 
     utils.run_vtctl(['InitShardMaster', test_keyspace+'/0',
@@ -91,10 +93,10 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  tablet.kill_tablets(tablets)
+  tablet.kill_tablets(all_tablets)
 
   teardown_procs = []
-  for t in tablets:
+  for t in all_tablets:
     teardown_procs.append(t.teardown_mysql())
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -102,44 +104,45 @@ def tearDownModule():
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
-  for t in tablets:
+  for t in all_tablets:
     t.remove_tree()
 
 
 class TestSchema(unittest.TestCase):
 
   def setUp(self):
-    for t in tablets:
+    for t in all_tablets:
       t.create_db(db_name)
 
   def tearDown(self):
     # This test assumes that it can reset the tablets by simply cleaning their
     # databases without restarting the tablets.
-    for t in tablets:
+    for t in all_tablets:
       t.clean_dbs()
     # Tablets from shard 2 are always started during the test. Shut
     # them down now.
-    if shard_2_master in tablets:
+    if shard_2_master in all_tablets:
       for t in tablets_shard2:
         t.kill_vttablet()
         utils.run_vtctl(['DeleteTablet', '-allow_master', t.tablet_alias],
                         auto_log=True)
-        tablets.remove(t)
+        all_tablets.remove(t)
       utils.run_vtctl(['DeleteShard', 'test_keyspace/2'], auto_log=True)
 
-  def _check_tables(self, tablet, expected_count):
-    tables = tablet.mquery(db_name, 'show tables')
-    self.assertEqual(len(tables), expected_count,
-                     'Unexpected table count on %s (not %d): got tables: %s' %
-                     (tablet.tablet_alias, expected_count, str(tables)))
+  def _check_tables(self, tablet_obj, expected_count):
+    tables = tablet_obj.mquery(db_name, 'show tables')
+    self.assertEqual(
+        len(tables), expected_count,
+        'Unexpected table count on %s (not %d): got tables: %s' %
+        (tablet_obj.tablet_alias, expected_count, str(tables)))
 
-  def _check_db_not_created(self, tablet):
+  def _check_db_not_created(self, tablet_obj):
     # Broadly catch all exceptions, since the exception being raised
     # is internal to MySQL.  We're strictly checking the error message
     # though, so should be fine.
     with self.assertRaisesRegexp(
         Exception, '(1049, "Unknown database \'%s\'")' % db_name):
-      tablet.mquery(db_name, 'show tables')
+      tablet_obj.mquery(db_name, 'show tables')
 
   def _apply_schema(self, keyspace, sql):
     utils.run_vtctl(['ApplySchema',
@@ -224,7 +227,7 @@ class TestSchema(unittest.TestCase):
       _init_mysql(tablets_shard2)
     finally:
       # Include shard2 tablets for tearDown.
-      tablets.extend(tablets_shard2)
+      all_tablets.extend(tablets_shard2)
 
     shard_2_master.init_tablet('master', 'test_keyspace', '2')
     shard_2_replica1.init_tablet('replica', 'test_keyspace', '2')

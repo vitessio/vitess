@@ -18,10 +18,16 @@ function msg() {
 PYLINT=/usr/bin/gpylint
 
 function call_pylint {
-  $PYLINT --mode style \
+  local file=$1
+  if [[ "$file" =~ ^test/ ]] ; then 
+    mode=style,test
+  else
+    mode=style
+  fi
+  $PYLINT --mode $mode \
     --disable g-bad-file-header,g-bad-import-order,g-unknown-interpreter \
     --module-header-template '' \
-    --msg-template '{path}:{line}:{msg_id}{obj_prefix}{obj}: {msg}{sym_separator}[{symbol}]' "$@"
+    --msg-template '{path}:{line}:{msg_id}{obj_prefix}{obj}: {msg}{sym_separator}[{symbol}]' $file
 }
 
 
