@@ -248,7 +248,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	stopPositionList := make([]*pbt.BlpPosition, len(sdw.shardInfo.SourceShards))
 	for i, ss := range sdw.shardInfo.SourceShards {
 		// find where we should be stopping
-		blpPos := blproto.FindBlpPositionById(blpPositionList, ss.Uid)
+		blpPos := blproto.FindBlpPositionByID(blpPositionList, ss.Uid)
 		if blpPos == nil {
 			return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 		}

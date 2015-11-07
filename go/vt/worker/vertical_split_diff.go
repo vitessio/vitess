@@ -250,7 +250,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	stopPositionList := make([]*pbt.BlpPosition, 1)
 	ss := vsdw.shardInfo.SourceShards[0]
 	// find where we should be stopping
-	blpPos := blproto.FindBlpPositionById(blpPositionList, ss.Uid)
+	blpPos := blproto.FindBlpPositionByID(blpPositionList, ss.Uid)
 	if blpPos == nil {
 		return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 	}

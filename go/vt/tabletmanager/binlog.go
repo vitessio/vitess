@@ -596,7 +596,7 @@ func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList []*pbt
 	// we're not doing anything wrong
 	posMap := make(map[uint32]string)
 	for _, bpc := range blm.players {
-		blpPos := blproto.FindBlpPositionById(blpPositionList, bpc.sourceShard.Uid)
+		blpPos := blproto.FindBlpPositionByID(blpPositionList, bpc.sourceShard.Uid)
 		if blpPos == nil {
 			return fmt.Errorf("No binlog position passed in for player Uid %v", bpc.sourceShard.Uid)
 		}
