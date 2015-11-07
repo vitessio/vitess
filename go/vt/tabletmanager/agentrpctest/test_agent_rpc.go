@@ -15,7 +15,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -24,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -694,14 +694,14 @@ func agentRPCTestGetSlavesPanic(ctx context.Context, t *testing.T, client tmclie
 	expectRPCWrapPanic(t, err)
 }
 
-var testBlpPosition = &blproto.BlpPosition{
+var testBlpPosition = &pbt.BlpPosition{
 	Uid:      73,
-	Position: testReplicationPosition,
+	Position: "testReplicationPosition",
 }
 var testWaitBlpPositionWaitTime = time.Hour
 var testWaitBlpPositionCalled = false
 
-func (fra *fakeRPCAgent) WaitBlpPosition(ctx context.Context, blpPosition *blproto.BlpPosition, waitTime time.Duration) error {
+func (fra *fakeRPCAgent) WaitBlpPosition(ctx context.Context, blpPosition *pbt.BlpPosition, waitTime time.Duration) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -712,22 +712,23 @@ func (fra *fakeRPCAgent) WaitBlpPosition(ctx context.Context, blpPosition *blpro
 }
 
 func agentRPCTestWaitBlpPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.WaitBlpPosition(ctx, ti, *testBlpPosition, testWaitBlpPositionWaitTime)
+	err := client.WaitBlpPosition(ctx, ti, testBlpPosition, testWaitBlpPositionWaitTime)
 	compareError(t, "WaitBlpPosition", err, true, testWaitBlpPositionCalled)
 }
 
 func agentRPCTestWaitBlpPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.WaitBlpPosition(ctx, ti, *testBlpPosition, testWaitBlpPositionWaitTime)
+	err := client.WaitBlpPosition(ctx, ti, testBlpPosition, testWaitBlpPositionWaitTime)
 	expectRPCWrapLockPanic(t, err)
 }
 
-var testBlpPositionList = &blproto.BlpPositionList{
-	Entries: []blproto.BlpPosition{
-		*testBlpPosition,
+var testBlpPositionList = []*pbt.BlpPosition{
+	{
+		Uid:      12,
+		Position: "testBlpPosition",
 	},
 }
 
-func (fra *fakeRPCAgent) StopBlp(ctx context.Context) (*blproto.BlpPositionList, error) {
+func (fra *fakeRPCAgent) StopBlp(ctx context.Context) ([]*pbt.BlpPosition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -766,7 +767,7 @@ func agentRPCTestStartBlpPanic(ctx context.Context, t *testing.T, client tmclien
 
 var testRunBlpUntilWaitTime = 3 * time.Minute
 
-func (fra *fakeRPCAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (fra *fakeRPCAgent) RunBlpUntil(ctx context.Context, bpl []*pbt.BlpPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

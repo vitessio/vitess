@@ -10,7 +10,6 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -18,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -116,18 +116,18 @@ type TabletManagerClient interface {
 
 	// WaitBlpPosition asks the tablet to wait until it reaches that
 	// position in replication
-	WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition blproto.BlpPosition, waitTime time.Duration) error
+	WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *pbt.BlpPosition, waitTime time.Duration) error
 
 	// StopBlp asks the tablet to stop all its binlog players,
 	// and returns the current position for all of them
-	StopBlp(ctx context.Context, tablet *topo.TabletInfo) (*blproto.BlpPositionList, error)
+	StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*pbt.BlpPosition, error)
 
 	// StartBlp asks the tablet to restart its binlog players
 	StartBlp(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// RunBlpUntil asks the tablet to restart its binlog players until
 	// it reaches the given positions, if not there yet.
-	RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions *blproto.BlpPositionList, waitTime time.Duration) (myproto.ReplicationPosition, error)
+	RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*pbt.BlpPosition, waitTime time.Duration) (myproto.ReplicationPosition, error)
 
 	//
 	// Reparenting related functions

@@ -10,6 +10,8 @@ import (
 	"fmt"
 
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // BlpPosition describes a binlog player position to start from.
@@ -35,4 +37,14 @@ func (bpl *BlpPositionList) FindBlpPositionById(id uint32) (*BlpPosition, error)
 		}
 	}
 	return nil, fmt.Errorf("BlpPosition for id %v not found", id)
+}
+
+// FindBlpPositionById2 returns the BlpPosition with the given id, or error
+func FindBlpPositionById(list []*pbt.BlpPosition, uid uint32) *pbt.BlpPosition {
+	for _, pos := range list {
+		if pos.Uid == uid {
+			return pos
+		}
+	}
+	return nil
 }

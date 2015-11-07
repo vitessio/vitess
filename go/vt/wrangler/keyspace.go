@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/event"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -20,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
 
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -234,14 +234,14 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 			defer wg.Done()
 			for _, sourceShard := range si.SourceShards {
 				// we're waiting on this guy
-				blpPosition := blproto.BlpPosition{
+				blpPosition := &pbt.BlpPosition{
 					Uid: sourceShard.Uid,
 				}
 
 				// find the position it should be at
 				for s, pos := range sourcePositions {
 					if s.Keyspace() == sourceShard.Keyspace && s.ShardName() == sourceShard.Shard {
-						blpPosition.Position = pos
+						blpPosition.Position = myproto.EncodeReplicationPosition(pos)
 					}
 				}
 
@@ -642,9 +642,9 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// wait for it
 	event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
-	if err := wr.tmc.WaitBlpPosition(ctx, destinationMasterTabletInfo, blproto.BlpPosition{
+	if err := wr.tmc.WaitBlpPosition(ctx, destinationMasterTabletInfo, &pbt.BlpPosition{
 		Uid:      0,
-		Position: masterPosition,
+		Position: myproto.EncodeReplicationPosition(masterPosition),
 	}, filteredReplicationWaitTime); err != nil {
 		return err
 	}

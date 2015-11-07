@@ -13,7 +13,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/netutil"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -418,21 +417,21 @@ func (client *Client) GetSlaves(ctx context.Context, tablet *topo.TabletInfo) ([
 }
 
 // WaitBlpPosition is part of the tmclient.TabletManagerClient interface
-func (client *Client) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition blproto.BlpPosition, waitTime time.Duration) error {
+func (client *Client) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *pb.BlpPosition, waitTime time.Duration) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
 	_, err = c.WaitBlpPosition(ctx, &pb.WaitBlpPositionRequest{
-		BlpPosition: blproto.BlpPositionToProto(&blpPosition),
+		BlpPosition: blpPosition,
 		WaitTimeout: int64(waitTime),
 	})
 	return err
 }
 
 // StopBlp is part of the tmclient.TabletManagerClient interface
-func (client *Client) StopBlp(ctx context.Context, tablet *topo.TabletInfo) (*blproto.BlpPositionList, error) {
+func (client *Client) StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*pb.BlpPosition, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -442,7 +441,7 @@ func (client *Client) StopBlp(ctx context.Context, tablet *topo.TabletInfo) (*bl
 	if err != nil {
 		return nil, err
 	}
-	return blproto.ProtoToBlpPositionList(response.BlpPositions), nil
+	return response.BlpPositions, nil
 }
 
 // StartBlp is part of the tmclient.TabletManagerClient interface
@@ -457,14 +456,14 @@ func (client *Client) StartBlp(ctx context.Context, tablet *topo.TabletInfo) err
 }
 
 // RunBlpUntil is part of the tmclient.TabletManagerClient interface
-func (client *Client) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions *blproto.BlpPositionList, waitTime time.Duration) (myproto.ReplicationPosition, error) {
+func (client *Client) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*pb.BlpPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 	defer cc.Close()
 	response, err := c.RunBlpUntil(ctx, &pb.RunBlpUntilRequest{
-		BlpPositions: blproto.BlpPositionListToProto(positions),
+		BlpPositions: positions,
 		WaitTimeout:  int64(waitTime),
 	})
 	if err != nil {

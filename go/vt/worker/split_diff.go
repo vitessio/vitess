@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -244,14 +245,16 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 
 	// 2 - stop all the source tablets at a binlog position
 	//     higher than the destination master
-	stopPositionList := blproto.BlpPositionList{
-		Entries: make([]blproto.BlpPosition, len(sdw.shardInfo.SourceShards)),
-	}
+	stopPositionList := make([]*pbt.BlpPosition, len(sdw.shardInfo.SourceShards))
 	for i, ss := range sdw.shardInfo.SourceShards {
 		// find where we should be stopping
-		blpPos, err := blpPositionList.FindBlpPositionById(ss.Uid)
-		if err != nil {
+		blpPos := blproto.FindBlpPositionById(blpPositionList, ss.Uid)
+		if blpPos == nil {
 			return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
+		}
+		position, err := myproto.DecodeReplicationPosition(blpPos.Position)
+		if err != nil {
+			return err
 		}
 
 		// read the tablet
@@ -265,13 +268,15 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		// stop replication
 		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, blpPos.Position, *remoteActionsTimeout)
+		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, position, *remoteActionsTimeout)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
 		}
-		stopPositionList.Entries[i].Uid = ss.Uid
-		stopPositionList.Entries[i].Position = stoppedAt
+		stopPositionList[i] = &pbt.BlpPosition{
+			Uid:      ss.Uid,
+			Position: myproto.EncodeReplicationPosition(stoppedAt),
+		}
 
 		// change the cleaner actions from ChangeSlaveType(rdonly)
 		// to StartSlave() + ChangeSlaveType(spare)
@@ -287,7 +292,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	//     replication up to the new list of positions
 	sdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, &stopPositionList, *remoteActionsTimeout)
+	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, stopPositionList, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil for %v until %v failed: %v", sdw.shardInfo.MasterAlias, stopPositionList, err)

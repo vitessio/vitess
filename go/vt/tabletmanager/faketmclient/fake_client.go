@@ -15,7 +15,6 @@ import (
 	"golang.org/x/net/context"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -24,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -187,23 +187,21 @@ func (client *FakeTabletManagerClient) GetSlaves(ctx context.Context, tablet *to
 }
 
 // WaitBlpPosition is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition blproto.BlpPosition, waitTime time.Duration) error {
+func (client *FakeTabletManagerClient) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *pbt.BlpPosition, waitTime time.Duration) error {
 	return nil
 }
 
 // StopBlp is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) StopBlp(ctx context.Context, tablet *topo.TabletInfo) (*blproto.BlpPositionList, error) {
+func (client *FakeTabletManagerClient) StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*pbt.BlpPosition, error) {
 	// TODO(aaijazi): this works because all tests so far only need to rely on Uid 0.
 	// Ideally, this should turn into a full mock, where the caller can configure the exact
 	// return value.
-	bpl := blproto.BlpPositionList{
-		Entries: []blproto.BlpPosition{
-			blproto.BlpPosition{
-				Uid: uint32(0),
-			},
+	bpl := []*pbt.BlpPosition{
+		{
+			Uid: uint32(0),
 		},
 	}
-	return &bpl, nil
+	return bpl, nil
 }
 
 // StartBlp is part of the tmclient.TabletManagerClient interface
@@ -212,7 +210,7 @@ func (client *FakeTabletManagerClient) StartBlp(ctx context.Context, tablet *top
 }
 
 // RunBlpUntil is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions *blproto.BlpPositionList, waitTime time.Duration) (myproto.ReplicationPosition, error) {
+func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*pbt.BlpPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	var pos myproto.ReplicationPosition
 	return pos, nil
 }
