@@ -35,12 +35,12 @@ func (client *client) Close() {
 	client.Client.Close()
 }
 
-func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
+func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *pb.StreamEvent, binlogplayer.ErrFunc, error) {
 	req := &proto.UpdateStreamRequest{
 		Position: position,
 	}
-	result := make(chan *proto.StreamEvent, 10)
-	responseChan := make(chan *proto.StreamEvent, 10)
+	result := make(chan *pb.StreamEvent, 10)
+	responseChan := make(chan *pb.StreamEvent, 10)
 	resp := client.Client.StreamGo("UpdateStream.ServeUpdateStream", req, responseChan)
 	var finalError error
 	go func() {

@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -246,18 +247,20 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 
 	// 2 - stop the source tablet at a binlog position
 	//     higher than the destination master
-	stopPositionList := blproto.BlpPositionList{
-		Entries: make([]blproto.BlpPosition, 1),
-	}
+	stopPositionList := make([]*pbt.BlpPosition, 1)
 	ss := vsdw.shardInfo.SourceShards[0]
 	// find where we should be stopping
-	pos, err := blpPositionList.FindBlpPositionById(ss.Uid)
-	if err != nil {
+	blpPos := blproto.FindBlpPositionByID(blpPositionList, ss.Uid)
+	if blpPos == nil {
 		return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
+	}
+	pos, err := myproto.DecodeReplicationPosition(blpPos.Position)
+	if err != nil {
+		return err
 	}
 
 	// stop replication
-	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", topoproto.TabletAliasString(vsdw.sourceAlias), pos.Position)
+	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", topoproto.TabletAliasString(vsdw.sourceAlias), blpPos.Position)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	sourceTablet, err := vsdw.wr.TopoServer().GetTablet(shortCtx, vsdw.sourceAlias)
 	cancel()
@@ -265,13 +268,15 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 		return err
 	}
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, pos.Position, *remoteActionsTimeout)
+	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, pos, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), pos.Position, err)
+		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), blpPos.Position, err)
 	}
-	stopPositionList.Entries[0].Uid = ss.Uid
-	stopPositionList.Entries[0].Position = stoppedAt
+	stopPositionList[0] = &pbt.BlpPosition{
+		Uid:      ss.Uid,
+		Position: myproto.EncodeReplicationPosition(stoppedAt),
+	}
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
@@ -286,7 +291,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	//     replication up to the new list of positions
 	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), stopPositionList)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, &stopPositionList, *remoteActionsTimeout)
+	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, stopPositionList, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), stopPositionList, err)

@@ -9,8 +9,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/binlog/proto"
-
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
@@ -27,10 +25,10 @@ var dmlErrorCases = []string{
 }
 
 func TestEventErrors(t *testing.T) {
-	var got *proto.StreamEvent
+	var got *pb.StreamEvent
 	evs := &EventStreamer{
-		sendEvent: func(event *proto.StreamEvent) error {
-			if event.Category != "POS" {
+		sendEvent: func(event *pb.StreamEvent) error {
+			if event.Category != pb.StreamEvent_SE_POS {
 				got = event
 			}
 			return nil
@@ -50,8 +48,8 @@ func TestEventErrors(t *testing.T) {
 			t.Errorf("%s: %v", sql, err)
 			continue
 		}
-		want := &proto.StreamEvent{
-			Category: "ERR",
+		want := &pb.StreamEvent{
+			Category: pb.StreamEvent_SE_ERR,
 			Sql:      sql,
 		}
 		if !reflect.DeepEqual(got, want) {
@@ -62,7 +60,7 @@ func TestEventErrors(t *testing.T) {
 
 func TestSetErrors(t *testing.T) {
 	evs := &EventStreamer{
-		sendEvent: func(event *proto.StreamEvent) error {
+		sendEvent: func(event *pb.StreamEvent) error {
 			return nil
 		},
 	}
@@ -106,22 +104,22 @@ func TestDMLEvent(t *testing.T) {
 		TransactionId: "MariaDB/0-41983-20",
 	}
 	evs := &EventStreamer{
-		sendEvent: func(event *proto.StreamEvent) error {
+		sendEvent: func(event *pb.StreamEvent) error {
 			switch event.Category {
-			case "DML":
-				want := `&{DML _table_ [name:"eid" type:INT64  name:"id" type:INT64  name:"name" type:VARBINARY ] [[10 -1 name] [11 18446744073709551615 name]]  1 }`
+			case pb.StreamEvent_SE_DML:
+				want := `category:SE_DML table_name:"_table_" primary_key_fields:<name:"eid" type:INT64 > primary_key_fields:<name:"id" type:INT64 > primary_key_fields:<name:"name" type:VARBINARY > primary_key_values:<lengths:2 lengths:2 lengths:4 values:"10-1name" > primary_key_values:<lengths:2 lengths:20 lengths:4 values:"1118446744073709551615name" > timestamp:1 `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got \n%s, want \n%s", got, want)
 				}
-			case "ERR":
-				want := `&{ERR  [] [] query 1 }`
+			case pb.StreamEvent_SE_ERR:
+				want := `sql:"query" timestamp:1 `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
 				}
-			case "POS":
-				want := `&{POS  [] []  1 MariaDB/0-41983-20}`
+			case pb.StreamEvent_SE_POS:
+				want := `category:SE_POS timestamp:1 transaction_id:"MariaDB/0-41983-20" `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
@@ -153,16 +151,16 @@ func TestDDLEvent(t *testing.T) {
 		TransactionId: "MariaDB/0-41983-20",
 	}
 	evs := &EventStreamer{
-		sendEvent: func(event *proto.StreamEvent) error {
+		sendEvent: func(event *pb.StreamEvent) error {
 			switch event.Category {
-			case "DDL":
-				want := `&{DDL  [] [] DDL 1 }`
+			case pb.StreamEvent_SE_DDL:
+				want := `category:SE_DDL sql:"DDL" timestamp:1 `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
 				}
-			case "POS":
-				want := `&{POS  [] []  1 MariaDB/0-41983-20}`
+			case pb.StreamEvent_SE_POS:
+				want := `category:SE_POS timestamp:1 transaction_id:"MariaDB/0-41983-20" `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)

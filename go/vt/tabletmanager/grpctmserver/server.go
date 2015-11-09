@@ -13,7 +13,6 @@ import (
 	"golang.org/x/net/context"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -291,7 +290,7 @@ func (s *server) WaitBlpPosition(ctx context.Context, request *pb.WaitBlpPositio
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.WaitBlpPositionResponse{}
 	return response, s.agent.RPCWrapLock(ctx, actionnode.TabletActionWaitBLPPosition, request, response, true, func() error {
-		return s.agent.WaitBlpPosition(ctx, blproto.ProtoToBlpPosition(request.BlpPosition), time.Duration(request.WaitTimeout))
+		return s.agent.WaitBlpPosition(ctx, request.BlpPosition, time.Duration(request.WaitTimeout))
 	})
 }
 
@@ -301,7 +300,7 @@ func (s *server) StopBlp(ctx context.Context, request *pb.StopBlpRequest) (*pb.S
 	return response, s.agent.RPCWrapLock(ctx, actionnode.TabletActionStopBLP, request, response, true, func() error {
 		positions, err := s.agent.StopBlp(ctx)
 		if err == nil {
-			response.BlpPositions = blproto.BlpPositionListToProto(positions)
+			response.BlpPositions = positions
 		}
 		return err
 	})
@@ -319,7 +318,7 @@ func (s *server) RunBlpUntil(ctx context.Context, request *pb.RunBlpUntilRequest
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.RunBlpUntilResponse{}
 	return response, s.agent.RPCWrapLock(ctx, actionnode.TabletActionRunBLPUntil, request, response, true, func() error {
-		position, err := s.agent.RunBlpUntil(ctx, blproto.ProtoToBlpPositionList(request.BlpPositions), time.Duration(request.WaitTimeout))
+		position, err := s.agent.RunBlpUntil(ctx, request.BlpPositions, time.Duration(request.WaitTimeout))
 		if err == nil {
 			response.Position = myproto.EncodeReplicationPosition(*position)
 		}

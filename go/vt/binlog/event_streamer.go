@@ -13,13 +13,12 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -29,7 +28,7 @@ var (
 	streamCommentStartLen = len(streamCommentStart)
 )
 
-type sendEventFunc func(event *proto.StreamEvent) error
+type sendEventFunc func(event *pb.StreamEvent) error
 
 // EventStreamer is an adapter on top of a BinlogStreamer that convert
 // the events into StreamEvent objects.
@@ -66,11 +65,11 @@ func (evs *EventStreamer) transactionToEvent(trans *pb.BinlogTransaction) error 
 				}
 			}
 		case pb.BinlogTransaction_Statement_BL_DML:
-			var dmlEvent *proto.StreamEvent
+			var dmlEvent *pb.StreamEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
-				dmlEvent = &proto.StreamEvent{
-					Category: "ERR",
+				dmlEvent = &pb.StreamEvent{
+					Category: pb.StreamEvent_SE_ERR,
 					Sql:      stmt.Sql,
 				}
 			}
@@ -79,8 +78,8 @@ func (evs *EventStreamer) transactionToEvent(trans *pb.BinlogTransaction) error 
 				return err
 			}
 		case pb.BinlogTransaction_Statement_BL_DDL:
-			ddlEvent := &proto.StreamEvent{
-				Category:  "DDL",
+			ddlEvent := &pb.StreamEvent{
+				Category:  pb.StreamEvent_SE_DDL,
 				Sql:       stmt.Sql,
 				Timestamp: trans.Timestamp,
 			}
@@ -88,8 +87,8 @@ func (evs *EventStreamer) transactionToEvent(trans *pb.BinlogTransaction) error 
 				return err
 			}
 		case pb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
-			unrecognized := &proto.StreamEvent{
-				Category:  "ERR",
+			unrecognized := &pb.StreamEvent{
+				Category:  pb.StreamEvent_SE_ERR,
 				Sql:       stmt.Sql,
 				Timestamp: trans.Timestamp,
 			}
@@ -101,9 +100,9 @@ func (evs *EventStreamer) transactionToEvent(trans *pb.BinlogTransaction) error 
 			log.Errorf("Unrecognized event: %v: %s", stmt.Category, stmt.Sql)
 		}
 	}
-	posEvent := &proto.StreamEvent{
-		Category:      "POS",
-		TransactionID: trans.TransactionId,
+	posEvent := &pb.StreamEvent{
+		Category:      pb.StreamEvent_SE_POS,
+		TransactionId: trans.TransactionId,
 		Timestamp:     trans.Timestamp,
 	}
 	if err = evs.sendEvent(posEvent); err != nil {
@@ -118,7 +117,7 @@ The _stream comment is extracted into a StreamEvent.
 */
 // Example query: insert into _table_(foo) values ('foo') /* _stream _table_ (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
-func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*proto.StreamEvent, int64, error) {
+func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*pb.StreamEvent, int64, error) {
 	// first extract the comment
 	commentIndex := strings.LastIndex(sql, streamCommentStart)
 	if commentIndex == -1 {
@@ -127,8 +126,8 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*proto.Stre
 	dmlComment := sql[commentIndex+streamCommentStartLen:]
 
 	// then strat building the response
-	dmlEvent := &proto.StreamEvent{
-		Category: "DML",
+	dmlEvent := &pb.StreamEvent{
+		Category: pb.StreamEvent_SE_DML,
 	}
 	tokenizer := sqlparser.NewStringTokenizer(dmlComment)
 
@@ -151,7 +150,7 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*proto.Stre
 		switch typ {
 		case '(':
 			// pkTuple is a list of pk values
-			var pkTuple []sqltypes.Value
+			var pkTuple *pbq.Row
 			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid, dmlEvent.PrimaryKeyFields)
 			if err != nil {
 				return nil, insertid, err
@@ -166,15 +165,15 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*proto.Stre
 }
 
 // parsePkNames parses something like (eid id name )
-func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*query.Field, error) {
-	var columns []*query.Field
+func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*pbq.Field, error) {
+	var columns []*pbq.Field
 	if typ, _ := tokenizer.Scan(); typ != '(' {
 		return nil, fmt.Errorf("expecting '('")
 	}
 	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
 		switch typ {
 		case sqlparser.ID:
-			columns = append(columns, &query.Field{
+			columns = append(columns, &pbq.Field{
 				Name: string(val),
 			})
 		default:
@@ -185,8 +184,8 @@ func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*query.Field, error) {
 }
 
 // parsePkTuple parses something like (null 1 'bmFtZQ==' )
-func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*query.Field) ([]sqltypes.Value, int64, error) {
-	var result []sqltypes.Value
+func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*pbq.Field) (*pbq.Row, int64, error) {
+	result := &pbq.Row{}
 
 	// start scanning the list
 	index := 0
@@ -222,7 +221,8 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 			}
 
 			// update value
-			result = append(result, sqltypes.MakeNumeric(fullVal))
+			result.Lengths = append(result.Lengths, int64(len(fullVal)))
+			result.Values = append(result.Values, fullVal...)
 
 		case sqlparser.NUMBER:
 			// check value
@@ -243,7 +243,8 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 			}
 
 			// update value
-			result = append(result, sqltypes.MakeNumeric(val))
+			result.Lengths = append(result.Lengths, int64(len(val)))
+			result.Values = append(result.Values, val...)
 		case sqlparser.NULL:
 			// update type
 			switch fields[index].Type {
@@ -258,7 +259,9 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 			}
 
 			// update value
-			result = append(result, sqltypes.MakeNumeric(strconv.AppendInt(nil, insertid, 10)))
+			v := sqltypes.MakeNumeric(strconv.AppendInt(nil, insertid, 10)).Raw()
+			result.Lengths = append(result.Lengths, int64(len(v)))
+			result.Values = append(result.Values, v...)
 			insertid++
 		case sqlparser.STRING:
 			// update type
@@ -279,7 +282,8 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 			if err != nil {
 				return nil, insertid, err
 			}
-			result = append(result, sqltypes.MakeString(decoded[:numDecoded]))
+			result.Lengths = append(result.Lengths, int64(numDecoded))
+			result.Values = append(result.Values, decoded[:numDecoded]...)
 		default:
 			return nil, insertid, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
 		}

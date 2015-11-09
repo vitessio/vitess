@@ -13,7 +13,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -25,6 +24,7 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	pbtm "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -79,7 +79,7 @@ func (fbc *fakeBinlogClient) Close() {
 }
 
 // ServeUpdateStream is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (chan *pb.StreamEvent, binlogplayer.ErrFunc, error) {
 	return nil, nil, fmt.Errorf("Should never be called")
 }
 
@@ -314,11 +314,9 @@ func checkBlpPositionList(t *testing.T, bpm *BinlogPlayerMap, vtClientSyncChanne
 		t.Errorf("BlpPositionList failed: %v", err)
 		return
 	}
-	if len(bpl.Entries) != 1 ||
-		bpl.Entries[0].Uid != 1 ||
-		bpl.Entries[0].Position.GTIDSet.(myproto.MariadbGTID).Domain != 0 ||
-		bpl.Entries[0].Position.GTIDSet.(myproto.MariadbGTID).Server != 1 ||
-		bpl.Entries[0].Position.GTIDSet.(myproto.MariadbGTID).Sequence != 1235 {
+	if len(bpl) != 1 ||
+		bpl[0].Uid != 1 ||
+		bpl[0].Position != "MariaDB/0-1-1235" {
 		t.Errorf("unexpected BlpPositionList: %v", bpl)
 	}
 }
@@ -662,18 +660,10 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	// now restart the map until we get the right BlpPosition
 	mysqlDaemon.BinlogPlayerEnabled = false
 	ctx1, _ := context.WithTimeout(ctx, 5*time.Second)
-	if err := bpm.RunUntil(ctx1, &proto.BlpPositionList{
-		Entries: []proto.BlpPosition{
-			proto.BlpPosition{
-				Uid: 1,
-				Position: myproto.ReplicationPosition{
-					GTIDSet: myproto.MariadbGTID{
-						Domain:   0,
-						Server:   1,
-						Sequence: 1235,
-					},
-				},
-			},
+	if err := bpm.RunUntil(ctx1, []*pbtm.BlpPosition{
+		{
+			Uid:      1,
+			Position: "MariaDB/0-1-1235",
 		},
 	}, 5*time.Second); err != nil {
 		t.Fatalf("RunUntil failed: %v", err)

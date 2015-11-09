@@ -13,7 +13,7 @@ import (
 type UpdateStream interface {
 	// ServeUpdateStream serves the query and streams the result
 	// for the full update stream
-	ServeUpdateStream(position string, sendReply func(reply *StreamEvent) error) error
+	ServeUpdateStream(position string, sendReply func(reply *pb.StreamEvent) error) error
 
 	// StreamKeyRange streams events related to a KeyRange only
 	StreamKeyRange(position string, keyspaceIdType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) error

@@ -205,7 +205,7 @@ func (updateStream *UpdateStream) IsEnabled() bool {
 }
 
 // ServeUpdateStream is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply func(reply *proto.StreamEvent) error) (err error) {
+func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply func(reply *pb.StreamEvent) error) (err error) {
 	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
@@ -225,11 +225,11 @@ func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply f
 	defer streamCount.Add("Updates", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, pos, func(reply *proto.StreamEvent) error {
-		if reply.Category == "ERR" {
+	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, pos, func(reply *pb.StreamEvent) error {
+		if reply.Category == pb.StreamEvent_SE_ERR {
 			updateStreamErrors.Add("UpdateStream", 1)
 		} else {
-			updateStreamEvents.Add(reply.Category, 1)
+			updateStreamEvents.Add(reply.Category.String(), 1)
 		}
 		return sendReply(reply)
 	})
