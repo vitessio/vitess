@@ -13,7 +13,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -80,7 +79,7 @@ func (fbc *fakeBinlogClient) Close() {
 }
 
 // ServeUpdateStream is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (chan *pb.StreamEvent, binlogplayer.ErrFunc, error) {
 	return nil, nil, fmt.Errorf("Should never be called")
 }
 

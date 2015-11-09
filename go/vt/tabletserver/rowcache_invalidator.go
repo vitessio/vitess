@@ -14,7 +14,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -22,6 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // RowcacheInvalidator runs the service to invalidate
@@ -143,7 +144,7 @@ func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 	return nil
 }
 
-func (rci *RowcacheInvalidator) handleInvalidationError(event *blproto.StreamEvent) {
+func (rci *RowcacheInvalidator) handleInvalidationError(event *pb.StreamEvent) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
@@ -156,18 +157,18 @@ func (rci *RowcacheInvalidator) handleInvalidationError(event *blproto.StreamEve
 	}
 }
 
-func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
+func (rci *RowcacheInvalidator) processEvent(event *pb.StreamEvent) error {
 	defer rci.handleInvalidationError(event)
 	switch event.Category {
-	case "DDL":
+	case pb.StreamEvent_SE_DDL:
 		log.Infof("DDL invalidation: %s", event.Sql)
 		rci.handleDDLEvent(event.Sql)
-	case "DML":
+	case pb.StreamEvent_SE_DML:
 		rci.handleDMLEvent(event)
-	case "ERR":
+	case pb.StreamEvent_SE_ERR:
 		rci.handleUnrecognizedEvent(event.Sql)
-	case "POS":
-		gtid, err := myproto.DecodeGTID(event.TransactionID)
+	case pb.StreamEvent_SE_POS:
+		gtid, err := myproto.DecodeGTID(event.TransactionId)
 		if err != nil {
 			return err
 		}
@@ -181,7 +182,7 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 	return nil
 }
 
-func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
+func (rci *RowcacheInvalidator) handleDMLEvent(event *pb.StreamEvent) {
 	invalidations := int64(0)
 	tableInfo := rci.qe.schemaInfo.GetTable(event.TableName)
 	if tableInfo == nil {
@@ -192,7 +193,7 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
 	}
 
 	for _, pkTuple := range event.PrimaryKeyValues {
-		newKey := validateKey(tableInfo, buildKey(pkTuple), rci.qe.queryServiceStats)
+		newKey := validateKey(tableInfo, buildKeyFromRow(event.PrimaryKeyFields, pkTuple), rci.qe.queryServiceStats)
 		if newKey == "" {
 			continue
 		}

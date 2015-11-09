@@ -2,7 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-from itertools import izip
 from urlparse import urlparse
 
 from grpc.beta import implementations
@@ -12,20 +11,24 @@ from vtproto import binlogdata_pb2
 from vtproto import binlogservice_pb2
 
 from vtdb import dbexceptions
-from vtdb import field_types
+from vtdb import field_types_proto3
 from vtdb import update_stream
 
 
 def _make_row(row, conversions):
+  """Builds a python native row from proto3 row."""
   converted_row = []
-  for conversion_func, field_data in izip(conversions, row):
-    if field_data is None:
-      v = None
-    elif conversion_func:
-      v = conversion_func(field_data)
+  offset = 0
+  for i in xrange(len(row.lengths)):
+    l = row.lengths[i]
+    if l == -1:
+      converted_row.append(None)
+    elif conversions[i]:
+      converted_row.append(conversions[i](row.values[offset:offset+l]))
+      offset += l
     else:
-      v = field_data
-    converted_row.append(v)
+      converted_row.append(row.values[offset:offset+l])
+      offset += l
   return converted_row
 
 
@@ -67,10 +70,10 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
           conversions = []
           for field in stream_event.primary_key_fields:
             fields.append(field.name)
-            conversions.append(field_types.conversions.get(field.type))
+            conversions.append(field_types_proto3.conversions.get(field.type))
 
           for r in stream_event.primary_key_values:
-            row = tuple(_make_row(r.values, conversions))
+            row = tuple(_make_row(r, conversions))
             rows.append(row)
 
         yield update_stream.StreamEvent(
