@@ -15,6 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // buildValueList builds the set of PK reference rows used to drive the next query.
@@ -229,6 +231,32 @@ func buildKey(row []sqltypes.Value) (key string) {
 		if i != len(row)-1 {
 			buf.WriteByte('.')
 		}
+	}
+	return buf.String()
+}
+
+// FIXME(sougou) Please double-check this is correct.
+// I also think we said we would validate the numbers before using them,
+// but I'm not sure this is the right place here.
+func buildKeyFromRow(fields []*pbq.Field, row *pbq.Row) (key string) {
+	buf := bytes.NewBuffer(make([]byte, 0, 32))
+	var offset int64
+	for i, length := range row.Lengths {
+		if length == -1 {
+			return ""
+		}
+		if sqltypes.IsQuoted(fields[i].Type) {
+			// need to quote
+			value := sqltypes.MakeString(row.Values[offset : offset+length])
+			value.EncodeASCII(buf)
+		} else {
+			// no need to quote, just add
+			buf.Write(row.Values[offset : offset+length])
+		}
+		if i != len(row.Lengths)-1 {
+			buf.WriteByte('.')
+		}
+		offset += length
 	}
 	return buf.String()
 }

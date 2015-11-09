@@ -28,9 +28,9 @@ func New(updateStream proto.UpdateStream) *UpdateStream {
 // StreamUpdate is part of the pbs.UpdateStreamServer interface
 func (server *UpdateStream) StreamUpdate(req *pb.StreamUpdateRequest, stream pbs.UpdateStream_StreamUpdateServer) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.ServeUpdateStream(req.Position, func(reply *proto.StreamEvent) error {
+	return server.updateStream.ServeUpdateStream(req.Position, func(reply *pb.StreamEvent) error {
 		return stream.Send(&pb.StreamUpdateResponse{
-			StreamEvent: proto.StreamEventToProto(reply),
+			StreamEvent: reply,
 		})
 	})
 }

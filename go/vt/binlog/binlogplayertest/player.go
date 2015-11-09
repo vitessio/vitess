@@ -13,13 +13,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -58,28 +56,28 @@ func NewFakeBinlogStreamer(t *testing.T) *FakeBinlogStreamer {
 
 var testUpdateStreamRequest = "UpdateStream starting position"
 
-var testStreamEvent = &proto.StreamEvent{
-	Category:  "DML",
+var testStreamEvent = &pb.StreamEvent{
+	Category:  pb.StreamEvent_SE_DML,
 	TableName: "table1",
-	PrimaryKeyFields: []mproto.Field{
-		mproto.Field{
-			Name:  "id",
-			Type:  254,
-			Flags: 128,
+	PrimaryKeyFields: []*pbq.Field{
+		{
+			Name: "id",
+			Type: pbq.Type_VARBINARY,
 		},
 	},
-	PrimaryKeyValues: [][]sqltypes.Value{
-		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("123")),
+	PrimaryKeyValues: []*pbq.Row{
+		{
+			Lengths: []int64{3},
+			Values:  []byte{'1', '2', '3'},
 		},
 	},
 	Sql:           "test sql",
 	Timestamp:     372,
-	TransactionID: "StreamEvent returned transaction id",
+	TransactionId: "StreamEvent returned transaction id",
 }
 
 // ServeUpdateStream is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) ServeUpdateStream(position string, sendReply func(reply *proto.StreamEvent) error) error {
+func (fake *FakeBinlogStreamer) ServeUpdateStream(position string, sendReply func(reply *pb.StreamEvent) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

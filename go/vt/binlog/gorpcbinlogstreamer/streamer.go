@@ -20,7 +20,7 @@ type UpdateStream struct {
 // ServeUpdateStream is part of the gorpc UpdateStream service
 func (server *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.ServeUpdateStream(req.Position, func(reply *proto.StreamEvent) error {
+	return server.updateStream.ServeUpdateStream(req.Position, func(reply *pb.StreamEvent) error {
 		return sendReply(reply)
 	})
 }
