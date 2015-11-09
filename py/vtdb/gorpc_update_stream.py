@@ -14,8 +14,7 @@ def _make_row(row, conversions):
   """Builds a python native row from proto3 over bsonrpc row."""
   converted_row = []
   offset = 0
-  for i in xrange(len(row['Lengths'])):
-    l = row['Lengths'][i]
+  for i, l in enumerate(row['Lengths']):
     if l == -1:
       converted_row.append(None)
     elif conversions[i]:
