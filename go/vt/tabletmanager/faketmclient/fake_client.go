@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletmanager/gorpcproto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
@@ -182,8 +181,7 @@ func (client *FakeTabletManagerClient) TabletExternallyReparented(ctx context.Co
 
 // GetSlaves is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) GetSlaves(ctx context.Context, tablet *topo.TabletInfo) ([]string, error) {
-	var sl gorpcproto.GetSlavesReply
-	return sl.Addrs, nil
+	return nil, nil
 }
 
 // WaitBlpPosition is part of the tmclient.TabletManagerClient interface
