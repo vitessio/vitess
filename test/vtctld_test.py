@@ -234,13 +234,11 @@ class TestVtctld(unittest.TestCase):
     """An interrupted streaming vtctl command should work."""
     protocol, endpoint = utils.vtctld.rpc_endpoint(python=True)
     vtctld_connection = vtctl_client.connect(protocol, endpoint, 30)
-    i = 0
-    for event in vtctld_connection.execute_vtctl_command(['ListAllTablets',
-                                                          'test_nj']):
+    for i, event in enumerate(
+        vtctld_connection.execute_vtctl_command(['ListAllTablets', 'test_nj'])):
       logging.debug('got event %d %s', i, event.value)
       if i == 1:
         break
-      i += 1
     vtctld_connection.close()
 
 if __name__ == '__main__':

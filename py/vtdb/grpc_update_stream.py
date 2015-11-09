@@ -19,8 +19,7 @@ def _make_row(row, conversions):
   """Builds a python native row from proto3 row."""
   converted_row = []
   offset = 0
-  for i in xrange(len(row.lengths)):
-    l = row.lengths[i]
+  for i, l in enumerate(row.lengths):
     if l == -1:
       converted_row.append(None)
     elif conversions[i]:
