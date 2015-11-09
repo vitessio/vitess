@@ -9,7 +9,6 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -271,17 +270,17 @@ func (tm *TabletManager) GetSlaves(ctx context.Context, args *rpc.Unused, reply 
 func (tm *TabletManager) WaitBlpPosition(ctx context.Context, args *gorpcproto.WaitBlpPositionArgs, reply *rpc.Unused) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TabletActionWaitBLPPosition, args, reply, true, func() error {
-		return tm.agent.WaitBlpPosition(ctx, &args.BlpPosition, args.WaitTimeout)
+		return tm.agent.WaitBlpPosition(ctx, args.BlpPosition, args.WaitTimeout)
 	})
 }
 
 // StopBlp wraps RPCAgent.StopBlp
-func (tm *TabletManager) StopBlp(ctx context.Context, args *rpc.Unused, reply *blproto.BlpPositionList) error {
+func (tm *TabletManager) StopBlp(ctx context.Context, args *rpc.Unused, reply *gorpcproto.StopBlpReply) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TabletActionStopBLP, args, reply, true, func() error {
 		positions, err := tm.agent.StopBlp(ctx)
 		if err == nil {
-			*reply = *positions
+			reply.Positions = positions
 		}
 		return err
 	})

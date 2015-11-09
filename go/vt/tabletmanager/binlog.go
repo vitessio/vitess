@@ -31,6 +31,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -90,7 +91,7 @@ type BinlogPlayerController struct {
 	done chan struct{}
 
 	// stopPosition contains the stopping point for this player, if any.
-	stopPosition myproto.ReplicationPosition
+	stopPosition string
 
 	// information about the individual tablet we're replicating from.
 	sourceTablet *pb.TabletAlias
@@ -143,12 +144,12 @@ func (bpc *BinlogPlayerController) Start(ctx context.Context) {
 	log.Infof("%v: starting binlog player", bpc)
 	bpc.ctx, bpc.cancel = context.WithCancel(ctx)
 	bpc.done = make(chan struct{}, 1)
-	bpc.stopPosition = myproto.ReplicationPosition{} // run forever
+	bpc.stopPosition = "" // run forever
 	go bpc.Loop()
 }
 
 // StartUntil will start the Player until we reach the given position.
-func (bpc *BinlogPlayerController) StartUntil(ctx context.Context, stopPos myproto.ReplicationPosition) error {
+func (bpc *BinlogPlayerController) StartUntil(ctx context.Context, stopPos string) error {
 	bpc.playerMutex.Lock()
 	defer bpc.playerMutex.Unlock()
 	if bpc.ctx != nil {
@@ -318,7 +319,10 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		}
 
 		// tables, just get them
-		player := binlogplayer.NewBinlogPlayerTables(vtClient, endPoint, tables, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+		player, err := binlogplayer.NewBinlogPlayerTables(vtClient, endPoint, tables, bpc.sourceShard.Uid, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+		if err != nil {
+			return fmt.Errorf("NewBinlogPlayerTables failed: %v", err)
+		}
 		return player.ApplyBinlogEvents(bpc.ctx)
 	}
 	// the data we have to replicate is the intersection of the
@@ -328,13 +332,23 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
 
-	player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, endPoint, bpc.keyspaceIDType, overlap, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+	player, err := binlogplayer.NewBinlogPlayerKeyRange(vtClient, endPoint, bpc.keyspaceIDType, overlap, bpc.sourceShard.Uid, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+	if err != nil {
+		return fmt.Errorf("NewBinlogPlayerKeyRange failed: %v", err)
+	}
 	return player.ApplyBinlogEvents(bpc.ctx)
 }
 
 // BlpPosition returns the current position for a controller, as read from the database.
-func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.VtClient) (*blproto.BlpPosition, string, error) {
-	return binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
+func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.VtClient) (*pbt.BlpPosition, string, error) {
+	pos, flags, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
+	if err != nil {
+		return nil, "", err
+	}
+	return &pbt.BlpPosition{
+		Uid:      bpc.sourceShard.Uid,
+		Position: pos,
+	}, flags, nil
 }
 
 // BinlogPlayerMap controls all the players.
@@ -545,7 +559,7 @@ func (blm *BinlogPlayerMap) Start(ctx context.Context) {
 }
 
 // BlpPositionList returns the current position of all the players.
-func (blm *BinlogPlayerMap) BlpPositionList() (*blproto.BlpPositionList, error) {
+func (blm *BinlogPlayerMap) BlpPositionList() ([]*pbt.BlpPosition, error) {
 	// create a db connection for this purpose
 	vtClient := blm.vtClientFactory()
 	if err := vtClient.Connect(); err != nil {
@@ -553,7 +567,7 @@ func (blm *BinlogPlayerMap) BlpPositionList() (*blproto.BlpPositionList, error) 
 	}
 	defer vtClient.Close()
 
-	result := &blproto.BlpPositionList{}
+	var result []*pbt.BlpPosition
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
 	for _, bpc := range blm.players {
@@ -562,14 +576,14 @@ func (blm *BinlogPlayerMap) BlpPositionList() (*blproto.BlpPositionList, error) 
 			return nil, fmt.Errorf("can't read current position for %v: %v", bpc, err)
 		}
 
-		result.Entries = append(result.Entries, *blp)
+		result = append(result, blp)
 	}
 	return result, nil
 }
 
 // RunUntil will run all the players until they reach the given position.
 // Holds the map lock during that exercise, shouldn't take long at all.
-func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList *blproto.BlpPositionList, waitTimeout time.Duration) error {
+func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList []*pbt.BlpPosition, waitTimeout time.Duration) error {
 	// lock and check state
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
@@ -580,10 +594,10 @@ func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList *blpro
 
 	// find the exact stop position for all players, to be sure
 	// we're not doing anything wrong
-	posMap := make(map[uint32]myproto.ReplicationPosition)
+	posMap := make(map[uint32]string)
 	for _, bpc := range blm.players {
-		blpPos, err := blpPositionList.FindBlpPositionById(bpc.sourceShard.Uid)
-		if err != nil {
+		blpPos := blproto.FindBlpPositionByID(blpPositionList, bpc.sourceShard.Uid)
+		if blpPos == nil {
 			return fmt.Errorf("No binlog position passed in for player Uid %v", bpc.sourceShard.Uid)
 		}
 		posMap[bpc.sourceShard.Uid] = blpPos.Position
@@ -620,7 +634,7 @@ type BinlogPlayerControllerStatus struct {
 	// configuration values
 	Index        uint32
 	SourceShard  *pb.Shard_SourceShard
-	StopPosition myproto.ReplicationPosition
+	StopPosition string
 
 	// stats and current values
 	LastPosition        myproto.ReplicationPosition

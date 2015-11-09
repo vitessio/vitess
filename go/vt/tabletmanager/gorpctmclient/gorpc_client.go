@@ -12,7 +12,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -22,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -260,7 +260,7 @@ func (client *GoRPCTabletManagerClient) GetSlaves(ctx context.Context, tablet *t
 }
 
 // WaitBlpPosition is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition blproto.BlpPosition, waitTime time.Duration) error {
+func (client *GoRPCTabletManagerClient) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *pbt.BlpPosition, waitTime time.Duration) error {
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionWaitBLPPosition, &gorpcproto.WaitBlpPositionArgs{
 		BlpPosition: blpPosition,
 		WaitTimeout: waitTime,
@@ -268,12 +268,12 @@ func (client *GoRPCTabletManagerClient) WaitBlpPosition(ctx context.Context, tab
 }
 
 // StopBlp is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) StopBlp(ctx context.Context, tablet *topo.TabletInfo) (*blproto.BlpPositionList, error) {
-	var bpl blproto.BlpPositionList
+func (client *GoRPCTabletManagerClient) StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*pbt.BlpPosition, error) {
+	var bpl gorpcproto.StopBlpReply
 	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionStopBLP, &rpc.Unused{}, &bpl); err != nil {
 		return nil, err
 	}
-	return &bpl, nil
+	return bpl.Positions, nil
 }
 
 // StartBlp is part of the tmclient.TabletManagerClient interface
@@ -282,7 +282,7 @@ func (client *GoRPCTabletManagerClient) StartBlp(ctx context.Context, tablet *to
 }
 
 // RunBlpUntil is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions *blproto.BlpPositionList, waitTime time.Duration) (myproto.ReplicationPosition, error) {
+func (client *GoRPCTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*pbt.BlpPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	var pos myproto.ReplicationPosition
 	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionRunBLPUntil, &gorpcproto.RunBlpUntilArgs{
 		BlpPositionList: positions,

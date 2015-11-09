@@ -22,7 +22,6 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -293,20 +292,24 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 
 // WaitBlpPosition will wait for the filtered replication to reach at least
 // the provided position.
-func WaitBlpPosition(mysqld MysqlDaemon, bp *blproto.BlpPosition, waitTimeout time.Duration) error {
+func WaitBlpPosition(mysqld MysqlDaemon, uid uint32, replicationPosition string, waitTimeout time.Duration) error {
+	position, err := proto.DecodeReplicationPosition(replicationPosition)
+	if err != nil {
+		return err
+	}
 	timeOut := time.Now().Add(waitTimeout)
 	for {
 		if time.Now().After(timeOut) {
 			break
 		}
 
-		cmd := binlogplayer.QueryBlpCheckpoint(bp.Uid)
+		cmd := binlogplayer.QueryBlpCheckpoint(uid)
 		qr, err := mysqld.FetchSuperQuery(cmd)
 		if err != nil {
 			return err
 		}
 		if len(qr.Rows) != 1 {
-			return fmt.Errorf("QueryBlpCheckpoint(%v) returned unexpected row count: %v", bp.Uid, len(qr.Rows))
+			return fmt.Errorf("QueryBlpCheckpoint(%v) returned unexpected row count: %v", uid, len(qr.Rows))
 		}
 		var pos proto.ReplicationPosition
 		if !qr.Rows[0][0].IsNull() {
@@ -315,15 +318,15 @@ func WaitBlpPosition(mysqld MysqlDaemon, bp *blproto.BlpPosition, waitTimeout ti
 				return err
 			}
 		}
-		if pos.AtLeast(bp.Position) {
+		if pos.AtLeast(position) {
 			return nil
 		}
 
-		log.Infof("Sleeping 1 second waiting for binlog replication(%v) to catch up: %v != %v", bp.Uid, pos, bp.Position)
+		log.Infof("Sleeping 1 second waiting for binlog replication(%v) to catch up: %v != %v", uid, pos, position)
 		time.Sleep(1 * time.Second)
 	}
 
-	return fmt.Errorf("WaitBlpPosition(%v) timed out", bp.Uid)
+	return fmt.Errorf("WaitBlpPosition(%v) timed out", uid)
 }
 
 // EnableBinlogPlayback prepares the server to play back events from a binlog stream.

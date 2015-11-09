@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/mysql/proto"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -20,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -79,13 +79,13 @@ type RPCAgent interface {
 
 	GetSlaves(ctx context.Context) ([]string, error)
 
-	WaitBlpPosition(ctx context.Context, blpPosition *blproto.BlpPosition, waitTime time.Duration) error
+	WaitBlpPosition(ctx context.Context, blpPosition *pbt.BlpPosition, waitTime time.Duration) error
 
-	StopBlp(ctx context.Context) (*blproto.BlpPositionList, error)
+	StopBlp(ctx context.Context) ([]*pbt.BlpPosition, error)
 
 	StartBlp(ctx context.Context) error
 
-	RunBlpUntil(ctx context.Context, bpl *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error)
+	RunBlpUntil(ctx context.Context, bpl []*pbt.BlpPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error)
 
 	// Reparenting related functions
 
@@ -326,13 +326,13 @@ func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
 // WaitBlpPosition waits until a specific filtered replication position is
 // reached.
 // Should be called under RPCWrapLock.
-func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *blproto.BlpPosition, waitTime time.Duration) error {
-	return mysqlctl.WaitBlpPosition(agent.MysqlDaemon, blpPosition, waitTime)
+func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *pbt.BlpPosition, waitTime time.Duration) error {
+	return mysqlctl.WaitBlpPosition(agent.MysqlDaemon, blpPosition.Uid, blpPosition.Position, waitTime)
 }
 
 // StopBlp stops the binlog players, and return their positions.
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) StopBlp(ctx context.Context) (*blproto.BlpPositionList, error) {
+func (agent *ActionAgent) StopBlp(ctx context.Context) ([]*pbt.BlpPosition, error) {
 	if agent.BinlogPlayerMap == nil {
 		return nil, fmt.Errorf("No BinlogPlayerMap configured")
 	}
@@ -352,7 +352,7 @@ func (agent *ActionAgent) StartBlp(ctx context.Context) error {
 
 // RunBlpUntil runs the binlog player server until the position is reached,
 // and returns the current mysql master replication position.
-func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl []*pbt.BlpPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	if agent.BinlogPlayerMap == nil {
 		return nil, fmt.Errorf("No BinlogPlayerMap configured")
 	}
