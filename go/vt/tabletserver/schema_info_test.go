@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -237,9 +237,9 @@ func TestSchemaInfoReload(t *testing.T) {
 	})
 
 	db.AddQuery("select * from `test_table_04` where 1 != 1", &mproto.QueryResult{
-		Fields: []mproto.Field{{
+		Fields: []*query.Field{{
 			Name: "pk",
-			Type: mysql.TypeLong,
+			Type: sqltypes.Int32,
 		}},
 	})
 	db.AddQuery("describe `test_table_04`", &mproto.QueryResult{
@@ -498,9 +498,9 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	})
 	q = fmt.Sprintf("select * from `%s` where 1 != 1", tableName)
 	db.AddQuery(q, &mproto.QueryResult{
-		Fields: []mproto.Field{{
+		Fields: []*query.Field{{
 			Name: "pk",
-			Type: mysql.TypeLong,
+			Type: sqltypes.Int32,
 		}},
 	})
 	q = fmt.Sprintf("describe `%s`", tableName)
@@ -811,9 +811,9 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 			},
 		},
 		"select * from `test_table_01` where 1 != 1": &mproto.QueryResult{
-			Fields: []mproto.Field{{
+			Fields: []*query.Field{{
 				Name: "pk",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}},
 		},
 		"describe `test_table_01`": &mproto.QueryResult{
@@ -830,9 +830,9 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 			},
 		},
 		"select * from `test_table_02` where 1 != 1": &mproto.QueryResult{
-			Fields: []mproto.Field{{
+			Fields: []*query.Field{{
 				Name: "pk",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}},
 		},
 		"describe `test_table_02`": &mproto.QueryResult{
@@ -849,9 +849,9 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 			},
 		},
 		"select * from `test_table_03` where 1 != 1": &mproto.QueryResult{
-			Fields: []mproto.Field{{
+			Fields: []*query.Field{{
 				Name: "pk",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}},
 		},
 		"describe `test_table_03`": &mproto.QueryResult{

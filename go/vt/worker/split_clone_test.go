@@ -25,7 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -35,7 +35,7 @@ type testQueryService struct {
 	t *testing.T
 }
 
-func (sq *testQueryService) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *testQueryService) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
@@ -55,18 +55,18 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *pb.Target
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
-		Fields: []mproto.Field{
-			mproto.Field{
+		Fields: []*pbq.Field{
+			&pbq.Field{
 				Name: "id",
-				Type: mproto.VT_LONGLONG,
+				Type: sqltypes.Int64,
 			},
-			mproto.Field{
+			&pbq.Field{
 				Name: "msg",
-				Type: mproto.VT_VAR_STRING,
+				Type: sqltypes.VarChar,
 			},
-			mproto.Field{
+			&pbq.Field{
 				Name: "keyspace_id",
-				Type: mproto.VT_LONGLONG,
+				Type: sqltypes.Int64,
 			},
 		},
 	}); err != nil {
@@ -181,14 +181,14 @@ func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 				ExpectedExecuteFetch{
 					Query: "SELECT MIN(id), MAX(id) FROM vt_ks.table1",
 					QueryResult: &mproto.QueryResult{
-						Fields: []mproto.Field{
-							mproto.Field{
+						Fields: []*pbq.Field{
+							&pbq.Field{
 								Name: "min",
-								Type: mproto.VT_LONGLONG,
+								Type: sqltypes.Int64,
 							},
-							mproto.Field{
+							&pbq.Field{
 								Name: "max",
-								Type: mproto.VT_LONGLONG,
+								Type: sqltypes.Int64,
 							},
 						},
 						Rows: [][]sqltypes.Value{

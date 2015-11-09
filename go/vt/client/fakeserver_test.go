@@ -227,14 +227,14 @@ var execMap = map[string]struct {
 }
 
 var result1 = mproto.QueryResult{
-	Fields: []mproto.Field{
-		mproto.Field{
+	Fields: []*pbq.Field{
+		&pbq.Field{
 			Name: "field1",
-			Type: mproto.VT_LONG,
+			Type: sqltypes.Int16,
 		},
-		mproto.Field{
+		&pbq.Field{
 			Name: "field2",
-			Type: mproto.VT_VAR_STRING,
+			Type: sqltypes.VarChar,
 		},
 	},
 	RowsAffected: 123,

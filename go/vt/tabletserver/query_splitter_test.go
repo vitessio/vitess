@@ -9,6 +9,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -246,9 +247,9 @@ func TestSplitBoundaries(t *testing.T) {
 	row := []sqltypes.Value{min, max}
 	rows := [][]sqltypes.Value{row}
 
-	minField := mproto.Field{Name: "min", Type: mproto.VT_LONGLONG}
-	maxField := mproto.Field{Name: "max", Type: mproto.VT_LONGLONG}
-	fields := []mproto.Field{minField, maxField}
+	minField := &pbq.Field{Name: "min", Type: sqltypes.Int64}
+	maxField := &pbq.Field{Name: "max", Type: sqltypes.Int64}
+	fields := []*pbq.Field{minField, maxField}
 
 	pkMinMax := &mproto.QueryResult{
 		Fields: fields,
@@ -257,14 +258,14 @@ func TestSplitBoundaries(t *testing.T) {
 
 	splitter := &QuerySplitter{}
 	splitter.splitCount = 5
-	boundaries, err := splitter.splitBoundaries(mproto.VT_LONGLONG, pkMinMax)
+	boundaries, err := splitter.splitBoundaries(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(boundaries) != splitter.splitCount-1 {
 		t.Errorf("wrong number of boundaries got: %v, want: %v", len(boundaries), splitter.splitCount-1)
 	}
-	got, err := splitter.splitBoundaries(mproto.VT_LONGLONG, pkMinMax)
+	got, err := splitter.splitBoundaries(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -279,7 +280,7 @@ func TestSplitBoundaries(t *testing.T) {
 	row = []sqltypes.Value{min, max}
 	rows = [][]sqltypes.Value{row}
 	pkMinMax.Rows = rows
-	got, err = splitter.splitBoundaries(mproto.VT_LONGLONG, pkMinMax)
+	got, err = splitter.splitBoundaries(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -293,12 +294,12 @@ func TestSplitBoundaries(t *testing.T) {
 	max, _ = sqltypes.BuildValue(60.5)
 	row = []sqltypes.Value{min, max}
 	rows = [][]sqltypes.Value{row}
-	minField = mproto.Field{Name: "min", Type: mproto.VT_DOUBLE}
-	maxField = mproto.Field{Name: "max", Type: mproto.VT_DOUBLE}
-	fields = []mproto.Field{minField, maxField}
+	minField = &pbq.Field{Name: "min", Type: sqltypes.Float64}
+	maxField = &pbq.Field{Name: "max", Type: sqltypes.Float64}
+	fields = []*pbq.Field{minField, maxField}
 	pkMinMax.Rows = rows
 	pkMinMax.Fields = fields
-	got, err = splitter.splitBoundaries(mproto.VT_DOUBLE, pkMinMax)
+	got, err = splitter.splitBoundaries(sqltypes.Float64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -322,27 +323,27 @@ func TestSplitQuery(t *testing.T) {
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(0)
 	max, _ := sqltypes.BuildValue(300)
-	minField := mproto.Field{
+	minField := &pbq.Field{
 		Name: "min",
-		Type: mproto.VT_LONGLONG,
+		Type: sqltypes.Int64,
 	}
-	maxField := mproto.Field{
+	maxField := &pbq.Field{
 		Name: "max",
-		Type: mproto.VT_LONGLONG,
+		Type: sqltypes.Int64,
 	}
-	fields := []mproto.Field{minField, maxField}
+	fields := []*pbq.Field{minField, maxField}
 	pkMinMax := &mproto.QueryResult{
 		Fields: fields,
 	}
 
 	// Ensure that empty min max does not cause panic or return any error
-	splits, err := splitter.split(mproto.VT_LONGLONG, pkMinMax)
+	splits, err := splitter.split(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Errorf("unexpected error while splitting on empty pkMinMax, %s", err)
 	}
 
 	pkMinMax.Rows = [][]sqltypes.Value{[]sqltypes.Value{min, max}}
-	splits, err = splitter.split(mproto.VT_LONGLONG, pkMinMax)
+	splits, err = splitter.split(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -384,21 +385,21 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(10.5)
 	max, _ := sqltypes.BuildValue(490.5)
-	minField := mproto.Field{
+	minField := &pbq.Field{
 		Name: "min",
-		Type: mproto.VT_FLOAT,
+		Type: sqltypes.Float32,
 	}
-	maxField := mproto.Field{
+	maxField := &pbq.Field{
 		Name: "max",
-		Type: mproto.VT_FLOAT,
+		Type: sqltypes.Float32,
 	}
-	fields := []mproto.Field{minField, maxField}
+	fields := []*pbq.Field{minField, maxField}
 	pkMinMax := &mproto.QueryResult{
 		Fields: fields,
 		Rows:   [][]sqltypes.Value{[]sqltypes.Value{min, max}},
 	}
 
-	splits, err := splitter.split(mproto.VT_FLOAT, pkMinMax)
+	splits, err := splitter.split(sqltypes.Float32, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -438,7 +439,7 @@ func TestSplitQueryStringColumn(t *testing.T) {
 	}
 	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
 	splitter.validateQuery()
-	splits, err := splitter.split(mproto.VT_VAR_STRING, nil)
+	splits, err := splitter.split(sqltypes.VarChar, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

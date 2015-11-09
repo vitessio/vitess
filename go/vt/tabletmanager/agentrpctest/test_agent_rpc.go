@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	"github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -474,15 +475,14 @@ func agentRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmcl
 var testExecuteFetchQuery = "fetch this"
 var testExecuteFetchMaxRows = 100
 var testExecuteFetchResult = &mproto.QueryResult{
-	Fields: []mproto.Field{
-		mproto.Field{
-			Name:  "column1",
-			Type:  mproto.VT_BLOB,
-			Flags: mproto.VT_BINARY_FLAG,
+	Fields: []*query.Field{
+		&query.Field{
+			Name: "column1",
+			Type: sqltypes.Blob,
 		},
-		mproto.Field{
+		&query.Field{
 			Name: "column2",
-			Type: mproto.VT_TIMESTAMP,
+			Type: sqltypes.Datetime,
 		},
 	},
 	RowsAffected: 10,

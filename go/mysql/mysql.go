@@ -25,6 +25,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -279,7 +280,7 @@ func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 }
 
 // Fields returns the current fields description for the query
-func (conn *Connection) Fields() (fields []proto.Field) {
+func (conn *Connection) Fields() (fields []*query.Field) {
 	nfields := int(conn.c.num_fields)
 	if nfields == 0 {
 		return nil
@@ -289,13 +290,14 @@ func (conn *Connection) Fields() (fields []proto.Field) {
 	for i := 0; i < nfields; i++ {
 		totalLength += uint64(cfields[i].name_length)
 	}
-	fields = make([]proto.Field, nfields)
+	fields = make([]*query.Field, nfields)
+	fvals := make([]query.Field, nfields)
 	for i := 0; i < nfields; i++ {
 		length := cfields[i].name_length
 		fname := (*[maxSize]byte)(unsafe.Pointer(cfields[i].name))[:length]
-		fields[i].Name = string(fname)
-		fields[i].Type = int64(cfields[i]._type)
-		fields[i].Flags = int64(cfields[i].flags) & RelevantFlags
+		fvals[i].Name = string(fname)
+		fvals[i].Type = sqltypes.MySQLToType(int64(cfields[i]._type), int64(cfields[i].flags))
+		fields[i] = &fvals[i]
 	}
 	return fields
 }

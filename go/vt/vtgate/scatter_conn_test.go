@@ -536,12 +536,12 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 func TestAppendResult(t *testing.T) {
 	qr := new(mproto.QueryResult)
 	innerqr1 := &mproto.QueryResult{
-		Fields: []mproto.Field{},
+		Fields: []*pbq.Field{},
 		Rows:   [][]sqltypes.Value{},
 	}
 	innerqr2 := &mproto.QueryResult{
-		Fields: []mproto.Field{
-			{Name: "foo", Type: 1},
+		Fields: []*pbq.Field{
+			{Name: "foo", Type: sqltypes.Int8},
 		},
 		RowsAffected: 1,
 		InsertId:     1,

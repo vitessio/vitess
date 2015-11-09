@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -23,7 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -85,7 +84,7 @@ func verifyErrorExceptServerCode(t *testing.T, err error, method string) {
 }
 
 // testTarget is the target we use for this test
-var testTarget = &pb.Target{
+var testTarget = &pbq.Target{
 	Keyspace:   "test_keyspace",
 	Shard:      "test_shard",
 	TabletType: pbt.TabletType_REPLICA,
@@ -97,7 +96,7 @@ var testCallerID = &vtrpc.CallerID{
 	Subcomponent: "test_subcomponent",
 }
 
-var testVTGateCallerID = &pb.VTGateCallerID{
+var testVTGateCallerID = &pbq.VTGateCallerID{
 	Username: "test_username",
 }
 
@@ -105,7 +104,7 @@ const testAsTransaction bool = true
 
 const testSessionID int64 = 5678
 
-func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *pb.Target) {
+func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *pbq.Target) {
 	if !reflect.DeepEqual(target, testTarget) {
 		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, testTarget)
 	}
@@ -140,7 +139,7 @@ func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sess
 }
 
 // Begin is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Begin(ctx context.Context, target *pb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
+func (f *FakeQueryService) Begin(ctx context.Context, target *pbq.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -213,7 +212,7 @@ func testBegin2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Commit is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Commit(ctx context.Context, target *pb.Target, session *proto.Session) error {
+func (f *FakeQueryService) Commit(ctx context.Context, target *pbq.Target, session *proto.Session) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -279,7 +278,7 @@ func testCommit2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Rollback is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Rollback(ctx context.Context, target *pb.Target, session *proto.Session) error {
+func (f *FakeQueryService) Rollback(ctx context.Context, target *pbq.Target, session *proto.Session) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -345,7 +344,7 @@ func testRollback2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *mproto.QueryResult) error {
+func (f *FakeQueryService) Execute(ctx context.Context, target *pbq.Target, query *proto.Query, reply *mproto.QueryResult) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -381,14 +380,14 @@ var executeBindVars = map[string]interface{}{
 const executeTransactionID int64 = 678
 
 var executeQueryResult = mproto.QueryResult{
-	Fields: []mproto.Field{
-		mproto.Field{
+	Fields: []*pbq.Field{
+		&pbq.Field{
 			Name: "field1",
-			Type: mysql.TypeTiny,
+			Type: sqltypes.Int8,
 		},
-		mproto.Field{
+		&pbq.Field{
 			Name: "field2",
-			Type: mysql.TypeString,
+			Type: sqltypes.Char,
 		},
 	},
 	RowsAffected: 123,
@@ -455,7 +454,7 @@ func testExecute2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
 	if f.panics && f.streamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -503,14 +502,14 @@ var streamExecuteBindVars = map[string]interface{}{
 const streamExecuteTransactionID int64 = 6789992
 
 var streamExecuteQueryResult1 = mproto.QueryResult{
-	Fields: []mproto.Field{
-		mproto.Field{
+	Fields: []*pbq.Field{
+		&pbq.Field{
 			Name: "field1",
-			Type: mysql.TypeTiny,
+			Type: sqltypes.Int8,
 		},
-		mproto.Field{
+		&pbq.Field{
 			Name: "field2",
-			Type: mysql.TypeString,
+			Type: sqltypes.Char,
 		},
 	},
 }
@@ -749,7 +748,7 @@ func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *Fa
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *pb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *pbq.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -796,10 +795,10 @@ const executeBatchTransactionID int64 = 678
 var executeBatchQueryResultList = proto.QueryResultList{
 	List: []mproto.QueryResult{
 		mproto.QueryResult{
-			Fields: []mproto.Field{
-				mproto.Field{
+			Fields: []*pbq.Field{
+				&pbq.Field{
 					Name: "field1",
-					Type: mysql.TypeTiny,
+					Type: sqltypes.Int8,
 				},
 			},
 			RowsAffected: 1232,
@@ -814,10 +813,10 @@ var executeBatchQueryResultList = proto.QueryResultList{
 			},
 		},
 		mproto.QueryResult{
-			Fields: []mproto.Field{
-				mproto.Field{
+			Fields: []*pbq.Field{
+				&pbq.Field{
 					Name: "field1",
-					Type: mysql.TypeTiny,
+					Type: sqltypes.Int8,
 				},
 			},
 			RowsAffected: 12333,
@@ -882,7 +881,7 @@ func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
-func (f *FakeQueryService) SplitQuery(ctx context.Context, target *pb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (f *FakeQueryService) SplitQuery(ctx context.Context, target *pbq.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -957,15 +956,15 @@ func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn) {
 // upon registration, and we also return an error, so the streaming query
 // ends right there. Otherwise we have no real way to trigger a real
 // communication error, that ends the streaming.
-var testStreamHealthStreamHealthResponse = &pb.StreamHealthResponse{
-	Target: &pb.Target{
+var testStreamHealthStreamHealthResponse = &pbq.StreamHealthResponse{
+	Target: &pbq.Target{
 		Keyspace:   "test_keyspace",
 		Shard:      "test_shard",
 		TabletType: pbt.TabletType_RDONLY,
 	},
 	Serving: true,
 	TabletExternallyReparentedTimestamp: 1234589,
-	RealtimeStats: &pb.RealtimeStats{
+	RealtimeStats: &pbq.RealtimeStats{
 		HealthError:                            "random error",
 		SecondsBehindMaster:                    234,
 		BinlogPlayersCount:                     1,
@@ -980,7 +979,7 @@ var testStreamHealthError = "to trigger a server error"
 var streamHealthSynchronization chan struct{}
 
 // StreamHealthRegister is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamHealthRegister(c chan<- *pb.StreamHealthResponse) (int, error) {
+func (f *FakeQueryService) StreamHealthRegister(c chan<- *pbq.StreamHealthResponse) (int, error) {
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

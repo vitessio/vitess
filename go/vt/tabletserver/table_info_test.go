@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -104,9 +104,9 @@ func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 	db := fakesqldb.Register()
 	db.AddQuery("show index from `test_table`", &mproto.QueryResult{})
 	db.AddQuery("select * from `test_table` where 1 != 1", &mproto.QueryResult{
-		Fields: []mproto.Field{{
+		Fields: []*query.Field{{
 			Name: "pk",
-			Type: mysql.TypeLong,
+			Type: sqltypes.Int32,
 		}},
 	})
 	db.AddQuery("describe `test_table`", &mproto.QueryResult{
@@ -153,9 +153,9 @@ func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 		},
 	})
 	db.AddQuery("select * from `test_table` where 1 != 1", &mproto.QueryResult{
-		Fields: []mproto.Field{{
+		Fields: []*query.Field{{
 			Name: "pk",
-			Type: mysql.TypeNewDecimal,
+			Type: sqltypes.Decimal,
 		}},
 	})
 	db.AddQuery("describe `test_table`", &mproto.QueryResult{
@@ -323,15 +323,15 @@ func newTestTableInfoCachePool() *CachePool {
 func getTestTableInfoQueries() map[string]*mproto.QueryResult {
 	return map[string]*mproto.QueryResult{
 		"select * from `test_table` where 1 != 1": &mproto.QueryResult{
-			Fields: []mproto.Field{{
+			Fields: []*query.Field{{
 				Name: "pk",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}, {
 				Name: "name",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}, {
 				Name: "addr",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}},
 		},
 		"describe `test_table`": &mproto.QueryResult{

@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/hack"
+	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -50,6 +51,17 @@ type Fractional []byte
 
 // String represents any SQL type that needs to be represented using quotes.
 type String []byte
+
+// MakeValue builds a Value from type & bytes.
+func MakeValue(typ query.Type, b []byte) Value {
+	switch {
+	case IsIntegral(typ):
+		return MakeNumeric(b)
+	case IsQuoted(typ):
+		return MakeString(b)
+	}
+	return MakeFractional(b)
+}
 
 // MakeNumeric makes a Numeric from a []byte without validation.
 func MakeNumeric(b []byte) Value {

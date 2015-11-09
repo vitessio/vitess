@@ -7,6 +7,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -101,7 +102,7 @@ func (qs *QuerySplitter) validateQuery() error {
 
 // split splits the query into multiple queries. validateQuery() must return
 // nil error before split() is called.
-func (qs *QuerySplitter) split(columnType int64, pkMinMax *mproto.QueryResult) ([]proto.QuerySplit, error) {
+func (qs *QuerySplitter) split(columnType query.Type, pkMinMax *mproto.QueryResult) ([]proto.QuerySplit, error) {
 	boundaries, err := qs.splitBoundaries(columnType, pkMinMax)
 	if err != nil {
 		return nil, err
@@ -211,13 +212,15 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 	}
 }
 
-func (qs *QuerySplitter) splitBoundaries(columnType int64, pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
-	switch columnType {
-	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
+func (qs *QuerySplitter) splitBoundaries(columnType query.Type, pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
+	switch {
+	case sqltypes.IsSigned(columnType):
 		return qs.splitBoundariesIntColumn(pkMinMax)
-	case mproto.VT_FLOAT, mproto.VT_DOUBLE:
+	case sqltypes.IsUnsigned(columnType):
+		return qs.splitBoundariesUintColumn(pkMinMax)
+	case sqltypes.IsFloat(columnType):
 		return qs.splitBoundariesFloatColumn(pkMinMax)
-	case mproto.VT_BIT, mproto.VT_VAR_STRING, mproto.VT_STRING:
+	case sqltypes.IsBinary(columnType) || sqltypes.IsText(columnType):
 		return qs.splitBoundariesStringColumn()
 	}
 	return []sqltypes.Value{}, nil
@@ -230,31 +233,36 @@ func (qs *QuerySplitter) splitBoundariesIntColumn(pkMinMax *mproto.QueryResult) 
 	}
 	minNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][0].Raw())
 	maxNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][1].Raw())
-	if pkMinMax.Rows[0][0].Raw()[0] == '-' {
-		// signed values, use int64
-		min, err := minNumeric.ParseInt64()
+	min, err := minNumeric.ParseInt64()
+	if err != nil {
+		return nil, err
+	}
+	max, err := maxNumeric.ParseInt64()
+	if err != nil {
+		return nil, err
+	}
+	interval := (max - min) / int64(qs.splitCount)
+	if interval == 0 {
+		return nil, err
+	}
+	qs.rowCount = interval
+	for i := int64(1); i < int64(qs.splitCount); i++ {
+		v, err := sqltypes.BuildValue(min + interval*i)
 		if err != nil {
 			return nil, err
 		}
-		max, err := maxNumeric.ParseInt64()
-		if err != nil {
-			return nil, err
-		}
-		interval := (max - min) / int64(qs.splitCount)
-		if interval == 0 {
-			return nil, err
-		}
-		qs.rowCount = interval
-		for i := int64(1); i < int64(qs.splitCount); i++ {
-			v, err := sqltypes.BuildValue(min + interval*i)
-			if err != nil {
-				return nil, err
-			}
-			boundaries = append(boundaries, v)
-		}
+		boundaries = append(boundaries, v)
+	}
+	return boundaries, nil
+}
+
+func (qs *QuerySplitter) splitBoundariesUintColumn(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
+	boundaries := []sqltypes.Value{}
+	if pkMinMax == nil || len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
 		return boundaries, nil
 	}
-	// unsigned values, use uint64
+	minNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][0].Raw())
+	maxNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][1].Raw())
 	min, err := minNumeric.ParseUint64()
 	if err != nil {
 		return nil, err

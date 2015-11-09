@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/key"
 
@@ -60,9 +61,9 @@ var testStreamEvent = &pb.StreamEvent{
 	Category:  pb.StreamEvent_SE_DML,
 	TableName: "table1",
 	PrimaryKeyFields: []*pbq.Field{
-		{
+		&pbq.Field{
 			Name: "id",
-			Type: pbq.Type_VARBINARY,
+			Type: sqltypes.Binary,
 		},
 	},
 	PrimaryKeyValues: []*pbq.Row{

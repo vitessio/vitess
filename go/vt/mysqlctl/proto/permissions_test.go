@@ -7,16 +7,16 @@ package proto
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
-func mapToSqlResults(row map[string]string) ([]proto.Field, []sqltypes.Value) {
-	fields := make([]proto.Field, len(row))
+func mapToSqlResults(row map[string]string) ([]*query.Field, []sqltypes.Value) {
+	fields := make([]*query.Field, len(row))
 	values := make([]sqltypes.Value, len(row))
 	index := 0
 	for key, value := range row {
-		fields[index] = proto.Field{Name: key}
+		fields[index] = &query.Field{Name: key}
 		values[index] = sqltypes.MakeString(([]byte)(value))
 		index++
 	}

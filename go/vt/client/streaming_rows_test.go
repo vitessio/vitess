@@ -14,22 +14,23 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var packet1 = mproto.QueryResult{
-	Fields: []mproto.Field{
-		mproto.Field{
+	Fields: []*query.Field{
+		&query.Field{
 			Name: "field1",
-			Type: mproto.VT_LONG,
+			Type: sqltypes.Int32,
 		},
-		mproto.Field{
+		&query.Field{
 			Name: "field2",
-			Type: mproto.VT_FLOAT,
+			Type: sqltypes.Float32,
 		},
-		mproto.Field{
+		&query.Field{
 			Name: "field3",
-			Type: mproto.VT_VAR_STRING,
+			Type: sqltypes.VarChar,
 		},
 	},
 }

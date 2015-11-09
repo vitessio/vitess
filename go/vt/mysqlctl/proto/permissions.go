@@ -9,9 +9,9 @@ import (
 	"hash/crc64"
 	"sort"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -51,7 +51,7 @@ type UserPermission struct {
 	Privileges       map[string]string
 }
 
-func NewUserPermission(fields []proto.Field, values []sqltypes.Value) *UserPermission {
+func NewUserPermission(fields []*query.Field, values []sqltypes.Value) *UserPermission {
 	up := &UserPermission{Privileges: make(map[string]string)}
 	for i, field := range fields {
 		switch field.Name {
@@ -101,7 +101,7 @@ type DbPermission struct {
 	Privileges map[string]string
 }
 
-func NewDbPermission(fields []proto.Field, values []sqltypes.Value) *DbPermission {
+func NewDbPermission(fields []*query.Field, values []sqltypes.Value) *DbPermission {
 	up := &DbPermission{Privileges: make(map[string]string)}
 	for i, field := range fields {
 		switch field.Name {
@@ -144,7 +144,7 @@ type HostPermission struct {
 	Privileges map[string]string
 }
 
-func NewHostPermission(fields []proto.Field, values []sqltypes.Value) *HostPermission {
+func NewHostPermission(fields []*query.Field, values []sqltypes.Value) *HostPermission {
 	hp := &HostPermission{Privileges: make(map[string]string)}
 	for i, field := range fields {
 		switch field.Name {

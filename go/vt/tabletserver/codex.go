@@ -221,6 +221,21 @@ func getLimit(limit interface{}, bv map[string]interface{}) (int64, error) {
 	}
 }
 
+func buildKeyFromRow(fields []*pbq.Field, row *pbq.Row) (key string) {
+	// TODO(sougou): Make this a convenience function after
+	// QueryResults is moved to sqltypes.
+	sqlRow := make([]sqltypes.Value, len(row.Lengths))
+	var offset int64
+	for i, length := range row.Lengths {
+		if length == -1 {
+			continue
+		}
+		sqlRow[i] = sqltypes.MakeValue(fields[i].Type, row.Values[offset:offset+length])
+		offset += length
+	}
+	return buildKey(sqlRow)
+}
+
 func buildKey(row []sqltypes.Value) (key string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
 	for i, pkValue := range row {
@@ -231,32 +246,6 @@ func buildKey(row []sqltypes.Value) (key string) {
 		if i != len(row)-1 {
 			buf.WriteByte('.')
 		}
-	}
-	return buf.String()
-}
-
-// FIXME(sougou) Please double-check this is correct.
-// I also think we said we would validate the numbers before using them,
-// but I'm not sure this is the right place here.
-func buildKeyFromRow(fields []*pbq.Field, row *pbq.Row) (key string) {
-	buf := bytes.NewBuffer(make([]byte, 0, 32))
-	var offset int64
-	for i, length := range row.Lengths {
-		if length == -1 {
-			return ""
-		}
-		if sqltypes.IsQuoted(fields[i].Type) {
-			// need to quote
-			value := sqltypes.MakeString(row.Values[offset : offset+length])
-			value.EncodeASCII(buf)
-		} else {
-			// no need to quote, just add
-			buf.Write(row.Values[offset : offset+length])
-		}
-		if i != len(row.Lengths)-1 {
-			buf.WriteByte('.')
-		}
-		offset += length
 	}
 	return buf.String()
 }

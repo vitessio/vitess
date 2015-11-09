@@ -210,10 +210,10 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*pbq.
 
 			// update type
 			switch fields[index].Type {
-			case pbq.Type_NULL_TYPE:
+			case sqltypes.Null:
 				// we haven't updated the type yet
-				fields[index].Type = pbq.Type_INT64
-			case pbq.Type_INT64:
+				fields[index].Type = sqltypes.Int64
+			case sqltypes.Int64:
 				// nothing to do there
 			default:
 				// we already set this to something incompatible!
@@ -232,10 +232,10 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*pbq.
 
 			// update type
 			switch fields[index].Type {
-			case pbq.Type_NULL_TYPE:
+			case sqltypes.Null:
 				// we haven't updated the type yet
-				fields[index].Type = pbq.Type_INT64
-			case pbq.Type_INT64:
+				fields[index].Type = sqltypes.Int64
+			case sqltypes.Int64:
 				// nothing to do there
 			default:
 				// we already set this to something incompatible!
@@ -248,10 +248,10 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*pbq.
 		case sqlparser.NULL:
 			// update type
 			switch fields[index].Type {
-			case pbq.Type_NULL_TYPE:
+			case sqltypes.Null:
 				// we haven't updated the type yet
-				fields[index].Type = pbq.Type_INT64
-			case pbq.Type_INT64:
+				fields[index].Type = sqltypes.Int64
+			case sqltypes.Int64:
 				// nothing to do there
 			default:
 				// we already set this to something incompatible!
@@ -266,10 +266,10 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*pbq.
 		case sqlparser.STRING:
 			// update type
 			switch fields[index].Type {
-			case pbq.Type_NULL_TYPE:
+			case sqltypes.Null:
 				// we haven't updated the type yet
-				fields[index].Type = pbq.Type_VARBINARY
-			case pbq.Type_VARBINARY:
+				fields[index].Type = sqltypes.VarBinary
+			case sqltypes.VarBinary:
 				// nothing to do there
 			default:
 				// we already set this to something incompatible!

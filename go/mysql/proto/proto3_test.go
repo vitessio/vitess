@@ -12,36 +12,6 @@ import (
 	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
-func TestFields(t *testing.T) {
-	fields := []Field{{
-		Name:  "aa",
-		Type:  1,
-		Flags: 32,
-	}, {
-		Name: "bb",
-		Type: 2,
-	}}
-	p3 := FieldsToProto3(fields)
-	wantp3 := []*query.Field{
-		&query.Field{
-			Name: "aa",
-			Type: sqltypes.Uint8,
-		},
-		&query.Field{
-			Name: "bb",
-			Type: sqltypes.Int16,
-		},
-	}
-	if !reflect.DeepEqual(p3, wantp3) {
-		t.Errorf("p3: %v, want %v", p3, wantp3)
-	}
-
-	reverse := Proto3ToFields(p3)
-	if !reflect.DeepEqual(reverse, fields) {
-		t.Errorf("reverse: %v, want %v", reverse, fields)
-	}
-}
-
 func TestRowsToProto3(t *testing.T) {
 	rows := [][]sqltypes.Value{{
 		sqltypes.MakeString([]byte("aa")),
