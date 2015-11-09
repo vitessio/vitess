@@ -14,6 +14,7 @@ from vttest import environment
 from vttest import mysql_db
 from vttest.mysql_flavor import mysql_flavor
 
+
 class MySqlDBMysqlctl(mysql_db.MySqlDB):
   """Contains data and methods to manage a MySQL instance using mysqlctl."""
 
@@ -29,7 +30,8 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
         '-db-config-dba-charset', 'utf8',
         '-db-config-dba-uname', 'vt_dba',
         'init',
-        '-bootstrap_archive', mysql_flavor().bootstrap_archive(),
+        '-init_db_sql_file',
+        os.path.join(os.environ['VTTOP'], 'config/init_db.sql'),
     ]
     env = os.environ
     env['VTDATAROOT'] = self._directory
