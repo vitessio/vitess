@@ -5,8 +5,8 @@
 package proto
 
 import (
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // StreamEvent represents one event for the update stream.
@@ -16,7 +16,7 @@ type StreamEvent struct {
 
 	// TableName, PrimaryKeyFields and PrimaryKeyValues are set for DML
 	TableName        string
-	PrimaryKeyFields []mproto.Field
+	PrimaryKeyFields []*query.Field
 	PrimaryKeyValues [][]sqltypes.Value
 
 	// Sql is set for DDL or ERR
@@ -28,5 +28,3 @@ type StreamEvent struct {
 	// TransactionID is set for POS
 	TransactionID string
 }
-
-//go:generate bsongen -file $GOFILE -type StreamEvent -o stream_event_bson.go

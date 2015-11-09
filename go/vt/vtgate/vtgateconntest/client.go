@@ -2687,14 +2687,14 @@ var execMap = map[string]struct {
 }
 
 var result1 = mproto.QueryResult{
-	Fields: []mproto.Field{
-		mproto.Field{
+	Fields: []*pbq.Field{
+		&pbq.Field{
 			Name: "field1",
-			Type: 2,
+			Type: sqltypes.Int16,
 		},
-		mproto.Field{
+		&pbq.Field{
 			Name: "field2",
-			Type: 3,
+			Type: sqltypes.Int32,
 		},
 	},
 	RowsAffected: 123,
@@ -2712,14 +2712,14 @@ var result1 = mproto.QueryResult{
 }
 
 var streamResult1 = mproto.QueryResult{
-	Fields: []mproto.Field{
-		mproto.Field{
+	Fields: []*pbq.Field{
+		&pbq.Field{
 			Name: "field1",
-			Type: 2,
+			Type: sqltypes.Int16,
 		},
-		mproto.Field{
+		&pbq.Field{
 			Name: "field2",
-			Type: 3,
+			Type: sqltypes.Int32,
 		},
 	},
 	RowsAffected: 0,

@@ -109,7 +109,7 @@ func TestDMLEvent(t *testing.T) {
 		sendEvent: func(event *proto.StreamEvent) error {
 			switch event.Category {
 			case "DML":
-				want := `&{DML _table_ [{eid 8 0} {id 8 0} {name 253 0}] [[10 -1 name] [11 18446744073709551615 name]]  1 }`
+				want := `&{DML _table_ [name:"eid" type:INT64  name:"id" type:INT64  name:"name" type:VARBINARY ] [[10 -1 name] [11 18446744073709551615 name]]  1 }`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got \n%s, want \n%s", got, want)

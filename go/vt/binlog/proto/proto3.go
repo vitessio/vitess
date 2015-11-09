@@ -22,7 +22,7 @@ import (
 func StreamEventToProto(s *StreamEvent) *pb.StreamEvent {
 	result := &pb.StreamEvent{
 		TableName:        s.TableName,
-		PrimaryKeyFields: mproto.FieldsToProto3(s.PrimaryKeyFields),
+		PrimaryKeyFields: s.PrimaryKeyFields,
 		PrimaryKeyValues: mproto.RowsToProto3(s.PrimaryKeyValues),
 		Sql:              s.Sql,
 		Timestamp:        s.Timestamp,
@@ -45,7 +45,7 @@ func StreamEventToProto(s *StreamEvent) *pb.StreamEvent {
 func ProtoToStreamEvent(s *pb.StreamEvent) *StreamEvent {
 	result := &StreamEvent{
 		TableName:        s.TableName,
-		PrimaryKeyFields: mproto.Proto3ToFields(s.PrimaryKeyFields),
+		PrimaryKeyFields: s.PrimaryKeyFields,
 		PrimaryKeyValues: mproto.Proto3ToRows(s.PrimaryKeyValues),
 		Sql:              s.Sql,
 		Timestamp:        s.Timestamp,

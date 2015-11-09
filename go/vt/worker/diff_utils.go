@@ -21,13 +21,14 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
+	"github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // QueryResultReader will stream rows towards the output channel.
 type QueryResultReader struct {
 	Output      <-chan *mproto.QueryResult
-	Fields      []mproto.Field
+	Fields      []*query.Field
 	conn        tabletconn.TabletConn
 	clientErrFn func() error
 }
@@ -202,7 +203,7 @@ func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 }
 
 // Fields returns the types for the rows
-func (rr *RowReader) Fields() []mproto.Field {
+func (rr *RowReader) Fields() []*query.Field {
 	return rr.queryResultReader.Fields
 }
 
@@ -269,7 +270,7 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // 0 if left and right are equal
 // +1 if left is bigger than right
 // TODO: This can panic if types for left and right don't match.
-func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
+func CompareRows(fields []*query.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
 		lv, err := mproto.Convert(fields[i], left[i])
 		if err != nil {

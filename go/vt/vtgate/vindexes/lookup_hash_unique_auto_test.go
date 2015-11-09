@@ -10,6 +10,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
@@ -68,8 +69,8 @@ func TestLookupHashUniqueAutoMapFail(t *testing.T) {
 
 func TestLookupHashUniqueAutoMapBadData(t *testing.T) {
 	result := &mproto.QueryResult{
-		Fields: []mproto.Field{{
-			Type: mproto.VT_INT24,
+		Fields: []*query.Field{{
+			Type: sqltypes.Int24,
 		}},
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
@@ -85,8 +86,8 @@ func TestLookupHashUniqueAutoMapBadData(t *testing.T) {
 		t.Errorf("lhua.Map: %v, want %v", err, want)
 	}
 
-	result.Fields = []mproto.Field{{
-		Type: mproto.VT_FLOAT,
+	result.Fields = []*query.Field{{
+		Type: sqltypes.Float32,
 	}}
 	vc = &vcursor{result: result}
 	_, err = lhua.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})

@@ -16,13 +16,13 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
+	"github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -297,38 +297,37 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v %v", td.Name, qr.Rows[0][0], qr.Rows[0][1])
 		return result, nil
 	}
-	switch qr.Fields[0].Type {
-	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
+	switch {
+	case sqltypes.IsSigned(qr.Fields[0].Type):
 		minNumeric := sqltypes.MakeNumeric(qr.Rows[0][0].Raw())
 		maxNumeric := sqltypes.MakeNumeric(qr.Rows[0][1].Raw())
-		if (qr.Fields[0].Flags & mproto.VT_UNSIGNED_FLAG) == 0 {
-			// signed values, use int64
-			min, err := minNumeric.ParseInt64()
-			if err != nil {
-				wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
-				return result, nil
-			}
-			max, err := maxNumeric.ParseInt64()
-			if err != nil {
-				wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, maxNumeric, err)
-				return result, nil
-			}
-			interval := (max - min) / int64(sourceReaderCount)
-			if interval == 0 {
-				wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", td.Name, max, min)
-				return result, nil
-			}
-
-			result = make([]string, sourceReaderCount+1)
-			result[0] = ""
-			result[sourceReaderCount] = ""
-			for i := int64(1); i < int64(sourceReaderCount); i++ {
-				result[i] = fmt.Sprintf("%v", min+interval*i)
-			}
+		min, err := minNumeric.ParseInt64()
+		if err != nil {
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
+			return result, nil
+		}
+		max, err := maxNumeric.ParseInt64()
+		if err != nil {
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, maxNumeric, err)
+			return result, nil
+		}
+		interval := (max - min) / int64(sourceReaderCount)
+		if interval == 0 {
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", td.Name, max, min)
 			return result, nil
 		}
 
-		// unsigned values, use uint64
+		result = make([]string, sourceReaderCount+1)
+		result[0] = ""
+		result[sourceReaderCount] = ""
+		for i := int64(1); i < int64(sourceReaderCount); i++ {
+			result[i] = fmt.Sprintf("%v", min+interval*i)
+		}
+		return result, nil
+
+	case sqltypes.IsUnsigned(qr.Fields[0].Type):
+		minNumeric := sqltypes.MakeNumeric(qr.Rows[0][0].Raw())
+		maxNumeric := sqltypes.MakeNumeric(qr.Rows[0][1].Raw())
 		min, err := minNumeric.ParseUint64()
 		if err != nil {
 			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
@@ -353,7 +352,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 		}
 		return result, nil
 
-	case mproto.VT_FLOAT, mproto.VT_DOUBLE:
+	case sqltypes.IsFloat(qr.Fields[0].Type):
 		min, err := strconv.ParseFloat(qr.Rows[0][0].String(), 64)
 		if err != nil {
 			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, qr.Rows[0][0], err)
@@ -408,7 +407,7 @@ func buildSQLFromChunks(wr *wrangler.Wrangler, td *myproto.TableDefinition, chun
 
 // makeValueString returns a string that contains all the passed-in rows
 // as an insert SQL command's parameters.
-func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
+func makeValueString(fields []*query.Field, rows [][]sqltypes.Value) string {
 	buf := bytes.Buffer{}
 	for i, row := range rows {
 		if i > 0 {
@@ -422,10 +421,10 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 			}
 			// convert value back to its original type
 			if !value.IsNull() {
-				switch fields[j].Type {
-				case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
+				switch {
+				case sqltypes.IsIntegral(fields[j].Type):
 					value = sqltypes.MakeNumeric(value.Raw())
-				case mproto.VT_FLOAT, mproto.VT_DOUBLE:
+				case sqltypes.IsFloat(fields[j].Type):
 					value = sqltypes.MakeFractional(value.Raw())
 				}
 			}

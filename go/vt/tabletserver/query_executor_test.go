@@ -27,7 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 )
 
@@ -386,8 +386,8 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 
 func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	db := setUpQueryExecutorTest()
-	fields := []mproto.Field{
-		mproto.Field{Name: "addr", Type: mproto.VT_LONG},
+	fields := []*pbq.Field{
+		&pbq.Field{Name: "addr", Type: sqltypes.Int32},
 	}
 	query := "select addr from test_table where pk = 1 limit 1000"
 	want := &mproto.QueryResult{
@@ -619,7 +619,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	})
 
 	username := "u2"
-	callerID := &querypb.VTGateCallerID{
+	callerID := &pbq.VTGateCallerID{
 		Username: username,
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
@@ -664,7 +664,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	})
 
 	username := "u2"
-	callerID := &querypb.VTGateCallerID{
+	callerID := &pbq.VTGateCallerID{
 		Username: username,
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
@@ -728,7 +728,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	})
 
 	username := "u2"
-	callerID := &querypb.VTGateCallerID{
+	callerID := &pbq.VTGateCallerID{
 		Username: username,
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
@@ -772,7 +772,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	if tsv.qe.exemptACL, err = f.New([]string{username}); err != nil {
 		t.Fatalf("Cannot load exempt ACL for Table ACL: %v", err)
 	}
-	callerID = &querypb.VTGateCallerID{
+	callerID = &pbq.VTGateCallerID{
 		Username: username,
 	}
 	ctx = callerid.NewContext(context.Background(), nil, callerID)
@@ -801,7 +801,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	})
 
 	username := "u2"
-	callerID := &querypb.VTGateCallerID{
+	callerID := &pbq.VTGateCallerID{
 		Username: username,
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
@@ -1061,11 +1061,11 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 	}
 }
 
-func getTestTableFields() []mproto.Field {
-	return []mproto.Field{
-		mproto.Field{Name: "pk", Type: mysql.TypeLong},
-		mproto.Field{Name: "name", Type: mysql.TypeLong},
-		mproto.Field{Name: "addr", Type: mysql.TypeLong},
+func getTestTableFields() []*pbq.Field {
+	return []*pbq.Field{
+		&pbq.Field{Name: "pk", Type: sqltypes.Int32},
+		&pbq.Field{Name: "name", Type: sqltypes.Int32},
+		&pbq.Field{Name: "addr", Type: sqltypes.Int32},
 	}
 }
 
@@ -1126,15 +1126,15 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 			},
 		},
 		"select * from `test_table` where 1 != 1": &mproto.QueryResult{
-			Fields: []mproto.Field{{
+			Fields: []*pbq.Field{{
 				Name: "pk",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}, {
 				Name: "name",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}, {
 				Name: "addr",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}},
 		},
 		"describe `test_table`": &mproto.QueryResult{

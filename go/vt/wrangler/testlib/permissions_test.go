@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -45,183 +46,183 @@ func TestPermissions(t *testing.T) {
 	// master will be asked for permissions
 	master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
 		"SELECT * FROM mysql.user": &mproto.QueryResult{
-			Fields: []mproto.Field{
-				mproto.Field{
-					Name:  "Host",
-					Type:  254,
-					Flags: 16515},
-				mproto.Field{
-					Name:  "User",
-					Type:  254,
-					Flags: 16515},
-				mproto.Field{
-					Name:  "Password",
-					Type:  254,
-					Flags: 129},
-				mproto.Field{
-					Name:  "Select_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Insert_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Update_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Delete_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Drop_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Reload_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Shutdown_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Process_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "File_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Grant_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "References_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Index_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Alter_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Show_db_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Super_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_tmp_table_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Lock_tables_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Execute_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Repl_slave_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Repl_client_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_view_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Show_view_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_routine_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Alter_routine_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_user_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Event_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Trigger_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_tablespace_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "ssl_type",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "ssl_cipher",
-					Type:  252,
-					Flags: 4241},
-				mproto.Field{
-					Name:  "x509_issuer",
-					Type:  252,
-					Flags: 4241},
-				mproto.Field{
-					Name:  "x509_subject",
-					Type:  252,
-					Flags: 4241},
-				mproto.Field{
-					Name:  "max_questions",
-					Type:  3,
-					Flags: 32801},
-				mproto.Field{
-					Name:  "max_updates",
-					Type:  3,
-					Flags: 32801},
-				mproto.Field{
-					Name:  "max_connections",
-					Type:  3,
-					Flags: 32801},
-				mproto.Field{
-					Name:  "max_user_connections",
-					Type:  3,
-					Flags: 32769},
-				mproto.Field{
-					Name:  "plugin",
-					Type:  254,
-					Flags: 1},
-				mproto.Field{
-					Name:  "authentication_string",
-					Type:  252,
-					Flags: 4241},
-				mproto.Field{
-					Name:  "password_expired",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "is_role",
-					Type:  254,
-					Flags: 257}},
+			Fields: []*query.Field{
+				&query.Field{
+					Name: "Host",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "User",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Password",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Select_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Insert_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Update_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Delete_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Drop_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Reload_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Shutdown_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Process_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "File_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Grant_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "References_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Index_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Alter_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Show_db_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Super_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_tmp_table_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Lock_tables_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Execute_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Repl_slave_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Repl_client_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_view_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Show_view_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_routine_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Alter_routine_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_user_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Event_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Trigger_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_tablespace_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "ssl_type",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "ssl_cipher",
+					Type: 252,
+				},
+				&query.Field{
+					Name: "x509_issuer",
+					Type: 252,
+				},
+				&query.Field{
+					Name: "x509_subject",
+					Type: 252,
+				},
+				&query.Field{
+					Name: "max_questions",
+					Type: 3,
+				},
+				&query.Field{
+					Name: "max_updates",
+					Type: 3,
+				},
+				&query.Field{
+					Name: "max_connections",
+					Type: 3,
+				},
+				&query.Field{
+					Name: "max_user_connections",
+					Type: 3,
+				},
+				&query.Field{
+					Name: "plugin",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "authentication_string",
+					Type: 252,
+				},
+				&query.Field{
+					Name: "password_expired",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "is_role",
+					Type: sqltypes.Char,
+				}},
 			RowsAffected: 0x6,
 			InsertId:     0x0,
 			Rows: [][]sqltypes.Value{
@@ -409,95 +410,95 @@ func TestPermissions(t *testing.T) {
 			},
 		},
 		"SELECT * FROM mysql.db": &mproto.QueryResult{
-			Fields: []mproto.Field{
-				mproto.Field{
-					Name:  "Host",
-					Type:  mproto.VT_STRING,
-					Flags: 16515},
-				mproto.Field{
-					Name:  "Db",
-					Type:  mproto.VT_STRING,
-					Flags: 16515},
-				mproto.Field{
-					Name:  "User",
-					Type:  mproto.VT_STRING,
-					Flags: 16515},
-				mproto.Field{
-					Name:  "Select_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Insert_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Update_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Delete_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Drop_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Grant_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "References_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Index_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Alter_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_tmp_table_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Lock_tables_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_view_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Show_view_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_routine_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Alter_routine_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Execute_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Event_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Trigger_priv",
-					Type:  254,
-					Flags: 257},
+			Fields: []*query.Field{
+				&query.Field{
+					Name: "Host",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Db",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "User",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Select_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Insert_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Update_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Delete_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Drop_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Grant_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "References_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Index_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Alter_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_tmp_table_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Lock_tables_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_view_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Show_view_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_routine_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Alter_routine_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Execute_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Event_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Trigger_priv",
+					Type: sqltypes.Char,
+				},
 			},
 			RowsAffected: 0,
 			InsertId:     0,
@@ -529,87 +530,87 @@ func TestPermissions(t *testing.T) {
 			},
 		},
 		"SELECT * FROM mysql.host": &mproto.QueryResult{
-			Fields: []mproto.Field{
-				mproto.Field{
-					Name:  "Host",
-					Type:  mproto.VT_STRING,
-					Flags: 16515},
-				mproto.Field{
-					Name:  "Db",
-					Type:  254,
-					Flags: 16515},
-				mproto.Field{
-					Name:  "Select_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Insert_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Update_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Delete_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Drop_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Grant_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "References_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Index_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Alter_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_tmp_table_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Lock_tables_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_view_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Show_view_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Create_routine_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Alter_routine_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Execute_priv",
-					Type:  254,
-					Flags: 257},
-				mproto.Field{
-					Name:  "Trigger_priv",
-					Type:  254,
-					Flags: 257},
+			Fields: []*query.Field{
+				&query.Field{
+					Name: "Host",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Db",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Select_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Insert_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Update_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Delete_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Drop_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Grant_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "References_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Index_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Alter_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_tmp_table_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Lock_tables_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_view_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Show_view_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Create_routine_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Alter_routine_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Execute_priv",
+					Type: sqltypes.Char,
+				},
+				&query.Field{
+					Name: "Trigger_priv",
+					Type: sqltypes.Char,
+				},
 			},
 			RowsAffected: 0,
 			InsertId:     0,
@@ -658,87 +659,87 @@ func TestPermissions(t *testing.T) {
 
 	// modify one field, this should fail
 	replica.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.host"] = &mproto.QueryResult{
-		Fields: []mproto.Field{
-			mproto.Field{
-				Name:  "Host",
-				Type:  mproto.VT_STRING,
-				Flags: 16515},
-			mproto.Field{
-				Name:  "Db",
-				Type:  254,
-				Flags: 16515},
-			mproto.Field{
-				Name:  "Select_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Insert_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Update_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Delete_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Create_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Drop_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Grant_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "References_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Index_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Alter_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Create_tmp_table_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Lock_tables_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Create_view_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Show_view_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Create_routine_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Alter_routine_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Execute_priv",
-				Type:  254,
-				Flags: 257},
-			mproto.Field{
-				Name:  "Trigger_priv",
-				Type:  254,
-				Flags: 257},
+		Fields: []*query.Field{
+			&query.Field{
+				Name: "Host",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Db",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Select_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Insert_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Update_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Delete_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Create_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Drop_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Grant_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "References_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Index_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Alter_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Create_tmp_table_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Lock_tables_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Create_view_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Show_view_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Create_routine_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Alter_routine_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Execute_priv",
+				Type: sqltypes.Char,
+			},
+			&query.Field{
+				Name: "Trigger_priv",
+				Type: sqltypes.Char,
+			},
 		},
 		RowsAffected: 0,
 		InsertId:     0,

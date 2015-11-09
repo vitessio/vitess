@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/context"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -21,7 +22,7 @@ type streamingRows struct {
 	qrc     <-chan *mproto.QueryResult
 	errFunc vtgateconn.ErrFunc
 	failed  error
-	fields  []mproto.Field
+	fields  []*query.Field
 	qr      *mproto.QueryResult
 	index   int
 	cancel  context.CancelFunc

@@ -13,13 +13,13 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -61,11 +61,10 @@ var testUpdateStreamRequest = "UpdateStream starting position"
 var testStreamEvent = &proto.StreamEvent{
 	Category:  "DML",
 	TableName: "table1",
-	PrimaryKeyFields: []mproto.Field{
-		mproto.Field{
-			Name:  "id",
-			Type:  254,
-			Flags: 128,
+	PrimaryKeyFields: []*query.Field{
+		&query.Field{
+			Name: "id",
+			Type: sqltypes.Binary,
 		},
 	},
 	PrimaryKeyValues: [][]sqltypes.Value{

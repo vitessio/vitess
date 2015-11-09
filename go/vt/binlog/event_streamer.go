@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
@@ -20,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -166,15 +166,15 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*proto.Stre
 }
 
 // parsePkNames parses something like (eid id name )
-func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]mproto.Field, error) {
-	var columns []mproto.Field
+func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*query.Field, error) {
+	var columns []*query.Field
 	if typ, _ := tokenizer.Scan(); typ != '(' {
 		return nil, fmt.Errorf("expecting '('")
 	}
 	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
 		switch typ {
 		case sqlparser.ID:
-			columns = append(columns, mproto.Field{
+			columns = append(columns, &query.Field{
 				Name: string(val),
 			})
 		default:
@@ -185,7 +185,7 @@ func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]mproto.Field, error) {
 }
 
 // parsePkTuple parses something like (null 1 'bmFtZQ==' )
-func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []mproto.Field) ([]sqltypes.Value, int64, error) {
+func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*query.Field) ([]sqltypes.Value, int64, error) {
 	var result []sqltypes.Value
 
 	// start scanning the list
@@ -211,10 +211,10 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []mprot
 
 			// update type
 			switch fields[index].Type {
-			case mproto.VT_DECIMAL:
+			case sqltypes.Null:
 				// we haven't updated the type yet
-				fields[index].Type = mproto.VT_LONGLONG
-			case mproto.VT_LONGLONG:
+				fields[index].Type = sqltypes.Int64
+			case sqltypes.Int64:
 				// nothing to do there
 			default:
 				// we already set this to something incompatible!
@@ -232,10 +232,10 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []mprot
 
 			// update type
 			switch fields[index].Type {
-			case mproto.VT_DECIMAL:
+			case sqltypes.Null:
 				// we haven't updated the type yet
-				fields[index].Type = mproto.VT_LONGLONG
-			case mproto.VT_LONGLONG:
+				fields[index].Type = sqltypes.Int64
+			case sqltypes.Int64:
 				// nothing to do there
 			default:
 				// we already set this to something incompatible!
@@ -247,10 +247,10 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []mprot
 		case sqlparser.NULL:
 			// update type
 			switch fields[index].Type {
-			case mproto.VT_DECIMAL:
+			case sqltypes.Null:
 				// we haven't updated the type yet
-				fields[index].Type = mproto.VT_LONGLONG
-			case mproto.VT_LONGLONG:
+				fields[index].Type = sqltypes.Int64
+			case sqltypes.Int64:
 				// nothing to do there
 			default:
 				// we already set this to something incompatible!
@@ -263,10 +263,10 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []mprot
 		case sqlparser.STRING:
 			// update type
 			switch fields[index].Type {
-			case mproto.VT_DECIMAL:
+			case sqltypes.Null:
 				// we haven't updated the type yet
-				fields[index].Type = mproto.VT_VAR_STRING
-			case mproto.VT_VAR_STRING:
+				fields[index].Type = sqltypes.VarBinary
+			case sqltypes.VarBinary:
 				// nothing to do there
 			default:
 				// we already set this to something incompatible!

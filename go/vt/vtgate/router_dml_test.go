@@ -11,6 +11,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
@@ -119,9 +120,9 @@ func TestDeleteEqual(t *testing.T) {
 	router, sbc, _, sbclookup := createRouterEnv()
 
 	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{
-		Fields: []mproto.Field{
-			{"id", 3, mproto.VT_ZEROVALUE_FLAG},
-			{"name", 253, mproto.VT_ZEROVALUE_FLAG},
+		Fields: []*query.Field{
+			{"id", sqltypes.Int32},
+			{"name", sqltypes.VarChar},
 		},
 		RowsAffected: 1,
 		InsertId:     0,
@@ -256,9 +257,9 @@ func TestDeleteVindexFail(t *testing.T) {
 	}
 
 	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{
-		Fields: []mproto.Field{
-			{"id", 3, mproto.VT_ZEROVALUE_FLAG},
-			{"name", 253, mproto.VT_ZEROVALUE_FLAG},
+		Fields: []*query.Field{
+			{"id", sqltypes.Int32},
+			{"name", sqltypes.VarChar},
 		},
 		RowsAffected: 1,
 		InsertId:     0,

@@ -54,7 +54,7 @@ func (ti *TableInfo) fetchColumns(conn *DBConn) error {
 	}
 	fieldTypes := make(map[string]query.Type, len(qr.Fields))
 	for _, field := range qr.Fields {
-		fieldTypes[field.Name] = sqltypes.MySQLToType(field.Type, field.Flags)
+		fieldTypes[field.Name] = field.Type
 	}
 	columns, err := conn.Exec(context.Background(), fmt.Sprintf("describe `%s`", ti.Name), 10000, false)
 	if err != nil {

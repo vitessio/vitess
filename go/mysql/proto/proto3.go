@@ -13,35 +13,6 @@ import (
 // This file contains the proto3 conversion functions for the structures
 // defined here.
 
-// FieldsToProto3 converts an internal []Field to the proto3 version
-func FieldsToProto3(f []Field) []*pbq.Field {
-	if len(f) == 0 {
-		return nil
-	}
-
-	result := make([]*pbq.Field, len(f))
-	for i, f := range f {
-		result[i] = &pbq.Field{
-			Name: f.Name,
-			Type: sqltypes.MySQLToType(f.Type, f.Flags),
-		}
-	}
-	return result
-}
-
-// Proto3ToFields converts a proto3 []Fields to an internal data structure.
-func Proto3ToFields(f []*pbq.Field) []Field {
-	if len(f) == 0 {
-		return nil
-	}
-	result := make([]Field, len(f))
-	for i, f := range f {
-		result[i].Name = f.Name
-		result[i].Type, result[i].Flags = sqltypes.TypeToMySQL(f.Type)
-	}
-	return result
-}
-
 // RowsToProto3 converts an internal [][]sqltypes.Value to the proto3 version
 func RowsToProto3(rows [][]sqltypes.Value) []*pbq.Row {
 	if len(rows) == 0 {
@@ -103,7 +74,7 @@ func QueryResultToProto3(qr *QueryResult) *pbq.QueryResult {
 		return nil
 	}
 	return &pbq.QueryResult{
-		Fields:       FieldsToProto3(qr.Fields),
+		Fields:       qr.Fields,
 		RowsAffected: qr.RowsAffected,
 		InsertId:     qr.InsertId,
 		Rows:         RowsToProto3(qr.Rows),
@@ -116,7 +87,7 @@ func Proto3ToQueryResult(qr *pbq.QueryResult) *QueryResult {
 		return nil
 	}
 	return &QueryResult{
-		Fields:       Proto3ToFields(qr.Fields),
+		Fields:       qr.Fields,
 		RowsAffected: qr.RowsAffected,
 		InsertId:     qr.InsertId,
 		Rows:         Proto3ToRows(qr.Rows),

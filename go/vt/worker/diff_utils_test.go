@@ -9,9 +9,9 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestOrderedColumns(t *testing.T) {
@@ -45,20 +45,20 @@ func TestUint64FromKeyspaceId(t *testing.T) {
 
 func TestCompareRows(t *testing.T) {
 	table := []struct {
-		fields      []mproto.Field
+		fields      []*query.Field
 		left, right []sqltypes.Value
 		want        int
 	}{
 		{
-			fields: []mproto.Field{{"a", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG}},
+			fields: []*query.Field{{"a", sqltypes.Int32}},
 			left:   []sqltypes.Value{sqltypes.MakeNumeric([]byte("123"))},
 			right:  []sqltypes.Value{sqltypes.MakeNumeric([]byte("14"))},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{
-				{"a", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG},
-				{"b", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG},
+			fields: []*query.Field{
+				{"a", sqltypes.Int32},
+				{"b", sqltypes.Int32},
 			},
 			left: []sqltypes.Value{
 				sqltypes.MakeNumeric([]byte("555")),
@@ -71,43 +71,43 @@ func TestCompareRows(t *testing.T) {
 			want: -1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG}},
+			fields: []*query.Field{{"a", sqltypes.Int32}},
 			left:   []sqltypes.Value{sqltypes.MakeNumeric([]byte("144"))},
 			right:  []sqltypes.Value{sqltypes.MakeNumeric([]byte("144"))},
 			want:   0,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_LONGLONG, mproto.VT_UNSIGNED_FLAG}},
+			fields: []*query.Field{{"a", sqltypes.Uint64}},
 			left:   []sqltypes.Value{sqltypes.MakeNumeric([]byte("9223372036854775809"))},
 			right:  []sqltypes.Value{sqltypes.MakeNumeric([]byte("9223372036854775810"))},
 			want:   -1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_LONGLONG, mproto.VT_UNSIGNED_FLAG}},
+			fields: []*query.Field{{"a", sqltypes.Uint64}},
 			left:   []sqltypes.Value{sqltypes.MakeNumeric([]byte("9223372036854775819"))},
 			right:  []sqltypes.Value{sqltypes.MakeNumeric([]byte("9223372036854775810"))},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_DOUBLE, mproto.VT_ZEROVALUE_FLAG}},
+			fields: []*query.Field{{"a", sqltypes.Float64}},
 			left:   []sqltypes.Value{sqltypes.MakeFractional([]byte("3.14"))},
 			right:  []sqltypes.Value{sqltypes.MakeFractional([]byte("3.2"))},
 			want:   -1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_DOUBLE, mproto.VT_ZEROVALUE_FLAG}},
+			fields: []*query.Field{{"a", sqltypes.Float64}},
 			left:   []sqltypes.Value{sqltypes.MakeFractional([]byte("123.4"))},
 			right:  []sqltypes.Value{sqltypes.MakeFractional([]byte("123.2"))},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_STRING, mproto.VT_ZEROVALUE_FLAG}},
+			fields: []*query.Field{{"a", sqltypes.Char}},
 			left:   []sqltypes.Value{sqltypes.MakeString([]byte("abc"))},
 			right:  []sqltypes.Value{sqltypes.MakeString([]byte("abb"))},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_STRING, mproto.VT_ZEROVALUE_FLAG}},
+			fields: []*query.Field{{"a", sqltypes.Char}},
 			left:   []sqltypes.Value{sqltypes.MakeString([]byte("abc"))},
 			right:  []sqltypes.Value{sqltypes.MakeString([]byte("abd"))},
 			want:   -1,

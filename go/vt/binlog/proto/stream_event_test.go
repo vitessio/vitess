@@ -9,14 +9,15 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/bson"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
 type reflectStreamEvent struct {
 	Category         string
 	TableName        string
-	PrimaryKeyFields []mproto.Field
+	PrimaryKeyFields []BSONField
 	PrimaryKeyValues [][]sqltypes.Value
 	Sql              string
 	Timestamp        int64
@@ -27,7 +28,7 @@ type extraStreamEvent struct {
 	Extra            int
 	Category         string
 	TableName        string
-	PrimaryKeyFields []mproto.Field
+	PrimaryKeyFields []BSONField
 	PrimaryKeyValues [][]sqltypes.Value
 	Sql              string
 	Timestamp        int64
@@ -38,18 +39,18 @@ func TestStreamEvent(t *testing.T) {
 	reflected, err := bson.Marshal(&reflectStreamEvent{
 		Category:  "str1",
 		TableName: "str2",
-		PrimaryKeyFields: []mproto.Field{
-			mproto.Field{
+		PrimaryKeyFields: []BSONField{
+			BSONField{
 				Name: "str2",
-				Type: mproto.VT_VAR_STRING,
+				Type: mysql.TypeVarString,
 			},
-			mproto.Field{
+			BSONField{
 				Name: "str3",
-				Type: mproto.VT_LONGLONG,
+				Type: mysql.TypeLonglong,
 			},
-			mproto.Field{
+			BSONField{
 				Name: "str4",
-				Type: mproto.VT_LONGLONG,
+				Type: mysql.TypeLonglong,
 			},
 		},
 		PrimaryKeyValues: [][]sqltypes.Value{
@@ -75,18 +76,18 @@ func TestStreamEvent(t *testing.T) {
 	custom := StreamEvent{
 		Category:  "str1",
 		TableName: "str2",
-		PrimaryKeyFields: []mproto.Field{
-			mproto.Field{
+		PrimaryKeyFields: []*query.Field{
+			&query.Field{
 				Name: "str2",
-				Type: mproto.VT_VAR_STRING,
+				Type: sqltypes.VarChar,
 			},
-			mproto.Field{
+			&query.Field{
 				Name: "str3",
-				Type: mproto.VT_LONGLONG,
+				Type: sqltypes.Int64,
 			},
-			mproto.Field{
+			&query.Field{
 				Name: "str4",
-				Type: mproto.VT_LONGLONG,
+				Type: sqltypes.Int64,
 			},
 		},
 		PrimaryKeyValues: [][]sqltypes.Value{
@@ -118,10 +119,10 @@ func TestStreamEvent(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = fmt.Sprintf("%#v", custom)
-	got = fmt.Sprintf("%#v", unmarshalled)
+	want = fmt.Sprintf("%+v", custom)
+	got = fmt.Sprintf("%+v", unmarshalled)
 	if want != got {
-		t.Errorf("want\n%#v, got\n%#v", want, got)
+		t.Errorf("want\n%+v, got\n%+v", want, got)
 	}
 
 	extra, err := bson.Marshal(&extraStreamEvent{})

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/proto/query"
@@ -23,23 +22,19 @@ func TestCharaterSet(t *testing.T) {
 		return
 	}
 	want := mproto.QueryResult{
-		Fields: []mproto.Field{
+		Fields: []*query.Field{
 			{
-				Name:  "intval",
-				Type:  3,
-				Flags: 0,
+				Name: "intval",
+				Type: sqltypes.Int32,
 			}, {
-				Name:  "floatval",
-				Type:  4,
-				Flags: 0,
+				Name: "floatval",
+				Type: sqltypes.Float32,
 			}, {
-				Name:  "charval",
-				Type:  253,
-				Flags: 0,
+				Name: "charval",
+				Type: sqltypes.VarChar,
 			}, {
-				Name:  "binval",
-				Type:  253,
-				Flags: mysql.FlagBinary,
+				Name: "binval",
+				Type: sqltypes.VarBinary,
 			},
 		},
 		RowsAffected: 1,
@@ -88,51 +83,40 @@ func TestInts(t *testing.T) {
 		return
 	}
 	want := mproto.QueryResult{
-		Fields: []mproto.Field{
+		Fields: []*query.Field{
 			{
-				Name:  "tiny",
-				Type:  mysql.TypeTiny,
-				Flags: 0,
+				Name: "tiny",
+				Type: sqltypes.Int8,
 			}, {
-				Name:  "tinyu",
-				Type:  mysql.TypeTiny,
-				Flags: mysql.FlagUnsigned,
+				Name: "tinyu",
+				Type: sqltypes.Uint8,
 			}, {
-				Name:  "small",
-				Type:  mysql.TypeShort,
-				Flags: 0,
+				Name: "small",
+				Type: sqltypes.Int16,
 			}, {
-				Name:  "smallu",
-				Type:  mysql.TypeShort,
-				Flags: mysql.FlagUnsigned,
+				Name: "smallu",
+				Type: sqltypes.Uint16,
 			}, {
-				Name:  "medium",
-				Type:  mysql.TypeInt24,
-				Flags: 0,
+				Name: "medium",
+				Type: sqltypes.Int24,
 			}, {
-				Name:  "mediumu",
-				Type:  mysql.TypeInt24,
-				Flags: mysql.FlagUnsigned,
+				Name: "mediumu",
+				Type: sqltypes.Uint24,
 			}, {
-				Name:  "normal",
-				Type:  mysql.TypeLong,
-				Flags: 0,
+				Name: "normal",
+				Type: sqltypes.Int32,
 			}, {
-				Name:  "normalu",
-				Type:  mysql.TypeLong,
-				Flags: mysql.FlagUnsigned,
+				Name: "normalu",
+				Type: sqltypes.Uint32,
 			}, {
-				Name:  "big",
-				Type:  mysql.TypeLonglong,
-				Flags: 0,
+				Name: "big",
+				Type: sqltypes.Int64,
 			}, {
-				Name:  "bigu",
-				Type:  mysql.TypeLonglong,
-				Flags: mysql.FlagUnsigned,
+				Name: "bigu",
+				Type: sqltypes.Uint64,
 			}, {
-				Name:  "y",
-				Type:  mysql.TypeYear,
-				Flags: mysql.FlagUnsigned,
+				Name: "y",
+				Type: sqltypes.Year,
 			},
 		},
 		RowsAffected: 1,
@@ -154,25 +138,6 @@ func TestInts(t *testing.T) {
 	}
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
-	}
-	wantTypes := []query.Type{
-		sqltypes.Int8,
-		sqltypes.Uint8,
-		sqltypes.Int16,
-		sqltypes.Uint16,
-		sqltypes.Int24,
-		sqltypes.Uint24,
-		sqltypes.Int32,
-		sqltypes.Uint32,
-		sqltypes.Int64,
-		sqltypes.Uint64,
-		sqltypes.Year,
-	}
-	for i, field := range qr.Fields {
-		got := sqltypes.MySQLToType(field.Type, field.Flags)
-		if got != wantTypes[i] {
-			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
-		}
 	}
 }
 
@@ -200,27 +165,22 @@ func TestFractionals(t *testing.T) {
 		return
 	}
 	want := mproto.QueryResult{
-		Fields: []mproto.Field{
+		Fields: []*query.Field{
 			{
-				Name:  "id",
-				Type:  mysql.TypeLong,
-				Flags: 0,
+				Name: "id",
+				Type: sqltypes.Int32,
 			}, {
-				Name:  "deci",
-				Type:  mysql.TypeNewDecimal,
-				Flags: 0,
+				Name: "deci",
+				Type: sqltypes.Decimal,
 			}, {
-				Name:  "num",
-				Type:  mysql.TypeNewDecimal,
-				Flags: 0,
+				Name: "num",
+				Type: sqltypes.Decimal,
 			}, {
-				Name:  "f",
-				Type:  mysql.TypeFloat,
-				Flags: 0,
+				Name: "f",
+				Type: sqltypes.Float32,
 			}, {
-				Name:  "d",
-				Type:  mysql.TypeDouble,
-				Flags: 0,
+				Name: "d",
+				Type: sqltypes.Float64,
 			},
 		},
 		RowsAffected: 1,
@@ -236,19 +196,6 @@ func TestFractionals(t *testing.T) {
 	}
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
-	}
-	wantTypes := []query.Type{
-		sqltypes.Int32,
-		sqltypes.Decimal,
-		sqltypes.Decimal,
-		sqltypes.Float32,
-		sqltypes.Float64,
-	}
-	for i, field := range qr.Fields {
-		got := sqltypes.MySQLToType(field.Type, field.Flags)
-		if got != wantTypes[i] {
-			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
-		}
 	}
 }
 
@@ -282,47 +229,37 @@ func TestStrings(t *testing.T) {
 		return
 	}
 	want := mproto.QueryResult{
-		Fields: []mproto.Field{
+		Fields: []*query.Field{
 			{
-				Name:  "vb",
-				Type:  mysql.TypeVarString,
-				Flags: mysql.FlagBinary,
+				Name: "vb",
+				Type: sqltypes.VarBinary,
 			}, {
-				Name:  "c",
-				Type:  mysql.TypeString,
-				Flags: 0,
+				Name: "c",
+				Type: sqltypes.Char,
 			}, {
-				Name:  "vc",
-				Type:  mysql.TypeVarString,
-				Flags: 0,
+				Name: "vc",
+				Type: sqltypes.VarChar,
 			}, {
-				Name:  "b",
-				Type:  mysql.TypeString,
-				Flags: mysql.FlagBinary,
+				Name: "b",
+				Type: sqltypes.Binary,
 			}, {
-				Name:  "tb",
-				Type:  mysql.TypeBlob,
-				Flags: mysql.FlagBinary,
+				Name: "tb",
+				Type: sqltypes.Blob,
 			}, {
-				Name:  "bl",
-				Type:  mysql.TypeBlob,
-				Flags: mysql.FlagBinary,
+				Name: "bl",
+				Type: sqltypes.Blob,
 			}, {
-				Name:  "ttx",
-				Type:  mysql.TypeBlob,
-				Flags: 0,
+				Name: "ttx",
+				Type: sqltypes.Text,
 			}, {
-				Name:  "tx",
-				Type:  mysql.TypeBlob,
-				Flags: 0,
+				Name: "tx",
+				Type: sqltypes.Text,
 			}, {
-				Name:  "en",
-				Type:  mysql.TypeString,
-				Flags: mysql.FlagEnum,
+				Name: "en",
+				Type: sqltypes.Enum,
 			}, {
-				Name:  "s",
-				Type:  mysql.TypeString,
-				Flags: mysql.FlagSet,
+				Name: "s",
+				Type: sqltypes.Set,
 			},
 		},
 		RowsAffected: 1,
@@ -343,24 +280,6 @@ func TestStrings(t *testing.T) {
 	}
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
-	}
-	wantTypes := []query.Type{
-		sqltypes.VarBinary,
-		sqltypes.Char,
-		sqltypes.VarChar,
-		sqltypes.Binary,
-		sqltypes.Blob,
-		sqltypes.Blob,
-		sqltypes.Text,
-		sqltypes.Text,
-		sqltypes.Enum,
-		sqltypes.Set,
-	}
-	for i, field := range qr.Fields {
-		got := sqltypes.MySQLToType(field.Type, field.Flags)
-		if got != wantTypes[i] {
-			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
-		}
 	}
 }
 
@@ -388,27 +307,22 @@ func TestMiscTypes(t *testing.T) {
 		return
 	}
 	want := mproto.QueryResult{
-		Fields: []mproto.Field{
+		Fields: []*query.Field{
 			{
-				Name:  "id",
-				Type:  mysql.TypeLong,
-				Flags: 0,
+				Name: "id",
+				Type: sqltypes.Int32,
 			}, {
-				Name:  "b",
-				Type:  mysql.TypeBit,
-				Flags: mysql.FlagUnsigned,
+				Name: "b",
+				Type: sqltypes.Bit,
 			}, {
-				Name:  "d",
-				Type:  mysql.TypeDate,
-				Flags: mysql.FlagBinary,
+				Name: "d",
+				Type: sqltypes.Date,
 			}, {
-				Name:  "dt",
-				Type:  mysql.TypeDatetime,
-				Flags: mysql.FlagBinary,
+				Name: "dt",
+				Type: sqltypes.Datetime,
 			}, {
-				Name:  "t",
-				Type:  mysql.TypeTime,
-				Flags: mysql.FlagBinary,
+				Name: "t",
+				Type: sqltypes.Time,
 			},
 		},
 		RowsAffected: 1,
@@ -425,19 +339,6 @@ func TestMiscTypes(t *testing.T) {
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
-	wantTypes := []query.Type{
-		sqltypes.Int32,
-		sqltypes.Bit,
-		sqltypes.Date,
-		sqltypes.Datetime,
-		sqltypes.Time,
-	}
-	for i, field := range qr.Fields {
-		got := sqltypes.MySQLToType(field.Type, field.Flags)
-		if got != wantTypes[i] {
-			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
-		}
-	}
 }
 
 func TestNull(t *testing.T) {
@@ -448,11 +349,10 @@ func TestNull(t *testing.T) {
 		return
 	}
 	want := mproto.QueryResult{
-		Fields: []mproto.Field{
+		Fields: []*query.Field{
 			{
-				Name:  "NULL",
-				Type:  mysql.TypeNull,
-				Flags: mysql.FlagBinary,
+				Name: "NULL",
+				Type: sqltypes.Null,
 			},
 		},
 		RowsAffected: 1,
@@ -464,15 +364,6 @@ func TestNull(t *testing.T) {
 	}
 	if !reflect.DeepEqual(*qr, want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
-	}
-	wantTypes := []query.Type{
-		sqltypes.Null,
-	}
-	for i, field := range qr.Fields {
-		got := sqltypes.MySQLToType(field.Type, field.Flags)
-		if got != wantTypes[i] {
-			t.Errorf("Unexpected type: col: %d, %d, want %d", i, got, wantTypes[i])
-		}
 	}
 }
 
