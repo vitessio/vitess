@@ -404,11 +404,11 @@ func CreateBlpCheckpoint() []string {
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
 // the _vt.blp_checkpoint table.
-func PopulateBlpCheckpoint(index uint32, pos myproto.ReplicationPosition, timeUpdated int64, flags string) string {
+func PopulateBlpCheckpoint(index uint32, position string, timeUpdated int64, flags string) string {
 	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint "+
 		"(source_shard_uid, pos, time_updated, transaction_timestamp, flags) "+
 		"VALUES (%v, '%v', %v, 0, '%v')",
-		index, myproto.EncodeReplicationPosition(pos), timeUpdated, flags)
+		index, position, timeUpdated, flags)
 }
 
 // UpdateBlpCheckpoint returns a statement to update a value in the

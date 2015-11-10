@@ -9,9 +9,11 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/proto/query"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-func mapToSqlResults(row map[string]string) ([]*query.Field, []sqltypes.Value) {
+func mapToSQLResults(row map[string]string) ([]*query.Field, []sqltypes.Value) {
 	fields := make([]*query.Field, len(row))
 	values := make([]sqltypes.Value, len(row))
 	index := 0
@@ -23,7 +25,7 @@ func mapToSqlResults(row map[string]string) ([]*query.Field, []sqltypes.Value) {
 	return fields, values
 }
 
-func testPermissionsDiff(t *testing.T, left, right *Permissions, leftName, rightName string, expected []string) {
+func testPermissionsDiff(t *testing.T, left, right *tabletmanagerdatapb.Permissions, leftName, rightName string, expected []string) {
 
 	actual := DiffPermissionsToArray(leftName, left, rightName, right)
 
@@ -47,12 +49,12 @@ func testPermissionsDiff(t *testing.T, left, right *Permissions, leftName, right
 
 func TestPermissionsDiff(t *testing.T) {
 
-	p1 := &Permissions{}
-	p1.UserPermissions = append(p1.UserPermissions, NewUserPermission(mapToSqlResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "N"})))
-	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSqlResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "N", "Insert_priv": "Y"})))
-	p1.HostPermissions = append(p1.HostPermissions, NewHostPermission(mapToSqlResults(map[string]string{"Host": "localhost", "Db": "mysql", "Select_priv": "N", "Insert_priv": "N"})))
+	p1 := &tabletmanagerdatapb.Permissions{}
+	p1.UserPermissions = append(p1.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "N"})))
+	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSQLResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "N", "Insert_priv": "Y"})))
+	p1.HostPermissions = append(p1.HostPermissions, NewHostPermission(mapToSQLResults(map[string]string{"Host": "localhost", "Db": "mysql", "Select_priv": "N", "Insert_priv": "N"})))
 
-	if p1.String() !=
+	if PermissionsString(p1) !=
 		"User Permissions:\n"+
 			"  %:vt: UserPermission PasswordChecksum(4831957779889520640) Insert_priv(N) Select_priv(Y)\n"+
 			"Db Permissions:\n"+
@@ -65,7 +67,7 @@ func TestPermissionsDiff(t *testing.T) {
 
 	testPermissionsDiff(t, p1, p1, "p1-1", "p1-2", []string{})
 
-	p2 := &Permissions{}
+	p2 := &tabletmanagerdatapb.Permissions{}
 	testPermissionsDiff(t, p1, p2, "p1", "p2", []string{
 		"p1 has an extra user %:vt",
 		"p1 has an extra db %:vt_live:vt",
@@ -80,9 +82,9 @@ func TestPermissionsDiff(t *testing.T) {
 		"p1 has an extra host localhost:mysql",
 	})
 
-	p2.UserPermissions = append(p2.UserPermissions, NewUserPermission(mapToSqlResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "Y"})))
-	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSqlResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "Y", "Insert_priv": "N"})))
-	p2.HostPermissions = append(p2.HostPermissions, NewHostPermission(mapToSqlResults(map[string]string{"Host": "localhost", "Db": "mysql", "Select_priv": "Y", "Insert_priv": "N"})))
+	p2.UserPermissions = append(p2.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "Y"})))
+	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSQLResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "Y", "Insert_priv": "N"})))
+	p2.HostPermissions = append(p2.HostPermissions, NewHostPermission(mapToSQLResults(map[string]string{"Host": "localhost", "Db": "mysql", "Select_priv": "Y", "Insert_priv": "N"})))
 	testPermissionsDiff(t, p1, p2, "p1", "p2", []string{
 		"p1 and p2 disagree on user %:vt:\n" +
 			"UserPermission PasswordChecksum(4831957779889520640) Insert_priv(N) Select_priv(Y)\n" +

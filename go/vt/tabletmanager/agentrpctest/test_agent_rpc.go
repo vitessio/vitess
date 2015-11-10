@@ -22,9 +22,10 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
-	"github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // fakeRPCAgent implements tabletmanager.RPCAgent and fills in all
@@ -140,10 +141,10 @@ func agentRPCTestPingPanic(ctx context.Context, t *testing.T, client tmclient.Ta
 
 var testGetSchemaTables = []string{"table1", "table2"}
 var testGetSchemaExcludeTables = []string{"etable1", "etable2", "etable3"}
-var testGetSchemaReply = &myproto.SchemaDefinition{
+var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 	DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
-	TableDefinitions: []*myproto.TableDefinition{
-		&myproto.TableDefinition{
+	TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+		{
 			Name:              "table_name",
 			Schema:            "create table_name",
 			Columns:           []string{"col1", "col2"},
@@ -152,7 +153,7 @@ var testGetSchemaReply = &myproto.SchemaDefinition{
 			DataLength:        12,
 			RowCount:          6,
 		},
-		&myproto.TableDefinition{
+		{
 			Name:              "table_name2",
 			Schema:            "create table_name2",
 			Columns:           []string{"col1"},
@@ -165,7 +166,7 @@ var testGetSchemaReply = &myproto.SchemaDefinition{
 	Version: "xxx",
 }
 
-func (fra *fakeRPCAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
+func (fra *fakeRPCAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -185,9 +186,9 @@ func agentRPCTestGetSchemaPanic(ctx context.Context, t *testing.T, client tmclie
 	expectRPCWrapPanic(t, err)
 }
 
-var testGetPermissionsReply = &myproto.Permissions{
-	UserPermissions: []*myproto.UserPermission{
-		&myproto.UserPermission{
+var testGetPermissionsReply = &tabletmanagerdatapb.Permissions{
+	UserPermissions: []*tabletmanagerdatapb.UserPermission{
+		{
 			Host:             "host1",
 			User:             "user1",
 			PasswordChecksum: 666,
@@ -197,8 +198,8 @@ var testGetPermissionsReply = &myproto.Permissions{
 			},
 		},
 	},
-	DbPermissions: []*myproto.DbPermission{
-		&myproto.DbPermission{
+	DbPermissions: []*tabletmanagerdatapb.DbPermission{
+		{
 			Host: "host2",
 			Db:   "db1",
 			User: "user2",
@@ -208,8 +209,8 @@ var testGetPermissionsReply = &myproto.Permissions{
 			},
 		},
 	},
-	HostPermissions: []*myproto.HostPermission{
-		&myproto.HostPermission{
+	HostPermissions: []*tabletmanagerdatapb.HostPermission{
+		{
 			Host: "host3",
 			Db:   "db2",
 			Privileges: map[string]string{
@@ -220,7 +221,7 @@ var testGetPermissionsReply = &myproto.Permissions{
 	},
 }
 
-func (fra *fakeRPCAgent) GetPermissions(ctx context.Context) (*myproto.Permissions, error) {
+func (fra *fakeRPCAgent) GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -271,9 +272,9 @@ func agentRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmcl
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testChangeTypeValue = pb.TabletType_REPLICA
+var testChangeTypeValue = topodatapb.TabletType_REPLICA
 
-func (fra *fakeRPCAgent) ChangeType(ctx context.Context, tabletType pb.TabletType) error {
+func (fra *fakeRPCAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -373,9 +374,9 @@ func agentRPCTestRefreshStatePanic(ctx context.Context, t *testing.T, client tmc
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testRunHealthCheckValue = pb.TabletType_RDONLY
+var testRunHealthCheckValue = topodatapb.TabletType_RDONLY
 
-func (fra *fakeRPCAgent) RunHealthCheck(ctx context.Context, targetTabletType pb.TabletType) {
+func (fra *fakeRPCAgent) RunHealthCheck(ctx context.Context, targetTabletType topodatapb.TabletType) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -474,12 +475,12 @@ func agentRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmcl
 var testExecuteFetchQuery = "fetch this"
 var testExecuteFetchMaxRows = 100
 var testExecuteFetchResult = &sqltypes.Result{
-	Fields: []*query.Field{
-		&query.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "column1",
 			Type: sqltypes.Blob,
 		},
-		&query.Field{
+		&querypb.Field{
 			Name: "column2",
 			Type: sqltypes.Datetime,
 		},
@@ -535,23 +536,17 @@ func agentRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmc
 // Replication related methods
 //
 
-var testReplicationStatus = myproto.ReplicationStatus{
-	Position: myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
-			Domain:   1,
-			Server:   345,
-			Sequence: 789,
-		},
-	},
-	SlaveIORunning:      true,
-	SlaveSQLRunning:     true,
+var testReplicationStatus = &replicationdatapb.Status{
+	Position:            "MariaDB/1-345-789",
+	SlaveIoRunning:      true,
+	SlaveSqlRunning:     true,
 	SecondsBehindMaster: 654,
 	MasterHost:          "master.host",
 	MasterPort:          3366,
 	MasterConnectRetry:  12,
 }
 
-func (fra *fakeRPCAgent) SlaveStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
+func (fra *fakeRPCAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -568,15 +563,9 @@ func agentRPCTestSlaveStatusPanic(ctx context.Context, t *testing.T, client tmcl
 	expectRPCWrapPanic(t, err)
 }
 
-var testReplicationPosition = myproto.ReplicationPosition{
-	GTIDSet: myproto.MariadbGTID{
-		Domain:   5,
-		Server:   456,
-		Sequence: 890,
-	},
-}
+var testReplicationPosition = "MariaDB/5-456-890"
 
-func (fra *fakeRPCAgent) MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
+func (fra *fakeRPCAgent) MasterPosition(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -615,11 +604,11 @@ func agentRPCTestStopSlavePanic(ctx context.Context, t *testing.T, client tmclie
 
 var testStopSlaveMinimumWaitTime = time.Hour
 
-func (fra *fakeRPCAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
+func (fra *fakeRPCAgent) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "StopSlaveMinimum position", position.GTIDSet, testReplicationPosition.GTIDSet)
+	compare(fra.t, "StopSlaveMinimum position", position, testReplicationPosition)
 	compare(fra.t, "StopSlaveMinimum waitTime", waitTime, testStopSlaveMinimumWaitTime)
 	return testReplicationPositionReturned, nil
 }
@@ -693,14 +682,14 @@ func agentRPCTestGetSlavesPanic(ctx context.Context, t *testing.T, client tmclie
 	expectRPCWrapPanic(t, err)
 }
 
-var testBlpPosition = &pbt.BlpPosition{
+var testBlpPosition = &tabletmanagerdatapb.BlpPosition{
 	Uid:      73,
 	Position: "testReplicationPosition",
 }
 var testWaitBlpPositionWaitTime = time.Hour
 var testWaitBlpPositionCalled = false
 
-func (fra *fakeRPCAgent) WaitBlpPosition(ctx context.Context, blpPosition *pbt.BlpPosition, waitTime time.Duration) error {
+func (fra *fakeRPCAgent) WaitBlpPosition(ctx context.Context, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -720,14 +709,14 @@ func agentRPCTestWaitBlpPositionPanic(ctx context.Context, t *testing.T, client 
 	expectRPCWrapLockPanic(t, err)
 }
 
-var testBlpPositionList = []*pbt.BlpPosition{
+var testBlpPositionList = []*tabletmanagerdatapb.BlpPosition{
 	{
 		Uid:      12,
 		Position: "testBlpPosition",
 	},
 }
 
-func (fra *fakeRPCAgent) StopBlp(ctx context.Context) ([]*pbt.BlpPosition, error) {
+func (fra *fakeRPCAgent) StopBlp(ctx context.Context) ([]*tabletmanagerdatapb.BlpPosition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -766,13 +755,13 @@ func agentRPCTestStartBlpPanic(ctx context.Context, t *testing.T, client tmclien
 
 var testRunBlpUntilWaitTime = 3 * time.Minute
 
-func (fra *fakeRPCAgent) RunBlpUntil(ctx context.Context, bpl []*pbt.BlpPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (fra *fakeRPCAgent) RunBlpUntil(ctx context.Context, bpl []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "RunBlpUntil bpl", bpl, testBlpPositionList)
 	compare(fra.t, "RunBlpUntil waitTime", waitTime, testRunBlpUntilWaitTime)
-	return &testReplicationPosition, nil
+	return testReplicationPosition, nil
 }
 
 func agentRPCTestRunBlpUntil(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
@@ -809,7 +798,7 @@ func agentRPCTestResetReplicationPanic(ctx context.Context, t *testing.T, client
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-func (fra *fakeRPCAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+func (fra *fakeRPCAgent) InitMaster(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -829,19 +818,19 @@ func agentRPCTestInitMasterPanic(ctx context.Context, t *testing.T, client tmcli
 var testPopulateReparentJournalCalled = false
 var testTimeCreatedNS int64 = 4569900
 var testActionName = "TestActionName"
-var testMasterAlias = &pb.TabletAlias{
+var testMasterAlias = &topodatapb.TabletAlias{
 	Cell: "ce",
 	Uid:  372,
 }
 
-func (fra *fakeRPCAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error {
+func (fra *fakeRPCAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "PopulateReparentJournal timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
 	compare(fra.t, "PopulateReparentJournal actionName", actionName, testActionName)
 	compare(fra.t, "PopulateReparentJournal masterAlias", masterAlias, testMasterAlias)
-	compare(fra.t, "PopulateReparentJournal pos", pos, testReplicationPosition)
+	compare(fra.t, "PopulateReparentJournal pos", position, testReplicationPosition)
 	testPopulateReparentJournalCalled = true
 	return nil
 }
@@ -858,12 +847,12 @@ func agentRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T,
 
 var testInitSlaveCalled = false
 
-func (fra *fakeRPCAgent) InitSlave(ctx context.Context, parent *pb.TabletAlias, pos myproto.ReplicationPosition, timeCreatedNS int64) error {
+func (fra *fakeRPCAgent) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "InitSlave parent", parent, testMasterAlias)
-	compare(fra.t, "InitSlave pos", pos, testReplicationPosition)
+	compare(fra.t, "InitSlave pos", position, testReplicationPosition)
 	compare(fra.t, "InitSlave timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
 	testInitSlaveCalled = true
 	return nil
@@ -879,7 +868,7 @@ func agentRPCTestInitSlavePanic(ctx context.Context, t *testing.T, client tmclie
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-func (fra *fakeRPCAgent) DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+func (fra *fakeRPCAgent) DemoteMaster(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -896,19 +885,13 @@ func agentRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmc
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testReplicationPositionReturned = myproto.ReplicationPosition{
-	GTIDSet: myproto.MariadbGTID{
-		Domain:   5,
-		Server:   567,
-		Sequence: 3456,
-	},
-}
+var testReplicationPositionReturned = "MariaDB/5-567-3456"
 
-func (fra *fakeRPCAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
+func (fra *fakeRPCAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "PromoteSlaveWhenCaughtUp pos", pos, testReplicationPosition)
+	compare(fra.t, "PromoteSlaveWhenCaughtUp pos", position, testReplicationPosition)
 	return testReplicationPositionReturned, nil
 }
 
@@ -945,7 +928,7 @@ func agentRPCTestSlaveWasPromotedPanic(ctx context.Context, t *testing.T, client
 var testSetMasterCalled = false
 var testForceStartSlave = true
 
-func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent *pb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -967,7 +950,7 @@ func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclie
 }
 
 var testSlaveWasRestartedArgs = &actionnode.SlaveWasRestartedArgs{
-	Parent: &pb.TabletAlias{
+	Parent: &topodatapb.TabletAlias{
 		Cell: "prison",
 		Uid:  42,
 	},
@@ -993,7 +976,7 @@ func agentRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, clien
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-func (fra *fakeRPCAgent) StopReplicationAndGetStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
+func (fra *fakeRPCAgent) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1010,7 +993,7 @@ func agentRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testin
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-func (fra *fakeRPCAgent) PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error) {
+func (fra *fakeRPCAgent) PromoteSlave(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

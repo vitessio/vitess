@@ -47,8 +47,8 @@ type SplitDiffWorker struct {
 	destinationAlias *pb.TabletAlias
 
 	// populated during WorkerStateDiff
-	sourceSchemaDefinitions     []*myproto.SchemaDefinition
-	destinationSchemaDefinition *myproto.SchemaDefinition
+	sourceSchemaDefinitions     []*pbt.SchemaDefinition
+	destinationSchemaDefinition *pbt.SchemaDefinition
 }
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
@@ -252,10 +252,6 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		if blpPos == nil {
 			return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 		}
-		position, err := myproto.DecodeReplicationPosition(blpPos.Position)
-		if err != nil {
-			return err
-		}
 
 		// read the tablet
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
@@ -268,14 +264,14 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		// stop replication
 		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, position, *remoteActionsTimeout)
+		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, blpPos.Position, *remoteActionsTimeout)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
 		}
 		stopPositionList[i] = &pbt.BlpPosition{
 			Uid:      ss.Uid,
-			Position: myproto.EncodeReplicationPosition(stoppedAt),
+			Position: stoppedAt,
 		}
 
 		// change the cleaner actions from ChangeSlaveType(rdonly)
@@ -344,7 +340,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	sdw.SetState(WorkerStateDiff)
 
 	sdw.wr.Logger().Infof("Gathering schema information...")
-	sdw.sourceSchemaDefinitions = make([]*myproto.SchemaDefinition, len(sdw.sourceAliases))
+	sdw.sourceSchemaDefinitions = make([]*pbt.SchemaDefinition, len(sdw.sourceAliases))
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	wg.Add(1)
@@ -395,7 +391,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition *myproto.TableDefinition) {
+		go func(tableDefinition *pbt.TableDefinition) {
 			defer wg.Done()
 			sem.Acquire()
 			defer sem.Release()

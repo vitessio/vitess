@@ -6,11 +6,13 @@ package mysqlctl
 
 import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // GetPermissions lists the permissions on the mysqld
-func GetPermissions(mysqld MysqlDaemon) (*proto.Permissions, error) {
-	permissions := &proto.Permissions{}
+func GetPermissions(mysqld MysqlDaemon) (*tabletmanagerdatapb.Permissions, error) {
+	permissions := &tabletmanagerdatapb.Permissions{}
 
 	// get Users
 	qr, err := mysqld.FetchSuperQuery("SELECT * FROM mysql.user")

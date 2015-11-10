@@ -19,8 +19,9 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the actions that exist as RPC only on the ActionAgent.
@@ -35,15 +36,15 @@ type RPCAgent interface {
 
 	Ping(ctx context.Context, args string) string
 
-	GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error)
+	GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
 
-	GetPermissions(ctx context.Context) (*myproto.Permissions, error)
+	GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error)
 
 	// Various read-write methods
 
 	SetReadOnly(ctx context.Context, rdonly bool) error
 
-	ChangeType(ctx context.Context, tabletType pb.TabletType) error
+	ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error
 
 	Sleep(ctx context.Context, duration time.Duration)
 
@@ -51,7 +52,7 @@ type RPCAgent interface {
 
 	RefreshState(ctx context.Context)
 
-	RunHealthCheck(ctx context.Context, targetTabletType pb.TabletType)
+	RunHealthCheck(ctx context.Context, targetTabletType topodatapb.TabletType)
 
 	ReloadSchema(ctx context.Context)
 
@@ -65,13 +66,13 @@ type RPCAgent interface {
 
 	// Replication related methods
 
-	SlaveStatus(ctx context.Context) (myproto.ReplicationStatus, error)
+	SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
-	MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error)
+	MasterPosition(ctx context.Context) (string, error)
 
 	StopSlave(ctx context.Context) error
 
-	StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error)
+	StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error)
 
 	StartSlave(ctx context.Context) error
 
@@ -79,37 +80,37 @@ type RPCAgent interface {
 
 	GetSlaves(ctx context.Context) ([]string, error)
 
-	WaitBlpPosition(ctx context.Context, blpPosition *pbt.BlpPosition, waitTime time.Duration) error
+	WaitBlpPosition(ctx context.Context, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error
 
-	StopBlp(ctx context.Context) ([]*pbt.BlpPosition, error)
+	StopBlp(ctx context.Context) ([]*tabletmanagerdatapb.BlpPosition, error)
 
 	StartBlp(ctx context.Context) error
 
-	RunBlpUntil(ctx context.Context, bpl []*pbt.BlpPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error)
+	RunBlpUntil(ctx context.Context, bpl []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error)
 
 	// Reparenting related functions
 
 	ResetReplication(ctx context.Context) error
 
-	InitMaster(ctx context.Context) (myproto.ReplicationPosition, error)
+	InitMaster(ctx context.Context) (string, error)
 
-	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error
+	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error
 
-	InitSlave(ctx context.Context, parent *pb.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
+	InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
 
-	DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error)
+	DemoteMaster(ctx context.Context) (string, error)
 
-	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition myproto.ReplicationPosition) (myproto.ReplicationPosition, error)
+	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition string) (string, error)
 
 	SlaveWasPromoted(ctx context.Context) error
 
-	SetMaster(ctx context.Context, parent *pb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
+	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
 
 	SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error
 
-	StopReplicationAndGetStatus(ctx context.Context) (myproto.ReplicationStatus, error)
+	StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
-	PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error)
+	PromoteSlave(ctx context.Context) (string, error)
 
 	// Backup / restore related methods
 
@@ -136,13 +137,13 @@ func (agent *ActionAgent) Ping(ctx context.Context, args string) string {
 
 // GetSchema returns the schema.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
+func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return agent.MysqlDaemon.GetSchema(agent.Tablet().DbName(), tables, excludeTables, includeViews)
 }
 
 // GetPermissions returns the db permissions.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) GetPermissions(ctx context.Context) (*myproto.Permissions, error) {
+func (agent *ActionAgent) GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error) {
 	return mysqlctl.GetPermissions(agent.MysqlDaemon)
 }
 
@@ -154,7 +155,7 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 
 // ChangeType changes the tablet type
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType pb.TabletType) error {
+func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
 	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil)
 }
 
@@ -178,7 +179,7 @@ func (agent *ActionAgent) RefreshState(ctx context.Context) {
 
 // RunHealthCheck will manually run the health check on the tablet
 // Should be called under RPCWrap.
-func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType pb.TabletType) {
+func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType topodatapb.TabletType) {
 	agent.runHealthCheck(targetTabletType)
 }
 
@@ -280,14 +281,22 @@ func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, m
 
 // SlaveStatus returns the replication status
 // Should be called under RPCWrap.
-func (agent *ActionAgent) SlaveStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
-	return agent.MysqlDaemon.SlaveStatus()
+func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
+	status, err := agent.MysqlDaemon.SlaveStatus()
+	if err != nil {
+		return nil, err
+	}
+	return myproto.ReplicationStatusToProto(status), nil
 }
 
 // MasterPosition returns the master position
 // Should be called under RPCWrap.
-func (agent *ActionAgent) MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
-	return agent.MysqlDaemon.MasterPosition()
+func (agent *ActionAgent) MasterPosition(ctx context.Context) (string, error) {
+	pos, err := agent.MysqlDaemon.MasterPosition()
+	if err != nil {
+		return "", err
+	}
+	return myproto.EncodeReplicationPosition(pos), nil
 }
 
 // StopSlave will stop the replication. Works both when Vitess manages
@@ -300,14 +309,22 @@ func (agent *ActionAgent) StopSlave(ctx context.Context) error {
 // StopSlaveMinimum will stop the slave after it reaches at least the
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
-func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
-	if err := agent.MysqlDaemon.WaitMasterPos(position, waitTime); err != nil {
-		return myproto.ReplicationPosition{}, err
+func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
+	pos, err := myproto.DecodeReplicationPosition(position)
+	if err != nil {
+		return "", err
+	}
+	if err := agent.MysqlDaemon.WaitMasterPos(pos, waitTime); err != nil {
+		return "", err
 	}
 	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
-	return agent.MysqlDaemon.MasterPosition()
+	pos, err = agent.MysqlDaemon.MasterPosition()
+	if err != nil {
+		return "", err
+	}
+	return myproto.EncodeReplicationPosition(pos), nil
 }
 
 // StartSlave will start the replication. Works both when Vitess manages
@@ -326,13 +343,13 @@ func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
 // WaitBlpPosition waits until a specific filtered replication position is
 // reached.
 // Should be called under RPCWrapLock.
-func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *pbt.BlpPosition, waitTime time.Duration) error {
+func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
 	return mysqlctl.WaitBlpPosition(agent.MysqlDaemon, blpPosition.Uid, blpPosition.Position, waitTime)
 }
 
 // StopBlp stops the binlog players, and return their positions.
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) StopBlp(ctx context.Context) ([]*pbt.BlpPosition, error) {
+func (agent *ActionAgent) StopBlp(ctx context.Context) ([]*tabletmanagerdatapb.BlpPosition, error) {
 	if agent.BinlogPlayerMap == nil {
 		return nil, fmt.Errorf("No BinlogPlayerMap configured")
 	}
@@ -352,15 +369,18 @@ func (agent *ActionAgent) StartBlp(ctx context.Context) error {
 
 // RunBlpUntil runs the binlog player server until the position is reached,
 // and returns the current mysql master replication position.
-func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl []*pbt.BlpPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
 	if agent.BinlogPlayerMap == nil {
-		return nil, fmt.Errorf("No BinlogPlayerMap configured")
+		return "", fmt.Errorf("No BinlogPlayerMap configured")
 	}
 	if err := agent.BinlogPlayerMap.RunUntil(ctx, bpl, waitTime); err != nil {
-		return nil, err
+		return "", err
 	}
-	rp, err := agent.MysqlDaemon.MasterPosition()
-	return &rp, err
+	pos, err := agent.MysqlDaemon.MasterPosition()
+	if err != nil {
+		return "", err
+	}
+	return myproto.EncodeReplicationPosition(pos), nil
 }
 
 //
@@ -381,18 +401,18 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 // InitMaster breaks slaves replication, get the current MySQL replication
 // position, insert a row in the reparent_journal table, and returns
 // the replication position
-func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
 	cmds := mysqlctl.CreateReparentJournal()
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
 	// get the current replication position
-	rp, err := agent.MysqlDaemon.MasterPosition()
+	pos, err := agent.MysqlDaemon.MasterPosition()
 	if err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
 	// Set the server read-write, from now on we can accept real
@@ -400,24 +420,28 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 	// we'll still need some slaves to be able to commit
 	// transactions.
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
 	// Change our type to master if not already
-	if err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *pb.Tablet) error {
-		tablet.Type = pb.TabletType_MASTER
+	if err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_MASTER
 		tablet.HealthMap = nil
 		return nil
 	}); err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
 	agent.initReplication = true
-	return rp, nil
+	return myproto.EncodeReplicationPosition(pos), nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
-func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error {
+func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
+	pos, err := myproto.DecodeReplicationPosition(position)
+	if err != nil {
+		return err
+	}
 	cmds := mysqlctl.CreateReparentJournal()
 	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(masterAlias), pos))
 
@@ -426,13 +450,17 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) InitSlave(ctx context.Context, parent *pb.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
+func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
+	pos, err := myproto.DecodeReplicationPosition(position)
+	if err != nil {
+		return err
+	}
 	ti, err := agent.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
 	}
 
-	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(replicationPosition)
+	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
 	if err != nil {
 		return err
 	}
@@ -455,11 +483,11 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *pb.TabletAlias,
 // DemoteMaster marks the server read-only, wait until it is done with
 // its current transactions, and returns its master position.
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// Set the server read-only. Note all active connections are not
 	// affected.
 	if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
 	// Now stop the query service, to make sure nobody is writing to the
@@ -468,7 +496,11 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.Replication
 	tablet := agent.Tablet()
 	agent.disallowQueries(tablet.Tablet.Type, "DemoteMaster marks server rdonly")
 
-	return agent.MysqlDaemon.DemoteMaster()
+	pos, err := agent.MysqlDaemon.DemoteMaster()
+	if err != nil {
+		return "", err
+	}
+	return myproto.EncodeReplicationPosition(pos), nil
 	// There is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will
 	// succeed. It will be less noisy to simply leave the entry
@@ -478,10 +510,14 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.Replication
 // PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
 // replication up to the provided point, and then makes the slave the
 // shard master.
-func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
+func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
+	pos, err := myproto.DecodeReplicationPosition(position)
+	if err != nil {
+		return "", err
+	}
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
 	// TODO(alainjobart) change the flavor API to take the context directly
@@ -494,19 +530,19 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos mypr
 		}
 	}
 	if err := agent.MysqlDaemon.WaitMasterPos(pos, waitTimeout); err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
-	rp, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
+	pos, err = agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
-	return rp, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
+	return myproto.EncodeReplicationPosition(pos), agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
@@ -522,7 +558,7 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) SetMaster(ctx context.Context, parent *pb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (agent *ActionAgent) SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	ti, err := agent.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
@@ -562,8 +598,8 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent *pb.TabletAlias,
 	if err != nil {
 		return err
 	}
-	if tablet.Type == pb.TabletType_MASTER {
-		tablet.Type = pb.TabletType_SPARE
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		tablet.Type = topodatapb.TabletType_SPARE
 		tablet.HealthMap = nil
 		if err := agent.TopoServer.UpdateTablet(ctx, tablet); err != nil {
 			return err
@@ -587,8 +623,8 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 	}
 
 	// Once this action completes, update authoritative tablet node first.
-	if tablet.Type == pb.TabletType_MASTER {
-		tablet.Type = pb.TabletType_SPARE
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		tablet.Type = topodatapb.TabletType_SPARE
 	}
 	err = agent.TopoServer.UpdateTablet(ctx, tablet)
 	if err != nil {
@@ -607,52 +643,52 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status
-func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
+func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	// get the status before we stop replication
 	rs, err := agent.MysqlDaemon.SlaveStatus()
 	if err != nil {
-		return myproto.ReplicationStatus{}, fmt.Errorf("before status failed: %v", err)
+		return nil, fmt.Errorf("before status failed: %v", err)
 	}
 	if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
 		// no replication is running, just return what we got
-		return rs, nil
+		return myproto.ReplicationStatusToProto(rs), nil
 	}
 	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
-		return myproto.ReplicationStatus{}, fmt.Errorf("stop slave failed: %v", err)
+		return nil, fmt.Errorf("stop slave failed: %v", err)
 	}
 	// now patch in the current position
 	rs.Position, err = agent.MysqlDaemon.MasterPosition()
 	if err != nil {
-		return myproto.ReplicationStatus{}, fmt.Errorf("after position failed: %v", err)
+		return nil, fmt.Errorf("after position failed: %v", err)
 	}
-	return rs, nil
+	return myproto.ReplicationStatusToProto(rs), nil
 }
 
 // PromoteSlave makes the current tablet the master
-func (agent *ActionAgent) PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error) {
+func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
-	rp, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
+	pos, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
 	// Set the server read-write
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
-		return myproto.ReplicationPosition{}, err
+		return "", err
 	}
 
-	return rp, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
+	return myproto.EncodeReplicationPosition(pos), agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
 }
 
 // updateReplicationGraphForPromotedSlave makes sure the newly promoted slave
 // is correctly represented in the replication graph
 func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Context, tablet *topo.TabletInfo) error {
 	// Update tablet regardless - trend towards consistency.
-	tablet.Type = pb.TabletType_MASTER
+	tablet.Type = topodatapb.TabletType_MASTER
 	tablet.HealthMap = nil
 	err := agent.TopoServer.UpdateTablet(ctx, tablet)
 	if err != nil {
@@ -685,11 +721,11 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	if err != nil {
 		return err
 	}
-	if tablet.Type == pb.TabletType_MASTER {
+	if tablet.Type == topodatapb.TabletType_MASTER {
 		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
 	}
 	originalType := tablet.Type
-	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, pb.TabletType_BACKUP, make(map[string]string)); err != nil {
+	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP, make(map[string]string)); err != nil {
 		return err
 	}
 
@@ -710,7 +746,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	// - if healthcheck is enabled, go to spare
 	// - if not, go back to original type
 	if agent.IsRunningHealthCheck() {
-		originalType = pb.TabletType_SPARE
+		originalType = topodatapb.TabletType_SPARE
 	}
 	err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType, nil)
 	if err != nil {

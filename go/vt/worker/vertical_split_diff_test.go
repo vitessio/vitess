@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -152,22 +153,22 @@ func TestVerticalSplitDiff(t *testing.T) {
 
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, destRdonly1, destRdonly2} {
 		// both source and destination should be identical (for schema and data returned)
-		rdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
+		rdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
-			TableDefinitions: []*myproto.TableDefinition{
-				&myproto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:              "moving1",
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              myproto.TableBaseTable,
 				},
-				&myproto.TableDefinition{
+				{
 					Name:              excludedTable,
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              myproto.TableBaseTable,
 				},
-				&myproto.TableDefinition{
+				{
 					Name: "view1",
 					Type: myproto.TableView,
 				},

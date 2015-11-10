@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
 
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
@@ -106,11 +107,11 @@ func TestSchemaManagerRun(t *testing.T) {
 		[]string{sql}, false, false, false)
 	fakeTmc := newFakeTabletManagerClient()
 	fakeTmc.AddSchemaChange(sql, &proto.SchemaChangeResult{
-		BeforeSchema: &proto.SchemaDefinition{},
-		AfterSchema: &proto.SchemaDefinition{
+		BeforeSchema: &tabletmanagerdatapb.SchemaDefinition{},
+		AfterSchema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
-			TableDefinitions: []*proto.TableDefinition{
-				&proto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:   "test_table",
 					Schema: sql,
 					Type:   proto.TableBaseTable,
@@ -119,7 +120,7 @@ func TestSchemaManagerRun(t *testing.T) {
 		},
 	})
 
-	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &proto.SchemaDefinition{})
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 
 	executor := NewTabletExecutor(
 		fakeTmc,
@@ -153,11 +154,11 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	controller := newFakeController([]string{sql}, false, false, false)
 	fakeTmc := newFakeTabletManagerClient()
 	fakeTmc.AddSchemaChange(sql, &proto.SchemaChangeResult{
-		BeforeSchema: &proto.SchemaDefinition{},
-		AfterSchema: &proto.SchemaDefinition{
+		BeforeSchema: &tabletmanagerdatapb.SchemaDefinition{},
+		AfterSchema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
-			TableDefinitions: []*proto.TableDefinition{
-				&proto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:   "test_table",
 					Schema: sql,
 					Type:   proto.TableBaseTable,
@@ -166,7 +167,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 		},
 	})
 
-	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &proto.SchemaDefinition{})
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 	fakeTmc.EnableExecuteFetchAsDbaError = true
 	executor := NewTabletExecutor(fakeTmc, newFakeTopo())
 
@@ -221,7 +222,7 @@ func newFakeTabletManagerClient() *fakeTabletManagerClient {
 	return &fakeTabletManagerClient{
 		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
 		preflightSchemas:    make(map[string]*proto.SchemaChangeResult),
-		schemaDefinitions:   make(map[string]*proto.SchemaDefinition),
+		schemaDefinitions:   make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 	}
 }
 
@@ -229,7 +230,7 @@ type fakeTabletManagerClient struct {
 	tmclient.TabletManagerClient
 	EnableExecuteFetchAsDbaError bool
 	preflightSchemas             map[string]*proto.SchemaChangeResult
-	schemaDefinitions            map[string]*proto.SchemaDefinition
+	schemaDefinitions            map[string]*tabletmanagerdatapb.SchemaDefinition
 }
 
 func (client *fakeTabletManagerClient) AddSchemaChange(
@@ -238,7 +239,7 @@ func (client *fakeTabletManagerClient) AddSchemaChange(
 }
 
 func (client *fakeTabletManagerClient) AddSchemaDefinition(
-	dbName string, schemaDefinition *proto.SchemaDefinition) {
+	dbName string, schemaDefinition *tabletmanagerdatapb.SchemaDefinition) {
 	client.schemaDefinitions[dbName] = schemaDefinition
 }
 
@@ -251,7 +252,7 @@ func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tabl
 	return result, nil
 }
 
-func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
+func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	result, ok := client.schemaDefinitions[tablet.DbName()]
 	if !ok {
 		return nil, fmt.Errorf("unknown database: %s", tablet.DbName())

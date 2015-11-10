@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -291,10 +292,10 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	wrk := gwrk.(*VerticalSplitCloneWorker)
 
 	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
-		sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
+		sourceRdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
-			TableDefinitions: []*myproto.TableDefinition{
-				&myproto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:              "moving1",
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
@@ -302,7 +303,7 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 					// This informs how many rows we can pack into a single insert
 					DataLength: 2048,
 				},
-				&myproto.TableDefinition{
+				{
 					Name: "view1",
 					Type: myproto.TableView,
 				},
