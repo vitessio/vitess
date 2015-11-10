@@ -15,13 +15,15 @@ WORKDIR /app
 RUN virtualenv /env
 ADD requirements.txt /app/requirements.txt
 RUN /env/bin/pip install -r /app/requirements.txt
-ADD . /app
+ADD main.py requirements.txt /app/
+ADD static /app/static
 
 EXPOSE 8080
 CMD []
 ENTRYPOINT ["/env/bin/python", "main.py"]
 
-ADD tmp/pkg /app/site-packages
-ADD tmp/lib/* /app/lib/
+ADD tmp/pkg /app/pkg
+ADD tmp/lib /app/lib
 ENV LD_LIBRARY_PATH /app/lib
-ENV PYTHONPATH /app/site-packages
+ENV PYTHONPATH /app/pkg/py-vtdb:/app/pkg/py-vt-bson-0.3.2/lib/python2.7/site-packages:/app/pkg/py-mock-1.0.1/lib/python2.7/site-packages:/app/pkg/dist-packages
+
