@@ -125,44 +125,6 @@ func (upl dbPermissionList) Len() int {
 	return len(upl)
 }
 
-// NewHostPermission is a helper method to create a tabletmanagerdatapb.HostPermission
-func NewHostPermission(fields []*query.Field, values []sqltypes.Value) *tabletmanagerdatapb.HostPermission {
-	hp := &tabletmanagerdatapb.HostPermission{
-		Privileges: make(map[string]string),
-	}
-	for i, field := range fields {
-		switch field.Name {
-		case "Host":
-			hp.Host = values[i].String()
-		case "Db":
-			hp.Db = values[i].String()
-		default:
-			hp.Privileges[field.Name] = values[i].String()
-		}
-	}
-	return hp
-}
-
-// HostPermissionPrimaryKey returns the sorting key for a HostPermission
-func HostPermissionPrimaryKey(hp *tabletmanagerdatapb.HostPermission) string {
-	return hp.Host + ":" + hp.Db
-}
-
-// HostPermissionString pretty-prints a HostPermission
-func HostPermissionString(hp *tabletmanagerdatapb.HostPermission) string {
-	return "HostPermission" + printPrivileges(hp.Privileges)
-}
-
-type hostPermissionList []*tabletmanagerdatapb.HostPermission
-
-func (upl hostPermissionList) Get(i int) (string, string) {
-	return HostPermissionPrimaryKey(upl[i]), HostPermissionString(upl[i])
-}
-
-func (upl hostPermissionList) Len() int {
-	return len(upl)
-}
-
 func printPermissions(name string, permissions permissionList) string {
 	result := name + " Permissions:\n"
 	for i := 0; i < permissions.Len(); i++ {
@@ -175,8 +137,7 @@ func printPermissions(name string, permissions permissionList) string {
 // PermissionsString pretty-prints Permissions
 func PermissionsString(permissions *tabletmanagerdatapb.Permissions) string {
 	return printPermissions("User", userPermissionList(permissions.UserPermissions)) +
-		printPermissions("Db", dbPermissionList(permissions.DbPermissions)) +
-		printPermissions("Host", hostPermissionList(permissions.HostPermissions))
+		printPermissions("Db", dbPermissionList(permissions.DbPermissions))
 }
 
 func diffPermissions(name, leftName string, left permissionList, rightName string, right permissionList, er concurrency.ErrorRecorder) {
@@ -224,7 +185,6 @@ func diffPermissions(name, leftName string, left permissionList, rightName strin
 func DiffPermissions(leftName string, left *tabletmanagerdatapb.Permissions, rightName string, right *tabletmanagerdatapb.Permissions, er concurrency.ErrorRecorder) {
 	diffPermissions("user", leftName, userPermissionList(left.UserPermissions), rightName, userPermissionList(right.UserPermissions), er)
 	diffPermissions("db", leftName, dbPermissionList(left.DbPermissions), rightName, dbPermissionList(right.DbPermissions), er)
-	diffPermissions("host", leftName, hostPermissionList(left.HostPermissions), rightName, hostPermissionList(right.HostPermissions), er)
 }
 
 // DiffPermissionsToArray difs two sets of permissions, and returns the difference

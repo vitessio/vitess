@@ -52,15 +52,12 @@ func TestPermissionsDiff(t *testing.T) {
 	p1 := &tabletmanagerdatapb.Permissions{}
 	p1.UserPermissions = append(p1.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "N"})))
 	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSQLResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "N", "Insert_priv": "Y"})))
-	p1.HostPermissions = append(p1.HostPermissions, NewHostPermission(mapToSQLResults(map[string]string{"Host": "localhost", "Db": "mysql", "Select_priv": "N", "Insert_priv": "N"})))
 
 	if PermissionsString(p1) !=
 		"User Permissions:\n"+
 			"  %:vt: UserPermission PasswordChecksum(4831957779889520640) Insert_priv(N) Select_priv(Y)\n"+
 			"Db Permissions:\n"+
-			"  %:vt_live:vt: DbPermission Insert_priv(Y) Select_priv(N)\n"+
-			"Host Permissions:\n"+
-			"  localhost:mysql: HostPermission Insert_priv(N) Select_priv(N)\n" {
+			"  %:vt_live:vt: DbPermission Insert_priv(Y) Select_priv(N)\n" {
 		t.Logf("Actual: %v", p1.String())
 		t.Fail()
 	}
@@ -71,7 +68,6 @@ func TestPermissionsDiff(t *testing.T) {
 	testPermissionsDiff(t, p1, p2, "p1", "p2", []string{
 		"p1 has an extra user %:vt",
 		"p1 has an extra db %:vt_live:vt",
-		"p1 has an extra host localhost:mysql",
 	})
 
 	p2.DbPermissions = p1.DbPermissions
@@ -79,12 +75,10 @@ func TestPermissionsDiff(t *testing.T) {
 	testPermissionsDiff(t, p1, p2, "p1", "p2", []string{
 		"p1 has an extra user %:vt",
 		"p2 has an extra db %:vt_live:vt",
-		"p1 has an extra host localhost:mysql",
 	})
 
 	p2.UserPermissions = append(p2.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "Y"})))
 	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSQLResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "Y", "Insert_priv": "N"})))
-	p2.HostPermissions = append(p2.HostPermissions, NewHostPermission(mapToSQLResults(map[string]string{"Host": "localhost", "Db": "mysql", "Select_priv": "Y", "Insert_priv": "N"})))
 	testPermissionsDiff(t, p1, p2, "p1", "p2", []string{
 		"p1 and p2 disagree on user %:vt:\n" +
 			"UserPermission PasswordChecksum(4831957779889520640) Insert_priv(N) Select_priv(Y)\n" +
@@ -94,15 +88,10 @@ func TestPermissionsDiff(t *testing.T) {
 			"DbPermission Insert_priv(N) Select_priv(Y)\n" +
 			" differs from:\n" +
 			"DbPermission Insert_priv(Y) Select_priv(N)",
-		"p1 and p2 disagree on host localhost:mysql:\n" +
-			"HostPermission Insert_priv(N) Select_priv(N)\n" +
-			" differs from:\n" +
-			"HostPermission Insert_priv(N) Select_priv(Y)",
 	})
 
 	p2.UserPermissions[0].Privileges["Insert_priv"] = "N"
 	p2.DbPermissions[0].Privileges["Insert_priv"] = "N"
 	p2.DbPermissions[0].Privileges["Select_priv"] = "Y"
-	p2.HostPermissions[0].Privileges["Select_priv"] = "N"
 	testPermissionsDiff(t, p1, p2, "p1", "p2", []string{})
 }

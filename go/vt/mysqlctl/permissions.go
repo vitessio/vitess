@@ -32,14 +32,5 @@ func GetPermissions(mysqld MysqlDaemon) (*tabletmanagerdatapb.Permissions, error
 		permissions.DbPermissions = append(permissions.DbPermissions, proto.NewDbPermission(qr.Fields, row))
 	}
 
-	// get Hosts
-	qr, err = mysqld.FetchSuperQuery("SELECT * FROM mysql.host")
-	if err != nil {
-		return nil, err
-	}
-	for _, row := range qr.Rows {
-		permissions.HostPermissions = append(permissions.HostPermissions, proto.NewHostPermission(qr.Fields, row))
-	}
-
 	return permissions, nil
 }
