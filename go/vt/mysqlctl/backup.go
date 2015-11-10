@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -512,6 +513,55 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 	return rec.Error()
 }
 
+// removeExistingFiles will delete existing files in the data dir to prevent
+// conflicts with the restored archive. In particular, binlogs can be created
+// even during initial bootstrap, and these can interfere with configuring
+// replication if kept around after the restore.
+func removeExistingFiles(cnf *Mycnf) error {
+	paths := map[string]string{
+		"BinLogPath.*":          cnf.BinLogPath,
+		"DataDir":               cnf.DataDir,
+		"InnodbDataHomeDir":     cnf.InnodbDataHomeDir,
+		"InnodbLogGroupHomeDir": cnf.InnodbLogGroupHomeDir,
+		"RelayLogPath.*":        cnf.RelayLogPath,
+		"RelayLogIndexPath":     cnf.RelayLogIndexPath,
+		"RelayLogInfoPath":      cnf.RelayLogInfoPath,
+	}
+	for name, path := range paths {
+		if path == "" {
+			return fmt.Errorf("can't remove existing files: %v is unknown", name)
+		}
+
+		if strings.HasSuffix(name, ".*") {
+			// These paths are actually filename prefixes, not directories.
+			// An extension of the form ".###" is appended by mysqld.
+			path += ".*"
+			log.Infof("Restore: removing files in %v (%v)", name, path)
+			matches, err := filepath.Glob(path)
+			if err != nil {
+				return fmt.Errorf("can't expand path glob %q: %v", path, err)
+			}
+			for _, match := range matches {
+				if err := os.Remove(match); err != nil {
+					return fmt.Errorf("can't remove existing file from %v (%v): %v", name, match, err)
+				}
+			}
+			continue
+		}
+
+		// Regular directory: delete recursively.
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			log.Infof("Restore: skipping removal of nonexistent %v (%v)", name, path)
+			continue
+		}
+		log.Infof("Restore: removing files in %v (%v)", name, path)
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("can't remove existing files in %v (%v): %v", name, path, err)
+		}
+	}
+	return nil
+}
+
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
@@ -564,6 +614,11 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 	log.Infof("Restore: shutdown mysqld")
 	err = mysqld.Shutdown(ctx, true)
 	if err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
+	log.Infof("Restore: deleting existing files")
+	if err := removeExistingFiles(mysqld.Cnf()); err != nil {
 		return proto.ReplicationPosition{}, err
 	}
 

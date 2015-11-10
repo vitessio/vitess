@@ -6,6 +6,7 @@ import sys
 import time
 import urllib2
 import warnings
+import re
 # Dropping a table inexplicably produces a warning despite
 # the 'IF EXISTS' clause. Squelch these warnings.
 warnings.simplefilter('ignore')
@@ -158,11 +159,12 @@ class Tablet(object):
   def init_mysql(self, extra_my_cnf=None):
     if self.use_mysqlctld:
       return self.mysqlctld(
-          ['-bootstrap_archive', mysql_flavor().bootstrap_archive()],
+          ['-init_db_sql_file', environment.vttop + '/config/init_db.sql'],
           extra_my_cnf=extra_my_cnf)
     else:
       return self.mysqlctl(
-          ['init', '-bootstrap_archive', mysql_flavor().bootstrap_archive()],
+          ['init', '-init_db_sql_file',
+           environment.vttop + '/config/init_db.sql'],
           extra_my_cnf=extra_my_cnf, with_ports=True)
 
   def start_mysql(self):
@@ -503,12 +505,12 @@ class Tablet(object):
 
     return self.proc
 
-
   def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
+    expr = re.compile('^' + expected + '$')
     while True:
       v = utils.get_vars(port or self.port)
       last_seen_state = '?'
-      if v == None:
+      if v is None:
         if self.proc.poll() is not None:
           raise utils.TestError(
               'vttablet died while test waiting for state %s' % expected)
@@ -523,12 +525,12 @@ class Tablet(object):
         else:
           s = v['TabletStateName']
           last_seen_state = s
-          if s != expected:
+          if expr.match(s):
+            break
+          else:
             logging.debug(
                 '  vttablet %s in state %s != %s', self.tablet_alias, s,
                 expected)
-          else:
-            break
       timeout = utils.wait_step(
           'waiting for state %s (last seen state: %s)' %
           (expected, last_seen_state),
@@ -646,7 +648,7 @@ class Tablet(object):
         'VtTabletExecute',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
-        ]
+    ]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if transaction_id:
@@ -662,7 +664,7 @@ class Tablet(object):
         '-keyspace', self.keyspace,
         '-shard', self.shard,
         self.tablet_alias,
-        ]
+    ]
     result = utils.run_vtctl_json(args, auto_log=auto_log)
     return result['transaction_id']
 
@@ -675,7 +677,7 @@ class Tablet(object):
         '-shard', self.shard,
         self.tablet_alias,
         str(transaction_id),
-        ]
+    ]
     return utils.run_vtctl(args, auto_log=auto_log)
 
   def rollback(self, transaction_id, auto_log=True):
@@ -687,7 +689,7 @@ class Tablet(object):
         '-shard', self.shard,
         self.tablet_alias,
         str(transaction_id),
-        ]
+    ]
     return utils.run_vtctl(args, auto_log=auto_log)
 
 

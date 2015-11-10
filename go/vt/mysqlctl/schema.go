@@ -218,7 +218,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 			sql += td.Schema + ";\n"
 		}
 	}
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 
@@ -226,7 +226,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	sql = "SET sql_log_bin = 0;\n"
 	sql += "USE _vt_preflight;\n"
 	sql += change
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 
@@ -239,7 +239,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	// and clean up the extra database
 	sql = "SET sql_log_bin = 0;\n"
 	sql += "DROP DATABASE _vt_preflight;\n"
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 
@@ -289,7 +289,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 

@@ -62,20 +62,11 @@ message DbPermission {
   map<string, string> privileges = 4;
 }
 
-// HostPermission describes a single row in the mysql.host table
-// Primary key is Host+Db
-message HostPermission {
-  string host = 1;
-  string db = 2;
-  map<string, string> privileges = 3;
-}
-
-// Permissions have all the rows in mysql.{user,db,host} tables,
+// Permissions have all the rows in mysql.{user,db} tables,
 // (all rows are sorted by primary key)
 message Permissions {
   repeated UserPermission user_permissions = 1;
   repeated DbPermission db_permissions = 2;
-  repeated HostPermission host_permissions = 3;
 }
 
 // BlpPosition is a replication position for a given binlog player

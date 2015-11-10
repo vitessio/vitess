@@ -209,16 +209,6 @@ var testGetPermissionsReply = &tabletmanagerdatapb.Permissions{
 			},
 		},
 	},
-	HostPermissions: []*tabletmanagerdatapb.HostPermission{
-		{
-			Host: "host3",
-			Db:   "db2",
-			Privileges: map[string]string{
-				"create": "maybe",
-				"delete": "whynot",
-			},
-		},
-	},
 }
 
 func (fra *fakeRPCAgent) GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error) {

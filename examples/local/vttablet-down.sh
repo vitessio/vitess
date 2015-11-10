@@ -25,6 +25,9 @@ for uid_index in $uids; do
   kill $pid
 
   echo "Stopping MySQL for tablet $alias..."
-  $VTROOT/bin/mysqlctl -tablet_uid $uid shutdown
+  $VTROOT/bin/mysqlctl \
+    -db-config-dba-uname vt_dba \
+    -tablet_uid $uid \
+    shutdown
 done
 

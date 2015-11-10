@@ -130,6 +130,10 @@ func TestBackupRestore(t *testing.T) {
 		DataDir:               sourceDataDir,
 		InnodbDataHomeDir:     sourceInnodbDataDir,
 		InnodbLogGroupHomeDir: sourceInnodbLogDir,
+		BinLogPath:            path.Join(root, "bin-logs/filename_prefix"),
+		RelayLogPath:          path.Join(root, "relay-logs/filename_prefix"),
+		RelayLogIndexPath:     path.Join(root, "relay-log.index"),
+		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": &sqltypes.Result{},

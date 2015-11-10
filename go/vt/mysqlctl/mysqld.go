@@ -16,6 +16,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -26,6 +27,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -264,15 +266,21 @@ func (mysqld *Mysqld) Wait(ctx context.Context) error {
 		_, statErr := os.Stat(mysqld.config.SocketFile)
 		if statErr == nil {
 			// Make sure the socket file isn't stale.
-			conn, connErr := mysqld.dbaPool.Get(0)
+			// Use a user that exists even before we apply the init_db_sql_file.
+			conn, connErr := mysql.Connect(sqldb.ConnParams{
+				Uname:      "root",
+				Charset:    "utf8",
+				UnixSocket: mysqld.config.SocketFile,
+			})
 			if connErr == nil {
-				conn.Recycle()
+				conn.Close()
 				return nil
 			}
+			log.Infof("mysqld socket file exists, but can't connect: %v", connErr)
 		} else if !os.IsNotExist(statErr) {
 			return fmt.Errorf("can't stat mysqld socket file: %v", statErr)
 		}
-		time.Sleep(time.Second)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -329,12 +337,12 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
 		}
 		name := path.Join(dir, "bin/mysqladmin")
 		arg := []string{
-			"-u", "vt_dba", "-S", mysqld.config.SocketFile,
+			"-u", mysqld.dba.Uname, "-S", mysqld.config.SocketFile,
 			"shutdown"}
 		env := []string{
 			os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
 		}
-		_, err = execCmd(name, arg, env, dir)
+		_, err = execCmd(name, arg, env, dir, nil)
 		if err != nil {
 			return err
 		}
@@ -365,14 +373,18 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
 	return nil
 }
 
-/* exec and wait for a return code. look for name in $PATH. */
-func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err error) {
+// execCmd searches the PATH for a command and runs it, logging the output.
+// If input is not nil, pipe it to the command's stdin.
+func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd *exec.Cmd, err error) {
 	cmdPath, _ := exec.LookPath(name)
 	log.Infof("execCmd: %v %v %v", name, cmdPath, args)
 
 	cmd = exec.Command(cmdPath, args...)
 	cmd.Env = env
 	cmd.Dir = dir
+	if input != nil {
+		cmd.Stdin = input
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		err = errors.New(name + ": " + string(output))
@@ -382,9 +394,9 @@ func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err er
 }
 
 // Init will create the default directory structure for the mysqld process,
-// generate / configure a my.cnf file, unpack a skeleton database,
-// and create some management tables.
-func (mysqld *Mysqld) Init(ctx context.Context, bootstrapArchive string) error {
+// generate / configure a my.cnf file, install a skeleton database,
+// and apply the provided initial SQL file.
+func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 	log.Infof("mysqlctl.Init")
 	err := mysqld.createDirs()
 	if err != nil {
@@ -403,12 +415,19 @@ func (mysqld *Mysqld) Init(ctx context.Context, bootstrapArchive string) error {
 		return err
 	}
 
-	// Unpack bootstrap DB files.
-	dbTbzPath := path.Join(root, "data/bootstrap/"+bootstrapArchive)
-	log.Infof("decompress bootstrap db %v", dbTbzPath)
-	args := []string{"-xj", "-C", mysqld.TabletDir, "-f", dbTbzPath}
-	if _, err = execCmd("tar", args, []string{}, ""); err != nil {
-		log.Errorf("failed unpacking %v: %v", dbTbzPath, err)
+	// Install data dir.
+	mysqlRoot, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		log.Errorf("%v", err)
+		return err
+	}
+	log.Infof("Installing data dir with mysql_install_db")
+	args := []string{
+		"--defaults-file=" + mysqld.config.path,
+		"--basedir=" + mysqlRoot,
+	}
+	if _, err = execCmd(path.Join(mysqlRoot, "bin/mysql_install_db"), args, nil, mysqlRoot, nil); err != nil {
+		log.Errorf("mysql_install_db failed: %v", err)
 		return err
 	}
 
@@ -416,6 +435,16 @@ func (mysqld *Mysqld) Init(ctx context.Context, bootstrapArchive string) error {
 	if err = mysqld.Start(ctx); err != nil {
 		log.Errorf("failed starting, check %v", mysqld.config.ErrorLogPath)
 		return err
+	}
+
+	// Run initial SQL file.
+	sqlFile, err := os.Open(initDBSQLFile)
+	if err != nil {
+		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
+	}
+	defer sqlFile.Close()
+	if err := mysqld.executeMysqlScript("root", sqlFile); err != nil {
+		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 
 	return nil
@@ -546,20 +575,24 @@ func deleteTopDir(dir string) (removalErr error) {
 	return
 }
 
-// ExecuteMysqlCommand executes some SQL commands using a mysql command line interface process
-func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
+// executeMysqlCommands executes some SQL commands,
+// using the mysql command line tool.
+func (mysqld *Mysqld) executeMysqlCommands(user, sql string) error {
+	return mysqld.executeMysqlScript(user, strings.NewReader(sql))
+}
+
+// executeMysqlScript executes a .sql script file with the mysql command line tool.
+func (mysqld *Mysqld) executeMysqlScript(user string, sql io.Reader) error {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return err
 	}
 	name := path.Join(dir, "bin/mysql")
-	arg := []string{
-		"-u", "vt_dba", "-S", mysqld.config.SocketFile,
-		"-e", sql}
+	arg := []string{"--batch", "-u", user, "-S", mysqld.config.SocketFile}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
 	}
-	_, err = execCmd(name, arg, env, dir)
+	_, err = execCmd(name, arg, env, dir, sql)
 	if err != nil {
 		return err
 	}
