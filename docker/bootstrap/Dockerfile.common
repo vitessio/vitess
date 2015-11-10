@@ -72,7 +72,7 @@ COPY config /vt/src/github.com/youtube/vitess/config
 COPY third_party /vt/src/github.com/youtube/vitess/third_party
 COPY tools /vt/src/github.com/youtube/vitess/tools
 COPY travis /vt/src/github.com/youtube/vitess/travis
-COPY php/composer.* /vt/src/github.com/youtube/vitess/php/
+COPY php/composer.json php/composer.lock /vt/src/github.com/youtube/vitess/php/
 
 # Install gRPC and protobuf as root
 RUN $VTTOP/travis/install_protobuf.sh

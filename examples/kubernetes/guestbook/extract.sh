@@ -3,12 +3,10 @@
 set -e
 
 # Collect all the local Python libs we need.
-cp -R $VTTOP/py/* /out/pkg/
-mkdir /out/pkg/google
-cp -R /usr/local/lib/python2.7/dist-packages/* /out/pkg/
-for pypath in $(find $VTROOT/dist -name site-packages); do
-  cp -R $pypath/* /out/pkg/
-done
+mkdir -p /out/pkg/py-vtdb
+cp -R $VTTOP/py/* /out/pkg/py-vtdb/
+cp -R /usr/local/lib/python2.7/dist-packages /out/pkg/
+cp -R /vt/dist/py-* /out/pkg/
 
 # We also need the grpc libraries.
 cp /usr/local/lib/libgrpc.so.0 /usr/local/lib/libgpr.so.0 /out/lib/

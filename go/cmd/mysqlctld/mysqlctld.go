@@ -33,8 +33,8 @@ var (
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
 	// mysqlctl init flags
-	waitTime         = flag.Duration("wait_time", 2*time.Minute, "how long to wait for mysqld startup or shutdown")
-	bootstrapArchive = flag.String("bootstrap_archive", "mysql-db-dir.tbz", "name of bootstrap archive within vitess/data/bootstrap directory")
+	waitTime      = flag.Duration("wait_time", 2*time.Minute, "how long to wait for mysqld startup or shutdown")
+	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
 )
 
 func init() {
@@ -74,7 +74,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
 	if _, err = os.Stat(mycnf.DataDir); os.IsNotExist(err) {
 		log.Infof("mysql data dir (%s) doesn't exist, initializing", mycnf.DataDir)
-		mysqld.Init(ctx, *bootstrapArchive)
+		mysqld.Init(ctx, *initDBSQLFile)
 	} else {
 		log.Infof("mysql data dir (%s) already exists, starting without init", mycnf.DataDir)
 		mysqld.Start(ctx)

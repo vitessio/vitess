@@ -13,7 +13,6 @@ It has these top-level messages:
 	SchemaDefinition
 	UserPermission
 	DbPermission
-	HostPermission
 	Permissions
 	BlpPosition
 	PingRequest
@@ -189,31 +188,11 @@ func (m *DbPermission) GetPrivileges() map[string]string {
 	return nil
 }
 
-// HostPermission describes a single row in the mysql.host table
-// Primary key is Host+Db
-type HostPermission struct {
-	Host       string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
-	Db         string            `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
-	Privileges map[string]string `protobuf:"bytes,3,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-}
-
-func (m *HostPermission) Reset()         { *m = HostPermission{} }
-func (m *HostPermission) String() string { return proto.CompactTextString(m) }
-func (*HostPermission) ProtoMessage()    {}
-
-func (m *HostPermission) GetPrivileges() map[string]string {
-	if m != nil {
-		return m.Privileges
-	}
-	return nil
-}
-
-// Permissions have all the rows in mysql.{user,db,host} tables,
+// Permissions have all the rows in mysql.{user,db} tables,
 // (all rows are sorted by primary key)
 type Permissions struct {
 	UserPermissions []*UserPermission `protobuf:"bytes,1,rep,name=user_permissions" json:"user_permissions,omitempty"`
 	DbPermissions   []*DbPermission   `protobuf:"bytes,2,rep,name=db_permissions" json:"db_permissions,omitempty"`
-	HostPermissions []*HostPermission `protobuf:"bytes,3,rep,name=host_permissions" json:"host_permissions,omitempty"`
 }
 
 func (m *Permissions) Reset()         { *m = Permissions{} }
@@ -230,13 +209,6 @@ func (m *Permissions) GetUserPermissions() []*UserPermission {
 func (m *Permissions) GetDbPermissions() []*DbPermission {
 	if m != nil {
 		return m.DbPermissions
-	}
-	return nil
-}
-
-func (m *Permissions) GetHostPermissions() []*HostPermission {
-	if m != nil {
-		return m.HostPermissions
 	}
 	return nil
 }
@@ -1023,7 +995,6 @@ func init() {
 	proto.RegisterType((*SchemaDefinition)(nil), "tabletmanagerdata.SchemaDefinition")
 	proto.RegisterType((*UserPermission)(nil), "tabletmanagerdata.UserPermission")
 	proto.RegisterType((*DbPermission)(nil), "tabletmanagerdata.DbPermission")
-	proto.RegisterType((*HostPermission)(nil), "tabletmanagerdata.HostPermission")
 	proto.RegisterType((*Permissions)(nil), "tabletmanagerdata.Permissions")
 	proto.RegisterType((*BlpPosition)(nil), "tabletmanagerdata.BlpPosition")
 	proto.RegisterType((*PingRequest)(nil), "tabletmanagerdata.PingRequest")
