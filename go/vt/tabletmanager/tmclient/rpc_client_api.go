@@ -17,8 +17,9 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TabletManagerProtocol is the implementation to use for tablet
@@ -38,10 +39,10 @@ type TabletManagerClient interface {
 	Ping(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// GetSchema asks the remote tablet for its database schema
-	GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*pbt.SchemaDefinition, error)
+	GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
 
 	// GetPermissions asks the remote tablet for its permissions list
-	GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*pbt.Permissions, error)
+	GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*tabletmanagerdatapb.Permissions, error)
 
 	//
 	// Various read-write methods
@@ -54,7 +55,7 @@ type TabletManagerClient interface {
 	SetReadWrite(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// ChangeType asks the remote tablet to change its type
-	ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType pb.TabletType) error
+	ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topodatapb.TabletType) error
 
 	// Sleep will sleep for a duration (used for tests)
 	Sleep(ctx context.Context, tablet *topo.TabletInfo, duration time.Duration) error
@@ -66,7 +67,7 @@ type TabletManagerClient interface {
 	RefreshState(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// RunHealthCheck asks the remote tablet to run a health check cycle
-	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType pb.TabletType) error
+	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topodatapb.TabletType) error
 
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error
@@ -88,17 +89,17 @@ type TabletManagerClient interface {
 	//
 
 	// SlaveStatus returns the tablet's mysql slave status.
-	SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationStatus, error)
+	SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*replicationdatapb.Status, error)
 
 	// MasterPosition returns the tablet's master position
-	MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+	MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (string, error)
 
 	// StopSlave stops the mysql replication
 	StopSlave(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// StopSlaveMinimum stops the mysql replication after it reaches
 	// the provided minimum point
-	StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, stopPos myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error)
+	StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, stopPos string, waitTime time.Duration) (string, error)
 
 	// StartSlave starts the mysql replication
 	StartSlave(ctx context.Context, tablet *topo.TabletInfo) error
@@ -116,18 +117,18 @@ type TabletManagerClient interface {
 
 	// WaitBlpPosition asks the tablet to wait until it reaches that
 	// position in replication
-	WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *pbt.BlpPosition, waitTime time.Duration) error
+	WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error
 
 	// StopBlp asks the tablet to stop all its binlog players,
 	// and returns the current position for all of them
-	StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*pbt.BlpPosition, error)
+	StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*tabletmanagerdatapb.BlpPosition, error)
 
 	// StartBlp asks the tablet to restart its binlog players
 	StartBlp(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// RunBlpUntil asks the tablet to restart its binlog players until
 	// it reaches the given positions, if not there yet.
-	RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*pbt.BlpPosition, waitTime time.Duration) (myproto.ReplicationPosition, error)
+	RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error)
 
 	//
 	// Reparenting related functions
@@ -141,23 +142,23 @@ type TabletManagerClient interface {
 	// InitMaster tells a tablet to make itself the new master,
 	// and return the replication position the slaves should use to
 	// reparent to it.
-	InitMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+	InitMaster(ctx context.Context, tablet *topo.TabletInfo) (string, error)
 
 	// PopulateReparentJournal asks the master to insert a row in
 	// its reparent_journal table.
-	PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error
+	PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error
 
 	// InitSlave tells a tablet to make itself a slave to the
 	// passed in master tablet alias, and wait for the row in the
 	// reparent_journal table.
-	InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent *pb.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
+	InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
 
 	// DemoteMaster tells the soon-to-be-former master it's gonna change,
 	// and it should go read-only and return its current position.
-	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (string, error)
 
 	// PromoteSlaveWhenCaughtUp transforms the tablet from a slave to a master.
-	PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error)
+	PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos string) (string, error)
 
 	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error
@@ -165,17 +166,17 @@ type TabletManagerClient interface {
 	// SetMaster tells a tablet to make itself a slave to the
 	// passed in master tablet alias, and wait for the row in the
 	// reparent_journal table (if timeCreatedNS is non-zero).
-	SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent *pb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
+	SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
 
 	// SlaveWasRestarted tells the remote tablet its master has changed
 	SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error
 
 	// StopReplicationAndGetStatus stops replication and returns the
 	// current position.
-	StopReplicationAndGetStatus(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationStatus, error)
+	StopReplicationAndGetStatus(ctx context.Context, tablet *topo.TabletInfo) (*replicationdatapb.Status, error)
 
 	// PromoteSlave makes the tablet the new master
-	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (string, error)
 
 	//
 	// Backup / restore related methods

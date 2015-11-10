@@ -94,13 +94,15 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -438,7 +440,7 @@ func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, zkVtPath string)
 	return nil
 }
 
-func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*pb.TabletAlias) error {
+func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*topodatapb.TabletAlias) error {
 	tabletMap, err := wr.TopoServer().GetTabletMap(ctx, tabletAliases)
 	if err != nil {
 		return err
@@ -532,8 +534,8 @@ func shardParamsToKeyspaceShards(ctx context.Context, wr *wrangler.Wrangler, par
 
 // tabletParamsToTabletAliases takes multiple params and converts them
 // to tablet aliases.
-func tabletParamsToTabletAliases(params []string) ([]*pb.TabletAlias, error) {
-	result := make([]*pb.TabletAlias, len(params))
+func tabletParamsToTabletAliases(params []string) ([]*topodatapb.TabletAlias, error) {
+	result := make([]*topodatapb.TabletAlias, len(params))
 	var err error
 	for i, param := range params {
 		result[i], err = topoproto.ParseTabletAlias(param)
@@ -546,26 +548,26 @@ func tabletParamsToTabletAliases(params []string) ([]*pb.TabletAlias, error) {
 
 // parseTabletType parses the string tablet type and verifies
 // it is an accepted one
-func parseTabletType(param string, types []pb.TabletType) (pb.TabletType, error) {
+func parseTabletType(param string, types []topodatapb.TabletType) (topodatapb.TabletType, error) {
 	tabletType, err := topoproto.ParseTabletType(param)
 	if err != nil {
-		return pb.TabletType_UNKNOWN, fmt.Errorf("invalid tablet type %v: %v", param, err)
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("invalid tablet type %v: %v", param, err)
 	}
-	if !topoproto.IsTypeInList(pb.TabletType(tabletType), types) {
-		return pb.TabletType_UNKNOWN, fmt.Errorf("Type %v is not one of: %v", tabletType, strings.Join(topoproto.MakeStringTypeList(types), " "))
+	if !topoproto.IsTypeInList(topodatapb.TabletType(tabletType), types) {
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("Type %v is not one of: %v", tabletType, strings.Join(topoproto.MakeStringTypeList(types), " "))
 	}
 	return tabletType, nil
 }
 
 // parseServingTabletType3 parses the tablet type into the enum,
 // and makes sure the enum is of serving type (MASTER, REPLICA, RDONLY/BATCH)
-func parseServingTabletType3(param string) (pb.TabletType, error) {
+func parseServingTabletType3(param string) (topodatapb.TabletType, error) {
 	servedType, err := topoproto.ParseTabletType(param)
 	if err != nil {
-		return pb.TabletType_UNKNOWN, err
+		return topodatapb.TabletType_UNKNOWN, err
 	}
 	if !topo.IsInServingGraph(servedType) {
-		return pb.TabletType_UNKNOWN, fmt.Errorf("served_type has to be in the serving graph, not %v", param)
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("served_type has to be in the serving graph, not %v", param)
 	}
 	return servedType, nil
 }
@@ -602,7 +604,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	}
 
 	// create tablet record
-	tablet := &pb.Tablet{
+	tablet := &topodatapb.Tablet{
 		Alias:          tabletAlias,
 		Hostname:       *hostname,
 		PortMap:        make(map[string]int32),
@@ -665,7 +667,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	return wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *pb.Tablet) error {
+	return wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if *hostname != "" {
 			tablet.Hostname = *hostname
 		}
@@ -869,7 +871,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []pb.TabletType{pb.TabletType_REPLICA, pb.TabletType_RDONLY})
+	servedType, err := parseTabletType(subFlags.Arg(1), []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
@@ -989,7 +991,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if *parent {
-		if err := wr.TopoServer().CreateKeyspace(ctx, keyspace, &pb.Keyspace{}); err != nil && err != topo.ErrNodeExists {
+		if err := wr.TopoServer().CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && err != topo.ErrNodeExists {
 			return err
 		}
 	}
@@ -1100,7 +1102,7 @@ func commandShardReplicationPositions(ctx context.Context, wr *wrangler.Wrangler
 
 	lines := make([]string, 0, 24)
 	for _, rt := range sortReplicatingTablets(tablets, stats) {
-		status := rt.ReplicationStatus
+		status := rt.Status
 		ti := rt.TabletInfo
 		if status == nil {
 			lines = append(lines, fmtTabletAwkable(ti)+" <err> <err> <err>")
@@ -1229,7 +1231,7 @@ func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if *tablesStr != "" {
 		tables = strings.Split(*tablesStr, ",")
 	}
-	var kr *pb.KeyRange
+	var kr *topodatapb.KeyRange
 	if *keyRange != "" {
 		if _, kr, err = topo.ValidateShardName(*keyRange); err != nil {
 			return err
@@ -1331,12 +1333,12 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 	// Always run an explicit healthcheck first to make sure we don't see any outdated values.
 	// This is especially true for tests and automation where there is no pause of multiple seconds
 	// between commands and the periodic healthcheck did not run again yet.
-	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, pb.TabletType_REPLICA); err != nil {
+	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, topodatapb.TabletType_REPLICA); err != nil {
 		return fmt.Errorf("failed to run explicit healthcheck on tablet: %v err: %v", tabletInfo, err)
 	}
 
 	// pass in a non-UNKNOWN tablet type to not use sessionId
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", pb.TabletType_MASTER, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_MASTER, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
 	}
@@ -1442,7 +1444,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	ki := &pb.Keyspace{
+	ki := &topodatapb.Keyspace{
 		ShardingColumnName: *shardingColumnName,
 		ShardingColumnType: kit,
 		SplitShardCount:    int32(*splitShardCount),
@@ -1453,7 +1455,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			if err != nil {
 				return err
 			}
-			ki.ServedFroms = append(ki.ServedFroms, &pb.Keyspace_ServedFrom{
+			ki.ServedFroms = append(ki.ServedFroms, &topodatapb.Keyspace_ServedFrom{
 				TabletType: tt,
 				Keyspace:   value,
 			})
@@ -1523,7 +1525,7 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 	if subFlags.NArg() >= 2 {
 		columnName = subFlags.Arg(1)
 	}
-	kit := pb.KeyspaceIdType_UNSET
+	kit := topodatapb.KeyspaceIdType_UNSET
 	if subFlags.NArg() >= 3 {
 		var err error
 		kit, err = key.ParseKeyspaceIDType(subFlags.Arg(2))
@@ -1546,7 +1548,7 @@ func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, su
 		return fmt.Errorf("The <keyspace name> and <tablet type> arguments are required for the SetKeyspaceServedFrom command.")
 	}
 	keyspace := subFlags.Arg(0)
-	servedType, err := parseTabletType(subFlags.Arg(1), []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY})
+	servedType, err := parseTabletType(subFlags.Arg(1), []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
@@ -1618,7 +1620,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 	if err != nil {
 		return err
 	}
-	if servedType == pb.TabletType_MASTER && *skipReFreshState {
+	if servedType == topodatapb.TabletType_MASTER && *skipReFreshState {
 		return fmt.Errorf("The skip-refresh-state flag can only be specified for non-master migrations.")
 	}
 	var cells []string
@@ -1643,7 +1645,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY})
+	servedType, err := parseTabletType(subFlags.Arg(1), []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
@@ -1721,7 +1723,7 @@ func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	paths := subFlags.Args()
-	aliases := make([]*pb.TabletAlias, len(paths))
+	aliases := make([]*topodatapb.TabletAlias, len(paths))
 	var err error
 	for i, path := range paths {
 		aliases[i], err = topoproto.ParseTabletAlias(path)
@@ -2052,7 +2054,7 @@ func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	tabletType, err := parseTabletType(subFlags.Arg(2), []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY})
+	tabletType, err := parseTabletType(subFlags.Arg(2), []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
@@ -2105,7 +2107,7 @@ func commandPanic(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 
 type rTablet struct {
 	*topo.TabletInfo
-	*myproto.ReplicationStatus
+	*replicationdatapb.Status
 }
 
 type rTablets []*rTablet
@@ -2121,32 +2123,40 @@ func (rts rTablets) Less(i, j int) bool {
 	l, r := rts[j], rts[i]
 	// l or r ReplicationStatus would be nil if we failed to get
 	// the position (put them at the beginning of the list)
-	if l.ReplicationStatus == nil {
-		return r.ReplicationStatus != nil
+	if l.Status == nil {
+		return r.Status != nil
 	}
-	if r.ReplicationStatus == nil {
+	if r.Status == nil {
 		return false
 	}
-	var lTypeMaster, rTypeMaster int
-	if l.Type == pb.TabletType_MASTER {
-		lTypeMaster = 1
-	}
-	if r.Type == pb.TabletType_MASTER {
-		rTypeMaster = 1
-	}
-	if lTypeMaster < rTypeMaster {
+	// the type proto has MASTER first, so sort by that. Will show
+	// the MASTER first, then each slave type sorted by
+	// replication position.
+	if l.Type < r.Type {
 		return true
 	}
-	if lTypeMaster == rTypeMaster {
-		return !l.Position.AtLeast(r.Position)
+	if l.Type > r.Type {
+		return false
 	}
-	return false
+	// then compare replication positions
+	lpos, err := myproto.DecodeReplicationPosition(l.Position)
+	if err != nil {
+		return true
+	}
+	rpos, err := myproto.DecodeReplicationPosition(r.Position)
+	if err != nil {
+		return false
+	}
+	return !lpos.AtLeast(rpos)
 }
 
-func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*myproto.ReplicationStatus) []*rTablet {
+func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status) []*rTablet {
 	rtablets := make([]*rTablet, len(tablets))
 	for i, status := range stats {
-		rtablets[i] = &rTablet{TabletInfo: tablets[i], ReplicationStatus: status}
+		rtablets[i] = &rTablet{
+			TabletInfo: tablets[i],
+			Status:     status,
+		}
 	}
 	sort.Sort(rTablets(rtablets))
 	return rtablets

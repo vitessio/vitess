@@ -252,10 +252,6 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		if blpPos == nil {
 			return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 		}
-		position, err := myproto.DecodeReplicationPosition(blpPos.Position)
-		if err != nil {
-			return err
-		}
 
 		// read the tablet
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
@@ -268,14 +264,14 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		// stop replication
 		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, position, *remoteActionsTimeout)
+		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, blpPos.Position, *remoteActionsTimeout)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
 		}
 		stopPositionList[i] = &pbt.BlpPosition{
 			Uid:      ss.Uid,
-			Position: myproto.EncodeReplicationPosition(stoppedAt),
+			Position: stoppedAt,
 		}
 
 		// change the cleaner actions from ChangeSlaveType(rdonly)
