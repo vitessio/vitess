@@ -23,11 +23,12 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // GetSchema uses an RPC to get the schema from a remote tablet
-func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *pb.TabletAlias, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
+func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *pb.TabletAlias, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
@@ -47,7 +48,7 @@ func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *pb.TabletAlia
 }
 
 // helper method to asynchronously diff a schema
-func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *myproto.SchemaDefinition, masterTabletAlias, alias *pb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *tabletmanagerdatapb.SchemaDefinition, masterTabletAlias, alias *pb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering schema for %v", topoproto.TabletAliasString(alias))
 	slaveSchema, err := wr.GetSchema(ctx, alias, nil, excludeTables, includeViews)
@@ -244,7 +245,7 @@ func (wr *Wrangler) lockAndApplySchemaShard(ctx context.Context, shardInfo *topo
 type tabletStatus struct {
 	ti           *topo.TabletInfo
 	lastError    error
-	beforeSchema *myproto.SchemaDefinition
+	beforeSchema *tabletmanagerdatapb.SchemaDefinition
 }
 
 func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
@@ -366,7 +367,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *pb.T
 		}
 	}
 
-	createSQL := sourceSd.ToSQLStrings()
+	createSQL := myproto.SchemaDefinitionToSQLStrings(sourceSd)
 	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.MasterAlias)
 	if err != nil {
 		return err

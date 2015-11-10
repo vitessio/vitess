@@ -10,12 +10,13 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/proto/query"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestOrderedColumns(t *testing.T) {
-	input := &myproto.TableDefinition{
+	input := &tabletmanagerdatapb.TableDefinition{
 		PrimaryKeyColumns: []string{"pk1", "pk2"},
 		Columns:           []string{"pk1", "col1", "pk2", "col2"},
 	}

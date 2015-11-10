@@ -107,7 +107,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	if err != nil {
 		return fmt.Errorf("unable to get database schema, error: %v", err)
 	}
-	tableWithCount := make(map[string]uint64, dbSchema.TableDefinitions.Len())
+	tableWithCount := make(map[string]uint64, len(dbSchema.TableDefinitions))
 	for _, tableSchema := range dbSchema.TableDefinitions {
 		tableWithCount[tableSchema.Name] = tableSchema.RowCount
 	}

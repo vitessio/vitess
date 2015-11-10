@@ -9,6 +9,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"golang.org/x/net/context"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestTabletExecutorOpen(t *testing.T) {
@@ -43,21 +45,21 @@ func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
 func TestTabletExecutorValidate(t *testing.T) {
 	fakeTmc := newFakeTabletManagerClient()
 
-	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &proto.SchemaDefinition{
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{
 		DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
-		TableDefinitions: []*proto.TableDefinition{
-			&proto.TableDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
 				Name:   "test_table",
 				Schema: "table schema",
 				Type:   proto.TableBaseTable,
 			},
-			&proto.TableDefinition{
+			{
 				Name:     "test_table_03",
 				Schema:   "table schema",
 				Type:     proto.TableBaseTable,
 				RowCount: 200000,
 			},
-			&proto.TableDefinition{
+			{
 				Name:     "test_table_04",
 				Schema:   "table schema",
 				Type:     proto.TableBaseTable,

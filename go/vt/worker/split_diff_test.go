@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/context"
 
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -211,22 +212,22 @@ func TestSplitDiff(t *testing.T) {
 		// the data split into left and right. However, if we do that in this test, we would really just be
 		// testing our fake SQL logic, since we do the data filtering in SQL.
 		// To simplify things, just assume that both sides have identical data.
-		rdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
+		rdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
-			TableDefinitions: []*myproto.TableDefinition{
-				&myproto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:              "table1",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              myproto.TableBaseTable,
 				},
-				&myproto.TableDefinition{
+				{
 					Name:              excludedTable,
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              myproto.TableBaseTable,
 				},
-				&myproto.TableDefinition{
+				{
 					Name: "view1",
 					Type: myproto.TableView,
 				},

@@ -22,8 +22,9 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 type timeoutError error
@@ -72,16 +73,13 @@ func (client *FakeTabletManagerClient) ExecuteHook(ctx context.Context, tablet *
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
+func (client *FakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return client.tmc.GetSchema(ctx, tablet, tables, excludeTables, includeViews)
-	// var sd myproto.SchemaDefinition
-	// return &sd, nil
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*myproto.Permissions, error) {
-	var p myproto.Permissions
-	return &p, nil
+func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*tabletmanagerdatapb.Permissions, error) {
+	return &tabletmanagerdatapb.Permissions{}, nil
 }
 
 //
@@ -99,7 +97,7 @@ func (client *FakeTabletManagerClient) SetReadWrite(ctx context.Context, tablet 
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType pb.TabletType) error {
+func (client *FakeTabletManagerClient) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topodatapb.TabletType) error {
 	return nil
 }
 
@@ -109,7 +107,7 @@ func (client *FakeTabletManagerClient) RefreshState(ctx context.Context, tablet 
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType pb.TabletType) error {
+func (client *FakeTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topodatapb.TabletType) error {
 	return nil
 }
 
@@ -147,15 +145,13 @@ func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, ta
 //
 
 // SlaveStatus is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationStatus, error) {
-	var status myproto.ReplicationStatus
-	return status, nil
+func (client *FakeTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*replicationdatapb.Status, error) {
+	return &replicationdatapb.Status{}, nil
 }
 
 // MasterPosition is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
-	var rp myproto.ReplicationPosition
-	return rp, nil
+func (client *FakeTabletManagerClient) MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+	return "", nil
 }
 
 // StopSlave is part of the tmclient.TabletManagerClient interface
@@ -164,9 +160,8 @@ func (client *FakeTabletManagerClient) StopSlave(ctx context.Context, tablet *to
 }
 
 // StopSlaveMinimum is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
-	var pos myproto.ReplicationPosition
-	return pos, nil
+func (client *FakeTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos string, waitTime time.Duration) (string, error) {
+	return "", nil
 }
 
 // StartSlave is part of the tmclient.TabletManagerClient interface
@@ -185,16 +180,16 @@ func (client *FakeTabletManagerClient) GetSlaves(ctx context.Context, tablet *to
 }
 
 // WaitBlpPosition is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *pbt.BlpPosition, waitTime time.Duration) error {
+func (client *FakeTabletManagerClient) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
 	return nil
 }
 
 // StopBlp is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*pbt.BlpPosition, error) {
+func (client *FakeTabletManagerClient) StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*tabletmanagerdatapb.BlpPosition, error) {
 	// TODO(aaijazi): this works because all tests so far only need to rely on Uid 0.
 	// Ideally, this should turn into a full mock, where the caller can configure the exact
 	// return value.
-	bpl := []*pbt.BlpPosition{
+	bpl := []*tabletmanagerdatapb.BlpPosition{
 		{
 			Uid: uint32(0),
 		},
@@ -208,9 +203,8 @@ func (client *FakeTabletManagerClient) StartBlp(ctx context.Context, tablet *top
 }
 
 // RunBlpUntil is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*pbt.BlpPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
-	var pos myproto.ReplicationPosition
-	return pos, nil
+func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
+	return "", nil
 }
 
 //
@@ -223,30 +217,28 @@ func (client *FakeTabletManagerClient) ResetReplication(ctx context.Context, tab
 }
 
 // InitMaster is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
-	return myproto.ReplicationPosition{}, nil
+func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+	return "", nil
 }
 
 // PopulateReparentJournal is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error {
+func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
 	return nil
 }
 
 // InitSlave is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent *pb.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
+func (client *FakeTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
 	return nil
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
-	var rp myproto.ReplicationPosition
-	return rp, nil
+func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+	return "", nil
 }
 
 // PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
-	var rp myproto.ReplicationPosition
-	return rp, nil
+func (client *FakeTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, position string) (string, error) {
+	return "", nil
 }
 
 // SlaveWasPromoted is part of the tmclient.TabletManagerClient interface
@@ -255,7 +247,7 @@ func (client *FakeTabletManagerClient) SlaveWasPromoted(ctx context.Context, tab
 }
 
 // SetMaster is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent *pb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	return nil
 }
 
@@ -265,15 +257,13 @@ func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, ta
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationStatus, error) {
-	var rp myproto.ReplicationStatus
-	return rp, nil
+func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topo.TabletInfo) (*replicationdatapb.Status, error) {
+	return &replicationdatapb.Status{}, nil
 }
 
 // PromoteSlave is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
-	var rp myproto.ReplicationPosition
-	return rp, nil
+func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+	return "", nil
 }
 
 //
