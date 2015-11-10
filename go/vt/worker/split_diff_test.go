@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -37,7 +36,7 @@ type destinationTabletServer struct {
 	excludedTable string
 }
 
-func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -49,7 +48,7 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *pb
 	sq.t.Logf("destinationTabletServer: got query: %v", *query)
 
 	// Send the headers
-	if err := sendReply(&mproto.QueryResult{
+	if err := sendReply(&sqltypes.Result{
 		Fields: []*pbq.Field{
 			&pbq.Field{
 				Name: "id",
@@ -71,7 +70,7 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *pb
 	// Send the values
 	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
 	for i := 0; i < 100; i++ {
-		if err := sendReply(&mproto.QueryResult{
+		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
@@ -93,7 +92,7 @@ type sourceTabletServer struct {
 	excludedTable string
 }
 
-func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -108,7 +107,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pbq.Tar
 	sq.t.Logf("sourceTabletServer: got query: %v", *query)
 
 	// Send the headers
-	if err := sendReply(&mproto.QueryResult{
+	if err := sendReply(&sqltypes.Result{
 		Fields: []*pbq.Field{
 			&pbq.Field{
 				Name: "id",
@@ -130,7 +129,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pbq.Tar
 	// Send the values
 	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
 	for i := 0; i < 100; i++ {
-		if err := sendReply(&mproto.QueryResult{
+		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),

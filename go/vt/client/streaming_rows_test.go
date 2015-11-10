@@ -12,13 +12,12 @@ import (
 	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
-var packet1 = mproto.QueryResult{
+var packet1 = sqltypes.Result{
 	Fields: []*query.Field{
 		&query.Field{
 			Name: "field1",
@@ -35,7 +34,7 @@ var packet1 = mproto.QueryResult{
 	},
 }
 
-var packet2 = mproto.QueryResult{
+var packet2 = sqltypes.Result{
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("1")),
@@ -45,7 +44,7 @@ var packet2 = mproto.QueryResult{
 	},
 }
 
-var packet3 = mproto.QueryResult{
+var packet3 = sqltypes.Result{
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("2")),
@@ -56,8 +55,8 @@ var packet3 = mproto.QueryResult{
 }
 
 func TestStreamingRows(t *testing.T) {
-	qrc, errFunc := func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
-		ch := make(chan *mproto.QueryResult)
+	qrc, errFunc := func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
+		ch := make(chan *sqltypes.Result)
 		go func() {
 			ch <- &packet1
 			ch <- &packet2
@@ -113,8 +112,8 @@ func TestStreamingRows(t *testing.T) {
 }
 
 func TestStreamingRowsReversed(t *testing.T) {
-	qrc, errFunc := func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
-		ch := make(chan *mproto.QueryResult)
+	qrc, errFunc := func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
+		ch := make(chan *sqltypes.Result)
 		go func() {
 			ch <- &packet1
 			ch <- &packet2
@@ -153,8 +152,8 @@ func TestStreamingRowsReversed(t *testing.T) {
 }
 
 func TestStreamingRowsError(t *testing.T) {
-	qrc, errFunc := func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
-		ch := make(chan *mproto.QueryResult)
+	qrc, errFunc := func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
+		ch := make(chan *sqltypes.Result)
 		go func() {
 			close(ch)
 		}()
@@ -173,8 +172,8 @@ func TestStreamingRowsError(t *testing.T) {
 	}
 	_ = ri.Close()
 
-	qrc, errFunc = func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
-		ch := make(chan *mproto.QueryResult)
+	qrc, errFunc = func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
+		ch := make(chan *sqltypes.Result)
 		go func() {
 			ch <- &packet1
 			close(ch)
@@ -204,8 +203,8 @@ func TestStreamingRowsError(t *testing.T) {
 	}
 	_ = ri.Close()
 
-	qrc, errFunc = func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
-		ch := make(chan *mproto.QueryResult)
+	qrc, errFunc = func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
+		ch := make(chan *sqltypes.Result)
 		go func() {
 			ch <- &packet1
 			ch <- &packet2
@@ -226,8 +225,8 @@ func TestStreamingRowsError(t *testing.T) {
 	}
 	_ = ri.Close()
 
-	qrc, errFunc = func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
-		ch := make(chan *mproto.QueryResult)
+	qrc, errFunc = func() (<-chan *sqltypes.Result, vtgateconn.ErrFunc) {
+		ch := make(chan *sqltypes.Result)
 		go func() {
 			ch <- &packet2
 			close(ch)

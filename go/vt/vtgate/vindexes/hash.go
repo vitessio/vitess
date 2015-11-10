@@ -149,7 +149,7 @@ func (vind *HashAuto) Generate(vcursor planbuilder.VCursor) (id int64, err error
 	if err != nil {
 		return 0, fmt.Errorf("hash.Generate: %v", err)
 	}
-	return int64(result.InsertId), err
+	return int64(result.InsertID), err
 }
 
 // Delete deletes the entry from the vindex table.

@@ -37,15 +37,7 @@ func TestRowsToProto3(t *testing.T) {
 		t.Errorf("P3: %v, want %v", p3, want)
 	}
 
-	f := []*query.Field{{
-		Type: VarBinary,
-	}, {
-		Type: VarBinary,
-	}, {
-		Type: VarBinary,
-	}}
-
-	reverse := Proto3ToRows(f, p3)
+	reverse := Proto3ToRows(p3)
 	if !reflect.DeepEqual(reverse, rows) {
 		t.Errorf("reverse: \n%#v, want \n%#v", reverse, rows)
 	}

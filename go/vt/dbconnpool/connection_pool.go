@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"golang.org/x/net/context"
 )
@@ -28,8 +28,8 @@ var (
 
 // PoolConnection is the interface implemented by users of this specialized pool.
 type PoolConnection interface {
-	ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error)
-	ExecuteStreamFetch(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error
+	ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
+	ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error
 	ID() int64
 	Close()
 	IsClosed() bool

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"golang.org/x/net/context"
 )
 
@@ -72,7 +72,7 @@ type ShardWithError struct {
 // ShardResult contains sql execute information on a particula shard
 type ShardResult struct {
 	Shard  string
-	Result *mproto.QueryResult
+	Result *sqltypes.Result
 }
 
 // Run schema changes on Vitess through VtGate

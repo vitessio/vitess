@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -93,7 +93,7 @@ func (stc *ScatterConn) Execute(
 	tabletType pb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
-) (*mproto.QueryResult, error) {
+) (*sqltypes.Result, error) {
 	results, allErrors := stc.multiGo(
 		ctx,
 		"Execute",
@@ -111,9 +111,9 @@ func (stc *ScatterConn) Execute(
 			return nil
 		})
 
-	qr := new(mproto.QueryResult)
+	qr := new(sqltypes.Result)
 	for innerqr := range results {
-		innerqr := innerqr.(*mproto.QueryResult)
+		innerqr := innerqr.(*sqltypes.Result)
 		appendResult(qr, innerqr)
 	}
 	if allErrors.HasErrors() {
@@ -133,7 +133,7 @@ func (stc *ScatterConn) ExecuteMulti(
 	tabletType pb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
-) (*mproto.QueryResult, error) {
+) (*sqltypes.Result, error) {
 	results, allErrors := stc.multiGo(
 		ctx,
 		"Execute",
@@ -151,9 +151,9 @@ func (stc *ScatterConn) ExecuteMulti(
 			return nil
 		})
 
-	qr := new(mproto.QueryResult)
+	qr := new(sqltypes.Result)
 	for innerqr := range results {
-		innerqr := innerqr.(*mproto.QueryResult)
+		innerqr := innerqr.(*sqltypes.Result)
 		appendResult(qr, innerqr)
 	}
 	if allErrors.HasErrors() {
@@ -172,7 +172,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	tabletType pb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
-) (*mproto.QueryResult, error) {
+) (*sqltypes.Result, error) {
 	results, allErrors := stc.multiGo(
 		ctx,
 		"ExecuteEntityIds",
@@ -192,9 +192,9 @@ func (stc *ScatterConn) ExecuteEntityIds(
 			return nil
 		})
 
-	qr := new(mproto.QueryResult)
+	qr := new(sqltypes.Result)
 	for innerqr := range results {
-		innerqr := innerqr.(*mproto.QueryResult)
+		innerqr := innerqr.(*sqltypes.Result)
 		appendResult(qr, innerqr)
 	}
 	if allErrors.HasErrors() {
@@ -230,7 +230,7 @@ func (stc *ScatterConn) ExecuteBatch(
 	allErrors := new(concurrency.AllErrorRecorder)
 
 	qrs = &tproto.QueryResultList{}
-	qrs.List = make([]mproto.QueryResult, batchRequest.Length)
+	qrs.List = make([]sqltypes.Result, batchRequest.Length)
 	var resMutex sync.Mutex
 
 	var wg sync.WaitGroup
@@ -297,7 +297,7 @@ func (stc *ScatterConn) StreamExecute(
 	keyspace string,
 	shards []string,
 	tabletType pb.TabletType,
-	sendReply func(reply *mproto.QueryResult) error,
+	sendReply func(reply *sqltypes.Result) error,
 ) error {
 	results, allErrors := stc.multiGo(
 		ctx,
@@ -323,7 +323,7 @@ func (stc *ScatterConn) StreamExecute(
 		if replyErr != nil {
 			continue
 		}
-		mqr := innerqr.(*mproto.QueryResult)
+		mqr := innerqr.(*sqltypes.Result)
 		// only send field info once for scattered streaming
 		if len(mqr.Fields) > 0 && len(mqr.Rows) == 0 {
 			if fieldSent {
@@ -348,7 +348,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	keyspace string,
 	shardVars map[string]map[string]interface{},
 	tabletType pb.TabletType,
-	sendReply func(reply *mproto.QueryResult) error,
+	sendReply func(reply *sqltypes.Result) error,
 ) error {
 	results, allErrors := stc.multiGo(
 		ctx,
@@ -374,7 +374,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		if replyErr != nil {
 			continue
 		}
-		mqr := innerqr.(*mproto.QueryResult)
+		mqr := innerqr.(*sqltypes.Result)
 		// only send field info once for scattered streaming
 		if len(mqr.Fields) > 0 && len(mqr.Rows) == 0 {
 			if fieldSent {
@@ -697,7 +697,7 @@ func getShards(shardVars map[string]map[string]interface{}) []string {
 	return shards
 }
 
-func appendResult(qr, innerqr *mproto.QueryResult) {
+func appendResult(qr, innerqr *sqltypes.Result) {
 	if innerqr.RowsAffected == 0 && len(innerqr.Fields) == 0 {
 		return
 	}
@@ -705,8 +705,8 @@ func appendResult(qr, innerqr *mproto.QueryResult) {
 		qr.Fields = innerqr.Fields
 	}
 	qr.RowsAffected += innerqr.RowsAffected
-	if innerqr.InsertId != 0 {
-		qr.InsertId = innerqr.InsertId
+	if innerqr.InsertID != 0 {
+		qr.InsertID = innerqr.InsertID
 	}
 	qr.Rows = append(qr.Rows, innerqr.Rows...)
 }

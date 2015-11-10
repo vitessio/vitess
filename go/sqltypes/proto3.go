@@ -42,7 +42,7 @@ func RowsToProto3(rows [][]Value) []*pbq.Row {
 }
 
 // Proto3ToRows converts a proto3 rows to [][]Value.
-func Proto3ToRows(fields []*pbq.Field, rows []*pbq.Row) [][]Value {
+func Proto3ToRows(rows []*pbq.Row) [][]Value {
 	if len(rows) == 0 {
 		return [][]Value{}
 	}
@@ -56,7 +56,7 @@ func Proto3ToRows(fields []*pbq.Field, rows []*pbq.Row) [][]Value {
 				result[i][j] = NULL
 			} else {
 				end := index + int(l)
-				result[i][j] = MakeValue(fields[j].Type, r.Values[index:end])
+				result[i][j] = MakeString(r.Values[index:end])
 				index = end
 			}
 		}
@@ -86,7 +86,7 @@ func Proto3ToResult(qr *pbq.QueryResult) *Result {
 		Fields:       qr.Fields,
 		RowsAffected: qr.RowsAffected,
 		InsertID:     qr.InsertId,
-		Rows:         Proto3ToRows(qr.Fields, qr.Rows),
+		Rows:         Proto3ToRows(qr.Rows),
 	}
 }
 

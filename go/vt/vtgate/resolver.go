@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -84,7 +84,7 @@ func isConnError(err error) (int, bool) {
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 // This throws an error if a dml spans multiple keyspace_ids. Resharding depends
 // on being able to uniquely route a write.
-func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool) (*mproto.QueryResult, error) {
+func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if isDml(sql) && len(keyspaceIds) > 1 {
 		return nil, vterrors.FromError(
 			vtrpc.ErrorCode_BAD_INPUT,
@@ -105,7 +105,7 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool) (*mproto.QueryResult, error) {
+func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
@@ -129,7 +129,7 @@ func (res *Resolver) Execute(
 	session *pbg.Session,
 	mapToShards func(string) (string, []string, error),
 	notInTransaction bool,
-) (*mproto.QueryResult, error) {
+) (*sqltypes.Result, error) {
 	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
 		return nil, err
@@ -184,7 +184,7 @@ func (res *Resolver) ExecuteEntityIds(
 	tabletType pb.TabletType,
 	session *pbg.Session,
 	notInTransaction bool,
-) (*mproto.QueryResult, error) {
+) (*sqltypes.Result, error) {
 	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
 		ctx,
 		res.toposerv,
@@ -305,7 +305,7 @@ func (res *Resolver) ExecuteBatch(
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, sendReply func(*mproto.QueryResult) error) error {
+func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			ctx,
@@ -324,7 +324,7 @@ func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, b
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, sendReply func(*mproto.QueryResult) error) error {
+func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
@@ -348,7 +348,7 @@ func (res *Resolver) StreamExecute(
 	keyspace string,
 	tabletType pb.TabletType,
 	mapToShards func(string) (string, []string, error),
-	sendReply func(*mproto.QueryResult) error,
+	sendReply func(*sqltypes.Result) error,
 ) error {
 	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {

@@ -11,7 +11,7 @@ import (
 	"path"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
@@ -131,8 +131,8 @@ func TestBackupRestore(t *testing.T) {
 		InnodbDataHomeDir:     sourceInnodbDataDir,
 		InnodbLogGroupHomeDir: sourceInnodbLogDir,
 	}
-	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
-		"SHOW DATABASES": &mproto.QueryResult{},
+	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES": &sqltypes.Result{},
 	}
 	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
 	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}

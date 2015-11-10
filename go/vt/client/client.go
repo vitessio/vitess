@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
@@ -140,7 +140,7 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 	if s.c.Streaming {
 		return nil, errors.New("Exec not allowed for streaming connections")
 	}
-	var qr *mproto.QueryResult
+	var qr *sqltypes.Result
 	var err error
 	if s.c.tx == nil {
 		qr, err = s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.tabletType)
@@ -150,7 +150,7 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return result{int64(qr.InsertId), int64(qr.RowsAffected)}, nil
+	return result{int64(qr.InsertID), int64(qr.RowsAffected)}, nil
 }
 
 func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
@@ -163,7 +163,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 		return newStreamingRows(qrc, errFunc, cancel), nil
 	}
 	defer cancel()
-	var qr *mproto.QueryResult
+	var qr *sqltypes.Result
 	var err error
 	if s.c.tx == nil {
 		qr, err = s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.tabletType)

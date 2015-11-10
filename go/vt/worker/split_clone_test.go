@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -35,7 +34,7 @@ type testQueryService struct {
 	t *testing.T
 }
 
-func (sq *testQueryService) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *testQueryService) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
@@ -54,7 +53,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *pbq.Targe
 	sq.t.Logf("testQueryService: got query: %v with min %v max %v", *query, min, max)
 
 	// Send the headers
-	if err := sendReply(&mproto.QueryResult{
+	if err := sendReply(&sqltypes.Result{
 		Fields: []*pbq.Field{
 			&pbq.Field{
 				Name: "id",
@@ -76,7 +75,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *pbq.Targe
 	// Send the values
 	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
 	for i := min; i < max; i++ {
-		if err := sendReply(&mproto.QueryResult{
+		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
@@ -96,7 +95,7 @@ type ExpectedExecuteFetch struct {
 	Query       string
 	MaxRows     int
 	WantFields  bool
-	QueryResult *mproto.QueryResult
+	QueryResult *sqltypes.Result
 	Error       error
 }
 
@@ -115,14 +114,14 @@ func NewFakePoolConnectionQuery(t *testing.T, query string, err error) *FakePool
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
 			ExpectedExecuteFetch{
 				Query:       query,
-				QueryResult: &mproto.QueryResult{},
+				QueryResult: &sqltypes.Result{},
 				Error:       err,
 			},
 		},
 	}
 }
 
-func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if fpc.ExpectedExecuteFetchIndex >= len(fpc.ExpectedExecuteFetch) {
 		fpc.t.Errorf("got unexpected out of bound fetch: %v >= %v", fpc.ExpectedExecuteFetchIndex, len(fpc.ExpectedExecuteFetch))
 		return nil, fmt.Errorf("unexpected out of bound fetch")
@@ -149,7 +148,7 @@ func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfield
 	return fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].QueryResult, nil
 }
 
-func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	return nil
 }
 
@@ -180,7 +179,7 @@ func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 			ExpectedExecuteFetch: []ExpectedExecuteFetch{
 				ExpectedExecuteFetch{
 					Query: "SELECT MIN(id), MAX(id) FROM vt_ks.table1",
-					QueryResult: &mproto.QueryResult{
+					QueryResult: &sqltypes.Result{
 						Fields: []*pbq.Field{
 							&pbq.Field{
 								Name: "min",

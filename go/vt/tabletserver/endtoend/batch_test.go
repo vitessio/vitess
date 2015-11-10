@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
@@ -24,7 +23,7 @@ func TestBatchRead(t *testing.T) {
 		Sql:           "select * from vitess_b where id = :b",
 		BindVariables: map[string]interface{}{"b": 2},
 	}}
-	qr1 := mproto.QueryResult{
+	qr1 := sqltypes.Result{
 		Fields: []*query.Field{{
 			Name: "eid",
 			Type: sqltypes.Int64,
@@ -48,7 +47,7 @@ func TestBatchRead(t *testing.T) {
 			},
 		},
 	}
-	qr2 := mproto.QueryResult{
+	qr2 := sqltypes.Result{
 		Fields: []*query.Field{{
 			Name: "eid",
 			Type: sqltypes.Int64,
@@ -65,7 +64,7 @@ func TestBatchRead(t *testing.T) {
 		},
 	}
 	want := &proto.QueryResultList{
-		List: []mproto.QueryResult{qr1, qr2},
+		List: []sqltypes.Result{qr1, qr2},
 	}
 
 	qrl, err := client.ExecuteBatch(queries, false)

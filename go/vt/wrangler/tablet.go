@@ -7,7 +7,7 @@ package wrangler
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -209,7 +209,7 @@ func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias *pb.Tabl
 }
 
 // ExecuteFetchAsDba executes a query remotely using the DBA pool
-func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *pb.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool, reloadSchema bool) (*mproto.QueryResult, error) {
+func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *pb.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool, reloadSchema bool) (*sqltypes.Result, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err

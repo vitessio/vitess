@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -31,7 +30,7 @@ var (
 // Conn defines the behavior for the low level db connection
 type Conn interface {
 	// ExecuteFetch executes the query on the connection
-	ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error)
+	ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 	// ExecuteFetchMap returns a map from column names to cell data for a query
 	// that should return exactly 1 row.
 	ExecuteFetchMap(query string) (map[string]string, error)

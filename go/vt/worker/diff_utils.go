@@ -27,7 +27,7 @@ import (
 
 // QueryResultReader will stream rows towards the output channel.
 type QueryResultReader struct {
-	Output      <-chan *mproto.QueryResult
+	Output      <-chan *sqltypes.Result
 	Fields      []*query.Field
 	conn        tabletconn.TabletConn
 	clientErrFn func() error
@@ -170,7 +170,7 @@ func (qrr *QueryResultReader) Close() {
 // RowReader returns individual rows from a QueryResultReader
 type RowReader struct {
 	queryResultReader *QueryResultReader
-	currentResult     *mproto.QueryResult
+	currentResult     *sqltypes.Result
 	currentIndex      int
 }
 

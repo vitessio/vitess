@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -259,9 +259,9 @@ func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *to
 	return result, nil
 }
 
-func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*mproto.QueryResult, error) {
+func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*sqltypes.Result, error) {
 	if client.EnableExecuteFetchAsDbaError {
-		var result mproto.QueryResult
+		var result sqltypes.Result
 		return &result, fmt.Errorf("ExecuteFetchAsDba occur an unknown error")
 	}
 	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, query, maxRows, wantFields, disableBinlogs, reloadSchema)

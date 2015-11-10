@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -59,9 +59,9 @@ type RPCAgent interface {
 
 	ApplySchema(ctx context.Context, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error)
 
-	ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*proto.QueryResult, error)
+	ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*sqltypes.Result, error)
 
-	ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*proto.QueryResult, error)
+	ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*sqltypes.Result, error)
 
 	// Replication related methods
 
@@ -225,7 +225,7 @@ func (agent *ActionAgent) ApplySchema(ctx context.Context, change *myproto.Schem
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields bool, disableBinlogs bool, reloadSchema bool) (*proto.QueryResult, error) {
+func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields bool, disableBinlogs bool, reloadSchema bool) (*sqltypes.Result, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetDbaConnection()
 	if err != nil {
@@ -268,7 +268,7 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, d
 
 // ExecuteFetchAsApp will execute the given query, possibly disabling binlogs.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*proto.QueryResult, error) {
+func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*sqltypes.Result, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetAppConnection()
 	if err != nil {

@@ -12,9 +12,9 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
@@ -279,7 +279,7 @@ func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
 }
 
 // Exec executes the statement for the current transaction.
-func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	r, err := txc.DBConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
 		if IsConnErr(err) {

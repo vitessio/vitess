@@ -9,7 +9,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -188,7 +188,7 @@ type internalTabletConn struct {
 
 // Execute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	bv, err := tproto.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, err
@@ -197,7 +197,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 	if err != nil {
 		return nil, err
 	}
-	reply := &mproto.QueryResult{}
+	reply := &sqltypes.Result{}
 	if err := itc.tablet.qsc.QueryService().Execute(ctx, &pbq.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
@@ -245,7 +245,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tprot
 
 // StreamExecute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	bv, err := tproto.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, nil, err
@@ -254,7 +254,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 	if err != nil {
 		return nil, nil, err
 	}
-	result := make(chan *mproto.QueryResult, 10)
+	result := make(chan *sqltypes.Result, 10)
 	var finalErr error
 
 	go func() {
@@ -266,7 +266,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 			Sql:           query,
 			BindVariables: bindVars,
 			TransactionId: transactionID,
-		}, func(reply *mproto.QueryResult) error {
+		}, func(reply *sqltypes.Result) error {
 			result <- reply
 			return nil
 		})
@@ -319,7 +319,7 @@ func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64
 }
 
 // Execute2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (itc *internalTabletConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return itc.Execute(ctx, query, bindVars, transactionID)
 }
 
@@ -344,7 +344,7 @@ func (itc *internalTabletConn) Rollback2(ctx context.Context, transactionID int6
 }
 
 // StreamExecute2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (itc *internalTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return itc.StreamExecute(ctx, query, bindVars, transactionID)
 }
 

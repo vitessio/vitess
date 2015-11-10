@@ -7,7 +7,7 @@ package framework
 import (
 	"errors"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -68,8 +68,8 @@ func (client *QueryClient) Rollback() error {
 }
 
 // Execute executes a query.
-func (client *QueryClient) Execute(query string, bindvars map[string]interface{}) (*mproto.QueryResult, error) {
-	var qr = &mproto.QueryResult{}
+func (client *QueryClient) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+	var qr = &sqltypes.Result{}
 	err := client.server.Execute(
 		client.ctx,
 		&client.target,
@@ -84,8 +84,8 @@ func (client *QueryClient) Execute(query string, bindvars map[string]interface{}
 }
 
 // StreamExecute executes a query & streams the results.
-func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}) (*mproto.QueryResult, error) {
-	result := &mproto.QueryResult{}
+func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+	result := &sqltypes.Result{}
 	err := client.server.StreamExecute(
 		client.ctx,
 		&client.target,
@@ -94,7 +94,7 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]inter
 			BindVariables: bindvars,
 			TransactionId: client.transactionID,
 		},
-		func(res *mproto.QueryResult) error {
+		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
 			}
@@ -110,7 +110,7 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]inter
 }
 
 // Stream streams the resutls of a query.
-func (client *QueryClient) Stream(query string, bindvars map[string]interface{}, sendFunc func(*mproto.QueryResult) error) error {
+func (client *QueryClient) Stream(query string, bindvars map[string]interface{}, sendFunc func(*sqltypes.Result) error) error {
 	return client.server.StreamExecute(
 		client.ctx,
 		&client.target,

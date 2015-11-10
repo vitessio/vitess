@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 )
 
@@ -85,7 +85,7 @@ func TestStreamTerminate(t *testing.T) {
 	err = client.Stream(
 		"select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id",
 		nil,
-		func(*mproto.QueryResult) error {
+		func(*sqltypes.Result) error {
 			if !called {
 				queries := framework.StreamQueryz()
 				if l := len(queries); l != 1 {

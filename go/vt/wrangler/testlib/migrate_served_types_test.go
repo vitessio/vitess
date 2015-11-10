@@ -7,7 +7,6 @@ package testlib
 import (
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -106,8 +105,8 @@ func TestMigrateServedTypes(t *testing.T) {
 
 	// dest1Master will see the refresh, and has to respond to it.
 	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	dest1Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &mproto.QueryResult{
+	dest1Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte(myproto.EncodeReplicationPosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
@@ -129,8 +128,8 @@ func TestMigrateServedTypes(t *testing.T) {
 
 	// dest2Master will see the refresh, and has to respond to it.
 	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	dest2Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &mproto.QueryResult{
+	dest2Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte(myproto.EncodeReplicationPosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),

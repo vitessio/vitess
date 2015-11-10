@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -344,7 +343,7 @@ func testRollback2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, target *pbq.Target, query *proto.Query, reply *mproto.QueryResult) error {
+func (f *FakeQueryService) Execute(ctx context.Context, target *pbq.Target, query *proto.Query, reply *sqltypes.Result) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -379,7 +378,7 @@ var executeBindVars = map[string]interface{}{
 
 const executeTransactionID int64 = 678
 
-var executeQueryResult = mproto.QueryResult{
+var executeQueryResult = sqltypes.Result{
 	Fields: []*pbq.Field{
 		&pbq.Field{
 			Name: "field1",
@@ -391,7 +390,7 @@ var executeQueryResult = mproto.QueryResult{
 		},
 	},
 	RowsAffected: 123,
-	InsertId:     72,
+	InsertID:     72,
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("row1 value1")),
@@ -454,7 +453,7 @@ func testExecute2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error {
 	if f.panics && f.streamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -501,7 +500,7 @@ var streamExecuteBindVars = map[string]interface{}{
 
 const streamExecuteTransactionID int64 = 6789992
 
-var streamExecuteQueryResult1 = mproto.QueryResult{
+var streamExecuteQueryResult1 = sqltypes.Result{
 	Fields: []*pbq.Field{
 		&pbq.Field{
 			Name: "field1",
@@ -514,7 +513,7 @@ var streamExecuteQueryResult1 = mproto.QueryResult{
 	},
 }
 
-var streamExecuteQueryResult2 = mproto.QueryResult{
+var streamExecuteQueryResult2 = sqltypes.Result{
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("row1 value1")),
@@ -793,8 +792,8 @@ var executeBatchQueries = []proto.BoundQuery{
 const executeBatchTransactionID int64 = 678
 
 var executeBatchQueryResultList = proto.QueryResultList{
-	List: []mproto.QueryResult{
-		mproto.QueryResult{
+	List: []sqltypes.Result{
+		sqltypes.Result{
 			Fields: []*pbq.Field{
 				&pbq.Field{
 					Name: "field1",
@@ -802,7 +801,7 @@ var executeBatchQueryResultList = proto.QueryResultList{
 				},
 			},
 			RowsAffected: 1232,
-			InsertId:     712,
+			InsertID:     712,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("row1 value1")),
@@ -812,7 +811,7 @@ var executeBatchQueryResultList = proto.QueryResultList{
 				},
 			},
 		},
-		mproto.QueryResult{
+		sqltypes.Result{
 			Fields: []*pbq.Field{
 				&pbq.Field{
 					Name: "field1",
@@ -820,7 +819,7 @@ var executeBatchQueryResultList = proto.QueryResultList{
 				},
 			},
 			RowsAffected: 12333,
-			InsertId:     74442,
+			InsertID:     74442,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("row1 value1")),

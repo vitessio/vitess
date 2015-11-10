@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
@@ -346,9 +345,9 @@ func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
 func TestTabletServerReconnect(t *testing.T) {
 	db := setUpTabletServerTest()
 	query := "select addr from test_table where pk = 1 limit 1000"
-	want := &mproto.QueryResult{}
+	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
-	db.AddQuery("select addr from test_table where 1 != 1", &mproto.QueryResult{})
+	db.AddQuery("select addr from test_table where 1 != 1", &sqltypes.Result{})
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -364,7 +363,7 @@ func TestTabletServerReconnect(t *testing.T) {
 		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
 	}
 	request := &proto.Query{Sql: query, SessionId: tsv.sessionID}
-	reply := &mproto.QueryResult{}
+	reply := &sqltypes.Result{}
 	err = tsv.Execute(context.Background(), nil, request, reply)
 	if err != nil {
 		t.Error(err)
@@ -476,12 +475,12 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 		SessionId:     session.SessionId,
 		TransactionId: session.TransactionId,
 	}
-	reply := mproto.QueryResult{}
+	reply := sqltypes.Result{}
 	if err := tsv.Execute(ctx, nil, &query, &reply); err == nil {
 		t.Fatalf("call TabletServer.Execute should fail because of an invalid session id: 0")
 	}
 
-	streamSendReply := func(*mproto.QueryResult) error { return nil }
+	streamSendReply := func(*sqltypes.Result) error { return nil }
 	if err = tsv.StreamExecute(ctx, nil, &query, streamSendReply); err == nil {
 		t.Fatalf("call TabletServer.StreamExecute should fail because of an invalid session id: 0")
 	}
@@ -497,9 +496,9 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 	}
 
 	batchReply := proto.QueryResultList{
-		List: []mproto.QueryResult{
-			mproto.QueryResult{},
-			mproto.QueryResult{},
+		List: []sqltypes.Result{
+			sqltypes.Result{},
+			sqltypes.Result{},
 		},
 	}
 	if err = tsv.ExecuteBatch(ctx, nil, &batchQuery, &batchReply); err == nil {
@@ -536,7 +535,7 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
-	executeSQLResult := &mproto.QueryResult{
+	executeSQLResult := &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
@@ -568,7 +567,7 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 		SessionId:     session.SessionId,
 		TransactionId: session.TransactionId,
 	}
-	reply := mproto.QueryResult{}
+	reply := sqltypes.Result{}
 	if err := tsv.Execute(ctx, nil, &query, &reply); err != nil {
 		t.Fatalf("failed to execute query: %s", query.Sql)
 	}
@@ -582,7 +581,7 @@ func TestTabletServerRollback(t *testing.T) {
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
-	executeSQLResult := &mproto.QueryResult{
+	executeSQLResult := &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
@@ -614,7 +613,7 @@ func TestTabletServerRollback(t *testing.T) {
 		SessionId:     session.SessionId,
 		TransactionId: session.TransactionId,
 	}
-	reply := mproto.QueryResult{}
+	reply := sqltypes.Result{}
 	if err := tsv.Execute(ctx, nil, &query, &reply); err != nil {
 		t.Fatalf("failed to execute query: %s", query.Sql)
 	}
@@ -628,7 +627,7 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
-	executeSQLResult := &mproto.QueryResult{
+	executeSQLResult := &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
@@ -661,7 +660,7 @@ func TestTabletServerStreamExecute(t *testing.T) {
 		SessionId:     session.SessionId,
 		TransactionId: session.TransactionId,
 	}
-	sendReply := func(*mproto.QueryResult) error { return nil }
+	sendReply := func(*sqltypes.Result) error { return nil }
 	if err := tsv.StreamExecute(ctx, nil, &query, sendReply); err == nil {
 		t.Fatalf("TabletServer.StreamExecute should fail: %s", query.Sql)
 	}
@@ -679,7 +678,7 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
-	sqlResult := &mproto.QueryResult{}
+	sqlResult := &sqltypes.Result{}
 	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
@@ -706,10 +705,10 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	}
 
 	reply := proto.QueryResultList{
-		List: []mproto.QueryResult{
-			mproto.QueryResult{},
+		List: []sqltypes.Result{
+			sqltypes.Result{},
 			*sqlResult,
-			mproto.QueryResult{},
+			sqltypes.Result{},
 		},
 	}
 	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err != nil {
@@ -737,7 +736,7 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	}
 
 	reply := proto.QueryResultList{
-		List: []mproto.QueryResult{},
+		List: []sqltypes.Result{},
 	}
 	err = tsv.ExecuteBatch(ctx, nil, &query, &reply)
 	verifyTabletError(t, err, ErrFail)
@@ -769,7 +768,7 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 	}
 
 	reply := proto.QueryResultList{
-		List: []mproto.QueryResult{},
+		List: []sqltypes.Result{},
 	}
 	err = tsv.ExecuteBatch(ctx, nil, &query, &reply)
 	verifyTabletError(t, err, ErrFail)
@@ -801,8 +800,8 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 	}
 
 	reply := proto.QueryResultList{
-		List: []mproto.QueryResult{
-			mproto.QueryResult{},
+		List: []sqltypes.Result{
+			sqltypes.Result{},
 		},
 	}
 	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
@@ -840,9 +839,9 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 	}
 
 	reply := proto.QueryResultList{
-		List: []mproto.QueryResult{
-			mproto.QueryResult{},
-			mproto.QueryResult{},
+		List: []sqltypes.Result{
+			sqltypes.Result{},
+			sqltypes.Result{},
 		},
 	}
 	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
@@ -854,7 +853,7 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
-	sqlResult := &mproto.QueryResult{}
+	sqlResult := &sqltypes.Result{}
 	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
@@ -886,10 +885,10 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	}
 
 	reply := proto.QueryResultList{
-		List: []mproto.QueryResult{
-			mproto.QueryResult{},
+		List: []sqltypes.Result{
+			sqltypes.Result{},
 			*sqlResult,
-			mproto.QueryResult{},
+			sqltypes.Result{},
 		},
 	}
 
@@ -910,7 +909,7 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
-	sqlResult := &mproto.QueryResult{}
+	sqlResult := &sqltypes.Result{}
 	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
@@ -941,7 +940,7 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	}
 
 	reply := proto.QueryResultList{
-		List: []mproto.QueryResult{
+		List: []sqltypes.Result{
 			*sqlResult,
 		},
 	}
@@ -974,8 +973,8 @@ func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 	}
 
 	reply := proto.QueryResultList{
-		List: []mproto.QueryResult{
-			mproto.QueryResult{},
+		List: []sqltypes.Result{
+			sqltypes.Result{},
 		},
 	}
 	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
@@ -987,7 +986,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
-	sqlResult := &mproto.QueryResult{}
+	sqlResult := &sqltypes.Result{}
 	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
@@ -1029,12 +1028,12 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	}
 
 	reply := proto.QueryResultList{
-		List: []mproto.QueryResult{
-			mproto.QueryResult{},
-			mproto.QueryResult{},
+		List: []sqltypes.Result{
+			sqltypes.Result{},
+			sqltypes.Result{},
 			*sqlResult,
-			mproto.QueryResult{},
-			mproto.QueryResult{},
+			sqltypes.Result{},
+			sqltypes.Result{},
 		},
 	}
 	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
@@ -1045,7 +1044,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 
 func TestTabletServerSplitQuery(t *testing.T) {
 	db := setUpTabletServerTest()
-	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &mproto.QueryResult{
+	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &sqltypes.Result{
 		Fields: []*pbq.Field{
 			&pbq.Field{Name: "pk", Type: sqltypes.Int32},
 		},
@@ -1057,7 +1056,7 @@ func TestTabletServerSplitQuery(t *testing.T) {
 			},
 		},
 	})
-	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &mproto.QueryResult{
+	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &sqltypes.Result{
 		Fields: []*pbq.Field{
 			&pbq.Field{Name: "pk", Type: sqltypes.Int32},
 		},
@@ -1107,7 +1106,7 @@ func TestTabletServerSplitQuery(t *testing.T) {
 
 func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	db := setUpTabletServerTest()
-	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &mproto.QueryResult{
+	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &sqltypes.Result{
 		Fields: []*pbq.Field{
 			&pbq.Field{Name: "pk", Type: sqltypes.Int32},
 		},
@@ -1119,7 +1118,7 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 			},
 		},
 	})
-	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &mproto.QueryResult{
+	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &sqltypes.Result{
 		Fields: []*pbq.Field{
 			&pbq.Field{Name: "pk", Type: sqltypes.Int32},
 		},
@@ -1171,7 +1170,7 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	pkMinMaxQuery := "SELECT MIN(pk), MAX(pk) FROM test_table"
-	pkMinMaxQueryResp := &mproto.QueryResult{
+	pkMinMaxQueryResp := &sqltypes.Result{
 		Fields: []*pbq.Field{
 			&pbq.Field{Name: "pk", Type: sqltypes.Int32},
 		},
@@ -1184,7 +1183,7 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 			},
 		},
 	}
-	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &mproto.QueryResult{
+	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &sqltypes.Result{
 		Fields: []*pbq.Field{
 			&pbq.Field{Name: "pk", Type: sqltypes.Int32},
 		},
@@ -1472,28 +1471,28 @@ func checkTabletServerState(t *testing.T, tsv *TabletServer, expectState int64) 
 	}
 }
 
-func getSupportedQueries() map[string]*mproto.QueryResult {
-	return map[string]*mproto.QueryResult{
+func getSupportedQueries() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
 		// queries for schema info
-		"select unix_timestamp()": &mproto.QueryResult{
+		"select unix_timestamp()": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{sqltypes.MakeString([]byte("1427325875"))},
 			},
 		},
-		"select @@global.sql_mode": &mproto.QueryResult{
+		"select @@global.sql_mode": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
-		"select * from test_table where 1 != 1": &mproto.QueryResult{
+		"select * from test_table where 1 != 1": &sqltypes.Result{
 			Fields: getTestTableFields(),
 		},
-		"select * from `test_table` where 1 != 1": &mproto.QueryResult{
+		"select * from `test_table` where 1 != 1": &sqltypes.Result{
 			Fields: getTestTableFields(),
 		},
-		baseShowTables: &mproto.QueryResult{
+		baseShowTables: &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -1508,7 +1507,7 @@ func getSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"describe `test_table`": &mproto.QueryResult{
+		"describe `test_table`": &sqltypes.Result{
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -1538,7 +1537,7 @@ func getSupportedQueries() map[string]*mproto.QueryResult {
 			},
 		},
 		// for SplitQuery because it needs a primary key column
-		"show index from `test_table`": &mproto.QueryResult{
+		"show index from `test_table`": &sqltypes.Result{
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -1561,10 +1560,10 @@ func getSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"begin":    &mproto.QueryResult{},
-		"commit":   &mproto.QueryResult{},
-		"rollback": &mproto.QueryResult{},
-		baseShowTables + " and table_name = 'test_table'": &mproto.QueryResult{
+		"begin":    &sqltypes.Result{},
+		"commit":   &sqltypes.Result{},
+		"rollback": &sqltypes.Result{},
+		baseShowTables + " and table_name = 'test_table'": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{

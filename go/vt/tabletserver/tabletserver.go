@@ -15,7 +15,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -426,7 +425,7 @@ func (tsv *TabletServer) IsHealthy() error {
 			Sql:       "select 1 from dual",
 			SessionId: tsv.sessionID,
 		},
-		new(mproto.QueryResult),
+		new(sqltypes.Result),
 	)
 }
 
@@ -637,7 +636,7 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *pbq.Target, query *proto.Query, reply *mproto.QueryResult) (err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, target *pbq.Target, query *proto.Query, reply *sqltypes.Result) (err error) {
 	logStats := newLogStats("Execute", ctx)
 	defer tsv.handleExecError(query, &err, logStats)
 
@@ -675,7 +674,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *pbq.Target, query 
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (tsv *TabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
+func (tsv *TabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) (err error) {
 	// check cases we don't handle yet
 	if query.TransactionId != 0 {
 		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Transactions not supported with streaming")
@@ -746,7 +745,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *pbq.Target, q
 			}
 		}()
 	}
-	reply.List = make([]mproto.QueryResult, 0, len(queryList.Queries))
+	reply.List = make([]sqltypes.Result, 0, len(queryList.Queries))
 	for _, bound := range queryList.Queries {
 		query := proto.Query{
 			Sql:           bound.Sql,
@@ -754,7 +753,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *pbq.Target, q
 			TransactionId: session.TransactionId,
 			SessionId:     session.SessionId,
 		}
-		var localReply mproto.QueryResult
+		var localReply sqltypes.Result
 		if err = tsv.Execute(ctx, target, &query, &localReply); err != nil {
 			return err
 		}
@@ -802,7 +801,7 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pbq.Target, req
 	if err != nil {
 		return err
 	}
-	var pkMinMax *mproto.QueryResult
+	var pkMinMax *sqltypes.Result
 	if sqltypes.IsIntegral(columnType) {
 		pkMinMax, err = getColumnMinMax(qre, splitter.splitColumn, splitter.tableName)
 		if err != nil {
@@ -1093,7 +1092,7 @@ func getColumnType(qre *QueryExecutor, columnName, tableName string) (pbq.Type, 
 	return result.Fields[0].Type, nil
 }
 
-func getColumnMinMax(qre *QueryExecutor, columnName, tableName string) (*mproto.QueryResult, error) {
+func getColumnMinMax(qre *QueryExecutor, columnName, tableName string) (*sqltypes.Result, error) {
 	conn, err := qre.getConn(qre.qe.connPool)
 	if err != nil {
 		return nil, err

@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -34,7 +33,7 @@ import (
 func TestQueryExecutorPlanDDL(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "alter table test_table add zipcode int"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
@@ -55,7 +54,7 @@ func TestQueryExecutorPlanDDL(t *testing.T) {
 func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "update test_table set pk = foo()"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
@@ -96,7 +95,7 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "update test_table set pk = foo()"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
@@ -135,8 +134,8 @@ func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
 
 func TestQueryExecutorPlanInsertPk(t *testing.T) {
 	db := setUpQueryExecutorTest()
-	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &mproto.QueryResult{})
-	want := &mproto.QueryResult{
+	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	want := &sqltypes.Result{
 		Rows: make([][]sqltypes.Value, 0),
 	}
 	query := "insert into test_table values(1)"
@@ -157,12 +156,12 @@ func TestQueryExecutorPlanInsertPk(t *testing.T) {
 func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
 	selectQuery := "select pk from test_table where pk = 1 limit 1000"
-	db.AddQuery(selectQuery, &mproto.QueryResult{
+	db.AddQuery(selectQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeNumeric([]byte("2"))},
@@ -171,7 +170,7 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 
 	insertQuery := "insert into test_table(pk) values (2) /* _stream test_table (pk ) (2 ); */"
 
-	db.AddQuery(insertQuery, &mproto.QueryResult{})
+	db.AddQuery(insertQuery, &sqltypes.Result{})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
@@ -189,12 +188,12 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
 	selectQuery := "select pk from test_table where pk = 1 limit 1000"
-	db.AddQuery(selectQuery, &mproto.QueryResult{
+	db.AddQuery(selectQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeNumeric([]byte("2"))},
@@ -203,7 +202,7 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 
 	insertQuery := "insert into test_table(pk) values (2) /* _stream test_table (pk ) (2 ); */"
 
-	db.AddQuery(insertQuery, &mproto.QueryResult{})
+	db.AddQuery(insertQuery, &sqltypes.Result{})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, newTransaction(tsv))
@@ -222,8 +221,8 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 
 func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	db := setUpQueryExecutorTest()
-	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &mproto.QueryResult{})
-	want := &mproto.QueryResult{
+	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	want := &sqltypes.Result{
 		Rows: make([][]sqltypes.Value, 0),
 	}
 	query := "insert into test_table values(1) on duplicate key update val=1"
@@ -251,7 +250,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
 		sqldb.NewSQLError(mysql.ErrDupEntry, "err"),
 	)
-	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &mproto.QueryResult{})
+	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	_, err = qre.Execute()
 	wantErr = "error: err (errno 1062)"
 	if err == nil || err.Error() != wantErr {
@@ -264,13 +263,13 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	)
 	db.AddQuery(
 		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
-		&mproto.QueryResult{RowsAffected: 1},
+		&sqltypes.Result{RowsAffected: 1},
 	)
 	got, err = qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
-	want = &mproto.QueryResult{
+	want = &sqltypes.Result{
 		RowsAffected: 2,
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -281,7 +280,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
-	want := &mproto.QueryResult{}
+	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
@@ -301,7 +300,7 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
-	want := &mproto.QueryResult{}
+	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
@@ -321,7 +320,7 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "update test_table set addr = 3 where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
-	want := &mproto.QueryResult{}
+	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	db.AddQuery(expandedQuery, want)
 	ctx := context.Background()
@@ -343,7 +342,7 @@ func TestQueryExecutorPlanDmlSubQueryAutoCommit(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "update test_table set addr = 3 where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
-	want := &mproto.QueryResult{}
+	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	db.AddQuery(expandedQuery, want)
 	ctx := context.Background()
@@ -363,7 +362,7 @@ func TestQueryExecutorPlanDmlSubQueryAutoCommit(t *testing.T) {
 func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "show test_table"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields:       getTestTableFields(),
 		RowsAffected: 0,
 		Rows:         [][]sqltypes.Value{},
@@ -390,7 +389,7 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 		&pbq.Field{Name: "addr", Type: sqltypes.Int32},
 	}
 	query := "select addr from test_table where pk = 1 limit 1000"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields:       fields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -398,7 +397,7 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 		},
 	}
 	db.AddQuery(query, want)
-	db.AddQuery("select addr from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select addr from test_table where 1 != 1", &sqltypes.Result{
 		Fields: fields,
 	})
 	ctx := context.Background()
@@ -419,12 +418,12 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table for update"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields: getTestTableFields(),
 		Rows:   [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
-	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
@@ -448,12 +447,12 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 func TestQueryExecutorPlanPassSelect(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table limit 1000"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields: getTestTableFields(),
 		Rows:   [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
-	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
@@ -474,7 +473,7 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table where pk in (1, 2, 3) limit 1000"
 	expandedQuery := "select pk, name, addr from test_table where pk in (1, 2, 3)"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields:       getTestTableFields(),
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -487,7 +486,7 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 	}
 	db.AddQuery(query, want)
 	db.AddQuery(expandedQuery, want)
-	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
@@ -504,7 +503,7 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 	}
 
 	cachedQuery := "select pk, name, addr from test_table where pk in (1)"
-	db.AddQuery(cachedQuery, &mproto.QueryResult{
+	db.AddQuery(cachedQuery, &sqltypes.Result{
 		Fields:       getTestTableFields(),
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -517,7 +516,7 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 	})
 
 	nonCachedQuery := "select pk, name, addr from test_table where pk in (2, 3)"
-	db.AddQuery(nonCachedQuery, &mproto.QueryResult{})
+	db.AddQuery(nonCachedQuery, &sqltypes.Result{})
 	db.AddQuery(cachedQuery, want)
 	// run again, this time pk=1 should hit the rowcache
 	got, err = qre.Execute()
@@ -533,13 +532,13 @@ func TestQueryExecutorPlanSelectSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table use index (`index`) where name = 1 limit 1000"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields: getTestTableFields(),
 	}
 	db.AddQuery(query, want)
 	db.AddQuery(expandedQuery, want)
 
-	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
@@ -559,7 +558,7 @@ func TestQueryExecutorPlanSelectSubQuery(t *testing.T) {
 func TestQueryExecutorPlanSet(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	setQuery := "set unknown_key = 1"
-	db.AddQuery(setQuery, &mproto.QueryResult{})
+	db.AddQuery(setQuery, &sqltypes.Result{})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableRowCache|enableStrict, db)
 	defer tsv.StopService()
@@ -567,7 +566,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	checkPlanID(t, planbuilder.PlanSet, qre.plan.PlanID)
 	// Query will be delegated to MySQL and both Fields and Rows should be
 	// empty arrays in this case.
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Rows: make([][]sqltypes.Value, 0),
 	}
 	got, err := qre.Execute()
@@ -582,7 +581,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 func TestQueryExecutorPlanOther(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "show test_table"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields:       getTestTableFields(),
 		RowsAffected: 0,
 		Rows:         [][]sqltypes.Value{},
@@ -608,13 +607,13 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table limit 1000"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields:       getTestTableFields(),
 		RowsAffected: 0,
 		Rows:         [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
-	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 
@@ -653,13 +652,13 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table limit 1000"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields:       getTestTableFields(),
 		RowsAffected: 0,
 		Rows:         [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
-	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 
@@ -717,13 +716,13 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table limit 1000"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields:       getTestTableFields(),
 		RowsAffected: 0,
 		Rows:         [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
-	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 
@@ -790,13 +789,13 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	tableacl.SetDefaultACL(aclName)
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table limit 1000"
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields:       getTestTableFields(),
 		RowsAffected: 0,
 		Rows:         [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
-	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 
@@ -846,13 +845,13 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table use index (`index`) where name = 1 limit 1000"
-	expected := &mproto.QueryResult{
+	expected := &sqltypes.Result{
 		Fields: getTestTableFields(),
 	}
 	db.AddQuery(query, expected)
 	db.AddQuery(expandedQuery, expected)
 
-	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 
@@ -906,13 +905,13 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table use index (`index`) where name = 1 limit 1000"
-	expected := &mproto.QueryResult{
+	expected := &sqltypes.Result{
 		Fields: getTestTableFields(),
 	}
 	db.AddQuery(query, expected)
 	db.AddQuery(expandedQuery, expected)
 
-	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 
@@ -1095,22 +1094,22 @@ func getTestTableSchemaOverrides() []SchemaOverride {
 	}
 }
 
-func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
-	return map[string]*mproto.QueryResult{
+func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
 		// queries for schema info
-		"select unix_timestamp()": &mproto.QueryResult{
+		"select unix_timestamp()": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{sqltypes.MakeNumeric([]byte("1427325875"))},
 			},
 		},
-		"select @@global.sql_mode": &mproto.QueryResult{
+		"select @@global.sql_mode": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
-		baseShowTables: &mproto.QueryResult{
+		baseShowTables: &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -1125,7 +1124,7 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"select * from `test_table` where 1 != 1": &mproto.QueryResult{
+		"select * from `test_table` where 1 != 1": &sqltypes.Result{
 			Fields: []*pbq.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -1137,7 +1136,7 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table`": &mproto.QueryResult{
+		"describe `test_table`": &sqltypes.Result{
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -1167,7 +1166,7 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 			},
 		},
 		// for SplitQuery because it needs a primary key column
-		"show index from `test_table`": &mproto.QueryResult{
+		"show index from `test_table`": &sqltypes.Result{
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -1190,9 +1189,9 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"begin":  &mproto.QueryResult{},
-		"commit": &mproto.QueryResult{},
-		baseShowTables + " and table_name = 'test_table'": &mproto.QueryResult{
+		"begin":  &sqltypes.Result{},
+		"commit": &sqltypes.Result{},
+		baseShowTables + " and table_name = 'test_table'": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -1207,6 +1206,6 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"rollback": &mproto.QueryResult{},
+		"rollback": &sqltypes.Result{},
 	}
 }
