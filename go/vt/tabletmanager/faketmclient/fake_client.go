@@ -79,9 +79,8 @@ func (client *FakeTabletManagerClient) GetSchema(ctx context.Context, tablet *to
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*myproto.Permissions, error) {
-	var p myproto.Permissions
-	return &p, nil
+func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*pbt.Permissions, error) {
+	return &pbt.Permissions{}, nil
 }
 
 //

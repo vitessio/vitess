@@ -186,9 +186,9 @@ func agentRPCTestGetSchemaPanic(ctx context.Context, t *testing.T, client tmclie
 	expectRPCWrapPanic(t, err)
 }
 
-var testGetPermissionsReply = &myproto.Permissions{
-	UserPermissions: []*myproto.UserPermission{
-		&myproto.UserPermission{
+var testGetPermissionsReply = &pbt.Permissions{
+	UserPermissions: []*pbt.UserPermission{
+		{
 			Host:             "host1",
 			User:             "user1",
 			PasswordChecksum: 666,
@@ -198,8 +198,8 @@ var testGetPermissionsReply = &myproto.Permissions{
 			},
 		},
 	},
-	DbPermissions: []*myproto.DbPermission{
-		&myproto.DbPermission{
+	DbPermissions: []*pbt.DbPermission{
+		{
 			Host: "host2",
 			Db:   "db1",
 			User: "user2",
@@ -209,8 +209,8 @@ var testGetPermissionsReply = &myproto.Permissions{
 			},
 		},
 	},
-	HostPermissions: []*myproto.HostPermission{
-		&myproto.HostPermission{
+	HostPermissions: []*pbt.HostPermission{
+		{
 			Host: "host3",
 			Db:   "db2",
 			Privileges: map[string]string{
@@ -221,7 +221,7 @@ var testGetPermissionsReply = &myproto.Permissions{
 	},
 }
 
-func (fra *fakeRPCAgent) GetPermissions(ctx context.Context) (*myproto.Permissions, error) {
+func (fra *fakeRPCAgent) GetPermissions(ctx context.Context) (*pbt.Permissions, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

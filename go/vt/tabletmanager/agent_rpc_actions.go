@@ -37,7 +37,7 @@ type RPCAgent interface {
 
 	GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error)
 
-	GetPermissions(ctx context.Context) (*myproto.Permissions, error)
+	GetPermissions(ctx context.Context) (*pbt.Permissions, error)
 
 	// Various read-write methods
 
@@ -142,7 +142,7 @@ func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables [
 
 // GetPermissions returns the db permissions.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) GetPermissions(ctx context.Context) (*myproto.Permissions, error) {
+func (agent *ActionAgent) GetPermissions(ctx context.Context) (*pbt.Permissions, error) {
 	return mysqlctl.GetPermissions(agent.MysqlDaemon)
 }
 

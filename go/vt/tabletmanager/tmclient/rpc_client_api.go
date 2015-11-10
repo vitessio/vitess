@@ -41,7 +41,7 @@ type TabletManagerClient interface {
 	GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error)
 
 	// GetPermissions asks the remote tablet for its permissions list
-	GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*myproto.Permissions, error)
+	GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*pbt.Permissions, error)
 
 	//
 	// Various read-write methods

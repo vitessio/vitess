@@ -83,7 +83,7 @@ func (s *server) GetPermissions(ctx context.Context, request *pb.GetPermissionsR
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionGetPermissions, request, response, func() error {
 		p, err := s.agent.GetPermissions(ctx)
 		if err == nil {
-			response.Permissions = myproto.PermissionsToProto(p)
+			response.Permissions = p
 		}
 		return err
 	})

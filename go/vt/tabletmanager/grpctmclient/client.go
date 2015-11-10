@@ -142,7 +142,7 @@ func (client *Client) GetSchema(ctx context.Context, tablet *topo.TabletInfo, ta
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface
-func (client *Client) GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*myproto.Permissions, error) {
+func (client *Client) GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*pb.Permissions, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (client *Client) GetPermissions(ctx context.Context, tablet *topo.TabletInf
 	if err != nil {
 		return nil, err
 	}
-	return myproto.ProtoToPermissions(response.Permissions), nil
+	return response.Permissions, nil
 }
 
 //
