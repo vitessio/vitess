@@ -9,20 +9,22 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-var basicTable1 = &TableDefinition{
+var basicTable1 = &tabletmanagerdatapb.TableDefinition{
 	Name:   "table1",
 	Schema: "table schema 1",
 	Type:   TableBaseTable,
 }
-var basicTable2 = &TableDefinition{
+var basicTable2 = &tabletmanagerdatapb.TableDefinition{
 	Name:   "table2",
 	Schema: "table schema 2",
 	Type:   TableBaseTable,
 }
 
-var table3 = &TableDefinition{
+var table3 = &tabletmanagerdatapb.TableDefinition{
 	Name: "table2",
 	Schema: "CREATE TABLE `table3` (\n" +
 		"id bigint not null,\n" +
@@ -30,13 +32,13 @@ var table3 = &TableDefinition{
 	Type: TableBaseTable,
 }
 
-var view1 = &TableDefinition{
+var view1 = &tabletmanagerdatapb.TableDefinition{
 	Name:   "view1",
 	Schema: "view schema 1",
 	Type:   TableView,
 }
 
-var view2 = &TableDefinition{
+var view2 = &tabletmanagerdatapb.TableDefinition{
 	Name:   "view2",
 	Schema: "view schema 2",
 	Type:   TableView,
@@ -44,14 +46,14 @@ var view2 = &TableDefinition{
 
 func TestToSQLStrings(t *testing.T) {
 	var testcases = []struct {
-		input *SchemaDefinition
+		input *tabletmanagerdatapb.SchemaDefinition
 		want  []string
 	}{
 		{
 			// basic SchemaDefinition with create db statement, basic table and basic view
-			input: &SchemaDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
 				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
-				TableDefinitions: []*TableDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 					view1,
 				},
@@ -60,21 +62,21 @@ func TestToSQLStrings(t *testing.T) {
 		},
 		{
 			// SchemaDefinition doesn't need any tables or views
-			input: &SchemaDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
 				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 			},
 			want: []string{"CREATE DATABASE {{.DatabaseName}}"},
 		},
 		{
 			// and can even have an empty DatabaseSchema
-			input: &SchemaDefinition{},
+			input: &tabletmanagerdatapb.SchemaDefinition{},
 			want:  []string{""},
 		},
 		{
 			// with tables but no views
-			input: &SchemaDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
 				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
-				TableDefinitions: []*TableDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 					basicTable2,
 				},
@@ -83,9 +85,9 @@ func TestToSQLStrings(t *testing.T) {
 		},
 		{
 			// multiple tables and views should be ordered with all tables before views
-			input: &SchemaDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
 				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
-				TableDefinitions: []*TableDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					view1,
 					view2,
 					basicTable1,
@@ -100,9 +102,9 @@ func TestToSQLStrings(t *testing.T) {
 		},
 		{
 			// valid table schema gets correctly rewritten to include DatabaseName
-			input: &SchemaDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
 				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
-				TableDefinitions: []*TableDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 					table3,
 				},
@@ -118,14 +120,14 @@ func TestToSQLStrings(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		got := tc.input.ToSQLStrings()
+		got := SchemaDefinitionToSQLStrings(tc.input)
 		if !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("ToSQLStrings() on SchemaDefinition %v returned %v; want %v", tc.input, got, tc.want)
 		}
 	}
 }
 
-func testDiff(t *testing.T, left, right *SchemaDefinition, leftName, rightName string, expected []string) {
+func testDiff(t *testing.T, left, right *tabletmanagerdatapb.SchemaDefinition, leftName, rightName string, expected []string) {
 
 	actual := DiffSchemaToArray(leftName, left, rightName, right)
 
@@ -148,14 +150,14 @@ func testDiff(t *testing.T, left, right *SchemaDefinition, leftName, rightName s
 }
 
 func TestSchemaDiff(t *testing.T) {
-	sd1 := &SchemaDefinition{
-		TableDefinitions: []*TableDefinition{
-			&TableDefinition{
+	sd1 := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			&tabletmanagerdatapb.TableDefinition{
 				Name:   "table1",
 				Schema: "schema1",
 				Type:   TableBaseTable,
 			},
-			&TableDefinition{
+			&tabletmanagerdatapb.TableDefinition{
 				Name:   "table2",
 				Schema: "schema2",
 				Type:   TableBaseTable,
@@ -163,11 +165,11 @@ func TestSchemaDiff(t *testing.T) {
 		},
 	}
 
-	sd2 := &SchemaDefinition{TableDefinitions: make([]*TableDefinition, 0, 2)}
+	sd2 := &tabletmanagerdatapb.SchemaDefinition{TableDefinitions: make([]*tabletmanagerdatapb.TableDefinition, 0, 2)}
 
-	sd3 := &SchemaDefinition{
-		TableDefinitions: []*TableDefinition{
-			&TableDefinition{
+	sd3 := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			&tabletmanagerdatapb.TableDefinition{
 				Name:   "table2",
 				Schema: "schema2",
 				Type:   TableBaseTable,
@@ -175,9 +177,9 @@ func TestSchemaDiff(t *testing.T) {
 		},
 	}
 
-	sd4 := &SchemaDefinition{
-		TableDefinitions: []*TableDefinition{
-			&TableDefinition{
+	sd4 := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			&tabletmanagerdatapb.TableDefinition{
 				Name:   "table2",
 				Schema: "table2",
 				Type:   TableView,
@@ -185,9 +187,9 @@ func TestSchemaDiff(t *testing.T) {
 		},
 	}
 
-	sd5 := &SchemaDefinition{
-		TableDefinitions: []*TableDefinition{
-			&TableDefinition{
+	sd5 := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			&tabletmanagerdatapb.TableDefinition{
 				Name:   "table2",
 				Schema: "table2",
 				Type:   TableBaseTable,
@@ -232,81 +234,81 @@ func TestSchemaDiff(t *testing.T) {
 	sd2.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
 	testDiff(t, sd2, sd1, "sd2", "sd1", []string{"sd1 has an extra table named table1", "sd1 has an extra table named table2"})
 
-	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table1", Schema: "schema1", Type: TableBaseTable})
+	sd2.TableDefinitions = append(sd2.TableDefinitions, &tabletmanagerdatapb.TableDefinition{Name: "table1", Schema: "schema1", Type: TableBaseTable})
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 has an extra table named table2"})
 
-	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table2", Schema: "schema3", Type: TableBaseTable})
+	sd2.TableDefinitions = append(sd2.TableDefinitions, &tabletmanagerdatapb.TableDefinition{Name: "table2", Schema: "schema3", Type: TableBaseTable})
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 and sd2 disagree on schema for table table2:\nschema2\n differs from:\nschema3"})
 }
 
 func TestFilterTables(t *testing.T) {
 	var testcases = []struct {
 		desc          string
-		input         *SchemaDefinition
+		input         *tabletmanagerdatapb.SchemaDefinition
 		tables        []string
 		excludeTables []string
 		includeViews  bool
-		want          *SchemaDefinition
+		want          *tabletmanagerdatapb.SchemaDefinition
 		wantError     error
 	}{
 		{
 			desc: "filter based on tables (whitelist)",
-			input: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 					basicTable2,
 				},
 			},
 			tables: []string{basicTable1.Name},
-			want: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			want: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 				},
 			},
 		},
 		{
 			desc: "filter based on excludeTables (blacklist)",
-			input: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 					basicTable2,
 				},
 			},
 			excludeTables: []string{basicTable1.Name},
-			want: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			want: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable2,
 				},
 			},
 		},
 		{
 			desc: "excludeTables may filter out a whitelisted item from tables",
-			input: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 					basicTable2,
 				},
 			},
 			tables:        []string{basicTable1.Name, basicTable2.Name},
 			excludeTables: []string{basicTable1.Name},
-			want: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			want: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable2,
 				},
 			},
 		},
 		{
 			desc: "exclude views",
-			input: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 					basicTable2,
 					view1,
 				},
 			},
 			includeViews: false,
-			want: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			want: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 					basicTable2,
 				},
@@ -314,16 +316,16 @@ func TestFilterTables(t *testing.T) {
 		},
 		{
 			desc: "update schema version hash when list of tables has changed",
-			input: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 					basicTable2,
 				},
 				Version: "dummy-version",
 			},
 			excludeTables: []string{basicTable1.Name},
-			want: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			want: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable2,
 				},
 				Version: "6d1d294def9febdb21b35dd19a1dd4c6",
@@ -331,8 +333,8 @@ func TestFilterTables(t *testing.T) {
 		},
 		{
 			desc: "invalid regex for tables returns an error",
-			input: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 				},
 			},
@@ -341,8 +343,8 @@ func TestFilterTables(t *testing.T) {
 		},
 		{
 			desc: "invalid regex for excludeTables returns an error",
-			input: &SchemaDefinition{
-				TableDefinitions: []*TableDefinition{
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,
 				},
 			},
@@ -352,7 +354,7 @@ func TestFilterTables(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		got, err := tc.input.FilterTables(tc.tables, tc.excludeTables, tc.includeViews)
+		got, err := FilterTables(tc.input, tc.tables, tc.excludeTables, tc.includeViews)
 		if tc.wantError != nil {
 			if err == nil {
 				t.Fatalf("FilterTables() test '%v' on SchemaDefinition %v did not return an error (result: %v), but should have, wantError %v", tc.desc, tc.input, got, tc.wantError)

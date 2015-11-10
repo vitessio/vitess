@@ -17,12 +17,12 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	"github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -268,7 +268,7 @@ func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shar
 // "", "value1", "value2", ""
 // A non-split tablet will just return:
 // "", ""
-func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
+func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *tabletmanagerdatapb.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
 	result := []string{"", ""}
 
 	// eliminate a few cases we don't split tables for
@@ -384,7 +384,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 
 // buildSQLFromChunks returns the SQL command to run to insert the data
 // using the chunks definitions into the provided table.
-func buildSQLFromChunks(wr *wrangler.Wrangler, td *myproto.TableDefinition, chunks []string, chunkIndex int, source string) string {
+func buildSQLFromChunks(wr *wrangler.Wrangler, td *tabletmanagerdatapb.TableDefinition, chunks []string, chunkIndex int, source string) string {
 	selectSQL := "SELECT " + strings.Join(td.Columns, ", ") + " FROM " + td.Name
 	if chunks[chunkIndex] != "" || chunks[chunkIndex+1] != "" {
 		wr.Logger().Infof("Starting to stream all data from tablet %v table %v between '%v' and '%v'", source, td.Name, chunks[chunkIndex], chunks[chunkIndex+1])

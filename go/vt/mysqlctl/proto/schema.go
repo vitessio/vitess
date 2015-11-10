@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 const (
@@ -21,20 +23,8 @@ const (
 	TableView = "VIEW"
 )
 
-// TableDefinition contains all schema information about a table.
-type TableDefinition struct {
-	Name              string   // the table name
-	Schema            string   // the SQL to run to create the table
-	Columns           []string // the columns in the order that will be used to dump and load the data
-	PrimaryKeyColumns []string // the columns used by the primary key, in order
-	Type              string   // TableBaseTable or TableView
-	DataLength        uint64   // how much space the data file takes.
-	RowCount          uint64   // how many rows in the table (may
-	// be approximate count)
-}
-
-// TableDefinitions is a list of TableDefinition.
-type TableDefinitions []*TableDefinition
+// TableDefinitions is a list of TableDefinition, for sorting
+type TableDefinitions []*tabletmanagerdatapb.TableDefinition
 
 // Len returns TableDefinitions length.
 func (tds TableDefinitions) Len() int {
@@ -46,23 +36,11 @@ func (tds TableDefinitions) Swap(i, j int) {
 	tds[i], tds[j] = tds[j], tds[i]
 }
 
-// SchemaDefinition defines schema for a certain database.
-type SchemaDefinition struct {
-	// the 'CREATE DATABASE...' statement, with db name as {{.DatabaseName}}
-	DatabaseSchema string
-
-	// ordered by TableDefinition.Name by default
-	TableDefinitions TableDefinitions
-
-	// the md5 of the concatenation of TableDefinition.Schema
-	Version string
-}
-
 // FilterTables returns a copy which includes only
 // whitelisted tables (tables), no blacklisted tables (excludeTables) and optionally views (includeViews).
-func (sd *SchemaDefinition) FilterTables(tables, excludeTables []string, includeViews bool) (*SchemaDefinition, error) {
+func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	copy := *sd
-	copy.TableDefinitions = make([]*TableDefinition, 0, len(sd.TableDefinitions))
+	copy.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(sd.TableDefinitions))
 
 	// build a list of regexp to match table names against
 	var tableRegexps []*regexp.Regexp
@@ -122,7 +100,7 @@ func (sd *SchemaDefinition) FilterTables(tables, excludeTables []string, include
 
 	// Regenerate hash over tables because it may have changed.
 	if copy.Version != "" {
-		copy.GenerateSchemaVersion()
+		GenerateSchemaVersion(&copy)
 	}
 
 	return &copy, nil
@@ -130,7 +108,7 @@ func (sd *SchemaDefinition) FilterTables(tables, excludeTables []string, include
 
 // GenerateSchemaVersion return a unique schema version string based on
 // its TableDefinitions.
-func (sd *SchemaDefinition) GenerateSchemaVersion() {
+func GenerateSchemaVersion(sd *tabletmanagerdatapb.SchemaDefinition) {
 	hasher := md5.New()
 	for _, td := range sd.TableDefinitions {
 		if _, err := hasher.Write([]byte(td.Schema)); err != nil {
@@ -140,8 +118,8 @@ func (sd *SchemaDefinition) GenerateSchemaVersion() {
 	sd.Version = hex.EncodeToString(hasher.Sum(nil))
 }
 
-// GetTable returns TableDefinition for a given table name.
-func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool) {
+// SchemaDefinitionGetTable returns TableDefinition for a given table name.
+func SchemaDefinitionGetTable(sd *tabletmanagerdatapb.SchemaDefinition, table string) (td *tabletmanagerdatapb.TableDefinition, ok bool) {
 	for _, td := range sd.TableDefinitions {
 		if td.Name == table {
 			return td, true
@@ -150,10 +128,10 @@ func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool
 	return nil, false
 }
 
-// ToSQLStrings converts a SchemaDefinition to an array of SQL strings. The array contains all
+// SchemaDefinitionToSQLStrings converts a SchemaDefinition to an array of SQL strings. The array contains all
 // the SQL statements needed for creating the database, tables, and views - in that order.
 // All SQL statements will have {{.DatabaseName}} in place of the actual db name.
-func (sd *SchemaDefinition) ToSQLStrings() []string {
+func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []string {
 	sqlStrings := make([]string, 0, len(sd.TableDefinitions)+1)
 	createViewSQL := make([]string, 0, len(sd.TableDefinitions))
 
@@ -178,7 +156,7 @@ func (sd *SchemaDefinition) ToSQLStrings() []string {
 
 // DiffSchema generates a report on what's different between two SchemaDefinitions
 // including views.
-func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition, er concurrency.ErrorRecorder) {
+func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rightName string, right *tabletmanagerdatapb.SchemaDefinition, er concurrency.ErrorRecorder) {
 	if left == nil && right == nil {
 		return
 	}
@@ -241,7 +219,7 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 }
 
 // DiffSchemaToArray diffs two schemas and return the schema diffs if there is any.
-func DiffSchemaToArray(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition) (result []string) {
+func DiffSchemaToArray(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rightName string, right *tabletmanagerdatapb.SchemaDefinition) (result []string) {
 	er := concurrency.AllErrorRecorder{}
 	DiffSchema(leftName, left, rightName, right, &er)
 	if er.HasErrors() {
@@ -255,13 +233,13 @@ type SchemaChange struct {
 	Sql              string
 	Force            bool
 	AllowReplication bool
-	BeforeSchema     *SchemaDefinition
-	AfterSchema      *SchemaDefinition
+	BeforeSchema     *tabletmanagerdatapb.SchemaDefinition
+	AfterSchema      *tabletmanagerdatapb.SchemaDefinition
 }
 
 // SchemaChangeResult contains before and after table schemas for
 // a schema change sql.
 type SchemaChangeResult struct {
-	BeforeSchema *SchemaDefinition
-	AfterSchema  *SchemaDefinition
+	BeforeSchema *tabletmanagerdatapb.SchemaDefinition
+	AfterSchema  *tabletmanagerdatapb.SchemaDefinition
 }

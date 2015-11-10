@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	pb "github.com/youtube/vitess/go/vt/proto/replicationdata"
-	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // ReplicationStatusToProto translates a ReplicationStatus to
@@ -40,60 +39,4 @@ func ProtoToReplicationStatus(r *pb.Status) ReplicationStatus {
 		MasterPort:          int(r.MasterPort),
 		MasterConnectRetry:  int(r.MasterConnectRetry),
 	}
-}
-
-// TableDefinitionToProto translates a TableDefinition to proto
-func TableDefinitionToProto(t *TableDefinition) *pbt.TableDefinition {
-	return &pbt.TableDefinition{
-		Name:              t.Name,
-		Schema:            t.Schema,
-		Columns:           t.Columns,
-		PrimaryKeyColumns: t.PrimaryKeyColumns,
-		Type:              t.Type,
-		DataLength:        t.DataLength,
-		RowCount:          t.RowCount,
-	}
-}
-
-// ProtoToTableDefinition translates a proto into a TableDefinition
-func ProtoToTableDefinition(t *pbt.TableDefinition) *TableDefinition {
-	return &TableDefinition{
-		Name:              t.Name,
-		Schema:            t.Schema,
-		Columns:           t.Columns,
-		PrimaryKeyColumns: t.PrimaryKeyColumns,
-		Type:              t.Type,
-		DataLength:        t.DataLength,
-		RowCount:          t.RowCount,
-	}
-}
-
-// SchemaDefinitionToProto translates a SchemaDefinition to proto
-func SchemaDefinitionToProto(s *SchemaDefinition) *pbt.SchemaDefinition {
-	result := &pbt.SchemaDefinition{
-		DatabaseSchema: s.DatabaseSchema,
-		Version:        s.Version,
-	}
-	if len(s.TableDefinitions) > 0 {
-		result.TableDefinitions = make([]*pbt.TableDefinition, len(s.TableDefinitions))
-		for i, t := range s.TableDefinitions {
-			result.TableDefinitions[i] = TableDefinitionToProto(t)
-		}
-	}
-	return result
-}
-
-// ProtoToSchemaDefinition translates a proto to a SchemaDefinition
-func ProtoToSchemaDefinition(s *pbt.SchemaDefinition) *SchemaDefinition {
-	result := &SchemaDefinition{
-		DatabaseSchema: s.DatabaseSchema,
-		Version:        s.Version,
-	}
-	if len(s.TableDefinitions) > 0 {
-		result.TableDefinitions = make([]*TableDefinition, len(s.TableDefinitions))
-		for i, t := range s.TableDefinitions {
-			result.TableDefinitions[i] = ProtoToTableDefinition(t)
-		}
-	}
-	return result
 }

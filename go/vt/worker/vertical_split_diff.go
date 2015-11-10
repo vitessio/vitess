@@ -47,8 +47,8 @@ type VerticalSplitDiffWorker struct {
 	destinationAlias *pb.TabletAlias
 
 	// populated during WorkerStateDiff
-	sourceSchemaDefinition      *myproto.SchemaDefinition
-	destinationSchemaDefinition *myproto.SchemaDefinition
+	sourceSchemaDefinition      *pbt.SchemaDefinition
+	destinationSchemaDefinition *pbt.SchemaDefinition
 }
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
@@ -383,7 +383,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	}
 
 	// Remove the tables we don't need from the source schema
-	newSourceTableDefinitions := make([]*myproto.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
+	newSourceTableDefinitions := make([]*pbt.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
 	for _, tableDefinition := range vsdw.sourceSchemaDefinition.TableDefinitions {
 		found := false
 		for _, tableRegexp := range tableRegexps {
@@ -415,7 +415,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range vsdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition *myproto.TableDefinition) {
+		go func(tableDefinition *pbt.TableDefinition) {
 			defer wg.Done()
 			sem.Acquire()
 			defer sem.Release()

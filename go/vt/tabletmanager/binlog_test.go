@@ -24,7 +24,7 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pbtm "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -660,7 +660,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	// now restart the map until we get the right BlpPosition
 	mysqlDaemon.BinlogPlayerEnabled = false
 	ctx1, _ := context.WithTimeout(ctx, 5*time.Second)
-	if err := bpm.RunUntil(ctx1, []*pbtm.BlpPosition{
+	if err := bpm.RunUntil(ctx1, []*tabletmanagerdatapb.BlpPosition{
 		{
 			Uid:      1,
 			Position: "MariaDB/0-1-1235",
@@ -721,22 +721,22 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	// The schema will be used to resolve the table wildcards.
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{
 		MysqlPort: 3306,
-		Schema: &myproto.SchemaDefinition{
+		Schema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
-			TableDefinitions: []*myproto.TableDefinition{
-				&myproto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:              "table1",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              myproto.TableBaseTable,
 				},
-				&myproto.TableDefinition{
+				{
 					Name:              "funtables_one",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              myproto.TableBaseTable,
 				},
-				&myproto.TableDefinition{
+				{
 					Name:              "excluded_table",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},

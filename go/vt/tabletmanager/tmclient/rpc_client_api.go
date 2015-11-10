@@ -38,7 +38,7 @@ type TabletManagerClient interface {
 	Ping(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// GetSchema asks the remote tablet for its database schema
-	GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error)
+	GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*pbt.SchemaDefinition, error)
 
 	// GetPermissions asks the remote tablet for its permissions list
 	GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*pbt.Permissions, error)

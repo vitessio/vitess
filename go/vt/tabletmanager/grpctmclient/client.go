@@ -124,7 +124,7 @@ func (client *Client) ExecuteHook(ctx context.Context, tablet *topo.TabletInfo, 
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface
-func (client *Client) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
+func (client *Client) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*pb.SchemaDefinition, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -138,7 +138,7 @@ func (client *Client) GetSchema(ctx context.Context, tablet *topo.TabletInfo, ta
 	if err != nil {
 		return nil, err
 	}
-	return myproto.ProtoToSchemaDefinition(response.SchemaDefinition), nil
+	return response.SchemaDefinition, nil
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface
@@ -243,8 +243,8 @@ func (client *Client) PreflightSchema(ctx context.Context, tablet *topo.TabletIn
 		return nil, err
 	}
 	return &myproto.SchemaChangeResult{
-		BeforeSchema: myproto.ProtoToSchemaDefinition(response.BeforeSchema),
-		AfterSchema:  myproto.ProtoToSchemaDefinition(response.AfterSchema),
+		BeforeSchema: response.BeforeSchema,
+		AfterSchema:  response.AfterSchema,
 	}, err
 }
 
@@ -259,15 +259,15 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, 
 		Sql:              change.Sql,
 		Force:            change.Force,
 		AllowReplication: change.AllowReplication,
-		BeforeSchema:     myproto.SchemaDefinitionToProto(change.BeforeSchema),
-		AfterSchema:      myproto.SchemaDefinitionToProto(change.AfterSchema),
+		BeforeSchema:     change.BeforeSchema,
+		AfterSchema:      change.AfterSchema,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &myproto.SchemaChangeResult{
-		BeforeSchema: myproto.ProtoToSchemaDefinition(response.BeforeSchema),
-		AfterSchema:  myproto.ProtoToSchemaDefinition(response.AfterSchema),
+		BeforeSchema: response.BeforeSchema,
+		AfterSchema:  response.AfterSchema,
 	}, nil
 }
 

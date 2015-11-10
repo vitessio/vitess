@@ -141,10 +141,10 @@ func agentRPCTestPingPanic(ctx context.Context, t *testing.T, client tmclient.Ta
 
 var testGetSchemaTables = []string{"table1", "table2"}
 var testGetSchemaExcludeTables = []string{"etable1", "etable2", "etable3"}
-var testGetSchemaReply = &myproto.SchemaDefinition{
+var testGetSchemaReply = &pbt.SchemaDefinition{
 	DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
-	TableDefinitions: []*myproto.TableDefinition{
-		&myproto.TableDefinition{
+	TableDefinitions: []*pbt.TableDefinition{
+		{
 			Name:              "table_name",
 			Schema:            "create table_name",
 			Columns:           []string{"col1", "col2"},
@@ -153,7 +153,7 @@ var testGetSchemaReply = &myproto.SchemaDefinition{
 			DataLength:        12,
 			RowCount:          6,
 		},
-		&myproto.TableDefinition{
+		{
 			Name:              "table_name2",
 			Schema:            "create table_name2",
 			Columns:           []string{"col1"},
@@ -166,7 +166,7 @@ var testGetSchemaReply = &myproto.SchemaDefinition{
 	Version: "xxx",
 }
 
-func (fra *fakeRPCAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
+func (fra *fakeRPCAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*pbt.SchemaDefinition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

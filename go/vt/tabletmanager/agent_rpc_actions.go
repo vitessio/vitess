@@ -35,7 +35,7 @@ type RPCAgent interface {
 
 	Ping(ctx context.Context, args string) string
 
-	GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error)
+	GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*pbt.SchemaDefinition, error)
 
 	GetPermissions(ctx context.Context) (*pbt.Permissions, error)
 
@@ -136,7 +136,7 @@ func (agent *ActionAgent) Ping(ctx context.Context, args string) string {
 
 // GetSchema returns the schema.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
+func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*pbt.SchemaDefinition, error) {
 	return agent.MysqlDaemon.GetSchema(agent.Tablet().DbName(), tables, excludeTables, includeViews)
 }
 

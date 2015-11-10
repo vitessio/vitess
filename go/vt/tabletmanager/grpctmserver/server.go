@@ -71,7 +71,7 @@ func (s *server) GetSchema(ctx context.Context, request *pb.GetSchemaRequest) (*
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionGetSchema, request, response, func() error {
 		sd, err := s.agent.GetSchema(ctx, request.Tables, request.ExcludeTables, request.IncludeViews)
 		if err == nil {
-			response.SchemaDefinition = myproto.SchemaDefinitionToProto(sd)
+			response.SchemaDefinition = sd
 		}
 		return err
 	})
@@ -150,8 +150,8 @@ func (s *server) PreflightSchema(ctx context.Context, request *pb.PreflightSchem
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionPreflightSchema, request, response, true, func() error {
 		scr, err := s.agent.PreflightSchema(ctx, request.Change)
 		if err == nil {
-			response.BeforeSchema = myproto.SchemaDefinitionToProto(scr.BeforeSchema)
-			response.AfterSchema = myproto.SchemaDefinitionToProto(scr.AfterSchema)
+			response.BeforeSchema = scr.BeforeSchema
+			response.AfterSchema = scr.AfterSchema
 		}
 		return err
 	})
@@ -165,12 +165,12 @@ func (s *server) ApplySchema(ctx context.Context, request *pb.ApplySchemaRequest
 			Sql:              request.Sql,
 			Force:            request.Force,
 			AllowReplication: request.AllowReplication,
-			BeforeSchema:     myproto.ProtoToSchemaDefinition(request.BeforeSchema),
-			AfterSchema:      myproto.ProtoToSchemaDefinition(request.AfterSchema),
+			BeforeSchema:     request.BeforeSchema,
+			AfterSchema:      request.AfterSchema,
 		})
 		if err == nil {
-			response.BeforeSchema = myproto.SchemaDefinitionToProto(scr.BeforeSchema)
-			response.AfterSchema = myproto.SchemaDefinitionToProto(scr.AfterSchema)
+			response.BeforeSchema = scr.BeforeSchema
+			response.AfterSchema = scr.AfterSchema
 		}
 		return err
 	})

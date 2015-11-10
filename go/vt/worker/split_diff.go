@@ -47,8 +47,8 @@ type SplitDiffWorker struct {
 	destinationAlias *pb.TabletAlias
 
 	// populated during WorkerStateDiff
-	sourceSchemaDefinitions     []*myproto.SchemaDefinition
-	destinationSchemaDefinition *myproto.SchemaDefinition
+	sourceSchemaDefinitions     []*pbt.SchemaDefinition
+	destinationSchemaDefinition *pbt.SchemaDefinition
 }
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
@@ -344,7 +344,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	sdw.SetState(WorkerStateDiff)
 
 	sdw.wr.Logger().Infof("Gathering schema information...")
-	sdw.sourceSchemaDefinitions = make([]*myproto.SchemaDefinition, len(sdw.sourceAliases))
+	sdw.sourceSchemaDefinitions = make([]*pbt.SchemaDefinition, len(sdw.sourceAliases))
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	wg.Add(1)
@@ -395,7 +395,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition *myproto.TableDefinition) {
+		go func(tableDefinition *pbt.TableDefinition) {
 			defer wg.Done()
 			sem.Acquire()
 			defer sem.Release()
