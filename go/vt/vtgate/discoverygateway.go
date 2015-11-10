@@ -281,8 +281,8 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 		}
 		return []*pbt.EndPoint{ep}
 	}
-	// for non-master, use only endpoints from local cell.
-	var epList []*pbt.EndPoint
+	// for non-master, use only endpoints from local cell and filter by replication lag.
+	list := make([]*discovery.EndPointStats, 0, len(epsList))
 	for _, eps := range epsList {
 		if eps.LastError != nil || !eps.Serving {
 			continue
@@ -290,6 +290,11 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 		if dg.localCell != eps.Cell {
 			continue
 		}
+		list = append(list, eps)
+	}
+	list = discovery.FilterByReplicationLag(list)
+	epList := make([]*pbt.EndPoint, 0, len(list))
+	for _, eps := range list {
 		epList = append(epList, eps.EndPoint)
 	}
 	return epList
