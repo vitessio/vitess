@@ -1,6 +1,11 @@
 package discovery
 
-import "fmt"
+import (
+	"flag"
+	"fmt"
+)
+
+var replicationLowLag = flag.Uint("discovery_replication_low_lag", 30, "the replication lag in seconds that is considered low")
 
 // FilterByReplicationLag filters the list of EndPointStats by EndPointStats.Stats.SecondsBehindMaster.
 // The algorithm (EndPointStats that is non-serving or has error is ignored):
@@ -24,7 +29,7 @@ func FilterByReplicationLag(epsList []*EndPointStats) []*EndPointStats {
 	// if all have low replication lag (<=30s), return all endpoints.
 	allLowLag := true
 	for _, eps := range list {
-		if eps.Stats.SecondsBehindMaster > 30 {
+		if eps.Stats.SecondsBehindMaster > uint32(*replicationLowLag) {
 			allLowLag = false
 			break
 		}
@@ -35,17 +40,10 @@ func FilterByReplicationLag(epsList []*EndPointStats) []*EndPointStats {
 	// filter those affecting "mean" lag significantly
 	// calculate mean for all endpoints
 	res := make([]*EndPointStats, 0, len(list))
-	m, err := mean(list, -1)
-	if err != nil {
-		return list
-	}
+	m, _ := mean(list, -1)
 	for i, eps := range list {
 		// calculate mean by excluding ith endpoint
-		mi, err := mean(list, i)
-		if err != nil {
-			res = append(res, eps)
-			continue
-		}
+		mi, _ := mean(list, i)
 		if float64(mi) > float64(m)*0.7 {
 			res = append(res, eps)
 		}
