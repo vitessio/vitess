@@ -18,8 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
-	pbs "github.com/youtube/vitess/go/vt/proto/queryservice"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	queryservicepb "github.com/youtube/vitess/go/vt/proto/queryservice"
 )
 
 // query is the gRPC query service implementation.
@@ -29,7 +29,7 @@ type query struct {
 }
 
 // GetSessionId is part of the queryservice.QueryServer interface
-func (q *query) GetSessionId(ctx context.Context, request *pb.GetSessionIdRequest) (response *pb.GetSessionIdResponse, err error) {
+func (q *query) GetSessionId(ctx context.Context, request *querypb.GetSessionIdRequest) (response *querypb.GetSessionIdResponse, err error) {
 	defer q.server.HandlePanic(&err)
 
 	sessionInfo := new(proto.SessionInfo)
@@ -40,13 +40,13 @@ func (q *query) GetSessionId(ctx context.Context, request *pb.GetSessionIdReques
 		return nil, tabletserver.ToGRPCError(err)
 	}
 
-	return &pb.GetSessionIdResponse{
+	return &querypb.GetSessionIdResponse{
 		SessionId: sessionInfo.SessionId,
 	}, nil
 }
 
 // Execute is part of the queryservice.QueryServer interface
-func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (response *pb.ExecuteResponse, err error) {
+func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (response *querypb.ExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.EffectiveCallerId,
@@ -65,13 +65,13 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 	}, reply); err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	return &pb.ExecuteResponse{
+	return &querypb.ExecuteResponse{
 		Result: sqltypes.ResultToProto3(reply),
 	}, nil
 }
 
 // ExecuteBatch is part of the queryservice.QueryServer interface
-func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchRequest) (response *pb.ExecuteBatchResponse, err error) {
+func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchRequest) (response *querypb.ExecuteBatchResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.EffectiveCallerId,
@@ -90,13 +90,13 @@ func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 	}, reply); err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	return &pb.ExecuteBatchResponse{
+	return &querypb.ExecuteBatchResponse{
 		Results: proto.QueryResultListToProto3(reply.List),
 	}, nil
 }
 
 // StreamExecute is part of the queryservice.QueryServer interface
-func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query_StreamExecuteServer) (err error) {
+func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream queryservicepb.Query_StreamExecuteServer) (err error) {
 	defer q.server.HandlePanic(&err)
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.EffectiveCallerId,
@@ -111,7 +111,7 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 		BindVariables: bv,
 		SessionId:     request.SessionId,
 	}, func(reply *sqltypes.Result) error {
-		return stream.Send(&pb.StreamExecuteResponse{
+		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	}); err != nil {
@@ -121,7 +121,7 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 }
 
 // Begin is part of the queryservice.QueryServer interface
-func (q *query) Begin(ctx context.Context, request *pb.BeginRequest) (response *pb.BeginResponse, err error) {
+func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (response *querypb.BeginResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.EffectiveCallerId,
@@ -134,13 +134,13 @@ func (q *query) Begin(ctx context.Context, request *pb.BeginRequest) (response *
 		return nil, tabletserver.ToGRPCError(err)
 	}
 
-	return &pb.BeginResponse{
+	return &querypb.BeginResponse{
 		TransactionId: txInfo.TransactionId,
 	}, nil
 }
 
 // Commit is part of the queryservice.QueryServer interface
-func (q *query) Commit(ctx context.Context, request *pb.CommitRequest) (response *pb.CommitResponse, err error) {
+func (q *query) Commit(ctx context.Context, request *querypb.CommitRequest) (response *querypb.CommitResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.EffectiveCallerId,
@@ -152,11 +152,11 @@ func (q *query) Commit(ctx context.Context, request *pb.CommitRequest) (response
 	}); err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	return &pb.CommitResponse{}, nil
+	return &querypb.CommitResponse{}, nil
 }
 
 // Rollback is part of the queryservice.QueryServer interface
-func (q *query) Rollback(ctx context.Context, request *pb.RollbackRequest) (response *pb.RollbackResponse, err error) {
+func (q *query) Rollback(ctx context.Context, request *querypb.RollbackRequest) (response *querypb.RollbackResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.EffectiveCallerId,
@@ -169,11 +169,11 @@ func (q *query) Rollback(ctx context.Context, request *pb.RollbackRequest) (resp
 		return nil, tabletserver.ToGRPCError(err)
 	}
 
-	return &pb.RollbackResponse{}, nil
+	return &querypb.RollbackResponse{}, nil
 }
 
 // SplitQuery is part of the queryservice.QueryServer interface
-func (q *query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (response *pb.SplitQueryResponse, err error) {
+func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryRequest) (response *querypb.SplitQueryResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.EffectiveCallerId,
@@ -196,14 +196,14 @@ func (q *query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	return &pb.SplitQueryResponse{Queries: qs}, nil
+	return &querypb.SplitQueryResponse{Queries: qs}, nil
 }
 
 // StreamHealth is part of the queryservice.QueryServer interface
-func (q *query) StreamHealth(request *pb.StreamHealthRequest, stream pbs.Query_StreamHealthServer) (err error) {
+func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream queryservicepb.Query_StreamHealthServer) (err error) {
 	defer q.server.HandlePanic(&err)
 
-	c := make(chan *pb.StreamHealthResponse, 10)
+	c := make(chan *querypb.StreamHealthResponse, 10)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -229,12 +229,12 @@ func (q *query) StreamHealth(request *pb.StreamHealthRequest, stream pbs.Query_S
 func init() {
 	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
 		if servenv.GRPCCheckServiceMap("queryservice") {
-			pbs.RegisterQueryServer(servenv.GRPCServer, &query{qsc.QueryService()})
+			queryservicepb.RegisterQueryServer(servenv.GRPCServer, &query{qsc.QueryService()})
 		}
 	})
 }
 
 // RegisterForTest should only be used by unit tests
 func RegisterForTest(s *grpc.Server, server queryservice.QueryService) {
-	pbs.RegisterQueryServer(s, &query{server})
+	queryservicepb.RegisterQueryServer(s, &query{server})
 }
