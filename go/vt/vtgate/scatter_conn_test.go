@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -27,14 +26,14 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestScatterConnExecute(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnExecute", func(shards []string) (*mproto.QueryResult, error) {
+	testScatterConnGeneric(t, "TestScatterConnExecute", func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		return stc.Execute(context.Background(), "query", nil, "TestScatterConnExecute", shards, pb.TabletType_REPLICA, nil, false)
 	})
 }
 
 func TestScatterConnExecuteMulti(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnExecuteMulti", func(shards []string) (*mproto.QueryResult, error) {
+	testScatterConnGeneric(t, "TestScatterConnExecuteMulti", func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		shardVars := make(map[string]map[string]interface{})
 		for _, shard := range shards {
@@ -45,7 +44,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 }
 
 func TestScatterConnExecuteBatch(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnExecuteBatch", func(shards []string) (*mproto.QueryResult, error) {
+	testScatterConnGeneric(t, "TestScatterConnExecuteBatch", func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		queries := []proto.BoundShardQuery{{
 			Sql:           "query",
@@ -63,10 +62,10 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 }
 
 func TestScatterConnStreamExecute(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(shards []string) (*mproto.QueryResult, error) {
+	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
-		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, pb.TabletType_REPLICA, func(r *mproto.QueryResult) error {
+		qr := new(sqltypes.Result)
+		err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, pb.TabletType_REPLICA, func(r *sqltypes.Result) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -75,14 +74,14 @@ func TestScatterConnStreamExecute(t *testing.T) {
 }
 
 func TestScatterConnStreamExecuteMulti(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(shards []string) (*mproto.QueryResult, error) {
+	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
-		qr := new(mproto.QueryResult)
+		qr := new(sqltypes.Result)
 		shardVars := make(map[string]map[string]interface{})
 		for _, shard := range shards {
 			shardVars[shard] = nil
 		}
-		err := stc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecuteMulti", shardVars, pb.TabletType_REPLICA, func(r *mproto.QueryResult) error {
+		err := stc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecuteMulti", shardVars, pb.TabletType_REPLICA, func(r *sqltypes.Result) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -113,7 +112,7 @@ func verifyErrorCode(t *testing.T, err error, wantCode vtrpc.ErrorCode) {
 	}
 }
 
-func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (*mproto.QueryResult, error)) {
+func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (*sqltypes.Result, error)) {
 	// no shard
 	s := createSandbox(name)
 	qr, err := f(nil)
@@ -234,7 +233,7 @@ func TestMultiExecs(t *testing.T) {
 	}
 	sbc0.Queries = nil
 	sbc1.Queries = nil
-	_ = stc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, pb.TabletType_REPLICA, func(*mproto.QueryResult) error {
+	_ = stc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, pb.TabletType_REPLICA, func(*sqltypes.Result) error {
 		return nil
 	})
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
@@ -250,7 +249,7 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, "")
-	err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, pb.TabletType_REPLICA, func(*mproto.QueryResult) error {
+	err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, pb.TabletType_REPLICA, func(*sqltypes.Result) error {
 		return fmt.Errorf("send error")
 	})
 	want := "send error"
@@ -534,17 +533,17 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 }
 
 func TestAppendResult(t *testing.T) {
-	qr := new(mproto.QueryResult)
-	innerqr1 := &mproto.QueryResult{
+	qr := new(sqltypes.Result)
+	innerqr1 := &sqltypes.Result{
 		Fields: []*pbq.Field{},
 		Rows:   [][]sqltypes.Value{},
 	}
-	innerqr2 := &mproto.QueryResult{
+	innerqr2 := &sqltypes.Result{
 		Fields: []*pbq.Field{
 			{Name: "foo", Type: sqltypes.Int8},
 		},
 		RowsAffected: 1,
-		InsertId:     1,
+		InsertID:     1,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.MakeString([]byte("abcd"))},
 		},
@@ -558,14 +557,14 @@ func TestAppendResult(t *testing.T) {
 	if qr.RowsAffected != 1 {
 		t.Errorf("want 1, got %v", qr.RowsAffected)
 	}
-	if qr.InsertId != 1 {
-		t.Errorf("want 1, got %v", qr.InsertId)
+	if qr.InsertID != 1 {
+		t.Errorf("want 1, got %v", qr.InsertID)
 	}
 	if len(qr.Rows) != 1 {
 		t.Errorf("want 1, got %v", len(qr.Rows))
 	}
 	// test two valid results
-	qr = new(mproto.QueryResult)
+	qr = new(sqltypes.Result)
 	appendResult(qr, innerqr2)
 	appendResult(qr, innerqr2)
 	if len(qr.Fields) != 1 {
@@ -574,8 +573,8 @@ func TestAppendResult(t *testing.T) {
 	if qr.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.RowsAffected)
 	}
-	if qr.InsertId != 1 {
-		t.Errorf("want 1, got %v", qr.InsertId)
+	if qr.InsertID != 1 {
+		t.Errorf("want 1, got %v", qr.InsertID)
 	}
 	if len(qr.Rows) != 2 {
 		t.Errorf("want 2, got %v", len(qr.Rows))

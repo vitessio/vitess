@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/key"
@@ -360,7 +359,7 @@ type sandboxConn struct {
 	// results specifies the results to be returned.
 	// They're consumed as results are returned. If there are
 	// no results left, singleRowResult is returned.
-	results []*mproto.QueryResult
+	results []*sqltypes.Result
 
 	// transaction id generator
 	TransactionID sync2.AtomicInt64
@@ -417,11 +416,11 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
-func (sbc *sandboxConn) setResults(r []*mproto.QueryResult) {
+func (sbc *sandboxConn) setResults(r []*sqltypes.Result) {
 	sbc.results = r
 }
 
-func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
@@ -440,7 +439,7 @@ func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[
 	return sbc.getNextResult(), nil
 }
 
-func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return sbc.Execute(ctx, query, bindVars, transactionID)
 }
 
@@ -457,7 +456,7 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 	}
 	sbc.BatchQueries = append(sbc.BatchQueries, queries)
 	qrl := &tproto.QueryResultList{}
-	qrl.List = make([]mproto.QueryResult, 0, len(queries))
+	qrl.List = make([]sqltypes.Result, 0, len(queries))
 	for _ = range queries {
 		qrl.List = append(qrl.List, *(sbc.getNextResult()))
 	}
@@ -468,7 +467,7 @@ func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []tproto.Boun
 	return sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
-func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
@@ -481,14 +480,14 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
-	ch := make(chan *mproto.QueryResult, 1)
+	ch := make(chan *sqltypes.Result, 1)
 	ch <- sbc.getNextResult()
 	close(ch)
 	err := sbc.getError()
 	return ch, func() error { return err }, err
 }
 
-func (sbc *sandboxConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (sbc *sandboxConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return sbc.StreamExecute(ctx, query, bindVars, transactionID)
 }
 
@@ -576,7 +575,7 @@ func (sbc *sandboxConn) setEndPoint(ep *pbt.EndPoint) {
 	sbc.endPoint = ep
 }
 
-func (sbc *sandboxConn) getNextResult() *mproto.QueryResult {
+func (sbc *sandboxConn) getNextResult() *sqltypes.Result {
 	if len(sbc.results) != 0 {
 		r := sbc.results[0]
 		sbc.results = sbc.results[1:]
@@ -585,13 +584,13 @@ func (sbc *sandboxConn) getNextResult() *mproto.QueryResult {
 	return singleRowResult
 }
 
-var singleRowResult = &mproto.QueryResult{
+var singleRowResult = &sqltypes.Result{
 	Fields: []*pbq.Field{
 		{"id", sqltypes.Int32},
 		{"value", sqltypes.VarChar},
 	},
 	RowsAffected: 1,
-	InsertId:     0,
+	InsertID:     0,
 	Rows: [][]sqltypes.Value{{
 		sqltypes.MakeNumeric([]byte("1")),
 		sqltypes.MakeString([]byte("foo")),

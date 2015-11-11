@@ -8,8 +8,8 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
@@ -90,7 +90,7 @@ func (dc *DBClient) Close() {
 }
 
 // ExecuteFetch sends query to the db server and fetch the result
-func (dc *DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (dc *DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		log.Errorf("ExecuteFetch failed w/ error %v", err)

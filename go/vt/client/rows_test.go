@@ -6,12 +6,11 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
-var rowsResult1 = mproto.QueryResult{
+var rowsResult1 = sqltypes.Result{
 	Fields: []*query.Field{
 		&query.Field{
 			Name: "field1",
@@ -37,7 +36,7 @@ var rowsResult1 = mproto.QueryResult{
 		},
 	},
 	RowsAffected: 2,
-	InsertId:     0,
+	InsertID:     0,
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("1")),
@@ -123,7 +122,7 @@ func TestRows(t *testing.T) {
 	_ = ri.Close()
 }
 
-var badResult1 = mproto.QueryResult{
+var badResult1 = sqltypes.Result{
 	Fields: []*query.Field{
 		&query.Field{},
 	},
@@ -132,7 +131,7 @@ var badResult1 = mproto.QueryResult{
 	},
 }
 
-var badResult2 = mproto.QueryResult{
+var badResult2 = sqltypes.Result{
 	Fields: []*query.Field{
 		&query.Field{
 			Name: "field1",

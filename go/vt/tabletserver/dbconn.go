@@ -10,8 +10,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -52,7 +52,7 @@ func NewDBConn(
 
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
-func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	for attempt := 1; attempt <= 2; attempt++ {
 		r, err := dbc.execOnce(ctx, query, maxrows, wantfields)
 		switch {
@@ -76,7 +76,7 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 	return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Exec: unreachable code"))
 }
 
-func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
@@ -90,12 +90,12 @@ func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, want
 }
 
 // ExecOnce executes the specified query, but does not retry on connection errors.
-func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	return dbc.execOnce(ctx, query, maxrows, wantfields)
 }
 
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 

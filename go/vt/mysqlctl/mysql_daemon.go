@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
@@ -73,7 +73,7 @@ type MysqlDaemon interface {
 	ExecuteSuperQueryList(queryList []string) error
 
 	// FetchSuperQuery executes one query, returns the result
-	FetchSuperQuery(query string) (*mproto.QueryResult, error)
+	FetchSuperQuery(query string) (*sqltypes.Result, error)
 
 	// NewSlaveConnection returns a SlaveConnection to the database.
 	NewSlaveConnection() (*SlaveConnection, error)
@@ -184,7 +184,7 @@ type FakeMysqlDaemon struct {
 	ExpectedExecuteSuperQueryCurrent int
 
 	// FetchSuperQueryResults is used by FetchSuperQuery
-	FetchSuperQueryMap map[string]*mproto.QueryResult
+	FetchSuperQueryMap map[string]*sqltypes.Result
 
 	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
 	BinlogPlayerEnabled bool
@@ -347,7 +347,7 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
 }
 
 // FetchSuperQuery returns the results from the map, if any
-func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*mproto.QueryResult, error) {
+func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*sqltypes.Result, error) {
 	if fmd.FetchSuperQueryMap == nil {
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}

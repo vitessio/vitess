@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -233,7 +233,7 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 	return router, sbc1, sbc2, sbclookup
 }
 
-func routerExec(router *Router, sql string, bv map[string]interface{}) (*mproto.QueryResult, error) {
+func routerExec(router *Router, sql string, bv map[string]interface{}) (*sqltypes.Result, error) {
 	return router.Execute(context.Background(),
 		sql,
 		bv,
@@ -242,9 +242,9 @@ func routerExec(router *Router, sql string, bv map[string]interface{}) (*mproto.
 		false)
 }
 
-func routerStream(router *Router, sql string) (qr *mproto.QueryResult, err error) {
-	results := make(chan *mproto.QueryResult, 10)
-	err = router.StreamExecute(context.Background(), sql, nil, pb.TabletType_MASTER, func(qr *mproto.QueryResult) error {
+func routerStream(router *Router, sql string) (qr *sqltypes.Result, err error) {
+	results := make(chan *sqltypes.Result, 10)
+	err = router.StreamExecute(context.Background(), sql, nil, pb.TabletType_MASTER, func(qr *sqltypes.Result) error {
 		results <- qr
 		return nil
 	})
@@ -255,7 +255,7 @@ func routerStream(router *Router, sql string) (qr *mproto.QueryResult, err error
 	first := true
 	for r := range results {
 		if first {
-			qr = &mproto.QueryResult{Fields: r.Fields}
+			qr = &sqltypes.Result{Fields: r.Fields}
 			first = false
 		}
 		qr.Rows = append(qr.Rows, r.Rows...)

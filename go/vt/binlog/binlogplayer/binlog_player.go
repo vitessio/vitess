@@ -18,8 +18,8 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -261,7 +261,7 @@ func (blp *BinlogPlayer) processTransaction(tx *pb.BinlogTransaction) (ok bool, 
 	return true, nil
 }
 
-func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
+func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	queryStartTime := time.Now()
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0, false)
 	blp.blplStats.Timings.Record(BlplQuery, queryStartTime)

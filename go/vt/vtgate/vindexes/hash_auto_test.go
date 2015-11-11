@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -134,11 +133,11 @@ func TestHashAutoReverseMap(t *testing.T) {
 type vcursor struct {
 	mustFail bool
 	numRows  int
-	result   *mproto.QueryResult
+	result   *sqltypes.Result
 	query    *tproto.BoundQuery
 }
 
-func (vc *vcursor) Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error) {
+func (vc *vcursor) Execute(query *tproto.BoundQuery) (*sqltypes.Result, error) {
 	vc.query = query
 	if vc.mustFail {
 		return nil, errors.New("execute failed")
@@ -148,7 +147,7 @@ func (vc *vcursor) Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error
 		if vc.result != nil {
 			return vc.result, nil
 		}
-		result := &mproto.QueryResult{
+		result := &sqltypes.Result{
 			Fields: []*pbq.Field{{
 				Type: sqltypes.Int32,
 			}},
@@ -161,9 +160,9 @@ func (vc *vcursor) Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error
 		}
 		return result, nil
 	case strings.HasPrefix(query.Sql, "insert"):
-		return &mproto.QueryResult{InsertId: 1}, nil
+		return &sqltypes.Result{InsertID: 1}, nil
 	case strings.HasPrefix(query.Sql, "delete"):
-		return &mproto.QueryResult{}, nil
+		return &sqltypes.Result{}, nil
 	}
 	panic("unexpected")
 }

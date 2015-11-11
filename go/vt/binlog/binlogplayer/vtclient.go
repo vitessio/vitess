@@ -4,7 +4,7 @@
 
 package binlogplayer
 
-import mproto "github.com/youtube/vitess/go/mysql/proto"
+import "github.com/youtube/vitess/go/sqltypes"
 
 // VtClient is a high level interface to the database
 type VtClient interface {
@@ -13,24 +13,24 @@ type VtClient interface {
 	Commit() error
 	Rollback() error
 	Close()
-	ExecuteFetch(query string, maxrows int, wantfields bool) (qr *mproto.QueryResult, err error)
+	ExecuteFetch(query string, maxrows int, wantfields bool) (qr *sqltypes.Result, err error)
 }
 
 // VtClientMock is a VtClient that writes to a writer instead of executing
 // anything
 type VtClientMock struct {
 	Stdout        []string
-	Result        *mproto.QueryResult
+	Result        *sqltypes.Result
 	CommitChannel chan []string
 }
 
 // NewVtClientMock returns a new VtClientMock
 func NewVtClientMock() *VtClientMock {
 	return &VtClientMock{
-		Result: &mproto.QueryResult{
+		Result: &sqltypes.Result{
 			Fields:       nil,
 			RowsAffected: 1,
-			InsertId:     0,
+			InsertID:     0,
 			Rows:         nil,
 		},
 	}
@@ -69,7 +69,7 @@ func (dc *VtClientMock) Close() {
 }
 
 // ExecuteFetch is part of the VtClient interface
-func (dc *VtClientMock) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *mproto.QueryResult, err error) {
+func (dc *VtClientMock) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *sqltypes.Result, err error) {
 	dc.Stdout = append(dc.Stdout, query)
 	return dc.Result, nil
 }

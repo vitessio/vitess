@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
@@ -21,14 +21,14 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestExecuteKeyspaceAlias(t *testing.T) {
-	testVerticalSplitGeneric(t, false, func(shards []string) (*mproto.QueryResult, error) {
+	testVerticalSplitGeneric(t, false, func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
 		return stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, pb.TabletType_RDONLY, nil, false)
 	})
 }
 
 func TestBatchExecuteKeyspaceAlias(t *testing.T) {
-	testVerticalSplitGeneric(t, false, func(shards []string) (*mproto.QueryResult, error) {
+	testVerticalSplitGeneric(t, false, func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
 		queries := []proto.BoundShardQuery{{
 			Sql:           "query",
@@ -46,10 +46,10 @@ func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 }
 
 func TestStreamExecuteKeyspaceAlias(t *testing.T) {
-	testVerticalSplitGeneric(t, true, func(shards []string) (*mproto.QueryResult, error) {
+	testVerticalSplitGeneric(t, true, func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
-		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, pb.TabletType_RDONLY, func(r *mproto.QueryResult) error {
+		qr := new(sqltypes.Result)
+		err := stc.StreamExecute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, pb.TabletType_RDONLY, func(r *sqltypes.Result) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -86,7 +86,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	}
 }
 
-func testVerticalSplitGeneric(t *testing.T, isStreaming bool, f func(shards []string) (*mproto.QueryResult, error)) {
+func testVerticalSplitGeneric(t *testing.T, isStreaming bool, f func(shards []string) (*sqltypes.Result, error)) {
 	// Retry Error, for keyspace that is redirected should succeed.
 	s := createSandbox(KsTestUnshardedServedFrom)
 	sbc := &sandboxConn{mustFailRetry: 1}

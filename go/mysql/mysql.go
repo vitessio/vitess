@@ -20,7 +20,6 @@ import (
 	"unsafe"
 
 	"github.com/youtube/vitess/go/hack"
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 
@@ -215,7 +214,7 @@ func (conn *Connection) IsClosed() bool {
 }
 
 // ExecuteFetch executes the query on the connection
-func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
+func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *sqltypes.Result, err error) {
 	if conn.IsClosed() {
 		return nil, sqldb.NewSQLError(2006, "Connection is closed")
 	}
@@ -225,9 +224,9 @@ func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool)
 	}
 	defer conn.CloseResult()
 
-	qr = &proto.QueryResult{}
+	qr = &sqltypes.Result{}
 	qr.RowsAffected = uint64(conn.c.affected_rows)
-	qr.InsertId = uint64(conn.c.insert_id)
+	qr.InsertID = uint64(conn.c.insert_id)
 	if conn.c.num_fields == 0 {
 		return qr, nil
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // MarshalBson bson-encodes QueryResultList.
@@ -20,7 +21,7 @@ func (queryResultList *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter, k
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
-	// []mproto.QueryResult
+	// []sqltypes.Result
 	{
 		bson.EncodePrefix(buf, bson.Array, "List")
 		lenWriter := bson.NewLenWriter(buf)
@@ -54,16 +55,16 @@ func (queryResultList *QueryResultList) UnmarshalBson(buf *bytes.Buffer, kind by
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
 		case "List":
-			// []mproto.QueryResult
+			// []sqltypes.Result
 			if kind != bson.Null {
 				if kind != bson.Array {
 					panic(bson.NewBsonError("unexpected kind %v for queryResultList.List", kind))
 				}
 				bson.Next(buf, 4)
-				queryResultList.List = make([]mproto.QueryResult, 0, 8)
+				queryResultList.List = make([]sqltypes.Result, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v1 mproto.QueryResult
+					var _v1 sqltypes.Result
 					_v1.UnmarshalBson(buf, kind)
 					queryResultList.List = append(queryResultList.List, _v1)
 				}

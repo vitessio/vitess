@@ -13,7 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
+
 	"golang.org/x/net/context"
 )
 
@@ -168,7 +169,7 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 		Sqls: []string{"create table test_table (id int)"},
 		SuccessShards: []ShardResult{{
 			Shard:  "0",
-			Result: &mproto.QueryResult{},
+			Result: &sqltypes.Result{},
 		}},
 	}
 	logPath := path.Join(controller.logDir, controller.sqlFilename)

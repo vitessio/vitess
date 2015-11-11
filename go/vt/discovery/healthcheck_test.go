@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -216,11 +216,11 @@ func (fc *fakeConn) StreamHealth(ctx context.Context) (<-chan *pbq.StreamHealthR
 	return fc.hcChan, func() error { return nil }, nil
 }
 
-func (fc *fakeConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (fc *fakeConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (fc *fakeConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (fc *fakeConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return fc.Execute(ctx, query, bindVars, transactionID)
 }
 
@@ -232,11 +232,11 @@ func (fc *fakeConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQue
 	return fc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
-func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (fc *fakeConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return nil, nil, fmt.Errorf("not implemented")
 }
 
-func (fc *fakeConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (fc *fakeConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return fc.StreamExecute(ctx, query, bindVars, transactionID)
 }
 

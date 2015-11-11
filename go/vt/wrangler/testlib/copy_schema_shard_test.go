@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -27,7 +27,7 @@ type ExpectedExecuteFetch struct {
 	Query       string
 	MaxRows     int
 	WantFields  bool
-	QueryResult *mproto.QueryResult
+	QueryResult *sqltypes.Result
 	Error       error
 }
 
@@ -46,13 +46,13 @@ func NewFakePoolConnectionQuery(t *testing.T, query string) *FakePoolConnection 
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
 			ExpectedExecuteFetch{
 				Query:       query,
-				QueryResult: &mproto.QueryResult{},
+				QueryResult: &sqltypes.Result{},
 			},
 		},
 	}
 }
 
-func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if fpc.ExpectedExecuteFetchIndex >= len(fpc.ExpectedExecuteFetch) {
 		fpc.t.Errorf("got unexpected out of bound fetch: %v >= %v", fpc.ExpectedExecuteFetchIndex, len(fpc.ExpectedExecuteFetch))
 		return nil, fmt.Errorf("unexpected out of bound fetch")
@@ -69,7 +69,7 @@ func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfield
 	return fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].QueryResult, nil
 }
 
-func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	return nil
 }
 
@@ -160,10 +160,10 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		"  PRIMARY KEY (`id`),\n" +
 		"  KEY `by_msg` (`msg`)\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8"
-	db.AddQuery("USE vt_ks", &mproto.QueryResult{})
-	db.AddQuery(createDb, &mproto.QueryResult{})
-	db.AddQuery(createTable, &mproto.QueryResult{})
-	db.AddQuery(createTableView, &mproto.QueryResult{})
+	db.AddQuery("USE vt_ks", &sqltypes.Result{})
+	db.AddQuery(createDb, &sqltypes.Result{})
+	db.AddQuery(createTable, &sqltypes.Result{})
+	db.AddQuery(createTableView, &sqltypes.Result{})
 
 	source := topoproto.TabletAliasString(sourceRdonly.Tablet.Alias)
 	if useShardAsSource {

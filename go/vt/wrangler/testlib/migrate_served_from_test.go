@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -88,8 +87,8 @@ func TestMigrateServedFrom(t *testing.T) {
 
 	// destMaster will see the refresh, and has to respond to it.
 	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	destMaster.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &mproto.QueryResult{
+	destMaster.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte(myproto.EncodeReplicationPosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),

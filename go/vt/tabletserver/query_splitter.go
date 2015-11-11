@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -102,7 +101,7 @@ func (qs *QuerySplitter) validateQuery() error {
 
 // split splits the query into multiple queries. validateQuery() must return
 // nil error before split() is called.
-func (qs *QuerySplitter) split(columnType query.Type, pkMinMax *mproto.QueryResult) ([]proto.QuerySplit, error) {
+func (qs *QuerySplitter) split(columnType query.Type, pkMinMax *sqltypes.Result) ([]proto.QuerySplit, error) {
 	boundaries, err := qs.splitBoundaries(columnType, pkMinMax)
 	if err != nil {
 		return nil, err
@@ -212,7 +211,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 	}
 }
 
-func (qs *QuerySplitter) splitBoundaries(columnType query.Type, pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
+func (qs *QuerySplitter) splitBoundaries(columnType query.Type, pkMinMax *sqltypes.Result) ([]sqltypes.Value, error) {
 	switch {
 	case sqltypes.IsSigned(columnType):
 		return qs.splitBoundariesIntColumn(pkMinMax)
@@ -226,7 +225,7 @@ func (qs *QuerySplitter) splitBoundaries(columnType query.Type, pkMinMax *mproto
 	return []sqltypes.Value{}, nil
 }
 
-func (qs *QuerySplitter) splitBoundariesIntColumn(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
+func (qs *QuerySplitter) splitBoundariesIntColumn(pkMinMax *sqltypes.Result) ([]sqltypes.Value, error) {
 	boundaries := []sqltypes.Value{}
 	if pkMinMax == nil || len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
 		return boundaries, nil
@@ -256,7 +255,7 @@ func (qs *QuerySplitter) splitBoundariesIntColumn(pkMinMax *mproto.QueryResult) 
 	return boundaries, nil
 }
 
-func (qs *QuerySplitter) splitBoundariesUintColumn(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
+func (qs *QuerySplitter) splitBoundariesUintColumn(pkMinMax *sqltypes.Result) ([]sqltypes.Value, error) {
 	boundaries := []sqltypes.Value{}
 	if pkMinMax == nil || len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
 		return boundaries, nil
@@ -286,7 +285,7 @@ func (qs *QuerySplitter) splitBoundariesUintColumn(pkMinMax *mproto.QueryResult)
 	return boundaries, nil
 }
 
-func (qs *QuerySplitter) splitBoundariesFloatColumn(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
+func (qs *QuerySplitter) splitBoundariesFloatColumn(pkMinMax *sqltypes.Result) ([]sqltypes.Value, error) {
 	boundaries := []sqltypes.Value{}
 	if pkMinMax == nil || len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
 		return boundaries, nil

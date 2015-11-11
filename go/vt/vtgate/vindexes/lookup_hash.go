@@ -345,7 +345,7 @@ func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid []byte) (id int64,
 	if err != nil {
 		return 0, fmt.Errorf("lookup.Generate: %v", err)
 	}
-	return int64(result.InsertId), err
+	return int64(result.InsertID), err
 }
 
 // Delete deletes the association between ids and ksid.
