@@ -30,19 +30,19 @@ var (
 
 type sendEventFunc func(event *pb.StreamEvent) error
 
-// EventStreamer is an adapter on top of a BinlogStreamer that convert
+// EventStreamer is an adapter on top of a binlog Streamer that convert
 // the events into StreamEvent objects.
 type EventStreamer struct {
-	bls       *BinlogStreamer
+	bls       *Streamer
 	sendEvent sendEventFunc
 }
 
-// NewEventStreamer returns a new EventStreamer on top of a BinlogStreamer
+// NewEventStreamer returns a new EventStreamer on top of a Streamer
 func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos myproto.ReplicationPosition, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}
-	evs.bls = NewBinlogStreamer(dbname, mysqld, nil, startPos, evs.transactionToEvent)
+	evs.bls = NewStreamer(dbname, mysqld, nil, startPos, evs.transactionToEvent)
 	return evs
 }
 

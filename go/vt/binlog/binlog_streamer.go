@@ -22,10 +22,10 @@ import (
 var (
 	binlogStreamerErrors = stats.NewCounters("BinlogStreamerErrors")
 
-	// ErrClientEOF is returned by BinlogStreamer if the stream ended because the
+	// ErrClientEOF is returned by Streamer if the stream ended because the
 	// consumer of the stream indicated it doesn't want any more events.
 	ErrClientEOF = fmt.Errorf("binlog stream consumer ended the reply stream")
-	// ErrServerEOF is returned by BinlogStreamer if the stream ended because the
+	// ErrServerEOF is returned by Streamer if the stream ended because the
 	// connection to the mysqld server was lost, or the stream was terminated by
 	// mysqld.
 	ErrServerEOF = fmt.Errorf("binlog stream connection was closed by mysqld")
@@ -59,10 +59,10 @@ func getStatementCategory(sql string) pb.BinlogTransaction_Statement_Category {
 	return statementPrefixes[strings.ToLower(sql)]
 }
 
-// BinlogStreamer streams binlog events from MySQL by connecting as a slave.
-// A BinlogStreamer should only be used once. To start another stream, call
-// NewBinlogStreamer() again.
-type BinlogStreamer struct {
+// Streamer streams binlog events from MySQL by connecting as a slave.
+// A Streamer should only be used once. To start another stream, call
+// NewStreamer() again.
+type Streamer struct {
 	// dbname and mysqld are set at creation.
 	dbname          string
 	mysqld          mysqlctl.MysqlDaemon
@@ -73,15 +73,15 @@ type BinlogStreamer struct {
 	conn *mysqlctl.SlaveConnection
 }
 
-// NewBinlogStreamer creates a BinlogStreamer.
+// NewStreamer creates a binlog Streamer.
 //
 // dbname specifes the database to stream events for.
 // mysqld is the local instance of mysqlctl.Mysqld.
 // charset is the default character set on the BinlogPlayer side.
 // startPos is the position to start streaming at.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewBinlogStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *pb.Charset, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) *BinlogStreamer {
-	return &BinlogStreamer{
+func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *pb.Charset, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) *Streamer {
+	return &Streamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
 		clientCharset:   clientCharset,
@@ -90,8 +90,8 @@ func NewBinlogStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset
 	}
 }
 
-// Stream starts streaming binlog events using the settings from NewBinlogStreamer().
-func (bls *BinlogStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
+// Stream starts streaming binlog events using the settings from NewStreamer().
+func (bls *Streamer) Stream(ctx *sync2.ServiceContext) (err error) {
 	stopPos := bls.startPos
 	defer func() {
 		if err != nil {
@@ -106,7 +106,7 @@ func (bls *BinlogStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
 	defer bls.conn.Close()
 
 	// Check that the default charsets match, if the client specified one.
-	// Note that BinlogStreamer uses the settings for the 'dba' user, while
+	// Note that Streamer uses the settings for the 'dba' user, while
 	// BinlogPlayer uses the 'filtered' user, so those are the ones whose charset
 	// must match. Filtered replication should still succeed even with a default
 	// mismatch, since we pass per-statement charset info. However, Vitess in
@@ -140,7 +140,7 @@ func (bls *BinlogStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
 //
 // If the sendTransaction func returns io.EOF, parseEvents returns ErrClientEOF.
 // If the events channel is closed, parseEvents returns ErrServerEOF.
-func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan mysqlctlproto.BinlogEvent) (myproto.ReplicationPosition, error) {
+func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan mysqlctlproto.BinlogEvent) (myproto.ReplicationPosition, error) {
 	var statements []*pb.BinlogTransaction_Statement
 	var format mysqlctlproto.BinlogFormat
 	var gtid myproto.GTID
@@ -190,7 +190,7 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 				return pos, ErrServerEOF
 			}
 		case <-ctx.ShuttingDown:
-			log.Infof("stopping early due to BinlogStreamer service shutdown")
+			log.Infof("stopping early due to binlog Streamer service shutdown")
 			return pos, nil
 		}
 

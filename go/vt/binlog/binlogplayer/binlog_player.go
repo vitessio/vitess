@@ -50,10 +50,10 @@ var (
 	BlpFlagDontStart = "DontStart"
 )
 
-// BinlogPlayerStats is the internal stats of a player. It is a different
+// Stats is the internal stats of a player. It is a different
 // structure that is passed in so stats can be collected over the life
 // of multiple individual players.
-type BinlogPlayerStats struct {
+type Stats struct {
 	// Stats about the player, keys used are BlplQuery and BlplTransaction
 	Timings *stats.Timings
 	Rates   *stats.Rates
@@ -65,22 +65,22 @@ type BinlogPlayerStats struct {
 }
 
 // SetLastPosition sets the last replication position.
-func (bps *BinlogPlayerStats) SetLastPosition(pos myproto.ReplicationPosition) {
+func (bps *Stats) SetLastPosition(pos myproto.ReplicationPosition) {
 	bps.lastPositionMutex.Lock()
 	defer bps.lastPositionMutex.Unlock()
 	bps.lastPosition = pos
 }
 
 // GetLastPosition gets the last replication position.
-func (bps *BinlogPlayerStats) GetLastPosition() myproto.ReplicationPosition {
+func (bps *Stats) GetLastPosition() myproto.ReplicationPosition {
 	bps.lastPositionMutex.RLock()
 	defer bps.lastPositionMutex.RUnlock()
 	return bps.lastPosition
 }
 
-// NewBinlogPlayerStats creates a new BinlogPlayerStats structure
-func NewBinlogPlayerStats() *BinlogPlayerStats {
-	bps := &BinlogPlayerStats{}
+// NewStats creates a new Stats structure
+func NewStats() *Stats {
+	bps := &Stats{}
 	bps.Timings = stats.NewTimings("")
 	bps.Rates = stats.NewRates("", bps.Timings, 15, 60e9)
 	return bps
@@ -92,7 +92,7 @@ type BinlogPlayer struct {
 	dbClient VtClient
 
 	// for key range base requests
-	keyspaceIdType pbt.KeyspaceIdType
+	keyspaceIDType pbt.KeyspaceIdType
 	keyRange       *pbt.KeyRange
 
 	// for table base requests
@@ -102,7 +102,7 @@ type BinlogPlayer struct {
 	uid            uint32
 	position       myproto.ReplicationPosition
 	stopPosition   myproto.ReplicationPosition
-	blplStats      *BinlogPlayerStats
+	blplStats      *Stats
 	defaultCharset *pb.Charset
 	currentCharset *pb.Charset
 }
@@ -111,11 +111,11 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pbt.EndPoint, keyspaceIdType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *BinlogPlayerStats) (*BinlogPlayer, error) {
+func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pbt.EndPoint, keyspaceIDType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
 	result := &BinlogPlayer{
 		endPoint:       endPoint,
 		dbClient:       dbClient,
-		keyspaceIdType: keyspaceIdType,
+		keyspaceIDType: keyspaceIDType,
 		keyRange:       keyRange,
 		uid:            uid,
 		blplStats:      blplStats,
@@ -138,7 +138,7 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pbt.EndPoint, keyspace
 // replicating the provided tables, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient VtClient, endPoint *pbt.EndPoint, tables []string, uid uint32, startPosition string, stopPosition string, blplStats *BinlogPlayerStats) (*BinlogPlayer, error) {
+func NewBinlogPlayerTables(dbClient VtClient, endPoint *pbt.EndPoint, tables []string, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
 	result := &BinlogPlayer{
 		endPoint:  endPoint,
 		dbClient:  dbClient,
@@ -224,7 +224,7 @@ func (blp *BinlogPlayer) processTransaction(tx *pb.BinlogTransaction) (ok bool, 
 			if stmt.Charset != nil {
 				stmtCharset = stmt.Charset
 			} else {
-				// BinlogStreamer sends a nil Charset for statements that use the
+				// Streamer sends a nil Charset for statements that use the
 				// charset we specified in the request.
 				stmtCharset = blp.defaultCharset
 			}
@@ -342,7 +342,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if len(blp.tables) > 0 {
 		responseChan, errFunc, err = blplClient.StreamTables(ctx, myproto.EncodeReplicationPosition(blp.position), blp.tables, blp.defaultCharset)
 	} else {
-		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, myproto.EncodeReplicationPosition(blp.position), blp.keyspaceIdType, blp.keyRange, blp.defaultCharset)
+		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, myproto.EncodeReplicationPosition(blp.position), blp.keyspaceIDType, blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
 		log.Errorf("Error sending streaming query to binlog server: %v", err)

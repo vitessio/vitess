@@ -261,13 +261,13 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(position string, keyspaceID
 	defer streamCount.Add("KeyRange", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->sendReply
+	// Calls cascade like this: binlog.Streamer->KeyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->sendReply
 	f := KeyRangeFilterFunc(keyspaceIDType, keyRange, func(reply *binlogdatapb.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, f)
+	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, f)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(bls.Stream)
@@ -297,13 +297,13 @@ func (updateStream *UpdateStreamImpl) StreamTables(position string, tables []str
 	defer streamCount.Add("Tables", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->sendReply
+	// Calls cascade like this: binlog.Streamer->TablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->sendReply
 	f := TablesFilterFunc(tables, func(reply *binlogdatapb.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, f)
+	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, f)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(bls.Stream)

@@ -15,7 +15,7 @@ import (
 // BinlogEvent represents a single event from a raw MySQL binlog dump stream.
 // The implementation is provided by each supported flavor in go/vt/mysqlctl.
 //
-// BinlogStreamer receives these events through a mysqlctl.SlaveConnection and
+// binlog.Streamer receives these events through a mysqlctl.SlaveConnection and
 // processes them, grouping statements into BinlogTransactions as appropriate.
 //
 // Methods that only access header fields can't fail as long as IsValid()

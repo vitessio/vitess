@@ -61,9 +61,9 @@ type BinlogPlayerController struct {
 	// Information about the source (set at construction, immutable).
 	sourceShard *pb.Shard_SourceShard
 
-	// BinlogPlayerStats has the stats for the players we're going to use
+	// binlogPlayerStats has the stats for the players we're going to use
 	// (pointer is set at construction, immutable, values are thread-safe).
-	binlogPlayerStats *binlogplayer.BinlogPlayerStats
+	binlogPlayerStats *binlogplayer.Stats
 
 	// healthCheck handles the connections to the sources (set at
 	// construction, immutable).
@@ -110,7 +110,7 @@ func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplay
 		keyRange:             keyRange,
 		dbName:               dbName,
 		sourceShard:          sourceShard,
-		binlogPlayerStats:    binlogplayer.NewBinlogPlayerStats(),
+		binlogPlayerStats:    binlogplayer.NewStats(),
 		healthCheck:          discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *retryDelay),
 		initialEndpointFound: make(chan struct{}),
 	}

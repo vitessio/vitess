@@ -15,7 +15,7 @@ import (
 
 // KeyRangeFilterFunc returns a function that calls sendReply only if statements
 // in the transaction match the specified keyrange. The resulting function can be
-// passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
+// passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
 // TODO(erez): Remove 'KeyspaceIdType' from here: it's no longer used.
 func KeyRangeFilterFunc(unused pbt.KeyspaceIdType, keyrange *pbt.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {

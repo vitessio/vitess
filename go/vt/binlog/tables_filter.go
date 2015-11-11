@@ -12,14 +12,14 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
-var (
-	STREAM_COMMENT = "/* _stream "
-	SPACE          = " "
+const (
+	streamComment = "/* _stream "
+	space         = " "
 )
 
 // TablesFilterFunc returns a function that calls sendReply only if statements
 // in the transaction match the specified tables. The resulting function can be
-// passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
+// passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, TablesFilterFunc(sendTransaction))
 func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransactionFunc {
 	return func(reply *pb.BinlogTransaction) error {
@@ -33,14 +33,14 @@ func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransa
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
 			case pb.BinlogTransaction_Statement_BL_DML:
-				tableIndex := strings.LastIndex(statement.Sql, STREAM_COMMENT)
+				tableIndex := strings.LastIndex(statement.Sql, streamComment)
 				if tableIndex == -1 {
 					updateStreamErrors.Add("TablesStream", 1)
 					log.Errorf("Error parsing table name: %s", statement.Sql)
 					continue
 				}
-				tableStart := tableIndex + len(STREAM_COMMENT)
-				tableEnd := strings.Index(statement.Sql[tableStart:], SPACE)
+				tableStart := tableIndex + len(streamComment)
+				tableEnd := strings.Index(statement.Sql[tableStart:], space)
 				if tableEnd == -1 {
 					updateStreamErrors.Add("TablesStream", 1)
 					log.Errorf("Error parsing table name: %s", statement.Sql)

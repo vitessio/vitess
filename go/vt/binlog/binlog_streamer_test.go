@@ -159,7 +159,7 @@ func sendTestEvents(channel chan<- mysqlctlproto.BinlogEvent, events []mysqlctlp
 	close(channel)
 }
 
-func TestBinlogStreamerParseEventsXID(t *testing.T) {
+func TestStreamerParseEventsXID(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -193,7 +193,7 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -210,7 +210,7 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsCommit(t *testing.T) {
+func TestStreamerParseEventsCommit(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -246,7 +246,7 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -263,13 +263,13 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerStop(t *testing.T) {
+func TestStreamerStop(t *testing.T) {
 	events := make(chan mysqlctlproto.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	// Start parseEvents(), but don't send it anything, so it just waits.
 	svm := &sync2.ServiceManager{}
@@ -294,7 +294,7 @@ func TestBinlogStreamerStop(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
+func TestStreamerParseEventsClientEOF(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -313,7 +313,7 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return io.EOF
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -330,7 +330,7 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsServerEOF(t *testing.T) {
+func TestStreamerParseEventsServerEOF(t *testing.T) {
 	want := ErrServerEOF
 
 	events := make(chan mysqlctlproto.BinlogEvent)
@@ -339,7 +339,7 @@ func TestBinlogStreamerParseEventsServerEOF(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(func(ctx *sync2.ServiceContext) error {
@@ -355,7 +355,7 @@ func TestBinlogStreamerParseEventsServerEOF(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsSendErrorXID(t *testing.T) {
+func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -374,7 +374,7 @@ func TestBinlogStreamerParseEventsSendErrorXID(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -392,7 +392,7 @@ func TestBinlogStreamerParseEventsSendErrorXID(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsSendErrorCommit(t *testing.T) {
+func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -413,7 +413,7 @@ func TestBinlogStreamerParseEventsSendErrorCommit(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -431,7 +431,7 @@ func TestBinlogStreamerParseEventsSendErrorCommit(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsInvalid(t *testing.T) {
+func TestStreamerParseEventsInvalid(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -448,7 +448,7 @@ func TestBinlogStreamerParseEventsInvalid(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -466,7 +466,7 @@ func TestBinlogStreamerParseEventsInvalid(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsInvalidFormat(t *testing.T) {
+func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		invalidFormatEvent{},
@@ -485,7 +485,7 @@ func TestBinlogStreamerParseEventsInvalidFormat(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -503,7 +503,7 @@ func TestBinlogStreamerParseEventsInvalidFormat(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsNoFormat(t *testing.T) {
+func TestStreamerParseEventsNoFormat(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		//formatEvent{},
@@ -522,7 +522,7 @@ func TestBinlogStreamerParseEventsNoFormat(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -540,7 +540,7 @@ func TestBinlogStreamerParseEventsNoFormat(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsInvalidQuery(t *testing.T) {
+func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -557,7 +557,7 @@ func TestBinlogStreamerParseEventsInvalidQuery(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -575,7 +575,7 @@ func TestBinlogStreamerParseEventsInvalidQuery(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsRollback(t *testing.T) {
+func TestStreamerParseEventsRollback(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -630,7 +630,7 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -647,7 +647,7 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
+func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -687,7 +687,7 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -704,7 +704,7 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
+func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -747,7 +747,7 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -764,7 +764,7 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
+func TestStreamerParseEventsSetInsertID(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -800,7 +800,7 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -817,7 +817,7 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsInvalidIntVar(t *testing.T) {
+func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -837,7 +837,7 @@ func TestBinlogStreamerParseEventsInvalidIntVar(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -855,7 +855,7 @@ func TestBinlogStreamerParseEventsInvalidIntVar(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
+func TestStreamerParseEventsOtherDB(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -892,7 +892,7 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -909,7 +909,7 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
+func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -946,7 +946,7 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -963,7 +963,7 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
+func TestStreamerParseEventsBeginAgain(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
@@ -983,7 +983,7 @@ func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)
@@ -1001,7 +1001,7 @@ func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
+func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		mariadbRotateEvent,
 		mariadbFormatEvent,
@@ -1031,7 +1031,7 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -1048,7 +1048,7 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
+func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		mariadbRotateEvent,
 		mariadbFormatEvent,
@@ -1077,7 +1077,7 @@ func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
