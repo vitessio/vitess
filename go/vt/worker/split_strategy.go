@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package mysqlctl
+package worker
 
 import (
 	"flag"
@@ -12,19 +12,19 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 )
 
-// SplitStrategy is the configuration for a split clone.
-type SplitStrategy struct {
-	// PopulateBlpCheckpoint will drive the population of the blp_checkpoint table
-	PopulateBlpCheckpoint bool
+// splitStrategy is the configuration for a split clone.
+type splitStrategy struct {
+	// populateBlpCheckpoint will drive the population of the blp_checkpoint table
+	populateBlpCheckpoint bool
 
-	// DontStartBinlogPlayer will delay starting the binlog replication
-	DontStartBinlogPlayer bool
+	// dontStartBinlogPlayer will delay starting the binlog replication
+	dontStartBinlogPlayer bool
 
-	// SkipSetSourceShards will not set the source shards at the end of restore
-	SkipSetSourceShards bool
+	// skipSetSourceShards will not set the source shards at the end of restore
+	skipSetSourceShards bool
 }
 
-func NewSplitStrategy(logger logutil.Logger, argsStr string) (*SplitStrategy, error) {
+func newSplitStrategy(logger logutil.Logger, argsStr string) (*splitStrategy, error) {
 	var args []string
 	if argsStr != "" {
 		args = strings.Split(argsStr, " ")
@@ -45,22 +45,22 @@ func NewSplitStrategy(logger logutil.Logger, argsStr string) (*SplitStrategy, er
 		return nil, fmt.Errorf("strategy doesn't have positional arguments")
 	}
 
-	return &SplitStrategy{
-		PopulateBlpCheckpoint: *populateBlpCheckpoint,
-		DontStartBinlogPlayer: *dontStartBinlogPlayer,
-		SkipSetSourceShards:   *skipSetSourceShards,
+	return &splitStrategy{
+		populateBlpCheckpoint: *populateBlpCheckpoint,
+		dontStartBinlogPlayer: *dontStartBinlogPlayer,
+		skipSetSourceShards:   *skipSetSourceShards,
 	}, nil
 }
 
-func (strategy *SplitStrategy) String() string {
+func (strategy *splitStrategy) String() string {
 	var result []string
-	if strategy.PopulateBlpCheckpoint {
+	if strategy.populateBlpCheckpoint {
 		result = append(result, "-populate_blp_checkpoint")
 	}
-	if strategy.DontStartBinlogPlayer {
+	if strategy.dontStartBinlogPlayer {
 		result = append(result, "-dont_start_binlog_player")
 	}
-	if strategy.SkipSetSourceShards {
+	if strategy.skipSetSourceShards {
 		result = append(result, "-skip_set_source_shards")
 	}
 	return strings.Join(result, " ")

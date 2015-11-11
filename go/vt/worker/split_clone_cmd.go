@@ -82,7 +82,7 @@ var splitCloneTemplate2 = mustParseTemplate("splitClone2", splitCloneHTML2)
 
 func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -strategy=-help' for more info")
+	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker SplitClone --strategy=-help k/s' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
