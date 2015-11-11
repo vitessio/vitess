@@ -30,7 +30,7 @@ func TestMigrateServedTypesTask(t *testing.T) {
 	}
 	testTask(t, "MigrateServedTypes", task, parameters)
 
-	fake.RegisterResult([]string{"MigrateServedTypes", "--cell=cell1", "--reverse=true", "test_keyspace/0", "rdonly"},
+	fake.RegisterResult([]string{"MigrateServedTypes", "--cells=cell1", "--reverse=true", "test_keyspace/0", "rdonly"},
 		"",  // No output.
 		nil) // No error.
 	parameters["cell"] = "cell1"

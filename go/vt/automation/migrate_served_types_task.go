@@ -22,7 +22,7 @@ func (t *MigrateServedTypesTask) Run(parameters map[string]string) ([]*pb.TaskCo
 
 	args := []string{"MigrateServedTypes"}
 	if cell := parameters["cell"]; cell != "" {
-		args = append(args, "--cell="+cell)
+		args = append(args, "--cells="+cell)
 	}
 	if reverse := parameters["reverse"]; reverse != "" {
 		args = append(args, "--reverse="+reverse)
