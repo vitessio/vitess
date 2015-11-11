@@ -11,8 +11,8 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 /*
@@ -68,7 +68,7 @@ type MysqlFlavor interface {
 	// MakeBinlogEvent takes a raw packet from the MySQL binlog
 	// stream connection and returns a BinlogEvent through which
 	// the packet can be examined.
-	MakeBinlogEvent(buf []byte) mysqlctlproto.BinlogEvent
+	MakeBinlogEvent(buf []byte) replication.BinlogEvent
 
 	// WaitMasterPos waits until slave replication reaches at
 	// least targetPos.

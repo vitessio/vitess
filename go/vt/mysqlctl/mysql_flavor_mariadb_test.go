@@ -10,8 +10,8 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 func TestMariadbStandaloneGTIDEventHasGTID(t *testing.T) {
@@ -104,7 +104,7 @@ func TestMariadbBinlogEventGTID(t *testing.T) {
 
 func TestMariadbBinlogEventFormat(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbFormatEvent)}
-	want := mysqlctlproto.BinlogFormat{
+	want := replication.BinlogFormat{
 		FormatVersion:     4,
 		ServerVersion:     "10.0.13-MariaDB-1~precise-log",
 		HeaderLength:      19,
@@ -121,7 +121,7 @@ func TestMariadbBinlogEventFormat(t *testing.T) {
 
 func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumFormatEvent)}
-	want := mysqlctlproto.BinlogFormat{
+	want := replication.BinlogFormat{
 		FormatVersion:     4,
 		ServerVersion:     "10.0.13-MariaDB-1~precise-log",
 		HeaderLength:      19,

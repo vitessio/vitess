@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -106,7 +106,7 @@ func TestSchemaManagerRun(t *testing.T) {
 	controller := newFakeController(
 		[]string{sql}, false, false, false)
 	fakeTmc := newFakeTabletManagerClient()
-	fakeTmc.AddSchemaChange(sql, &mysqlctlproto.SchemaChangeResult{
+	fakeTmc.AddSchemaChange(sql, &tmutils.SchemaChangeResult{
 		BeforeSchema: &tabletmanagerdatapb.SchemaDefinition{},
 		AfterSchema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
@@ -114,7 +114,7 @@ func TestSchemaManagerRun(t *testing.T) {
 				{
 					Name:   "test_table",
 					Schema: sql,
-					Type:   mysqlctlproto.TableBaseTable,
+					Type:   tmutils.TableBaseTable,
 				},
 			},
 		},
@@ -153,7 +153,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	sql := "create table test_table (pk int)"
 	controller := newFakeController([]string{sql}, false, false, false)
 	fakeTmc := newFakeTabletManagerClient()
-	fakeTmc.AddSchemaChange(sql, &mysqlctlproto.SchemaChangeResult{
+	fakeTmc.AddSchemaChange(sql, &tmutils.SchemaChangeResult{
 		BeforeSchema: &tabletmanagerdatapb.SchemaDefinition{},
 		AfterSchema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
@@ -161,7 +161,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 				{
 					Name:   "test_table",
 					Schema: sql,
-					Type:   mysqlctlproto.TableBaseTable,
+					Type:   tmutils.TableBaseTable,
 				},
 			},
 		},
@@ -221,7 +221,7 @@ func newFakeExecutor() *TabletExecutor {
 func newFakeTabletManagerClient() *fakeTabletManagerClient {
 	return &fakeTabletManagerClient{
 		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
-		preflightSchemas:    make(map[string]*mysqlctlproto.SchemaChangeResult),
+		preflightSchemas:    make(map[string]*tmutils.SchemaChangeResult),
 		schemaDefinitions:   make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 	}
 }
@@ -229,12 +229,12 @@ func newFakeTabletManagerClient() *fakeTabletManagerClient {
 type fakeTabletManagerClient struct {
 	tmclient.TabletManagerClient
 	EnableExecuteFetchAsDbaError bool
-	preflightSchemas             map[string]*mysqlctlproto.SchemaChangeResult
+	preflightSchemas             map[string]*tmutils.SchemaChangeResult
 	schemaDefinitions            map[string]*tabletmanagerdatapb.SchemaDefinition
 }
 
 func (client *fakeTabletManagerClient) AddSchemaChange(
-	sql string, schemaResult *mysqlctlproto.SchemaChangeResult) {
+	sql string, schemaResult *tmutils.SchemaChangeResult) {
 	client.preflightSchemas[sql] = schemaResult
 }
 
@@ -243,10 +243,10 @@ func (client *fakeTabletManagerClient) AddSchemaDefinition(
 	client.schemaDefinitions[dbName] = schemaDefinition
 }
 
-func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*mysqlctlproto.SchemaChangeResult, error) {
+func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*tmutils.SchemaChangeResult, error) {
 	result, ok := client.preflightSchemas[change]
 	if !ok {
-		var scr mysqlctlproto.SchemaChangeResult
+		var scr tmutils.SchemaChangeResult
 		return &scr, nil
 	}
 	return result, nil

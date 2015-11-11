@@ -12,8 +12,8 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 // mariaDB10 is the implementation of MysqlFlavor for MariaDB 10.0.10
@@ -163,7 +163,7 @@ func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.Re
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
-func (*mariaDB10) MakeBinlogEvent(buf []byte) mysqlctlproto.BinlogEvent {
+func (*mariaDB10) MakeBinlogEvent(buf []byte) replication.BinlogEvent {
 	return NewMariadbBinlogEvent(buf)
 }
 
@@ -178,19 +178,19 @@ func (*mariaDB10) DisableBinlogPlayback(mysqld *Mysqld) error {
 }
 
 // mariadbBinlogEvent wraps a raw packet buffer and provides methods to examine
-// it by implementing mysqlctlproto.BinlogEvent. Some methods are pulled in from
+// it by implementing replication.BinlogEvent. Some methods are pulled in from
 // binlogEvent.
 type mariadbBinlogEvent struct {
 	binlogEvent
 }
 
 // NewMariadbBinlogEvent creates a BinlogEvent instance from given byte array
-func NewMariadbBinlogEvent(buf []byte) mysqlctlproto.BinlogEvent {
+func NewMariadbBinlogEvent(buf []byte) replication.BinlogEvent {
 	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf)}
 }
 
 // HasGTID implements BinlogEvent.HasGTID().
-func (ev mariadbBinlogEvent) HasGTID(f mysqlctlproto.BinlogFormat) bool {
+func (ev mariadbBinlogEvent) HasGTID(f replication.BinlogFormat) bool {
 	// MariaDB provides GTIDs in a separate event type GTID_EVENT.
 	return ev.IsGTID()
 }
@@ -207,7 +207,7 @@ func (ev mariadbBinlogEvent) IsGTID() bool {
 //   8         sequence number
 //   4         domain ID
 //   1         flags2
-func (ev mariadbBinlogEvent) IsBeginGTID(f mysqlctlproto.BinlogFormat) bool {
+func (ev mariadbBinlogEvent) IsBeginGTID(f replication.BinlogFormat) bool {
 	const FLStandalone = 1
 
 	data := ev.Bytes()[f.HeaderLength:]
@@ -222,7 +222,7 @@ func (ev mariadbBinlogEvent) IsBeginGTID(f mysqlctlproto.BinlogFormat) bool {
 //   8         sequence number
 //   4         domain ID
 //   1         flags2
-func (ev mariadbBinlogEvent) GTID(f mysqlctlproto.BinlogFormat) (proto.GTID, error) {
+func (ev mariadbBinlogEvent) GTID(f replication.BinlogFormat) (proto.GTID, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 
 	return proto.MariadbGTID{
@@ -233,7 +233,7 @@ func (ev mariadbBinlogEvent) GTID(f mysqlctlproto.BinlogFormat) (proto.GTID, err
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().
-func (ev mariadbBinlogEvent) StripChecksum(f mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev mariadbBinlogEvent) StripChecksum(f replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	switch f.ChecksumAlgorithm {
 	case BinlogChecksumAlgOff, BinlogChecksumAlgUndef:
 		// There is no checksum.

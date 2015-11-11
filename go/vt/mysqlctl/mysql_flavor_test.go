@@ -10,17 +10,17 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 type fakeMysqlFlavor string
 
-func (f fakeMysqlFlavor) VersionMatch(version string) bool                   { return version == string(f) }
-func (fakeMysqlFlavor) PromoteSlaveCommands() []string                       { return nil }
-func (fakeMysqlFlavor) ResetReplicationCommands() []string                   { return nil }
-func (fakeMysqlFlavor) ParseGTID(string) (proto.GTID, error)                 { return nil, nil }
-func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) mysqlctlproto.BinlogEvent { return nil }
+func (f fakeMysqlFlavor) VersionMatch(version string) bool                 { return version == string(f) }
+func (fakeMysqlFlavor) PromoteSlaveCommands() []string                     { return nil }
+func (fakeMysqlFlavor) ResetReplicationCommands() []string                 { return nil }
+func (fakeMysqlFlavor) ParseGTID(string) (proto.GTID, error)               { return nil, nil }
+func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) replication.BinlogEvent { return nil }
 func (fakeMysqlFlavor) ParseReplicationPosition(string) (proto.ReplicationPosition, error) {
 	return proto.ReplicationPosition{}, nil
 }

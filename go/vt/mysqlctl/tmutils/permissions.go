@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package mysqlctlproto
+// Package tmutils contains helper methods to deal with the tabletmanagerdata
+// proto3 structures.
+package tmutils
 
 import (
 	"fmt"

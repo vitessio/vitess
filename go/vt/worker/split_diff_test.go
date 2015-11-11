@@ -13,7 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -218,17 +218,17 @@ func TestSplitDiff(t *testing.T) {
 					Name:              "table1",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              mysqlctlproto.TableBaseTable,
+					Type:              tmutils.TableBaseTable,
 				},
 				{
 					Name:              excludedTable,
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              mysqlctlproto.TableBaseTable,
+					Type:              tmutils.TableBaseTable,
 				},
 				{
 					Name: "view1",
-					Type: mysqlctlproto.TableView,
+					Type: tmutils.TableView,
 				},
 			},
 		}

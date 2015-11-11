@@ -17,7 +17,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -58,7 +58,7 @@ func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *tabletmanagerd
 	}
 
 	log.Infof("Diffing schema for %v", topoproto.TabletAliasString(alias))
-	mysqlctlproto.DiffSchema(topoproto.TabletAliasString(masterTabletAlias), masterSchema, topoproto.TabletAliasString(alias), slaveSchema, er)
+	tmutils.DiffSchema(topoproto.TabletAliasString(masterTabletAlias), masterSchema, topoproto.TabletAliasString(alias), slaveSchema, er)
 }
 
 // ValidateSchemaShard will diff the schema from all the tablets in the shard.
@@ -187,7 +187,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 }
 
 // PreflightSchema will try a schema change on the remote tablet.
-func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *pb.TabletAlias, change string) (*mysqlctlproto.SchemaChangeResult, error) {
+func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *pb.TabletAlias, change string) (*tmutils.SchemaChangeResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
@@ -196,7 +196,7 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *pb.TabletA
 }
 
 // ApplySchema will apply a schema change on the remote tablet.
-func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias *pb.TabletAlias, sc *mysqlctlproto.SchemaChange) (*mysqlctlproto.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias *pb.TabletAlias, sc *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
@@ -205,7 +205,7 @@ func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias *pb.TabletAlias
 }
 
 // ApplySchemaShard applies a schema change on a shard.
-func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*mysqlctlproto.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
 	// read the shard
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
@@ -229,7 +229,7 @@ func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, chang
 	return wr.lockAndApplySchemaShard(ctx, shardInfo, preflight, keyspace, shard, shardInfo.MasterAlias, change, newParentTabletAlias, force, waitSlaveTimeout)
 }
 
-func (wr *Wrangler) lockAndApplySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *mysqlctlproto.SchemaChangeResult, keyspace, shard string, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*mysqlctlproto.SchemaChangeResult, error) {
+func (wr *Wrangler) lockAndApplySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *tmutils.SchemaChangeResult, keyspace, shard string, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
 	// get a shard lock
 	actionNode := actionnode.ApplySchemaShard(masterTabletAlias, change)
 	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
@@ -248,7 +248,7 @@ type tabletStatus struct {
 	beforeSchema *tabletmanagerdatapb.SchemaDefinition
 }
 
-func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *mysqlctlproto.SchemaChangeResult, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*mysqlctlproto.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *tmutils.SchemaChangeResult, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
 
 	// find all the shards we need to handle
 	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, shardInfo.Keyspace(), shardInfo.ShardName())
@@ -294,7 +294,7 @@ func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardI
 	// BeforeSchema. If not, we shouldn't proceed
 	log.Infof("Checking schema on all tablets")
 	for _, status := range statusArray {
-		diffs := mysqlctlproto.DiffSchemaToArray("master", preflight.BeforeSchema, topoproto.TabletAliasString(status.ti.Alias), status.beforeSchema)
+		diffs := tmutils.DiffSchemaToArray("master", preflight.BeforeSchema, topoproto.TabletAliasString(status.ti.Alias), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
 				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.AliasString(), strings.Join(diffs, "\n"))
@@ -306,7 +306,7 @@ func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardI
 
 	// we're good, just send to the master
 	log.Infof("Applying schema change to master")
-	sc := &mysqlctlproto.SchemaChange{
+	sc := &tmutils.SchemaChange{
 		SQL:              change,
 		Force:            force,
 		AllowReplication: true,
@@ -320,7 +320,7 @@ func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardI
 // take a keyspace lock to do this.
 // first we will validate the Preflight works the same on all shard masters
 // and fail if not (unless force is specified)
-func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, change string, force bool, waitSlaveTimeout time.Duration) (*mysqlctlproto.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, change string, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
 	actionNode := actionnode.ApplySchemaKeyspace(change)
 	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
 	if err != nil {
@@ -366,14 +366,14 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *pb.T
 		destSd = nil
 	}
 	if destSd != nil {
-		diffs := mysqlctlproto.DiffSchemaToArray("source", sourceSd, "dest", destSd)
+		diffs := tmutils.DiffSchemaToArray("source", sourceSd, "dest", destSd)
 		if diffs == nil {
 			// Return early because dest has already the same schema as source.
 			return nil
 		}
 	}
 
-	createSQL := mysqlctlproto.SchemaDefinitionToSQLStrings(sourceSd)
+	createSQL := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
 	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.MasterAlias)
 	if err != nil {
 		return err

@@ -14,8 +14,8 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 
@@ -61,8 +61,8 @@ type MysqlDaemon interface {
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
-	PreflightSchemaChange(dbName string, change string) (*mysqlctlproto.SchemaChangeResult, error)
-	ApplySchemaChange(dbName string, change *mysqlctlproto.SchemaChange) (*mysqlctlproto.SchemaChangeResult, error)
+	PreflightSchemaChange(dbName string, change string) (*tmutils.SchemaChangeResult, error)
+	ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error)
 
 	// GetAppConnection returns a app connection to be able to talk to the database.
 	GetAppConnection() (dbconnpool.PoolConnection, error)
@@ -162,11 +162,11 @@ type FakeMysqlDaemon struct {
 
 	// PreflightSchemaChangeResult will be returned by PreflightSchemaChange.
 	// If nil we'll return an error.
-	PreflightSchemaChangeResult *mysqlctlproto.SchemaChangeResult
+	PreflightSchemaChangeResult *tmutils.SchemaChangeResult
 
 	// ApplySchemaChangeResult will be returned by ApplySchemaChange.
 	// If nil we'll return an error.
-	ApplySchemaChangeResult *mysqlctlproto.SchemaChangeResult
+	ApplySchemaChangeResult *tmutils.SchemaChangeResult
 
 	// DbAppConnectionFactory is the factory for making fake db app connections
 	DbAppConnectionFactory func() (dbconnpool.PoolConnection, error)
@@ -400,11 +400,11 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 	if fmd.Schema == nil {
 		return nil, fmt.Errorf("no schema defined")
 	}
-	return mysqlctlproto.FilterTables(fmd.Schema, tables, excludeTables, includeViews)
+	return tmutils.FilterTables(fmd.Schema, tables, excludeTables, includeViews)
 }
 
 // PreflightSchemaChange is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, change string) (*mysqlctlproto.SchemaChangeResult, error) {
+func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, change string) (*tmutils.SchemaChangeResult, error) {
 	if fmd.PreflightSchemaChangeResult == nil {
 		return nil, fmt.Errorf("no preflight result defined")
 	}
@@ -412,7 +412,7 @@ func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, change string) 
 }
 
 // ApplySchemaChange is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ApplySchemaChange(dbName string, change *mysqlctlproto.SchemaChange) (*mysqlctlproto.SchemaChangeResult, error) {
+func (fmd *FakeMysqlDaemon) ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	if fmd.ApplySchemaChangeResult == nil {
 		return nil, fmt.Errorf("no apply schema defined")
 	}

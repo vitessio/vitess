@@ -15,104 +15,104 @@ import (
 
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
-// fakeEvent implements mysqlctlproto.BinlogEvent.
+// fakeEvent implements replication.BinlogEvent.
 type fakeEvent struct{}
 
-func (fakeEvent) IsValid() bool                           { return true }
-func (fakeEvent) IsFormatDescription() bool               { return false }
-func (fakeEvent) IsQuery() bool                           { return false }
-func (fakeEvent) IsXID() bool                             { return false }
-func (fakeEvent) IsGTID() bool                            { return false }
-func (fakeEvent) IsRotate() bool                          { return false }
-func (fakeEvent) IsIntVar() bool                          { return false }
-func (fakeEvent) IsRand() bool                            { return false }
-func (fakeEvent) HasGTID(mysqlctlproto.BinlogFormat) bool { return true }
-func (fakeEvent) Timestamp() uint32                       { return 1407805592 }
-func (fakeEvent) Format() (mysqlctlproto.BinlogFormat, error) {
-	return mysqlctlproto.BinlogFormat{}, errors.New("not a format")
+func (fakeEvent) IsValid() bool                         { return true }
+func (fakeEvent) IsFormatDescription() bool             { return false }
+func (fakeEvent) IsQuery() bool                         { return false }
+func (fakeEvent) IsXID() bool                           { return false }
+func (fakeEvent) IsGTID() bool                          { return false }
+func (fakeEvent) IsRotate() bool                        { return false }
+func (fakeEvent) IsIntVar() bool                        { return false }
+func (fakeEvent) IsRand() bool                          { return false }
+func (fakeEvent) HasGTID(replication.BinlogFormat) bool { return true }
+func (fakeEvent) Timestamp() uint32                     { return 1407805592 }
+func (fakeEvent) Format() (replication.BinlogFormat, error) {
+	return replication.BinlogFormat{}, errors.New("not a format")
 }
-func (fakeEvent) GTID(mysqlctlproto.BinlogFormat) (myproto.GTID, error) {
+func (fakeEvent) GTID(replication.BinlogFormat) (myproto.GTID, error) {
 	return myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0xd}, nil
 }
-func (fakeEvent) IsBeginGTID(mysqlctlproto.BinlogFormat) bool { return false }
-func (fakeEvent) Query(mysqlctlproto.BinlogFormat) (mysqlctlproto.Query, error) {
-	return mysqlctlproto.Query{}, errors.New("not a query")
+func (fakeEvent) IsBeginGTID(replication.BinlogFormat) bool { return false }
+func (fakeEvent) Query(replication.BinlogFormat) (replication.Query, error) {
+	return replication.Query{}, errors.New("not a query")
 }
-func (fakeEvent) IntVar(mysqlctlproto.BinlogFormat) (string, uint64, error) {
+func (fakeEvent) IntVar(replication.BinlogFormat) (string, uint64, error) {
 	return "", 0, errors.New("not an intvar")
 }
-func (fakeEvent) Rand(mysqlctlproto.BinlogFormat) (uint64, uint64, error) {
+func (fakeEvent) Rand(replication.BinlogFormat) (uint64, uint64, error) {
 	return 0, 0, errors.New("not a rand")
 }
-func (ev fakeEvent) StripChecksum(mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev fakeEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
 type invalidEvent struct{ fakeEvent }
 
 func (invalidEvent) IsValid() bool { return false }
-func (ev invalidEvent) StripChecksum(mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev invalidEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
 type rotateEvent struct{ fakeEvent }
 
 func (rotateEvent) IsRotate() bool { return true }
-func (ev rotateEvent) StripChecksum(mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev rotateEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
 type formatEvent struct{ fakeEvent }
 
 func (formatEvent) IsFormatDescription() bool { return true }
-func (formatEvent) Format() (mysqlctlproto.BinlogFormat, error) {
-	return mysqlctlproto.BinlogFormat{FormatVersion: 1}, nil
+func (formatEvent) Format() (replication.BinlogFormat, error) {
+	return replication.BinlogFormat{FormatVersion: 1}, nil
 }
-func (ev formatEvent) StripChecksum(mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev formatEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
 type invalidFormatEvent struct{ formatEvent }
 
-func (invalidFormatEvent) Format() (mysqlctlproto.BinlogFormat, error) {
-	return mysqlctlproto.BinlogFormat{}, errors.New("invalid format event")
+func (invalidFormatEvent) Format() (replication.BinlogFormat, error) {
+	return replication.BinlogFormat{}, errors.New("invalid format event")
 }
-func (ev invalidFormatEvent) StripChecksum(mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev invalidFormatEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
 type queryEvent struct {
 	fakeEvent
-	query mysqlctlproto.Query
+	query replication.Query
 }
 
 func (queryEvent) IsQuery() bool { return true }
-func (ev queryEvent) Query(mysqlctlproto.BinlogFormat) (mysqlctlproto.Query, error) {
+func (ev queryEvent) Query(replication.BinlogFormat) (replication.Query, error) {
 	return ev.query, nil
 }
-func (ev queryEvent) StripChecksum(mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev queryEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
 type invalidQueryEvent struct{ queryEvent }
 
-func (invalidQueryEvent) Query(mysqlctlproto.BinlogFormat) (mysqlctlproto.Query, error) {
-	return mysqlctlproto.Query{}, errors.New("invalid query event")
+func (invalidQueryEvent) Query(replication.BinlogFormat) (replication.Query, error) {
+	return replication.Query{}, errors.New("invalid query event")
 }
-func (ev invalidQueryEvent) StripChecksum(mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev invalidQueryEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
 type xidEvent struct{ fakeEvent }
 
 func (xidEvent) IsXID() bool { return true }
-func (ev xidEvent) StripChecksum(mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev xidEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
@@ -123,19 +123,19 @@ type intVarEvent struct {
 }
 
 func (intVarEvent) IsIntVar() bool { return true }
-func (ev intVarEvent) IntVar(mysqlctlproto.BinlogFormat) (string, uint64, error) {
+func (ev intVarEvent) IntVar(replication.BinlogFormat) (string, uint64, error) {
 	return ev.name, ev.value, nil
 }
-func (ev intVarEvent) StripChecksum(mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev intVarEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
 type invalidIntVarEvent struct{ intVarEvent }
 
-func (invalidIntVarEvent) IntVar(mysqlctlproto.BinlogFormat) (string, uint64, error) {
+func (invalidIntVarEvent) IntVar(replication.BinlogFormat) (string, uint64, error) {
 	return "", 0, errors.New("invalid intvar event")
 }
-func (ev invalidIntVarEvent) StripChecksum(mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
+func (ev invalidIntVarEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
@@ -152,7 +152,7 @@ var (
 	charset = &pb.Charset{Client: 33, Conn: 33, Server: 33}
 )
 
-func sendTestEvents(channel chan<- mysqlctlproto.BinlogEvent, events []mysqlctlproto.BinlogEvent) {
+func sendTestEvents(channel chan<- replication.BinlogEvent, events []replication.BinlogEvent) {
 	for _, ev := range events {
 		channel <- ev
 	}
@@ -160,19 +160,19 @@ func sendTestEvents(channel chan<- mysqlctlproto.BinlogEvent, events []mysqlctlp
 }
 
 func TestStreamerParseEventsXID(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	want := []pb.BinlogTransaction{
 		pb.BinlogTransaction{
@@ -211,21 +211,21 @@ func TestStreamerParseEventsXID(t *testing.T) {
 }
 
 func TestStreamerParseEventsCommit(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "COMMIT"}},
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	want := []pb.BinlogTransaction{
 		pb.BinlogTransaction{
@@ -264,7 +264,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 }
 
 func TestStreamerStop(t *testing.T) {
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
@@ -295,20 +295,20 @@ func TestStreamerStop(t *testing.T) {
 }
 
 func TestStreamerParseEventsClientEOF(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := ErrClientEOF
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return io.EOF
@@ -333,7 +333,7 @@ func TestStreamerParseEventsClientEOF(t *testing.T) {
 func TestStreamerParseEventsServerEOF(t *testing.T) {
 	want := ErrServerEOF
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 	close(events)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
@@ -356,20 +356,20 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 }
 
 func TestStreamerParseEventsSendErrorXID(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "send reply error: foobar"
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
@@ -393,22 +393,22 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 }
 
 func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "COMMIT"}},
 	}
 	want := "send reply error: foobar"
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
@@ -432,10 +432,10 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalid(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
 		invalidEvent{},
@@ -443,7 +443,7 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 	}
 	want := "can't parse binlog event, invalid data:"
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
@@ -467,20 +467,20 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalidFormat(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		invalidFormatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "can't parse FORMAT_DESCRIPTION_EVENT:"
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
@@ -504,20 +504,20 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 }
 
 func TestStreamerParseEventsNoFormat(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		//formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "got a real event before FORMAT_DESCRIPTION_EVENT:"
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
@@ -541,10 +541,10 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalidQuery(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
 		invalidQueryEvent{},
@@ -552,7 +552,7 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 	}
 	want := "can't get query from binlog event:"
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
@@ -576,31 +576,31 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 }
 
 func TestStreamerParseEventsRollback(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "ROLLBACK"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	want := []pb.BinlogTransaction{
 		pb.BinlogTransaction{
@@ -648,16 +648,16 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 }
 
 func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	want := []pb.BinlogTransaction{
 		pb.BinlogTransaction{
@@ -705,19 +705,19 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 }
 
 func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
 		xidEvent{},
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	want := []pb.BinlogTransaction{
 		pb.BinlogTransaction{
@@ -765,20 +765,20 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 }
 
 func TestStreamerParseEventsSetInsertID(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
 		intVarEvent{name: "INSERT_ID", value: 101},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	want := []pb.BinlogTransaction{
 		pb.BinlogTransaction{
@@ -818,21 +818,21 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
 		invalidIntVarEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "can't parse INTVAR_EVENT:"
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
@@ -856,22 +856,22 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 }
 
 func TestStreamerParseEventsOtherDB(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "other",
 			SQL:      "INSERT INTO test values (3, 4)"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	want := []pb.BinlogTransaction{
 		pb.BinlogTransaction{
@@ -910,22 +910,22 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 }
 
 func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "other",
 			SQL:      "BEGIN"}}, // Check that this doesn't get filtered out.
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "other",
 			SQL:      "INSERT INTO test values (3, 4)"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	want := []pb.BinlogTransaction{
 		pb.BinlogTransaction{
@@ -964,21 +964,21 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 }
 
 func TestStreamerParseEventsBeginAgain(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{
+		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
@@ -1002,7 +1002,7 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 }
 
 func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		mariadbRotateEvent,
 		mariadbFormatEvent,
 		mariadbBeginGTIDEvent,
@@ -1010,7 +1010,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		mariadbXidEvent,
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	want := []pb.BinlogTransaction{
 		pb.BinlogTransaction{
@@ -1049,14 +1049,14 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 }
 
 func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
-	input := []mysqlctlproto.BinlogEvent{
+	input := []replication.BinlogEvent{
 		mariadbRotateEvent,
 		mariadbFormatEvent,
 		mariadbStandaloneGTIDEvent,
 		mariadbCreateEvent,
 	}
 
-	events := make(chan mysqlctlproto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
 	want := []pb.BinlogTransaction{
 		pb.BinlogTransaction{

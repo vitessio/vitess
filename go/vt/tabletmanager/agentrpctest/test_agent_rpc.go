@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -149,7 +149,7 @@ var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 			Schema:            "create table_name",
 			Columns:           []string{"col1", "col2"},
 			PrimaryKeyColumns: []string{"col1"},
-			Type:              mysqlctlproto.TableView,
+			Type:              tmutils.TableView,
 			DataLength:        12,
 			RowCount:          6,
 		},
@@ -158,7 +158,7 @@ var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 			Schema:            "create table_name2",
 			Columns:           []string{"col1"},
 			PrimaryKeyColumns: []string{"col1"},
-			Type:              mysqlctlproto.TableBaseTable,
+			Type:              tmutils.TableBaseTable,
 			DataLength:        12,
 			RowCount:          6,
 		},
@@ -413,12 +413,12 @@ func agentRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmc
 }
 
 var testPreflightSchema = "change table add table cloth"
-var testSchemaChangeResult = &mysqlctlproto.SchemaChangeResult{
+var testSchemaChangeResult = &tmutils.SchemaChangeResult{
 	BeforeSchema: testGetSchemaReply,
 	AfterSchema:  testGetSchemaReply,
 }
 
-func (fra *fakeRPCAgent) PreflightSchema(ctx context.Context, change string) (*mysqlctlproto.SchemaChangeResult, error) {
+func (fra *fakeRPCAgent) PreflightSchema(ctx context.Context, change string) (*tmutils.SchemaChangeResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -436,7 +436,7 @@ func agentRPCTestPreflightSchemaPanic(ctx context.Context, t *testing.T, client 
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testSchemaChange = &mysqlctlproto.SchemaChange{
+var testSchemaChange = &tmutils.SchemaChange{
 	SQL:              "alter table add fruit basket",
 	Force:            true,
 	AllowReplication: true,
@@ -444,7 +444,7 @@ var testSchemaChange = &mysqlctlproto.SchemaChange{
 	AfterSchema:      testGetSchemaReply,
 }
 
-func (fra *fakeRPCAgent) ApplySchema(ctx context.Context, change *mysqlctlproto.SchemaChange) (*mysqlctlproto.SchemaChangeResult, error) {
+func (fra *fakeRPCAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

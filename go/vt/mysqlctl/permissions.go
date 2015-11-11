@@ -5,8 +5,7 @@
 package mysqlctl
 
 import (
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
-
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -20,7 +19,7 @@ func GetPermissions(mysqld MysqlDaemon) (*tabletmanagerdatapb.Permissions, error
 		return nil, err
 	}
 	for _, row := range qr.Rows {
-		permissions.UserPermissions = append(permissions.UserPermissions, mysqlctlproto.NewUserPermission(qr.Fields, row))
+		permissions.UserPermissions = append(permissions.UserPermissions, tmutils.NewUserPermission(qr.Fields, row))
 	}
 
 	// get Dbs
@@ -29,7 +28,7 @@ func GetPermissions(mysqld MysqlDaemon) (*tabletmanagerdatapb.Permissions, error
 		return nil, err
 	}
 	for _, row := range qr.Rows {
-		permissions.DbPermissions = append(permissions.DbPermissions, mysqlctlproto.NewDbPermission(qr.Fields, row))
+		permissions.DbPermissions = append(permissions.DbPermissions, tmutils.NewDbPermission(qr.Fields, row))
 	}
 
 	return permissions, nil

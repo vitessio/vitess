@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
@@ -186,7 +186,7 @@ func TestBinlogEventIsNotXID(t *testing.T) {
 
 func TestBinlogEventFormat(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	want := mysqlctlproto.BinlogFormat{
+	want := replication.BinlogFormat{
 		FormatVersion: 4,
 		ServerVersion: "5.1.63-google-log",
 		HeaderLength:  27,
@@ -242,7 +242,7 @@ func TestBinlogEventQuery(t *testing.T) {
 	}
 
 	input := binlogEvent(googleQueryEvent)
-	want := mysqlctlproto.Query{
+	want := replication.Query{
 		Database: "vt_test_keyspace",
 		Charset:  &pb.Charset{Client: 8, Conn: 8, Server: 33},
 		SQL: `create table if not exists vt_a (

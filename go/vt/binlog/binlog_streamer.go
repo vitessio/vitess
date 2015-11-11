@@ -13,8 +13,8 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
@@ -123,7 +123,7 @@ func (bls *Streamer) Stream(ctx *sync2.ServiceContext) (err error) {
 		}
 	}
 
-	var events <-chan mysqlctlproto.BinlogEvent
+	var events <-chan replication.BinlogEvent
 	events, err = bls.conn.StartBinlogDump(bls.startPos)
 	if err != nil {
 		return err
@@ -140,9 +140,9 @@ func (bls *Streamer) Stream(ctx *sync2.ServiceContext) (err error) {
 //
 // If the sendTransaction func returns io.EOF, parseEvents returns ErrClientEOF.
 // If the events channel is closed, parseEvents returns ErrServerEOF.
-func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan mysqlctlproto.BinlogEvent) (myproto.ReplicationPosition, error) {
+func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replication.BinlogEvent) (myproto.ReplicationPosition, error) {
 	var statements []*pb.BinlogTransaction_Statement
-	var format mysqlctlproto.BinlogFormat
+	var format replication.BinlogFormat
 	var gtid myproto.GTID
 	var pos = bls.startPos
 	var autocommit = true
@@ -179,7 +179,7 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan mysqlc
 
 	// Parse events.
 	for ctx.IsRunning() {
-		var ev mysqlctlproto.BinlogEvent
+		var ev replication.BinlogEvent
 		var ok bool
 
 		select {

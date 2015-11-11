@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package mysqlctlproto
+// Package replication contains data structures to deal with MySQL
+// replication.
+package replication
 
 import (
 	"fmt"

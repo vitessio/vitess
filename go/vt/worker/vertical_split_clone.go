@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/worker/events"
@@ -361,7 +361,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	// Count rows
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
 		vscw.tableStatus[i].mu.Lock()
-		if td.Type == mysqlctlproto.TableBaseTable {
+		if td.Type == tmutils.TableBaseTable {
 			vscw.tableStatus[i].rowCount = td.RowCount
 		} else {
 			vscw.tableStatus[i].isView = true
@@ -413,7 +413,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	sourceWaitGroup := sync.WaitGroup{}
 	sema := sync2.NewSemaphore(vscw.sourceReaderCount, 0)
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == mysqlctlproto.TableView {
+		if td.Type == tmutils.TableView {
 			continue
 		}
 

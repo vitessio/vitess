@@ -10,8 +10,8 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 // Sample event data for MySQL 5.6.
@@ -34,7 +34,7 @@ func TestMysql56IsGTID(t *testing.T) {
 }
 
 func TestMysql56HasGTID(t *testing.T) {
-	format := mysqlctlproto.BinlogFormat{}
+	format := replication.BinlogFormat{}
 	if got, want := mysql56FormatEvent.HasGTID(format), false; got != want {
 		t.Errorf("%#v.HasGTID() = %#v, want %#v", mysql56FormatEvent, got, want)
 	}
