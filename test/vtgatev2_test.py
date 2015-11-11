@@ -208,7 +208,7 @@ def _delete_all(shard_index, table_name):
   vtgate_conn.commit()
 
 
-def do_write(count, shard_index):
+def write_rows_to_shard(count, shard_index):
   kid_list = SHARD_KID_MAP[SHARD_NAMES[shard_index]]
   _delete_all(shard_index, 'vt_insert_test')
   vtgate_conn = get_connection()
@@ -282,7 +282,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     """Test VtGate routes queries to the right tablets."""
     row_counts = [20, 30]
     for shard_index in [0, 1]:
-      do_write(row_counts[shard_index], shard_index)
+      write_rows_to_shard(row_counts[shard_index], shard_index)
     vtgate_conn = get_connection()
     for shard_index in [0, 1]:
       # Fetch all rows in each shard
@@ -332,7 +332,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
         rowcount, count,
         "Fetched rows(%d) != inserted rows(%d), rollback didn't work" %
         (rowcount, count))
-    do_write(10, self.shard_index)
+    write_rows_to_shard(10, self.shard_index)
 
   def test_execute_entity_ids(self):
     vtgate_conn = get_connection()
@@ -389,6 +389,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.commit()
     kid_list = [pack_kid(kid) for kid in kid_list]
     cursor = vtgate_conn.cursor(keyspace=None, tablet_type='master')
+    # Test ExecuteBatchKeyspaceIds
     params_list = [
         dict(sql='select msg, keyspace_id from vt_insert_test',
              bind_variables={},
@@ -479,7 +480,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def test_streaming_fetchsubset(self):
     count = 30
-    do_write(count, self.shard_index)
+    write_rows_to_shard(count, self.shard_index)
     # Fetch a subset of the total size.
     vtgate_conn = get_connection()
 
@@ -498,6 +499,8 @@ class TestCoreVTGateFunctions(BaseTestCase):
       rows = stream_cursor.fetchmany(size=10)
       self.assertEqual(rows, [('test %d' % x,) for x in xrange(10, 20)])
 
+    # Open two streaming queries at the same time, fetch some from each,
+    # and make sure they don't interfere with each other.
     stream_cursor_1 = get_stream_cursor()
     stream_cursor_2 = get_stream_cursor()
     fetch_first_10_rows(stream_cursor_1)
@@ -509,7 +512,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def test_streaming_fetchall(self):
     count = 30
-    do_write(count, self.shard_index)
+    write_rows_to_shard(count, self.shard_index)
     # Fetch all.
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
@@ -524,7 +527,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def test_streaming_fetchone(self):
     count = 30
-    do_write(count, self.shard_index)
+    write_rows_to_shard(count, self.shard_index)
     # Fetch one.
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
@@ -538,8 +541,8 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def test_streaming_multishards(self):
     count = 30
-    do_write(count, 0)
-    do_write(count, 1)
+    write_rows_to_shard(count, 0)
+    write_rows_to_shard(count, 1)
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
         KEYSPACE_NAME, 'master',

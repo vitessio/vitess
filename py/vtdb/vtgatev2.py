@@ -2,8 +2,12 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-"""A simple, direct connection to the vttablet query server."""
+"""A simple, direct connection to the vttablet query server.
 
+This currently supports both vtgatev2 and vtgatev3.
+"""
+
+# TODO(dumbunny): Rename module, class, and tests to vtgate_gorpc_client.
 
 from itertools import izip
 import logging
@@ -25,7 +29,7 @@ from vtdb import vtgate_cursor
 from vtdb import vtgate_utils
 
 
-def _create_req_with_keyspace_ids(
+def _create_v2_request_with_keyspace_ids(
     sql, new_binds, keyspace_name, tablet_type, keyspace_ids,
     not_in_transaction):
   """Make a request dict from arguments.
@@ -56,7 +60,32 @@ def _create_req_with_keyspace_ids(
   return req
 
 
-def _create_req_with_keyranges(
+def _create_v3_request(
+    sql, new_binds, tablet_type, not_in_transaction):
+  """Make a request where routing info is derived from sql and bind vars.
+
+  Args:
+    sql: Str sql with format tokens.
+    new_binds: Dict of bind variables.
+    tablet_type: Str tablet_type.
+    not_in_transaction: Bool True if a transaction should not be started
+      (generally used when sql is not a write).
+
+  Returns:
+    A (str: value) dict.
+  """
+  # sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
+  new_binds = field_types.convert_bind_vars(new_binds)
+  req = {
+      'Sql': sql,
+      'BindVariables': new_binds,
+      'TabletType': topodata_pb2.TabletType.Value(tablet_type.upper()),
+      'NotInTransaction': not_in_transaction,
+  }
+  return req
+
+
+def _create_v2_request_with_keyranges(
     sql, new_binds, keyspace_name, tablet_type, keyranges, not_in_transaction):
   """Make a request dict from arguments.
 
@@ -275,20 +304,23 @@ class VTGateConnection(vtgate_client.VTGateClient):
         raise dbexceptions.ProgrammingError(
             '_execute called with keyspace_ids and keyranges both defined')
       routing_kwargs['keyspace_ids'] = keyspace_ids
-      req = _create_req_with_keyspace_ids(
+      req = _create_v2_request_with_keyspace_ids(
           sql, bind_variables, keyspace_name, tablet_type, keyspace_ids,
           not_in_transaction)
       exec_method = 'VTGate.ExecuteKeyspaceIds'
     elif keyranges is not None:
       routing_kwargs['keyranges'] = keyranges
-      req = _create_req_with_keyranges(
+      req = _create_v2_request_with_keyranges(
           sql, bind_variables, keyspace_name, tablet_type, keyranges,
           not_in_transaction)
       exec_method = 'VTGate.ExecuteKeyRanges'
     else:
-      raise dbexceptions.ProgrammingError(
-          '_execute called with no entity_keyspace_id_map, '
-          'keyspace_ids, or keyranges')
+      req = _create_v3_request(
+          sql, bind_variables, tablet_type, not_in_transaction)
+      if keyspace_name is not None:
+        raise dbexceptions.ProgrammingError(
+            '_execute called with keyspace_name but no routing args')
+      exec_method = 'VTGate.Execute'
 
     self._add_caller_id(req, effective_caller_id)
     if not not_in_transaction:
@@ -333,7 +365,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
     Raises:
       gorpc.AppError: Error returned from vtgate server.
-      dbexceptions.ProgrammingError: Bad input.
+      dbexceptions.ProgrammingError: On bad input.
     """
 
     def build_query_list():
@@ -441,18 +473,23 @@ class VTGateConnection(vtgate_client.VTGateClient):
     exec_method = None
     req = None
     if keyspace_ids is not None:
-      req = _create_req_with_keyspace_ids(
+      req = _create_v2_request_with_keyspace_ids(
           sql, bind_variables, keyspace_name, tablet_type, keyspace_ids,
           not_in_transaction)
       exec_method = 'VTGate.StreamExecuteKeyspaceIds2'
     elif keyranges is not None:
-      req = _create_req_with_keyranges(
+      req = _create_v2_request_with_keyranges(
           sql, bind_variables, keyspace_name, tablet_type, keyranges,
           not_in_transaction)
       exec_method = 'VTGate.StreamExecuteKeyRanges2'
     else:
-      raise dbexceptions.ProgrammingError(
-          '_stream_execute called without specifying keyspace_ids or keyranges')
+      if keyspace_name:
+        raise dbexceptions.ProgrammingError(
+            'keyspace_name should only be provided if keyspace_ids or '
+            'keyranges is provided.')
+      req = _create_v3_request(
+          sql, bind_variables, tablet_type, not_in_transaction)
+      exec_method = 'VTGate.StreamExecute2'
 
     self._add_caller_id(req, effective_caller_id)
 
@@ -557,12 +594,11 @@ class VTGateConnection(vtgate_client.VTGateClient):
     Returns:
       Api interface exceptions - dbexceptions with new args.
     """
-
-    new_args = exc.args + (str(self),) + args
-    if kwargs:
-      new_args += tuple(sorted(kwargs.itervalues()))
-    new_exc = exc
-
+    kwargs_as_str = vtgate_utils.convert_exception_kwargs(kwargs)
+    exc.args += args
+    if kwargs_as_str:
+      exc.args += kwargs_as_str,
+    new_args = (type(exc).__name__,) + exc.args
     if isinstance(exc, gorpc.TimeoutError):
       new_exc = dbexceptions.TimeoutError(new_args)
     elif isinstance(exc, vtgate_utils.VitessError):
@@ -571,12 +607,11 @@ class VTGateConnection(vtgate_client.VTGateClient):
       new_exc = dbexceptions.ProgrammingError(new_args)
     elif isinstance(exc, gorpc.GoRpcError):
       new_exc = dbexceptions.FatalError(new_args)
-
-    keyspace_name = kwargs.get('keyspace', None)
-    tablet_type = kwargs.get('tablet_type', None)
-
-    vtgate_utils.log_exception(new_exc, keyspace=keyspace_name,
-                               tablet_type=tablet_type)
+    else:
+      new_exc = exc
+    vtgate_utils.log_exception(
+        new_exc,
+        keyspace=kwargs.get('keyspace'), tablet_type=kwargs.get('tablet_type'))
     return new_exc
 
 

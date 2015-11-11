@@ -148,3 +148,62 @@ def extract_rpc_error(method_name, response):
   err = reply.get('Err', None)
   if err:
     raise VitessError(method_name, err)
+
+
+def unique_join(str_list, delim='|'):
+  return delim.join(sorted(set(str(item) for item in str_list)))
+
+
+def keyspace_id_prefix(packed_keyspace_id):
+  """Return the first str byte of packed_keyspace_id if it exists."""
+  return '%02x' % ord(packed_keyspace_id[0])
+
+
+def keyspace_id_prefixes(packed_keyspace_ids):
+  """Return the first str byte of each packed_keyspace_id if it exists."""
+  return unique_join(keyspace_id_prefix(pkid) for pkid in packed_keyspace_ids)
+
+
+def convert_exception_kwarg(key, value):
+  if value is None:
+    return key, value
+  if key in (
+      'entity_column_name',
+      'keyspace',
+      'num_queries',
+      'tablet_type'):
+    return key, value
+  elif key == 'entity_keyspace_id_map':
+    return 'entity_keyspace_ids', keyspace_id_prefixes(
+        value.values())
+  elif key in (
+      'keyspace_ids',
+      'merged_keyspace_ids'):
+    return key, keyspace_id_prefixes(value)
+  elif key in (
+      'keyranges',
+      'keyspaces',
+      'sqls'):
+    return key, unique_join(value)
+  else:
+    return key, 'unknown'
+
+
+def convert_exception_kwargs(kwargs):
+  """Convert kwargs into a readable str.
+
+  Args:
+    kwargs: A (str: value) dict.
+
+  Returns:
+    A comma-delimited string of converted, truncated key=value pairs.
+      All non-None kwargs are included in alphabetical order.
+  """
+  new_kwargs = {}
+  for key, value in kwargs.iteritems():
+    new_key, new_value = convert_exception_kwarg(key, value)
+    new_kwargs[new_key] = new_value
+  return ', '.join(
+      ('%s=%s' % (k, v))[:256]
+      for (k, v) in sorted(new_kwargs.iteritems())
+      if v is not None)
