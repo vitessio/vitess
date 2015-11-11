@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/binlog/binlogproto"
+	"github.com/youtube/vitess/go/vt/binlog/gorpcbinlogcommon"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -36,7 +36,7 @@ func (client *client) Close() {
 }
 
 func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *pb.StreamEvent, binlogplayer.ErrFunc, error) {
-	req := &binlogproto.UpdateStreamRequest{
+	req := &gorpcbinlogcommon.UpdateStreamRequest{
 		Position: position,
 	}
 	result := make(chan *pb.StreamEvent, 10)
@@ -65,10 +65,10 @@ func (client *client) ServeUpdateStream(ctx context.Context, position string) (c
 	}, nil
 }
 
-func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	req := &binlogproto.KeyRangeRequest{
+func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIDType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+	req := &gorpcbinlogcommon.KeyRangeRequest{
 		Position:       position,
-		KeyspaceIdType: keyspaceIdType,
+		KeyspaceIdType: keyspaceIDType,
 		KeyRange:       keyRange,
 		Charset:        charset,
 	}
@@ -99,7 +99,7 @@ func (client *client) StreamKeyRange(ctx context.Context, position string, keysp
 }
 
 func (client *client) StreamTables(ctx context.Context, position string, tables []string, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	req := &binlogproto.TablesRequest{
+	req := &gorpcbinlogcommon.TablesRequest{
 		Position: position,
 		Tables:   tables,
 		Charset:  charset,

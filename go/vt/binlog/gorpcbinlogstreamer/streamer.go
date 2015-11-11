@@ -6,7 +6,7 @@ package gorpcbinlogstreamer
 
 import (
 	"github.com/youtube/vitess/go/vt/binlog"
-	"github.com/youtube/vitess/go/vt/binlog/binlogproto"
+	"github.com/youtube/vitess/go/vt/binlog/gorpcbinlogcommon"
 	"github.com/youtube/vitess/go/vt/servenv"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -18,7 +18,7 @@ type UpdateStream struct {
 }
 
 // ServeUpdateStream is part of the gorpc UpdateStream service
-func (server *UpdateStream) ServeUpdateStream(req *binlogproto.UpdateStreamRequest, sendReply func(reply interface{}) error) (err error) {
+func (server *UpdateStream) ServeUpdateStream(req *gorpcbinlogcommon.UpdateStreamRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
 	return server.updateStream.ServeUpdateStream(req.Position, func(reply *pb.StreamEvent) error {
 		return sendReply(reply)
@@ -26,7 +26,7 @@ func (server *UpdateStream) ServeUpdateStream(req *binlogproto.UpdateStreamReque
 }
 
 // StreamKeyRange is part of the gorpc UpdateStream service
-func (server *UpdateStream) StreamKeyRange(req *binlogproto.KeyRangeRequest, sendReply func(reply interface{}) error) (err error) {
+func (server *UpdateStream) StreamKeyRange(req *gorpcbinlogcommon.KeyRangeRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
 	return server.updateStream.StreamKeyRange(req.Position, req.KeyspaceIdType, req.KeyRange, req.Charset, func(reply *pb.BinlogTransaction) error {
 		return sendReply(reply)
@@ -34,7 +34,7 @@ func (server *UpdateStream) StreamKeyRange(req *binlogproto.KeyRangeRequest, sen
 }
 
 // StreamTables is part of the gorpc UpdateStream service
-func (server *UpdateStream) StreamTables(req *binlogproto.TablesRequest, sendReply func(reply interface{}) error) (err error) {
+func (server *UpdateStream) StreamTables(req *gorpcbinlogcommon.TablesRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
 	return server.updateStream.StreamTables(req.Position, req.Tables, req.Charset, func(reply *pb.BinlogTransaction) error {
 		return sendReply(reply)

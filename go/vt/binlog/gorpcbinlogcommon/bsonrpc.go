@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package binlogproto
+// Package gorpcbinlogcommon contains data structures shared by
+// gorpcbinlogplayer and gorpcbinlogstreamer packages.
+package gorpcbinlogcommon
 
 import (
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-// This file contains the data structures used by bson rpc for update stream.
 
 // UpdateStreamRequest is used to make a request for ServeUpdateStream.
 type UpdateStreamRequest struct {
