@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -38,7 +37,7 @@ type verticalDiffTabletServer struct {
 	excludedTable string
 }
 
-func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Vertical Split Diff operation should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -50,7 +49,7 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *p
 	sq.t.Logf("verticalDiffTabletServer: got query: %v", *query)
 
 	// Send the headers
-	if err := sendReply(&mproto.QueryResult{
+	if err := sendReply(&sqltypes.Result{
 		Fields: []*pbq.Field{
 			&pbq.Field{
 				Name: "id",
@@ -67,7 +66,7 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *p
 
 	// Send the values
 	for i := 0; i < 1000; i++ {
-		if err := sendReply(&mproto.QueryResult{
+		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),

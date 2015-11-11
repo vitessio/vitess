@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -81,7 +81,7 @@ func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard str
 }
 
 // Execute sends the query to VTTablet.
-func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -105,11 +105,11 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
-	return mproto.Proto3ToQueryResult(er.Result), nil
+	return sqltypes.Proto3ToResult(er.Result), nil
 }
 
 // Execute2 is the same with Execute in gRPC, since Execute is already CallerID enabled
-func (conn *gRPCQueryClient) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (conn *gRPCQueryClient) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return conn.Execute(ctx, query, bindVars, transactionID)
 }
 
@@ -150,7 +150,7 @@ func (conn *gRPCQueryClient) ExecuteBatch2(ctx context.Context, queries []tproto
 }
 
 // StreamExecute starts a streaming query to VTTablet.
-func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -172,7 +172,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	if err != nil {
 		return nil, nil, tabletconn.TabletErrorFromGRPC(err)
 	}
-	sr := make(chan *mproto.QueryResult, 10)
+	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
 		for {
@@ -184,7 +184,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 				close(sr)
 				return
 			}
-			sr <- mproto.Proto3ToQueryResult(ser.Result)
+			sr <- sqltypes.Proto3ToResult(ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -193,7 +193,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 }
 
 // StreamExecute2 is the same as StreamExecute for gRPC
-func (conn *gRPCQueryClient) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (conn *gRPCQueryClient) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return conn.StreamExecute(ctx, query, bindVars, transactionID)
 }
 

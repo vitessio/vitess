@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -187,22 +186,22 @@ func TestSelectEqual(t *testing.T) {
 func TestSelectEqualNotFound(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 
-	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
+	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{}})
 	result, err := routerExec(router, "select * from music where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult := &mproto.QueryResult{}
+	wantResult := &sqltypes.Result{}
 	if !reflect.DeepEqual(result, wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
+	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{}})
 	result, err = routerExec(router, "select * from user where name = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult = &mproto.QueryResult{}
+	wantResult = &sqltypes.Result{}
 	if !reflect.DeepEqual(result, wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
@@ -362,7 +361,7 @@ func TestStreamSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult = &mproto.QueryResult{
+	wantResult = &sqltypes.Result{
 		Fields: singleRowResult.Fields,
 		Rows: [][]sqltypes.Value{
 			singleRowResult.Rows[0],
@@ -553,7 +552,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantResult := &mproto.QueryResult{
+	wantResult := &sqltypes.Result{
 		Fields: singleRowResult.Fields,
 		Rows: [][]sqltypes.Value{
 			singleRowResult.Rows[0],

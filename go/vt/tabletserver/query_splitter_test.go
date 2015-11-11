@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
@@ -251,7 +250,7 @@ func TestSplitBoundaries(t *testing.T) {
 	maxField := &pbq.Field{Name: "max", Type: sqltypes.Int64}
 	fields := []*pbq.Field{minField, maxField}
 
-	pkMinMax := &mproto.QueryResult{
+	pkMinMax := &sqltypes.Result{
 		Fields: fields,
 		Rows:   rows,
 	}
@@ -332,7 +331,7 @@ func TestSplitQuery(t *testing.T) {
 		Type: sqltypes.Int64,
 	}
 	fields := []*pbq.Field{minField, maxField}
-	pkMinMax := &mproto.QueryResult{
+	pkMinMax := &sqltypes.Result{
 		Fields: fields,
 	}
 
@@ -394,7 +393,7 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 		Type: sqltypes.Float32,
 	}
 	fields := []*pbq.Field{minField, maxField}
-	pkMinMax := &mproto.QueryResult{
+	pkMinMax := &sqltypes.Result{
 		Fields: fields,
 		Rows:   [][]sqltypes.Value{[]sqltypes.Value{min, max}},
 	}

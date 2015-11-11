@@ -17,12 +17,12 @@ import (
 // rows creates a database/sql/driver compliant Row iterator
 // for a non-streaming QueryResult.
 type rows struct {
-	qr    *mproto.QueryResult
+	qr    *sqltypes.Result
 	index int
 }
 
 // newRows creates a new rows from qr.
-func newRows(qr *mproto.QueryResult) driver.Rows {
+func newRows(qr *sqltypes.Result) driver.Rows {
 	return &rows{qr: qr}
 }
 

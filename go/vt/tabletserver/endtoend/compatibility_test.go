@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
@@ -21,7 +20,7 @@ func TestCharaterSet(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := mproto.QueryResult{
+	want := sqltypes.Result{
 		Fields: []*query.Field{
 			{
 				Name: "intval",
@@ -82,7 +81,7 @@ func TestInts(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := mproto.QueryResult{
+	want := sqltypes.Result{
 		Fields: []*query.Field{
 			{
 				Name: "tiny",
@@ -164,7 +163,7 @@ func TestFractionals(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := mproto.QueryResult{
+	want := sqltypes.Result{
 		Fields: []*query.Field{
 			{
 				Name: "id",
@@ -228,7 +227,7 @@ func TestStrings(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := mproto.QueryResult{
+	want := sqltypes.Result{
 		Fields: []*query.Field{
 			{
 				Name: "vb",
@@ -306,7 +305,7 @@ func TestMiscTypes(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := mproto.QueryResult{
+	want := sqltypes.Result{
 		Fields: []*query.Field{
 			{
 				Name: "id",
@@ -348,7 +347,7 @@ func TestNull(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := mproto.QueryResult{
+	want := sqltypes.Result{
 		Fields: []*query.Field{
 			{
 				Name: "NULL",

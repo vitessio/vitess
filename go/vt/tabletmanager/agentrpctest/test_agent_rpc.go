@@ -13,7 +13,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -465,7 +464,7 @@ func agentRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmcl
 
 var testExecuteFetchQuery = "fetch this"
 var testExecuteFetchMaxRows = 100
-var testExecuteFetchResult = &mproto.QueryResult{
+var testExecuteFetchResult = &sqltypes.Result{
 	Fields: []*querypb.Field{
 		&querypb.Field{
 			Name: "column1",
@@ -477,7 +476,7 @@ var testExecuteFetchResult = &mproto.QueryResult{
 		},
 	},
 	RowsAffected: 10,
-	InsertId:     32,
+	InsertID:     32,
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("ABC")),
@@ -485,7 +484,7 @@ var testExecuteFetchResult = &mproto.QueryResult{
 	},
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*mproto.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*sqltypes.Result, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -498,7 +497,7 @@ func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, db
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*mproto.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*sqltypes.Result, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

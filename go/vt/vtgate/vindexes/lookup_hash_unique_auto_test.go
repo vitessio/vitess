@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/proto/query"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -68,7 +67,7 @@ func TestLookupHashUniqueAutoMapFail(t *testing.T) {
 }
 
 func TestLookupHashUniqueAutoMapBadData(t *testing.T) {
-	result := &mproto.QueryResult{
+	result := &sqltypes.Result{
 		Fields: []*query.Field{{
 			Type: sqltypes.Int24,
 		}},

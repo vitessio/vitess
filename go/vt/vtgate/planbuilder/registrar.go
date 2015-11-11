@@ -7,7 +7,7 @@ package planbuilder
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -17,7 +17,7 @@ import (
 // in the current context and session of a VTGate request. Vindexes
 // can use this interface to execute lookup queries.
 type VCursor interface {
-	Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error)
+	Execute(query *tproto.BoundQuery) (*sqltypes.Result, error)
 }
 
 // Vindex defines the interface required to register a vindex.

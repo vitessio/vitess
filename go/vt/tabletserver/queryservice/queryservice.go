@@ -9,7 +9,7 @@ package queryservice
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
@@ -27,8 +27,8 @@ type QueryService interface {
 	Rollback(ctx context.Context, target *pb.Target, session *proto.Session) error
 
 	// Query execution
-	Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *mproto.QueryResult) error
-	StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) error
+	Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *sqltypes.Result) error
+	StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error
 	ExecuteBatch(ctx context.Context, target *pb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error
 
 	// Map reduce helper
@@ -72,12 +72,12 @@ func (e *ErrorQueryService) Rollback(ctx context.Context, target *pb.Target, ses
 }
 
 // Execute is part of QueryService interface
-func (e *ErrorQueryService) Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *mproto.QueryResult) error {
+func (e *ErrorQueryService) Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *sqltypes.Result) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // StreamExecute is part of QueryService interface
-func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
+func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 

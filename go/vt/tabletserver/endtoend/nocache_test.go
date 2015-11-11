@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 
@@ -58,7 +57,7 @@ func TestBinary(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := mproto.QueryResult{
+	want := sqltypes.Result{
 		Fields: []*pbq.Field{
 			{
 				Name: "binval",
@@ -289,7 +288,7 @@ func TestBindInSelect(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := &mproto.QueryResult{
+	want := &sqltypes.Result{
 		Fields: []*pbq.Field{{
 			Name: "1",
 			Type: sqltypes.Int64,
@@ -314,7 +313,7 @@ func TestBindInSelect(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want = &mproto.QueryResult{
+	want = &sqltypes.Result{
 		Fields: []*pbq.Field{{
 			Name: "abcd",
 			Type: sqltypes.VarChar,
@@ -339,7 +338,7 @@ func TestBindInSelect(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want = &mproto.QueryResult{
+	want = &sqltypes.Result{
 		Fields: []*pbq.Field{{
 			Name: "",
 			Type: sqltypes.VarChar,

@@ -11,7 +11,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/discovery"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -32,13 +32,13 @@ type Gateway interface {
 	InitializeConnections(ctx context.Context) error
 
 	// Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
-	Execute(ctx context.Context, keyspace, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error)
+	Execute(ctx context.Context, keyspace, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error)
 
 	// ExecuteBatch executes a group of queries for the specified keyspace, shard, and tablet type.
 	ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType pb.TabletType, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error)
 
 	// StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-	StreamExecute(ctx context.Context, keyspace, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc)
+	StreamExecute(ctx context.Context, keyspace, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc)
 
 	// Begin starts a transaction for the specified keyspace, shard, and tablet type.
 	// It returns the transaction ID.

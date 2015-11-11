@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -52,7 +52,7 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	reply := new(mproto.QueryResult)
+	reply := new(sqltypes.Result)
 	bv, err := proto.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
@@ -66,7 +66,7 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 		return nil, tabletserver.ToGRPCError(err)
 	}
 	return &pb.ExecuteResponse{
-		Result: mproto.QueryResultToProto3(reply),
+		Result: sqltypes.ResultToProto3(reply),
 	}, nil
 }
 
@@ -110,9 +110,9 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 		Sql:           request.Query.Sql,
 		BindVariables: bv,
 		SessionId:     request.SessionId,
-	}, func(reply *mproto.QueryResult) error {
+	}, func(reply *sqltypes.Result) error {
 		return stream.Send(&pb.StreamExecuteResponse{
-			Result: mproto.QueryResultToProto3(reply),
+			Result: sqltypes.ResultToProto3(reply),
 		})
 	}); err != nil {
 		return tabletserver.ToGRPCError(err)

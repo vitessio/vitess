@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
@@ -60,8 +59,8 @@ func printSortedMap(val reflect.Value) []byte {
 	return buf.Bytes()
 }
 
-func echoQueryResult(vals map[string]interface{}) *mproto.QueryResult {
-	qr := &mproto.QueryResult{}
+func echoQueryResult(vals map[string]interface{}) *sqltypes.Result {
+	qr := &sqltypes.Result{}
 
 	var row []sqltypes.Value
 

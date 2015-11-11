@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -33,7 +33,7 @@ func TestInitMasterShard(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	db.AddQuery("CREATE DATABASE IF NOT EXISTS `vt_test_keyspace`", &mproto.QueryResult{})
+	db.AddQuery("CREATE DATABASE IF NOT EXISTS `vt_test_keyspace`", &sqltypes.Result{})
 
 	// Create a master, a couple good slaves
 	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)

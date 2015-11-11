@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -44,8 +43,8 @@ func TestPermissions(t *testing.T) {
 	}
 
 	// master will be asked for permissions
-	master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
-		"SELECT * FROM mysql.user": &mproto.QueryResult{
+	master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT * FROM mysql.user": &sqltypes.Result{
 			Fields: []*query.Field{
 				&query.Field{
 					Name: "Host",
@@ -224,7 +223,7 @@ func TestPermissions(t *testing.T) {
 					Type: sqltypes.Char,
 				}},
 			RowsAffected: 0x6,
-			InsertId:     0x0,
+			InsertID:     0x0,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_host1")),
@@ -409,7 +408,7 @@ func TestPermissions(t *testing.T) {
 				},
 			},
 		},
-		"SELECT * FROM mysql.db": &mproto.QueryResult{
+		"SELECT * FROM mysql.db": &sqltypes.Result{
 			Fields: []*query.Field{
 				&query.Field{
 					Name: "Host",
@@ -501,7 +500,7 @@ func TestPermissions(t *testing.T) {
 				},
 			},
 			RowsAffected: 0,
-			InsertId:     0,
+			InsertID:     0,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_host")),
@@ -538,7 +537,7 @@ func TestPermissions(t *testing.T) {
 	user.Fields = append([]*query.Field{}, user.Fields...)
 
 	// replica will be asked for permissions
-	replica.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
+	replica.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SELECT * FROM mysql.user": &user,
 		"SELECT * FROM mysql.db":   master.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.db"],
 	}

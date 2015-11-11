@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -129,14 +129,14 @@ func (client *FakeTabletManagerClient) ApplySchema(ctx context.Context, tablet *
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*mproto.QueryResult, error) {
-	var qr mproto.QueryResult
+func (client *FakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*sqltypes.Result, error) {
+	var qr sqltypes.Result
 	return &qr, nil
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields bool) (*mproto.QueryResult, error) {
-	var qr mproto.QueryResult
+func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
+	var qr sqltypes.Result
 	return &qr, nil
 }
 

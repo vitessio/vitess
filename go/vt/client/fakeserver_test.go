@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -85,13 +84,13 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 		return fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
 	}
 	if execCase.reply.Result != nil {
-		result := proto.QueryResult{Result: &mproto.QueryResult{}}
+		result := proto.QueryResult{Result: &sqltypes.Result{}}
 		result.Result.Fields = execCase.reply.Result.Fields
 		if err := sendReply(&result); err != nil {
 			return err
 		}
 		for _, row := range execCase.reply.Result.Rows {
-			result := proto.QueryResult{Result: &mproto.QueryResult{}}
+			result := proto.QueryResult{Result: &sqltypes.Result{}}
 			result.Result.Rows = [][]sqltypes.Value{row}
 			if err := sendReply(&result); err != nil {
 				return err
@@ -219,14 +218,14 @@ var execMap = map[string]struct {
 			Session:    session1,
 		},
 		reply: &proto.QueryResult{
-			Result:  &mproto.QueryResult{},
+			Result:  &sqltypes.Result{},
 			Session: session2,
 			Error:   "",
 		},
 	},
 }
 
-var result1 = mproto.QueryResult{
+var result1 = sqltypes.Result{
 	Fields: []*pbq.Field{
 		&pbq.Field{
 			Name: "field1",
@@ -238,7 +237,7 @@ var result1 = mproto.QueryResult{
 		},
 	},
 	RowsAffected: 123,
-	InsertId:     72,
+	InsertID:     72,
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("1")),

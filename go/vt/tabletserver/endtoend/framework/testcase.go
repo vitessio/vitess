@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"strings"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // Testable restricts the types that can be added to
@@ -167,7 +167,7 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 	return nil
 }
 
-func exec(client *QueryClient, query string, bv map[string]interface{}) (*mproto.QueryResult, error) {
+func exec(client *QueryClient, query string, bv map[string]interface{}) (*sqltypes.Result, error) {
 	switch query {
 	case "begin":
 		return nil, client.Begin()
@@ -180,7 +180,7 @@ func exec(client *QueryClient, query string, bv map[string]interface{}) (*mproto
 }
 
 // RowsToStrings converts qr.Rows to [][]string.
-func RowsToStrings(qr *mproto.QueryResult) [][]string {
+func RowsToStrings(qr *sqltypes.Result) [][]string {
 	var result [][]string
 	for _, row := range qr.Rows {
 		var srow []string

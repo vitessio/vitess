@@ -13,7 +13,6 @@ import (
 	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -27,7 +26,7 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestResolverExecuteKeyspaceIds(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
+	testResolverGeneric(t, "TestResolverExecuteKeyspaceIds", func() (*sqltypes.Result, error) {
 		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		return res.ExecuteKeyspaceIds(context.Background(),
 			"query",
@@ -41,7 +40,7 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 }
 
 func TestResolverExecuteKeyRanges(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteKeyRanges", func() (*mproto.QueryResult, error) {
+	testResolverGeneric(t, "TestResolverExecuteKeyRanges", func() (*sqltypes.Result, error) {
 		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		return res.ExecuteKeyRanges(context.Background(),
 			"query",
@@ -55,7 +54,7 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 }
 
 func TestResolverExecuteEntityIds(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteEntityIds", func() (*mproto.QueryResult, error) {
+	testResolverGeneric(t, "TestResolverExecuteEntityIds", func() (*sqltypes.Result, error) {
 		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		return res.ExecuteEntityIds(context.Background(),
 			"query",
@@ -81,7 +80,7 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 }
 
 func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func() (*mproto.QueryResult, error) {
+	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func() (*sqltypes.Result, error) {
 		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
 		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(),
 			[]proto.BoundKeyspaceIdQuery{{
@@ -105,31 +104,31 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 
 func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	createSandbox("TestResolverStreamExecuteKeyspaceIds")
-	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
+	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*sqltypes.Result, error) {
 		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
-		qr := new(mproto.QueryResult)
+		qr := new(sqltypes.Result)
 		err := res.StreamExecuteKeyspaceIds(context.Background(),
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyspaceIds",
 			[][]byte{[]byte{0x10}, []byte{0x15}},
 			pb.TabletType_MASTER,
-			func(r *mproto.QueryResult) error {
+			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
 			})
 		return qr, err
 	})
-	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
+	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*sqltypes.Result, error) {
 		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
-		qr := new(mproto.QueryResult)
+		qr := new(sqltypes.Result)
 		err := res.StreamExecuteKeyspaceIds(context.Background(),
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyspaceIds",
 			[][]byte{[]byte{0x10}, []byte{0x15}, []byte{0x25}},
 			pb.TabletType_MASTER,
-			func(r *mproto.QueryResult) error {
+			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
 			})
@@ -140,32 +139,32 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	createSandbox("TestResolverStreamExecuteKeyRanges")
 	// streaming a single shard
-	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
+	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*sqltypes.Result, error) {
 		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
-		qr := new(mproto.QueryResult)
+		qr := new(sqltypes.Result)
 		err := res.StreamExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyRanges",
 			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x15}}},
 			pb.TabletType_MASTER,
-			func(r *mproto.QueryResult) error {
+			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
 			})
 		return qr, err
 	})
 	// streaming multiple shards
-	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
+	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*sqltypes.Result, error) {
 		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, "")
-		qr := new(mproto.QueryResult)
+		qr := new(sqltypes.Result)
 		err := res.StreamExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyRanges",
 			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
 			pb.TabletType_MASTER,
-			func(r *mproto.QueryResult) error {
+			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
 			})
@@ -173,7 +172,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	})
 }
 
-func testResolverGeneric(t *testing.T, name string, action func() (*mproto.QueryResult, error)) {
+func testResolverGeneric(t *testing.T, name string, action func() (*sqltypes.Result, error)) {
 	// successful execute
 	s := createSandbox(name)
 	sbc0 := &sandboxConn{}
@@ -351,7 +350,7 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	}
 }
 
-func testResolverStreamGeneric(t *testing.T, name string, action func() (*mproto.QueryResult, error)) {
+func testResolverStreamGeneric(t *testing.T, name string, action func() (*sqltypes.Result, error)) {
 	// successful execute
 	s := createSandbox(name)
 	sbc0 := &sandboxConn{}

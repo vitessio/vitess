@@ -9,7 +9,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
@@ -78,7 +78,7 @@ type TabletDialer func(ctx context.Context, endPoint *pbt.EndPoint, keyspace, sh
 // not be concurrently used across goroutines.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
-	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
+	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*sqltypes.Result, error)
 
 	// ExecuteBatch executes a group of queries.
 	ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) (*tproto.QueryResultList, error)
@@ -87,7 +87,7 @@ type TabletConn interface {
 	// If error is non-nil, it means that the StreamExecute failed to send the request. Otherwise,
 	// you can pull values from the channel till it's closed. Following this, you can call ErrFunc
 	// to see if the stream ended normally or due to a failure.
-	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc, error)
+	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *sqltypes.Result, ErrFunc, error)
 
 	// Transaction support
 	Begin(ctx context.Context) (transactionId int64, err error)
@@ -96,12 +96,12 @@ type TabletConn interface {
 
 	// These should not be used for anything except tests for now; they will eventually
 	// replace the existing methods.
-	Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
+	Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*sqltypes.Result, error)
 	ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) (*tproto.QueryResultList, error)
 	Begin2(ctx context.Context) (transactionId int64, err error)
 	Commit2(ctx context.Context, transactionId int64) error
 	Rollback2(ctx context.Context, transactionId int64) error
-	StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc, error)
+	StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *sqltypes.Result, ErrFunc, error)
 
 	// Close must be called for releasing resources.
 	Close()
