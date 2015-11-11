@@ -11,7 +11,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
@@ -40,7 +40,7 @@ func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *tabl
 	}
 
 	log.Infof("Diffing permissions for %v", topoproto.TabletAliasString(alias))
-	myproto.DiffPermissions(topoproto.TabletAliasString(masterAlias), masterPermissions, topoproto.TabletAliasString(alias), slavePermissions, er)
+	mysqlctlproto.DiffPermissions(topoproto.TabletAliasString(masterAlias), masterPermissions, topoproto.TabletAliasString(alias), slavePermissions, er)
 }
 
 // ValidatePermissionsShard validates all the permissions are the same
