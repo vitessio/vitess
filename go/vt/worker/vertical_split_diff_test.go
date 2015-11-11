@@ -14,7 +14,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -161,17 +161,17 @@ func TestVerticalSplitDiff(t *testing.T) {
 					Name:              "moving1",
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TableBaseTable,
+					Type:              mysqlctlproto.TableBaseTable,
 				},
 				{
 					Name:              excludedTable,
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TableBaseTable,
+					Type:              mysqlctlproto.TableBaseTable,
 				},
 				{
 					Name: "view1",
-					Type: myproto.TableView,
+					Type: mysqlctlproto.TableView,
 				},
 			},
 		}

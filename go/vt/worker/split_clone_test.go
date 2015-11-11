@@ -16,6 +16,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -310,7 +311,7 @@ func testSplitClone(t *testing.T, strategy string) {
 					Name:              "table1",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TableBaseTable,
+					Type:              mysqlctlproto.TableBaseTable,
 					// This informs how many rows we can pack into a single insert
 					DataLength: 2048,
 				},

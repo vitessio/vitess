@@ -17,7 +17,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -117,15 +117,13 @@ func (client *FakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet 
 }
 
 // PreflightSchema is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*myproto.SchemaChangeResult, error) {
-	var scr myproto.SchemaChangeResult
-	return &scr, nil
+func (client *FakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*mysqlctlproto.SchemaChangeResult, error) {
+	return &mysqlctlproto.SchemaChangeResult{}, nil
 }
 
 // ApplySchema is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
-	var scr myproto.SchemaChangeResult
-	return &scr, nil
+func (client *FakeTabletManagerClient) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *mysqlctlproto.SchemaChange) (*mysqlctlproto.SchemaChangeResult, error) {
+	return &mysqlctlproto.SchemaChangeResult{}, nil
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface

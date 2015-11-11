@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -161,7 +161,7 @@ func (s *server) ApplySchema(ctx context.Context, request *tabletmanagerdatapb.A
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &tabletmanagerdatapb.ApplySchemaResponse{}
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionApplySchema, request, response, true, func() error {
-		scr, err := s.agent.ApplySchema(ctx, &myproto.SchemaChange{
+		scr, err := s.agent.ApplySchema(ctx, &mysqlctlproto.SchemaChange{
 			Sql:              request.Sql,
 			Force:            request.Force,
 			AllowReplication: request.AllowReplication,

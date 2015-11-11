@@ -10,7 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -22,7 +22,7 @@ type TabletExecutor struct {
 	tmClient    tmclient.TabletManagerClient
 	topoServer  topo.Server
 	tabletInfos []*topo.TabletInfo
-	schemaDiffs []*proto.SchemaChangeResult
+	schemaDiffs []*mysqlctlproto.SchemaChangeResult
 	isClosed    bool
 }
 
@@ -131,7 +131,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 }
 
 func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
-	exec.schemaDiffs = make([]*proto.SchemaChangeResult, len(sqls))
+	exec.schemaDiffs = make([]*mysqlctlproto.SchemaChangeResult, len(sqls))
 	for i := range sqls {
 		schemaDiff, err := exec.tmClient.PreflightSchema(
 			ctx, exec.tabletInfos[0], sqls[i])
@@ -139,7 +139,7 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 			return err
 		}
 		exec.schemaDiffs[i] = schemaDiff
-		diffs := proto.DiffSchemaToArray(
+		diffs := mysqlctlproto.DiffSchemaToArray(
 			"BeforeSchema",
 			exec.schemaDiffs[i].BeforeSchema,
 			"AfterSchema",

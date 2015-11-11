@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -231,7 +231,7 @@ func (client *Client) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // PreflightSchema is part of the tmclient.TabletManagerClient interface
-func (client *Client) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*myproto.SchemaChangeResult, error) {
+func (client *Client) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*mysqlctlproto.SchemaChangeResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -243,14 +243,14 @@ func (client *Client) PreflightSchema(ctx context.Context, tablet *topo.TabletIn
 	if err != nil {
 		return nil, err
 	}
-	return &myproto.SchemaChangeResult{
+	return &mysqlctlproto.SchemaChangeResult{
 		BeforeSchema: response.BeforeSchema,
 		AfterSchema:  response.AfterSchema,
 	}, err
 }
 
 // ApplySchema is part of the tmclient.TabletManagerClient interface
-func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
+func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *mysqlctlproto.SchemaChange) (*mysqlctlproto.SchemaChangeResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -266,7 +266,7 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, 
 	if err != nil {
 		return nil, err
 	}
-	return &myproto.SchemaChangeResult{
+	return &mysqlctlproto.SchemaChangeResult{
 		BeforeSchema: response.BeforeSchema,
 		AfterSchema:  response.AfterSchema,
 	}, nil

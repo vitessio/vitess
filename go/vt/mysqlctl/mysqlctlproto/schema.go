@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+package mysqlctlproto
 
 import (
 	"crypto/md5"
@@ -15,6 +15,8 @@ import (
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
+
+// This file contains helper methods to deal with Schema information.
 
 const (
 	// TableBaseTable indicates the table type is a base table.

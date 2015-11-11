@@ -7,8 +7,9 @@ package schemamanager
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -51,18 +52,18 @@ func TestTabletExecutorValidate(t *testing.T) {
 			{
 				Name:   "test_table",
 				Schema: "table schema",
-				Type:   proto.TableBaseTable,
+				Type:   mysqlctlproto.TableBaseTable,
 			},
 			{
 				Name:     "test_table_03",
 				Schema:   "table schema",
-				Type:     proto.TableBaseTable,
+				Type:     mysqlctlproto.TableBaseTable,
 				RowCount: 200000,
 			},
 			{
 				Name:     "test_table_04",
 				Schema:   "table schema",
-				Type:     proto.TableBaseTable,
+				Type:     mysqlctlproto.TableBaseTable,
 				RowCount: 3000000,
 			},
 		},

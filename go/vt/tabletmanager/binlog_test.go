@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -728,19 +728,19 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 					Name:              "table1",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TableBaseTable,
+					Type:              mysqlctlproto.TableBaseTable,
 				},
 				{
 					Name:              "funtables_one",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TableBaseTable,
+					Type:              mysqlctlproto.TableBaseTable,
 				},
 				{
 					Name:              "excluded_table",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TableBaseTable,
+					Type:              mysqlctlproto.TableBaseTable,
 				},
 			},
 		},

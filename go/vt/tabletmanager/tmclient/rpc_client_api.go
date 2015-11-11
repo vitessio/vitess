@@ -12,7 +12,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
@@ -73,10 +73,10 @@ type TabletManagerClient interface {
 	ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// PreflightSchema will test a schema change
-	PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*myproto.SchemaChangeResult, error)
+	PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*mysqlctlproto.SchemaChangeResult, error)
 
 	// ApplySchema will apply a schema change
-	ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error)
+	ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *mysqlctlproto.SchemaChange) (*mysqlctlproto.SchemaChangeResult, error)
 
 	// ExecuteFetchAsDba executes a query remotely using the DBA pool
 	ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*mproto.QueryResult, error)

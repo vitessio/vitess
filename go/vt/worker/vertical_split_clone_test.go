@@ -16,6 +16,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -300,13 +301,13 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 					Name:              "moving1",
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TableBaseTable,
+					Type:              mysqlctlproto.TableBaseTable,
 					// This informs how many rows we can pack into a single insert
 					DataLength: 2048,
 				},
 				{
 					Name: "view1",
-					Type: myproto.TableView,
+					Type: mysqlctlproto.TableView,
 				},
 			},
 		}

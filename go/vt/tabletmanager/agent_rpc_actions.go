@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -57,9 +58,9 @@ type RPCAgent interface {
 
 	ReloadSchema(ctx context.Context)
 
-	PreflightSchema(ctx context.Context, change string) (*myproto.SchemaChangeResult, error)
+	PreflightSchema(ctx context.Context, change string) (*mysqlctlproto.SchemaChangeResult, error)
 
-	ApplySchema(ctx context.Context, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error)
+	ApplySchema(ctx context.Context, change *mysqlctlproto.SchemaChange) (*mysqlctlproto.SchemaChangeResult, error)
 
 	ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*proto.QueryResult, error)
 
@@ -200,7 +201,7 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context) {
 
 // PreflightSchema will try out the schema change
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) PreflightSchema(ctx context.Context, change string) (*myproto.SchemaChangeResult, error) {
+func (agent *ActionAgent) PreflightSchema(ctx context.Context, change string) (*mysqlctlproto.SchemaChangeResult, error) {
 	// get the db name from the tablet
 	tablet := agent.Tablet()
 
@@ -210,7 +211,7 @@ func (agent *ActionAgent) PreflightSchema(ctx context.Context, change string) (*
 
 // ApplySchema will apply a schema change
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) ApplySchema(ctx context.Context, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
+func (agent *ActionAgent) ApplySchema(ctx context.Context, change *mysqlctlproto.SchemaChange) (*mysqlctlproto.SchemaChangeResult, error) {
 	// get the db name from the tablet
 	tablet := agent.Tablet()
 
