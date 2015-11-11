@@ -257,7 +257,7 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, 
 	}
 	defer cc.Close()
 	response, err := c.ApplySchema(ctx, &tabletmanagerdatapb.ApplySchemaRequest{
-		Sql:              change.Sql,
+		Sql:              change.SQL,
 		Force:            change.Force,
 		AllowReplication: change.AllowReplication,
 		BeforeSchema:     change.BeforeSchema,

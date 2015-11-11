@@ -163,8 +163,12 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -210,9 +214,15 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "COMMIT"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "COMMIT"}},
 	}
 
 	events := make(chan mysqlctlproto.BinlogEvent)
@@ -288,8 +298,12 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := ErrClientEOF
@@ -345,8 +359,12 @@ func TestBinlogStreamerParseEventsSendErrorXID(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "send reply error: foobar"
@@ -378,9 +396,15 @@ func TestBinlogStreamerParseEventsSendErrorCommit(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "COMMIT"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "COMMIT"}},
 	}
 	want := "send reply error: foobar"
 
@@ -411,7 +435,9 @@ func TestBinlogStreamerParseEventsInvalid(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
 		invalidEvent{},
 		xidEvent{},
 	}
@@ -444,8 +470,12 @@ func TestBinlogStreamerParseEventsInvalidFormat(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		invalidFormatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "can't parse FORMAT_DESCRIPTION_EVENT:"
@@ -477,8 +507,12 @@ func TestBinlogStreamerParseEventsNoFormat(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		//formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "got a real event before FORMAT_DESCRIPTION_EVENT:"
@@ -510,7 +544,9 @@ func TestBinlogStreamerParseEventsInvalidQuery(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
 		invalidQueryEvent{},
 		xidEvent{},
 	}
@@ -543,12 +579,24 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "ROLLBACK"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "ROLLBACK"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -603,7 +651,9 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -658,8 +708,12 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
 		xidEvent{},
 	}
 
@@ -714,9 +768,13 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
 		intVarEvent{name: "INSERT_ID", value: 101},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -763,9 +821,13 @@ func TestBinlogStreamerParseEventsInvalidIntVar(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
 		invalidIntVarEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "can't parse INTVAR_EVENT:"
@@ -797,9 +859,15 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "other", Sql: "INSERT INTO test values (3, 4)"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "other",
+			SQL:      "INSERT INTO test values (3, 4)"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -845,9 +913,15 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "other", Sql: "BEGIN"}}, // Check that this doesn't get filtered out.
-		queryEvent{query: mysqlctlproto.Query{Database: "other", Sql: "INSERT INTO test values (3, 4)"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "other",
+			SQL:      "BEGIN"}}, // Check that this doesn't get filtered out.
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "other",
+			SQL:      "INSERT INTO test values (3, 4)"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -893,9 +967,15 @@ func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
 	input := []mysqlctlproto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: mysqlctlproto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: mysqlctlproto.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
 	}
 
 	events := make(chan mysqlctlproto.BinlogEvent)

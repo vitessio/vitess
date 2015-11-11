@@ -69,8 +69,8 @@ func TestMysql56StripChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query() error: %v", err)
 	}
-	if want := "insert into test_table (msg) values ('hello')"; string(gotQuery.Sql) != want {
-		t.Errorf("query = %#v, want %#v", string(gotQuery.Sql), want)
+	if want := "insert into test_table (msg) values ('hello')"; string(gotQuery.SQL) != want {
+		t.Errorf("query = %#v, want %#v", string(gotQuery.SQL), want)
 	}
 }
 

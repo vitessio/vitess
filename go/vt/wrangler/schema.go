@@ -306,7 +306,13 @@ func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardI
 
 	// we're good, just send to the master
 	log.Infof("Applying schema change to master")
-	sc := &mysqlctlproto.SchemaChange{Sql: change, Force: force, AllowReplication: true, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
+	sc := &mysqlctlproto.SchemaChange{
+		SQL:              change,
+		Force:            force,
+		AllowReplication: true,
+		BeforeSchema:     preflight.BeforeSchema,
+		AfterSchema:      preflight.AfterSchema,
+	}
 	return wr.ApplySchema(ctx, masterTabletAlias, sc)
 }
 

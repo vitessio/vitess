@@ -279,7 +279,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *mysqlctlproto.Sch
 		}
 	}
 
-	sql := change.Sql
+	sql := change.SQL
 	if !change.AllowReplication {
 		sql = "SET sql_log_bin = 0;\n" + sql
 	}

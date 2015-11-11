@@ -245,7 +245,7 @@ func TestBinlogEventQuery(t *testing.T) {
 	want := mysqlctlproto.Query{
 		Database: "vt_test_keyspace",
 		Charset:  &pb.Charset{Client: 8, Conn: 8, Server: 33},
-		Sql: `create table if not exists vt_a (
+		SQL: `create table if not exists vt_a (
 eid bigint,
 id int,
 primary key(eid, id)

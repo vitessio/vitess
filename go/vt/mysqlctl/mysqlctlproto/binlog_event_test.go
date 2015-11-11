@@ -18,9 +18,9 @@ func TestQueryString(t *testing.T) {
 			Conn:   34,
 			Server: 56,
 		},
-		Sql: "sql",
+		SQL: "sql",
 	}
-	want := `{Database: "test_database", Charset: client:12 conn:34 server:56 , Sql: "sql"}`
+	want := `{Database: "test_database", Charset: client:12 conn:34 server:56 , SQL: "sql"}`
 	if got := input.String(); got != want {
 		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
 	}
@@ -30,9 +30,9 @@ func TestQueryStringNilCharset(t *testing.T) {
 	input := Query{
 		Database: "test_database",
 		Charset:  nil,
-		Sql:      "sql",
+		SQL:      "sql",
 	}
-	want := `{Database: "test_database", Charset: <nil>, Sql: "sql"}`
+	want := `{Database: "test_database", Charset: <nil>, SQL: "sql"}`
 	if got := input.String(); got != want {
 		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
 	}

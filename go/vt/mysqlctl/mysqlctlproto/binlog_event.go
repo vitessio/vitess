@@ -24,6 +24,9 @@ import (
 //
 // Methods that require information from the initial FORMAT_DESCRIPTION_EVENT
 // will have a BinlogFormat parameter.
+//
+// A BinlogEvent should never be sent over the wire. UpdateStream service
+// will send BinlogTransactions from these events.
 type BinlogEvent interface {
 	// IsValid returns true if the underlying data buffer contains a valid event.
 	// This should be called first on any BinlogEvent, and other methods should
@@ -105,11 +108,11 @@ func (f BinlogFormat) IsZero() bool {
 type Query struct {
 	Database string
 	Charset  *binlogdatapb.Charset
-	Sql      string
+	SQL      string
 }
 
 // String pretty-prints a Query.
 func (q Query) String() string {
-	return fmt.Sprintf("{Database: %q, Charset: %v, Sql: %q}",
-		q.Database, q.Charset, q.Sql)
+	return fmt.Sprintf("{Database: %q, Charset: %v, SQL: %q}",
+		q.Database, q.Charset, q.SQL)
 }

@@ -438,7 +438,7 @@ func agentRPCTestPreflightSchemaPanic(ctx context.Context, t *testing.T, client 
 }
 
 var testSchemaChange = &mysqlctlproto.SchemaChange{
-	Sql:              "alter table add fruit basket",
+	SQL:              "alter table add fruit basket",
 	Force:            true,
 	AllowReplication: true,
 	BeforeSchema:     testGetSchemaReply,

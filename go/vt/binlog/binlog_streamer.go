@@ -272,7 +272,7 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 			if err != nil {
 				return pos, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 			}
-			switch cat := getStatementCategory(q.Sql); cat {
+			switch cat := getStatementCategory(q.SQL); cat {
 			case pb.BinlogTransaction_Statement_BL_BEGIN:
 				begin()
 			case pb.BinlogTransaction_Statement_BL_ROLLBACK:
@@ -297,7 +297,7 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 				}
 				statement := &pb.BinlogTransaction_Statement{
 					Category: cat,
-					Sql:      q.Sql,
+					Sql:      q.SQL,
 				}
 				// If the statement has a charset and it's different than our client's
 				// default charset, send it along with the statement.

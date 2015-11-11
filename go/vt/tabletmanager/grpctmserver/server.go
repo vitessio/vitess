@@ -162,7 +162,7 @@ func (s *server) ApplySchema(ctx context.Context, request *tabletmanagerdatapb.A
 	response := &tabletmanagerdatapb.ApplySchemaResponse{}
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionApplySchema, request, response, true, func() error {
 		scr, err := s.agent.ApplySchema(ctx, &mysqlctlproto.SchemaChange{
-			Sql:              request.Sql,
+			SQL:              request.Sql,
 			Force:            request.Force,
 			AllowReplication: request.AllowReplication,
 			BeforeSchema:     request.BeforeSchema,
