@@ -3,9 +3,10 @@ package discovery
 import (
 	"flag"
 	"fmt"
+	"time"
 )
 
-var replicationLowLag = flag.Uint("discovery_replication_low_lag", 30, "the replication lag in seconds that is considered low")
+var lowReplicationLag = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
 
 // FilterByReplicationLag filters the list of EndPointStats by EndPointStats.Stats.SecondsBehindMaster.
 // The algorithm (EndPointStats that is non-serving or has error is ignored):
@@ -29,7 +30,7 @@ func FilterByReplicationLag(epsList []*EndPointStats) []*EndPointStats {
 	// if all have low replication lag (<=30s), return all endpoints.
 	allLowLag := true
 	for _, eps := range list {
-		if eps.Stats.SecondsBehindMaster > uint32(*replicationLowLag) {
+		if float64(eps.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds() {
 			allLowLag = false
 			break
 		}
