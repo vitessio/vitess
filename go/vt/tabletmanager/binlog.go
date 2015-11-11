@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/binlog/binlogproto"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
@@ -596,7 +596,7 @@ func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList []*pbt
 	// we're not doing anything wrong
 	posMap := make(map[uint32]string)
 	for _, bpc := range blm.players {
-		blpPos := blproto.FindBlpPositionByID(blpPositionList, bpc.sourceShard.Uid)
+		blpPos := binlogproto.FindBlpPositionByID(blpPositionList, bpc.sourceShard.Uid)
 		if blpPos == nil {
 			return fmt.Errorf("No binlog position passed in for player Uid %v", bpc.sourceShard.Uid)
 		}

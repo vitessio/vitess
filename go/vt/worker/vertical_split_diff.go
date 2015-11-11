@@ -13,7 +13,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sync2"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/binlog/binlogproto"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -250,7 +250,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	stopPositionList := make([]*pbt.BlpPosition, 1)
 	ss := vsdw.shardInfo.SourceShards[0]
 	// find where we should be stopping
-	blpPos := blproto.FindBlpPositionByID(blpPositionList, ss.Uid)
+	blpPos := binlogproto.FindBlpPositionByID(blpPositionList, ss.Uid)
 	if blpPos == nil {
 		return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 	}

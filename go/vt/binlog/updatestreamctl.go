@@ -12,12 +12,12 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/binlog/binlogproto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /* API and config for UpdateStream Service */
@@ -88,7 +88,7 @@ func (m *UpdateStreamControlMock) IsEnabled() bool {
 	return m.enabled
 }
 
-// UpdateStream is the real implementation of proto.UpdateStream
+// UpdateStream is the real implementation of binlogproto.UpdateStream
 // and UpdateStreamControl
 type UpdateStream struct {
 	// the following variables are set at construction time
@@ -136,7 +136,7 @@ func (sl *streamList) Stop() {
 
 // RegisterUpdateStreamServiceFunc is the type to use for delayed
 // registration of RPC servers until we have all the objects
-type RegisterUpdateStreamServiceFunc func(proto.UpdateStream)
+type RegisterUpdateStreamServiceFunc func(binlogproto.UpdateStream)
 
 // RegisterUpdateStreamServices is the list of all registration
 // callbacks to invoke
@@ -204,8 +204,8 @@ func (updateStream *UpdateStream) IsEnabled() bool {
 	return updateStream.state.Get() == usEnabled
 }
 
-// ServeUpdateStream is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply func(reply *pb.StreamEvent) error) (err error) {
+// ServeUpdateStream is part of the binlogproto.UpdateStream interface
+func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply func(reply *binlogdatapb.StreamEvent) error) (err error) {
 	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
@@ -225,8 +225,8 @@ func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply f
 	defer streamCount.Add("Updates", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, pos, func(reply *pb.StreamEvent) error {
-		if reply.Category == pb.StreamEvent_SE_ERR {
+	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, pos, func(reply *binlogdatapb.StreamEvent) error {
+		if reply.Category == binlogdatapb.StreamEvent_SE_ERR {
 			updateStreamErrors.Add("UpdateStream", 1)
 		} else {
 			updateStreamEvents.Add(reply.Category.String(), 1)
@@ -241,8 +241,8 @@ func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply f
 	return svm.Join()
 }
 
-// StreamKeyRange is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) (err error) {
+// StreamKeyRange is part of the binlogproto.UpdateStream interface
+func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
 	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
@@ -262,8 +262,8 @@ func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType
 	defer streamCount.Add("KeyRange", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
-	f := KeyRangeFilterFunc(keyspaceIDType, keyRange, func(reply *pb.BinlogTransaction) error {
+	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->sendReply
+	f := KeyRangeFilterFunc(keyspaceIDType, keyRange, func(reply *binlogdatapb.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
@@ -277,8 +277,8 @@ func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIDType
 	return svm.Join()
 }
 
-// StreamTables is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) StreamTables(position string, tables []string, charset *pb.Charset, sendReply func(reply *pb.BinlogTransaction) error) (err error) {
+// StreamTables is part of the binlogproto.UpdateStream interface
+func (updateStream *UpdateStream) StreamTables(position string, tables []string, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
 	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
@@ -298,8 +298,8 @@ func (updateStream *UpdateStream) StreamTables(position string, tables []string,
 	defer streamCount.Add("Tables", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*proto.BinlogTransaction)->sendReply
-	f := TablesFilterFunc(tables, func(reply *pb.BinlogTransaction) error {
+	// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->sendReply
+	f := TablesFilterFunc(tables, func(reply *binlogdatapb.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
@@ -313,7 +313,7 @@ func (updateStream *UpdateStream) StreamTables(position string, tables []string,
 	return svm.Join()
 }
 
-// HandlePanic is part of the proto.UpdateStream interface
+// HandlePanic is part of the binlogproto.UpdateStream interface
 func (updateStream *UpdateStream) HandlePanic(err *error) {
 	if x := recover(); x != nil {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))

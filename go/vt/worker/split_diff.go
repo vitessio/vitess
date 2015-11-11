@@ -12,7 +12,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sync2"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/binlog/binlogproto"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -248,7 +248,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	stopPositionList := make([]*pbt.BlpPosition, len(sdw.shardInfo.SourceShards))
 	for i, ss := range sdw.shardInfo.SourceShards {
 		// find where we should be stopping
-		blpPos := blproto.FindBlpPositionByID(blpPositionList, ss.Uid)
+		blpPos := binlogproto.FindBlpPositionByID(blpPositionList, ss.Uid)
 		if blpPos == nil {
 			return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 		}

@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/binlog/binlogproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -36,7 +36,7 @@ func (client *client) Close() {
 }
 
 func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *pb.StreamEvent, binlogplayer.ErrFunc, error) {
-	req := &proto.UpdateStreamRequest{
+	req := &binlogproto.UpdateStreamRequest{
 		Position: position,
 	}
 	result := make(chan *pb.StreamEvent, 10)
@@ -66,7 +66,7 @@ func (client *client) ServeUpdateStream(ctx context.Context, position string) (c
 }
 
 func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	req := &proto.KeyRangeRequest{
+	req := &binlogproto.KeyRangeRequest{
 		Position:       position,
 		KeyspaceIdType: keyspaceIdType,
 		KeyRange:       keyRange,
@@ -99,7 +99,7 @@ func (client *client) StreamKeyRange(ctx context.Context, position string, keysp
 }
 
 func (client *client) StreamTables(ctx context.Context, position string, tables []string, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	req := &proto.TablesRequest{
+	req := &binlogproto.TablesRequest{
 		Position: position,
 		Tables:   tables,
 		Charset:  charset,
