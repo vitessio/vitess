@@ -2,18 +2,18 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+package mysqlctlproto
 
 import (
 	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 func TestQueryString(t *testing.T) {
 	input := Query{
 		Database: "test_database",
-		Charset: &pb.Charset{
+		Charset: &binlogdatapb.Charset{
 			Client: 12,
 			Conn:   34,
 			Server: 56,

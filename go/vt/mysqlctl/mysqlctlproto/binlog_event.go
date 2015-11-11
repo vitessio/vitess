@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+package mysqlctlproto
 
 import (
 	"fmt"
 
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // BinlogEvent represents a single event from a raw MySQL binlog dump stream.
@@ -104,7 +104,7 @@ func (f BinlogFormat) IsZero() bool {
 // Query contains data from a QUERY_EVENT.
 type Query struct {
 	Database string
-	Charset  *pb.Charset
+	Charset  *binlogdatapb.Charset
 	Sql      string
 }
 

@@ -10,7 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -34,7 +34,7 @@ func TestMysql56IsGTID(t *testing.T) {
 }
 
 func TestMysql56HasGTID(t *testing.T) {
-	format := blproto.BinlogFormat{}
+	format := mysqlctlproto.BinlogFormat{}
 	if got, want := mysql56FormatEvent.HasGTID(format), false; got != want {
 		t.Errorf("%#v.HasGTID() = %#v, want %#v", mysql56FormatEvent, got, want)
 	}

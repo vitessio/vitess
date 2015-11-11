@@ -13,7 +13,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -144,7 +144,7 @@ func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos pro
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
-func (*mysql56) MakeBinlogEvent(buf []byte) blproto.BinlogEvent {
+func (*mysql56) MakeBinlogEvent(buf []byte) mysqlctlproto.BinlogEvent {
 	return NewMysql56BinlogEvent(buf)
 }
 
@@ -159,14 +159,14 @@ func (*mysql56) DisableBinlogPlayback(mysqld *Mysqld) error {
 }
 
 // mysql56BinlogEvent wraps a raw packet buffer and provides methods to examine
-// it by implementing blproto.BinlogEvent. Some methods are pulled in from
+// it by implementing mysqlctlproto.BinlogEvent. Some methods are pulled in from
 // binlogEvent.
 type mysql56BinlogEvent struct {
 	binlogEvent
 }
 
 // NewMysql56BinlogEvent creates a BinlogEvent from given byte array
-func NewMysql56BinlogEvent(buf []byte) blproto.BinlogEvent {
+func NewMysql56BinlogEvent(buf []byte) mysqlctlproto.BinlogEvent {
 	return mysql56BinlogEvent{binlogEvent: binlogEvent(buf)}
 }
 
@@ -176,7 +176,7 @@ func (ev mysql56BinlogEvent) IsGTID() bool {
 }
 
 // HasGTID implements BinlogEvent.HasGTID().
-func (ev mysql56BinlogEvent) HasGTID(f blproto.BinlogFormat) bool {
+func (ev mysql56BinlogEvent) HasGTID(f mysqlctlproto.BinlogFormat) bool {
 	// MySQL 5.6 provides GTIDs in a separate event type GTID_EVENT.
 	return ev.IsGTID()
 }
@@ -188,7 +188,7 @@ func (ev mysql56BinlogEvent) HasGTID(f blproto.BinlogFormat) bool {
 //   1         flags
 //   16        SID (server UUID)
 //   8         GNO (sequence number, signed int)
-func (ev mysql56BinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
+func (ev mysql56BinlogEvent) GTID(f mysqlctlproto.BinlogFormat) (proto.GTID, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 	var sid proto.SID
 	copy(sid[:], data[1:1+16])
@@ -197,7 +197,7 @@ func (ev mysql56BinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().
-func (ev mysql56BinlogEvent) StripChecksum(f blproto.BinlogFormat) (blproto.BinlogEvent, []byte, error) {
+func (ev mysql56BinlogEvent) StripChecksum(f mysqlctlproto.BinlogFormat) (mysqlctlproto.BinlogEvent, []byte, error) {
 	switch f.ChecksumAlgorithm {
 	case BinlogChecksumAlgOff, BinlogChecksumAlgUndef:
 		// There is no checksum.

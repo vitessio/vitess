@@ -12,8 +12,8 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlproto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -51,7 +51,7 @@ var (
 // reply is of type pb.BinlogTransaction.
 type sendTransactionFunc func(trans *pb.BinlogTransaction) error
 
-// getStatementCategory returns the proto.BL_* category for a SQL statement.
+// getStatementCategory returns the pb.BL_* category for a SQL statement.
 func getStatementCategory(sql string) pb.BinlogTransaction_Statement_Category {
 	if i := strings.IndexByte(sql, byte(' ')); i >= 0 {
 		sql = sql[:i]
@@ -123,7 +123,7 @@ func (bls *BinlogStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
 		}
 	}
 
-	var events <-chan proto.BinlogEvent
+	var events <-chan mysqlctlproto.BinlogEvent
 	events, err = bls.conn.StartBinlogDump(bls.startPos)
 	if err != nil {
 		return err
@@ -140,9 +140,9 @@ func (bls *BinlogStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
 //
 // If the sendTransaction func returns io.EOF, parseEvents returns ErrClientEOF.
 // If the events channel is closed, parseEvents returns ErrServerEOF.
-func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan proto.BinlogEvent) (myproto.ReplicationPosition, error) {
+func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan mysqlctlproto.BinlogEvent) (myproto.ReplicationPosition, error) {
 	var statements []*pb.BinlogTransaction_Statement
-	var format proto.BinlogFormat
+	var format mysqlctlproto.BinlogFormat
 	var gtid myproto.GTID
 	var pos = bls.startPos
 	var autocommit = true
@@ -179,7 +179,7 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 
 	// Parse events.
 	for ctx.IsRunning() {
-		var ev proto.BinlogEvent
+		var ev mysqlctlproto.BinlogEvent
 		var ok bool
 
 		select {
