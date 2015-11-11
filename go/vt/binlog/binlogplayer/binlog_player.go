@@ -179,7 +179,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *pb.BinlogTransaction) error {
 	now := time.Now().Unix()
 
 	blp.position = myproto.AppendGTID(blp.position, gtid)
-	updateRecovery := UpdateBlpCheckpoint(blp.uid, blp.position, now, tx.Timestamp)
+	updateRecovery := updateBlpCheckpoint(blp.uid, blp.position, now, tx.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -411,9 +411,9 @@ func PopulateBlpCheckpoint(index uint32, position string, timeUpdated int64, fla
 		index, position, timeUpdated, flags)
 }
 
-// UpdateBlpCheckpoint returns a statement to update a value in the
+// updateBlpCheckpoint returns a statement to update a value in the
 // _vt.blp_checkpoint table.
-func UpdateBlpCheckpoint(uid uint32, pos myproto.ReplicationPosition, timeUpdated int64, txTimestamp int64) string {
+func updateBlpCheckpoint(uid uint32, pos myproto.ReplicationPosition, timeUpdated int64, txTimestamp int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
 			"UPDATE _vt.blp_checkpoint "+

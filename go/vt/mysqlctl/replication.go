@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -292,7 +291,7 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 
 // WaitBlpPosition will wait for the filtered replication to reach at least
 // the provided position.
-func WaitBlpPosition(mysqld MysqlDaemon, uid uint32, replicationPosition string, waitTimeout time.Duration) error {
+func WaitBlpPosition(mysqld MysqlDaemon, sql string, replicationPosition string, waitTimeout time.Duration) error {
 	position, err := proto.DecodeReplicationPosition(replicationPosition)
 	if err != nil {
 		return err
@@ -303,13 +302,12 @@ func WaitBlpPosition(mysqld MysqlDaemon, uid uint32, replicationPosition string,
 			break
 		}
 
-		cmd := binlogplayer.QueryBlpCheckpoint(uid)
-		qr, err := mysqld.FetchSuperQuery(cmd)
+		qr, err := mysqld.FetchSuperQuery(sql)
 		if err != nil {
 			return err
 		}
 		if len(qr.Rows) != 1 {
-			return fmt.Errorf("QueryBlpCheckpoint(%v) returned unexpected row count: %v", uid, len(qr.Rows))
+			return fmt.Errorf("QueryBlpCheckpoint(%v) returned unexpected row count: %v", sql, len(qr.Rows))
 		}
 		var pos proto.ReplicationPosition
 		if !qr.Rows[0][0].IsNull() {
@@ -322,11 +320,11 @@ func WaitBlpPosition(mysqld MysqlDaemon, uid uint32, replicationPosition string,
 			return nil
 		}
 
-		log.Infof("Sleeping 1 second waiting for binlog replication(%v) to catch up: %v != %v", uid, pos, position)
+		log.Infof("Sleeping 1 second waiting for binlog replication(%v) to catch up: %v != %v", sql, pos, position)
 		time.Sleep(1 * time.Second)
 	}
 
-	return fmt.Errorf("WaitBlpPosition(%v) timed out", uid)
+	return fmt.Errorf("WaitBlpPosition(%v) timed out", sql)
 }
 
 // EnableBinlogPlayback prepares the server to play back events from a binlog stream.

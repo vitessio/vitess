@@ -27,9 +27,9 @@ func TestUpdateBlpCheckpoint(t *testing.T) {
 		"SET pos='MariaDB/0-1-8283', time_updated=88822 " +
 		"WHERE source_shard_uid=78522"
 
-	got := UpdateBlpCheckpoint(78522, myproto.ReplicationPosition{GTIDSet: gtid.GTIDSet()}, 88822, 0)
+	got := updateBlpCheckpoint(78522, myproto.ReplicationPosition{GTIDSet: gtid.GTIDSet()}, 88822, 0)
 	if got != want {
-		t.Errorf("UpdateBlpCheckpoint() = %#v, want %#v", got, want)
+		t.Errorf("updateBlpCheckpoint() = %#v, want %#v", got, want)
 	}
 }
 
@@ -39,9 +39,9 @@ func TestUpdateBlpCheckpointTimestamp(t *testing.T) {
 		"SET pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828 " +
 		"WHERE source_shard_uid=78522"
 
-	got := UpdateBlpCheckpoint(78522, myproto.ReplicationPosition{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
+	got := updateBlpCheckpoint(78522, myproto.ReplicationPosition{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
 	if got != want {
-		t.Errorf("UpdateBlpCheckpoint() = %#v, want %#v", got, want)
+		t.Errorf("updateBlpCheckpoint() = %#v, want %#v", got, want)
 	}
 }
 

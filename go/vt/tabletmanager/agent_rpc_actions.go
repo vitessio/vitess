@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -344,7 +345,7 @@ func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
 // reached.
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
-	return mysqlctl.WaitBlpPosition(agent.MysqlDaemon, blpPosition.Uid, blpPosition.Position, waitTime)
+	return mysqlctl.WaitBlpPosition(agent.MysqlDaemon, binlogplayer.QueryBlpCheckpoint(blpPosition.Uid), blpPosition.Position, waitTime)
 }
 
 // StopBlp stops the binlog players, and return their positions.
