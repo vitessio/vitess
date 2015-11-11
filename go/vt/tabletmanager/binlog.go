@@ -21,12 +21,12 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/binlog/binlogproto"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
@@ -596,7 +596,7 @@ func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList []*pbt
 	// we're not doing anything wrong
 	posMap := make(map[uint32]string)
 	for _, bpc := range blm.players {
-		blpPos := binlogproto.FindBlpPositionByID(blpPositionList, bpc.sourceShard.Uid)
+		blpPos := tmutils.FindBlpPositionByID(blpPositionList, bpc.sourceShard.Uid)
 		if blpPos == nil {
 			return fmt.Errorf("No binlog position passed in for player Uid %v", bpc.sourceShard.Uid)
 		}
