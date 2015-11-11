@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -50,7 +49,7 @@ type queryExecuteShards struct {
 type queryResponse struct {
 	execQuery  *queryExecute
 	shardQuery *queryExecuteShards
-	reply      *mproto.QueryResult
+	reply      *sqltypes.Result
 	err        error
 }
 
@@ -97,7 +96,7 @@ func (conn *FakeVTGateConn) AddQuery(
 	tabletType pb.TabletType,
 	session *pbg.Session,
 	notInTransaction bool,
-	expectedResult *mproto.QueryResult) {
+	expectedResult *sqltypes.Result) {
 	conn.execMap[sql] = &queryResponse{
 		execQuery: &queryExecute{
 			SQL:              sql,
@@ -119,7 +118,7 @@ func (conn *FakeVTGateConn) AddShardQuery(
 	tabletType pb.TabletType,
 	session *pbg.Session,
 	notInTransaction bool,
-	expectedResult *mproto.QueryResult) {
+	expectedResult *sqltypes.Result) {
 	conn.execMap[getShardQueryKey(sql, shards)] = &queryResponse{
 		shardQuery: &queryExecuteShards{
 			SQL:              sql,
@@ -159,7 +158,7 @@ func (conn *FakeVTGateConn) AddSplitQuery(
 }
 
 // Execute please see vtgateconn.Impl.Execute
-func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
 	var s *pbg.Session
 	if session != nil {
 		s = session.(*pbg.Session)
@@ -179,7 +178,7 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 		return nil, nil, fmt.Errorf(
 			"Execute: %+v, want %+v", query, response.execQuery)
 	}
-	var reply mproto.QueryResult
+	var reply sqltypes.Result
 	reply = *response.reply
 	if s != nil {
 		s = newSession(true, "test_keyspace", []string{}, pb.TabletType_MASTER)
@@ -188,7 +187,7 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 }
 
 // ExecuteShards please see vtgateconn.Impl.ExecuteShard
-func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
 	var s *pbg.Session
 	if session != nil {
 		s = session.(*pbg.Session)
@@ -210,7 +209,7 @@ func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keysp
 		return nil, nil, fmt.Errorf(
 			"ExecuteShards: %+v, want %+v", query, response.shardQuery)
 	}
-	var reply mproto.QueryResult
+	var reply sqltypes.Result
 	reply = *response.reply
 	if s != nil {
 		s = newSession(true, keyspace, shards, tabletType)
@@ -219,32 +218,32 @@ func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keysp
 }
 
 // ExecuteKeyspaceIds please see vtgateconn.Impl.ExecuteKeyspaceIds
-func (conn *FakeVTGateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
 	panic("not implemented")
 }
 
 // ExecuteKeyRanges please see vtgateconn.Impl.ExecuteKeyRanges
-func (conn *FakeVTGateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
 	panic("not implemented")
 }
 
 // ExecuteEntityIds please see vtgateconn.Impl.ExecuteEntityIds
-func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
 	panic("not implemented")
 }
 
 // ExecuteBatchShards please see vtgateconn.Impl.ExecuteBatchShards
-func (conn *FakeVTGateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
 	panic("not implemented")
 }
 
 // ExecuteBatchKeyspaceIds please see vtgateconn.Impl.ExecuteBatchKeyspaceIds
-func (conn *FakeVTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
 	panic("not implemented")
 }
 
 // StreamExecute please see vtgateconn.Impl.StreamExecute
-func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
 	response, ok := conn.execMap[sql]
 	if !ok {
 		return nil, nil, fmt.Errorf("no match for: %s", sql)
@@ -260,58 +259,58 @@ func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindV
 	if response.err != nil {
 		return nil, nil, response.err
 	}
-	var resultChan chan *mproto.QueryResult
+	var resultChan chan *sqltypes.Result
 	defer close(resultChan)
 	if response.reply != nil {
 		// create a result channel big enough to buffer all of
 		// the responses so we don't need to fork a go routine.
-		resultChan := make(chan *mproto.QueryResult, len(response.reply.Rows)+1)
-		result := &mproto.QueryResult{}
+		resultChan := make(chan *sqltypes.Result, len(response.reply.Rows)+1)
+		result := &sqltypes.Result{}
 		result.Fields = response.reply.Fields
 		resultChan <- result
 		for _, row := range response.reply.Rows {
-			result := &mproto.QueryResult{}
+			result := &sqltypes.Result{}
 			result.Rows = [][]sqltypes.Value{row}
 			resultChan <- result
 		}
 	} else {
-		resultChan = make(chan *mproto.QueryResult)
+		resultChan = make(chan *sqltypes.Result)
 	}
 	return resultChan, func() error { return nil }, nil
 }
 
 // StreamExecute2 please see vtgateconn.Impl.StreamExecute2
-func (conn *FakeVTGateConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
 // StreamExecuteShards please see vtgateconn.Impl.StreamExecuteShards
-func (conn *FakeVTGateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
 // StreamExecuteShards2 please see vtgateconn.Impl.StreamExecuteShards2
-func (conn *FakeVTGateConn) StreamExecuteShards2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecuteShards2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
 // StreamExecuteKeyRanges please see vtgateconn.Impl.StreamExecuteKeyRanges
-func (conn *FakeVTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
 // StreamExecuteKeyRanges2 please see vtgateconn.Impl.StreamExecuteKeyRanges2
-func (conn *FakeVTGateConn) StreamExecuteKeyRanges2(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecuteKeyRanges2(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
 // StreamExecuteKeyspaceIds please see vtgateconn.Impl.StreamExecuteKeyspaceIds
-func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
 // StreamExecuteKeyspaceIds2 please see vtgateconn.Impl.StreamExecuteKeyspaceIds2
-func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 

@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	gproto "github.com/youtube/vitess/go/vt/vtgate/proto"
 
@@ -85,7 +84,7 @@ func testEcho(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
-	var qr *mproto.QueryResult
+	var qr *sqltypes.Result
 	var err error
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
@@ -139,7 +138,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"tabletType":       tabletTypeEcho,
 	})
 
-	var qrs []mproto.QueryResult
+	var qrs []sqltypes.Result
 
 	qrs, err = conn.ExecuteBatchShards(ctx, []gproto.BoundShardQuery{
 		gproto.BoundShardQuery{
@@ -179,7 +178,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
-	var qrc <-chan *mproto.QueryResult
+	var qrc <-chan *sqltypes.Result
 	var err error
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
@@ -224,7 +223,7 @@ func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
-	var qr *mproto.QueryResult
+	var qr *sqltypes.Result
 	var err error
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
@@ -301,7 +300,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Fatalf("Begin (again) error: %v", err)
 	}
 
-	var qrs []mproto.QueryResult
+	var qrs []sqltypes.Result
 
 	qrs, err = tx.ExecuteBatchShards(ctx, []gproto.BoundShardQuery{
 		gproto.BoundShardQuery{
@@ -364,7 +363,7 @@ func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 // getEcho extracts the echoed field values from a query result.
-func getEcho(qr *mproto.QueryResult) map[string]sqltypes.Value {
+func getEcho(qr *sqltypes.Result) map[string]sqltypes.Value {
 	values := map[string]sqltypes.Value{}
 	for i, field := range qr.Fields {
 		values[field.Name] = qr.Rows[0][i]
@@ -374,7 +373,7 @@ func getEcho(qr *mproto.QueryResult) map[string]sqltypes.Value {
 
 // checkEcho verifies that the values present in 'want' are equal to those in
 // 'got'. Note that extra values in 'got' are fine.
-func checkEcho(t *testing.T, name string, qr *mproto.QueryResult, err error, want map[string]string) {
+func checkEcho(t *testing.T, name string, qr *sqltypes.Result, err error, want map[string]string) {
 	if err != nil {
 		t.Fatalf("%v error: %v", name, err)
 	}

@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -105,7 +105,7 @@ func (sg *shardGateway) InitializeConnections(ctx context.Context) error {
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) Execute(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (sg *shardGateway) Execute(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).Execute(ctx, query, bindVars, transactionID)
 }
 
@@ -115,7 +115,7 @@ func (sg *shardGateway) ExecuteBatch(ctx context.Context, keyspace string, shard
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).StreamExecute(ctx, query, bindVars, transactionID)
 }
 

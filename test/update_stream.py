@@ -216,8 +216,8 @@ class TestUpdateStream(unittest.TestCase):
     if v['UpdateStreamState'] != 'Enabled':
       self.fail("Update stream service should be 'Enabled' but is '%s'" %
                 v['UpdateStreamState'])
-    self.assertIn('DML', v['UpdateStreamEvents'])
-    self.assertIn('POS', v['UpdateStreamEvents'])
+    self.assertIn('SE_DML', v['UpdateStreamEvents'])
+    self.assertIn('SE_POS', v['UpdateStreamEvents'])
 
     logging.debug('Testing enable -> disable switch starting @ %s',
                   start_position)
@@ -263,6 +263,8 @@ class TestUpdateStream(unittest.TestCase):
     from master and replica for the same writes. Also tests
     transactions are retrieved properly.
     """
+    global master_start_position
+
     timeout = 30
     while True:
       master_start_position = _get_master_current_position()

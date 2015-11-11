@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -26,7 +27,7 @@ type ExpectedExecuteFetch struct {
 	Query       string
 	MaxRows     int
 	WantFields  bool
-	QueryResult *mproto.QueryResult
+	QueryResult *sqltypes.Result
 	Error       error
 }
 
@@ -45,13 +46,13 @@ func NewFakePoolConnectionQuery(t *testing.T, query string) *FakePoolConnection 
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
 			ExpectedExecuteFetch{
 				Query:       query,
-				QueryResult: &mproto.QueryResult{},
+				QueryResult: &sqltypes.Result{},
 			},
 		},
 	}
 }
 
-func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if fpc.ExpectedExecuteFetchIndex >= len(fpc.ExpectedExecuteFetch) {
 		fpc.t.Errorf("got unexpected out of bound fetch: %v >= %v", fpc.ExpectedExecuteFetchIndex, len(fpc.ExpectedExecuteFetch))
 		return nil, fmt.Errorf("unexpected out of bound fetch")
@@ -68,7 +69,7 @@ func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfield
 	return fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].QueryResult, nil
 }
 
-func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	return nil
 }
 
@@ -126,15 +127,15 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		defer ft.StopActionLoop(t)
 	}
 
-	schema := &myproto.SchemaDefinition{
+	schema := &tabletmanagerdatapb.SchemaDefinition{
 		DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
-		TableDefinitions: []*myproto.TableDefinition{
-			&myproto.TableDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
 				Name:   "table1",
 				Schema: "CREATE TABLE `resharding1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
 				Type:   myproto.TableBaseTable,
 			},
-			&myproto.TableDefinition{
+			{
 				Name:   "view1",
 				Schema: "CREATE TABLE `view1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
 				Type:   myproto.TableView,
@@ -159,10 +160,10 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		"  PRIMARY KEY (`id`),\n" +
 		"  KEY `by_msg` (`msg`)\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8"
-	db.AddQuery("USE vt_ks", &mproto.QueryResult{})
-	db.AddQuery(createDb, &mproto.QueryResult{})
-	db.AddQuery(createTable, &mproto.QueryResult{})
-	db.AddQuery(createTableView, &mproto.QueryResult{})
+	db.AddQuery("USE vt_ks", &sqltypes.Result{})
+	db.AddQuery(createDb, &sqltypes.Result{})
+	db.AddQuery(createTable, &sqltypes.Result{})
+	db.AddQuery(createTableView, &sqltypes.Result{})
 
 	source := topoproto.TabletAliasString(sourceRdonly.Tablet.Alias)
 	if useShardAsSource {

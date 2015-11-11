@@ -11,7 +11,6 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -36,7 +35,7 @@ type Client interface {
 
 	// Ask the server to stream binlog updates.
 	// Should return context.Canceled if the context is canceled.
-	ServeUpdateStream(ctx context.Context, position string) (chan *proto.StreamEvent, ErrFunc, error)
+	ServeUpdateStream(ctx context.Context, position string) (chan *pb.StreamEvent, ErrFunc, error)
 
 	// Ask the server to stream updates related to the provided tables.
 	// Should return context.Canceled if the context is canceled.

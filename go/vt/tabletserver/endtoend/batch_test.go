@@ -8,9 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -24,23 +23,19 @@ func TestBatchRead(t *testing.T) {
 		Sql:           "select * from vitess_b where id = :b",
 		BindVariables: map[string]interface{}{"b": 2},
 	}}
-	qr1 := mproto.QueryResult{
-		Fields: []mproto.Field{{
-			Name:  "eid",
-			Type:  mysql.TypeLonglong,
-			Flags: 0,
+	qr1 := sqltypes.Result{
+		Fields: []*query.Field{{
+			Name: "eid",
+			Type: sqltypes.Int64,
 		}, {
-			Name:  "id",
-			Type:  mysql.TypeLong,
-			Flags: 0,
+			Name: "id",
+			Type: sqltypes.Int32,
 		}, {
-			Name:  "name",
-			Type:  mysql.TypeVarString,
-			Flags: 0,
+			Name: "name",
+			Type: sqltypes.VarChar,
 		}, {
-			Name:  "foo",
-			Type:  mysql.TypeVarString,
-			Flags: mysql.FlagBinary,
+			Name: "foo",
+			Type: sqltypes.VarBinary,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -52,15 +47,13 @@ func TestBatchRead(t *testing.T) {
 			},
 		},
 	}
-	qr2 := mproto.QueryResult{
-		Fields: []mproto.Field{{
-			Name:  "eid",
-			Type:  mysql.TypeLonglong,
-			Flags: 0,
+	qr2 := sqltypes.Result{
+		Fields: []*query.Field{{
+			Name: "eid",
+			Type: sqltypes.Int64,
 		}, {
-			Name:  "id",
-			Type:  mysql.TypeLong,
-			Flags: 0,
+			Name: "id",
+			Type: sqltypes.Int32,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -71,7 +64,7 @@ func TestBatchRead(t *testing.T) {
 		},
 	}
 	want := &proto.QueryResultList{
-		List: []mproto.QueryResult{qr1, qr2},
+		List: []sqltypes.Result{qr1, qr2},
 	}
 
 	qrl, err := client.ExecuteBatch(queries, false)

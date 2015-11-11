@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -25,7 +24,8 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -35,7 +35,7 @@ type verticalTabletServer struct {
 	t *testing.T
 }
 
-func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
@@ -54,15 +54,15 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *pb.Ta
 	sq.t.Logf("verticalTabletServer: got query: %v with min %v max %v", *query, min, max)
 
 	// Send the headers
-	if err := sendReply(&mproto.QueryResult{
-		Fields: []mproto.Field{
-			mproto.Field{
+	if err := sendReply(&sqltypes.Result{
+		Fields: []*pbq.Field{
+			&pbq.Field{
 				Name: "id",
-				Type: mproto.VT_LONGLONG,
+				Type: sqltypes.Int64,
 			},
-			mproto.Field{
+			&pbq.Field{
 				Name: "msg",
-				Type: mproto.VT_VAR_STRING,
+				Type: sqltypes.VarChar,
 			},
 		},
 	}); err != nil {
@@ -71,7 +71,7 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *pb.Ta
 
 	// Send the values
 	for i := min; i < max; i++ {
-		if err := sendReply(&mproto.QueryResult{
+		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
@@ -100,14 +100,14 @@ func NewVerticalFakePoolConnectionQuery(t *testing.T, query string, err error) *
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
 			ExpectedExecuteFetch{
 				Query:       query,
-				QueryResult: &mproto.QueryResult{},
+				QueryResult: &sqltypes.Result{},
 				Error:       err,
 			},
 		},
 	}
 }
 
-func (fpc *VerticalFakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (fpc *VerticalFakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if fpc.ExpectedExecuteFetchIndex >= len(fpc.ExpectedExecuteFetch) {
 		fpc.t.Errorf("got unexpected out of bound fetch: %v >= %v", fpc.ExpectedExecuteFetchIndex, len(fpc.ExpectedExecuteFetch))
 		return nil, fmt.Errorf("unexpected out of bound fetch")
@@ -134,7 +134,7 @@ func (fpc *VerticalFakePoolConnection) ExecuteFetch(query string, maxrows int, w
 	return fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].QueryResult, nil
 }
 
-func (fpc *VerticalFakePoolConnection) ExecuteStreamFetch(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (fpc *VerticalFakePoolConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	return nil
 }
 
@@ -165,15 +165,15 @@ func VerticalSourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection
 			ExpectedExecuteFetch: []ExpectedExecuteFetch{
 				ExpectedExecuteFetch{
 					Query: "SELECT MIN(id), MAX(id) FROM vt_source_ks.moving1",
-					QueryResult: &mproto.QueryResult{
-						Fields: []mproto.Field{
-							mproto.Field{
+					QueryResult: &sqltypes.Result{
+						Fields: []*pbq.Field{
+							&pbq.Field{
 								Name: "min",
-								Type: mproto.VT_LONGLONG,
+								Type: sqltypes.Int64,
 							},
-							mproto.Field{
+							&pbq.Field{
 								Name: "max",
-								Type: mproto.VT_LONGLONG,
+								Type: sqltypes.Int64,
 							},
 						},
 						Rows: [][]sqltypes.Value{
@@ -292,10 +292,10 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	wrk := gwrk.(*VerticalSplitCloneWorker)
 
 	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
-		sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
+		sourceRdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
-			TableDefinitions: []*myproto.TableDefinition{
-				&myproto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:              "moving1",
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
@@ -303,7 +303,7 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 					// This informs how many rows we can pack into a single insert
 					DataLength: 2048,
 				},
-				&myproto.TableDefinition{
+				{
 					Name: "view1",
 					Type: myproto.TableView,
 				},

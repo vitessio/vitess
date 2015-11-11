@@ -18,8 +18,8 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -261,7 +261,7 @@ func (blp *BinlogPlayer) processTransaction(tx *pb.BinlogTransaction) (ok bool, 
 	return true, nil
 }
 
-func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
+func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	queryStartTime := time.Now()
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0, false)
 	blp.blplStats.Timings.Record(BlplQuery, queryStartTime)
@@ -404,11 +404,11 @@ func CreateBlpCheckpoint() []string {
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
 // the _vt.blp_checkpoint table.
-func PopulateBlpCheckpoint(index uint32, pos myproto.ReplicationPosition, timeUpdated int64, flags string) string {
+func PopulateBlpCheckpoint(index uint32, position string, timeUpdated int64, flags string) string {
 	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint "+
 		"(source_shard_uid, pos, time_updated, transaction_timestamp, flags) "+
 		"VALUES (%v, '%v', %v, 0, '%v')",
-		index, myproto.EncodeReplicationPosition(pos), timeUpdated, flags)
+		index, position, timeUpdated, flags)
 }
 
 // UpdateBlpCheckpoint returns a statement to update a value in the

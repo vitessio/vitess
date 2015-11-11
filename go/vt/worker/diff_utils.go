@@ -16,18 +16,19 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
+	"github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // QueryResultReader will stream rows towards the output channel.
 type QueryResultReader struct {
-	Output      <-chan *mproto.QueryResult
-	Fields      []mproto.Field
+	Output      <-chan *sqltypes.Result
+	Fields      []*query.Field
 	conn        tabletconn.TabletConn
 	clientErrFn func() error
 }
@@ -75,7 +76,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 // orderedColumns returns the list of columns:
 // - first the primary key columns in the right order
 // - then the rest of the columns
-func orderedColumns(tableDefinition *myproto.TableDefinition) []string {
+func orderedColumns(tableDefinition *tabletmanagerdatapb.TableDefinition) []string {
 	result := make([]string, 0, len(tableDefinition.Columns))
 	result = append(result, tableDefinition.PrimaryKeyColumns...)
 	for _, column := range tableDefinition.Columns {
@@ -103,7 +104,7 @@ func uint64FromKeyspaceID(keyspaceID []byte) string {
 // TableScan returns a QueryResultReader that gets all the rows from a
 // table, ordered by Primary Key. The returned columns are ordered
 // with the Primary Key columns in front.
-func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *myproto.TableDefinition) (*QueryResultReader, error) {
+func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition) (*QueryResultReader, error) {
 	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
@@ -113,7 +114,7 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange *pb.KeyRange, keyspaceIDType pb.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *pb.KeyRange, keyspaceIDType pb.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
 	if keyRange != nil {
 		switch keyspaceIDType {
@@ -169,7 +170,7 @@ func (qrr *QueryResultReader) Close() {
 // RowReader returns individual rows from a QueryResultReader
 type RowReader struct {
 	queryResultReader *QueryResultReader
-	currentResult     *mproto.QueryResult
+	currentResult     *sqltypes.Result
 	currentIndex      int
 }
 
@@ -202,7 +203,7 @@ func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 }
 
 // Fields returns the types for the rows
-func (rr *RowReader) Fields() []mproto.Field {
+func (rr *RowReader) Fields() []*query.Field {
 	return rr.queryResultReader.Fields
 }
 
@@ -269,7 +270,7 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // 0 if left and right are equal
 // +1 if left is bigger than right
 // TODO: This can panic if types for left and right don't match.
-func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
+func CompareRows(fields []*query.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
 		lv, err := mproto.Convert(fields[i], left[i])
 		if err != nil {
@@ -321,7 +322,7 @@ type RowDiffer struct {
 }
 
 // NewRowDiffer returns a new RowDiffer
-func NewRowDiffer(left, right *QueryResultReader, tableDefinition *myproto.TableDefinition) (*RowDiffer, error) {
+func NewRowDiffer(left, right *QueryResultReader, tableDefinition *tabletmanagerdatapb.TableDefinition) (*RowDiffer, error) {
 	if len(left.Fields) != len(right.Fields) {
 		return nil, fmt.Errorf("Cannot diff inputs with different types")
 	}

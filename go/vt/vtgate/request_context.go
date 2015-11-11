@@ -5,7 +5,7 @@
 package vtgate
 
 import (
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
@@ -35,6 +35,6 @@ func newRequestContext(ctx context.Context, sql string, bindVariables map[string
 	}
 }
 
-func (vc *requestContext) Execute(boundQuery *tproto.BoundQuery) (*mproto.QueryResult, error) {
+func (vc *requestContext) Execute(boundQuery *tproto.BoundQuery) (*sqltypes.Result, error) {
 	return vc.router.Execute(vc.ctx, boundQuery.Sql, boundQuery.BindVariables, vc.tabletType, vc.session, false)
 }

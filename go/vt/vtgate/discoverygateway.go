@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/discovery"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -66,7 +66,7 @@ func (dg *discoveryGateway) InitializeConnections(ctx context.Context) error {
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (qr *mproto.QueryResult, err error) {
+func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (qr *sqltypes.Result, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		qr, innerErr = conn.Execute2(ctx, query, bindVars, transactionID)
@@ -86,10 +86,10 @@ func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard st
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
 	var usedConn tabletconn.TabletConn
 	var erFunc tabletconn.ErrFunc
-	var results <-chan *mproto.QueryResult
+	var results <-chan *sqltypes.Result
 	err := dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var err error
 		results, erFunc, err = conn.StreamExecute2(ctx, query, bindVars, transactionID)
@@ -281,8 +281,8 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 		}
 		return []*pbt.EndPoint{ep}
 	}
-	// for non-master, use only endpoints from local cell.
-	var epList []*pbt.EndPoint
+	// for non-master, use only endpoints from local cell and filter by replication lag.
+	list := make([]*discovery.EndPointStats, 0, len(epsList))
 	for _, eps := range epsList {
 		if eps.LastError != nil || !eps.Serving {
 			continue
@@ -290,6 +290,11 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 		if dg.localCell != eps.Cell {
 			continue
 		}
+		list = append(list, eps)
+	}
+	list = discovery.FilterByReplicationLag(list)
+	epList := make([]*pbt.EndPoint, 0, len(list))
+	for _, eps := range list {
 		epList = append(epList, eps.EndPoint)
 	}
 	return epList

@@ -9,6 +9,7 @@ import (
 
 	"github.com/youtube/vitess/go/bytes2"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // SessionParams is passed to GetSessionId. The server will
@@ -111,7 +112,7 @@ type ExecuteBatchRequest struct {
 
 // QueryResultList is the return type for ExecuteBatch.
 type QueryResultList struct {
-	List []mproto.QueryResult
+	List []sqltypes.Result
 	Err  *mproto.RPCError
 }
 
@@ -257,7 +258,7 @@ type StreamExecuteRequest struct {
 
 // StreamExecuteResponse is the BSON implementation of the proto3 query.StreamExecuteResponse
 type StreamExecuteResponse struct {
-	Result *mproto.QueryResult
+	Result *sqltypes.Result
 	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
 	// consistent with other BSON structs.
 	Err *mproto.RPCError

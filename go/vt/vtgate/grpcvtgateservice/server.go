@@ -8,7 +8,7 @@ package grpcvtgateservice
 import (
 	"google.golang.org/grpc"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -46,7 +46,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *pb.ExecuteRequest) (res
 	if executeErr != nil {
 		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	response.Result = mproto.QueryResultToProto3(reply.Result)
+	response.Result = sqltypes.ResultToProto3(reply.Result)
 	response.Session = reply.Session
 	return response, nil
 }
@@ -77,7 +77,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsR
 	if executeErr != nil {
 		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	response.Result = mproto.QueryResultToProto3(reply.Result)
+	response.Result = sqltypes.ResultToProto3(reply.Result)
 	response.Session = reply.Session
 	return response, nil
 }
@@ -108,7 +108,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 	if executeErr != nil {
 		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	response.Result = mproto.QueryResultToProto3(reply.Result)
+	response.Result = sqltypes.ResultToProto3(reply.Result)
 	response.Session = reply.Session
 	return response, nil
 }
@@ -139,7 +139,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 	if executeErr != nil {
 		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	response.Result = mproto.QueryResultToProto3(reply.Result)
+	response.Result = sqltypes.ResultToProto3(reply.Result)
 	response.Session = reply.Session
 	return response, nil
 }
@@ -171,7 +171,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 	if executeErr != nil {
 		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	response.Result = mproto.QueryResultToProto3(reply.Result)
+	response.Result = sqltypes.ResultToProto3(reply.Result)
 	response.Session = reply.Session
 	return response, nil
 }
@@ -249,7 +249,7 @@ func (vtg *VTGate) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Vi
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return stream.Send(&pb.StreamExecuteResponse{
-				Result: mproto.QueryResultToProto3(value.Result),
+				Result: sqltypes.ResultToProto3(value.Result),
 			})
 		})
 	return vterrors.ToGRPCError(vtgErr)
@@ -273,7 +273,7 @@ func (vtg *VTGate) StreamExecuteShards(request *pb.StreamExecuteShardsRequest, s
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return stream.Send(&pb.StreamExecuteShardsResponse{
-				Result: mproto.QueryResultToProto3(value.Result),
+				Result: sqltypes.ResultToProto3(value.Result),
 			})
 		})
 	return vterrors.ToGRPCError(vtgErr)
@@ -298,7 +298,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *pb.StreamExecuteKeyspaceIds
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{
-				Result: mproto.QueryResultToProto3(value.Result),
+				Result: sqltypes.ResultToProto3(value.Result),
 			})
 		})
 	return vterrors.ToGRPCError(vtgErr)
@@ -323,7 +323,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *pb.StreamExecuteKeyRangesRequ
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return stream.Send(&pb.StreamExecuteKeyRangesResponse{
-				Result: mproto.QueryResultToProto3(value.Result),
+				Result: sqltypes.ResultToProto3(value.Result),
 			})
 		})
 	return vterrors.ToGRPCError(vtgErr)

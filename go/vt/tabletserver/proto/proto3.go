@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strconv"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
@@ -308,22 +307,22 @@ func SQLToNative(typ pb.Type, val []byte) (interface{}, error) {
 // Proto3ToQueryResultList converts a proto3 QueryResult to an internal data structure.
 func Proto3ToQueryResultList(results []*pb.QueryResult) *QueryResultList {
 	result := &QueryResultList{
-		List: make([]mproto.QueryResult, len(results)),
+		List: make([]sqltypes.Result, len(results)),
 	}
 	for i, qr := range results {
-		result.List[i] = *mproto.Proto3ToQueryResult(qr)
+		result.List[i] = *sqltypes.Proto3ToResult(qr)
 	}
 	return result
 }
 
 // QueryResultListToProto3 changes the internal array of QueryResult to the proto3 version
-func QueryResultListToProto3(results []mproto.QueryResult) []*pb.QueryResult {
+func QueryResultListToProto3(results []sqltypes.Result) []*pb.QueryResult {
 	if len(results) == 0 {
 		return nil
 	}
 	result := make([]*pb.QueryResult, len(results))
 	for i := range results {
-		result[i] = mproto.QueryResultToProto3(&results[i])
+		result[i] = sqltypes.ResultToProto3(&results[i])
 	}
 	return result
 }

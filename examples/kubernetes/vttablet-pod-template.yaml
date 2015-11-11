@@ -114,7 +114,7 @@ spec:
           -db-config-filtered-uname vt_filtered
           -db-config-filtered-dbname vt_{{keyspace}}
           -db-config-filtered-charset utf8
-          -bootstrap_archive mysql-db-dir_5.6.24.tbz" vitess
+          -init_db_sql_file $VTROOT/config/init_db.sql" vitess
       env:
         - name: EXTRA_MY_CNF
           value: /vt/config/mycnf/master_mysql56.cnf

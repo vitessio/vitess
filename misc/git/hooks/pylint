@@ -16,20 +16,7 @@ function msg() {
 }
 
 PYLINT=/usr/bin/gpylint
-
-function call_pylint {
-  local file=$1
-  if [[ "$file" =~ ^test/ ]] ; then 
-    mode=style,test
-  else
-    mode=style
-  fi
-  $PYLINT --mode $mode \
-    --disable g-bad-file-header,g-bad-import-order,g-unknown-interpreter \
-    --module-header-template '' \
-    --msg-template '{path}:{line}:{msg_id}{obj_prefix}{obj}: {msg}{sym_separator}[{symbol}]' $file
-}
-
+pylint_script=$VTTOP/tools/pylint.sh
 
 # This script does not handle file names that contain spaces.
 pyfiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.*\.py$' | grep -v '^py/vtproto/')
@@ -51,7 +38,7 @@ errors=
 pyfiles_with_warnings=()
 for pyfile in $pyfiles
 do
-  errcount=$(call_pylint $pyfile | egrep '^[^:]+:[^:]+:[CWE][0-9]{4}:' | wc -l)
+  errcount=$($pylint_script $pyfile | egrep '^[^:]+:[^:]+:[CWE][0-9]{4}:' | wc -l)
   if [ "$errcount" -gt "0" ]; then
     if [ -z "$errors" ] ; then
       msg "$PYLINT found one or more issues:"
@@ -73,8 +60,8 @@ if [[ $? -eq 0 ]]; then
   do
     echo
     msg "Press enter to show the warnings for $pyfile:"
-    read
-    call_pylint $pyfile
+    read -p "  \$VTTOP/tools/pylint.sh $pyfile"
+    $pylint_script $pyfile
   done
   read -r -p \
     'Type "ack" to ignore issues and commit anyway. Press enter to cancel: '
@@ -88,7 +75,7 @@ else
   # non-interactive shell (e.g. called from Eclipse). Just display the errors.
   for pyfile in "${pyfiles_with_warnings[@]}"
   do
-    call_pylint $pyfile
+    $pylint_script $pyfile
   done
 fi
 exit 1

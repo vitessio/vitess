@@ -32,13 +32,6 @@ class MysqlFlavor(object):
     """Returns the path to an extra my_cnf file, or None."""
     return None
 
-  def bootstrap_archive(self):
-    """Returns the name of the bootstrap archive for mysqlctl.
-
-    Name is relative to vitess/data/bootstrap/.
-    """
-    return "mysql-db-dir.tbz"
-
   def master_position(self, tablet):
     """Returns the position from SHOW MASTER STATUS as a string."""
     raise NotImplementedError()
@@ -90,9 +83,6 @@ class MariaDB(MysqlFlavor):
   def extra_my_cnf(self):
     return environment.vttop + "/config/mycnf/master_mariadb.cnf"
 
-  def bootstrap_archive(self):
-    return "mysql-db-dir_10.0.13-MariaDB.tbz"
-
   def master_position(self, tablet):
     gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_binlog_pos")[0][0]
     return "MariaDB/" + gtid
@@ -122,9 +112,6 @@ class MariaDB(MysqlFlavor):
 class MySQL56(MysqlFlavor):
   """Overrides specific to MySQL 5.6"""
 
-  def bootstrap_archive(self):
-    return "mysql-db-dir_5.6.24.tbz"
-
   def master_position(self, tablet):
     gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_executed")[0][0]
     return "MySQL56/" + gtid
@@ -142,7 +129,7 @@ class MySQL56(MysqlFlavor):
   def position_append(self, pos, gtid):
     return "MySQL56/" + subprocess.check_output([
         "mysqlctl", "position", "append", pos, gtid,
-        ]).strip()
+    ]).strip()
 
   def extra_my_cnf(self):
     return environment.vttop + "/config/mycnf/master_mysql56.cnf"

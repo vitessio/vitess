@@ -22,12 +22,8 @@ mkdir -p $lite/$vttop/web
 cp -R base/$vttop/go/cmd/vtctld/templates $lite/$vttop/go/cmd/vtctld/
 cp -R base/$vttop/web/vtctld $lite/$vttop/web/
 
-mkdir -p $lite/$vttop/data/bootstrap
-cp base/$vttop/data/bootstrap/mysql-db-dir_* $lite/$vttop/data/bootstrap/
-ln -s /$vttop/data $lite/vt/data
-
 mkdir -p $lite/$vttop/config
-cp -R base/$vttop/config/mycnf $lite/$vttop/config/
+cp -R base/$vttop/config/* $lite/$vttop/config/
 ln -s /$vttop/config $lite/vt/config
 
 sudo rm -rf base

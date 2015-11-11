@@ -15,11 +15,10 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -58,12 +57,11 @@ func TestBinary(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := mproto.QueryResult{
-		Fields: []mproto.Field{
+	want := sqltypes.Result{
+		Fields: []*pbq.Field{
 			{
-				Name:  "binval",
-				Type:  mysql.TypeVarString,
-				Flags: mysql.FlagBinary,
+				Name: "binval",
+				Type: sqltypes.VarBinary,
 			},
 		},
 		RowsAffected: 1,
@@ -290,11 +288,10 @@ func TestBindInSelect(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := &mproto.QueryResult{
-		Fields: []mproto.Field{{
-			Name:  "1",
-			Type:  mysql.TypeLonglong,
-			Flags: mysql.FlagBinary,
+	want := &sqltypes.Result{
+		Fields: []*pbq.Field{{
+			Name: "1",
+			Type: sqltypes.Int64,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -316,11 +313,10 @@ func TestBindInSelect(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want = &mproto.QueryResult{
-		Fields: []mproto.Field{{
-			Name:  "abcd",
-			Type:  mysql.TypeVarString,
-			Flags: 0,
+	want = &sqltypes.Result{
+		Fields: []*pbq.Field{{
+			Name: "abcd",
+			Type: sqltypes.VarChar,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -342,11 +338,10 @@ func TestBindInSelect(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want = &mproto.QueryResult{
-		Fields: []mproto.Field{{
-			Name:  "",
-			Type:  mysql.TypeVarString,
-			Flags: 0,
+	want = &sqltypes.Result{
+		Fields: []*pbq.Field{{
+			Name: "",
+			Type: sqltypes.VarChar,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -378,7 +373,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestStreamHealth(t *testing.T) {
-	ch := make(chan *pb.StreamHealthResponse, 10)
+	ch := make(chan *pbq.StreamHealthResponse, 10)
 	id, _ := framework.Server.StreamHealthRegister(ch)
 	defer framework.Server.StreamHealthUnregister(id)
 	framework.Server.BroadcastHealth(0, nil)

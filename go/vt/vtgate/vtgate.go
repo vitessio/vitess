@@ -16,7 +16,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
@@ -441,7 +441,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 		sql,
 		bindVariables,
 		tabletType,
-		func(mreply *mproto.QueryResult) error {
+		func(mreply *sqltypes.Result) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
@@ -488,7 +488,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 		keyspace,
 		keyspaceIds,
 		tabletType,
-		func(mreply *mproto.QueryResult) error {
+		func(mreply *sqltypes.Result) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
@@ -537,7 +537,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindV
 		keyspace,
 		keyRanges,
 		tabletType,
-		func(mreply *mproto.QueryResult) error {
+		func(mreply *sqltypes.Result) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
@@ -583,7 +583,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 		func(keyspace string) (string, []string, error) {
 			return keyspace, shards, nil
 		},
-		func(mreply *mproto.QueryResult) error {
+		func(mreply *sqltypes.Result) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))

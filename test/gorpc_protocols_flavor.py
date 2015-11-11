@@ -24,7 +24,8 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
     return 'grpc'
 
   def tablet_manager_protocol(self):
-    return 'bson'
+    # we do not support bson rpc for tablet manager any more.
+    return 'grpc'
 
   def tabletconn_protocol(self):
     # GoRPC tabletconn doesn't work for the vtgate->vttablet interface,
@@ -39,17 +40,17 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
     return 'gorpc'
 
   def rpc_timeout_message(self):
-    return 'timeout waiting for'
+    return 'context deadline exceeded'
 
   def service_map(self):
     return [
         'bsonrpc-vt-queryservice',
-        'bsonrpc-vt-tabletmanager',
         'bsonrpc-vt-updatestream',
         'bsonrpc-vt-vtctl',
         'bsonrpc-vt-vtgateservice',
         'grpc-vtworker',
         'grpc-queryservice',
+        'grpc-tabletmanager',
         ]
 
   def vttest_protocol(self):

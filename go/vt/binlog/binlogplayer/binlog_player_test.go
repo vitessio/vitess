@@ -11,12 +11,11 @@ import (
 )
 
 func TestPopulateBlpCheckpoint(t *testing.T) {
-	gtid := myproto.MustParseGTID("MariaDB", "0-1-1083")
 	want := "INSERT INTO _vt.blp_checkpoint " +
 		"(source_shard_uid, pos, time_updated, transaction_timestamp, flags) " +
 		"VALUES (18372, 'MariaDB/0-1-1083', 481823, 0, 'myflags')"
 
-	got := PopulateBlpCheckpoint(18372, myproto.ReplicationPosition{GTIDSet: gtid.GTIDSet()}, 481823, "myflags")
+	got := PopulateBlpCheckpoint(18372, "MariaDB/0-1-1083", 481823, "myflags")
 	if got != want {
 		t.Errorf("PopulateBlpCheckpoint() = %#v, want %#v", got, want)
 	}

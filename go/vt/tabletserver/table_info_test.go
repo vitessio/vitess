@@ -11,10 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -102,14 +101,14 @@ func TestTableInfoWithoutRowCacheViaTableType(t *testing.T) {
 func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 	fakecacheservice.Register()
 	db := fakesqldb.Register()
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{})
-	db.AddQuery("select * from `test_table` where 1 != 1", &mproto.QueryResult{
-		Fields: []mproto.Field{{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{})
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
+		Fields: []*query.Field{{
 			Name: "pk",
-			Type: mysql.TypeLong,
+			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQuery("describe `test_table`", &mproto.QueryResult{
+	db.AddQuery("describe `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
@@ -138,7 +137,7 @@ func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 	fakecacheservice.Register()
 	db := fakesqldb.Register()
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
@@ -152,13 +151,13 @@ func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 			},
 		},
 	})
-	db.AddQuery("select * from `test_table` where 1 != 1", &mproto.QueryResult{
-		Fields: []mproto.Field{{
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
+		Fields: []*query.Field{{
 			Name: "pk",
-			Type: mysql.TypeNewDecimal,
+			Type: sqltypes.Decimal,
 		}},
 	})
-	db.AddQuery("describe `test_table`", &mproto.QueryResult{
+	db.AddQuery("describe `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
@@ -215,7 +214,7 @@ func TestTableInfoSetPKColumn(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
@@ -254,7 +253,7 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
@@ -320,21 +319,21 @@ func newTestTableInfoCachePool() *CachePool {
 	)
 }
 
-func getTestTableInfoQueries() map[string]*mproto.QueryResult {
-	return map[string]*mproto.QueryResult{
-		"select * from `test_table` where 1 != 1": &mproto.QueryResult{
-			Fields: []mproto.Field{{
+func getTestTableInfoQueries() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
+		"select * from `test_table` where 1 != 1": &sqltypes.Result{
+			Fields: []*query.Field{{
 				Name: "pk",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}, {
 				Name: "name",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}, {
 				Name: "addr",
-				Type: mysql.TypeLong,
+				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table`": &mproto.QueryResult{
+		"describe `test_table`": &sqltypes.Result{
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -363,7 +362,7 @@ func getTestTableInfoQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"show index from `test_table`": &mproto.QueryResult{
+		"show index from `test_table`": &sqltypes.Result{
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{

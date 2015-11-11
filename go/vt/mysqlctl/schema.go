@@ -11,14 +11,16 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")
 
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
-func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
-	sd := &proto.SchemaDefinition{}
+func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	sd := &tabletmanagerdatapb.SchemaDefinition{}
 
 	// get the database creation command
 	qr, fetchErr := mysqld.FetchSuperQuery("SHOW CREATE DATABASE IF NOT EXISTS " + dbName)
@@ -43,7 +45,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		return sd, nil
 	}
 
-	sd.TableDefinitions = make([]*proto.TableDefinition, 0, len(qr.Rows))
+	sd.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		tableName := row[0].String()
 		tableType := row[1].String()
@@ -86,7 +88,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 			norm = strings.Replace(norm, "`"+dbName+"`", "`{{.DatabaseName}}`", -1)
 		}
 
-		td := &proto.TableDefinition{}
+		td := &tabletmanagerdatapb.TableDefinition{}
 		td.Name = tableName
 		td.Schema = norm
 
@@ -104,11 +106,11 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		sd.TableDefinitions = append(sd.TableDefinitions, td)
 	}
 
-	sd, err = sd.FilterTables(tables, excludeTables, includeViews)
+	sd, err = proto.FilterTables(sd, tables, excludeTables, includeViews)
 	if err != nil {
 		return nil, err
 	}
-	sd.GenerateSchemaVersion()
+	proto.GenerateSchemaVersion(sd)
 	return sd, nil
 }
 
@@ -216,7 +218,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 			sql += td.Schema + ";\n"
 		}
 	}
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 
@@ -224,7 +226,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	sql = "SET sql_log_bin = 0;\n"
 	sql += "USE _vt_preflight;\n"
 	sql += change
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 
@@ -237,7 +239,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	// and clean up the extra database
 	sql = "SET sql_log_bin = 0;\n"
 	sql += "DROP DATABASE _vt_preflight;\n"
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 
@@ -287,7 +289,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 

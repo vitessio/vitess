@@ -20,11 +20,11 @@ import (
 	"unsafe"
 
 	"github.com/youtube/vitess/go/hack"
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	"github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -214,7 +214,7 @@ func (conn *Connection) IsClosed() bool {
 }
 
 // ExecuteFetch executes the query on the connection
-func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
+func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *sqltypes.Result, err error) {
 	if conn.IsClosed() {
 		return nil, sqldb.NewSQLError(2006, "Connection is closed")
 	}
@@ -224,9 +224,9 @@ func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool)
 	}
 	defer conn.CloseResult()
 
-	qr = &proto.QueryResult{}
+	qr = &sqltypes.Result{}
 	qr.RowsAffected = uint64(conn.c.affected_rows)
-	qr.InsertId = uint64(conn.c.insert_id)
+	qr.InsertID = uint64(conn.c.insert_id)
 	if conn.c.num_fields == 0 {
 		return qr, nil
 	}
@@ -279,7 +279,7 @@ func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 }
 
 // Fields returns the current fields description for the query
-func (conn *Connection) Fields() (fields []proto.Field) {
+func (conn *Connection) Fields() (fields []*query.Field) {
 	nfields := int(conn.c.num_fields)
 	if nfields == 0 {
 		return nil
@@ -289,13 +289,14 @@ func (conn *Connection) Fields() (fields []proto.Field) {
 	for i := 0; i < nfields; i++ {
 		totalLength += uint64(cfields[i].name_length)
 	}
-	fields = make([]proto.Field, nfields)
+	fields = make([]*query.Field, nfields)
+	fvals := make([]query.Field, nfields)
 	for i := 0; i < nfields; i++ {
 		length := cfields[i].name_length
 		fname := (*[maxSize]byte)(unsafe.Pointer(cfields[i].name))[:length]
-		fields[i].Name = string(fname)
-		fields[i].Type = int64(cfields[i]._type)
-		fields[i].Flags = int64(cfields[i].flags) & RelevantFlags
+		fvals[i].Name = string(fname)
+		fvals[i].Type = sqltypes.MySQLToType(int64(cfields[i]._type), int64(cfields[i].flags))
+		fields[i] = &fvals[i]
 	}
 	return fields
 }

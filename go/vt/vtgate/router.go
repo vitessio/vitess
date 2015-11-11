@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"golang.org/x/net/context"
@@ -60,7 +61,7 @@ func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, stat
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool) (*mproto.QueryResult, error) {
+func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if bindVariables == nil {
 		bindVariables = make(map[string]interface{})
 	}
@@ -108,7 +109,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[st
 }
 
 // StreamExecute executes a streaming query.
-func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*mproto.QueryResult) error) error {
+func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if bindVariables == nil {
 		bindVariables = make(map[string]interface{})
 	}
@@ -230,7 +231,7 @@ func (rtr *Router) paramsSelectScatter(vcursor *requestContext, plan *planbuilde
 	return newScatterParams(plan.Rewritten, ks, vcursor.bindVariables, shards), nil
 }
 
-func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Plan) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.bindVariables)
 	if err != nil {
 		return nil, fmt.Errorf("execUpdateEqual: %v", err)
@@ -240,7 +241,7 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Pl
 		return nil, fmt.Errorf("execUpdateEqual: %v", err)
 	}
 	if len(ksid) == 0 {
-		return &mproto.QueryResult{}, nil
+		return &sqltypes.Result{}, nil
 	}
 	vcursor.bindVariables[ksidName] = string(ksid)
 	rewritten := sqlannotation.AddKeyspaceID(plan.Rewritten, ksid)
@@ -255,7 +256,7 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Pl
 		vcursor.notInTransaction)
 }
 
-func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Plan) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.bindVariables)
 	if err != nil {
 		return nil, fmt.Errorf("execDeleteEqual: %v", err)
@@ -265,7 +266,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Pl
 		return nil, fmt.Errorf("execDeleteEqual: %v", err)
 	}
 	if len(ksid) == 0 {
-		return &mproto.QueryResult{}, nil
+		return &sqltypes.Result{}, nil
 	}
 	if plan.Subquery != "" {
 		err = rtr.deleteVindexEntries(vcursor, plan, ks, shard, ksid)
@@ -286,7 +287,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Pl
 		vcursor.notInTransaction)
 }
 
-func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.Plan) (*sqltypes.Result, error) {
 	input := plan.Values.([]interface{})
 	keys, err := rtr.resolveKeys(input, vcursor.bindVariables)
 	if err != nil {
@@ -327,10 +328,10 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 	if generated != 0 {
-		if result.InsertId != 0 {
+		if result.InsertID != 0 {
 			return nil, fmt.Errorf("vindex and db generated a value each for insert")
 		}
-		result.InsertId = uint64(generated)
+		result.InsertID = uint64(generated)
 	}
 	return result, nil
 }

@@ -6,6 +6,7 @@ package proto
 
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -80,9 +81,9 @@ type EntityIdsQuery struct {
 	NotInTransaction  bool
 }
 
-// QueryResult is mproto.QueryResult+Session (for now).
+// QueryResult is sqltypes.Result+Session (for now).
 type QueryResult struct {
-	Result  *mproto.QueryResult
+	Result  *sqltypes.Result
 	Session *pb.Session
 	// Error field is deprecated, as it only returns a string. New users should use the
 	// Err field below, which contains a string and an error code.
@@ -128,9 +129,9 @@ type KeyspaceIdBatchQuery struct {
 	Session       *pb.Session
 }
 
-// QueryResultList is mproto.QueryResultList+Session
+// QueryResultList is sqltypes.ResultList+Session
 type QueryResultList struct {
-	List    []mproto.QueryResult
+	List    []sqltypes.Result
 	Session *pb.Session
 	// Error field is deprecated, as it only returns a string. New users should use the
 	// Err field below, which contains a string and an error code.

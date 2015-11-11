@@ -337,6 +337,7 @@ func (fhc *fakeHealthCheck) addTestEndPoint(cell, host string, port int32, keysp
 	item.eps.Target = &pbq.Target{Keyspace: keyspace, Shard: shard, TabletType: tabletType}
 	item.eps.Serving = serving
 	item.eps.TabletExternallyReparentedTimestamp = reparentTS
+	item.eps.Stats = &pbq.RealtimeStats{}
 	item.eps.LastError = err
 	item.conn = conn
 	return ep

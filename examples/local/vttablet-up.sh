@@ -28,15 +28,18 @@ dbconfig_flags="\
     -db-config-filtered-uname vt_filtered \
     -db-config-filtered-dbname vt_$keyspace \
     -db-config-filtered-charset utf8"
+init_db_sql_file="$VTROOT/config/init_db.sql"
 
 case "$MYSQL_FLAVOR" in
   "MySQL56")
-    bootstrap_archive=mysql-db-dir_5.6.24.tbz
     export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mysql56.cnf
     ;;
   "MariaDB")
-    bootstrap_archive=mysql-db-dir_10.0.13-MariaDB.tbz
     export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mariadb.cnf
+    ;;
+  *)
+    echo "Please set MYSQL_FLAVOR to MySQL56 or MariaDB."
+    exit 1
     ;;
 esac
 
@@ -62,7 +65,7 @@ for uid_index in $uids; do
   printf -v tablet_dir 'vt_%010d' $uid
 
   echo "Starting MySQL for tablet $alias..."
-  action="init -bootstrap_archive $bootstrap_archive"
+  action="init -init_db_sql_file $init_db_sql_file"
   if [ -d $VTDATAROOT/$tablet_dir ]; then
     echo "Resuming from existing vttablet dir:"
     echo "    $VTDATAROOT/$tablet_dir"

@@ -14,7 +14,6 @@ import (
 
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbs "github.com/youtube/vitess/go/vt/proto/binlogservice"
@@ -42,8 +41,8 @@ func (client *client) Close() {
 	client.cc.Close()
 }
 
-func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
-	response := make(chan *proto.StreamEvent, 10)
+func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *pb.StreamEvent, binlogplayer.ErrFunc, error) {
+	response := make(chan *pb.StreamEvent, 10)
 	query := &pb.StreamUpdateRequest{
 		Position: position,
 	}
@@ -63,7 +62,7 @@ func (client *client) ServeUpdateStream(ctx context.Context, position string) (c
 				close(response)
 				return
 			}
-			response <- proto.ProtoToStreamEvent(r.StreamEvent)
+			response <- r.StreamEvent
 		}
 	}()
 	return response, func() error {

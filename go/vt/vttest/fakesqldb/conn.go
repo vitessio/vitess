@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	pbq "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Conn provides a fake implementation of sqldb.Conn.
@@ -24,7 +24,7 @@ type Conn struct {
 	db             *DB
 	isClosed       bool
 	id             int64
-	curQueryResult *proto.QueryResult
+	curQueryResult *sqltypes.Result
 	curQueryRow    int64
 	charset        *pb.Charset
 }
@@ -33,15 +33,15 @@ type Conn struct {
 type DB struct {
 	Name         string
 	isConnFail   bool
-	data         map[string]*proto.QueryResult
+	data         map[string]*sqltypes.Result
 	rejectedData map[string]error
 	queryCalled  map[string]int
 	mu           sync.Mutex
 }
 
 // AddQuery adds a query and its expected result.
-func (db *DB) AddQuery(query string, expectedResult *proto.QueryResult) {
-	result := &proto.QueryResult{}
+func (db *DB) AddQuery(query string, expectedResult *sqltypes.Result) {
+	result := &sqltypes.Result{}
 	*result = *expectedResult
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -51,7 +51,7 @@ func (db *DB) AddQuery(query string, expectedResult *proto.QueryResult) {
 }
 
 // GetQuery gets a query from the fake DB.
-func (db *DB) GetQuery(query string) (*proto.QueryResult, bool) {
+func (db *DB) GetQuery(query string) (*sqltypes.Result, bool) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	key := strings.ToLower(query)
@@ -125,7 +125,7 @@ func NewFakeSQLDBConn(db *DB) *Conn {
 }
 
 // ExecuteFetch executes the query on the connection
-func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if conn.db.IsConnFail() {
 		return nil, newConnError()
 	}
@@ -140,16 +140,16 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 	if !ok {
 		return nil, fmt.Errorf("query: %s is not supported", query)
 	}
-	qr := &proto.QueryResult{}
+	qr := &sqltypes.Result{}
 	qr.RowsAffected = result.RowsAffected
-	qr.InsertId = result.InsertId
+	qr.InsertID = result.InsertID
 
 	if qr.RowsAffected > uint64(maxrows) {
 		return nil, fmt.Errorf("row count exceeded %d", maxrows)
 	}
 
 	if wantfields {
-		qr.Fields = make([]proto.Field, len(result.Fields))
+		qr.Fields = make([]*pbq.Field, len(result.Fields))
 		copy(qr.Fields, result.Fields)
 	}
 
@@ -228,8 +228,8 @@ func (conn *Conn) Shutdown() {
 }
 
 // Fields returns the current fields description for the query
-func (conn *Conn) Fields() []proto.Field {
-	return make([]proto.Field, 0)
+func (conn *Conn) Fields() []*pbq.Field {
+	return make([]*pbq.Field, 0)
 }
 
 // ID returns the connection id.
@@ -275,7 +275,7 @@ func Register() *DB {
 	name := fmt.Sprintf("fake-%d", rand.Int63())
 	db := &DB{
 		Name:         name,
-		data:         make(map[string]*proto.QueryResult),
+		data:         make(map[string]*sqltypes.Result),
 		rejectedData: make(map[string]error),
 		queryCalled:  make(map[string]int),
 	}

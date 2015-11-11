@@ -10,13 +10,15 @@ import (
 	"strings"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // MysqlDaemon is the interface we use for abstracting Mysqld.
@@ -57,7 +59,7 @@ type MysqlDaemon interface {
 	PromoteSlave(map[string]string) (proto.ReplicationPosition, error)
 
 	// Schema related methods
-	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
+	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
 	PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error)
 	ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error)
 
@@ -70,7 +72,7 @@ type MysqlDaemon interface {
 	ExecuteSuperQueryList(queryList []string) error
 
 	// FetchSuperQuery executes one query, returns the result
-	FetchSuperQuery(query string) (*mproto.QueryResult, error)
+	FetchSuperQuery(query string) (*sqltypes.Result, error)
 
 	// NewSlaveConnection returns a SlaveConnection to the database.
 	NewSlaveConnection() (*SlaveConnection, error)
@@ -155,7 +157,7 @@ type FakeMysqlDaemon struct {
 
 	// Schema will be returned by GetSchema. If nil we'll
 	// return an error.
-	Schema *proto.SchemaDefinition
+	Schema *tabletmanagerdatapb.SchemaDefinition
 
 	// PreflightSchemaChangeResult will be returned by PreflightSchemaChange.
 	// If nil we'll return an error.
@@ -181,7 +183,7 @@ type FakeMysqlDaemon struct {
 	ExpectedExecuteSuperQueryCurrent int
 
 	// FetchSuperQueryResults is used by FetchSuperQuery
-	FetchSuperQueryMap map[string]*mproto.QueryResult
+	FetchSuperQueryMap map[string]*sqltypes.Result
 
 	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
 	BinlogPlayerEnabled bool
@@ -344,7 +346,7 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
 }
 
 // FetchSuperQuery returns the results from the map, if any
-func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*mproto.QueryResult, error) {
+func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*sqltypes.Result, error) {
 	if fmd.FetchSuperQueryMap == nil {
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}
@@ -393,11 +395,11 @@ func (fmd *FakeMysqlDaemon) CheckSuperQueryList() error {
 }
 
 // GetSchema is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
+func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fmd.Schema == nil {
 		return nil, fmt.Errorf("no schema defined")
 	}
-	return fmd.Schema.FilterTables(tables, excludeTables, includeViews)
+	return proto.FilterTables(fmd.Schema, tables, excludeTables, includeViews)
 }
 
 // PreflightSchemaChange is part of the MysqlDaemon interface

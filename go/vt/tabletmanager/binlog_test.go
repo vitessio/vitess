@@ -10,10 +10,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -25,7 +23,7 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pbtm "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -80,7 +78,7 @@ func (fbc *fakeBinlogClient) Close() {
 }
 
 // ServeUpdateStream is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) ServeUpdateStream(ctx context.Context, position string) (chan *pb.StreamEvent, binlogplayer.ErrFunc, error) {
 	return nil, nil, fmt.Errorf("Should never be called")
 }
 
@@ -146,7 +144,7 @@ type fakeTabletConn struct {
 }
 
 // Execute is part of the TabletConn interface
-func (ftc *fakeTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (ftc *fakeTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
@@ -156,7 +154,7 @@ func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.Bo
 }
 
 // StreamExecute is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return nil, nil, fmt.Errorf("not implemented in this test")
 }
 
@@ -176,7 +174,7 @@ func (ftc *fakeTabletConn) Rollback(ctx context.Context, transactionID int64) er
 }
 
 // Execute2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (ftc *fakeTabletConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
@@ -201,7 +199,7 @@ func (ftc *fakeTabletConn) Rollback2(ctx context.Context, transactionID int64) e
 }
 
 // StreamExecute2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (ftc *fakeTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return nil, nil, fmt.Errorf("not implemented in this test")
 }
 
@@ -297,10 +295,10 @@ func checkBlpPositionList(t *testing.T, bpm *BinlogPlayerMap, vtClientSyncChanne
 	// ask for BlpPositionList, make sure we got what we expect
 	go func() {
 		vtcm := binlogplayer.NewVtClientMock()
-		vtcm.Result = &mproto.QueryResult{
+		vtcm.Result = &sqltypes.Result{
 			Fields:       nil,
 			RowsAffected: 1,
-			InsertId:     0,
+			InsertID:     0,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("MariaDB/0-1-1235")),
@@ -417,10 +415,10 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	// start position at first. Note this also synchronizes the player,
 	// so we can then check mysqlDaemon.BinlogPlayerEnabled.
 	vtClientMock := binlogplayer.NewVtClientMock()
-	vtClientMock.Result = &mproto.QueryResult{
+	vtClientMock.Result = &sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
-		InsertId:     0,
+		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
 				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
@@ -586,10 +584,10 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	// start position at first. Note this also synchronizes the player,
 	// so we can then check mysqlDaemon.BinlogPlayerEnabled.
 	vtClientMock := binlogplayer.NewVtClientMock()
-	vtClientMock.Result = &mproto.QueryResult{
+	vtClientMock.Result = &sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
-		InsertId:     0,
+		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
 				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
@@ -661,7 +659,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	// now restart the map until we get the right BlpPosition
 	mysqlDaemon.BinlogPlayerEnabled = false
 	ctx1, _ := context.WithTimeout(ctx, 5*time.Second)
-	if err := bpm.RunUntil(ctx1, []*pbtm.BlpPosition{
+	if err := bpm.RunUntil(ctx1, []*tabletmanagerdatapb.BlpPosition{
 		{
 			Uid:      1,
 			Position: "MariaDB/0-1-1235",
@@ -722,22 +720,22 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	// The schema will be used to resolve the table wildcards.
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{
 		MysqlPort: 3306,
-		Schema: &myproto.SchemaDefinition{
+		Schema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
-			TableDefinitions: []*myproto.TableDefinition{
-				&myproto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:              "table1",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              myproto.TableBaseTable,
 				},
-				&myproto.TableDefinition{
+				{
 					Name:              "funtables_one",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              myproto.TableBaseTable,
 				},
-				&myproto.TableDefinition{
+				{
 					Name:              "excluded_table",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
@@ -793,10 +791,10 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	// start position at first. Note this also synchronizes the player,
 	// so we can then check mysqlDaemon.BinlogPlayerEnabled.
 	vtClientMock := binlogplayer.NewVtClientMock()
-	vtClientMock.Result = &mproto.QueryResult{
+	vtClientMock.Result = &sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
-		InsertId:     0,
+		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
 				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),

@@ -7,6 +7,8 @@ import re
 
 from vtproto import topodata_pb2
 
+from vtctl import vtctl_client
+
 import environment
 import tablet
 import utils
@@ -118,10 +120,10 @@ class TestVtctld(unittest.TestCase):
       parts = line.split()
       alias = parts[0]
       line_map[alias] = parts
-    for tablet in tablets:
-      if tablet.tablet_alias not in line_map:
+    for t in tablets:
+      if t.tablet_alias not in line_map:
         self.assertFalse('tablet %s is not in the result: %s' % (
-            tablet.tablet_alias, str(line_map)))
+            t.tablet_alias, str(line_map)))
 
   def test_vtctl(self):
     # standalone RPC client to vtctld
@@ -130,9 +132,9 @@ class TestVtctld(unittest.TestCase):
     self._check_all_tablets(out)
 
     # vtctl querying the topology directly
-    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
-                               mode=utils.VTCTL_VTCTL,
-                               trap_output=True, auto_log=True)
+    out, _ = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                             mode=utils.VTCTL_VTCTL,
+                             trap_output=True, auto_log=True)
     self._check_all_tablets(out)
 
     # python RPC client to vtctld
@@ -228,6 +230,16 @@ class TestVtctld(unittest.TestCase):
     self.assertIn('Alias: <a href="http://localhost:', shard_0_replica_status)
     self.assertIn('</html>', shard_0_replica_status)
 
+  def test_interrupt_vtctl_command(self):
+    """An interrupted streaming vtctl command should work."""
+    protocol, endpoint = utils.vtctld.rpc_endpoint(python=True)
+    vtctld_connection = vtctl_client.connect(protocol, endpoint, 30)
+    for i, event in enumerate(
+        vtctld_connection.execute_vtctl_command(['ListAllTablets', 'test_nj'])):
+      logging.debug('got event %d %s', i, event.value)
+      if i == 1:
+        break
+    vtctld_connection.close()
 
 if __name__ == '__main__':
   utils.main()
