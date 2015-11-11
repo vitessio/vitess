@@ -12,7 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -42,8 +42,8 @@ func TestInitMasterShard(t *testing.T) {
 
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
-	master.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	master.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 890,
@@ -176,8 +176,8 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
-	master.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	master.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 890,

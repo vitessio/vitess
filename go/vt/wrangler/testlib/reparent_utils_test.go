@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -44,8 +44,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}
 
 	// master action loop (to initialize host and port)
-	master.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	master.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 892,
@@ -55,8 +55,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// slave loop
-	slave.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	slave.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 890,

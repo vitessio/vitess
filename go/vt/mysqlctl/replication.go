@@ -23,7 +23,7 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 const (
@@ -70,8 +70,8 @@ func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort in
 }
 
 // parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
-func parseSlaveStatus(fields map[string]string) proto.ReplicationStatus {
-	status := proto.ReplicationStatus{
+func parseSlaveStatus(fields map[string]string) replication.ReplicationStatus {
+	status := replication.ReplicationStatus{
 		MasterHost:      fields["Master_Host"],
 		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
 		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
@@ -186,7 +186,7 @@ var (
 )
 
 // WaitMasterPos lets slaves wait to given replication position
-func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
+func (mysqld *Mysqld) WaitMasterPos(targetPos replication.ReplicationPosition, waitTimeout time.Duration) error {
 	flavor, err := mysqld.flavor()
 	if err != nil {
 		return fmt.Errorf("WaitMasterPos needs flavor: %v", err)
@@ -195,16 +195,16 @@ func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTim
 }
 
 // SlaveStatus returns the slave replication statuses
-func (mysqld *Mysqld) SlaveStatus() (proto.ReplicationStatus, error) {
+func (mysqld *Mysqld) SlaveStatus() (replication.ReplicationStatus, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
-		return proto.ReplicationStatus{}, fmt.Errorf("SlaveStatus needs flavor: %v", err)
+		return replication.ReplicationStatus{}, fmt.Errorf("SlaveStatus needs flavor: %v", err)
 	}
 	return flavor.SlaveStatus(mysqld)
 }
 
 // MasterPosition returns master replication position
-func (mysqld *Mysqld) MasterPosition() (rp proto.ReplicationPosition, err error) {
+func (mysqld *Mysqld) MasterPosition() (rp replication.ReplicationPosition, err error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
 		return rp, fmt.Errorf("MasterPosition needs flavor: %v", err)
@@ -215,7 +215,7 @@ func (mysqld *Mysqld) MasterPosition() (rp proto.ReplicationPosition, err error)
 // SetSlavePositionCommands returns the commands to set the
 // replication position at which the slave will resume
 // when it is later reparented with SetMasterCommands.
-func (mysqld *Mysqld) SetSlavePositionCommands(pos proto.ReplicationPosition) ([]string, error) {
+func (mysqld *Mysqld) SetSlavePositionCommands(pos replication.ReplicationPosition) ([]string, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
 		return nil, fmt.Errorf("SetSlavePositionCommands needs flavor: %v", err)
@@ -292,7 +292,7 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 // WaitBlpPosition will wait for the filtered replication to reach at least
 // the provided position.
 func WaitBlpPosition(mysqld MysqlDaemon, sql string, replicationPosition string, waitTimeout time.Duration) error {
-	position, err := proto.DecodeReplicationPosition(replicationPosition)
+	position, err := replication.DecodeReplicationPosition(replicationPosition)
 	if err != nil {
 		return err
 	}
@@ -309,9 +309,9 @@ func WaitBlpPosition(mysqld MysqlDaemon, sql string, replicationPosition string,
 		if len(qr.Rows) != 1 {
 			return fmt.Errorf("QueryBlpCheckpoint(%v) returned unexpected row count: %v", sql, len(qr.Rows))
 		}
-		var pos proto.ReplicationPosition
+		var pos replication.ReplicationPosition
 		if !qr.Rows[0][0].IsNull() {
-			pos, err = proto.DecodeReplicationPosition(qr.Rows[0][0].String())
+			pos, err = replication.DecodeReplicationPosition(qr.Rows[0][0].String())
 			if err != nil {
 				return err
 			}

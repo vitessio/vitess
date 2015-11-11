@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -38,7 +38,7 @@ type EventStreamer struct {
 }
 
 // NewEventStreamer returns a new EventStreamer on top of a Streamer
-func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos myproto.ReplicationPosition, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos replication.ReplicationPosition, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}

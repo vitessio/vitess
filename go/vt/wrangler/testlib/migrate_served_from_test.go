@@ -10,7 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -67,8 +67,8 @@ func TestMigrateServedFrom(t *testing.T) {
 
 	// sourceMaster will see the refresh, and has to respond to it
 	// also will be asked about its replication position.
-	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 892,
@@ -91,7 +91,7 @@ func TestMigrateServedFrom(t *testing.T) {
 		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
-					sqltypes.MakeString([]byte(myproto.EncodeReplicationPosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
+					sqltypes.MakeString([]byte(replication.EncodeReplicationPosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
 					sqltypes.MakeString([]byte("")),
 				},
 			},

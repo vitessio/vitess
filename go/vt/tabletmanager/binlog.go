@@ -25,7 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -637,7 +637,7 @@ type BinlogPlayerControllerStatus struct {
 	StopPosition string
 
 	// stats and current values
-	LastPosition        myproto.ReplicationPosition
+	LastPosition        replication.ReplicationPosition
 	SecondsBehindMaster int64
 	Counts              map[string]int64
 	Rates               map[string][]float64

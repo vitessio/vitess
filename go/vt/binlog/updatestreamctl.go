@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -205,7 +205,7 @@ func (updateStream *UpdateStreamImpl) IsEnabled() bool {
 
 // ServeUpdateStream is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) ServeUpdateStream(position string, sendReply func(reply *binlogdatapb.StreamEvent) error) (err error) {
-	pos, err := myproto.DecodeReplicationPosition(position)
+	pos, err := replication.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func (updateStream *UpdateStreamImpl) ServeUpdateStream(position string, sendRep
 
 // StreamKeyRange is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) StreamKeyRange(position string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
-	pos, err := myproto.DecodeReplicationPosition(position)
+	pos, err := replication.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(position string, keyspaceID
 
 // StreamTables is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) StreamTables(position string, tables []string, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
-	pos, err := myproto.DecodeReplicationPosition(position)
+	pos, err := replication.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
 	}

@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"golang.org/x/net/context"
 
 	// import mysql to register mysql connection function
@@ -89,30 +89,30 @@ func positionCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 		return fmt.Errorf("Not enough arguments for position operation.")
 	}
 
-	pos1, err := myproto.DecodeReplicationPosition(args[1])
+	pos1, err := replication.DecodeReplicationPosition(args[1])
 	if err != nil {
 		return err
 	}
 
 	switch args[0] {
 	case "equal":
-		pos2, err := myproto.DecodeReplicationPosition(args[2])
+		pos2, err := replication.DecodeReplicationPosition(args[2])
 		if err != nil {
 			return err
 		}
 		fmt.Println(pos1.Equal(pos2))
 	case "at_least":
-		pos2, err := myproto.DecodeReplicationPosition(args[2])
+		pos2, err := replication.DecodeReplicationPosition(args[2])
 		if err != nil {
 			return err
 		}
 		fmt.Println(pos1.AtLeast(pos2))
 	case "append":
-		gtid, err := myproto.DecodeGTID(args[2])
+		gtid, err := replication.DecodeGTID(args[2])
 		if err != nil {
 			return err
 		}
-		fmt.Println(myproto.AppendGTID(pos1, gtid))
+		fmt.Println(replication.AppendGTID(pos1, gtid))
 	}
 
 	return nil

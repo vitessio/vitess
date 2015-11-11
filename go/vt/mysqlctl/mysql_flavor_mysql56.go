@@ -13,7 +13,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
@@ -29,7 +28,7 @@ func (*mysql56) VersionMatch(version string) bool {
 }
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
-func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosition, err error) {
+func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp replication.ReplicationPosition, err error) {
 	qr, err := mysqld.FetchSuperQuery("SELECT @@GLOBAL.gtid_executed")
 	if err != nil {
 		return rp, err
@@ -41,22 +40,22 @@ func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosit
 }
 
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
-func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (proto.ReplicationStatus, error) {
+func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (replication.ReplicationStatus, error) {
 	fields, err := mysqld.fetchSuperQueryMap("SHOW SLAVE STATUS")
 	if err != nil {
-		return proto.ReplicationStatus{}, ErrNotSlave
+		return replication.ReplicationStatus{}, ErrNotSlave
 	}
 	status := parseSlaveStatus(fields)
 
 	status.Position, err = flavor.ParseReplicationPosition(fields["Executed_Gtid_Set"])
 	if err != nil {
-		return proto.ReplicationStatus{}, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", fields["Executed_Gtid_Set"], err)
+		return replication.ReplicationStatus{}, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", fields["Executed_Gtid_Set"], err)
 	}
 	return status, nil
 }
 
 // WaitMasterPos implements MysqlFlavor.WaitMasterPos().
-func (*mysql56) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
+func (*mysql56) WaitMasterPos(mysqld *Mysqld, targetPos replication.ReplicationPosition, waitTimeout time.Duration) error {
 	var query string
 	// A timeout of 0 means wait indefinitely.
 	query = fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s', %v)", targetPos, int(waitTimeout.Seconds()))
@@ -96,7 +95,7 @@ func (*mysql56) PromoteSlaveCommands() []string {
 }
 
 // SetSlavePositionCommands implements MysqlFlavor.
-func (*mysql56) SetSlavePositionCommands(pos proto.ReplicationPosition) ([]string, error) {
+func (*mysql56) SetSlavePositionCommands(pos replication.ReplicationPosition) ([]string, error) {
 	return []string{
 		"RESET MASTER", // We must clear gtid_executed before setting gtid_purged.
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", pos),
@@ -114,20 +113,20 @@ func (*mysql56) SetMasterCommands(params *sqldb.ConnParams, masterHost string, m
 }
 
 // ParseGTID implements MysqlFlavor.ParseGTID().
-func (*mysql56) ParseGTID(s string) (proto.GTID, error) {
-	return proto.ParseGTID(mysql56FlavorID, s)
+func (*mysql56) ParseGTID(s string) (replication.GTID, error) {
+	return replication.ParseGTID(mysql56FlavorID, s)
 }
 
 // ParseReplicationPosition implements MysqlFlavor.ParseReplicationPosition().
-func (*mysql56) ParseReplicationPosition(s string) (proto.ReplicationPosition, error) {
-	return proto.ParseReplicationPosition(mysql56FlavorID, s)
+func (*mysql56) ParseReplicationPosition(s string) (replication.ReplicationPosition, error) {
+	return replication.ParseReplicationPosition(mysql56FlavorID, s)
 }
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.ReplicationPosition) error {
+func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.ReplicationPosition) error {
 	const ComBinlogDumpGTID = 0x1E // COM_BINLOG_DUMP_GTID
 
-	gtidSet, ok := startPos.GTIDSet.(proto.Mysql56GTIDSet)
+	gtidSet, ok := startPos.GTIDSet.(replication.Mysql56GTIDSet)
 	if !ok {
 		return fmt.Errorf("startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
 	}
@@ -188,12 +187,12 @@ func (ev mysql56BinlogEvent) HasGTID(f replication.BinlogFormat) bool {
 //   1         flags
 //   16        SID (server UUID)
 //   8         GNO (sequence number, signed int)
-func (ev mysql56BinlogEvent) GTID(f replication.BinlogFormat) (proto.GTID, error) {
+func (ev mysql56BinlogEvent) GTID(f replication.BinlogFormat) (replication.GTID, error) {
 	data := ev.Bytes()[f.HeaderLength:]
-	var sid proto.SID
+	var sid replication.SID
 	copy(sid[:], data[1:1+16])
 	gno := int64(binary.LittleEndian.Uint64(data[1+16 : 1+16+8]))
-	return proto.Mysql56GTID{Server: sid, Sequence: gno}, nil
+	return replication.Mysql56GTID{Server: sid, Sequence: gno}, nil
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().
@@ -220,7 +219,7 @@ func (ev mysql56BinlogEvent) StripChecksum(f replication.BinlogFormat) (replicat
 // COM_BINLOG_DUMP_GTID command. Only the GTID form is supported.
 //
 // https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
-func makeBinlogDumpGTIDCommand(flags uint16, serverID uint32, gtidSet proto.Mysql56GTIDSet) []byte {
+func makeBinlogDumpGTIDCommand(flags uint16, serverID uint32, gtidSet replication.Mysql56GTIDSet) []byte {
 	sidBlock := gtidSet.SIDBlock()
 
 	var buf bytes.Buffer

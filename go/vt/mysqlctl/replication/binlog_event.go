@@ -9,8 +9,6 @@ package replication
 import (
 	"fmt"
 
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
@@ -65,7 +63,7 @@ type BinlogEvent interface {
 	Format() (BinlogFormat, error)
 	// GTID returns the GTID from the event.
 	// This is only valid if HasGTID() returns true.
-	GTID(BinlogFormat) (myproto.GTID, error)
+	GTID(BinlogFormat) (GTID, error)
 	// IsBeginGTID returns true if this is a GTID_EVENT that also serves as a
 	// BEGIN statement. Otherwise, the GTID_EVENT is just providing the GTID for
 	// the following QUERY_EVENT.

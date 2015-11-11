@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -38,8 +38,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
-	newMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 456,
@@ -51,8 +51,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.PromoteSlaveResult = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 456,
@@ -69,8 +69,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
 	goodSlave1.FakeMysqlDaemon.Replicating = true
-	goodSlave1.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	goodSlave1.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 455,
@@ -89,8 +89,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// good slave 2 is not replicating
 	goodSlave2.FakeMysqlDaemon.ReadOnly = true
 	goodSlave2.FakeMysqlDaemon.Replicating = false
-	goodSlave2.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	goodSlave2.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 454,
@@ -155,8 +155,8 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 
 	// new master
 	newMaster.FakeMysqlDaemon.Replicating = true
-	newMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 456,
@@ -174,8 +174,8 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 
 	// more advanced slave
 	moreAdvancedSlave.FakeMysqlDaemon.Replicating = true
-	moreAdvancedSlave.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	moreAdvancedSlave.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 457,

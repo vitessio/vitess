@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -36,27 +36,27 @@ type RowcacheInvalidator struct {
 	svm sync2.ServiceManager
 
 	posMutex   sync.Mutex
-	pos        myproto.ReplicationPosition
+	pos        replication.ReplicationPosition
 	lagSeconds sync2.AtomicInt64
 }
 
 // AppendGTID updates the current replication position by appending a GTID to
 // the set of transactions that have been processed.
-func (rci *RowcacheInvalidator) AppendGTID(gtid myproto.GTID) {
+func (rci *RowcacheInvalidator) AppendGTID(gtid replication.GTID) {
 	rci.posMutex.Lock()
 	defer rci.posMutex.Unlock()
-	rci.pos = myproto.AppendGTID(rci.pos, gtid)
+	rci.pos = replication.AppendGTID(rci.pos, gtid)
 }
 
 // SetPosition sets the current ReplicationPosition.
-func (rci *RowcacheInvalidator) SetPosition(rp myproto.ReplicationPosition) {
+func (rci *RowcacheInvalidator) SetPosition(rp replication.ReplicationPosition) {
 	rci.posMutex.Lock()
 	defer rci.posMutex.Unlock()
 	rci.pos = rp
 }
 
 // Position returns the current ReplicationPosition.
-func (rci *RowcacheInvalidator) Position() myproto.ReplicationPosition {
+func (rci *RowcacheInvalidator) Position() replication.ReplicationPosition {
 	rci.posMutex.Lock()
 	defer rci.posMutex.Unlock()
 	return rci.pos
@@ -168,7 +168,7 @@ func (rci *RowcacheInvalidator) processEvent(event *pb.StreamEvent) error {
 	case pb.StreamEvent_SE_ERR:
 		rci.handleUnrecognizedEvent(event.Sql)
 	case pb.StreamEvent_SE_POS:
-		gtid, err := myproto.DecodeGTID(event.TransactionId)
+		gtid, err := replication.DecodeGTID(event.TransactionId)
 		if err != nil {
 			return err
 		}

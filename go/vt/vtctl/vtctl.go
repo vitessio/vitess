@@ -93,7 +93,7 @@ import (
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -2139,11 +2139,11 @@ func (rts rTablets) Less(i, j int) bool {
 		return false
 	}
 	// then compare replication positions
-	lpos, err := myproto.DecodeReplicationPosition(l.Position)
+	lpos, err := replication.DecodeReplicationPosition(l.Position)
 	if err != nil {
 		return true
 	}
-	rpos, err := myproto.DecodeReplicationPosition(r.Position)
+	rpos, err := replication.DecodeReplicationPosition(r.Position)
 	if err != nil {
 		return false
 	}

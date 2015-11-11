@@ -15,7 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -563,7 +563,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	if !ok {
 		return fmt.Errorf("couldn't get master elect %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
-	masterElectPos, err := myproto.DecodeReplicationPosition(masterElectStatus.Position)
+	masterElectPos, err := replication.DecodeReplicationPosition(masterElectStatus.Position)
 	if err != nil {
 		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStatus.Position, err)
 	}
@@ -571,7 +571,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		if topoproto.TabletAliasEqual(&alias, masterElectTabletAlias) {
 			continue
 		}
-		pos, err := myproto.DecodeReplicationPosition(status.Position)
+		pos, err := replication.DecodeReplicationPosition(status.Position)
 		if err != nil {
 			return fmt.Errorf("cannot decode slave %v position %v: %v", topoproto.TabletAliasString(&alias), status.Position, err)
 		}

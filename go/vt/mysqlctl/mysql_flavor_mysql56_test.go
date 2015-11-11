@@ -10,7 +10,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
@@ -99,8 +98,8 @@ func TestMysql56GTID(t *testing.T) {
 
 func TestMysql56ParseGTID(t *testing.T) {
 	input := "00010203-0405-0607-0809-0A0B0C0D0E0F:56789"
-	want := proto.Mysql56GTID{
-		Server:   proto.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+	want := replication.Mysql56GTID{
+		Server:   replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 		Sequence: 56789,
 	}
 
@@ -116,11 +115,11 @@ func TestMysql56ParseGTID(t *testing.T) {
 func TestMysql56ParseReplicationPosition(t *testing.T) {
 	input := "00010203-0405-0607-0809-0a0b0c0d0e0f:1-2"
 
-	sid := proto.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	var set proto.GTIDSet = proto.Mysql56GTIDSet{}
-	set = set.AddGTID(proto.Mysql56GTID{Server: sid, Sequence: 1})
-	set = set.AddGTID(proto.Mysql56GTID{Server: sid, Sequence: 2})
-	want := proto.ReplicationPosition{GTIDSet: set}
+	sid := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	var set replication.GTIDSet = replication.Mysql56GTIDSet{}
+	set = set.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 1})
+	set = set.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 2})
+	want := replication.ReplicationPosition{GTIDSet: set}
 
 	got, err := (&mysql56{}).ParseReplicationPosition(input)
 	if err != nil {
@@ -279,7 +278,7 @@ func TestMakeBinlogDumpGTIDCommand(t *testing.T) {
 	}
 
 	pos, _ := (&mysql56{}).ParseReplicationPosition("00010203-0405-0607-0809-0a0b0c0d0e0f:1-2")
-	got := makeBinlogDumpGTIDCommand(0x0000 /* flags */, 0x01020304 /* serverID */, pos.GTIDSet.(proto.Mysql56GTIDSet))
+	got := makeBinlogDumpGTIDCommand(0x0000 /* flags */, 0x01020304 /* serverID */, pos.GTIDSet.(replication.Mysql56GTIDSet))
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("makeBinlogDumpGTIDCommand() = %#v, want %#v", got, want)
 	}

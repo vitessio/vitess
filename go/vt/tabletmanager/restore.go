@@ -10,7 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -72,7 +72,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	return nil
 }
 
-func (agent *ActionAgent) startReplication(ctx context.Context, pos myproto.ReplicationPosition) error {
+func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.ReplicationPosition) error {
 	// Set the position at which to resume from the master.
 	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
 	if err != nil {

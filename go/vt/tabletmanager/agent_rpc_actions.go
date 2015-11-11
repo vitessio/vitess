@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -288,7 +288,7 @@ func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.S
 	if err != nil {
 		return nil, err
 	}
-	return myproto.ReplicationStatusToProto(status), nil
+	return replication.ReplicationStatusToProto(status), nil
 }
 
 // MasterPosition returns the master position
@@ -298,7 +298,7 @@ func (agent *ActionAgent) MasterPosition(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return myproto.EncodeReplicationPosition(pos), nil
+	return replication.EncodeReplicationPosition(pos), nil
 }
 
 // StopSlave will stop the replication. Works both when Vitess manages
@@ -312,7 +312,7 @@ func (agent *ActionAgent) StopSlave(ctx context.Context) error {
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
 func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
-	pos, err := myproto.DecodeReplicationPosition(position)
+	pos, err := replication.DecodeReplicationPosition(position)
 	if err != nil {
 		return "", err
 	}
@@ -326,7 +326,7 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 	if err != nil {
 		return "", err
 	}
-	return myproto.EncodeReplicationPosition(pos), nil
+	return replication.EncodeReplicationPosition(pos), nil
 }
 
 // StartSlave will start the replication. Works both when Vitess manages
@@ -382,7 +382,7 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl []*tabletmanagerd
 	if err != nil {
 		return "", err
 	}
-	return myproto.EncodeReplicationPosition(pos), nil
+	return replication.EncodeReplicationPosition(pos), nil
 }
 
 //
@@ -435,12 +435,12 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	}
 
 	agent.initReplication = true
-	return myproto.EncodeReplicationPosition(pos), nil
+	return replication.EncodeReplicationPosition(pos), nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
 func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
-	pos, err := myproto.DecodeReplicationPosition(position)
+	pos, err := replication.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
 	}
@@ -453,7 +453,7 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
-	pos, err := myproto.DecodeReplicationPosition(position)
+	pos, err := replication.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
 	}
@@ -502,7 +502,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return myproto.EncodeReplicationPosition(pos), nil
+	return replication.EncodeReplicationPosition(pos), nil
 	// There is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will
 	// succeed. It will be less noisy to simply leave the entry
@@ -513,7 +513,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 // replication up to the provided point, and then makes the slave the
 // shard master.
 func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
-	pos, err := myproto.DecodeReplicationPosition(position)
+	pos, err := replication.DecodeReplicationPosition(position)
 	if err != nil {
 		return "", err
 	}
@@ -544,7 +544,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 		return "", err
 	}
 
-	return myproto.EncodeReplicationPosition(pos), agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
+	return replication.EncodeReplicationPosition(pos), agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
@@ -653,7 +653,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 	}
 	if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
 		// no replication is running, just return what we got
-		return myproto.ReplicationStatusToProto(rs), nil
+		return replication.ReplicationStatusToProto(rs), nil
 	}
 	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
 		return nil, fmt.Errorf("stop slave failed: %v", err)
@@ -663,7 +663,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 	if err != nil {
 		return nil, fmt.Errorf("after position failed: %v", err)
 	}
-	return myproto.ReplicationStatusToProto(rs), nil
+	return replication.ReplicationStatusToProto(rs), nil
 }
 
 // PromoteSlave makes the current tablet the master
@@ -683,7 +683,7 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	return myproto.EncodeReplicationPosition(pos), agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
+	return replication.EncodeReplicationPosition(pos), agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
 }
 
 // updateReplicationGraphForPromotedSlave makes sure the newly promoted slave

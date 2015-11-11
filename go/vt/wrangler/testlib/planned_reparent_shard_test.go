@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -36,15 +36,15 @@ func TestPlannedReparentShard(t *testing.T) {
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
-	newMaster.FakeMysqlDaemon.WaitMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.WaitMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   7,
 			Server:   123,
 			Sequence: 990,
 		},
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.PromoteSlaveResult = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   7,
 			Server:   456,
 			Sequence: 991,

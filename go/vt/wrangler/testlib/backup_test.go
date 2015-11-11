@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 	"github.com/youtube/vitess/go/vt/mysqlctl/filebackupstorage"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -75,8 +75,8 @@ func TestBackupRestore(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
-	sourceTablet.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 457,
@@ -114,8 +114,8 @@ func TestBackupRestore(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 457,

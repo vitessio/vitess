@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+package replication
 
 // GTIDSet represents the set of transactions received or applied by a server.
 // In some flavors, a single GTID is enough to specify the set of all

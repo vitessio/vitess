@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -67,7 +66,7 @@ type Streamer struct {
 	dbname          string
 	mysqld          mysqlctl.MysqlDaemon
 	clientCharset   *pb.Charset
-	startPos        myproto.ReplicationPosition
+	startPos        replication.ReplicationPosition
 	sendTransaction sendTransactionFunc
 
 	conn *mysqlctl.SlaveConnection
@@ -80,7 +79,7 @@ type Streamer struct {
 // charset is the default character set on the BinlogPlayer side.
 // startPos is the position to start streaming at.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *pb.Charset, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *pb.Charset, startPos replication.ReplicationPosition, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
@@ -140,10 +139,10 @@ func (bls *Streamer) Stream(ctx *sync2.ServiceContext) (err error) {
 //
 // If the sendTransaction func returns io.EOF, parseEvents returns ErrClientEOF.
 // If the events channel is closed, parseEvents returns ErrServerEOF.
-func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replication.BinlogEvent) (myproto.ReplicationPosition, error) {
+func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replication.BinlogEvent) (replication.ReplicationPosition, error) {
 	var statements []*pb.BinlogTransaction_Statement
 	var format replication.BinlogFormat
-	var gtid myproto.GTID
+	var gtid replication.GTID
 	var pos = bls.startPos
 	var autocommit = true
 	var err error
@@ -164,7 +163,7 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 		trans := &pb.BinlogTransaction{
 			Statements:    statements,
 			Timestamp:     int64(timestamp),
-			TransactionId: myproto.EncodeGTID(gtid),
+			TransactionId: replication.EncodeGTID(gtid),
 		}
 		if err = bls.sendTransaction(trans); err != nil {
 			if err == io.EOF {
@@ -236,7 +235,7 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 			if err != nil {
 				return pos, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 			}
-			pos = myproto.AppendGTID(pos, gtid)
+			pos = replication.AppendGTID(pos, gtid)
 		}
 
 		switch {
