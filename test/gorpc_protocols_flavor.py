@@ -44,7 +44,6 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def service_map(self):
     return [
-        'bsonrpc-vt-queryservice',
         'bsonrpc-vt-updatestream',
         'bsonrpc-vt-vtctl',
         'bsonrpc-vt-vtgateservice',
