@@ -2,10 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package binlogproto contains the definitions exported by the binlog
-// package, which clients can depend on, without depending on the full
-// binlog server code.
-package binlogproto
+package binlog
 
 import (
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"

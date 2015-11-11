@@ -8,7 +8,6 @@ package grpcbinlogstreamer
 
 import (
 	"github.com/youtube/vitess/go/vt/binlog"
-	"github.com/youtube/vitess/go/vt/binlog/binlogproto"
 	"github.com/youtube/vitess/go/vt/servenv"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -17,11 +16,11 @@ import (
 
 // UpdateStream is the gRPC UpdateStream server
 type UpdateStream struct {
-	updateStream binlogproto.UpdateStream
+	updateStream binlog.UpdateStream
 }
 
 // New returns a new go rpc server implementation stub for UpdateStream
-func New(updateStream binlogproto.UpdateStream) *UpdateStream {
+func New(updateStream binlog.UpdateStream) *UpdateStream {
 	return &UpdateStream{updateStream}
 }
 
@@ -58,7 +57,7 @@ func (server *UpdateStream) StreamTables(req *pb.StreamTablesRequest, stream pbs
 // registration mechanism
 
 func init() {
-	binlog.RegisterUpdateStreamServices = append(binlog.RegisterUpdateStreamServices, func(updateStream binlogproto.UpdateStream) {
+	binlog.RegisterUpdateStreamServices = append(binlog.RegisterUpdateStreamServices, func(updateStream binlog.UpdateStream) {
 		if servenv.GRPCCheckServiceMap("updatestream") {
 			pbs.RegisterUpdateStreamServer(servenv.GRPCServer, New(updateStream))
 		}

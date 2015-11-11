@@ -14,7 +14,7 @@ import (
 
 // UpdateStream is the go rpc UpdateStream server
 type UpdateStream struct {
-	updateStream binlogproto.UpdateStream
+	updateStream binlog.UpdateStream
 }
 
 // ServeUpdateStream is part of the gorpc UpdateStream service
@@ -42,14 +42,14 @@ func (server *UpdateStream) StreamTables(req *binlogproto.TablesRequest, sendRep
 }
 
 // New returns a new go rpc server implementation stub for UpdateStream
-func New(updateStream binlogproto.UpdateStream) *UpdateStream {
+func New(updateStream binlog.UpdateStream) *UpdateStream {
 	return &UpdateStream{updateStream}
 }
 
 // registration mechanism
 
 func init() {
-	binlog.RegisterUpdateStreamServices = append(binlog.RegisterUpdateStreamServices, func(updateStream binlogproto.UpdateStream) {
+	binlog.RegisterUpdateStreamServices = append(binlog.RegisterUpdateStreamServices, func(updateStream binlog.UpdateStream) {
 		servenv.Register("updatestream", New(updateStream))
 	})
 }
