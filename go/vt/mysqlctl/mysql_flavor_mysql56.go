@@ -28,7 +28,7 @@ func (*mysql56) VersionMatch(version string) bool {
 }
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
-func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp replication.ReplicationPosition, err error) {
+func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp replication.Position, err error) {
 	qr, err := mysqld.FetchSuperQuery("SELECT @@GLOBAL.gtid_executed")
 	if err != nil {
 		return rp, err
@@ -40,22 +40,22 @@ func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp replication.Replicatio
 }
 
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
-func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (replication.ReplicationStatus, error) {
+func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (replication.Status, error) {
 	fields, err := mysqld.fetchSuperQueryMap("SHOW SLAVE STATUS")
 	if err != nil {
-		return replication.ReplicationStatus{}, ErrNotSlave
+		return replication.Status{}, ErrNotSlave
 	}
 	status := parseSlaveStatus(fields)
 
 	status.Position, err = flavor.ParseReplicationPosition(fields["Executed_Gtid_Set"])
 	if err != nil {
-		return replication.ReplicationStatus{}, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", fields["Executed_Gtid_Set"], err)
+		return replication.Status{}, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", fields["Executed_Gtid_Set"], err)
 	}
 	return status, nil
 }
 
 // WaitMasterPos implements MysqlFlavor.WaitMasterPos().
-func (*mysql56) WaitMasterPos(mysqld *Mysqld, targetPos replication.ReplicationPosition, waitTimeout time.Duration) error {
+func (*mysql56) WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, waitTimeout time.Duration) error {
 	var query string
 	// A timeout of 0 means wait indefinitely.
 	query = fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s', %v)", targetPos, int(waitTimeout.Seconds()))
@@ -95,7 +95,7 @@ func (*mysql56) PromoteSlaveCommands() []string {
 }
 
 // SetSlavePositionCommands implements MysqlFlavor.
-func (*mysql56) SetSlavePositionCommands(pos replication.ReplicationPosition) ([]string, error) {
+func (*mysql56) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
 	return []string{
 		"RESET MASTER", // We must clear gtid_executed before setting gtid_purged.
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", pos),
@@ -118,12 +118,12 @@ func (*mysql56) ParseGTID(s string) (replication.GTID, error) {
 }
 
 // ParseReplicationPosition implements MysqlFlavor.ParseReplicationPosition().
-func (*mysql56) ParseReplicationPosition(s string) (replication.ReplicationPosition, error) {
-	return replication.ParseReplicationPosition(mysql56FlavorID, s)
+func (*mysql56) ParseReplicationPosition(s string) (replication.Position, error) {
+	return replication.ParsePosition(mysql56FlavorID, s)
 }
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.ReplicationPosition) error {
+func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
 	const ComBinlogDumpGTID = 0x1E // COM_BINLOG_DUMP_GTID
 
 	gtidSet, ok := startPos.GTIDSet.(replication.Mysql56GTIDSet)

@@ -317,7 +317,7 @@ func testSplitClone(t *testing.T, strategy string) {
 			},
 		}
 		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = SourceRdonlyFactory(t)
-		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
 			GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 		}
 		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{

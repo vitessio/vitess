@@ -72,7 +72,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	return nil
 }
 
-func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.ReplicationPosition) error {
+func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.Position) error {
 	// Set the position at which to resume from the master.
 	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
 	if err != nil {

@@ -37,27 +37,27 @@ type MysqlDaemon interface {
 	GetMysqlPort() (int32, error)
 
 	// replication related methods
-	SlaveStatus() (replication.ReplicationStatus, error)
+	SlaveStatus() (replication.Status, error)
 
 	// reparenting related methods
 	ResetReplicationCommands() ([]string, error)
-	MasterPosition() (replication.ReplicationPosition, error)
+	MasterPosition() (replication.Position, error)
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
-	SetSlavePositionCommands(pos replication.ReplicationPosition) ([]string, error)
+	SetSlavePositionCommands(pos replication.Position) ([]string, error)
 	SetMasterCommands(masterHost string, masterPort int) ([]string, error)
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	// DemoteMaster waits for all current transactions to finish,
 	// and returns the current replication position. It will not
 	// change the read_only state of the server.
-	DemoteMaster() (replication.ReplicationPosition, error)
+	DemoteMaster() (replication.Position, error)
 
-	WaitMasterPos(replication.ReplicationPosition, time.Duration) error
+	WaitMasterPos(replication.Position, time.Duration) error
 
 	// PromoteSlave makes the slave the new master. It will not change
 	// the read_only state of the server.
-	PromoteSlave(map[string]string) (replication.ReplicationPosition, error)
+	PromoteSlave(map[string]string) (replication.Position, error)
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
@@ -117,7 +117,7 @@ type FakeMysqlDaemon struct {
 
 	// CurrentMasterPosition is returned by MasterPosition
 	// and SlaveStatus
-	CurrentMasterPosition replication.ReplicationPosition
+	CurrentMasterPosition replication.Position
 
 	// CurrentMasterHost is returned by SlaveStatus
 	CurrentMasterHost string
@@ -131,7 +131,7 @@ type FakeMysqlDaemon struct {
 	// SetSlavePositionCommandsPos is matched against the input
 	// of SetSlavePositionCommands. If it doesn't match,
 	// SetSlavePositionCommands will return an error.
-	SetSlavePositionCommandsPos replication.ReplicationPosition
+	SetSlavePositionCommandsPos replication.Position
 
 	// SetSlavePositionCommandsResult is what
 	// SetSlavePositionCommands will return
@@ -147,14 +147,14 @@ type FakeMysqlDaemon struct {
 	SetMasterCommandsResult []string
 
 	// DemoteMasterPosition is returned by DemoteMaster
-	DemoteMasterPosition replication.ReplicationPosition
+	DemoteMasterPosition replication.Position
 
 	// WaitMasterPosition is checked by WaitMasterPos, if the
 	// same it returns nil, if different it returns an error
-	WaitMasterPosition replication.ReplicationPosition
+	WaitMasterPosition replication.Position
 
 	// PromoteSlaveResult is returned by PromoteSlave
-	PromoteSlaveResult replication.ReplicationPosition
+	PromoteSlaveResult replication.Position
 
 	// Schema will be returned by GetSchema. If nil we'll
 	// return an error.
@@ -241,8 +241,8 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 }
 
 // SlaveStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SlaveStatus() (replication.ReplicationStatus, error) {
-	return replication.ReplicationStatus{
+func (fmd *FakeMysqlDaemon) SlaveStatus() (replication.Status, error) {
+	return replication.Status{
 		Position:        fmd.CurrentMasterPosition,
 		SlaveIORunning:  fmd.Replicating,
 		SlaveSQLRunning: fmd.Replicating,
@@ -257,7 +257,7 @@ func (fmd *FakeMysqlDaemon) ResetReplicationCommands() ([]string, error) {
 }
 
 // MasterPosition is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) MasterPosition() (replication.ReplicationPosition, error) {
+func (fmd *FakeMysqlDaemon) MasterPosition() (replication.Position, error) {
 	return fmd.CurrentMasterPosition, nil
 }
 
@@ -273,7 +273,7 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 }
 
 // SetSlavePositionCommands is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SetSlavePositionCommands(pos replication.ReplicationPosition) ([]string, error) {
+func (fmd *FakeMysqlDaemon) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
 	if !reflect.DeepEqual(fmd.SetSlavePositionCommandsPos, pos) {
 		return nil, fmt.Errorf("wrong pos for SetSlavePositionCommands: expected %v got %v", fmd.SetSlavePositionCommandsPos, pos)
 	}
@@ -295,12 +295,12 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 }
 
 // DemoteMaster is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) DemoteMaster() (replication.ReplicationPosition, error) {
+func (fmd *FakeMysqlDaemon) DemoteMaster() (replication.Position, error) {
 	return fmd.DemoteMasterPosition, nil
 }
 
 // WaitMasterPos is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) WaitMasterPos(pos replication.ReplicationPosition, waitTimeout time.Duration) error {
+func (fmd *FakeMysqlDaemon) WaitMasterPos(pos replication.Position, waitTimeout time.Duration) error {
 	if reflect.DeepEqual(fmd.WaitMasterPosition, pos) {
 		return nil
 	}
@@ -308,7 +308,7 @@ func (fmd *FakeMysqlDaemon) WaitMasterPos(pos replication.ReplicationPosition, w
 }
 
 // PromoteSlave is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PromoteSlave(hookExtraEnv map[string]string) (replication.ReplicationPosition, error) {
+func (fmd *FakeMysqlDaemon) PromoteSlave(hookExtraEnv map[string]string) (replication.Position, error) {
 	return fmd.PromoteSlaveResult, nil
 }
 

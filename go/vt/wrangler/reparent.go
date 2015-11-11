@@ -563,7 +563,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	if !ok {
 		return fmt.Errorf("couldn't get master elect %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
-	masterElectPos, err := replication.DecodeReplicationPosition(masterElectStatus.Position)
+	masterElectPos, err := replication.DecodePosition(masterElectStatus.Position)
 	if err != nil {
 		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStatus.Position, err)
 	}
@@ -571,7 +571,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		if topoproto.TabletAliasEqual(&alias, masterElectTabletAlias) {
 			continue
 		}
-		pos, err := replication.DecodeReplicationPosition(status.Position)
+		pos, err := replication.DecodePosition(status.Position)
 		if err != nil {
 			return fmt.Errorf("cannot decode slave %v position %v: %v", topoproto.TabletAliasString(&alias), status.Position, err)
 		}

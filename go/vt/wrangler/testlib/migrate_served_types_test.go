@@ -85,7 +85,7 @@ func TestMigrateServedTypes(t *testing.T) {
 
 	// sourceMaster will see the refresh, and has to respond to it
 	// also will be asked about its replication position.
-	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
 		GTIDSet: replication.MariadbGTID{
 			Domain:   5,
 			Server:   456,
@@ -109,7 +109,7 @@ func TestMigrateServedTypes(t *testing.T) {
 		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
-					sqltypes.MakeString([]byte(replication.EncodeReplicationPosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
+					sqltypes.MakeString([]byte(replication.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
 					sqltypes.MakeString([]byte("")),
 				},
 			},
@@ -132,7 +132,7 @@ func TestMigrateServedTypes(t *testing.T) {
 		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
-					sqltypes.MakeString([]byte(replication.EncodeReplicationPosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
+					sqltypes.MakeString([]byte(replication.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
 					sqltypes.MakeString([]byte("")),
 				},
 			},

@@ -27,7 +27,7 @@ func (*mariaDB10) VersionMatch(version string) bool {
 }
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
-func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp replication.ReplicationPosition, err error) {
+func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp replication.Position, err error) {
 	qr, err := mysqld.FetchSuperQuery("SELECT @@GLOBAL.gtid_binlog_pos")
 	if err != nil {
 		return rp, err
@@ -39,16 +39,16 @@ func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp replication.Replicat
 }
 
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
-func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (replication.ReplicationStatus, error) {
+func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (replication.Status, error) {
 	fields, err := mysqld.fetchSuperQueryMap("SHOW ALL SLAVES STATUS")
 	if err != nil {
-		return replication.ReplicationStatus{}, ErrNotSlave
+		return replication.Status{}, ErrNotSlave
 	}
 	status := parseSlaveStatus(fields)
 
 	status.Position, err = flavor.ParseReplicationPosition(fields["Gtid_Slave_Pos"])
 	if err != nil {
-		return replication.ReplicationStatus{}, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", fields["Gtid_Slave_Pos"], err)
+		return replication.Status{}, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", fields["Gtid_Slave_Pos"], err)
 	}
 	return status, nil
 }
@@ -57,7 +57,7 @@ func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (replication.ReplicationSta
 //
 // Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
 // if the slave thread stops. If that is a problem, we'll have to change this.
-func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos replication.ReplicationPosition, waitTimeout time.Duration) error {
+func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, waitTimeout time.Duration) error {
 	var query string
 	if waitTimeout == 0 {
 		// Omit the timeout to wait indefinitely. In MariaDB, a timeout of 0 means
@@ -100,7 +100,7 @@ func (*mariaDB10) PromoteSlaveCommands() []string {
 }
 
 // SetSlavePositionCommands implements MysqlFlavor.
-func (*mariaDB10) SetSlavePositionCommands(pos replication.ReplicationPosition) ([]string, error) {
+func (*mariaDB10) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
 	return []string{
 		fmt.Sprintf("SET GLOBAL gtid_slave_pos = '%s'", pos),
 	}, nil
@@ -122,12 +122,12 @@ func (*mariaDB10) ParseGTID(s string) (replication.GTID, error) {
 }
 
 // ParseReplicationPosition implements MysqlFlavor.ParseReplicationposition().
-func (*mariaDB10) ParseReplicationPosition(s string) (replication.ReplicationPosition, error) {
-	return replication.ParseReplicationPosition(mariadbFlavorID, s)
+func (*mariaDB10) ParseReplicationPosition(s string) (replication.Position, error) {
+	return replication.ParsePosition(mariadbFlavorID, s)
 }
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.ReplicationPosition) error {
+func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
 	const ComBinlogDump = 0x12
 
 	// Tell the server that we understand GTIDs by setting our slave capability

@@ -179,7 +179,7 @@ func TestMariadbMakeBinlogEvent(t *testing.T) {
 }
 
 func TestMariadbSetSlavePositionCommands(t *testing.T) {
-	pos := replication.ReplicationPosition{GTIDSet: replication.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}}
+	pos := replication.Position{GTIDSet: replication.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}}
 	want := []string{
 		"SET GLOBAL gtid_slave_pos = '1-41983-12345'",
 	}
@@ -275,7 +275,7 @@ func TestMariadbParseGTID(t *testing.T) {
 
 func TestMariadbParseReplicationPosition(t *testing.T) {
 	input := "12-34-5678"
-	want := replication.ReplicationPosition{GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}}
+	want := replication.Position{GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}}
 
 	got, err := (&mariaDB10{}).ParseReplicationPosition(input)
 	if err != nil {

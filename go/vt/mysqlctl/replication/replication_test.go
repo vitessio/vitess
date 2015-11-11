@@ -8,13 +8,11 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-
-	"github.com/youtube/vitess/go/bson"
 )
 
-func TestReplicationPositionEqual(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
-	input2 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+func TestPositionEqual(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+	input2 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	want := true
 
 	if got := input1.Equal(input2); got != want {
@@ -22,9 +20,9 @@ func TestReplicationPositionEqual(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionNotEqual(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
-	input2 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 12345}}
+func TestPositionNotEqual(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+	input2 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 12345}}
 	want := false
 
 	if got := input1.Equal(input2); got != want {
@@ -32,9 +30,9 @@ func TestReplicationPositionNotEqual(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionEqualZero(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
-	input2 := ReplicationPosition{}
+func TestPositionEqualZero(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+	input2 := Position{}
 	want := false
 
 	if got := input1.Equal(input2); got != want {
@@ -42,9 +40,9 @@ func TestReplicationPositionEqualZero(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionZeroEqualZero(t *testing.T) {
-	input1 := ReplicationPosition{}
-	input2 := ReplicationPosition{}
+func TestPositionZeroEqualZero(t *testing.T) {
+	input1 := Position{}
+	input2 := Position{}
 	want := true
 
 	if got := input1.Equal(input2); got != want {
@@ -52,9 +50,9 @@ func TestReplicationPositionZeroEqualZero(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionAtLeastLess(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1233}}
-	input2 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+func TestPositionAtLeastLess(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1233}}
+	input2 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	want := false
 
 	if got := input1.AtLeast(input2); got != want {
@@ -62,9 +60,9 @@ func TestReplicationPositionAtLeastLess(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionAtLeastEqual(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
-	input2 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+func TestPositionAtLeastEqual(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+	input2 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	want := true
 
 	if got := input1.AtLeast(input2); got != want {
@@ -72,9 +70,9 @@ func TestReplicationPositionAtLeastEqual(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionAtLeastGreater(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}
-	input2 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+func TestPositionAtLeastGreater(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}
+	input2 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	want := true
 
 	if got := input1.AtLeast(input2); got != want {
@@ -82,9 +80,9 @@ func TestReplicationPositionAtLeastGreater(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionAtLeastDifferentServer(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}
-	input2 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 4444, Sequence: 1234}}
+func TestPositionAtLeastDifferentServer(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}
+	input2 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 4444, Sequence: 1234}}
 	want := true
 
 	if got := input1.AtLeast(input2); got != want {
@@ -92,9 +90,9 @@ func TestReplicationPositionAtLeastDifferentServer(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionAtLeastDifferentDomain(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}
-	input2 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 4, Server: 5555, Sequence: 1234}}
+func TestPositionAtLeastDifferentDomain(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}
+	input2 := Position{GTIDSet: MariadbGTID{Domain: 4, Server: 5555, Sequence: 1234}}
 	want := false
 
 	if got := input1.AtLeast(input2); got != want {
@@ -102,9 +100,9 @@ func TestReplicationPositionAtLeastDifferentDomain(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionZeroAtLeast(t *testing.T) {
-	input1 := ReplicationPosition{}
-	input2 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+func TestPositionZeroAtLeast(t *testing.T) {
+	input1 := Position{}
+	input2 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	want := false
 
 	if got := input1.AtLeast(input2); got != want {
@@ -112,9 +110,9 @@ func TestReplicationPositionZeroAtLeast(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionAtLeastZero(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
-	input2 := ReplicationPosition{}
+func TestPositionAtLeastZero(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+	input2 := Position{}
 	want := true
 
 	if got := input1.AtLeast(input2); got != want {
@@ -122,9 +120,9 @@ func TestReplicationPositionAtLeastZero(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionZeroAtLeastZero(t *testing.T) {
-	input1 := ReplicationPosition{}
-	input2 := ReplicationPosition{}
+func TestPositionZeroAtLeastZero(t *testing.T) {
+	input1 := Position{}
+	input2 := Position{}
 	want := true
 
 	if got := input1.AtLeast(input2); got != want {
@@ -132,8 +130,8 @@ func TestReplicationPositionZeroAtLeastZero(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionString(t *testing.T) {
-	input := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+func TestPositionString(t *testing.T) {
+	input := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	want := "3-5555-1234"
 
 	if got := input.String(); got != want {
@@ -141,8 +139,8 @@ func TestReplicationPositionString(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionStringNil(t *testing.T) {
-	input := ReplicationPosition{}
+func TestPositionStringNil(t *testing.T) {
+	input := Position{}
 	want := "<nil>"
 
 	if got := input.String(); got != want {
@@ -150,8 +148,8 @@ func TestReplicationPositionStringNil(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionIsZero(t *testing.T) {
-	input := ReplicationPosition{}
+func TestPositionIsZero(t *testing.T) {
+	input := Position{}
 	want := true
 
 	if got := input.IsZero(); got != want {
@@ -159,8 +157,8 @@ func TestReplicationPositionIsZero(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionIsNotZero(t *testing.T) {
-	input := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+func TestPositionIsNotZero(t *testing.T) {
+	input := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	want := false
 
 	if got := input.IsZero(); got != want {
@@ -168,50 +166,50 @@ func TestReplicationPositionIsNotZero(t *testing.T) {
 	}
 }
 
-func TestReplicationPositionAppend(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+func TestPositionAppend(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}
-	want := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}
+	want := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}
 
 	if got := AppendGTID(input1, input2); !got.Equal(want) {
 		t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
 	}
 }
 
-func TestReplicationPositionAppendNil(t *testing.T) {
-	input1 := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+func TestPositionAppendNil(t *testing.T) {
+	input1 := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	input2 := GTID(nil)
-	want := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+	want := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 
 	if got := AppendGTID(input1, input2); !got.Equal(want) {
 		t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
 	}
 }
 
-func TestReplicationPositionAppendToZero(t *testing.T) {
-	input1 := ReplicationPosition{}
+func TestPositionAppendToZero(t *testing.T) {
+	input1 := Position{}
 	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
-	want := ReplicationPosition{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+	want := Position{GTIDSet: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 
 	if got := AppendGTID(input1, input2); !got.Equal(want) {
 		t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
 	}
 }
 
-func TestMustParseReplicationPosition(t *testing.T) {
+func TestMustParsePosition(t *testing.T) {
 	flavor := "fake flavor"
 	gtidSetParsers[flavor] = func(s string) (GTIDSet, error) {
 		return fakeGTID{value: s}, nil
 	}
 	input := "12345"
-	want := ReplicationPosition{GTIDSet: fakeGTID{value: "12345"}}
+	want := Position{GTIDSet: fakeGTID{value: "12345"}}
 
-	if got := MustParseReplicationPosition(flavor, input); !got.Equal(want) {
-		t.Errorf("MustParseReplicationPosition(%#v, %#v) = %#v, want %#v", flavor, input, got, want)
+	if got := MustParsePosition(flavor, input); !got.Equal(want) {
+		t.Errorf("MustParsePosition(%#v, %#v) = %#v, want %#v", flavor, input, got, want)
 	}
 }
 
-func TestMustParseReplicationPositionError(t *testing.T) {
+func TestMustParsePositionError(t *testing.T) {
 	defer func() {
 		want := `parse error: unknown GTIDSet flavor "unknown flavor !@$!@"`
 		err := recover()
@@ -224,168 +222,77 @@ func TestMustParseReplicationPositionError(t *testing.T) {
 		}
 	}()
 
-	MustParseReplicationPosition("unknown flavor !@$!@", "yowzah")
+	MustParsePosition("unknown flavor !@$!@", "yowzah")
 }
 
-func TestEncodeReplicationPosition(t *testing.T) {
-	input := ReplicationPosition{GTIDSet: fakeGTID{
+func TestEncodePosition(t *testing.T) {
+	input := Position{GTIDSet: fakeGTID{
 		flavor: "myflav",
 		value:  "1:2:3-4-5-6",
 	}}
 	want := "myflav/1:2:3-4-5-6"
 
-	if got := EncodeReplicationPosition(input); got != want {
-		t.Errorf("EncodeReplicationPosition(%#v) = %#v, want %#v", input, got, want)
+	if got := EncodePosition(input); got != want {
+		t.Errorf("EncodePosition(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestEncodeReplicationPositionZero(t *testing.T) {
-	input := ReplicationPosition{}
+func TestEncodePositionZero(t *testing.T) {
+	input := Position{}
 	want := ""
 
-	if got := EncodeReplicationPosition(input); got != want {
-		t.Errorf("EncodeReplicationPosition(%#v) = %#v, want %#v", input, got, want)
+	if got := EncodePosition(input); got != want {
+		t.Errorf("EncodePosition(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestDecodeReplicationPosition(t *testing.T) {
+func TestDecodePosition(t *testing.T) {
 	gtidSetParsers["flavorflav"] = func(s string) (GTIDSet, error) {
 		return fakeGTID{value: s}, nil
 	}
 	input := "flavorflav/123-456:789"
-	want := ReplicationPosition{GTIDSet: fakeGTID{value: "123-456:789"}}
+	want := Position{GTIDSet: fakeGTID{value: "123-456:789"}}
 
-	got, err := DecodeReplicationPosition(input)
+	got, err := DecodePosition(input)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if !got.Equal(want) {
-		t.Errorf("DecodeReplicationPosition(%#v) = %#v, want %#v", input, got, want)
+		t.Errorf("DecodePosition(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestDecodeReplicationPositionZero(t *testing.T) {
+func TestDecodePositionZero(t *testing.T) {
 	input := ""
-	want := ReplicationPosition{}
+	want := Position{}
 
-	got, err := DecodeReplicationPosition(input)
+	got, err := DecodePosition(input)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if !got.Equal(want) {
-		t.Errorf("DecodeReplicationPosition(%#v) = %#v, want %#v", input, got, want)
+		t.Errorf("DecodePosition(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestDecodeReplicationPositionNoFlavor(t *testing.T) {
+func TestDecodePositionNoFlavor(t *testing.T) {
 	gtidSetParsers[""] = func(s string) (GTIDSet, error) {
 		return fakeGTID{value: s}, nil
 	}
 	input := "12345"
-	want := ReplicationPosition{GTIDSet: fakeGTID{value: "12345"}}
+	want := Position{GTIDSet: fakeGTID{value: "12345"}}
 
-	got, err := DecodeReplicationPosition(input)
+	got, err := DecodePosition(input)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if !got.Equal(want) {
-		t.Errorf("DecodeReplicationPosition(%#v) = %#v, want %#v", input, got, want)
+		t.Errorf("DecodePosition(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestBsonMarshalUnmarshalReplicationPosition(t *testing.T) {
-	gtidSetParsers["golf"] = func(s string) (GTIDSet, error) {
-		return fakeGTID{flavor: "golf", value: s}, nil
-	}
-	input := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
-	want := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
-
-	buf, err := bson.Marshal(input)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	var got ReplicationPosition
-	if err = bson.Unmarshal(buf, &got); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !got.Equal(want) {
-		t.Errorf("marshal->unmarshal mismatch, got %#v, want %#v", got, want)
-	}
-}
-
-func TestBsonMarshalUnmarshalReplicationPositionPointer(t *testing.T) {
-	gtidSetParsers["golf"] = func(s string) (GTIDSet, error) {
-		return fakeGTID{flavor: "golf", value: s}, nil
-	}
-	input := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
-	want := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
-
-	buf, err := bson.Marshal(&input)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	var got ReplicationPosition
-	if err = bson.Unmarshal(buf, &got); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	if !got.Equal(want) {
-		t.Errorf("marshal->unmarshal mismatch, got %#v, want %#v", got, want)
-	}
-}
-
-func TestBsonMarshalUnmarshalReplicationPositionInStruct(t *testing.T) {
-	gtidSetParsers["golf"] = func(s string) (GTIDSet, error) {
-		return fakeGTID{flavor: "golf", value: s}, nil
-	}
-	input := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
-	want := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
-
-	type mystruct struct {
-		ReplicationPosition
-	}
-
-	buf, err := bson.Marshal(&mystruct{ReplicationPosition: input})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	var gotStruct mystruct
-	if err = bson.Unmarshal(buf, &gotStruct); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	if got := gotStruct.ReplicationPosition; !got.Equal(want) {
-		t.Errorf("marshal->unmarshal mismatch, got %#v, want %#v", got, want)
-	}
-}
-
-func TestBsonMarshalUnmarshalReplicationPositionZero(t *testing.T) {
-	gtidSetParsers["golf"] = func(s string) (GTIDSet, error) {
-		return fakeGTID{flavor: "golf", value: s}, nil
-	}
-	input := ReplicationPosition{}
-	want := ReplicationPosition{}
-
-	buf, err := bson.Marshal(input)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	var got ReplicationPosition
-	if err = bson.Unmarshal(buf, &got); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	if !got.Equal(want) {
-		t.Errorf("marshal->unmarshal mismatch, got %#v, want %#v", got, want)
-	}
-}
-
-func TestJsonMarshalReplicationPosition(t *testing.T) {
-	input := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
+func TestJsonMarshalPosition(t *testing.T) {
+	input := Position{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
 	want := `"golf/par"`
 
 	buf, err := json.Marshal(input)
@@ -398,8 +305,8 @@ func TestJsonMarshalReplicationPosition(t *testing.T) {
 	}
 }
 
-func TestJsonMarshalReplicationPositionPointer(t *testing.T) {
-	input := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
+func TestJsonMarshalPositionPointer(t *testing.T) {
+	input := Position{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
 	want := `"golf/par"`
 
 	buf, err := json.Marshal(&input)
@@ -412,14 +319,14 @@ func TestJsonMarshalReplicationPositionPointer(t *testing.T) {
 	}
 }
 
-func TestJsonUnmarshalReplicationPosition(t *testing.T) {
+func TestJsonUnmarshalPosition(t *testing.T) {
 	gtidSetParsers["golf"] = func(s string) (GTIDSet, error) {
 		return fakeGTID{flavor: "golf", value: s}, nil
 	}
 	input := `"golf/par"`
-	want := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
+	want := Position{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
 
-	var got ReplicationPosition
+	var got Position
 	err := json.Unmarshal([]byte(input), &got)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -429,12 +336,12 @@ func TestJsonUnmarshalReplicationPosition(t *testing.T) {
 	}
 }
 
-func TestJsonMarshalReplicationPositionInStruct(t *testing.T) {
-	input := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
-	want := `{"ReplicationPosition":"golf/par"}`
+func TestJsonMarshalPositionInStruct(t *testing.T) {
+	input := Position{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
+	want := `{"Position":"golf/par"}`
 
 	type mystruct struct {
-		ReplicationPosition ReplicationPosition
+		Position Position
 	}
 
 	buf, err := json.Marshal(&mystruct{input})
@@ -447,27 +354,27 @@ func TestJsonMarshalReplicationPositionInStruct(t *testing.T) {
 	}
 }
 
-func TestJsonUnmarshalReplicationPositionInStruct(t *testing.T) {
+func TestJsonUnmarshalPositionInStruct(t *testing.T) {
 	gtidSetParsers["golf"] = func(s string) (GTIDSet, error) {
 		return fakeGTID{flavor: "golf", value: s}, nil
 	}
-	input := `{"ReplicationPosition":"golf/par"}`
-	want := ReplicationPosition{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
+	input := `{"Position":"golf/par"}`
+	want := Position{GTIDSet: fakeGTID{flavor: "golf", value: "par"}}
 
 	var gotStruct struct {
-		ReplicationPosition ReplicationPosition
+		Position Position
 	}
 	err := json.Unmarshal([]byte(input), &gotStruct)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if got := gotStruct.ReplicationPosition; !got.Equal(want) {
+	if got := gotStruct.Position; !got.Equal(want) {
 		t.Errorf("json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestJsonMarshalReplicationPositionZero(t *testing.T) {
-	input := ReplicationPosition{}
+func TestJsonMarshalPositionZero(t *testing.T) {
+	input := Position{}
 	want := `""`
 
 	buf, err := json.Marshal(input)
@@ -480,11 +387,11 @@ func TestJsonMarshalReplicationPositionZero(t *testing.T) {
 	}
 }
 
-func TestJsonUnmarshalReplicationPositionZero(t *testing.T) {
+func TestJsonUnmarshalPositionZero(t *testing.T) {
 	input := `""`
-	want := ReplicationPosition{}
+	want := Position{}
 
-	var got ReplicationPosition
+	var got Position
 	err := json.Unmarshal([]byte(input), &got)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -494,8 +401,8 @@ func TestJsonUnmarshalReplicationPositionZero(t *testing.T) {
 	}
 }
 
-func TestReplicationStatusSlaveRunning(t *testing.T) {
-	input := &ReplicationStatus{
+func TestStatusSlaveRunning(t *testing.T) {
+	input := &Status{
 		SlaveIORunning:  true,
 		SlaveSQLRunning: true,
 	}
@@ -505,8 +412,8 @@ func TestReplicationStatusSlaveRunning(t *testing.T) {
 	}
 }
 
-func TestReplicationStatusSlaveIONotRunning(t *testing.T) {
-	input := &ReplicationStatus{
+func TestStatusSlaveIONotRunning(t *testing.T) {
+	input := &Status{
 		SlaveIORunning:  false,
 		SlaveSQLRunning: true,
 	}
@@ -516,8 +423,8 @@ func TestReplicationStatusSlaveIONotRunning(t *testing.T) {
 	}
 }
 
-func TestReplicationStatusSlaveSQLNotRunning(t *testing.T) {
-	input := &ReplicationStatus{
+func TestStatusSlaveSQLNotRunning(t *testing.T) {
+	input := &Status{
 		SlaveIORunning:  true,
 		SlaveSQLRunning: false,
 	}
@@ -527,13 +434,13 @@ func TestReplicationStatusSlaveSQLNotRunning(t *testing.T) {
 	}
 }
 
-func TestReplicationStatusMasterAddr(t *testing.T) {
-	table := map[string]*ReplicationStatus{
-		"master-host:1234": &ReplicationStatus{
+func TestStatusMasterAddr(t *testing.T) {
+	table := map[string]*Status{
+		"master-host:1234": &Status{
 			MasterHost: "master-host",
 			MasterPort: 1234,
 		},
-		"[::1]:4321": &ReplicationStatus{
+		"[::1]:4321": &Status{
 			MasterHost: "::1",
 			MasterPort: 4321,
 		},
@@ -545,24 +452,24 @@ func TestReplicationStatusMasterAddr(t *testing.T) {
 	}
 }
 
-func TestNewReplicationStatus(t *testing.T) {
-	table := map[string]*ReplicationStatus{
-		"master-host:1234": &ReplicationStatus{
+func TestNewStatus(t *testing.T) {
+	table := map[string]*Status{
+		"master-host:1234": &Status{
 			MasterHost: "master-host",
 			MasterPort: 1234,
 		},
-		"[::1]:4321": &ReplicationStatus{
+		"[::1]:4321": &Status{
 			MasterHost: "::1",
 			MasterPort: 4321,
 		},
 	}
 	for input, want := range table {
-		got, err := NewReplicationStatus(input)
+		got, err := NewStatus(input)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 		if got.MasterHost != want.MasterHost || got.MasterPort != want.MasterPort {
-			t.Errorf("NewReplicationStatus(%#v) = %#v, want %#v", input, got, want)
+			t.Errorf("NewStatus(%#v) = %#v, want %#v", input, got, want)
 		}
 	}
 }

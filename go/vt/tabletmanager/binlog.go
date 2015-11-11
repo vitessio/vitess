@@ -637,7 +637,7 @@ type BinlogPlayerControllerStatus struct {
 	StopPosition string
 
 	// stats and current values
-	LastPosition        replication.ReplicationPosition
+	LastPosition        replication.Position
 	SecondsBehindMaster int64
 	Counts              map[string]int64
 	Rates               map[string][]float64

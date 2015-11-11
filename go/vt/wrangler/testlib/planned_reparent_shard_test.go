@@ -36,14 +36,14 @@ func TestPlannedReparentShard(t *testing.T) {
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
-	newMaster.FakeMysqlDaemon.WaitMasterPosition = replication.ReplicationPosition{
+	newMaster.FakeMysqlDaemon.WaitMasterPosition = replication.Position{
 		GTIDSet: replication.MariadbGTID{
 			Domain:   7,
 			Server:   123,
 			Sequence: 990,
 		},
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = replication.ReplicationPosition{
+	newMaster.FakeMysqlDaemon.PromoteSlaveResult = replication.Position{
 		GTIDSet: replication.MariadbGTID{
 			Domain:   7,
 			Server:   456,

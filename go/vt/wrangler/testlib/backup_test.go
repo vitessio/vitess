@@ -75,7 +75,7 @@ func TestBackupRestore(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
-	sourceTablet.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+	sourceTablet.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
 		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
@@ -114,7 +114,7 @@ func TestBackupRestore(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentMasterPosition = replication.ReplicationPosition{
+	destTablet.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
 		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,

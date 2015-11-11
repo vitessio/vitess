@@ -26,10 +26,10 @@ type MysqlFlavor interface {
 	VersionMatch(version string) bool
 
 	// MasterPosition returns the ReplicationPosition of a master.
-	MasterPosition(mysqld *Mysqld) (replication.ReplicationPosition, error)
+	MasterPosition(mysqld *Mysqld) (replication.Position, error)
 
 	// SlaveStatus returns the ReplicationStatus of a slave.
-	SlaveStatus(mysqld *Mysqld) (replication.ReplicationStatus, error)
+	SlaveStatus(mysqld *Mysqld) (replication.Status, error)
 
 	// ResetReplicationCommands returns the commands to completely reset
 	// replication on the host.
@@ -42,7 +42,7 @@ type MysqlFlavor interface {
 	// SetSlavePositionCommands returns the commands to set the
 	// replication position at which the slave will resume
 	// when it is later reparented with SetMasterCommands.
-	SetSlavePositionCommands(pos replication.ReplicationPosition) ([]string, error)
+	SetSlavePositionCommands(pos replication.Position) ([]string, error)
 
 	// SetMasterCommands returns the commands to use the provided master
 	// as the new master (without changing any GTID position).
@@ -56,13 +56,13 @@ type MysqlFlavor interface {
 
 	// ParseReplicationPosition parses a replication position in
 	// the canonical format of this MySQL flavor into a
-	// replication.ReplicationPosition struct.
-	ParseReplicationPosition(string) (replication.ReplicationPosition, error)
+	// replication.Position struct.
+	ParseReplicationPosition(string) (replication.Position, error)
 
 	// SendBinlogDumpCommand sends the flavor-specific version of
 	// the COM_BINLOG_DUMP command to start dumping raw binlog
 	// events over a slave connection, starting at a given GTID.
-	SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.ReplicationPosition) error
+	SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error
 
 	// MakeBinlogEvent takes a raw packet from the MySQL binlog
 	// stream connection and returns a BinlogEvent through which
@@ -71,7 +71,7 @@ type MysqlFlavor interface {
 
 	// WaitMasterPos waits until slave replication reaches at
 	// least targetPos.
-	WaitMasterPos(mysqld *Mysqld, targetPos replication.ReplicationPosition, waitTimeout time.Duration) error
+	WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, waitTimeout time.Duration) error
 
 	// EnableBinlogPlayback prepares the server to play back
 	// events from a binlog stream.  Whatever it does for a given

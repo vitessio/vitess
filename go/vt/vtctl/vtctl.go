@@ -2139,11 +2139,11 @@ func (rts rTablets) Less(i, j int) bool {
 		return false
 	}
 	// then compare replication positions
-	lpos, err := replication.DecodeReplicationPosition(l.Position)
+	lpos, err := replication.DecodePosition(l.Position)
 	if err != nil {
 		return true
 	}
-	rpos, err := replication.DecodeReplicationPosition(r.Position)
+	rpos, err := replication.DecodePosition(r.Position)
 	if err != nil {
 		return false
 	}

@@ -205,7 +205,7 @@ func (updateStream *UpdateStreamImpl) IsEnabled() bool {
 
 // ServeUpdateStream is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) ServeUpdateStream(position string, sendReply func(reply *binlogdatapb.StreamEvent) error) (err error) {
-	pos, err := replication.DecodeReplicationPosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func (updateStream *UpdateStreamImpl) ServeUpdateStream(position string, sendRep
 
 // StreamKeyRange is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) StreamKeyRange(position string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
-	pos, err := replication.DecodeReplicationPosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(position string, keyspaceID
 
 // StreamTables is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) StreamTables(position string, tables []string, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
-	pos, err := replication.DecodeReplicationPosition(position)
+	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
 	}

@@ -89,20 +89,20 @@ func positionCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 		return fmt.Errorf("Not enough arguments for position operation.")
 	}
 
-	pos1, err := replication.DecodeReplicationPosition(args[1])
+	pos1, err := replication.DecodePosition(args[1])
 	if err != nil {
 		return err
 	}
 
 	switch args[0] {
 	case "equal":
-		pos2, err := replication.DecodeReplicationPosition(args[2])
+		pos2, err := replication.DecodePosition(args[2])
 		if err != nil {
 			return err
 		}
 		fmt.Println(pos1.Equal(pos2))
 	case "at_least":
-		pos2, err := replication.DecodeReplicationPosition(args[2])
+		pos2, err := replication.DecodePosition(args[2])
 		if err != nil {
 			return err
 		}

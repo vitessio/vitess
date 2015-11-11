@@ -36,7 +36,7 @@ type RowcacheInvalidator struct {
 	svm sync2.ServiceManager
 
 	posMutex   sync.Mutex
-	pos        replication.ReplicationPosition
+	pos        replication.Position
 	lagSeconds sync2.AtomicInt64
 }
 
@@ -49,14 +49,14 @@ func (rci *RowcacheInvalidator) AppendGTID(gtid replication.GTID) {
 }
 
 // SetPosition sets the current ReplicationPosition.
-func (rci *RowcacheInvalidator) SetPosition(rp replication.ReplicationPosition) {
+func (rci *RowcacheInvalidator) SetPosition(rp replication.Position) {
 	rci.posMutex.Lock()
 	defer rci.posMutex.Unlock()
 	rci.pos = rp
 }
 
 // Position returns the current ReplicationPosition.
-func (rci *RowcacheInvalidator) Position() replication.ReplicationPosition {
+func (rci *RowcacheInvalidator) Position() replication.Position {
 	rci.posMutex.Lock()
 	defer rci.posMutex.Unlock()
 	return rci.pos

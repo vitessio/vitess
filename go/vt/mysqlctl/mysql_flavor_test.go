@@ -20,22 +20,22 @@ func (fakeMysqlFlavor) PromoteSlaveCommands() []string                     { ret
 func (fakeMysqlFlavor) ResetReplicationCommands() []string                 { return nil }
 func (fakeMysqlFlavor) ParseGTID(string) (replication.GTID, error)         { return nil, nil }
 func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) replication.BinlogEvent { return nil }
-func (fakeMysqlFlavor) ParseReplicationPosition(string) (replication.ReplicationPosition, error) {
-	return replication.ReplicationPosition{}, nil
+func (fakeMysqlFlavor) ParseReplicationPosition(string) (replication.Position, error) {
+	return replication.Position{}, nil
 }
-func (fakeMysqlFlavor) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.ReplicationPosition) error {
+func (fakeMysqlFlavor) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
 	return nil
 }
-func (fakeMysqlFlavor) WaitMasterPos(mysqld *Mysqld, targetPos replication.ReplicationPosition, waitTimeout time.Duration) error {
+func (fakeMysqlFlavor) WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, waitTimeout time.Duration) error {
 	return nil
 }
-func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (replication.ReplicationPosition, error) {
-	return replication.ReplicationPosition{}, nil
+func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (replication.Position, error) {
+	return replication.Position{}, nil
 }
-func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (replication.ReplicationStatus, error) {
-	return replication.ReplicationStatus{}, nil
+func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (replication.Status, error) {
+	return replication.Status{}, nil
 }
-func (fakeMysqlFlavor) SetSlavePositionCommands(pos replication.ReplicationPosition) ([]string, error) {
+func (fakeMysqlFlavor) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
 	return nil, nil
 }
 func (fakeMysqlFlavor) SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {

@@ -10,11 +10,10 @@ import (
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 )
 
-// ReplicationStatusToProto translates a ReplicationStatus to
-// proto, or panics
-func ReplicationStatusToProto(r ReplicationStatus) *replicationdatapb.Status {
+// StatusToProto translates a Status to proto3
+func StatusToProto(r Status) *replicationdatapb.Status {
 	return &replicationdatapb.Status{
-		Position:            EncodeReplicationPosition(r.Position),
+		Position:            EncodePosition(r.Position),
 		SlaveIoRunning:      r.SlaveIORunning,
 		SlaveSqlRunning:     r.SlaveSQLRunning,
 		SecondsBehindMaster: uint32(r.SecondsBehindMaster),
@@ -24,13 +23,13 @@ func ReplicationStatusToProto(r ReplicationStatus) *replicationdatapb.Status {
 	}
 }
 
-// ProtoToReplicationStatus translates a proto ReplicationStatus, or panics
-func ProtoToReplicationStatus(r *replicationdatapb.Status) ReplicationStatus {
-	pos, err := DecodeReplicationPosition(r.Position)
+// ProtoToStatus translates a proto Status, or panics
+func ProtoToStatus(r *replicationdatapb.Status) Status {
+	pos, err := DecodePosition(r.Position)
 	if err != nil {
 		panic(fmt.Errorf("cannot decode Position: %v", err))
 	}
-	return ReplicationStatus{
+	return Status{
 		Position:            pos,
 		SlaveIORunning:      r.SlaveIoRunning,
 		SlaveSQLRunning:     r.SlaveSqlRunning,

@@ -192,7 +192,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -245,7 +245,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -268,7 +268,7 @@ func TestStreamerStop(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	// Start parseEvents(), but don't send it anything, so it just waits.
 	svm := &sync2.ServiceManager{}
@@ -312,7 +312,7 @@ func TestStreamerParseEventsClientEOF(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return io.EOF
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -338,7 +338,7 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(func(ctx *sync2.ServiceContext) error {
@@ -373,7 +373,7 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -412,7 +412,7 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -447,7 +447,7 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -484,7 +484,7 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -521,7 +521,7 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -556,7 +556,7 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -629,7 +629,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -686,7 +686,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -746,7 +746,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -799,7 +799,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -836,7 +836,7 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -891,7 +891,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -945,7 +945,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -982,7 +982,7 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 	sendTransaction := func(trans *pb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)
@@ -1030,7 +1030,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -1076,7 +1076,7 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}

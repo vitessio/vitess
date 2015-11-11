@@ -66,7 +66,7 @@ type Streamer struct {
 	dbname          string
 	mysqld          mysqlctl.MysqlDaemon
 	clientCharset   *pb.Charset
-	startPos        replication.ReplicationPosition
+	startPos        replication.Position
 	sendTransaction sendTransactionFunc
 
 	conn *mysqlctl.SlaveConnection
@@ -79,7 +79,7 @@ type Streamer struct {
 // charset is the default character set on the BinlogPlayer side.
 // startPos is the position to start streaming at.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *pb.Charset, startPos replication.ReplicationPosition, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *pb.Charset, startPos replication.Position, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
@@ -139,7 +139,7 @@ func (bls *Streamer) Stream(ctx *sync2.ServiceContext) (err error) {
 //
 // If the sendTransaction func returns io.EOF, parseEvents returns ErrClientEOF.
 // If the events channel is closed, parseEvents returns ErrServerEOF.
-func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replication.BinlogEvent) (replication.ReplicationPosition, error) {
+func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replication.BinlogEvent) (replication.Position, error) {
 	var statements []*pb.BinlogTransaction_Statement
 	var format replication.BinlogFormat
 	var gtid replication.GTID

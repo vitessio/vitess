@@ -119,7 +119,7 @@ func TestMysql56ParseReplicationPosition(t *testing.T) {
 	var set replication.GTIDSet = replication.Mysql56GTIDSet{}
 	set = set.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 1})
 	set = set.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 2})
-	want := replication.ReplicationPosition{GTIDSet: set}
+	want := replication.Position{GTIDSet: set}
 
 	got, err := (&mysql56{}).ParseReplicationPosition(input)
 	if err != nil {

@@ -59,20 +59,20 @@ type Stats struct {
 	Rates   *stats.Rates
 
 	// Last saved status
-	lastPosition        replication.ReplicationPosition
+	lastPosition        replication.Position
 	lastPositionMutex   sync.RWMutex
 	SecondsBehindMaster sync2.AtomicInt64
 }
 
 // SetLastPosition sets the last replication position.
-func (bps *Stats) SetLastPosition(pos replication.ReplicationPosition) {
+func (bps *Stats) SetLastPosition(pos replication.Position) {
 	bps.lastPositionMutex.Lock()
 	defer bps.lastPositionMutex.Unlock()
 	bps.lastPosition = pos
 }
 
 // GetLastPosition gets the last replication position.
-func (bps *Stats) GetLastPosition() replication.ReplicationPosition {
+func (bps *Stats) GetLastPosition() replication.Position {
 	bps.lastPositionMutex.RLock()
 	defer bps.lastPositionMutex.RUnlock()
 	return bps.lastPosition
@@ -100,8 +100,8 @@ type BinlogPlayer struct {
 
 	// common to all
 	uid            uint32
-	position       replication.ReplicationPosition
-	stopPosition   replication.ReplicationPosition
+	position       replication.Position
+	stopPosition   replication.Position
 	blplStats      *Stats
 	defaultCharset *pb.Charset
 	currentCharset *pb.Charset
@@ -121,12 +121,12 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pbt.EndPoint, keyspace
 		blplStats:      blplStats,
 	}
 	var err error
-	result.position, err = replication.DecodeReplicationPosition(startPosition)
+	result.position, err = replication.DecodePosition(startPosition)
 	if err != nil {
 		return nil, err
 	}
 	if stopPosition != "" {
-		result.stopPosition, err = replication.DecodeReplicationPosition(stopPosition)
+		result.stopPosition, err = replication.DecodePosition(stopPosition)
 		if err != nil {
 			return nil, err
 		}
@@ -147,13 +147,13 @@ func NewBinlogPlayerTables(dbClient VtClient, endPoint *pbt.EndPoint, tables []s
 		blplStats: blplStats,
 	}
 	var err error
-	result.position, err = replication.DecodeReplicationPosition(startPosition)
+	result.position, err = replication.DecodePosition(startPosition)
 	if err != nil {
 		return nil, err
 	}
 	if stopPosition != "" {
 		var err error
-		result.stopPosition, err = replication.DecodeReplicationPosition(stopPosition)
+		result.stopPosition, err = replication.DecodePosition(stopPosition)
 		if err != nil {
 			return nil, err
 		}
@@ -340,9 +340,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	var responseChan chan *pb.BinlogTransaction
 	var errFunc ErrFunc
 	if len(blp.tables) > 0 {
-		responseChan, errFunc, err = blplClient.StreamTables(ctx, replication.EncodeReplicationPosition(blp.position), blp.tables, blp.defaultCharset)
+		responseChan, errFunc, err = blplClient.StreamTables(ctx, replication.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
 	} else {
-		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, replication.EncodeReplicationPosition(blp.position), blp.keyspaceIDType, blp.keyRange, blp.defaultCharset)
+		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyspaceIDType, blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
 		log.Errorf("Error sending streaming query to binlog server: %v", err)
@@ -413,20 +413,20 @@ func PopulateBlpCheckpoint(index uint32, position string, timeUpdated int64, fla
 
 // updateBlpCheckpoint returns a statement to update a value in the
 // _vt.blp_checkpoint table.
-func updateBlpCheckpoint(uid uint32, pos replication.ReplicationPosition, timeUpdated int64, txTimestamp int64) string {
+func updateBlpCheckpoint(uid uint32, pos replication.Position, timeUpdated int64, txTimestamp int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
 			"UPDATE _vt.blp_checkpoint "+
 				"SET pos='%v', time_updated=%v, transaction_timestamp=%v "+
 				"WHERE source_shard_uid=%v",
-			replication.EncodeReplicationPosition(pos), timeUpdated, txTimestamp, uid)
+			replication.EncodePosition(pos), timeUpdated, txTimestamp, uid)
 	}
 
 	return fmt.Sprintf(
 		"UPDATE _vt.blp_checkpoint "+
 			"SET pos='%v', time_updated=%v "+
 			"WHERE source_shard_uid=%v",
-		replication.EncodeReplicationPosition(pos), timeUpdated, uid)
+		replication.EncodePosition(pos), timeUpdated, uid)
 }
 
 // QueryBlpCheckpoint returns a statement to query the gtid and flags for a
