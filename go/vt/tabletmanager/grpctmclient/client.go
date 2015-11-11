@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -231,7 +231,7 @@ func (client *Client) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // PreflightSchema is part of the tmclient.TabletManagerClient interface
-func (client *Client) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*myproto.SchemaChangeResult, error) {
+func (client *Client) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*tmutils.SchemaChangeResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -243,21 +243,21 @@ func (client *Client) PreflightSchema(ctx context.Context, tablet *topo.TabletIn
 	if err != nil {
 		return nil, err
 	}
-	return &myproto.SchemaChangeResult{
+	return &tmutils.SchemaChangeResult{
 		BeforeSchema: response.BeforeSchema,
 		AfterSchema:  response.AfterSchema,
 	}, err
 }
 
 // ApplySchema is part of the tmclient.TabletManagerClient interface
-func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
+func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer cc.Close()
 	response, err := c.ApplySchema(ctx, &tabletmanagerdatapb.ApplySchemaRequest{
-		Sql:              change.Sql,
+		Sql:              change.SQL,
 		Force:            change.Force,
 		AllowReplication: change.AllowReplication,
 		BeforeSchema:     change.BeforeSchema,
@@ -266,7 +266,7 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, 
 	if err != nil {
 		return nil, err
 	}
-	return &myproto.SchemaChangeResult{
+	return &tmutils.SchemaChangeResult{
 		BeforeSchema: response.BeforeSchema,
 		AfterSchema:  response.AfterSchema,
 	}, nil

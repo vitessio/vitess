@@ -26,12 +26,8 @@ errors=
 # with multiple files requires the files to all be in one package.
 for gofile in $gofiles
 do
-    if [ $gofile == "go/vt/tabletserver/grpcqueryservice/server.go" ]; then
-      echo "skipping go/vt/tabletserver/grpcqueryservice/server.go as Errorf is different"
-    else
-        if ! go tool vet $vetflags $gofile 2>&1; then
-            errors=YES
-        fi
+    if ! go tool vet $vetflags $gofile 2>&1; then
+        errors=YES
     fi
 done
 

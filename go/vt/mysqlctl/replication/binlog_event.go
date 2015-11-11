@@ -2,20 +2,20 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+// Package replication contains data structures to deal with MySQL
+// replication.
+package replication
 
 import (
 	"fmt"
 
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // BinlogEvent represents a single event from a raw MySQL binlog dump stream.
 // The implementation is provided by each supported flavor in go/vt/mysqlctl.
 //
-// BinlogStreamer receives these events through a mysqlctl.SlaveConnection and
+// binlog.Streamer receives these events through a mysqlctl.SlaveConnection and
 // processes them, grouping statements into BinlogTransactions as appropriate.
 //
 // Methods that only access header fields can't fail as long as IsValid()
@@ -24,6 +24,9 @@ import (
 //
 // Methods that require information from the initial FORMAT_DESCRIPTION_EVENT
 // will have a BinlogFormat parameter.
+//
+// A BinlogEvent should never be sent over the wire. UpdateStream service
+// will send BinlogTransactions from these events.
 type BinlogEvent interface {
 	// IsValid returns true if the underlying data buffer contains a valid event.
 	// This should be called first on any BinlogEvent, and other methods should
@@ -60,7 +63,7 @@ type BinlogEvent interface {
 	Format() (BinlogFormat, error)
 	// GTID returns the GTID from the event.
 	// This is only valid if HasGTID() returns true.
-	GTID(BinlogFormat) (myproto.GTID, error)
+	GTID(BinlogFormat) (GTID, error)
 	// IsBeginGTID returns true if this is a GTID_EVENT that also serves as a
 	// BEGIN statement. Otherwise, the GTID_EVENT is just providing the GTID for
 	// the following QUERY_EVENT.
@@ -104,12 +107,12 @@ func (f BinlogFormat) IsZero() bool {
 // Query contains data from a QUERY_EVENT.
 type Query struct {
 	Database string
-	Charset  *pb.Charset
-	Sql      string
+	Charset  *binlogdatapb.Charset
+	SQL      string
 }
 
 // String pretty-prints a Query.
 func (q Query) String() string {
-	return fmt.Sprintf("{Database: %q, Charset: %v, Sql: %q}",
-		q.Database, q.Charset, q.Sql)
+	return fmt.Sprintf("{Database: %q, Charset: %v, SQL: %q}",
+		q.Database, q.Charset, q.SQL)
 }

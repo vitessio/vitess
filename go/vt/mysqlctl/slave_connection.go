@@ -14,9 +14,8 @@ import (
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sync2"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 // SlaveConnection represents a connection to mysqld that pretends to be a slave
@@ -65,7 +64,7 @@ var slaveIDPool = pools.NewIDPool()
 // be sent. The stream will continue, waiting for new events if necessary,
 // until the connection is closed, either by the master or by calling
 // SlaveConnection.Close(). At that point, the channel will also be closed.
-func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (<-chan blproto.BinlogEvent, error) {
+func (sc *SlaveConnection) StartBinlogDump(startPos replication.Position) (<-chan replication.BinlogEvent, error) {
 	flavor, err := sc.mysqld.flavor()
 	if err != nil {
 		return nil, fmt.Errorf("StartBinlogDump needs flavor: %v", err)
@@ -84,7 +83,7 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 		return nil, err
 	}
 
-	eventChan := make(chan blproto.BinlogEvent)
+	eventChan := make(chan replication.BinlogEvent)
 
 	// Start reading events.
 	sc.svm.Go(func(svc *sync2.ServiceContext) error {

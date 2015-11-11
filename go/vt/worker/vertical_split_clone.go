@@ -17,8 +17,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/worker/events"
@@ -38,7 +37,7 @@ type VerticalSplitCloneWorker struct {
 	destinationKeyspace    string
 	destinationShard       string
 	tables                 []string
-	strategy               *mysqlctl.SplitStrategy
+	strategy               *splitStrategy
 	sourceReaderCount      int
 	destinationPackCount   int
 	minTableSizeForSplit   uint64
@@ -72,7 +71,7 @@ type VerticalSplitCloneWorker struct {
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
 func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
-	strategy, err := mysqlctl.NewSplitStrategy(wr.Logger(), strategyStr)
+	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +361,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	// Count rows
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
 		vscw.tableStatus[i].mu.Lock()
-		if td.Type == myproto.TableBaseTable {
+		if td.Type == tmutils.TableBaseTable {
 			vscw.tableStatus[i].rowCount = td.RowCount
 		} else {
 			vscw.tableStatus[i].isView = true
@@ -414,7 +413,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	sourceWaitGroup := sync.WaitGroup{}
 	sema := sync2.NewSemaphore(vscw.sourceReaderCount, 0)
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == myproto.TableView {
+		if td.Type == tmutils.TableView {
 			continue
 		}
 
@@ -460,7 +459,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	}
 
 	// then create and populate the blp_checkpoint table
-	if vscw.strategy.PopulateBlpCheckpoint {
+	if vscw.strategy.populateBlpCheckpoint {
 		// get the current position from the source
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet)
@@ -472,7 +471,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		queries := make([]string, 0, 4)
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		flags := ""
-		if vscw.strategy.DontStartBinlogPlayer {
+		if vscw.strategy.dontStartBinlogPlayer {
 			flags = binlogplayer.BlpFlagDontStart
 		}
 		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
@@ -491,7 +490,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	}
 
 	// Now we're done with data copy, update the shard's source info.
-	if vscw.strategy.SkipSetSourceShards {
+	if vscw.strategy.skipSetSourceShards {
 		vscw.wr.Logger().Infof("Skipping setting SourceShard on destination shard.")
 	} else {
 		vscw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)

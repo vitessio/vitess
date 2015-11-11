@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+// Package gorpcbinlogcommon contains data structures shared by
+// gorpcbinlogplayer and gorpcbinlogstreamer packages.
+package gorpcbinlogcommon
 
 import (
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-// This file contains the data structures used by bson rpc for update stream.
 
 // UpdateStreamRequest is used to make a request for ServeUpdateStream.
 type UpdateStreamRequest struct {
@@ -19,14 +19,14 @@ type UpdateStreamRequest struct {
 // KeyRangeRequest is used to make a request for StreamKeyRange.
 type KeyRangeRequest struct {
 	Position       string
-	KeyspaceIdType pbt.KeyspaceIdType
-	KeyRange       *pbt.KeyRange
-	Charset        *pb.Charset
+	KeyspaceIdType topodatapb.KeyspaceIdType
+	KeyRange       *topodatapb.KeyRange
+	Charset        *binlogdatapb.Charset
 }
 
 // TablesRequest is used to make a request for StreamTables.
 type TablesRequest struct {
 	Position string
 	Tables   []string
-	Charset  *pb.Charset
+	Charset  *binlogdatapb.Charset
 }

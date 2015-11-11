@@ -21,12 +21,12 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
@@ -61,9 +61,9 @@ type BinlogPlayerController struct {
 	// Information about the source (set at construction, immutable).
 	sourceShard *pb.Shard_SourceShard
 
-	// BinlogPlayerStats has the stats for the players we're going to use
+	// binlogPlayerStats has the stats for the players we're going to use
 	// (pointer is set at construction, immutable, values are thread-safe).
-	binlogPlayerStats *binlogplayer.BinlogPlayerStats
+	binlogPlayerStats *binlogplayer.Stats
 
 	// healthCheck handles the connections to the sources (set at
 	// construction, immutable).
@@ -110,7 +110,7 @@ func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplay
 		keyRange:             keyRange,
 		dbName:               dbName,
 		sourceShard:          sourceShard,
-		binlogPlayerStats:    binlogplayer.NewBinlogPlayerStats(),
+		binlogPlayerStats:    binlogplayer.NewStats(),
 		healthCheck:          discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *retryDelay),
 		initialEndpointFound: make(chan struct{}),
 	}
@@ -596,7 +596,7 @@ func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList []*pbt
 	// we're not doing anything wrong
 	posMap := make(map[uint32]string)
 	for _, bpc := range blm.players {
-		blpPos := blproto.FindBlpPositionByID(blpPositionList, bpc.sourceShard.Uid)
+		blpPos := tmutils.FindBlpPositionByID(blpPositionList, bpc.sourceShard.Uid)
 		if blpPos == nil {
 			return fmt.Errorf("No binlog position passed in for player Uid %v", bpc.sourceShard.Uid)
 		}
@@ -637,7 +637,7 @@ type BinlogPlayerControllerStatus struct {
 	StopPosition string
 
 	// stats and current values
-	LastPosition        myproto.ReplicationPosition
+	LastPosition        replication.Position
 	SecondsBehindMaster int64
 	Counts              map[string]int64
 	Rates               map[string][]float64

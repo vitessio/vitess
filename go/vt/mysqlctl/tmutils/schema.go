@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+package tmutils
 
 import (
 	"crypto/md5"
@@ -15,6 +15,8 @@ import (
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
+
+// This file contains helper methods to deal with Schema information.
 
 const (
 	// TableBaseTable indicates the table type is a base table.
@@ -229,8 +231,9 @@ func DiffSchemaToArray(leftName string, left *tabletmanagerdatapb.SchemaDefiniti
 }
 
 // SchemaChange contains all necessary information to apply a schema change.
+// It should not be sent over the wire, it's just a set of parameters.
 type SchemaChange struct {
-	Sql              string
+	SQL              string
 	Force            bool
 	AllowReplication bool
 	BeforeSchema     *tabletmanagerdatapb.SchemaDefinition
@@ -239,6 +242,7 @@ type SchemaChange struct {
 
 // SchemaChangeResult contains before and after table schemas for
 // a schema change sql.
+// It should not be sent over the wire, it's just a set of parameters.
 type SchemaChangeResult struct {
 	BeforeSchema *tabletmanagerdatapb.SchemaDefinition
 	AfterSchema  *tabletmanagerdatapb.SchemaDefinition

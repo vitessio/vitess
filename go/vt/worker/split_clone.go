@@ -16,8 +16,7 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -38,7 +37,7 @@ type SplitCloneWorker struct {
 	keyspace               string
 	shard                  string
 	excludeTables          []string
-	strategy               *mysqlctl.SplitStrategy
+	strategy               *splitStrategy
 	sourceReaderCount      int
 	destinationPackCount   int
 	minTableSizeForSplit   uint64
@@ -76,7 +75,7 @@ type SplitCloneWorker struct {
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
 func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
-	strategy, err := mysqlctl.NewSplitStrategy(wr.Logger(), strategyStr)
+	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +409,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	// Find the column index for the sharding columns in all the databases, and count rows
 	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == myproto.TableBaseTable {
+		if td.Type == tmutils.TableBaseTable {
 			// find the column to split on
 			columnIndexes[tableIndex] = -1
 			for i, name := range td.Columns {
@@ -479,7 +478,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	for shardIndex := range scw.sourceShards {
 		sema := sync2.NewSemaphore(scw.sourceReaderCount, 0)
 		for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-			if td.Type == myproto.TableView {
+			if td.Type == tmutils.TableView {
 				continue
 			}
 
@@ -530,11 +529,11 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	}
 
 	// then create and populate the blp_checkpoint table
-	if scw.strategy.PopulateBlpCheckpoint {
+	if scw.strategy.populateBlpCheckpoint {
 		queries := make([]string, 0, 4)
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		flags := ""
-		if scw.strategy.DontStartBinlogPlayer {
+		if scw.strategy.dontStartBinlogPlayer {
 			flags = binlogplayer.BlpFlagDontStart
 		}
 
@@ -570,7 +569,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	// TODO(alainjobart) this is a superset, some shards may not
 	// overlap, have to deal with this better (for N -> M splits
 	// where both N>1 and M>1)
-	if scw.strategy.SkipSetSourceShards {
+	if scw.strategy.skipSetSourceShards {
 		scw.wr.Logger().Infof("Skipping setting SourceShard on destination shards.")
 	} else {
 		for _, si := range scw.destinationShards {

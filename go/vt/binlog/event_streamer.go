@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -30,19 +30,19 @@ var (
 
 type sendEventFunc func(event *pb.StreamEvent) error
 
-// EventStreamer is an adapter on top of a BinlogStreamer that convert
+// EventStreamer is an adapter on top of a binlog Streamer that convert
 // the events into StreamEvent objects.
 type EventStreamer struct {
-	bls       *BinlogStreamer
+	bls       *Streamer
 	sendEvent sendEventFunc
 }
 
-// NewEventStreamer returns a new EventStreamer on top of a BinlogStreamer
-func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos myproto.ReplicationPosition, sendEvent sendEventFunc) *EventStreamer {
+// NewEventStreamer returns a new EventStreamer on top of a Streamer
+func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos replication.Position, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}
-	evs.bls = NewBinlogStreamer(dbname, mysqld, nil, startPos, evs.transactionToEvent)
+	evs.bls = NewStreamer(dbname, mysqld, nil, startPos, evs.transactionToEvent)
 	return evs
 }
 

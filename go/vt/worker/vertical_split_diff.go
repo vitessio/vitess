@@ -13,9 +13,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sync2"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -250,7 +249,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	stopPositionList := make([]*pbt.BlpPosition, 1)
 	ss := vsdw.shardInfo.SourceShards[0]
 	// find where we should be stopping
-	blpPos := blproto.FindBlpPositionByID(blpPositionList, ss.Uid)
+	blpPos := tmutils.FindBlpPositionByID(blpPositionList, ss.Uid)
 	if blpPos == nil {
 		return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 	}
@@ -399,7 +398,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	// Check the schema
 	vsdw.wr.Logger().Infof("Diffing the schema...")
 	rec = concurrency.AllErrorRecorder{}
-	myproto.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, &rec)
+	tmutils.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, &rec)
 	if rec.HasErrors() {
 		vsdw.wr.Logger().Warningf("Different schemas: %v", rec.Error())
 	} else {
