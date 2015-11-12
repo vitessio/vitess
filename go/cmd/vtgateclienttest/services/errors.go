@@ -100,7 +100,7 @@ func trimmedRequestToError(received string) error {
 	case "transient error":
 		return vterrors.FromError(
 			vtrpc.ErrorCode_TRANSIENT_ERROR,
-			errors.New("request_backlog: too many requests in flight: vtgate test client forced error"),
+			errors.New("request_backlog: too many requests in flight: vtgate test client forced error: transient error"),
 		)
 	case "unauthenticated":
 		return vterrors.FromError(
