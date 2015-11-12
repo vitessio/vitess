@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestRowsToProto3(t *testing.T) {
@@ -23,12 +23,12 @@ func TestRowsToProto3(t *testing.T) {
 		sqltypes.NULL,
 	}}
 	p3 := RowsToProto3(rows)
-	want := []*query.Row{
-		&query.Row{
+	want := []*querypb.Row{
+		&querypb.Row{
 			Lengths: []int64{2, -1, 2},
 			Values:  []byte("aa12"),
 		},
-		&query.Row{
+		&querypb.Row{
 			Lengths: []int64{2, -1, -1},
 			Values:  []byte("bb"),
 		},

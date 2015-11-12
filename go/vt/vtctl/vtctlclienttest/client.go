@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
@@ -39,8 +39,8 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	ctx := context.Background()
 
 	// Create a fake tablet
-	tablet := &pb.Tablet{
-		Alias:    &pb.TabletAlias{Cell: "cell1", Uid: 1},
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 1},
 		Hostname: "localhost",
 		Ip:       "10.11.12.13",
 		PortMap: map[string]int32{
@@ -50,7 +50,7 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
-		Type:     pb.TabletType_MASTER,
+		Type:     topodatapb.TabletType_MASTER,
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)

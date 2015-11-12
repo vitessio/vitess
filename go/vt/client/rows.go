@@ -11,7 +11,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // rows creates a database/sql/driver compliant Row iterator
@@ -51,7 +51,7 @@ func (ri *rows) Next(dest []driver.Value) error {
 // The returned types for "dest" include the list from the interface
 // specification at https://golang.org/pkg/database/sql/driver/#Value
 // and in addition the type "uint64" for unsigned BIGINT MySQL records.
-func populateRow(dest []driver.Value, fields []*query.Field, row []sqltypes.Value) error {
+func populateRow(dest []driver.Value, fields []*querypb.Field, row []sqltypes.Value) error {
 	if len(dest) != len(fields) {
 		return fmt.Errorf("length mismatch: dest is %d, fields are %d", len(dest), len(fields))
 	}

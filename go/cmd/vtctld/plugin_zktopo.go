@@ -23,7 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func init() {
@@ -66,12 +66,12 @@ func (ex ZkExplorer) GetSrvShardPath(cell, keyspace, shard string) string {
 }
 
 // GetSrvTypePath is part of the Explorer interface
-func (ex ZkExplorer) GetSrvTypePath(cell, keyspace, shard string, tabletType pb.TabletType) string {
+func (ex ZkExplorer) GetSrvTypePath(cell, keyspace, shard string, tabletType topodatapb.TabletType) string {
 	return path.Join("/zk", cell, "/vt/ns", keyspace, shard, strings.ToLower(tabletType.String()))
 }
 
 // GetTabletPath is part of the Explorer interface
-func (ex ZkExplorer) GetTabletPath(alias *pb.TabletAlias) string {
+func (ex ZkExplorer) GetTabletPath(alias *topodatapb.TabletAlias) string {
 	return path.Join("/zk", alias.Cell, "vt/tablets", topoproto.TabletAliasUIDStr(alias))
 }
 
@@ -129,7 +129,7 @@ func (ex ZkExplorer) HandlePath(actionRepo proto.ActionRepository, zkPath string
 }
 
 func (ex ZkExplorer) addTabletLinks(data string, result *ZkResult) {
-	t := &pb.Tablet{}
+	t := &topodatapb.Tablet{}
 	err := json.Unmarshal([]byte(data), t)
 	if err != nil {
 		return

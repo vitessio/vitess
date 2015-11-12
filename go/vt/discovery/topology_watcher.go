@@ -10,13 +10,13 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // NewCellTabletsWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and starts refreshing.
 func NewCellTabletsWatcher(topoServer topo.Server, hc HealthCheck, cell string, refreshInterval time.Duration, topoReadConcurrency int) *TopologyWatcher {
-	return NewTopologyWatcher(topoServer, hc, cell, refreshInterval, topoReadConcurrency, func(tw *TopologyWatcher) ([]*pbt.TabletAlias, error) {
+	return NewTopologyWatcher(topoServer, hc, cell, refreshInterval, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error) {
 		return tw.topoServer.GetTabletsByCell(tw.ctx, tw.cell)
 	})
 }
@@ -24,7 +24,7 @@ func NewCellTabletsWatcher(topoServer topo.Server, hc HealthCheck, cell string, 
 // NewShardReplicationWatcher returns a TopologyWatcher that
 // monitors the tablets in a cell/keyspace/shard, and starts refreshing.
 func NewShardReplicationWatcher(topoServer topo.Server, hc HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) *TopologyWatcher {
-	return NewTopologyWatcher(topoServer, hc, cell, refreshInterval, topoReadConcurrency, func(tw *TopologyWatcher) ([]*pbt.TabletAlias, error) {
+	return NewTopologyWatcher(topoServer, hc, cell, refreshInterval, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error) {
 		sri, err := tw.topoServer.GetShardReplication(tw.ctx, tw.cell, keyspace, shard)
 		switch err {
 		case nil:
@@ -36,7 +36,7 @@ func NewShardReplicationWatcher(topoServer topo.Server, hc HealthCheck, cell, ke
 			return nil, err
 		}
 
-		result := make([]*pbt.TabletAlias, len(sri.Nodes))
+		result := make([]*topodatapb.TabletAlias, len(sri.Nodes))
 		for i, node := range sri.Nodes {
 			result[i] = node.TabletAlias
 		}
@@ -47,7 +47,7 @@ func NewShardReplicationWatcher(topoServer topo.Server, hc HealthCheck, cell, ke
 // tabletEndPoint is used internally by the TopologyWatcher class
 type tabletEndPoint struct {
 	alias    string
-	endPoint *pbt.EndPoint
+	endPoint *topodatapb.EndPoint
 }
 
 // TopologyWatcher pulls endpoints from a configurable set of tablets
@@ -58,7 +58,7 @@ type TopologyWatcher struct {
 	hc              HealthCheck
 	cell            string
 	refreshInterval time.Duration
-	getTablets      func(tw *TopologyWatcher) ([]*pbt.TabletAlias, error)
+	getTablets      func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error)
 	sem             chan int
 	ctx             context.Context
 	cancelFunc      context.CancelFunc
@@ -70,7 +70,7 @@ type TopologyWatcher struct {
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and starts refreshing.
-func NewTopologyWatcher(topoServer topo.Server, hc HealthCheck, cell string, refreshInterval time.Duration, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*pbt.TabletAlias, error)) *TopologyWatcher {
+func NewTopologyWatcher(topoServer topo.Server, hc HealthCheck, cell string, refreshInterval time.Duration, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error)) *TopologyWatcher {
 	ctw := &TopologyWatcher{
 		topoServer:      topoServer,
 		hc:              hc,
@@ -115,7 +115,7 @@ func (ctw *TopologyWatcher) loadTablets() {
 	}
 	for _, tAlias := range tabletAlias {
 		wg.Add(1)
-		go func(alias *pbt.TabletAlias) {
+		go func(alias *topodatapb.TabletAlias) {
 			defer wg.Done()
 			ctw.sem <- 1 // Wait for active queue to drain.
 			tablet, err := ctw.topoServer.GetTablet(ctw.ctx, alias)

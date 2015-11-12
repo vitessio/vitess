@@ -15,7 +15,7 @@ import (
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /*
@@ -23,7 +23,7 @@ This file contains the shard management code for zktopo.Server
 */
 
 // CreateShard is part of the topo.Server interface
-func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error {
+func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard) error {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	pathList := []string{
 		shardPath,
@@ -58,7 +58,7 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 }
 
 // UpdateShard is part of the topo.Server interface
-func (zkts *Server) UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (int64, error) {
+func (zkts *Server) UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (int64, error) {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
@@ -91,7 +91,7 @@ func (zkts *Server) ValidateShard(ctx context.Context, keyspace, shard string) e
 }
 
 // GetShard is part of the topo.Server interface
-func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error) {
+func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	data, stat, err := zkts.zconn.Get(shardPath)
 	if err != nil {
@@ -101,7 +101,7 @@ func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*pb.S
 		return nil, 0, err
 	}
 
-	s := &pb.Shard{}
+	s := &topodatapb.Shard{}
 	if err = json.Unmarshal([]byte(data), s); err != nil {
 		return nil, 0, fmt.Errorf("bad shard data %v", err)
 	}

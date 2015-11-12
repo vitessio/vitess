@@ -24,7 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // SplitCloneWorker will clone the data within a keyspace from a
@@ -52,7 +52,7 @@ type SplitCloneWorker struct {
 	destinationShards []*topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAliases []*pb.TabletAlias
+	sourceAliases []*topodatapb.TabletAlias
 	sourceTablets []*topo.TabletInfo
 
 	// populated during WorkerStateCopy
@@ -60,8 +60,8 @@ type SplitCloneWorker struct {
 	startTime   time.Time
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
-	reloadAliases [][]*pb.TabletAlias
-	reloadTablets []map[pb.TabletAlias]*topo.TabletInfo
+	reloadAliases [][]*topodatapb.TabletAlias
+	reloadTablets []map[topodatapb.TabletAlias]*topo.TabletInfo
 
 	ev *events.SplitClone
 
@@ -251,7 +251,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	}
 
 	// validate all serving types
-	servingTypes := []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY}
+	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 	for _, st := range servingTypes {
 		for _, si := range scw.sourceShards {
 			if si.GetServedType(st) == nil {
@@ -277,7 +277,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	var err error
 
 	// find an appropriate endpoint in the source shards
-	scw.sourceAliases = make([]*pb.TabletAlias, len(scw.sourceShards))
+	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
 		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
 		if err != nil {
@@ -308,7 +308,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(alias), err)
 		}
-		action.TabletType = pb.TabletType_SPARE
+		action.TabletType = topodatapb.TabletType_SPARE
 	}
 
 	return scw.ResolveDestinationMasters(ctx)
@@ -359,8 +359,8 @@ func (scw *SplitCloneWorker) GetDestinationMaster(shardName string) (*topo.Table
 // Find all tablets on all destination shards. This should be done immediately before reloading
 // the schema on these tablets, to minimize the chances of the topo changing in between.
 func (scw *SplitCloneWorker) findReloadTargets(ctx context.Context) error {
-	scw.reloadAliases = make([][]*pb.TabletAlias, len(scw.destinationShards))
-	scw.reloadTablets = make([]map[pb.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
+	scw.reloadAliases = make([][]*topodatapb.TabletAlias, len(scw.destinationShards))
+	scw.reloadTablets = make([]map[topodatapb.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
 		reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)

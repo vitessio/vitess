@@ -16,8 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	pb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
@@ -26,7 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 )
 
@@ -385,8 +384,8 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 
 func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	db := setUpQueryExecutorTest()
-	fields := []*pbq.Field{
-		&pbq.Field{Name: "addr", Type: sqltypes.Int32},
+	fields := []*querypb.Field{
+		&querypb.Field{Name: "addr", Type: sqltypes.Int32},
 	}
 	query := "select addr from test_table where pk = 1 limit 1000"
 	want := &sqltypes.Result{
@@ -618,7 +617,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	})
 
 	username := "u2"
-	callerID := &pbq.VTGateCallerID{
+	callerID := &querypb.VTGateCallerID{
 		Username: username,
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
@@ -663,7 +662,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	})
 
 	username := "u2"
-	callerID := &pbq.VTGateCallerID{
+	callerID := &querypb.VTGateCallerID{
 		Username: username,
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
@@ -727,7 +726,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	})
 
 	username := "u2"
-	callerID := &pbq.VTGateCallerID{
+	callerID := &querypb.VTGateCallerID{
 		Username: username,
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
@@ -771,7 +770,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	if tsv.qe.exemptACL, err = f.New([]string{username}); err != nil {
 		t.Fatalf("Cannot load exempt ACL for Table ACL: %v", err)
 	}
-	callerID = &pbq.VTGateCallerID{
+	callerID = &querypb.VTGateCallerID{
 		Username: username,
 	}
 	ctx = callerid.NewContext(context.Background(), nil, callerID)
@@ -800,7 +799,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	})
 
 	username := "u2"
-	callerID := &pbq.VTGateCallerID{
+	callerID := &querypb.VTGateCallerID{
 		Username: username,
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
@@ -1006,7 +1005,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	if flags&enableSchemaOverrides > 0 {
 		schemaOverrides = getTestTableSchemaOverrides()
 	}
-	target := pb.Target{TabletType: topodata.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	tsv.StartService(target, dbconfigs, schemaOverrides, testUtils.newMysqld(&dbconfigs))
 	return tsv
 }
@@ -1060,11 +1059,11 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 	}
 }
 
-func getTestTableFields() []*pbq.Field {
-	return []*pbq.Field{
-		&pbq.Field{Name: "pk", Type: sqltypes.Int32},
-		&pbq.Field{Name: "name", Type: sqltypes.Int32},
-		&pbq.Field{Name: "addr", Type: sqltypes.Int32},
+func getTestTableFields() []*querypb.Field {
+	return []*querypb.Field{
+		&querypb.Field{Name: "pk", Type: sqltypes.Int32},
+		&querypb.Field{Name: "name", Type: sqltypes.Int32},
+		&querypb.Field{Name: "addr", Type: sqltypes.Int32},
 	}
 }
 
@@ -1125,7 +1124,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"select * from `test_table` where 1 != 1": &sqltypes.Result{
-			Fields: []*pbq.Field{{
+			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}, {

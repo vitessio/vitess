@@ -16,12 +16,12 @@ import (
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlclient"
 
-	pb "github.com/youtube/vitess/go/vt/proto/mysqlctl"
+	mysqlctlpb "github.com/youtube/vitess/go/vt/proto/mysqlctl"
 )
 
 type client struct {
 	cc *grpc.ClientConn
-	c  pb.MysqlCtlClient
+	c  mysqlctlpb.MysqlCtlClient
 }
 
 func factory(network, addr string, dialTimeout time.Duration) (mysqlctlclient.MysqlctlClient, error) {
@@ -32,7 +32,7 @@ func factory(network, addr string, dialTimeout time.Duration) (mysqlctlclient.My
 	if err != nil {
 		return nil, err
 	}
-	c := pb.NewMysqlCtlClient(cc)
+	c := mysqlctlpb.NewMysqlCtlClient(cc)
 
 	return &client{
 		cc: cc,
@@ -42,13 +42,13 @@ func factory(network, addr string, dialTimeout time.Duration) (mysqlctlclient.My
 
 // Start is part of the MysqlctlClient interface.
 func (c *client) Start(ctx context.Context) error {
-	_, err := c.c.Start(ctx, &pb.StartRequest{})
+	_, err := c.c.Start(ctx, &mysqlctlpb.StartRequest{})
 	return err
 }
 
 // Shutdown is part of the MysqlctlClient interface.
 func (c *client) Shutdown(ctx context.Context, waitForMysqld bool) error {
-	_, err := c.c.Shutdown(ctx, &pb.ShutdownRequest{
+	_, err := c.c.Shutdown(ctx, &mysqlctlpb.ShutdownRequest{
 		WaitForMysqld: waitForMysqld,
 	})
 	return err
@@ -56,7 +56,7 @@ func (c *client) Shutdown(ctx context.Context, waitForMysqld bool) error {
 
 // RunMysqlUpgrade is part of the MysqlctlClient interface.
 func (c *client) RunMysqlUpgrade(ctx context.Context) error {
-	_, err := c.c.RunMysqlUpgrade(ctx, &pb.RunMysqlUpgradeRequest{})
+	_, err := c.c.RunMysqlUpgrade(ctx, &mysqlctlpb.RunMysqlUpgradeRequest{})
 	return err
 }
 

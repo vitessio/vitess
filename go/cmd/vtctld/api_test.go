@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func compactJSON(in []byte) string {
@@ -39,30 +39,30 @@ func TestAPI(t *testing.T) {
 	defer server.Close()
 
 	// Populate topo.
-	ts.CreateKeyspace(ctx, "ks1", &pb.Keyspace{ShardingColumnName: "shardcol"})
-	ts.Impl.CreateShard(ctx, "ks1", "-80", &pb.Shard{
+	ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{ShardingColumnName: "shardcol"})
+	ts.Impl.CreateShard(ctx, "ks1", "-80", &topodatapb.Shard{
 		Cells:    cells,
-		KeyRange: &pb.KeyRange{Start: nil, End: []byte{0x80}},
+		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
 	})
-	ts.Impl.CreateShard(ctx, "ks1", "80-", &pb.Shard{
+	ts.Impl.CreateShard(ctx, "ks1", "80-", &topodatapb.Shard{
 		Cells:    cells,
-		KeyRange: &pb.KeyRange{Start: []byte{0x80}, End: nil},
+		KeyRange: &topodatapb.KeyRange{Start: []byte{0x80}, End: nil},
 	})
 
-	ts.CreateTablet(ctx, &pb.Tablet{
-		Alias:    &pb.TabletAlias{Cell: "cell1", Uid: 100},
+	ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
 		Keyspace: "ks1",
 		Shard:    "-80",
-		Type:     pb.TabletType_REPLICA,
-		KeyRange: &pb.KeyRange{Start: nil, End: []byte{0x80}},
+		Type:     topodatapb.TabletType_REPLICA,
+		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
 		PortMap:  map[string]int32{"vt": 100},
 	})
-	ts.CreateTablet(ctx, &pb.Tablet{
-		Alias:    &pb.TabletAlias{Cell: "cell2", Uid: 200},
+	ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "cell2", Uid: 200},
 		Keyspace: "ks1",
 		Shard:    "-80",
-		Type:     pb.TabletType_REPLICA,
-		KeyRange: &pb.KeyRange{Start: nil, End: []byte{0x80}},
+		Type:     topodatapb.TabletType_REPLICA,
+		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
 		PortMap:  map[string]int32{"vt": 200},
 	})
 	topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), ts, "ks1", "-80", cells)
@@ -77,7 +77,7 @@ func TestAPI(t *testing.T) {
 			return "TestShardAction Result", nil
 		})
 	actionRepo.RegisterTabletAction("TestTabletAction", "",
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
 			return "TestTabletAction Result", nil
 		})
 

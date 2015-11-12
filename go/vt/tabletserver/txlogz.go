@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/callerid"
 
-	qrpb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -37,7 +37,7 @@ var (
 	txlogzFuncMap = template.FuncMap{
 		"stampMicro":         func(t time.Time) string { return t.Format(time.StampMicro) },
 		"getEffectiveCaller": func(e *vtpb.CallerID) string { return callerid.GetPrincipal(e) },
-		"getImmediateCaller": func(i *qrpb.VTGateCallerID) string { return callerid.GetUsername(i) },
+		"getImmediateCaller": func(i *querypb.VTGateCallerID) string { return callerid.GetUsername(i) },
 	}
 	txlogzTmpl = template.Must(template.New("example").Funcs(txlogzFuncMap).Parse(`
 		<tr class="{{.ColorLevel}}">

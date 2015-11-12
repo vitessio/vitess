@@ -4,20 +4,20 @@
 
 package sqltypes
 
-import pbq "github.com/youtube/vitess/go/vt/proto/query"
+import querypb "github.com/youtube/vitess/go/vt/proto/query"
 
 // This file contains the proto3 conversion functions for the structures
 // defined here.
 
 // RowsToProto3 converts [][]Value to proto3.
-func RowsToProto3(rows [][]Value) []*pbq.Row {
+func RowsToProto3(rows [][]Value) []*querypb.Row {
 	if len(rows) == 0 {
 		return nil
 	}
 
-	result := make([]*pbq.Row, len(rows))
+	result := make([]*querypb.Row, len(rows))
 	for i, r := range rows {
-		row := &pbq.Row{}
+		row := &querypb.Row{}
 		result[i] = row
 		row.Lengths = make([]int64, 0, len(r))
 		total := 0
@@ -42,7 +42,7 @@ func RowsToProto3(rows [][]Value) []*pbq.Row {
 }
 
 // Proto3ToRows converts a proto3 rows to [][]Value.
-func Proto3ToRows(rows []*pbq.Row) [][]Value {
+func Proto3ToRows(rows []*querypb.Row) [][]Value {
 	if len(rows) == 0 {
 		return [][]Value{}
 	}
@@ -65,11 +65,11 @@ func Proto3ToRows(rows []*pbq.Row) [][]Value {
 }
 
 // ResultToProto3 converts Result to proto3.
-func ResultToProto3(qr *Result) *pbq.QueryResult {
+func ResultToProto3(qr *Result) *querypb.QueryResult {
 	if qr == nil {
 		return nil
 	}
-	return &pbq.QueryResult{
+	return &querypb.QueryResult{
 		Fields:       qr.Fields,
 		RowsAffected: qr.RowsAffected,
 		InsertId:     qr.InsertID,
@@ -78,7 +78,7 @@ func ResultToProto3(qr *Result) *pbq.QueryResult {
 }
 
 // Proto3ToResult converts a proto3 Result to an internal data structure.
-func Proto3ToResult(qr *pbq.QueryResult) *Result {
+func Proto3ToResult(qr *querypb.QueryResult) *Result {
 	if qr == nil {
 		return nil
 	}
@@ -91,7 +91,7 @@ func Proto3ToResult(qr *pbq.QueryResult) *Result {
 }
 
 // Proto3ToResults converts proto3 results to []Result.
-func Proto3ToResults(qr []*pbq.QueryResult) []Result {
+func Proto3ToResults(qr []*querypb.QueryResult) []Result {
 	if len(qr) == 0 {
 		return nil
 	}

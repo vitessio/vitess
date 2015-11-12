@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
@@ -33,7 +33,7 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 			nil,
 			"TestResolverExecuteKeyspaceIds",
 			[][]byte{[]byte{0x10}, []byte{0x25}},
-			pb.TabletType_MASTER,
+			topodatapb.TabletType_MASTER,
 			nil,
 			false)
 	})
@@ -46,8 +46,8 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 			"query",
 			nil,
 			"TestResolverExecuteKeyRanges",
-			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
-			pb.TabletType_MASTER,
+			[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
+			topodatapb.TabletType_MASTER,
 			nil,
 			false)
 	})
@@ -73,7 +73,7 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 					KeyspaceId: []byte{0x25},
 				},
 			},
-			pb.TabletType_MASTER,
+			topodatapb.TabletType_MASTER,
 			nil,
 			false)
 	})
@@ -92,7 +92,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 					[]byte{0x25},
 				},
 			}},
-			pb.TabletType_MASTER,
+			topodatapb.TabletType_MASTER,
 			false,
 			nil)
 		if err != nil {
@@ -112,7 +112,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 			nil,
 			"TestResolverStreamExecuteKeyspaceIds",
 			[][]byte{[]byte{0x10}, []byte{0x15}},
-			pb.TabletType_MASTER,
+			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
@@ -127,7 +127,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 			nil,
 			"TestResolverStreamExecuteKeyspaceIds",
 			[][]byte{[]byte{0x10}, []byte{0x15}, []byte{0x25}},
-			pb.TabletType_MASTER,
+			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
@@ -146,8 +146,8 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyRanges",
-			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x15}}},
-			pb.TabletType_MASTER,
+			[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x15}}},
+			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
@@ -162,8 +162,8 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyRanges",
-			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
-			pb.TabletType_MASTER,
+			[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
+			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
 				return nil
@@ -459,7 +459,7 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 		nil,
 		"TestResolverExecuteKeyspaceIds",
 		[][]byte{[]byte{0x10}, []byte{0x25}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false)
 	if err == nil {
@@ -486,7 +486,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 		return boundShardQueriesToScatterBatchRequest(queries), nil
 	}
 
-	_, err := res.ExecuteBatch(context.Background(), pb.TabletType_MASTER, false, nil, buildBatchRequest)
+	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, buildBatchRequest)
 	want := "shard, host: TestResolverExecBatchReresolve.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
@@ -519,7 +519,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 		return boundShardQueriesToScatterBatchRequest(queries), nil
 	}
 
-	_, err := res.ExecuteBatch(context.Background(), pb.TabletType_MASTER, true, nil, buildBatchRequest)
+	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, buildBatchRequest)
 	want := "shard, host: TestResolverExecBatchAsTransaction.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want got, got none")

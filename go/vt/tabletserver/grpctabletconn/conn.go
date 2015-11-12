@@ -18,9 +18,9 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
-	pbs "github.com/youtube/vitess/go/vt/proto/queryservice"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	queryservicepb "github.com/youtube/vitess/go/vt/proto/queryservice"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const protocolName = "grpc"
@@ -32,34 +32,34 @@ func init() {
 // gRPCQueryClient implements a gRPC implementation for TabletConn
 type gRPCQueryClient struct {
 	// endPoint is set at construction time, and never changed
-	endPoint *pbt.EndPoint
+	endPoint *topodatapb.EndPoint
 
 	// mu protects the next fields
 	mu        sync.RWMutex
 	cc        *grpc.ClientConn
-	c         pbs.QueryClient
+	c         queryservicepb.QueryClient
 	sessionID int64
-	target    *pb.Target
+	target    *querypb.Target
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
 	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["grpc"])
 	cc, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(timeout))
 	if err != nil {
 		return nil, err
 	}
-	c := pbs.NewQueryClient(cc)
+	c := queryservicepb.NewQueryClient(cc)
 
 	result := &gRPCQueryClient{
 		endPoint: endPoint,
 		cc:       cc,
 		c:        c,
 	}
-	if tabletType == pbt.TabletType_UNKNOWN {
+	if tabletType == topodatapb.TabletType_UNKNOWN {
 		// we use session
-		gsir, err := c.GetSessionId(ctx, &pb.GetSessionIdRequest{
+		gsir, err := c.GetSessionId(ctx, &querypb.GetSessionIdRequest{
 			Keyspace: keyspace,
 			Shard:    shard,
 		})
@@ -70,7 +70,7 @@ func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard str
 		result.sessionID = gsir.SessionId
 	} else {
 		// we use target
-		result.target = &pb.Target{
+		result.target = &querypb.Target{
 			Keyspace:   keyspace,
 			Shard:      shard,
 			TabletType: tabletType,
@@ -93,7 +93,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 		return nil, err
 	}
 
-	req := &pb.ExecuteRequest{
+	req := &querypb.ExecuteRequest{
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -121,11 +121,11 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 		return nil, tabletconn.ConnClosed
 	}
 
-	req := &pb.ExecuteBatchRequest{
+	req := &querypb.ExecuteBatchRequest{
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Queries:           make([]*pb.BoundQuery, len(queries)),
+		Queries:           make([]*querypb.BoundQuery, len(queries)),
 		AsTransaction:     asTransaction,
 		TransactionId:     transactionID,
 		SessionId:         conn.sessionID,
@@ -161,7 +161,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	if err != nil {
 		return nil, nil, err
 	}
-	req := &pb.StreamExecuteRequest{
+	req := &querypb.StreamExecuteRequest{
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -205,7 +205,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 		return 0, tabletconn.ConnClosed
 	}
 
-	req := &pb.BeginRequest{
+	req := &querypb.BeginRequest{
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -231,7 +231,7 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 		return tabletconn.ConnClosed
 	}
 
-	req := &pb.CommitRequest{
+	req := &querypb.CommitRequest{
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -258,7 +258,7 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 		return tabletconn.ConnClosed
 	}
 
-	req := &pb.RollbackRequest{
+	req := &querypb.RollbackRequest{
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -290,7 +290,7 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
-	req := &pb.SplitQueryRequest{
+	req := &querypb.SplitQueryRequest{
 		Target:            conn.target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -311,15 +311,15 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 }
 
 // StreamHealth is the stub for TabletServer.StreamHealth RPC
-func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
 		return nil, nil, tabletconn.ConnClosed
 	}
 
-	result := make(chan *pb.StreamHealthResponse, 10)
-	stream, err := conn.c.StreamHealth(ctx, &pb.StreamHealthRequest{})
+	result := make(chan *querypb.StreamHealthResponse, 10)
+	stream, err := conn.c.StreamHealth(ctx, &querypb.StreamHealthRequest{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -358,16 +358,16 @@ func (conn *gRPCQueryClient) Close() {
 }
 
 // SetTarget can be called to change the target used for subsequent calls.
-func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType pbt.TabletType) error {
+func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
 	if conn.target == nil {
 		return fmt.Errorf("cannot set target on sessionId based conn")
 	}
-	if tabletType == pbt.TabletType_UNKNOWN {
+	if tabletType == topodatapb.TabletType_UNKNOWN {
 		return fmt.Errorf("cannot set tablet type to UNKNOWN")
 	}
-	conn.target = &pb.Target{
+	conn.target = &querypb.Target{
 		Keyspace:   keyspace,
 		Shard:      shard,
 		TabletType: tabletType,
@@ -376,6 +376,6 @@ func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType pbt.Ta
 }
 
 // EndPoint returns the rpc end point.
-func (conn *gRPCQueryClient) EndPoint() *pbt.EndPoint {
+func (conn *gRPCQueryClient) EndPoint() *topodatapb.EndPoint {
 	return conn.endPoint
 }

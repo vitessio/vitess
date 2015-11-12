@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
@@ -119,7 +119,7 @@ func TestDeleteEqual(t *testing.T) {
 	router, sbc, _, sbclookup := createRouterEnv()
 
 	sbc.setResults([]*sqltypes.Result{&sqltypes.Result{
-		Fields: []*query.Field{
+		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 			{"name", sqltypes.VarChar},
 		},
@@ -256,7 +256,7 @@ func TestDeleteVindexFail(t *testing.T) {
 	}
 
 	sbc.setResults([]*sqltypes.Result{&sqltypes.Result{
-		Fields: []*query.Field{
+		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 			{"name", sqltypes.VarChar},
 		},

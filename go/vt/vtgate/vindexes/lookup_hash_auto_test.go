@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
@@ -59,7 +59,7 @@ func TestLookupHashAutoMapFail(t *testing.T) {
 
 func TestLookupHashAutoMapBadData(t *testing.T) {
 	result := &sqltypes.Result{
-		Fields: []*query.Field{{
+		Fields: []*querypb.Field{{
 			Type: sqltypes.Int24,
 		}},
 		Rows: [][]sqltypes.Value{
@@ -76,7 +76,7 @@ func TestLookupHashAutoMapBadData(t *testing.T) {
 		t.Errorf("lha.Map: %v, want %v", err, want)
 	}
 
-	result.Fields = []*query.Field{{
+	result.Fields = []*querypb.Field{{
 		Type: sqltypes.Float32,
 	}}
 	vc = &vcursor{result: result}

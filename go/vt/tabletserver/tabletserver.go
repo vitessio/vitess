@@ -26,8 +26,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -86,7 +86,7 @@ type TabletServer struct {
 	// before starting the tabletserver. For backward compatibility,
 	// we temporarily allow them to be changed until the migration
 	// to the new API is complete.
-	target          pbq.Target
+	target          querypb.Target
 	dbconfigs       dbconfigs.DBConfigs
 	schemaOverrides []SchemaOverride
 	mysqld          mysqlctl.MysqlDaemon
@@ -104,8 +104,8 @@ type TabletServer struct {
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
 	streamHealthIndex        int
-	streamHealthMap          map[int]chan<- *pbq.StreamHealthResponse
-	lastStreamHealthResponse *pbq.StreamHealthResponse
+	streamHealthMap          map[int]chan<- *querypb.StreamHealthResponse
+	lastStreamHealthResponse *querypb.StreamHealthResponse
 }
 
 // RegisterFunction is a callback type to be called when we
@@ -131,7 +131,7 @@ func NewTabletServer(config Config) *TabletServer {
 		QueryTimeout:        sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		BeginTimeout:        sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
-		streamHealthMap:     make(map[int]chan<- *pbq.StreamHealthResponse),
+		streamHealthMap:     make(map[int]chan<- *querypb.StreamHealthResponse),
 		sessionID:           Rand(),
 	}
 	tsv.qe = NewQueryEngine(tsv, config)
@@ -211,7 +211,7 @@ func (tsv *TabletServer) IsServing() bool {
 
 // InitDBConfig inititalizes the db config variables for TabletServer. You must call this function before
 // calling StartService or SetServingType.
-func (tsv *TabletServer) InitDBConfig(target pbq.Target, dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
+func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
@@ -226,7 +226,7 @@ func (tsv *TabletServer) InitDBConfig(target pbq.Target, dbconfigs dbconfigs.DBC
 
 // StartService is a convenience function for InitDBConfig->SetServingType
 // with serving=true.
-func (tsv *TabletServer) StartService(target pbq.Target, dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) (err error) {
+func (tsv *TabletServer) StartService(target querypb.Target, dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) (err error) {
 	// Save tablet type away to prevent data races
 	tabletType := target.TabletType
 	err = tsv.InitDBConfig(target, dbconfigs, schemaOverrides, mysqld)
@@ -245,7 +245,7 @@ const (
 
 // SetServingType changes the serving type of the tabletserver. It starts or
 // stops internal services as deemed necessary.
-func (tsv *TabletServer) SetServingType(tabletType topodata.TabletType, serving bool) error {
+func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool) error {
 	action, err := tsv.decideAction(tabletType, serving)
 	if err != nil {
 		return err
@@ -264,7 +264,7 @@ func (tsv *TabletServer) SetServingType(tabletType topodata.TabletType, serving 
 	panic("unreachable")
 }
 
-func (tsv *TabletServer) decideAction(tabletType topodata.TabletType, serving bool) (action int, err error) {
+func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving bool) (action int, err error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	// Handle the case where the requested TabletType and serving state
@@ -346,11 +346,11 @@ func (tsv *TabletServer) serveNewType() (err error) {
 }
 
 // needInvalidator returns true if the rowcache invalidator needs to be enabled.
-func (tsv *TabletServer) needInvalidator(target pbq.Target) bool {
+func (tsv *TabletServer) needInvalidator(target querypb.Target) bool {
 	if !tsv.config.RowCache.Enabled {
 		return false
 	}
-	return target.TabletType != topodata.TabletType_MASTER
+	return target.TabletType != topodatapb.TabletType_MASTER
 }
 
 func (tsv *TabletServer) gracefulStop() {
@@ -511,7 +511,7 @@ func (tsv *TabletServer) GetSessionId(sessionParams *proto.SessionParams, sessio
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
-func (tsv *TabletServer) Begin(ctx context.Context, target *pbq.Target, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
+func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	logStats := newLogStats("Begin", ctx)
 	logStats.OriginalSQL = "begin"
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
@@ -532,7 +532,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *pbq.Target, session 
 }
 
 // Commit commits the specified transaction.
-func (tsv *TabletServer) Commit(ctx context.Context, target *pbq.Target, session *proto.Session) (err error) {
+func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, session *proto.Session) (err error) {
 	logStats := newLogStats("Commit", ctx)
 	logStats.OriginalSQL = "commit"
 	logStats.TransactionID = session.TransactionId
@@ -553,7 +553,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *pbq.Target, session
 }
 
 // Rollback rollsback the specified transaction.
-func (tsv *TabletServer) Rollback(ctx context.Context, target *pbq.Target, session *proto.Session) (err error) {
+func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, session *proto.Session) (err error) {
 	logStats := newLogStats("Rollback", ctx)
 	logStats.OriginalSQL = "rollback"
 	logStats.TransactionID = session.TransactionId
@@ -636,7 +636,7 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *pbq.Target, query *proto.Query, reply *sqltypes.Result) (err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) (err error) {
 	logStats := newLogStats("Execute", ctx)
 	defer tsv.handleExecError(query, &err, logStats)
 
@@ -674,7 +674,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *pbq.Target, query 
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (tsv *TabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) (err error) {
+func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) (err error) {
 	// check cases we don't handle yet
 	if query.TransactionId != 0 {
 		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Transactions not supported with streaming")
@@ -712,7 +712,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *pbq.Target, 
 // ExecuteBatch can be called for an existing transaction, or it can be called with
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
-func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *pbq.Target, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
+func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	if len(queryList.Queries) == 0 {
 		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Empty query list")
 	}
@@ -770,7 +770,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *pbq.Target, q
 }
 
 // SplitQuery splits a BoundQuery into smaller queries that return a subset of rows from the original query.
-func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pbq.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
+func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	logStats := newLogStats("SplitQuery", ctx)
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 	if err = tsv.startRequest(target, req.SessionID, false, false); err != nil {
@@ -816,7 +816,7 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *pbq.Target, req
 }
 
 // StreamHealthRegister is part of queryservice.QueryService interface
-func (tsv *TabletServer) StreamHealthRegister(c chan<- *pbq.StreamHealthResponse) (int, error) {
+func (tsv *TabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
 	tsv.streamHealthMutex.Lock()
 	defer tsv.streamHealthMutex.Unlock()
 
@@ -846,11 +846,11 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 }
 
 // BroadcastHealth will broadcast the current health to all listeners
-func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *pbq.RealtimeStats) {
+func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats) {
 	tsv.mu.Lock()
 	target := tsv.target
 	tsv.mu.Unlock()
-	shr := &pbq.StreamHealthResponse{
+	shr := &querypb.StreamHealthResponse{
 		Target:  &target,
 		Serving: tsv.IsServing(),
 		TabletExternallyReparentedTimestamp: terTimestamp,
@@ -874,7 +874,7 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *pbq.Realtime
 // and only one corresponding endRequest. When the service shuts down,
 // StopService will wait on this waitgroup to ensure that there are
 // no requests in flight.
-func (tsv *TabletServer) startRequest(target *pbq.Target, sessionID int64, isBegin, allowShutdown bool) (err error) {
+func (tsv *TabletServer) startRequest(target *querypb.Target, sessionID int64, isBegin, allowShutdown bool) (err error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state == StateServing {
@@ -1072,7 +1072,7 @@ func withTimeout(ctx context.Context, timeout time.Duration) (context.Context, c
 	return context.WithTimeout(ctx, timeout)
 }
 
-func getColumnType(qre *QueryExecutor, columnName, tableName string) (pbq.Type, error) {
+func getColumnType(qre *QueryExecutor, columnName, tableName string) (querypb.Type, error) {
 	conn, err := qre.getConn(qre.qe.connPool)
 	if err != nil {
 		return sqltypes.Null, err

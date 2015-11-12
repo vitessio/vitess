@@ -20,7 +20,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tableacl"
@@ -45,7 +45,7 @@ const (
 type ExecPlan struct {
 	*planbuilder.ExecPlan
 	TableInfo  *TableInfo
-	Fields     []*query.Field
+	Fields     []*querypb.Field
 	Rules      *QueryRules
 	Authorized *tableacl.ACLResult
 

@@ -12,7 +12,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"golang.org/x/net/context"
 )
@@ -52,7 +52,7 @@ func (ti *TableInfo) fetchColumns(conn *DBConn) error {
 	if err != nil {
 		return err
 	}
-	fieldTypes := make(map[string]query.Type, len(qr.Fields))
+	fieldTypes := make(map[string]querypb.Type, len(qr.Fields))
 	for _, field := range qr.Fields {
 		fieldTypes[field.Name] = field.Type
 	}

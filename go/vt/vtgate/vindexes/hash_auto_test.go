@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
@@ -148,7 +148,7 @@ func (vc *vcursor) Execute(query *tproto.BoundQuery) (*sqltypes.Result, error) {
 			return vc.result, nil
 		}
 		result := &sqltypes.Result{
-			Fields: []*pbq.Field{{
+			Fields: []*querypb.Field{{
 				Type: sqltypes.Int32,
 			}},
 			RowsAffected: uint64(vc.numRows),

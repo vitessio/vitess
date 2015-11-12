@@ -11,7 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/flagutil"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
@@ -69,11 +69,11 @@ func shardFilePath(keyspace, shard string) string {
 	return path.Join(shardDirPath(keyspace, shard), shardFilename)
 }
 
-func tabletDirPath(tabletAlias *pb.TabletAlias) string {
+func tabletDirPath(tabletAlias *topodatapb.TabletAlias) string {
 	return path.Join(tabletsDirPath, topoproto.TabletAliasString(tabletAlias))
 }
 
-func tabletFilePath(tabletAlias *pb.TabletAlias) string {
+func tabletFilePath(tabletAlias *topodatapb.TabletAlias) string {
 	return path.Join(tabletDirPath(tabletAlias), tabletFilename)
 }
 
@@ -105,10 +105,10 @@ func srvShardFilePath(keyspace, shard string) string {
 	return path.Join(srvShardDirPath(keyspace, shard), srvShardFilename)
 }
 
-func endPointsDirPath(keyspace, shard string, tabletType pb.TabletType) string {
+func endPointsDirPath(keyspace, shard string, tabletType topodatapb.TabletType) string {
 	return path.Join(srvShardDirPath(keyspace, shard), strings.ToLower(tabletType.String()))
 }
 
-func endPointsFilePath(keyspace, shard string, tabletType pb.TabletType) string {
+func endPointsFilePath(keyspace, shard string, tabletType topodatapb.TabletType) string {
 	return path.Join(endPointsDirPath(keyspace, shard, tabletType), endPointsFilename)
 }

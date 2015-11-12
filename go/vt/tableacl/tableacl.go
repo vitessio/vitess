@@ -17,7 +17,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 
-	pb "github.com/youtube/vitess/go/vt/proto/tableacl"
+	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 )
 
 // ACLResult embeds an acl.ACL and also tell which table group it belongs to.
@@ -57,7 +57,7 @@ var defaultACL string
 type tableACL struct {
 	sync.RWMutex
 	entries aclEntries
-	config  pb.Config
+	config  tableaclpb.Config
 }
 
 // currentACL stores current effective ACL information.
@@ -76,7 +76,7 @@ func Init(configFile string, aclCB func()) error {
 			log.Infof("unable to read tableACL config file: %v", err)
 			return err
 		}
-		config := &pb.Config{}
+		config := &tableaclpb.Config{}
 		if err := proto.Unmarshal(data, config); err != nil {
 			log.Infof("unable to parse tableACL config file as a protobuf file: %v", err)
 			// try to parse tableacl as json file
@@ -94,7 +94,7 @@ func Init(configFile string, aclCB func()) error {
 }
 
 // InitFromProto inits table ACLs from a proto.
-func InitFromProto(config *pb.Config) (err error) {
+func InitFromProto(config *tableaclpb.Config) (err error) {
 	return load(config)
 }
 
@@ -105,7 +105,7 @@ func InitFromProto(config *pb.Config) (err error) {
 //	<table name or table name prefix>: {"READER": "*", "WRITER": "<u2>,<u4>...","ADMIN": "<u5>"},
 //	<table name or table name prefix>: {"ADMIN": "<u5>"}
 //}`)
-func load(config *pb.Config) error {
+func load(config *tableaclpb.Config) error {
 	var entries aclEntries
 	for _, group := range config.TableGroups {
 		readers, err := newACL(group.Readers)
@@ -229,8 +229,8 @@ func Authorized(table string, role Role) *ACLResult {
 }
 
 // GetCurrentConfig returns a copy of current tableacl configuration.
-func GetCurrentConfig() *pb.Config {
-	config := &pb.Config{}
+func GetCurrentConfig() *tableaclpb.Config {
+	config := &tableaclpb.Config{}
 	currentACL.RLock()
 	defer currentACL.RUnlock()
 	*config = currentACL.config

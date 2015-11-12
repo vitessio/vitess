@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestQueryRules(t *testing.T) {
@@ -318,8 +318,8 @@ var creationCases = []BVCreation{
 	{"a", true, true, QRMatch, "a", false},
 	{"a", true, true, QRNoMatch, "a", false},
 
-	{"a", true, true, QRIn, &pb.KeyRange{}, false},
-	{"a", true, true, QRNotIn, &pb.KeyRange{}, false},
+	{"a", true, true, QRIn, &topodatapb.KeyRange{}, false},
+	{"a", true, true, QRNotIn, &topodatapb.KeyRange{}, false},
 
 	{"a", true, true, QRMatch, int64(1), true},
 	{"a", true, true, QRNoMatch, int64(1), true},
@@ -492,7 +492,7 @@ func makere(s string) bvcre {
 }
 
 func numKeyRange(start, end uint64) *bvcKeyRange {
-	kr := pb.KeyRange{
+	kr := topodatapb.KeyRange{
 		Start: key.Uint64Key(start).Bytes(),
 		End:   key.Uint64Key(end).Bytes(),
 	}
@@ -501,7 +501,7 @@ func numKeyRange(start, end uint64) *bvcKeyRange {
 }
 
 func strKeyRange(start, end string) *bvcKeyRange {
-	kr := pb.KeyRange{
+	kr := topodatapb.KeyRange{
 		Start: []byte(start),
 		End:   []byte(end),
 	}
@@ -767,7 +767,7 @@ func TestBuildQueryRuleFailureModes(t *testing.T) {
 	var errStr string
 
 	_, err = BuildQueryRule(map[string]interface{}{
-		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "Operator": QRIn, "Value": &pb.KeyRange{}}},
+		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "Operator": QRIn, "Value": &topodatapb.KeyRange{}}},
 	})
 	if err == nil {
 		t.Fatalf("should get an error")
@@ -854,9 +854,9 @@ func TestBadAddBindVarCond(t *testing.T) {
 	if err == nil {
 		t.Fatalf("invalid op: QRNotIn for value type: string")
 	}
-	err = qr1.AddBindVarCond("a", true, false, QRLessThan, &pb.KeyRange{})
+	err = qr1.AddBindVarCond("a", true, false, QRLessThan, &topodatapb.KeyRange{})
 	if err == nil {
-		t.Fatalf("invalid op: QRLessThan for value type: *pb.KeyRange")
+		t.Fatalf("invalid op: QRLessThan for value type: *topodatapb.KeyRange")
 	}
 }
 

@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -120,7 +120,7 @@ func main() {
 
 	// tablet actions
 	actionRepo.RegisterTabletAction("Ping", "",
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
 			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
@@ -129,7 +129,7 @@ func main() {
 		})
 
 	actionRepo.RegisterTabletAction("RefreshState", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
 			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
@@ -138,12 +138,12 @@ func main() {
 		})
 
 	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
 			return "", wr.DeleteTablet(ctx, tabletAlias, false, false)
 		})
 
 	actionRepo.RegisterTabletAction("ReloadSchema", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
 			return "", wr.ReloadSchema(ctx, tabletAlias)
 		})
 

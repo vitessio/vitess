@@ -13,11 +13,11 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CreateKeyspace implements topo.Server.
-func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
+func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
@@ -31,7 +31,7 @@ func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.
 }
 
 // UpdateKeyspace implements topo.Server.
-func (s *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (int64, error) {
+func (s *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (int64, error) {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
@@ -49,7 +49,7 @@ func (s *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.
 }
 
 // GetKeyspace implements topo.Server.
-func (s *Server) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error) {
+func (s *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodatapb.Keyspace, int64, error) {
 	resp, err := s.getGlobal().Get(keyspaceFilePath(keyspace), false /* sort */, false /* recursive */)
 	if err != nil {
 		return nil, 0, convertError(err)
@@ -58,7 +58,7 @@ func (s *Server) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace
 		return nil, 0, ErrBadResponse
 	}
 
-	value := &pb.Keyspace{}
+	value := &topodatapb.Keyspace{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, 0, fmt.Errorf("bad keyspace data (%v): %q", err, resp.Node.Value)
 	}

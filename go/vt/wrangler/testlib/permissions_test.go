@@ -16,8 +16,8 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestPermissions(t *testing.T) {
@@ -29,8 +29,8 @@ func TestPermissions(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
-	replica := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
+	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	replica := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 
 	// mark the master inside the shard
 	si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
@@ -45,180 +45,180 @@ func TestPermissions(t *testing.T) {
 	// master will be asked for permissions
 	master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SELECT * FROM mysql.user": &sqltypes.Result{
-			Fields: []*query.Field{
-				&query.Field{
+			Fields: []*querypb.Field{
+				&querypb.Field{
 					Name: "Host",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "User",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Password",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Select_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Insert_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Update_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Delete_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Create_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Drop_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Reload_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Shutdown_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Process_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "File_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Grant_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "References_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Index_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Alter_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Show_db_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Super_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Create_tmp_table_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Lock_tables_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Execute_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Repl_slave_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Repl_client_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Create_view_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Show_view_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Create_routine_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Alter_routine_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Create_user_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Event_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Trigger_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Create_tablespace_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "ssl_type",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "ssl_cipher",
 					Type: 252,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "x509_issuer",
 					Type: 252,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "x509_subject",
 					Type: 252,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "max_questions",
 					Type: 3,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "max_updates",
 					Type: 3,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "max_connections",
 					Type: 3,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "max_user_connections",
 					Type: 3,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "plugin",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "authentication_string",
 					Type: 252,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "password_expired",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "is_role",
 					Type: sqltypes.Char,
 				}},
@@ -409,92 +409,92 @@ func TestPermissions(t *testing.T) {
 			},
 		},
 		"SELECT * FROM mysql.db": &sqltypes.Result{
-			Fields: []*query.Field{
-				&query.Field{
+			Fields: []*querypb.Field{
+				&querypb.Field{
 					Name: "Host",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Db",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "User",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Select_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Insert_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Update_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Delete_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Create_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Drop_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Grant_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "References_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Index_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Alter_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Create_tmp_table_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Lock_tables_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Create_view_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Show_view_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Create_routine_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Alter_routine_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Execute_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Event_priv",
 					Type: sqltypes.Char,
 				},
-				&query.Field{
+				&querypb.Field{
 					Name: "Trigger_priv",
 					Type: sqltypes.Char,
 				},
@@ -534,7 +534,7 @@ func TestPermissions(t *testing.T) {
 
 	// Make a two-level-deep copy, so we can make them diverge later.
 	user := *master.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user"]
-	user.Fields = append([]*query.Field{}, user.Fields...)
+	user.Fields = append([]*querypb.Field{}, user.Fields...)
 
 	// replica will be asked for permissions
 	replica.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
@@ -545,7 +545,7 @@ func TestPermissions(t *testing.T) {
 	defer replica.StopActionLoop(t)
 
 	// Overwrite with the correct value to make sure it passes.
-	replica.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user"].Fields[0] = &query.Field{
+	replica.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user"].Fields[0] = &querypb.Field{
 		Name: "Host",
 		Type: sqltypes.Char,
 	}
@@ -556,7 +556,7 @@ func TestPermissions(t *testing.T) {
 	}
 
 	// modify one field, this should fail
-	replica.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user"].Fields[0] = &query.Field{
+	replica.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user"].Fields[0] = &querypb.Field{
 		Name: "Wrong",
 		Type: sqltypes.Char,
 	}

@@ -11,7 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // BSONField is a temporary struct for backward compatibility.
@@ -85,13 +85,13 @@ func (result *Result) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 					panic(bson.NewBsonError("unexpected kind %v for result.Fields", kind))
 				}
 				bson.Next(buf, 4)
-				result.Fields = make([]*query.Field, 0, 8)
+				result.Fields = make([]*querypb.Field, 0, 8)
 				var f BSONField
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v1 *query.Field
+					var _v1 *querypb.Field
 					// *query.Field
-					_v1 = new(query.Field)
+					_v1 = new(querypb.Field)
 					bson.UnmarshalFromBuffer(buf, &f)
 					_v1.Name = f.Name
 					_v1.Type = MySQLToType(f.Type, f.Flags)

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
@@ -80,23 +80,23 @@ func TestKeyspaceNodesTabletTypes(t *testing.T) {
 			&ShardNodes{
 				TabletNodes: []*TabletNodesByType{
 					&TabletNodesByType{
-						TabletType: pb.TabletType_REPLICA,
+						TabletType: topodatapb.TabletType_REPLICA,
 					},
 				},
 			},
 			&ShardNodes{
 				TabletNodes: []*TabletNodesByType{
 					&TabletNodesByType{
-						TabletType: pb.TabletType_MASTER,
+						TabletType: topodatapb.TabletType_MASTER,
 					},
 					&TabletNodesByType{
-						TabletType: pb.TabletType_REPLICA,
+						TabletType: topodatapb.TabletType_REPLICA,
 					},
 				},
 			},
 		},
 	}
-	want := topoproto.MakeStringTypeList([]pb.TabletType{pb.TabletType_REPLICA, pb.TabletType_MASTER})
+	want := topoproto.MakeStringTypeList([]topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_MASTER})
 	got := topoproto.MakeStringTypeList(input.TabletTypes())
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("KeyspaceNodes.TabletTypes() = %v, want %v", got, want)

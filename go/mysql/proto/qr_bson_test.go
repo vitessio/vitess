@@ -10,7 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 type TestCase struct {
@@ -25,20 +25,20 @@ var testcases = []TestCase{
 		qr:      QueryResult{},
 		encoded: "J\x00\x00\x00\x04Fields\x00\x05\x00\x00\x00\x00\x12RowsAffected\x00\x00\x00\x00\x00\x00\x00\x00\x00\x12InsertId\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04Rows\x00\x05\x00\x00\x00\x00\nErr\x00\x00",
 		unmarshalled: QueryResult{
-			Fields: []*query.Field{},
+			Fields: []*querypb.Field{},
 			Rows:   [][]sqltypes.Value{},
 		},
 	},
 	// Only fields set
 	{
 		qr: QueryResult{
-			Fields: []*query.Field{
+			Fields: []*querypb.Field{
 				{Name: "foo", Type: sqltypes.Int8},
 			},
 		},
 		encoded: "}\x00\x00\x00\x04Fields\x008\x00\x00\x00\x030\x000\x00\x00\x00\x05Name\x00\x03\x00\x00\x00\x00foo\x12Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x12Flags\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x12RowsAffected\x00\x00\x00\x00\x00\x00\x00\x00\x00\x12InsertId\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04Rows\x00\x05\x00\x00\x00\x00\nErr\x00\x00",
 		unmarshalled: QueryResult{
-			Fields: []*query.Field{
+			Fields: []*querypb.Field{
 				{Name: "foo", Type: sqltypes.Int8},
 			},
 			Rows: [][]sqltypes.Value{},
@@ -53,7 +53,7 @@ var testcases = []TestCase{
 		},
 		encoded: "w\x00\x00\x00\x04Fields\x00\x05\x00\x00\x00\x00\x12RowsAffected\x00\x00\x00\x00\x00\x00\x00\x00\x00\x12InsertId\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04Rows\x002\x00\x00\x00\x040\x00*\x00\x00\x00\x050\x00\x04\x00\x00\x00\x00abcd\x051\x00\x04\x00\x00\x00\x001234\x052\x00\x05\x00\x00\x00\x001.234\x00\x00\nErr\x00\x00",
 		unmarshalled: QueryResult{
-			Fields: []*query.Field{},
+			Fields: []*querypb.Field{},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.MakeString([]byte("abcd")), sqltypes.MakeString([]byte("1234")), sqltypes.MakeString([]byte("1.234"))},
 			},
@@ -62,7 +62,7 @@ var testcases = []TestCase{
 	// one row and one field
 	{
 		qr: QueryResult{
-			Fields: []*query.Field{
+			Fields: []*querypb.Field{
 				{Name: "foo", Type: sqltypes.Int8},
 			},
 			Rows: [][]sqltypes.Value{
@@ -71,7 +71,7 @@ var testcases = []TestCase{
 		},
 		encoded: "",
 		unmarshalled: QueryResult{
-			Fields: []*query.Field{
+			Fields: []*querypb.Field{
 				{Name: "foo", Type: sqltypes.Int8},
 			},
 			Rows: [][]sqltypes.Value{
@@ -82,7 +82,7 @@ var testcases = []TestCase{
 	// two rows and two fields
 	{
 		qr: QueryResult{
-			Fields: []*query.Field{
+			Fields: []*querypb.Field{
 				{Name: "foo", Type: sqltypes.Int8},
 				{Name: "bar", Type: sqltypes.Int16},
 			},
@@ -92,7 +92,7 @@ var testcases = []TestCase{
 		},
 		encoded: "",
 		unmarshalled: QueryResult{
-			Fields: []*query.Field{
+			Fields: []*querypb.Field{
 				{Name: "foo", Type: sqltypes.Int8},
 				{Name: "bar", Type: sqltypes.Int16},
 			},
@@ -108,7 +108,7 @@ var testcases = []TestCase{
 		},
 		encoded: "x\x00\x00\x00\x04Fields\x00\x05\x00\x00\x00\x00\x12RowsAffected\x00\x00\x00\x00\x00\x00\x00\x00\x00\x12InsertId\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04Rows\x00\x05\x00\x00\x00\x00\x03Err\x00.\x00\x00\x00\x12Code\x00\xe8\x03\x00\x00\x00\x00\x00\x00\x05Message\x00\r\x00\x00\x00\x00generic error\x00\x00",
 		unmarshalled: QueryResult{
-			Fields: []*query.Field{},
+			Fields: []*querypb.Field{},
 			Rows:   [][]sqltypes.Value{},
 			Err:    &RPCError{1000, "generic error"},
 		},

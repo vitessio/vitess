@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Tee is an implementation of topo.Server that uses a primary
@@ -40,7 +40,7 @@ type Tee struct {
 
 	keyspaceVersionMapping map[string]versionMapping
 	shardVersionMapping    map[string]versionMapping
-	tabletVersionMapping   map[pb.TabletAlias]versionMapping
+	tabletVersionMapping   map[topodatapb.TabletAlias]versionMapping
 
 	keyspaceLockPaths map[string]string
 	shardLockPaths    map[string]string
@@ -72,7 +72,7 @@ func NewTee(primary, secondary topo.Impl, reverseLockOrder bool) *Tee {
 		lockSecond:             lockSecond,
 		keyspaceVersionMapping: make(map[string]versionMapping),
 		shardVersionMapping:    make(map[string]versionMapping),
-		tabletVersionMapping:   make(map[pb.TabletAlias]versionMapping),
+		tabletVersionMapping:   make(map[topodatapb.TabletAlias]versionMapping),
 		keyspaceLockPaths:      make(map[string]string),
 		shardLockPaths:         make(map[string]string),
 		srvShardLockPaths:      make(map[string]string),
@@ -103,7 +103,7 @@ func (tee *Tee) GetKnownCells(ctx context.Context) ([]string, error) {
 //
 
 // CreateKeyspace is part of the topo.Server interface
-func (tee *Tee) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
+func (tee *Tee) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
 	if err := tee.primary.CreateKeyspace(ctx, keyspace, value); err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func (tee *Tee) CreateKeyspace(ctx context.Context, keyspace string, value *pb.K
 }
 
 // UpdateKeyspace is part of the topo.Server interface
-func (tee *Tee) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (newVersion int64, err error) {
+func (tee *Tee) UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (newVersion int64, err error) {
 	if newVersion, err = tee.primary.UpdateKeyspace(ctx, keyspace, value, existingVersion); err != nil {
 		// failed on primary, not updating secondary
 		return
@@ -182,7 +182,7 @@ func (tee *Tee) DeleteKeyspace(ctx context.Context, keyspace string) error {
 }
 
 // GetKeyspace is part of the topo.Server interface
-func (tee *Tee) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error) {
+func (tee *Tee) GetKeyspace(ctx context.Context, keyspace string) (*topodatapb.Keyspace, int64, error) {
 	k, version, err := tee.readFrom.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return nil, 0, err
@@ -226,7 +226,7 @@ func (tee *Tee) DeleteKeyspaceShards(ctx context.Context, keyspace string) error
 //
 
 // CreateShard is part of the topo.Server interface
-func (tee *Tee) CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error {
+func (tee *Tee) CreateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard) error {
 	err := tee.primary.CreateShard(ctx, keyspace, shard, value)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
@@ -241,7 +241,7 @@ func (tee *Tee) CreateShard(ctx context.Context, keyspace, shard string, value *
 }
 
 // UpdateShard is part of the topo.Server interface
-func (tee *Tee) UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (newVersion int64, err error) {
+func (tee *Tee) UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (newVersion int64, err error) {
 	if newVersion, err = tee.primary.UpdateShard(ctx, keyspace, shard, value, existingVersion); err != nil {
 		// failed on primary, not updating secondary
 		return
@@ -307,7 +307,7 @@ func (tee *Tee) ValidateShard(ctx context.Context, keyspace, shard string) error
 }
 
 // GetShard is part of the topo.Server interface
-func (tee *Tee) GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error) {
+func (tee *Tee) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
 	s, v, err := tee.readFrom.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return nil, 0, err
@@ -352,7 +352,7 @@ func (tee *Tee) DeleteShard(ctx context.Context, keyspace, shard string) error {
 //
 
 // CreateTablet is part of the topo.Server interface
-func (tee *Tee) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
+func (tee *Tee) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
 	err := tee.primary.CreateTablet(ctx, tablet)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
@@ -366,7 +366,7 @@ func (tee *Tee) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 }
 
 // UpdateTablet is part of the topo.Server interface
-func (tee *Tee) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVersion int64) (newVersion int64, err error) {
+func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, existingVersion int64) (newVersion int64, err error) {
 	if newVersion, err = tee.primary.UpdateTablet(ctx, tablet, existingVersion); err != nil {
 		// failed on primary, not updating secondary
 		return
@@ -418,7 +418,7 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVer
 }
 
 // UpdateTabletFields is part of the topo.Server interface
-func (tee *Tee) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) (*pb.Tablet, error) {
+func (tee *Tee) UpdateTabletFields(ctx context.Context, tabletAlias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
 	tablet, err := tee.primary.UpdateTabletFields(ctx, tabletAlias, update)
 	if err != nil {
 		// failed on primary, not updating secondary
@@ -433,7 +433,7 @@ func (tee *Tee) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAl
 }
 
 // DeleteTablet is part of the topo.Server interface
-func (tee *Tee) DeleteTablet(ctx context.Context, alias *pb.TabletAlias) error {
+func (tee *Tee) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error {
 	if err := tee.primary.DeleteTablet(ctx, alias); err != nil {
 		return err
 	}
@@ -446,7 +446,7 @@ func (tee *Tee) DeleteTablet(ctx context.Context, alias *pb.TabletAlias) error {
 }
 
 // GetTablet is part of the topo.Server interface
-func (tee *Tee) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*pb.Tablet, int64, error) {
+func (tee *Tee) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
 	t, v, err := tee.readFrom.GetTablet(ctx, alias)
 	if err != nil {
 		return nil, 0, err
@@ -468,7 +468,7 @@ func (tee *Tee) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*pb.Table
 }
 
 // GetTabletsByCell is part of the topo.Server interface
-func (tee *Tee) GetTabletsByCell(ctx context.Context, cell string) ([]*pb.TabletAlias, error) {
+func (tee *Tee) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
 	return tee.readFrom.GetTabletsByCell(ctx, cell)
 }
 
@@ -477,7 +477,7 @@ func (tee *Tee) GetTabletsByCell(ctx context.Context, cell string) ([]*pb.Tablet
 //
 
 // UpdateShardReplicationFields is part of the topo.Server interface
-func (tee *Tee) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*pb.ShardReplication) error) error {
+func (tee *Tee) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error {
 	if err := tee.primary.UpdateShardReplicationFields(ctx, cell, keyspace, shard, update); err != nil {
 		// failed on primary, not updating secondary
 		return err
@@ -575,12 +575,12 @@ func (tee *Tee) UnlockSrvShardForAction(ctx context.Context, cell, keyspace, sha
 }
 
 // GetSrvTabletTypesPerShard is part of the topo.Server interface
-func (tee *Tee) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]pb.TabletType, error) {
+func (tee *Tee) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]topodatapb.TabletType, error) {
 	return tee.readFrom.GetSrvTabletTypesPerShard(ctx, cell, keyspace, shard)
 }
 
 // CreateEndPoints is part of the topo.Server interface
-func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints) error {
+func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints) error {
 	if err := tee.primary.CreateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs); err != nil {
 		return err
 	}
@@ -593,7 +593,7 @@ func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard strin
 }
 
 // UpdateEndPoints is part of the topo.Server interface
-func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints, existingVersion int64) error {
+func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints, existingVersion int64) error {
 	if err := tee.primary.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs, existingVersion); err != nil {
 		return err
 	}
@@ -606,12 +606,12 @@ func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard strin
 }
 
 // GetEndPoints is part of the topo.Server interface
-func (tee *Tee) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (*pb.EndPoints, int64, error) {
+func (tee *Tee) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error) {
 	return tee.readFrom.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 }
 
 // DeleteEndPoints is part of the topo.Server interface
-func (tee *Tee) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, existingVersion int64) error {
+func (tee *Tee) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, existingVersion int64) error {
 	err := tee.primary.DeleteEndPoints(ctx, cell, keyspace, shard, tabletType, existingVersion)
 	if err != nil && err != topo.ErrNoNode {
 		return err
@@ -625,7 +625,7 @@ func (tee *Tee) DeleteEndPoints(ctx context.Context, cell, keyspace, shard strin
 }
 
 // UpdateSrvShard is part of the topo.Server interface
-func (tee *Tee) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *pb.SrvShard) error {
+func (tee *Tee) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topodatapb.SrvShard) error {
 	if err := tee.primary.UpdateSrvShard(ctx, cell, keyspace, shard, srvShard); err != nil {
 		return err
 	}
@@ -638,7 +638,7 @@ func (tee *Tee) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string
 }
 
 // GetSrvShard is part of the topo.Server interface
-func (tee *Tee) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error) {
+func (tee *Tee) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
 	return tee.readFrom.GetSrvShard(ctx, cell, keyspace, shard)
 }
 
@@ -657,7 +657,7 @@ func (tee *Tee) DeleteSrvShard(ctx context.Context, cell, keyspace, shard string
 }
 
 // UpdateSrvKeyspace is part of the topo.Server interface
-func (tee *Tee) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *pb.SrvKeyspace) error {
+func (tee *Tee) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
 	if err := tee.primary.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
 		return err
 	}
@@ -684,7 +684,7 @@ func (tee *Tee) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) er
 }
 
 // GetSrvKeyspace is part of the topo.Server interface
-func (tee *Tee) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error) {
+func (tee *Tee) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return tee.readFrom.GetSrvKeyspace(ctx, cell, keyspace)
 }
 
@@ -695,7 +695,7 @@ func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string,
 
 // WatchSrvKeyspace is part of the topo.Server interface.
 // We only watch for changes on the primary.
-func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *pb.SrvKeyspace, chan<- struct{}, error) {
+func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
 	return tee.primary.WatchSrvKeyspace(ctx, cell, keyspace)
 }
 

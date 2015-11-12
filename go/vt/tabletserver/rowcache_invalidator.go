@@ -22,7 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // RowcacheInvalidator runs the service to invalidate
@@ -144,7 +144,7 @@ func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 	return nil
 }
 
-func (rci *RowcacheInvalidator) handleInvalidationError(event *pb.StreamEvent) {
+func (rci *RowcacheInvalidator) handleInvalidationError(event *binlogdatapb.StreamEvent) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
@@ -157,17 +157,17 @@ func (rci *RowcacheInvalidator) handleInvalidationError(event *pb.StreamEvent) {
 	}
 }
 
-func (rci *RowcacheInvalidator) processEvent(event *pb.StreamEvent) error {
+func (rci *RowcacheInvalidator) processEvent(event *binlogdatapb.StreamEvent) error {
 	defer rci.handleInvalidationError(event)
 	switch event.Category {
-	case pb.StreamEvent_SE_DDL:
+	case binlogdatapb.StreamEvent_SE_DDL:
 		log.Infof("DDL invalidation: %s", event.Sql)
 		rci.handleDDLEvent(event.Sql)
-	case pb.StreamEvent_SE_DML:
+	case binlogdatapb.StreamEvent_SE_DML:
 		rci.handleDMLEvent(event)
-	case pb.StreamEvent_SE_ERR:
+	case binlogdatapb.StreamEvent_SE_ERR:
 		rci.handleUnrecognizedEvent(event.Sql)
-	case pb.StreamEvent_SE_POS:
+	case binlogdatapb.StreamEvent_SE_POS:
 		gtid, err := replication.DecodeGTID(event.TransactionId)
 		if err != nil {
 			return err
@@ -182,7 +182,7 @@ func (rci *RowcacheInvalidator) processEvent(event *pb.StreamEvent) error {
 	return nil
 }
 
-func (rci *RowcacheInvalidator) handleDMLEvent(event *pb.StreamEvent) {
+func (rci *RowcacheInvalidator) handleDMLEvent(event *binlogdatapb.StreamEvent) {
 	invalidations := int64(0)
 	tableInfo := rci.qe.schemaInfo.GetTable(event.TableName)
 	if tableInfo == nil {

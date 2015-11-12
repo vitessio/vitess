@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestShardReplicationStatuses(t *testing.T) {
@@ -30,8 +30,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 	if err := ts.CreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	master := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_MASTER, db)
-	slave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
+	master := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, db)
+	slave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 
 	// mark the master inside the shard
 	si, err := ts.GetShard(ctx, "test_keyspace", "0")
@@ -99,8 +99,8 @@ func TestReparentTablet(t *testing.T) {
 	if err := ts.CreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	master := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_MASTER, db)
-	slave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
+	master := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, db)
+	slave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 
 	// mark the master inside the shard
 	si, err := ts.GetShard(ctx, "test_keyspace", "0")

@@ -12,7 +12,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	context "golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 )
 
 // newTestScheduler constructs a scheduler with test tasks.
@@ -26,7 +26,7 @@ func newTestScheduler(t *testing.T) *Scheduler {
 	return scheduler
 }
 
-func enqueueClusterOperationAndCheckOutput(t *testing.T, taskName string, expectedOutput string, expectedError string) *pb.ClusterOperation {
+func enqueueClusterOperationAndCheckOutput(t *testing.T, taskName string, expectedOutput string, expectedError string) *automationpb.ClusterOperation {
 	scheduler := newTestScheduler(t)
 	defer scheduler.ShutdownAndWait()
 	scheduler.registerClusterOperation("TestingEchoTask")
@@ -36,7 +36,7 @@ func enqueueClusterOperationAndCheckOutput(t *testing.T, taskName string, expect
 
 	scheduler.Run()
 
-	enqueueRequest := &pb.EnqueueClusterOperationRequest{
+	enqueueRequest := &automationpb.EnqueueClusterOperationRequest{
 		Name: taskName,
 		Parameters: map[string]string{
 			"echo_text": expectedOutput,
@@ -51,12 +51,12 @@ func enqueueClusterOperationAndCheckOutput(t *testing.T, taskName string, expect
 }
 
 // waitForClusterOperation is a helper function which blocks until the Cluster Operation has finished.
-func waitForClusterOperation(t *testing.T, scheduler *Scheduler, id string, expectedOutputLastTask string, expectedErrorLastTask string) *pb.ClusterOperation {
+func waitForClusterOperation(t *testing.T, scheduler *Scheduler, id string, expectedOutputLastTask string, expectedErrorLastTask string) *automationpb.ClusterOperation {
 	if expectedOutputLastTask == "" && expectedErrorLastTask == "" {
 		t.Fatal("Error in test: Cannot wait for an operation where both output and error are expected to be empty.")
 	}
 
-	getDetailsRequest := &pb.GetClusterOperationDetailsRequest{
+	getDetailsRequest := &automationpb.GetClusterOperationDetailsRequest{
 		Id: id,
 	}
 
@@ -65,12 +65,12 @@ func waitForClusterOperation(t *testing.T, scheduler *Scheduler, id string, expe
 		if err != nil {
 			t.Fatalf("Failed to get details for cluster operation. Request: %v Error: %v", getDetailsRequest, err)
 		}
-		if getDetailsResponse.ClusterOp.State == pb.ClusterOperationState_CLUSTER_OPERATION_DONE {
+		if getDetailsResponse.ClusterOp.State == automationpb.ClusterOperationState_CLUSTER_OPERATION_DONE {
 			tc := getDetailsResponse.ClusterOp.SerialTasks
 			// Check the last task which have finished. (It may not be the last one because tasks can fail.)
-			var lastTc *pb.TaskContainer
+			var lastTc *automationpb.TaskContainer
 			for i := len(tc) - 1; i >= 0; i-- {
-				if tc[i].ParallelTasks[len(tc[i].ParallelTasks)-1].State == pb.TaskState_DONE {
+				if tc[i].ParallelTasks[len(tc[i].ParallelTasks)-1].State == automationpb.TaskState_DONE {
 					lastTc = tc[i]
 					break
 				}
@@ -122,7 +122,7 @@ func TestFailedTaskFailsWholeClusterOperationEarly(t *testing.T) {
 	if got != want {
 		t.Errorf("TestFailedTaskFailsWholeClusterOperationEarly: got error: '%v' want error: '%v'", got, want)
 	}
-	if details.SerialTasks[3].ParallelTasks[0].State != pb.TaskState_NOT_STARTED {
+	if details.SerialTasks[3].ParallelTasks[0].State != automationpb.TaskState_NOT_STARTED {
 		t.Errorf("TestFailedTaskFailsWholeClusterOperationEarly: Task after a failing task must not have been started.")
 	}
 }
@@ -134,7 +134,7 @@ func TestEnqueueFailsDueToMissingParameter(t *testing.T) {
 
 	scheduler.Run()
 
-	enqueueRequest := &pb.EnqueueClusterOperationRequest{
+	enqueueRequest := &automationpb.EnqueueClusterOperationRequest{
 		Name: "TestingEchoTask",
 		Parameters: map[string]string{
 			"unrelevant-parameter": "value",
@@ -157,7 +157,7 @@ func TestEnqueueFailsDueToUnregisteredClusterOperation(t *testing.T) {
 
 	scheduler.Run()
 
-	enqueueRequest := &pb.EnqueueClusterOperationRequest{
+	enqueueRequest := &automationpb.EnqueueClusterOperationRequest{
 		Name: "TestingEchoTask",
 		Parameters: map[string]string{
 			"unrelevant-parameter": "value",
@@ -180,7 +180,7 @@ func TestGetDetailsFailsUnknownId(t *testing.T) {
 
 	scheduler.Run()
 
-	getDetailsRequest := &pb.GetClusterOperationDetailsRequest{
+	getDetailsRequest := &automationpb.GetClusterOperationDetailsRequest{
 		Id: "-1", // There will never be a ClusterOperation with this id.
 	}
 
@@ -203,7 +203,7 @@ func TestEnqueueFailsBecauseTaskInstanceCannotBeCreated(t *testing.T) {
 
 	scheduler.Run()
 
-	enqueueRequest := &pb.EnqueueClusterOperationRequest{
+	enqueueRequest := &automationpb.EnqueueClusterOperationRequest{
 		Name: "TestingEchoTask",
 		Parameters: map[string]string{
 			"unrelevant-parameter": "value",
@@ -236,7 +236,7 @@ func TestTaskEmitsTaskWhichCannotBeInstantiated(t *testing.T) {
 
 	scheduler.Run()
 
-	enqueueRequest := &pb.EnqueueClusterOperationRequest{
+	enqueueRequest := &automationpb.EnqueueClusterOperationRequest{
 		Name: "TestingEmitEchoTask",
 		Parameters: map[string]string{
 			"echo_text": "to be emitted task should fail to instantiate",

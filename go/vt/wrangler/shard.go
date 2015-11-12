@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // shard related methods for Wrangler
@@ -27,7 +27,7 @@ func (wr *Wrangler) unlockShard(ctx context.Context, keyspace, shard string, act
 
 // updateShardCellsAndMaster will update the 'Cells' and possibly
 // MasterAlias records for the shard, if needed.
-func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.ShardInfo, tabletAlias *pb.TabletAlias, tabletType pb.TabletType, allowMasterOverride bool) error {
+func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.ShardInfo, tabletAlias *topodatapb.TabletAlias, tabletType topodatapb.TabletType, allowMasterOverride bool) error {
 	// See if we need to update the Shard:
 	// - add the tablet's cell to the shard's Cells if needed
 	// - change the master if needed
@@ -35,7 +35,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 	if !si.HasCell(tabletAlias.Cell) {
 		shardUpdateRequired = true
 	}
-	if tabletType == pb.TabletType_MASTER && !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
+	if tabletType == topodatapb.TabletType_MASTER && !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
 		shardUpdateRequired = true
 	}
 	if !shardUpdateRequired {
@@ -62,7 +62,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 		si.Cells = append(si.Cells, tabletAlias.Cell)
 		wasUpdated = true
 	}
-	if tabletType == pb.TabletType_MASTER && !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
+	if tabletType == topodatapb.TabletType_MASTER && !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
 		if si.HasMaster() && !allowMasterOverride {
 			return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", topoproto.TabletAliasString(si.MasterAlias), keyspace, shard))
 		}
@@ -83,7 +83,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 
 // SetShardServedTypes changes the ServedTypes parameter of a shard.
 // It does not rebuild any serving graph or do any consistency check (yet).
-func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType pb.TabletType, remove bool) error {
+func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, remove bool) error {
 
 	actionNode := actionnode.SetShardServedTypes(cells, servedType)
 	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
@@ -95,7 +95,7 @@ func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard str
 	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) setShardServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType pb.TabletType, remove bool) error {
+func (wr *Wrangler) setShardServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, remove bool) error {
 	si, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -113,7 +113,7 @@ func (wr *Wrangler) setShardServedTypes(ctx context.Context, keyspace, shard str
 // - if disableQueryService is set, tables has to be empty
 // - if disableQueryService is not set, and tables is empty, we remove
 //   the TabletControl record for the cells
-func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard string, tabletType pb.TabletType, cells []string, remove, disableQueryService bool, tables []string) error {
+func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove, disableQueryService bool, tables []string) error {
 
 	if disableQueryService && len(tables) > 0 {
 		return fmt.Errorf("SetShardTabletControl cannot have both DisableQueryService set and tables set")
@@ -129,7 +129,7 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) setShardTabletControl(ctx context.Context, keyspace, shard string, tabletType pb.TabletType, cells []string, remove, disableQueryService bool, tables []string) error {
+func (wr *Wrangler) setShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove, disableQueryService bool, tables []string) error {
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -314,7 +314,7 @@ func (wr *Wrangler) sourceShardDelete(ctx context.Context, keyspace, shard strin
 	if err != nil {
 		return err
 	}
-	newSourceShards := make([]*pb.Shard_SourceShard, 0, 0)
+	newSourceShards := make([]*topodatapb.Shard_SourceShard, 0, 0)
 	for _, ss := range si.SourceShards {
 		if ss.Uid != uid {
 			newSourceShards = append(newSourceShards, ss)
@@ -331,7 +331,7 @@ func (wr *Wrangler) sourceShardDelete(ctx context.Context, keyspace, shard strin
 }
 
 // SourceShardAdd will add a new SourceShard inside a shard
-func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *pb.KeyRange, tables []string) error {
+func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *topodatapb.KeyRange, tables []string) error {
 	actionNode := actionnode.UpdateShard()
 	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
 	if err != nil {
@@ -342,7 +342,7 @@ func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, 
 	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) sourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *pb.KeyRange, tables []string) error {
+func (wr *Wrangler) sourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *topodatapb.KeyRange, tables []string) error {
 	si, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -355,7 +355,7 @@ func (wr *Wrangler) sourceShardAdd(ctx context.Context, keyspace, shard string, 
 		}
 	}
 
-	si.SourceShards = append(si.SourceShards, &pb.Shard_SourceShard{
+	si.SourceShards = append(si.SourceShards, &topodatapb.Shard_SourceShard{
 		Uid:      uid,
 		Keyspace: skeyspace,
 		Shard:    sshard,

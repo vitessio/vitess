@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -46,18 +46,18 @@ func TestUint64FromKeyspaceId(t *testing.T) {
 
 func TestCompareRows(t *testing.T) {
 	table := []struct {
-		fields      []*query.Field
+		fields      []*querypb.Field
 		left, right []sqltypes.Value
 		want        int
 	}{
 		{
-			fields: []*query.Field{{"a", sqltypes.Int32}},
+			fields: []*querypb.Field{{"a", sqltypes.Int32}},
 			left:   []sqltypes.Value{sqltypes.MakeNumeric([]byte("123"))},
 			right:  []sqltypes.Value{sqltypes.MakeNumeric([]byte("14"))},
 			want:   1,
 		},
 		{
-			fields: []*query.Field{
+			fields: []*querypb.Field{
 				{"a", sqltypes.Int32},
 				{"b", sqltypes.Int32},
 			},
@@ -72,43 +72,43 @@ func TestCompareRows(t *testing.T) {
 			want: -1,
 		},
 		{
-			fields: []*query.Field{{"a", sqltypes.Int32}},
+			fields: []*querypb.Field{{"a", sqltypes.Int32}},
 			left:   []sqltypes.Value{sqltypes.MakeNumeric([]byte("144"))},
 			right:  []sqltypes.Value{sqltypes.MakeNumeric([]byte("144"))},
 			want:   0,
 		},
 		{
-			fields: []*query.Field{{"a", sqltypes.Uint64}},
+			fields: []*querypb.Field{{"a", sqltypes.Uint64}},
 			left:   []sqltypes.Value{sqltypes.MakeNumeric([]byte("9223372036854775809"))},
 			right:  []sqltypes.Value{sqltypes.MakeNumeric([]byte("9223372036854775810"))},
 			want:   -1,
 		},
 		{
-			fields: []*query.Field{{"a", sqltypes.Uint64}},
+			fields: []*querypb.Field{{"a", sqltypes.Uint64}},
 			left:   []sqltypes.Value{sqltypes.MakeNumeric([]byte("9223372036854775819"))},
 			right:  []sqltypes.Value{sqltypes.MakeNumeric([]byte("9223372036854775810"))},
 			want:   1,
 		},
 		{
-			fields: []*query.Field{{"a", sqltypes.Float64}},
+			fields: []*querypb.Field{{"a", sqltypes.Float64}},
 			left:   []sqltypes.Value{sqltypes.MakeFractional([]byte("3.14"))},
 			right:  []sqltypes.Value{sqltypes.MakeFractional([]byte("3.2"))},
 			want:   -1,
 		},
 		{
-			fields: []*query.Field{{"a", sqltypes.Float64}},
+			fields: []*querypb.Field{{"a", sqltypes.Float64}},
 			left:   []sqltypes.Value{sqltypes.MakeFractional([]byte("123.4"))},
 			right:  []sqltypes.Value{sqltypes.MakeFractional([]byte("123.2"))},
 			want:   1,
 		},
 		{
-			fields: []*query.Field{{"a", sqltypes.Char}},
+			fields: []*querypb.Field{{"a", sqltypes.Char}},
 			left:   []sqltypes.Value{sqltypes.MakeString([]byte("abc"))},
 			right:  []sqltypes.Value{sqltypes.MakeString([]byte("abb"))},
 			want:   1,
 		},
 		{
-			fields: []*query.Field{{"a", sqltypes.Char}},
+			fields: []*querypb.Field{{"a", sqltypes.Char}},
 			left:   []sqltypes.Value{sqltypes.MakeString([]byte("abc"))},
 			right:  []sqltypes.Value{sqltypes.MakeString([]byte("abd"))},
 			want:   -1,

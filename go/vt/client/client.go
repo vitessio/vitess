@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func init() {
@@ -59,7 +59,7 @@ type conn struct {
 	Streaming  bool
 	Timeout    time.Duration
 
-	tabletType pb.TabletType
+	tabletType topodatapb.TabletType
 	vtgateConn *vtgateconn.VTGateConn
 	tx         *vtgateconn.VTGateTx
 }

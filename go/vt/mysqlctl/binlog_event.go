@@ -10,7 +10,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // binlogEvent wraps a raw packet buffer and provides methods to examine it
@@ -216,7 +216,7 @@ varsLoop:
 			if pos+6 > len(vars) {
 				return query, fmt.Errorf("Q_CHARSET_CODE status var overflows buffer (%v + 6 > %v)", pos, len(vars))
 			}
-			query.Charset = &pb.Charset{
+			query.Charset = &binlogdatapb.Charset{
 				Client: int32(binary.LittleEndian.Uint16(vars[pos : pos+2])),
 				Conn:   int32(binary.LittleEndian.Uint16(vars[pos+2 : pos+4])),
 				Server: int32(binary.LittleEndian.Uint16(vars[pos+4 : pos+6])),

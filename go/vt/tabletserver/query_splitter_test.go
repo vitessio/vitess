@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -246,9 +246,9 @@ func TestSplitBoundaries(t *testing.T) {
 	row := []sqltypes.Value{min, max}
 	rows := [][]sqltypes.Value{row}
 
-	minField := &pbq.Field{Name: "min", Type: sqltypes.Int64}
-	maxField := &pbq.Field{Name: "max", Type: sqltypes.Int64}
-	fields := []*pbq.Field{minField, maxField}
+	minField := &querypb.Field{Name: "min", Type: sqltypes.Int64}
+	maxField := &querypb.Field{Name: "max", Type: sqltypes.Int64}
+	fields := []*querypb.Field{minField, maxField}
 
 	pkMinMax := &sqltypes.Result{
 		Fields: fields,
@@ -293,9 +293,9 @@ func TestSplitBoundaries(t *testing.T) {
 	max, _ = sqltypes.BuildValue(60.5)
 	row = []sqltypes.Value{min, max}
 	rows = [][]sqltypes.Value{row}
-	minField = &pbq.Field{Name: "min", Type: sqltypes.Float64}
-	maxField = &pbq.Field{Name: "max", Type: sqltypes.Float64}
-	fields = []*pbq.Field{minField, maxField}
+	minField = &querypb.Field{Name: "min", Type: sqltypes.Float64}
+	maxField = &querypb.Field{Name: "max", Type: sqltypes.Float64}
+	fields = []*querypb.Field{minField, maxField}
 	pkMinMax.Rows = rows
 	pkMinMax.Fields = fields
 	got, err = splitter.splitBoundaries(sqltypes.Float64, pkMinMax)
@@ -322,15 +322,15 @@ func TestSplitQuery(t *testing.T) {
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(0)
 	max, _ := sqltypes.BuildValue(300)
-	minField := &pbq.Field{
+	minField := &querypb.Field{
 		Name: "min",
 		Type: sqltypes.Int64,
 	}
-	maxField := &pbq.Field{
+	maxField := &querypb.Field{
 		Name: "max",
 		Type: sqltypes.Int64,
 	}
-	fields := []*pbq.Field{minField, maxField}
+	fields := []*querypb.Field{minField, maxField}
 	pkMinMax := &sqltypes.Result{
 		Fields: fields,
 	}
@@ -384,15 +384,15 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(10.5)
 	max, _ := sqltypes.BuildValue(490.5)
-	minField := &pbq.Field{
+	minField := &querypb.Field{
 		Name: "min",
 		Type: sqltypes.Float32,
 	}
-	maxField := &pbq.Field{
+	maxField := &querypb.Field{
 		Name: "max",
 		Type: sqltypes.Float32,
 	}
-	fields := []*pbq.Field{minField, maxField}
+	fields := []*querypb.Field{minField, maxField}
 	pkMinMax := &sqltypes.Result{
 		Fields: fields,
 		Rows:   [][]sqltypes.Value{[]sqltypes.Value{min, max}},

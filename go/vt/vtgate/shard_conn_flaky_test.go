@@ -15,7 +15,7 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
@@ -33,12 +33,12 @@ var (
 
 func TestShardConnExecute(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecute", false, func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecute", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecute", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		_, err := sdc.Execute(context.Background(), "query", nil, 0)
 		return err
 	})
 	testShardConnTransact(t, "TestShardConnExecute", func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecute", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecute", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		_, err := sdc.Execute(context.Background(), "query", nil, 1)
 		return err
 	})
@@ -46,13 +46,13 @@ func TestShardConnExecute(t *testing.T) {
 
 func TestShardConnExecuteBatch(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecuteBatch", false, func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", pb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		queries := []tproto.BoundQuery{{"query", nil}}
 		_, err := sdc.ExecuteBatch(context.Background(), queries, false, 0)
 		return err
 	})
 	testShardConnTransact(t, "TestShardConnExecuteBatch", func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", pb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		queries := []tproto.BoundQuery{{"query", nil}}
 		_, err := sdc.ExecuteBatch(context.Background(), queries, false, 1)
 		return err
@@ -61,12 +61,12 @@ func TestShardConnExecuteBatch(t *testing.T) {
 
 func TestShardConnExecuteStream(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecuteStream", true, func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", pb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		_, errfunc := sdc.StreamExecute(context.Background(), "query", nil, 0)
 		return errfunc()
 	})
 	testShardConnTransact(t, "TestShardConnExecuteStream", func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", pb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		_, errfunc := sdc.StreamExecute(context.Background(), "query", nil, 1)
 		return errfunc()
 	})
@@ -74,7 +74,7 @@ func TestShardConnExecuteStream(t *testing.T) {
 
 func TestShardConnBegin(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnBegin", false, func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnBegin", "0", pb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnBegin", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		_, err := sdc.Begin(context.Background())
 		return err
 	})
@@ -82,14 +82,14 @@ func TestShardConnBegin(t *testing.T) {
 
 func TestShardConnCommit(t *testing.T) {
 	testShardConnTransact(t, "TestShardConnCommit", func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnCommit", "0", pb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnCommit", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		return sdc.Commit(context.Background(), 1)
 	})
 }
 
 func TestShardConnRollback(t *testing.T) {
 	testShardConnTransact(t, "TestShardConnRollback", func() error {
-		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnRollback", "0", pb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnRollback", "0", topodatapb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		return sdc.Rollback(context.Background(), 1)
 	})
 }
@@ -283,7 +283,7 @@ func TestShardConnBeginOther(t *testing.T) {
 	sbc := &sandboxConn{mustFailTxPool: 1}
 	s.MapTestConn("0", sbc)
 	want := fmt.Sprintf("shard, host: TestShardConnBeginOther.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , tx_pool_full: err")
-	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnBeginOther", "0", pb.TabletType_REPLICA, 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnBeginOther", "0", topodatapb.TabletType_REPLICA, 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	_, err := sdc.Begin(context.Background())
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)
@@ -303,7 +303,7 @@ func TestShardConnStreamingRetry(t *testing.T) {
 	s := createSandbox("TestShardConnStreamingRetry")
 	sbc := &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("0", sbc)
-	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", pb.TabletType_REPLICA, 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", topodatapb.TabletType_REPLICA, 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	_, errfunc := sdc.StreamExecute(context.Background(), "query", nil, 0)
 	err := errfunc()
 	if err != nil {
@@ -320,7 +320,7 @@ func TestShardConnStreamingRetry(t *testing.T) {
 	s.Reset()
 	sbc = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("0", sbc)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", pb.TabletType_REPLICA, 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", topodatapb.TabletType_REPLICA, 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	_, errfunc = sdc.StreamExecute(context.Background(), "query", nil, 0)
 	err = errfunc()
 	want := "shard, host: TestShardConnStreamingRetry.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , fatal: err"
@@ -341,7 +341,7 @@ func TestShardConnTimeout(t *testing.T) {
 	s.DialMustTimeout = 1
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
-	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnTimeout", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnTimeout", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	startTime := time.Now()
 	_, err := sdc.Execute(context.Background(), "query", nil, 0)
 	execDuration := time.Now().Sub(startTime)
@@ -360,7 +360,7 @@ func TestShardConnTimeout(t *testing.T) {
 	s.DialMustTimeout = 1
 	sbc = &sandboxConn{}
 	s.MapTestConn("0", sbc)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnTimeout", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutTotal*3, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnTimeout", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutTotal*3, connLife, connectTimings)
 	startTime = time.Now()
 	_, err = sdc.Execute(context.Background(), "query", nil, 0)
 	execDuration = time.Now().Sub(startTime)
@@ -382,7 +382,7 @@ func TestShardConnTimeout(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	s.MapTestConn("0", sbc2)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnTimeout", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnTimeout", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	startTime = time.Now()
 	_, err = sdc.Execute(context.Background(), "query", nil, 0)
 	execDuration = time.Now().Sub(startTime)
@@ -404,7 +404,7 @@ func TestShardConnTimeout(t *testing.T) {
 	sbc2 = &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	s.MapTestConn("0", sbc2)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnTimeout", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnTimeout", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	startTime = time.Now()
 	_, err = sdc.Execute(context.Background(), "query", nil, 0)
 	execDuration = time.Now().Sub(startTime)
@@ -424,7 +424,7 @@ func TestShardConnReconnect(t *testing.T) {
 	retryCount := 5
 	s := createSandbox("TestShardConnReconnect")
 	// case 1: resolved 0 endpoint, return error
-	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	startTime := time.Now()
 	_, err := sdc.Execute(context.Background(), "query", nil, 0)
 	execDuration := time.Now().Sub(startTime)
@@ -446,7 +446,7 @@ func TestShardConnReconnect(t *testing.T) {
 	s.DialMustFail = 1
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	timeStart := time.Now()
 	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration := time.Now().Sub(timeStart)
@@ -464,7 +464,7 @@ func TestShardConnReconnect(t *testing.T) {
 	s.Reset()
 	sbc = &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("0", sbc)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	timeStart = time.Now()
 	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
@@ -482,7 +482,7 @@ func TestShardConnReconnect(t *testing.T) {
 	s.Reset()
 	sbc = &sandboxConn{mustFailConn: 1}
 	s.MapTestConn("0", sbc)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	timeStart = time.Now()
 	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
@@ -502,7 +502,7 @@ func TestShardConnReconnect(t *testing.T) {
 	s.MapTestConn("0", sbc0)
 	s.MapTestConn("0", sbc1)
 	s.MapTestConn("0", sbc2)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	timeStart = time.Now()
 	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
@@ -531,7 +531,7 @@ func TestShardConnReconnect(t *testing.T) {
 	s.MapTestConn("0", sbc0)
 	s.MapTestConn("0", sbc1)
 	s.MapTestConn("0", sbc2)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	timeStart = time.Now()
 	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
@@ -569,7 +569,7 @@ func TestShardConnReconnect(t *testing.T) {
 	s.MapTestConn("0", sbc0)
 	s.MapTestConn("0", sbc1)
 	s.MapTestConn("0", sbc2)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	timeStart = time.Now()
 	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
@@ -607,7 +607,7 @@ func TestShardConnReconnect(t *testing.T) {
 	s.MapTestConn("0", sbc0)
 	s.MapTestConn("0", sbc1)
 	s.MapTestConn("0", sbc2)
-	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	timeStart = time.Now()
 	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
@@ -654,7 +654,7 @@ func TestShardConnReconnect(t *testing.T) {
 		}
 		countGetEndPoints++
 	}
-	sdc = NewShardConn(context.Background(), &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	timeStart = time.Now()
 	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
@@ -704,7 +704,7 @@ func TestShardConnReconnect(t *testing.T) {
 		}
 		countGetEndPoints++
 	}
-	sdc = NewShardConn(context.Background(), &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	timeStart = time.Now()
 	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
@@ -760,7 +760,7 @@ func TestShardConnReconnect(t *testing.T) {
 		}
 		countGetEndPoints++
 	}
-	sdc = NewShardConn(context.Background(), &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
+	sdc = NewShardConn(context.Background(), &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 	timeStart = time.Now()
 	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
@@ -790,7 +790,7 @@ func TestReplicaShardConnLife(t *testing.T) {
 	s := createSandbox("TestReplicaShardConnLife")
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
-	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestReplicaShardConnLife", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, 10*time.Millisecond, connectTimings)
+	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestReplicaShardConnLife", "0", topodatapb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, 10*time.Millisecond, connectTimings)
 	sdc.Execute(context.Background(), "query", nil, 0)
 	if s.DialCounter != 1 {
 		t.Errorf("DialCounter: %d, want 1", s.DialCounter)
@@ -810,7 +810,7 @@ func TestMasterShardConnLife(t *testing.T) {
 	s := createSandbox("TestMasterShardConnLife")
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
-	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestMasterShardConnLife", "0", pb.TabletType_MASTER, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, 10*time.Millisecond, connectTimings)
+	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestMasterShardConnLife", "0", topodatapb.TabletType_MASTER, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, 10*time.Millisecond, connectTimings)
 	sdc.Execute(context.Background(), "query", nil, 0)
 	if s.DialCounter != 1 {
 		t.Errorf("DialCounter: %d, want 1", s.DialCounter)

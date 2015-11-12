@@ -22,8 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const keyspace = "ks"
@@ -34,14 +34,14 @@ const destShard = "-80"
 // with the source shard up to a maximum replication delay (in seconds).
 func TestWaitForFilteredReplication(t *testing.T) {
 	// Replication is lagging behind.
-	oneHourDelay := &pbq.RealtimeStats{
+	oneHourDelay := &querypb.RealtimeStats{
 		BinlogPlayersCount:                     1,
 		SecondsBehindMasterFilteredReplication: 3600,
 	}
 
 	// Replication caught up.
-	oneSecondDelayFunc := func() *pbq.RealtimeStats {
-		return &pbq.RealtimeStats{
+	oneSecondDelayFunc := func() *querypb.RealtimeStats {
+		return &querypb.RealtimeStats{
 			BinlogPlayersCount:                     1,
 			SecondsBehindMasterFilteredReplication: 1,
 		}
@@ -54,10 +54,10 @@ func TestWaitForFilteredReplication(t *testing.T) {
 // vtctl WaitForFilteredReplication fails when no filtered replication is
 // running (judging by the tablet's returned stream health record).
 func TestWaitForFilteredReplication_noFilteredReplication(t *testing.T) {
-	noFilteredReplication := &pbq.RealtimeStats{
+	noFilteredReplication := &querypb.RealtimeStats{
 		BinlogPlayersCount: 0,
 	}
-	noFilteredReplicationFunc := func() *pbq.RealtimeStats {
+	noFilteredReplicationFunc := func() *querypb.RealtimeStats {
 		return noFilteredReplication
 	}
 
@@ -67,17 +67,17 @@ func TestWaitForFilteredReplication_noFilteredReplication(t *testing.T) {
 // TestWaitForFilteredReplication_unhealthy checks that
 // vtctl WaitForFilteredReplication fails when a tablet is not healthy.
 func TestWaitForFilteredReplication_unhealthy(t *testing.T) {
-	unhealthy := &pbq.RealtimeStats{
+	unhealthy := &querypb.RealtimeStats{
 		HealthError: "WaitForFilteredReplication: unhealthy test",
 	}
-	unhealthyFunc := func() *pbq.RealtimeStats {
+	unhealthyFunc := func() *querypb.RealtimeStats {
 		return unhealthy
 	}
 
 	waitForFilteredReplication(t, "tablet is not healthy", unhealthy, unhealthyFunc)
 }
 
-func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *pbq.RealtimeStats, broadcastStatsFunc func() *pbq.RealtimeStats) {
+func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *querypb.RealtimeStats, broadcastStatsFunc func() *querypb.RealtimeStats) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -85,25 +85,25 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	defer vp.Close()
 
 	// create keyspace
-	if err := ts.CreateKeyspace(context.Background(), keyspace, &pbt.Keyspace{
+	if err := ts.CreateKeyspace(context.Background(), keyspace, &topodatapb.Keyspace{
 		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
 	// source of the filtered replication. We don't start its loop because we don't connect to it.
-	source := NewFakeTablet(t, wr, "cell1", 0, pbt.TabletType_MASTER, db,
+	source := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, keyspace, "0"))
 	// dest is the master of the dest shard which receives filtered replication events.
-	dest := NewFakeTablet(t, wr, "cell1", 1, pbt.TabletType_MASTER, db,
+	dest := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, keyspace, destShard))
 	dest.StartActionLoop(t, wr)
 	defer dest.StopActionLoop(t)
 
 	// Build topology state as we would expect it when filtered replication is enabled.
 	ctx := context.Background()
-	wr.SetSourceShards(ctx, keyspace, destShard, []*pbt.TabletAlias{source.Tablet.GetAlias()}, nil)
+	wr.SetSourceShards(ctx, keyspace, destShard, []*topodatapb.TabletAlias{source.Tablet.GetAlias()}, nil)
 
 	// Set a BinlogPlayerMap to avoid a nil panic when the explicit RunHealthCheck
 	// is called by WaitForFilteredReplication.

@@ -9,7 +9,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
@@ -45,16 +45,16 @@ func (c *successClient) Rollback(ctx context.Context, inSession *pbg.Session) er
 	return c.fallback.Rollback(ctx, inSession)
 }
 
-func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
+func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	if keyspace == "big" {
-		return &pb.SrvKeyspace{
-			Partitions: []*pb.SrvKeyspace_KeyspacePartition{
-				&pb.SrvKeyspace_KeyspacePartition{
-					ServedType: pb.TabletType_REPLICA,
-					ShardReferences: []*pb.ShardReference{
-						&pb.ShardReference{
+		return &topodatapb.SrvKeyspace{
+			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+				&topodatapb.SrvKeyspace_KeyspacePartition{
+					ServedType: topodatapb.TabletType_REPLICA,
+					ShardReferences: []*topodatapb.ShardReference{
+						&topodatapb.ShardReference{
 							Name: "shard0",
-							KeyRange: &pb.KeyRange{
+							KeyRange: &topodatapb.KeyRange{
 								Start: []byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
 								End:   []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
 							},
@@ -63,10 +63,10 @@ func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*p
 				},
 			},
 			ShardingColumnName: "sharding_column_name",
-			ShardingColumnType: pb.KeyspaceIdType_UINT64,
-			ServedFrom: []*pb.SrvKeyspace_ServedFrom{
-				&pb.SrvKeyspace_ServedFrom{
-					TabletType: pb.TabletType_MASTER,
+			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+			ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
+				&topodatapb.SrvKeyspace_ServedFrom{
+					TabletType: topodatapb.TabletType_MASTER,
 					Keyspace:   "other_keyspace",
 				},
 			},
@@ -74,7 +74,7 @@ func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*p
 		}, nil
 	}
 	if keyspace == "small" {
-		return &pb.SrvKeyspace{}, nil
+		return &topodatapb.SrvKeyspace{}, nil
 	}
 	return c.fallback.GetSrvKeyspace(ctx, keyspace)
 }

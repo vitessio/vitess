@@ -13,8 +13,8 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -72,7 +72,7 @@ func (e OperationalError) Error() string { return string(e) }
 // 2 - using Target with each call (and never calling GetSessionId).
 // If tabletType is set to UNKNOWN, we'll use mode 1.
 // Mode 1 is being deprecated.
-type TabletDialer func(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (TabletConn, error)
+type TabletDialer func(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // not be concurrently used across goroutines.
@@ -109,17 +109,17 @@ type TabletConn interface {
 	// SetTarget can be called to change the target used for
 	// subsequent calls. Can only be called if tabletType was not
 	// set to UNKNOWN in TabletDialer.
-	SetTarget(keyspace, shard string, tabletType pbt.TabletType) error
+	SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error
 
 	// GetEndPoint returns the end point info.
-	EndPoint() *pbt.EndPoint
+	EndPoint() *topodatapb.EndPoint
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
 	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error)
 
 	// StreamHealth streams StreamHealthResponse to the client
-	StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, ErrFunc, error)
+	StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, ErrFunc, error)
 }
 
 type ErrFunc func() error

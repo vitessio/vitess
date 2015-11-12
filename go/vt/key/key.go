@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 //
@@ -39,15 +39,15 @@ func (i Uint64Key) Bytes() []byte {
 //
 
 // ParseKeyspaceIDType parses the keyspace id type into the enum
-func ParseKeyspaceIDType(param string) (pb.KeyspaceIdType, error) {
+func ParseKeyspaceIDType(param string) (topodatapb.KeyspaceIdType, error) {
 	if param == "" {
-		return pb.KeyspaceIdType_UNSET, nil
+		return topodatapb.KeyspaceIdType_UNSET, nil
 	}
-	value, ok := pb.KeyspaceIdType_value[strings.ToUpper(param)]
+	value, ok := topodatapb.KeyspaceIdType_value[strings.ToUpper(param)]
 	if !ok {
-		return pb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
+		return topodatapb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
 	}
-	return pb.KeyspaceIdType(value), nil
+	return topodatapb.KeyspaceIdType(value), nil
 }
 
 //
@@ -55,7 +55,7 @@ func ParseKeyspaceIDType(param string) (pb.KeyspaceIdType, error) {
 //
 
 // KeyRangeContains returns true if the provided id is in the keyrange.
-func KeyRangeContains(kr *pb.KeyRange, id []byte) bool {
+func KeyRangeContains(kr *topodatapb.KeyRange, id []byte) bool {
 	if kr == nil {
 		return true
 	}
@@ -64,7 +64,7 @@ func KeyRangeContains(kr *pb.KeyRange, id []byte) bool {
 }
 
 // ParseKeyRangeParts parses a start and end hex values and build a proto KeyRange
-func ParseKeyRangeParts(start, end string) (*pb.KeyRange, error) {
+func ParseKeyRangeParts(start, end string) (*topodatapb.KeyRange, error) {
 	s, err := hex.DecodeString(start)
 	if err != nil {
 		return nil, err
@@ -73,11 +73,11 @@ func ParseKeyRangeParts(start, end string) (*pb.KeyRange, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pb.KeyRange{Start: s, End: e}, nil
+	return &topodatapb.KeyRange{Start: s, End: e}, nil
 }
 
-// KeyRangeString prints a pb.KeyRange
-func KeyRangeString(k *pb.KeyRange) string {
+// KeyRangeString prints a topodatapb.KeyRange
+func KeyRangeString(k *topodatapb.KeyRange) string {
 	if k == nil {
 		return "<nil>"
 	}
@@ -85,7 +85,7 @@ func KeyRangeString(k *pb.KeyRange) string {
 }
 
 // KeyRangeIsPartial returns true if the KeyRange does not cover the entire space.
-func KeyRangeIsPartial(kr *pb.KeyRange) bool {
+func KeyRangeIsPartial(kr *topodatapb.KeyRange) bool {
 	if kr == nil {
 		return false
 	}
@@ -93,7 +93,7 @@ func KeyRangeIsPartial(kr *pb.KeyRange) bool {
 }
 
 // KeyRangeEqual returns true if both key ranges cover the same area
-func KeyRangeEqual(left, right *pb.KeyRange) bool {
+func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
 	}
@@ -105,7 +105,7 @@ func KeyRangeEqual(left, right *pb.KeyRange) bool {
 }
 
 // KeyRangeStartEqual returns true if both key ranges have the same start
-func KeyRangeStartEqual(left, right *pb.KeyRange) bool {
+func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || len(right.Start) == 0
 	}
@@ -116,7 +116,7 @@ func KeyRangeStartEqual(left, right *pb.KeyRange) bool {
 }
 
 // KeyRangeEndEqual returns true if both key ranges have the same end
-func KeyRangeEndEqual(left, right *pb.KeyRange) bool {
+func KeyRangeEndEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || len(right.End) == 0
 	}
@@ -133,7 +133,7 @@ func KeyRangeEndEqual(left, right *pb.KeyRange) bool {
 // overlap = min(b, d) - max(c, a)
 
 // KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
-func KeyRangesIntersect(first, second *pb.KeyRange) bool {
+func KeyRangesIntersect(first, second *topodatapb.KeyRange) bool {
 	if first == nil || second == nil {
 		return true
 	}
@@ -143,7 +143,7 @@ func KeyRangesIntersect(first, second *pb.KeyRange) bool {
 
 // KeyRangesOverlap returns the overlap between two KeyRanges.
 // They need to overlap, otherwise an error is returned.
-func KeyRangesOverlap(first, second *pb.KeyRange) (*pb.KeyRange, error) {
+func KeyRangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, error) {
 	if !KeyRangesIntersect(first, second) {
 		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", first, second)
 	}
@@ -174,13 +174,13 @@ func KeyRangesOverlap(first, second *pb.KeyRange) (*pb.KeyRange, error) {
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
 // string may serve both as the start and end of the keyspace: -a-b-
 // will be parsed as start-a, a-b, b-end.
-func ParseShardingSpec(spec string) ([]*pb.KeyRange, error) {
+func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 	parts := strings.Split(spec, "-")
 	if len(parts) == 1 {
 		return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)
 	}
 	old := parts[0]
-	ranges := make([]*pb.KeyRange, len(parts)-1)
+	ranges := make([]*topodatapb.KeyRange, len(parts)-1)
 
 	for i, p := range parts[1:] {
 		if p == "" && i != (len(parts)-2) {
@@ -203,7 +203,7 @@ func ParseShardingSpec(spec string) ([]*pb.KeyRange, error) {
 		if len(e) == 0 {
 			e = nil
 		}
-		ranges[i] = &pb.KeyRange{Start: s, End: e}
+		ranges[i] = &topodatapb.KeyRange{Start: s, End: e}
 		old = p
 	}
 	return ranges, nil

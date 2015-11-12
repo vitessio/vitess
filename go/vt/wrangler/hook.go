@@ -13,11 +13,11 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // ExecuteHook will run the hook on the tablet
-func (wr *Wrangler) ExecuteHook(ctx context.Context, tabletAlias *pb.TabletAlias, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
+func (wr *Wrangler) ExecuteHook(ctx context.Context, tabletAlias *topodatapb.TabletAlias, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
 	if strings.Contains(hook.Name, "/") {
 		return nil, fmt.Errorf("hook name cannot have a '/' in it")
 	}

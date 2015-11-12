@@ -18,7 +18,7 @@ get all shards with "keyspace.*.db_type".
 In zk, this is in /zk/local/vt/ns/<keyspace>/<shard>/<db type>
 */
 
-import pb "github.com/youtube/vitess/go/vt/proto/topodata"
+import topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 const (
 	// DefaultPortName is the port named used by SrvEntries
@@ -27,8 +27,8 @@ const (
 )
 
 // NewEndPoint returns a new empty EndPoint
-func NewEndPoint(uid uint32, host string) *pb.EndPoint {
-	return &pb.EndPoint{
+func NewEndPoint(uid uint32, host string) *topodatapb.EndPoint {
+	return &topodatapb.EndPoint{
 		Uid:     uid,
 		Host:    host,
 		PortMap: make(map[string]int32),
@@ -36,7 +36,7 @@ func NewEndPoint(uid uint32, host string) *pb.EndPoint {
 }
 
 // EndPointEquality returns true iff two EndPoint are representing the same data
-func EndPointEquality(left, right *pb.EndPoint) bool {
+func EndPointEquality(left, right *topodatapb.EndPoint) bool {
 	if left.Uid != right.Uid {
 		return false
 	}
@@ -71,6 +71,6 @@ func EndPointEquality(left, right *pb.EndPoint) bool {
 }
 
 // NewEndPoints creates a EndPoints with a pre-allocated slice for Entries.
-func NewEndPoints() *pb.EndPoints {
-	return &pb.EndPoints{Entries: make([]*pb.EndPoint, 0, 8)}
+func NewEndPoints() *topodatapb.EndPoints {
+	return &topodatapb.EndPoints{Entries: make([]*topodatapb.EndPoint, 0, 8)}
 }

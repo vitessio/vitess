@@ -21,8 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -83,10 +83,10 @@ func verifyErrorExceptServerCode(t *testing.T, err error, method string) {
 }
 
 // testTarget is the target we use for this test
-var testTarget = &pbq.Target{
+var testTarget = &querypb.Target{
 	Keyspace:   "test_keyspace",
 	Shard:      "test_shard",
-	TabletType: pbt.TabletType_REPLICA,
+	TabletType: topodatapb.TabletType_REPLICA,
 }
 
 var testCallerID = &vtrpc.CallerID{
@@ -95,7 +95,7 @@ var testCallerID = &vtrpc.CallerID{
 	Subcomponent: "test_subcomponent",
 }
 
-var testVTGateCallerID = &pbq.VTGateCallerID{
+var testVTGateCallerID = &querypb.VTGateCallerID{
 	Username: "test_username",
 }
 
@@ -103,7 +103,7 @@ const testAsTransaction bool = true
 
 const testSessionID int64 = 5678
 
-func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *pbq.Target) {
+func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *querypb.Target) {
 	if !reflect.DeepEqual(target, testTarget) {
 		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, testTarget)
 	}
@@ -138,7 +138,7 @@ func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sess
 }
 
 // Begin is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Begin(ctx context.Context, target *pbq.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
+func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -211,7 +211,7 @@ func testBegin2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Commit is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Commit(ctx context.Context, target *pbq.Target, session *proto.Session) error {
+func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, session *proto.Session) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -277,7 +277,7 @@ func testCommit2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Rollback is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Rollback(ctx context.Context, target *pbq.Target, session *proto.Session) error {
+func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, session *proto.Session) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -343,7 +343,7 @@ func testRollback2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, target *pbq.Target, query *proto.Query, reply *sqltypes.Result) error {
+func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -379,12 +379,12 @@ var executeBindVars = map[string]interface{}{
 const executeTransactionID int64 = 678
 
 var executeQueryResult = sqltypes.Result{
-	Fields: []*pbq.Field{
-		&pbq.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
 			Type: sqltypes.Int8,
 		},
-		&pbq.Field{
+		&querypb.Field{
 			Name: "field2",
 			Type: sqltypes.Char,
 		},
@@ -453,7 +453,7 @@ func testExecute2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error {
 	if f.panics && f.streamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -501,12 +501,12 @@ var streamExecuteBindVars = map[string]interface{}{
 const streamExecuteTransactionID int64 = 6789992
 
 var streamExecuteQueryResult1 = sqltypes.Result{
-	Fields: []*pbq.Field{
-		&pbq.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
 			Type: sqltypes.Int8,
 		},
-		&pbq.Field{
+		&querypb.Field{
 			Name: "field2",
 			Type: sqltypes.Char,
 		},
@@ -747,7 +747,7 @@ func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *Fa
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *pbq.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -794,8 +794,8 @@ const executeBatchTransactionID int64 = 678
 var executeBatchQueryResultList = proto.QueryResultList{
 	List: []sqltypes.Result{
 		sqltypes.Result{
-			Fields: []*pbq.Field{
-				&pbq.Field{
+			Fields: []*querypb.Field{
+				&querypb.Field{
 					Name: "field1",
 					Type: sqltypes.Int8,
 				},
@@ -812,8 +812,8 @@ var executeBatchQueryResultList = proto.QueryResultList{
 			},
 		},
 		sqltypes.Result{
-			Fields: []*pbq.Field{
-				&pbq.Field{
+			Fields: []*querypb.Field{
+				&querypb.Field{
 					Name: "field1",
 					Type: sqltypes.Int8,
 				},
@@ -880,7 +880,7 @@ func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
-func (f *FakeQueryService) SplitQuery(ctx context.Context, target *pbq.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -955,15 +955,15 @@ func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn) {
 // upon registration, and we also return an error, so the streaming query
 // ends right there. Otherwise we have no real way to trigger a real
 // communication error, that ends the streaming.
-var testStreamHealthStreamHealthResponse = &pbq.StreamHealthResponse{
-	Target: &pbq.Target{
+var testStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
+	Target: &querypb.Target{
 		Keyspace:   "test_keyspace",
 		Shard:      "test_shard",
-		TabletType: pbt.TabletType_RDONLY,
+		TabletType: topodatapb.TabletType_RDONLY,
 	},
 	Serving: true,
 	TabletExternallyReparentedTimestamp: 1234589,
-	RealtimeStats: &pbq.RealtimeStats{
+	RealtimeStats: &querypb.RealtimeStats{
 		HealthError:                            "random error",
 		SecondsBehindMaster:                    234,
 		BinlogPlayersCount:                     1,
@@ -978,7 +978,7 @@ var testStreamHealthError = "to trigger a server error"
 var streamHealthSynchronization chan struct{}
 
 // StreamHealthRegister is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamHealthRegister(c chan<- *pbq.StreamHealthResponse) (int, error) {
+func (f *FakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1054,13 +1054,13 @@ func CreateFakeServer(t *testing.T) *FakeQueryService {
 }
 
 // TestSuite runs all the tests
-func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *FakeQueryService) {
+func TestSuite(t *testing.T, protocol string, endPoint *topodatapb.EndPoint, fake *FakeQueryService) {
 	// make sure we use the right client
 	*tabletconn.TabletProtocol = protocol
 
 	// create a connection, using sessionId
 	ctx := context.Background()
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_UNKNOWN, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -1077,7 +1077,7 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 
 	// create a new connection that expects the extra fields
 	conn.Close()
-	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_REPLICA, 30*time.Second)
+	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_REPLICA, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -1105,7 +1105,7 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 
 	// force panic without extra fields
 	conn.Close()
-	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_UNKNOWN, 30*time.Second)
+	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -1121,13 +1121,13 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 }
 
 // TestErrorSuite runs all the tests that expect errors
-func TestErrorSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *FakeQueryService) {
+func TestErrorSuite(t *testing.T, protocol string, endPoint *topodatapb.EndPoint, fake *FakeQueryService) {
 	// make sure we use the right client
 	*tabletconn.TabletProtocol = protocol
 
 	// create a connection, using sessionId
 	ctx := context.Background()
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_UNKNOWN, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

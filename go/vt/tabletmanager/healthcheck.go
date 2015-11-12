@@ -22,7 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -140,7 +140,7 @@ func (agent *ActionAgent) initHealthCheck() {
 //
 // This will not change the TabletControl record, but will use it
 // to see if we should be running the query service.
-func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
+func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType) {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 
@@ -163,7 +163,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 
 	// run the health check
 	isSlaveType := true
-	if tablet.Type == pbt.TabletType_MASTER {
+	if tablet.Type == topodatapb.TabletType_MASTER {
 		isSlaveType = false
 	}
 	replicationDelay, err := agent.HealthReporter.Report(isSlaveType, shouldBeServing)
@@ -180,7 +180,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	// Figure out if we should be running QueryService, see if we are,
 	// and reconcile.
 	if err != nil {
-		if tablet.Type != pbt.TabletType_WORKER {
+		if tablet.Type != topodatapb.TabletType_WORKER {
 			// We are not healthy and must shut down QueryService.
 			// At the moment, the only exception to this are "worker" tablets which
 			// still must serve queries e.g. as source tablet during a "SplitClone".
@@ -192,7 +192,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 		if !isServing {
 			// send the type we want to be, not the type we are
 			desiredType := tablet.Type
-			if desiredType == pbt.TabletType_SPARE {
+			if desiredType == topodatapb.TabletType_SPARE {
 				desiredType = targetTabletType
 			}
 
@@ -233,7 +233,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 			agent.mutex.Unlock()
 		} else {
 			log.Infof("Updating tablet mysql port to %v", mysqlPort)
-			if err := agent.TopoServer.UpdateTabletFields(agent.batchCtx, tablet.Alias, func(tablet *pbt.Tablet) error {
+			if err := agent.TopoServer.UpdateTabletFields(agent.batchCtx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
 				tablet.PortMap["mysql"] = mysqlPort
 				return nil
 			}); err != nil {
@@ -265,7 +265,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	if err != nil {
 		// The tablet is not healthy, let's see what we need to do
 		if tablet.Type != targetTabletType {
-			if tablet.Type != pbt.TabletType_SPARE {
+			if tablet.Type != topodatapb.TabletType_SPARE {
 				// we only log if we're not in spare,
 				// as the spare state is normal for a
 				// failed health check.
@@ -279,12 +279,12 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 		// it, and it will be done after we change our state,
 		// so it's the right order, let it do it.
 		log.Infof("Tablet not healthy, converting it from %v to spare: %v", targetTabletType, err)
-		newTabletType = pbt.TabletType_SPARE
+		newTabletType = topodatapb.TabletType_SPARE
 	} else {
 		// We are healthy, maybe with health, see if we need
 		// to update the record. We only change from spare to
 		// our target type.
-		if tablet.Type == pbt.TabletType_SPARE {
+		if tablet.Type == topodatapb.TabletType_SPARE {
 			newTabletType = targetTabletType
 		}
 		if tablet.Type == newTabletType && topo.IsHealthEqual(health, tablet.HealthMap) {
@@ -322,7 +322,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 // We will clean up our state, and shut down query service.
 // We only do something if we are in targetTabletType state, and then
 // we just go to spare.
-func (agent *ActionAgent) terminateHealthChecks(targetTabletType pbt.TabletType) {
+func (agent *ActionAgent) terminateHealthChecks(targetTabletType topodatapb.TabletType) {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 	log.Info("agent.terminateHealthChecks is starting")
@@ -336,7 +336,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType pbt.TabletType)
 
 	// Change the Type to spare, update the health. Note we pass in a map
 	// that's not nil, meaning we will clear it.
-	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, pbt.TabletType_SPARE, make(map[string]string)); err != nil {
+	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_SPARE, make(map[string]string)); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
@@ -364,7 +364,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType pbt.TabletType)
 }
 
 // updateServingGraph will update the serving graph if we need to.
-func (agent *ActionAgent) updateServingGraph(tablet *topo.TabletInfo, targetTabletType pbt.TabletType) error {
+func (agent *ActionAgent) updateServingGraph(tablet *topo.TabletInfo, targetTabletType topodatapb.TabletType) error {
 	if topo.IsInServingGraph(targetTabletType) {
 		if err := topotools.UpdateTabletEndpoints(agent.batchCtx, agent.TopoServer, tablet.Tablet); err != nil {
 			return fmt.Errorf("UpdateTabletEndpoints failed: %v", err)

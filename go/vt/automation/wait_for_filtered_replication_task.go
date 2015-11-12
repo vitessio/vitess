@@ -7,7 +7,7 @@ package automation
 import (
 	"fmt"
 
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
 )
 
@@ -17,7 +17,7 @@ type WaitForFilteredReplicationTask struct {
 }
 
 // Run is part of the Task interface.
-func (t *WaitForFilteredReplicationTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
+func (t *WaitForFilteredReplicationTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
 	keyspaceAndShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["shard"])
 	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"],
 		[]string{"WaitForFilteredReplication", "-max_delay", parameters["max_delay"], keyspaceAndShard})

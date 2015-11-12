@@ -10,7 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CheckShardReplication tests ShardReplication objects
@@ -20,17 +20,17 @@ func CheckShardReplication(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("GetShardReplication(not there): %v", err)
 	}
 
-	sr := &pb.ShardReplication{
-		Nodes: []*pb.ShardReplication_Node{
-			&pb.ShardReplication_Node{
-				TabletAlias: &pb.TabletAlias{
+	sr := &topodatapb.ShardReplication{
+		Nodes: []*topodatapb.ShardReplication_Node{
+			&topodatapb.ShardReplication_Node{
+				TabletAlias: &topodatapb.TabletAlias{
 					Cell: "c1",
 					Uid:  1,
 				},
 			},
 		},
 	}
-	if err := ts.UpdateShardReplicationFields(ctx, cell, "test_keyspace", "-10", func(oldSr *pb.ShardReplication) error {
+	if err := ts.UpdateShardReplicationFields(ctx, cell, "test_keyspace", "-10", func(oldSr *topodatapb.ShardReplication) error {
 		*oldSr = *sr
 		return nil
 	}); err != nil {
@@ -47,9 +47,9 @@ func CheckShardReplication(ctx context.Context, t *testing.T, ts topo.Impl) {
 		}
 	}
 
-	if err := ts.UpdateShardReplicationFields(ctx, cell, "test_keyspace", "-10", func(sr *pb.ShardReplication) error {
-		sr.Nodes = append(sr.Nodes, &pb.ShardReplication_Node{
-			TabletAlias: &pb.TabletAlias{
+	if err := ts.UpdateShardReplicationFields(ctx, cell, "test_keyspace", "-10", func(sr *topodatapb.ShardReplication) error {
+		sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{
+			TabletAlias: &topodatapb.TabletAlias{
 				Cell: "c3",
 				Uid:  3,
 			},

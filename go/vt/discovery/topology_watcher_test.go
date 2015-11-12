@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
@@ -37,7 +37,7 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 123})
 	ctw.loadTablets()
 	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 123}); ctw.loadTablets()`)
-	want := &pbt.EndPoint{
+	want := &topodatapb.EndPoint{
 		Uid:     0,
 		Host:    "host1",
 		PortMap: map[string]int32{"vt": 123},
@@ -52,7 +52,7 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 456})
 	ctw.loadTablets()
 	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 456}); ctw.loadTablets()`)
-	want = &pbt.EndPoint{
+	want = &topodatapb.EndPoint{
 		Uid:     0,
 		Host:    "host1",
 		PortMap: map[string]int32{"vt": 456},
@@ -68,7 +68,7 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 func newFakeTopo(expectGetTabletsByCell bool) *fakeTopo {
 	return &fakeTopo{
 		expectGetTabletsByCell: expectGetTabletsByCell,
-		tablets:                make(map[pbt.TabletAlias]*pbt.Tablet),
+		tablets:                make(map[topodatapb.TabletAlias]*topodatapb.Tablet),
 	}
 }
 
@@ -76,17 +76,17 @@ type fakeTopo struct {
 	faketopo.FakeTopo
 	expectGetTabletsByCell bool
 	mu                     sync.RWMutex
-	tablets                map[pbt.TabletAlias]*pbt.Tablet
+	tablets                map[topodatapb.TabletAlias]*topodatapb.Tablet
 }
 
 func (ft *fakeTopo) AddTablet(cell string, uid uint32, host string, ports map[string]int32) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
-	ta := pbt.TabletAlias{
+	ta := topodatapb.TabletAlias{
 		Cell: cell,
 		Uid:  uid,
 	}
-	tablet := &pbt.Tablet{
+	tablet := &topodatapb.Tablet{
 		Alias:    &ta,
 		Hostname: host,
 		PortMap:  make(map[string]int32),
@@ -100,20 +100,20 @@ func (ft *fakeTopo) AddTablet(cell string, uid uint32, host string, ports map[st
 func (ft *fakeTopo) RemoveTablet(cell string, uid uint32) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
-	ta := pbt.TabletAlias{
+	ta := topodatapb.TabletAlias{
 		Cell: cell,
 		Uid:  uid,
 	}
 	delete(ft.tablets, ta)
 }
 
-func (ft *fakeTopo) GetTabletsByCell(ctx context.Context, cell string) ([]*pbt.TabletAlias, error) {
+func (ft *fakeTopo) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
 	if !ft.expectGetTabletsByCell {
 		return nil, fmt.Errorf("unexpected GetTabletsByCell")
 	}
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
-	res := make([]*pbt.TabletAlias, 0, 1)
+	res := make([]*topodatapb.TabletAlias, 0, 1)
 	for alias, tablet := range ft.tablets {
 		if tablet.Alias.Cell == cell {
 			res = append(res, &alias)
@@ -132,20 +132,20 @@ func (ft *fakeTopo) GetShardReplication(ctx context.Context, cell, keyspace, sha
 
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
-	nodes := make([]*pbt.ShardReplication_Node, 0, 1)
+	nodes := make([]*topodatapb.ShardReplication_Node, 0, 1)
 	for alias, tablet := range ft.tablets {
 		if tablet.Alias.Cell == cell {
-			nodes = append(nodes, &pbt.ShardReplication_Node{
+			nodes = append(nodes, &topodatapb.ShardReplication_Node{
 				TabletAlias: &alias,
 			})
 		}
 	}
-	return topo.NewShardReplicationInfo(&pbt.ShardReplication{
+	return topo.NewShardReplicationInfo(&topodatapb.ShardReplication{
 		Nodes: nodes,
 	}, cell, keyspace, shard), nil
 }
 
-func (ft *fakeTopo) GetTablet(ctx context.Context, alias *pbt.TabletAlias) (*pbt.Tablet, int64, error) {
+func (ft *fakeTopo) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
 	return ft.tablets[*alias], 0, nil

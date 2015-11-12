@@ -12,12 +12,12 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // ShardReplicationInfo is the companion structure for ShardReplication.
 type ShardReplicationInfo struct {
-	*pb.ShardReplication
+	*topodatapb.ShardReplication
 	cell     string
 	keyspace string
 	shard    string
@@ -25,7 +25,7 @@ type ShardReplicationInfo struct {
 
 // NewShardReplicationInfo is for topo.Server implementations to
 // create the structure
-func NewShardReplicationInfo(sr *pb.ShardReplication, cell, keyspace, shard string) *ShardReplicationInfo {
+func NewShardReplicationInfo(sr *topodatapb.ShardReplication, cell, keyspace, shard string) *ShardReplicationInfo {
 	return &ShardReplicationInfo{
 		ShardReplication: sr,
 		cell:             cell,
@@ -50,7 +50,7 @@ func (sri *ShardReplicationInfo) Shard() string {
 }
 
 // GetShardReplicationNode finds a node for a given tablet.
-func (sri *ShardReplicationInfo) GetShardReplicationNode(tabletAlias *pb.TabletAlias) (*pb.ShardReplication_Node, error) {
+func (sri *ShardReplicationInfo) GetShardReplicationNode(tabletAlias *topodatapb.TabletAlias) (*topodatapb.ShardReplication_Node, error) {
 	for _, rl := range sri.Nodes {
 		if *rl.TabletAlias == *tabletAlias {
 			return rl, nil
@@ -61,7 +61,7 @@ func (sri *ShardReplicationInfo) GetShardReplicationNode(tabletAlias *pb.TabletA
 
 // UpdateShardReplicationRecord is a low level function to add / update an
 // entry to the ShardReplication object.
-func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shard string, tabletAlias *pb.TabletAlias) error {
+func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shard string, tabletAlias *topodatapb.TabletAlias) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateShardReplicationFields")
 	span.Annotate("keyspace", keyspace)
@@ -69,9 +69,9 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 	span.Annotate("tablet", topoproto.TabletAliasString(tabletAlias))
 	defer span.Finish()
 
-	return ts.UpdateShardReplicationFields(ctx, tabletAlias.Cell, keyspace, shard, func(sr *pb.ShardReplication) error {
+	return ts.UpdateShardReplicationFields(ctx, tabletAlias.Cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
 		// not very efficient, but easy to read
-		nodes := make([]*pb.ShardReplication_Node, 0, len(sr.Nodes)+1)
+		nodes := make([]*topodatapb.ShardReplication_Node, 0, len(sr.Nodes)+1)
 		found := false
 		for _, node := range sr.Nodes {
 			if *node.TabletAlias == *tabletAlias {
@@ -84,7 +84,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 			nodes = append(nodes, node)
 		}
 		if !found {
-			nodes = append(nodes, &pb.ShardReplication_Node{TabletAlias: tabletAlias})
+			nodes = append(nodes, &topodatapb.ShardReplication_Node{TabletAlias: tabletAlias})
 		}
 		sr.Nodes = nodes
 		return nil
@@ -93,9 +93,9 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 
 // RemoveShardReplicationRecord is a low level function to remove an
 // entry from the ShardReplication object.
-func RemoveShardReplicationRecord(ctx context.Context, ts Server, cell, keyspace, shard string, tabletAlias *pb.TabletAlias) error {
-	err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *pb.ShardReplication) error {
-		nodes := make([]*pb.ShardReplication_Node, 0, len(sr.Nodes))
+func RemoveShardReplicationRecord(ctx context.Context, ts Server, cell, keyspace, shard string, tabletAlias *topodatapb.TabletAlias) error {
+	err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
+		nodes := make([]*topodatapb.ShardReplication_Node, 0, len(sr.Nodes))
 		for _, node := range sr.Nodes {
 			if *node.TabletAlias != *tabletAlias {
 				nodes = append(nodes, node)

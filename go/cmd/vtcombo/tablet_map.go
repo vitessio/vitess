@@ -22,8 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // tablet contains all the data for an individual tablet.
@@ -31,7 +31,7 @@ type tablet struct {
 	// configuration parameters
 	keyspace   string
 	shard      string
-	tabletType pb.TabletType
+	tabletType topodatapb.TabletType
 	dbname     string
 
 	// objects built at construction time
@@ -71,7 +71,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		if _, ok := keyspaceMap[keyspace]; !ok {
 			// only set for sharding key info for sharded keyspaces
 			scn := ""
-			sct := pb.KeyspaceIdType_UNSET
+			sct := topodatapb.KeyspaceIdType_UNSET
 			if shard != "0" {
 				var err error
 				sct, err = key.ParseKeyspaceIDType(*shardingColumnType)
@@ -81,7 +81,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 				scn = *shardingColumnName
 			}
 
-			if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{
+			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
 				ShardingColumnName: scn,
 				ShardingColumnType: sct,
 			}); err != nil {
@@ -91,7 +91,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		}
 
 		// create the master
-		alias := &pb.TabletAlias{
+		alias := &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  uid,
 		}
@@ -105,7 +105,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		tabletMap[uid] = &tablet{
 			keyspace:   keyspace,
 			shard:      shard,
-			tabletType: pb.TabletType_MASTER,
+			tabletType: topodatapb.TabletType_MASTER,
 			dbname:     dbname,
 
 			qsc:   masterController,
@@ -114,7 +114,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		uid++
 
 		// create a replica slave
-		alias = &pb.TabletAlias{
+		alias = &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  uid,
 		}
@@ -124,7 +124,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		tabletMap[uid] = &tablet{
 			keyspace:   keyspace,
 			shard:      shard,
-			tabletType: pb.TabletType_REPLICA,
+			tabletType: topodatapb.TabletType_REPLICA,
 			dbname:     dbname,
 
 			qsc:   replicaController,
@@ -133,7 +133,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		uid++
 
 		// create a rdonly slave
-		alias = &pb.TabletAlias{
+		alias = &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  uid,
 		}
@@ -143,7 +143,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		tabletMap[uid] = &tablet{
 			keyspace:   keyspace,
 			shard:      shard,
-			tabletType: pb.TabletType_RDONLY,
+			tabletType: topodatapb.TabletType_RDONLY,
 			dbname:     dbname,
 
 			qsc:   rdonlyController,
@@ -167,7 +167,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 }
 
 // dialer is our tabletconn.Dialer
-func dialer(ctx context.Context, endPoint *pb.EndPoint, keyspace, shard string, tabletType pb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func dialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	tablet, ok := tabletMap[endPoint.Uid]
 	if !ok {
 		return nil, tabletconn.OperationalError("connection refused")
@@ -183,7 +183,7 @@ func dialer(ctx context.Context, endPoint *pb.EndPoint, keyspace, shard string, 
 // to the tablet
 type internalTabletConn struct {
 	tablet   *tablet
-	endPoint *pb.EndPoint
+	endPoint *topodatapb.EndPoint
 }
 
 // Execute is part of tabletconn.TabletConn
@@ -198,7 +198,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 		return nil, err
 	}
 	reply := &sqltypes.Result{}
-	if err := itc.tablet.qsc.QueryService().Execute(ctx, &pbq.Target{
+	if err := itc.tablet.qsc.QueryService().Execute(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -229,7 +229,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tprot
 		q[i].BindVariables = bindVars
 	}
 	reply := &tproto.QueryResultList{}
-	if err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &pbq.Target{
+	if err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -258,7 +258,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 	var finalErr error
 
 	go func() {
-		finalErr = itc.tablet.qsc.QueryService().StreamExecute(ctx, &pbq.Target{
+		finalErr = itc.tablet.qsc.QueryService().StreamExecute(ctx, &querypb.Target{
 			Keyspace:   itc.tablet.keyspace,
 			Shard:      itc.tablet.shard,
 			TabletType: itc.tablet.tabletType,
@@ -284,7 +284,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 // Begin is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, err error) {
 	result := &tproto.TransactionInfo{}
-	if err := itc.tablet.qsc.QueryService().Begin(ctx, &pbq.Target{
+	if err := itc.tablet.qsc.QueryService().Begin(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -296,7 +296,7 @@ func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, 
 
 // Commit is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) error {
-	err := itc.tablet.qsc.QueryService().Commit(ctx, &pbq.Target{
+	err := itc.tablet.qsc.QueryService().Commit(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -308,7 +308,7 @@ func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) 
 
 // Rollback is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64) error {
-	err := itc.tablet.qsc.QueryService().Rollback(ctx, &pbq.Target{
+	err := itc.tablet.qsc.QueryService().Rollback(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -353,19 +353,19 @@ func (itc *internalTabletConn) Close() {
 }
 
 // SetTarget is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SetTarget(keyspace, shard string, tabletType pb.TabletType) error {
+func (itc *internalTabletConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
 	return nil
 }
 
 // EndPoint is part of tabletconn.TabletConn
-func (itc *internalTabletConn) EndPoint() *pb.EndPoint {
+func (itc *internalTabletConn) EndPoint() *topodatapb.EndPoint {
 	return itc.endPoint
 }
 
 // SplitQuery is part of tabletconn.TabletConn
 func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
 	reply := &tproto.SplitQueryResult{}
-	if err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &pbq.Target{
+	if err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -380,8 +380,8 @@ func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.Boun
 }
 
 // StreamHealth is part of tabletconn.TabletConn
-func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
-	result := make(chan *pbq.StreamHealthResponse, 10)
+func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	result := make(chan *querypb.StreamHealthResponse, 10)
 
 	id, err := itc.tablet.qsc.QueryService().StreamHealthRegister(result)
 	if err != nil {

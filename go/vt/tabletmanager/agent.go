@@ -50,8 +50,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Query rules from keyrange
@@ -68,7 +68,7 @@ type ActionAgent struct {
 	UpdateStream        binlog.UpdateStreamControl
 	HealthReporter      health.Reporter
 	TopoServer          topo.Server
-	TabletAlias         *pb.TabletAlias
+	TabletAlias         *topodatapb.TabletAlias
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           dbconfigs.DBConfigs
 	SchemaOverrides     []tabletserver.SchemaOverride
@@ -107,7 +107,7 @@ type ActionAgent struct {
 	// to update the fields, nothing else.
 	mutex            sync.Mutex
 	_tablet          *topo.TabletInfo
-	_tabletControl   *pb.Shard_TabletControl
+	_tabletControl   *topodatapb.Shard_TabletControl
 	_waitingForMysql bool
 
 	// if the agent is healthy, this is nil. Otherwise it contains
@@ -152,7 +152,7 @@ func NewActionAgent(
 	batchCtx context.Context,
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
-	tabletAlias *pb.TabletAlias,
+	tabletAlias *topodatapb.TabletAlias,
 	dbcfgs dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
@@ -242,7 +242,7 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
+func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -267,7 +267,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *p
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -375,7 +375,7 @@ func (agent *ActionAgent) DisableQueryService() bool {
 	return disable
 }
 
-func (agent *ActionAgent) setTabletControl(tc *pb.Shard_TabletControl) {
+func (agent *ActionAgent) setTabletControl(tc *topodatapb.Shard_TabletControl) {
 	agent.mutex.Lock()
 	agent._tabletControl = tc
 	agent.mutex.Unlock()
@@ -429,7 +429,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	ipAddr := ipAddrs[0]
 
 	// Update bind addr for mysql and query service in the tablet node.
-	f := func(tablet *pb.Tablet) error {
+	f := func(tablet *topodatapb.Tablet) error {
 		tablet.Hostname = hostname
 		tablet.Ip = ipAddr
 		if tablet.PortMap == nil {
@@ -495,7 +495,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	}
 
 	// initialize tablet server
-	if err := agent.QueryServiceControl.InitDBConfig(pbq.Target{
+	if err := agent.QueryServiceControl.InitDBConfig(querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
@@ -524,7 +524,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	}
 
 	// update our state
-	oldTablet := &pb.Tablet{}
+	oldTablet := &topodatapb.Tablet{}
 	if err = agent.updateState(ctx, oldTablet, "Start"); err != nil {
 		log.Warningf("Initial updateState failed, will need a state change before running properly: %v", err)
 	}
@@ -569,7 +569,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	}
 
 	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.PortMap["mysql"], mport)
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
+	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.PortMap["mysql"] = mport
 		return nil
 	}); err != nil {
@@ -583,7 +583,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 }
 
 // initializeKeyRangeRule will create and set the key range rules
-func (agent *ActionAgent) initializeKeyRangeRule(ctx context.Context, keyspace string, keyRange *pb.KeyRange) error {
+func (agent *ActionAgent) initializeKeyRangeRule(ctx context.Context, keyspace string, keyRange *topodatapb.KeyRange) error {
 	// check we have a partial key range
 	if !key.KeyRangeIsPartial(keyRange) {
 		log.Infof("Tablet covers the full KeyRange, not adding KeyRange query rule")

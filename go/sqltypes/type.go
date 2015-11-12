@@ -7,93 +7,93 @@ package sqltypes
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // This file provides wrappers and support
-// functions for query.Type.
+// functions for querypb.Type.
 
 // These bit flags can be used to query on the
 // common properties of types.
 const (
-	flagIsIntegral = int(query.Flag_ISINTEGRAL)
-	flagIsUnsigned = int(query.Flag_ISUNSIGNED)
-	flagIsFloat    = int(query.Flag_ISFLOAT)
-	flagIsQuoted   = int(query.Flag_ISQUOTED)
-	flagIsText     = int(query.Flag_ISTEXT)
-	flagIsBinary   = int(query.Flag_ISBINARY)
+	flagIsIntegral = int(querypb.Flag_ISINTEGRAL)
+	flagIsUnsigned = int(querypb.Flag_ISUNSIGNED)
+	flagIsFloat    = int(querypb.Flag_ISFLOAT)
+	flagIsQuoted   = int(querypb.Flag_ISQUOTED)
+	flagIsText     = int(querypb.Flag_ISTEXT)
+	flagIsBinary   = int(querypb.Flag_ISBINARY)
 )
 
-// IsIntegral returns true if query.Type is an integral
+// IsIntegral returns true if querypb.Type is an integral
 // (signed/unsigned) that can be represented using
 // up to 64 binary bits.
-func IsIntegral(t query.Type) bool {
+func IsIntegral(t querypb.Type) bool {
 	return int(t)&flagIsIntegral == flagIsIntegral
 }
 
-// IsSigned returns true if query.Type is a signed integral.
-func IsSigned(t query.Type) bool {
+// IsSigned returns true if querypb.Type is a signed integral.
+func IsSigned(t querypb.Type) bool {
 	return int(t)&(flagIsIntegral|flagIsUnsigned) == flagIsIntegral
 }
 
-// IsUnsigned returns true if query.Type is an unsigned integral.
+// IsUnsigned returns true if querypb.Type is an unsigned integral.
 // Caution: this is not the same as !IsSigned.
-func IsUnsigned(t query.Type) bool {
+func IsUnsigned(t querypb.Type) bool {
 	return int(t)&(flagIsIntegral|flagIsUnsigned) == flagIsIntegral|flagIsUnsigned
 }
 
-// IsFloat returns true is query.Type is a floating point.
-func IsFloat(t query.Type) bool {
+// IsFloat returns true is querypb.Type is a floating point.
+func IsFloat(t querypb.Type) bool {
 	return int(t)&flagIsFloat == flagIsFloat
 }
 
-// IsQuoted returns true if query.Type is a quoted text or binary.
-func IsQuoted(t query.Type) bool {
+// IsQuoted returns true if querypb.Type is a quoted text or binary.
+func IsQuoted(t querypb.Type) bool {
 	return int(t)&flagIsQuoted == flagIsQuoted
 }
 
-// IsText returns true if query.Type is a text.
-func IsText(t query.Type) bool {
+// IsText returns true if querypb.Type is a text.
+func IsText(t querypb.Type) bool {
 	return int(t)&flagIsText == flagIsText
 }
 
-// IsBinary returns true if query.Type is a binary.
-func IsBinary(t query.Type) bool {
+// IsBinary returns true if querypb.Type is a binary.
+func IsBinary(t querypb.Type) bool {
 	return int(t)&flagIsBinary == flagIsBinary
 }
 
 // Vitess data types. These are idiomatically
-// named synonyms for the query.Type values.
+// named synonyms for the querypb.Type values.
 const (
-	Null      = query.Type_NULL_TYPE
-	Int8      = query.Type_INT8
-	Uint8     = query.Type_UINT8
-	Int16     = query.Type_INT16
-	Uint16    = query.Type_UINT16
-	Int24     = query.Type_INT24
-	Uint24    = query.Type_UINT24
-	Int32     = query.Type_INT32
-	Uint32    = query.Type_UINT32
-	Int64     = query.Type_INT64
-	Uint64    = query.Type_UINT64
-	Float32   = query.Type_FLOAT32
-	Float64   = query.Type_FLOAT64
-	Timestamp = query.Type_TIMESTAMP
-	Date      = query.Type_DATE
-	Time      = query.Type_TIME
-	Datetime  = query.Type_DATETIME
-	Year      = query.Type_YEAR
-	Decimal   = query.Type_DECIMAL
-	Text      = query.Type_TEXT
-	Blob      = query.Type_BLOB
-	VarChar   = query.Type_VARCHAR
-	VarBinary = query.Type_VARBINARY
-	Char      = query.Type_CHAR
-	Binary    = query.Type_BINARY
-	Bit       = query.Type_BIT
-	Enum      = query.Type_ENUM
-	Set       = query.Type_SET
-	Tuple     = query.Type_TUPLE
+	Null      = querypb.Type_NULL_TYPE
+	Int8      = querypb.Type_INT8
+	Uint8     = querypb.Type_UINT8
+	Int16     = querypb.Type_INT16
+	Uint16    = querypb.Type_UINT16
+	Int24     = querypb.Type_INT24
+	Uint24    = querypb.Type_UINT24
+	Int32     = querypb.Type_INT32
+	Uint32    = querypb.Type_UINT32
+	Int64     = querypb.Type_INT64
+	Uint64    = querypb.Type_UINT64
+	Float32   = querypb.Type_FLOAT32
+	Float64   = querypb.Type_FLOAT64
+	Timestamp = querypb.Type_TIMESTAMP
+	Date      = querypb.Type_DATE
+	Time      = querypb.Type_TIME
+	Datetime  = querypb.Type_DATETIME
+	Year      = querypb.Type_YEAR
+	Decimal   = querypb.Type_DECIMAL
+	Text      = querypb.Type_TEXT
+	Blob      = querypb.Type_BLOB
+	VarChar   = querypb.Type_VARCHAR
+	VarBinary = querypb.Type_VARBINARY
+	Char      = querypb.Type_CHAR
+	Binary    = querypb.Type_BINARY
+	Bit       = querypb.Type_BIT
+	Enum      = querypb.Type_ENUM
+	Set       = querypb.Type_SET
+	Tuple     = querypb.Type_TUPLE
 )
 
 // bit-shift the mysql flags by two byte so we
@@ -112,7 +112,7 @@ const (
 
 // If you add to this map, make sure you add a test case
 // in tabletserver/endtoend.
-var mysqlToType = map[int64]query.Type{
+var mysqlToType = map[int64]querypb.Type{
 	1:   Int8,
 	2:   Int16,
 	3:   Int32,
@@ -133,7 +133,7 @@ var mysqlToType = map[int64]query.Type{
 	254: Char,
 }
 
-var modifier = map[int64]query.Type{
+var modifier = map[int64]querypb.Type{
 	int64(Int8) | mysqlUnsigned:  Uint8,
 	int64(Int16) | mysqlUnsigned: Uint16,
 	int64(Int32) | mysqlUnsigned: Uint32,
@@ -147,7 +147,7 @@ var modifier = map[int64]query.Type{
 }
 
 // typeToMySQL is the reverse of mysqlToType.
-var typeToMySQL = map[query.Type]struct {
+var typeToMySQL = map[querypb.Type]struct {
 	typ   int64
 	flags int64
 }{
@@ -183,7 +183,7 @@ var typeToMySQL = map[query.Type]struct {
 
 // MySQLToType computes the vitess type from mysql type and flags.
 // The function panics if the type is unrecognized.
-func MySQLToType(mysqlType, flags int64) query.Type {
+func MySQLToType(mysqlType, flags int64) querypb.Type {
 	result, ok := mysqlToType[mysqlType]
 	if !ok {
 		panic(fmt.Errorf("Could not map: %d to a vitess type", mysqlType))
@@ -198,7 +198,7 @@ func MySQLToType(mysqlType, flags int64) query.Type {
 }
 
 // TypeToMySQL returns the equivalent mysql type and flag for a vitess type.
-func TypeToMySQL(typ query.Type) (mysqlType, flags int64) {
+func TypeToMySQL(typ querypb.Type) (mysqlType, flags int64) {
 	val := typeToMySQL[typ]
 	return val.typ, val.flags >> 16
 }

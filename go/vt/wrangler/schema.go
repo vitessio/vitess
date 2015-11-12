@@ -24,11 +24,11 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // GetSchema uses an RPC to get the schema from a remote tablet
-func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *pb.TabletAlias, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
@@ -38,7 +38,7 @@ func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *pb.TabletAlias, 
 }
 
 // ReloadSchema forces the remote tablet to reload its schema.
-func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *pb.TabletAlias) error {
+func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
@@ -48,7 +48,7 @@ func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *pb.TabletAlia
 }
 
 // helper method to asynchronously diff a schema
-func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *tabletmanagerdatapb.SchemaDefinition, masterTabletAlias, alias *pb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *tabletmanagerdatapb.SchemaDefinition, masterTabletAlias, alias *topodatapb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering schema for %v", topoproto.TabletAliasString(alias))
 	slaveSchema, err := wr.GetSchema(ctx, alias, nil, excludeTables, includeViews)
@@ -187,7 +187,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 }
 
 // PreflightSchema will try a schema change on the remote tablet.
-func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *pb.TabletAlias, change string) (*tmutils.SchemaChangeResult, error) {
+func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias, change string) (*tmutils.SchemaChangeResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
@@ -196,7 +196,7 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *pb.TabletA
 }
 
 // ApplySchema will apply a schema change on the remote tablet.
-func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias *pb.TabletAlias, sc *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias, sc *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
@@ -205,7 +205,7 @@ func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias *pb.TabletAlias
 }
 
 // ApplySchemaShard applies a schema change on a shard.
-func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, change string, newParentTabletAlias *topodatapb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
 	// read the shard
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
@@ -229,7 +229,7 @@ func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, chang
 	return wr.lockAndApplySchemaShard(ctx, shardInfo, preflight, keyspace, shard, shardInfo.MasterAlias, change, newParentTabletAlias, force, waitSlaveTimeout)
 }
 
-func (wr *Wrangler) lockAndApplySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *tmutils.SchemaChangeResult, keyspace, shard string, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
+func (wr *Wrangler) lockAndApplySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *tmutils.SchemaChangeResult, keyspace, shard string, masterTabletAlias *topodatapb.TabletAlias, change string, newParentTabletAlias *topodatapb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
 	// get a shard lock
 	actionNode := actionnode.ApplySchemaShard(masterTabletAlias, change)
 	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
@@ -248,7 +248,7 @@ type tabletStatus struct {
 	beforeSchema *tabletmanagerdatapb.SchemaDefinition
 }
 
-func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *tmutils.SchemaChangeResult, masterTabletAlias *pb.TabletAlias, change string, newParentTabletAlias *pb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *tmutils.SchemaChangeResult, masterTabletAlias *topodatapb.TabletAlias, change string, newParentTabletAlias *topodatapb.TabletAlias, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
 
 	// find all the shards we need to handle
 	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, shardInfo.Keyspace(), shardInfo.ShardName())
@@ -351,7 +351,7 @@ func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, exclud
 // specified shard.  The schema is applied directly on the master of
 // the destination shard, and is propogated to the replicas through
 // binlogs.
-func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *pb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string) error {
+func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string) error {
 	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)
 	if err != nil {
 		return err

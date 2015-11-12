@@ -9,12 +9,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // SetSourceShards is a utility function to override the SourceShards fields
 // on a Shard.
-func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string, sources []*pb.TabletAlias, tables []string) error {
+func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string, sources []*topodatapb.TabletAlias, tables []string) error {
 	// read the shard
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
@@ -36,10 +36,10 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 	// Insert their KeyRange in the SourceShards array.
 	// We use a linear 0-based id, that matches what mysqlctld/split.go
 	// inserts into _vt.blp_checkpoint.
-	shardInfo.SourceShards = make([]*pb.Shard_SourceShard, len(sourceTablets))
+	shardInfo.SourceShards = make([]*topodatapb.Shard_SourceShard, len(sourceTablets))
 	i := 0
 	for _, ti := range sourceTablets {
-		shardInfo.SourceShards[i] = &pb.Shard_SourceShard{
+		shardInfo.SourceShards[i] = &topodatapb.Shard_SourceShard{
 			Uid:      uint32(i),
 			Keyspace: ti.Keyspace,
 			Shard:    ti.Shard,

@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/trace"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
@@ -39,16 +39,16 @@ const (
 
 // IsTrivialTypeChange returns if this db type be trivially reassigned
 // without changes to the replication graph
-func IsTrivialTypeChange(oldTabletType, newTabletType pb.TabletType) bool {
+func IsTrivialTypeChange(oldTabletType, newTabletType topodatapb.TabletType) bool {
 	switch oldTabletType {
-	case pb.TabletType_REPLICA, pb.TabletType_RDONLY, pb.TabletType_SPARE, pb.TabletType_BACKUP, pb.TabletType_EXPERIMENTAL, pb.TabletType_WORKER:
+	case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE, topodatapb.TabletType_BACKUP, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_WORKER:
 		switch newTabletType {
-		case pb.TabletType_REPLICA, pb.TabletType_RDONLY, pb.TabletType_SPARE, pb.TabletType_BACKUP, pb.TabletType_EXPERIMENTAL, pb.TabletType_WORKER:
+		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE, topodatapb.TabletType_BACKUP, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_WORKER:
 			return true
 		}
-	case pb.TabletType_RESTORE:
+	case topodatapb.TabletType_RESTORE:
 		switch newTabletType {
-		case pb.TabletType_SPARE:
+		case topodatapb.TabletType_SPARE:
 			return true
 		}
 	}
@@ -56,18 +56,18 @@ func IsTrivialTypeChange(oldTabletType, newTabletType pb.TabletType) bool {
 }
 
 // IsInServingGraph returns if a tablet appears in the serving graph
-func IsInServingGraph(tt pb.TabletType) bool {
+func IsInServingGraph(tt topodatapb.TabletType) bool {
 	switch tt {
-	case pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY:
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 		return true
 	}
 	return false
 }
 
 // IsRunningQueryService returns if a tablet is running the query service
-func IsRunningQueryService(tt pb.TabletType) bool {
+func IsRunningQueryService(tt topodatapb.TabletType) bool {
 	switch tt {
-	case pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY, pb.TabletType_WORKER:
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_WORKER:
 		return true
 	}
 	return false
@@ -75,9 +75,9 @@ func IsRunningQueryService(tt pb.TabletType) bool {
 
 // IsRunningUpdateStream returns if a tablet is running the update stream
 // RPC service.
-func IsRunningUpdateStream(tt pb.TabletType) bool {
+func IsRunningUpdateStream(tt topodatapb.TabletType) bool {
 	switch tt {
-	case pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY:
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 		return true
 	}
 	return false
@@ -87,9 +87,9 @@ func IsRunningUpdateStream(tt pb.TabletType) bool {
 // and actively replicating?
 // MASTER is not obviously (only support one level replication graph)
 // BACKUP, RESTORE, WORKER may or may not be, but we don't know for sure
-func IsSlaveType(tt pb.TabletType) bool {
+func IsSlaveType(tt topodatapb.TabletType) bool {
 	switch tt {
-	case pb.TabletType_MASTER, pb.TabletType_BACKUP, pb.TabletType_RESTORE, pb.TabletType_WORKER:
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_WORKER:
 		return false
 	}
 	return true
@@ -99,7 +99,7 @@ func IsSlaveType(tt pb.TabletType) bool {
 // contain all the necessary ports for the tablet to be fully
 // operational. We only care about vt port now, as mysql may not even
 // be running.
-func TabletValidatePortMap(tablet *pb.Tablet) error {
+func TabletValidatePortMap(tablet *topodatapb.Tablet) error {
 	if _, ok := tablet.PortMap["vt"]; !ok {
 		return fmt.Errorf("no vt port available")
 	}
@@ -107,7 +107,7 @@ func TabletValidatePortMap(tablet *pb.Tablet) error {
 }
 
 // TabletEndPoint returns an EndPoint associated with the tablet record
-func TabletEndPoint(tablet *pb.Tablet) (*pb.EndPoint, error) {
+func TabletEndPoint(tablet *topodatapb.Tablet) (*topodatapb.EndPoint, error) {
 	if err := TabletValidatePortMap(tablet); err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func TabletEndPoint(tablet *pb.Tablet) (*pb.EndPoint, error) {
 
 // TabletComplete validates and normalizes the tablet. If the shard name
 // contains a '-' it is going to try to infer the keyrange from it.
-func TabletComplete(tablet *pb.Tablet) error {
+func TabletComplete(tablet *topodatapb.Tablet) error {
 	shard, kr, err := ValidateShardName(tablet.Shard)
 	if err != nil {
 		return err
@@ -141,7 +141,7 @@ func TabletComplete(tablet *pb.Tablet) error {
 // TabletInfo is the container for a Tablet, read from the topology server.
 type TabletInfo struct {
 	version int64 // node version - used to prevent stomping concurrent writes
-	*pb.Tablet
+	*topodatapb.Tablet
 }
 
 // String returns a string describing the tablet.
@@ -199,13 +199,13 @@ func IsHealthEqual(left, right map[string]string) bool {
 // NewTabletInfo returns a TabletInfo basing on tablet with the
 // version set. This function should be only used by Server
 // implementations.
-func NewTabletInfo(tablet *pb.Tablet, version int64) *TabletInfo {
+func NewTabletInfo(tablet *topodatapb.Tablet, version int64) *TabletInfo {
 	return &TabletInfo{version: version, Tablet: tablet}
 }
 
 // GetTablet is a high level function to read tablet data.
 // It generates trace spans.
-func (ts Server) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*TabletInfo, error) {
+func (ts Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.GetTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
@@ -249,7 +249,7 @@ func (ts Server) UpdateTablet(ctx context.Context, tablet *TabletInfo) error {
 
 // UpdateTabletFields is a high level wrapper for TopoServer.UpdateTabletFields
 // that generates trace spans.
-func (ts Server) UpdateTabletFields(ctx context.Context, alias *pb.TabletAlias, update func(*pb.Tablet) error) error {
+func (ts Server) UpdateTabletFields(ctx context.Context, alias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTabletFields")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
@@ -269,7 +269,7 @@ func (ts Server) UpdateTabletFields(ctx context.Context, alias *pb.TabletAlias, 
 }
 
 // Validate makes sure a tablet is represented correctly in the topology server.
-func Validate(ctx context.Context, ts Server, tabletAlias *pb.TabletAlias) error {
+func Validate(ctx context.Context, ts Server, tabletAlias *topodatapb.TabletAlias) error {
 	// read the tablet record, make sure it parses
 	tablet, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -298,7 +298,7 @@ func Validate(ctx context.Context, ts Server, tabletAlias *pb.TabletAlias) error
 
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
-func (ts Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
+func (ts Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
 	// Have the Server create the tablet
 	err := ts.Impl.CreateTablet(ctx, tablet)
 	if err != nil {
@@ -318,7 +318,7 @@ func (ts Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 
 // DeleteTablet wraps the underlying Impl.DeleteTablet
 // and dispatches the event.
-func (ts Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) error {
+func (ts Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
 	// get the current tablet record, if any, to log the deletion
 	tablet, _, tErr := ts.Impl.GetTablet(ctx, tabletAlias)
 
@@ -330,7 +330,7 @@ func (ts Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) 
 	if tErr == nil {
 		// Only copy the identity info for the tablet. The rest has been deleted.
 		event.Dispatch(&events.TabletChange{
-			Tablet: pb.Tablet{
+			Tablet: topodatapb.Tablet{
 				Alias:    tabletAlias,
 				Keyspace: tablet.Keyspace,
 				Shard:    tablet.Shard,
@@ -343,12 +343,12 @@ func (ts Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) 
 
 // UpdateTabletReplicationData creates or updates the replication
 // graph data for a tablet
-func UpdateTabletReplicationData(ctx context.Context, ts Server, tablet *pb.Tablet) error {
+func UpdateTabletReplicationData(ctx context.Context, ts Server, tablet *topodatapb.Tablet) error {
 	return UpdateShardReplicationRecord(ctx, ts, tablet.Keyspace, tablet.Shard, tablet.Alias)
 }
 
 // DeleteTabletReplicationData deletes replication data.
-func DeleteTabletReplicationData(ctx context.Context, ts Server, tablet *pb.Tablet) error {
+func DeleteTabletReplicationData(ctx context.Context, ts Server, tablet *topodatapb.Tablet) error {
 	return RemoveShardReplicationRecord(ctx, ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, tablet.Alias)
 }
 
@@ -356,7 +356,7 @@ func DeleteTabletReplicationData(ctx context.Context, ts Server, tablet *pb.Tabl
 // and returns them all in a map.
 // If error is ErrPartialResult, the results in the dictionary are
 // incomplete, meaning some tablets couldn't be read.
-func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*pb.TabletAlias) (map[pb.TabletAlias]*TabletInfo, error) {
+func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.TabletAlias) (map[topodatapb.TabletAlias]*TabletInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("topo.GetTabletMap")
 	span.Annotate("num_tablets", len(tabletAliases))
@@ -365,12 +365,12 @@ func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*pb.TabletAli
 	wg := sync.WaitGroup{}
 	mutex := sync.Mutex{}
 
-	tabletMap := make(map[pb.TabletAlias]*TabletInfo)
+	tabletMap := make(map[topodatapb.TabletAlias]*TabletInfo)
 	var someError error
 
 	for _, tabletAlias := range tabletAliases {
 		wg.Add(1)
-		go func(tabletAlias *pb.TabletAlias) {
+		go func(tabletAlias *topodatapb.TabletAlias) {
 			defer wg.Done()
 			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
 			mutex.Lock()

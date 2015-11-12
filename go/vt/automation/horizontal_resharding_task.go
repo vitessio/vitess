@@ -7,7 +7,7 @@ package automation
 import (
 	"strings"
 
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 )
 
 // HorizontalReshardingTask is a cluster operation which allows to increase the number of shards.
@@ -15,7 +15,7 @@ type HorizontalReshardingTask struct {
 }
 
 // Run is part of the Task interface.
-func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
+func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
 	// Example: test_keyspace
 	keyspace := parameters["keyspace"]
 	// Example: 10-20
@@ -27,7 +27,7 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*pb.Task
 	// Example: localhost:15001
 	vtworkerEndpoint := parameters["vtworker_endpoint"]
 
-	var newTasks []*pb.TaskContainer
+	var newTasks []*automationpb.TaskContainer
 	copySchemaTasks := NewTaskContainer()
 	for _, destShard := range destShards {
 		AddTask(copySchemaTasks, "CopySchemaShardTask", map[string]string{

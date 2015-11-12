@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 var dmlErrorCases = []string{
@@ -25,20 +25,20 @@ var dmlErrorCases = []string{
 }
 
 func TestEventErrors(t *testing.T) {
-	var got *pb.StreamEvent
+	var got *binlogdatapb.StreamEvent
 	evs := &EventStreamer{
-		sendEvent: func(event *pb.StreamEvent) error {
-			if event.Category != pb.StreamEvent_SE_POS {
+		sendEvent: func(event *binlogdatapb.StreamEvent) error {
+			if event.Category != binlogdatapb.StreamEvent_SE_POS {
 				got = event
 			}
 			return nil
 		},
 	}
 	for _, sql := range dmlErrorCases {
-		trans := &pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
+		trans := &binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{
-					Category: pb.BinlogTransaction_Statement_BL_DML,
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
 					Sql:      sql,
 				},
 			},
@@ -48,8 +48,8 @@ func TestEventErrors(t *testing.T) {
 			t.Errorf("%s: %v", sql, err)
 			continue
 		}
-		want := &pb.StreamEvent{
-			Category: pb.StreamEvent_SE_ERR,
+		want := &binlogdatapb.StreamEvent{
+			Category: binlogdatapb.StreamEvent_SE_ERR,
 			Sql:      sql,
 		}
 		if !reflect.DeepEqual(got, want) {
@@ -60,14 +60,14 @@ func TestEventErrors(t *testing.T) {
 
 func TestSetErrors(t *testing.T) {
 	evs := &EventStreamer{
-		sendEvent: func(event *pb.StreamEvent) error {
+		sendEvent: func(event *binlogdatapb.StreamEvent) error {
 			return nil
 		},
 	}
-	trans := &pb.BinlogTransaction{
-		Statements: []*pb.BinlogTransaction_Statement{
+	trans := &binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: pb.BinlogTransaction_Statement_BL_SET,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "SET INSERT_ID=abcd",
 			},
 		},
@@ -84,19 +84,19 @@ func TestSetErrors(t *testing.T) {
 }
 
 func TestDMLEvent(t *testing.T) {
-	trans := &pb.BinlogTransaction{
-		Statements: []*pb.BinlogTransaction_Statement{
+	trans := &binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: pb.BinlogTransaction_Statement_BL_SET,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "SET TIMESTAMP=2",
 			}, {
-				Category: pb.BinlogTransaction_Statement_BL_SET,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "SET INSERT_ID=10",
 			}, {
-				Category: pb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "query /* _stream _table_ (eid id name)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */",
 			}, {
-				Category: pb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "query",
 			},
 		},
@@ -104,21 +104,21 @@ func TestDMLEvent(t *testing.T) {
 		TransactionId: "MariaDB/0-41983-20",
 	}
 	evs := &EventStreamer{
-		sendEvent: func(event *pb.StreamEvent) error {
+		sendEvent: func(event *binlogdatapb.StreamEvent) error {
 			switch event.Category {
-			case pb.StreamEvent_SE_DML:
+			case binlogdatapb.StreamEvent_SE_DML:
 				want := `category:SE_DML table_name:"_table_" primary_key_fields:<name:"eid" type:INT64 > primary_key_fields:<name:"id" type:INT64 > primary_key_fields:<name:"name" type:VARBINARY > primary_key_values:<lengths:2 lengths:2 lengths:4 values:"10-1name" > primary_key_values:<lengths:2 lengths:20 lengths:4 values:"1118446744073709551615name" > timestamp:1 `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got \n%s, want \n%s", got, want)
 				}
-			case pb.StreamEvent_SE_ERR:
+			case binlogdatapb.StreamEvent_SE_ERR:
 				want := `sql:"query" timestamp:1 `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
 				}
-			case pb.StreamEvent_SE_POS:
+			case binlogdatapb.StreamEvent_SE_POS:
 				want := `category:SE_POS timestamp:1 transaction_id:"MariaDB/0-41983-20" `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
@@ -137,13 +137,13 @@ func TestDMLEvent(t *testing.T) {
 }
 
 func TestDDLEvent(t *testing.T) {
-	trans := &pb.BinlogTransaction{
-		Statements: []*pb.BinlogTransaction_Statement{
+	trans := &binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: pb.BinlogTransaction_Statement_BL_SET,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "SET TIMESTAMP=2",
 			}, {
-				Category: pb.BinlogTransaction_Statement_BL_DDL,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DDL,
 				Sql:      "DDL",
 			},
 		},
@@ -151,15 +151,15 @@ func TestDDLEvent(t *testing.T) {
 		TransactionId: "MariaDB/0-41983-20",
 	}
 	evs := &EventStreamer{
-		sendEvent: func(event *pb.StreamEvent) error {
+		sendEvent: func(event *binlogdatapb.StreamEvent) error {
 			switch event.Category {
-			case pb.StreamEvent_SE_DDL:
+			case binlogdatapb.StreamEvent_SE_DDL:
 				want := `category:SE_DDL sql:"DDL" timestamp:1 `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
 				}
-			case pb.StreamEvent_SE_POS:
+			case binlogdatapb.StreamEvent_SE_POS:
 				want := `category:SE_POS timestamp:1 transaction_id:"MariaDB/0-41983-20" `
 				got := fmt.Sprintf("%v", event)
 				if got != want {

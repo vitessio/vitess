@@ -12,7 +12,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // testSuccess exercises the test cases provided by the "success" service.
@@ -21,14 +21,14 @@ func testSuccess(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 func testGetSrvKeyspace(t *testing.T, conn *vtgateconn.VTGateConn) {
-	want := &pbt.SrvKeyspace{
-		Partitions: []*pbt.SrvKeyspace_KeyspacePartition{
-			&pbt.SrvKeyspace_KeyspacePartition{
-				ServedType: pbt.TabletType_REPLICA,
-				ShardReferences: []*pbt.ShardReference{
-					&pbt.ShardReference{
+	want := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_REPLICA,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{
 						Name: "shard0",
-						KeyRange: &pbt.KeyRange{
+						KeyRange: &topodatapb.KeyRange{
 							Start: []byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
 							End:   []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
 						},
@@ -37,10 +37,10 @@ func testGetSrvKeyspace(t *testing.T, conn *vtgateconn.VTGateConn) {
 			},
 		},
 		ShardingColumnName: "sharding_column_name",
-		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
-		ServedFrom: []*pbt.SrvKeyspace_ServedFrom{
-			&pbt.SrvKeyspace_ServedFrom{
-				TabletType: pbt.TabletType_MASTER,
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+		ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
+			&topodatapb.SrvKeyspace_ServedFrom{
+				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   "other_keyspace",
 			},
 		},

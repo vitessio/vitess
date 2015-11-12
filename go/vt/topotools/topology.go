@@ -16,14 +16,14 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TabletNode is the representation of a tablet in the db topology.
 // It can be constructed from a Tablet object, or from an EndPoint.
 type TabletNode struct {
 	Host  string
-	Alias *pb.TabletAlias
+	Alias *topodatapb.TabletAlias
 	Port  int32
 }
 
@@ -52,10 +52,10 @@ func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {
 	}
 }
 
-func newTabletNodeFromEndPoint(ep *pb.EndPoint, cell string) *TabletNode {
+func newTabletNodeFromEndPoint(ep *topodatapb.EndPoint, cell string) *TabletNode {
 	return &TabletNode{
 		Host: ep.Host,
-		Alias: &pb.TabletAlias{
+		Alias: &topodatapb.TabletAlias{
 			Uid:  ep.Uid,
 			Cell: cell,
 		},
@@ -65,7 +65,7 @@ func newTabletNodeFromEndPoint(ep *pb.EndPoint, cell string) *TabletNode {
 
 // TabletNodesByType maps tablet types to slices of tablet nodes.
 type TabletNodesByType struct {
-	TabletType pb.TabletType
+	TabletType topodatapb.TabletType
 	Nodes      []*TabletNode
 }
 
@@ -73,7 +73,7 @@ type TabletNodesByType struct {
 type ShardNodes struct {
 	Name        string
 	TabletNodes []*TabletNodesByType
-	ServedTypes []pb.TabletType
+	ServedTypes []topodatapb.TabletType
 	Tag         interface{} // Tag is an arbitrary value manageable by a plugin.
 }
 
@@ -146,8 +146,8 @@ func (ks *KeyspaceNodes) hasOnlyNumericShardNames() bool {
 
 // TabletTypes returns a slice of tablet type names this ks
 // contains.
-func (ks KeyspaceNodes) TabletTypes() []pb.TabletType {
-	var contained []pb.TabletType
+func (ks KeyspaceNodes) TabletTypes() []topodatapb.TabletType {
+	var contained []topodatapb.TabletType
 	for _, t := range topoproto.AllTabletTypes {
 		if ks.HasType(t) {
 			contained = append(contained, t)
@@ -157,7 +157,7 @@ func (ks KeyspaceNodes) TabletTypes() []pb.TabletType {
 }
 
 // HasType returns true if ks has any tablets with the named type.
-func (ks KeyspaceNodes) HasType(tabletType pb.TabletType) bool {
+func (ks KeyspaceNodes) HasType(tabletType topodatapb.TabletType) bool {
 	for _, shardNodes := range ks.ShardNodes {
 		for _, tabletNodes := range shardNodes.TabletNodes {
 			if tabletNodes.TabletType == tabletType {
@@ -255,7 +255,7 @@ func DbServingGraph(ctx context.Context, ts topo.Server, cell string) (servingGr
 		return
 	}
 	wg := sync.WaitGroup{}
-	servingTypes := []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY}
+	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 	for _, keyspace := range keyspaces {
 		kn := newKeyspaceNodes()
 		servingGraph.Keyspaces[keyspace] = kn

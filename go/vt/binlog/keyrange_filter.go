@@ -9,8 +9,8 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // KeyRangeFilterFunc returns a function that calls sendReply only if statements
@@ -18,18 +18,18 @@ import (
 // passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
 // TODO(erez): Remove 'KeyspaceIdType' from here: it's no longer used.
-func KeyRangeFilterFunc(unused pbt.KeyspaceIdType, keyrange *pbt.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
-	return func(reply *pb.BinlogTransaction) error {
+func KeyRangeFilterFunc(unused topodatapb.KeyspaceIdType, keyrange *topodatapb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+	return func(reply *binlogdatapb.BinlogTransaction) error {
 		matched := false
-		filtered := make([]*pb.BinlogTransaction_Statement, 0, len(reply.Statements))
+		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(reply.Statements))
 		for _, statement := range reply.Statements {
 			switch statement.Category {
-			case pb.BinlogTransaction_Statement_BL_SET:
+			case binlogdatapb.BinlogTransaction_Statement_BL_SET:
 				filtered = append(filtered, statement)
-			case pb.BinlogTransaction_Statement_BL_DDL:
+			case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
-			case pb.BinlogTransaction_Statement_BL_DML:
+			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
 				keyspaceID, err := sqlannotation.ExtractKeySpaceID(statement.Sql)
 				if err != nil {
 					if handleExtractKeySpaceIDError(err) {
@@ -46,7 +46,7 @@ func KeyRangeFilterFunc(unused pbt.KeyspaceIdType, keyrange *pbt.KeyRange, sendR
 				}
 				filtered = append(filtered, statement)
 				matched = true
-			case pb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
+			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("KeyRangeStream", 1)
 				log.Errorf("Error parsing keyspace id: %s", statement.Sql)
 				continue

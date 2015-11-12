@@ -11,7 +11,7 @@ import (
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestKeyspace(t *testing.T) {
@@ -97,7 +97,7 @@ func TestPurgeActions(t *testing.T) {
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestPruneActionLogs(t *testing.T) {
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 

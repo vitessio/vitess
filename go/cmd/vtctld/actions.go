@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -44,7 +44,7 @@ type actionKeyspaceMethod func(ctx context.Context, wr *wrangler.Wrangler, keysp
 
 type actionShardMethod func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (output string, err error)
 
-type actionTabletMethod func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (output string, err error)
+type actionTabletMethod func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (output string, err error)
 
 type actionTabletRecord struct {
 	role   string
@@ -139,7 +139,7 @@ func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, ke
 }
 
 // ApplyTabletAction applies the provided action to the tablet.
-func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName string, tabletAlias *pb.TabletAlias, r *http.Request) *ActionResult {
+func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName string, tabletAlias *topodatapb.TabletAlias, r *http.Request) *ActionResult {
 	result := &ActionResult{
 		Name:       actionName,
 		Parameters: topoproto.TabletAliasString(tabletAlias),

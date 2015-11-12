@@ -24,9 +24,9 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // destinationTabletServer is a local QueryService implementation to
@@ -37,7 +37,7 @@ type destinationTabletServer struct {
 	excludedTable string
 }
 
-func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -50,16 +50,16 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *pb
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
-		Fields: []*pbq.Field{
-			&pbq.Field{
+		Fields: []*querypb.Field{
+			&querypb.Field{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&pbq.Field{
+			&querypb.Field{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
-			&pbq.Field{
+			&querypb.Field{
 				Name: "keyspace_id",
 				Type: sqltypes.Int64,
 			},
@@ -93,7 +93,7 @@ type sourceTabletServer struct {
 	excludedTable string
 }
 
-func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -109,16 +109,16 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pbq.Tar
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
-		Fields: []*pbq.Field{
-			&pbq.Field{
+		Fields: []*querypb.Field{
+			&querypb.Field{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&pbq.Field{
+			&querypb.Field{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
-			&pbq.Field{
+			&querypb.Field{
 				Name: "keyspace_id",
 				Type: sqltypes.Int64,
 			},
@@ -153,26 +153,26 @@ func TestSplitDiff(t *testing.T) {
 	ctx := context.Background()
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
+	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
 		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
-		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
 	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
-		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 12,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly1, leftRdonly2} {
 		ft.StartActionLoop(t, wi.wr)
@@ -183,8 +183,8 @@ func TestSplitDiff(t *testing.T) {
 	if err := ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
-	wi.wr.SetSourceShards(ctx, "ks", "-40", []*pbt.TabletAlias{sourceRdonly1.Tablet.Alias}, nil)
-	if err := wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", pbt.KeyspaceIdType_UINT64, 4, false); err != nil {
+	wi.wr.SetSourceShards(ctx, "ks", "-40", []*topodatapb.TabletAlias{sourceRdonly1.Tablet.Alias}, nil)
+	if err := wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, 4, false); err != nil {
 		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
 	if err := wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil, true); err != nil {

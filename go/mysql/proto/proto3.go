@@ -7,21 +7,21 @@ package proto
 import (
 	"github.com/youtube/vitess/go/sqltypes"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // This file contains the proto3 conversion functions for the structures
 // defined here.
 
 // RowsToProto3 converts an internal [][]sqltypes.Value to the proto3 version
-func RowsToProto3(rows [][]sqltypes.Value) []*pbq.Row {
+func RowsToProto3(rows [][]sqltypes.Value) []*querypb.Row {
 	if len(rows) == 0 {
 		return nil
 	}
 
-	result := make([]*pbq.Row, len(rows))
+	result := make([]*querypb.Row, len(rows))
 	for i, r := range rows {
-		row := &pbq.Row{}
+		row := &querypb.Row{}
 		result[i] = row
 		row.Lengths = make([]int64, 0, len(r))
 		total := 0
@@ -46,7 +46,7 @@ func RowsToProto3(rows [][]sqltypes.Value) []*pbq.Row {
 }
 
 // Proto3ToRows converts a proto3 []Row to an internal data structure.
-func Proto3ToRows(rows []*pbq.Row) [][]sqltypes.Value {
+func Proto3ToRows(rows []*querypb.Row) [][]sqltypes.Value {
 	if len(rows) == 0 {
 		return [][]sqltypes.Value{}
 	}
@@ -69,11 +69,11 @@ func Proto3ToRows(rows []*pbq.Row) [][]sqltypes.Value {
 }
 
 // QueryResultToProto3 converts an internal QueryResult to the proto3 version
-func QueryResultToProto3(qr *QueryResult) *pbq.QueryResult {
+func QueryResultToProto3(qr *QueryResult) *querypb.QueryResult {
 	if qr == nil {
 		return nil
 	}
-	return &pbq.QueryResult{
+	return &querypb.QueryResult{
 		Fields:       qr.Fields,
 		RowsAffected: qr.RowsAffected,
 		InsertId:     qr.InsertId,
@@ -82,7 +82,7 @@ func QueryResultToProto3(qr *QueryResult) *pbq.QueryResult {
 }
 
 // Proto3ToQueryResult converts a proto3 QueryResult to an internal data structure.
-func Proto3ToQueryResult(qr *pbq.QueryResult) *QueryResult {
+func Proto3ToQueryResult(qr *querypb.QueryResult) *QueryResult {
 	if qr == nil {
 		return nil
 	}
@@ -96,7 +96,7 @@ func Proto3ToQueryResult(qr *pbq.QueryResult) *QueryResult {
 
 // Proto3ToQueryResults converts an array os proto3 QueryResult to an
 // internal data structure.
-func Proto3ToQueryResults(qr []*pbq.QueryResult) []QueryResult {
+func Proto3ToQueryResults(qr []*querypb.QueryResult) []QueryResult {
 	if len(qr) == 0 {
 		return nil
 	}

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -24,7 +24,7 @@ func TestBatchRead(t *testing.T) {
 		BindVariables: map[string]interface{}{"b": 2},
 	}}
 	qr1 := sqltypes.Result{
-		Fields: []*query.Field{{
+		Fields: []*querypb.Field{{
 			Name: "eid",
 			Type: sqltypes.Int64,
 		}, {
@@ -48,7 +48,7 @@ func TestBatchRead(t *testing.T) {
 		},
 	}
 	qr2 := sqltypes.Result{
-		Fields: []*query.Field{{
+		Fields: []*querypb.Field{{
 			Name: "eid",
 			Type: sqltypes.Int64,
 		}, {

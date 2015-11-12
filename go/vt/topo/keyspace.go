@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo/events"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file contains keyspace utility functions
@@ -26,7 +26,7 @@ import (
 type KeyspaceInfo struct {
 	keyspace string
 	version  int64
-	*pb.Keyspace
+	*topodatapb.Keyspace
 }
 
 // KeyspaceName returns the keyspace name
@@ -35,7 +35,7 @@ func (ki *KeyspaceInfo) KeyspaceName() string {
 }
 
 // GetServedFrom returns a Keyspace_ServedFrom record if it exists.
-func (ki *KeyspaceInfo) GetServedFrom(tabletType pb.TabletType) *pb.Keyspace_ServedFrom {
+func (ki *KeyspaceInfo) GetServedFrom(tabletType topodatapb.TabletType) *topodatapb.Keyspace_ServedFrom {
 	for _, ksf := range ki.ServedFroms {
 		if ksf.TabletType == tabletType {
 			return ksf
@@ -45,9 +45,9 @@ func (ki *KeyspaceInfo) GetServedFrom(tabletType pb.TabletType) *pb.Keyspace_Ser
 }
 
 // CheckServedFromMigration makes sure a requested migration is safe
-func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType pb.TabletType, cells []string, keyspace string, remove bool) error {
+func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletType, cells []string, keyspace string, remove bool) error {
 	// master is a special case with a few extra checks
-	if tabletType == pb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_MASTER {
 		if !remove {
 			return fmt.Errorf("Cannot add master back to %v", ki.keyspace)
 		}
@@ -76,7 +76,7 @@ func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType pb.TabletType, cells
 
 // UpdateServedFromMap handles ServedFromMap. It can add or remove
 // records, cells, ...
-func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType pb.TabletType, cells []string, keyspace string, remove bool, allCells []string) error {
+func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType topodatapb.TabletType, cells []string, keyspace string, remove bool, allCells []string) error {
 	// check parameters to be sure
 	if err := ki.CheckServedFromMigration(tabletType, cells, keyspace, remove); err != nil {
 		return err
@@ -91,7 +91,7 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType pb.TabletType, cells []st
 			}
 			log.Warningf("Trying to remove KeyspaceServedFrom for missing type %v in keyspace %v", tabletType, ki.keyspace)
 		} else {
-			ki.ServedFroms = append(ki.ServedFroms, &pb.Keyspace_ServedFrom{
+			ki.ServedFroms = append(ki.ServedFroms, &topodatapb.Keyspace_ServedFrom{
 				TabletType: tabletType,
 				Cells:      cells,
 				Keyspace:   keyspace,
@@ -104,7 +104,7 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType pb.TabletType, cells []st
 		result, emptyList := removeCells(ksf.Cells, cells, allCells)
 		if emptyList {
 			// we don't have any cell left, we need to clear this record
-			var newServedFroms []*pb.Keyspace_ServedFrom
+			var newServedFroms []*topodatapb.Keyspace_ServedFrom
 			for _, k := range ki.ServedFroms {
 				if k != ksf {
 					newServedFroms = append(newServedFroms, k)
@@ -124,11 +124,11 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType pb.TabletType, cells []st
 }
 
 // ComputeCellServedFrom returns the ServedFrom list for a cell
-func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*pb.SrvKeyspace_ServedFrom {
-	var result []*pb.SrvKeyspace_ServedFrom
+func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeyspace_ServedFrom {
+	var result []*topodatapb.SrvKeyspace_ServedFrom
 	for _, ksf := range ki.ServedFroms {
 		if InCellList(cell, ksf.Cells) {
-			result = append(result, &pb.SrvKeyspace_ServedFrom{
+			result = append(result, &topodatapb.SrvKeyspace_ServedFrom{
 				TabletType: ksf.TabletType,
 				Keyspace:   ksf.Keyspace,
 			})
@@ -139,7 +139,7 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*pb.SrvKeyspace_Ser
 
 // CreateKeyspace wraps the underlying Impl.DeleteKeyspaceShards
 // and dispatches the event.
-func (ts Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
+func (ts Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
 	if err := ts.Impl.CreateKeyspace(ctx, keyspace, value); err != nil {
 		return err
 	}

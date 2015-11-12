@@ -9,7 +9,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
@@ -18,7 +18,7 @@ type Query struct {
 	CallerID         *tproto.CallerID // only used by BSON
 	Sql              string
 	BindVariables    map[string]interface{}
-	TabletType       pbt.TabletType
+	TabletType       topodatapb.TabletType
 	Session          *pb.Session
 	NotInTransaction bool
 }
@@ -31,7 +31,7 @@ type QueryShard struct {
 	BindVariables    map[string]interface{}
 	Keyspace         string
 	Shards           []string
-	TabletType       pbt.TabletType
+	TabletType       topodatapb.TabletType
 	Session          *pb.Session
 	NotInTransaction bool
 }
@@ -44,7 +44,7 @@ type KeyspaceIdQuery struct {
 	BindVariables    map[string]interface{}
 	Keyspace         string
 	KeyspaceIds      [][]byte
-	TabletType       pbt.TabletType
+	TabletType       topodatapb.TabletType
 	Session          *pb.Session
 	NotInTransaction bool
 }
@@ -56,8 +56,8 @@ type KeyRangeQuery struct {
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
-	KeyRanges        []*pbt.KeyRange
-	TabletType       pbt.TabletType
+	KeyRanges        []*topodatapb.KeyRange
+	TabletType       topodatapb.TabletType
 	Session          *pb.Session
 	NotInTransaction bool
 }
@@ -76,7 +76,7 @@ type EntityIdsQuery struct {
 	Keyspace          string
 	EntityColumnName  string
 	EntityKeyspaceIDs []EntityId
-	TabletType        pbt.TabletType
+	TabletType        topodatapb.TabletType
 	Session           *pb.Session
 	NotInTransaction  bool
 }
@@ -105,7 +105,7 @@ type BoundShardQuery struct {
 type BatchQueryShard struct {
 	CallerID      *tproto.CallerID // only used by BSON
 	Queries       []BoundShardQuery
-	TabletType    pbt.TabletType
+	TabletType    topodatapb.TabletType
 	AsTransaction bool
 	Session       *pb.Session
 }
@@ -124,7 +124,7 @@ type BoundKeyspaceIdQuery struct {
 type KeyspaceIdBatchQuery struct {
 	CallerID      *tproto.CallerID // only used by BSON
 	Queries       []BoundKeyspaceIdQuery
-	TabletType    pbt.TabletType
+	TabletType    topodatapb.TabletType
 	AsTransaction bool
 	Session       *pb.Session
 }

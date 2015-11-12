@@ -20,7 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 type ExpectedExecuteFetch struct {
@@ -107,20 +107,20 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &pb.Keyspace{
+	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
 		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: pb.KeyspaceIdType_UINT64,
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
 	sourceMaster := NewFakeTablet(t, wr, "cell1", 0,
-		pb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly := NewFakeTablet(t, wr, "cell1", 1,
-		pb.TabletType_RDONLY, db, TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_RDONLY, db, TabletKeyspaceShard(t, "ks", "-80"))
 
 	destinationMaster := NewFakeTablet(t, wr, "cell1", 10,
-		pb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-40"))
 
 	for _, ft := range []*FakeTablet{sourceMaster, sourceRdonly, destinationMaster} {
 		ft.StartActionLoop(t, wr)

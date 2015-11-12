@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -41,11 +41,11 @@ const (
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
 
-	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error)
+	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 
-	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error)
+	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error)
 
-	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (*pb.EndPoints, int64, error)
+	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error)
 }
 
 // ResilientSrvTopoServer is an implementation of SrvTopoServer based
@@ -123,7 +123,7 @@ type srvKeyspaceEntry struct {
 	mutex sync.Mutex
 
 	insertionTime time.Time
-	value         *pb.SrvKeyspace
+	value         *topodatapb.SrvKeyspace
 	lastError     error
 	lastErrorCtx  context.Context
 }
@@ -138,7 +138,7 @@ type srvShardEntry struct {
 	mutex sync.Mutex
 
 	insertionTime time.Time
-	value         *pb.SrvShard
+	value         *topodatapb.SrvShard
 	lastError     error
 	lastErrorCtx  context.Context
 }
@@ -148,7 +148,7 @@ type endPointsEntry struct {
 	cell       string
 	keyspace   string
 	shard      string
-	tabletType pb.TabletType
+	tabletType topodatapb.TabletType
 	remote     bool
 
 	// the mutex protects any access to this structure (read or write)
@@ -157,31 +157,31 @@ type endPointsEntry struct {
 	insertionTime time.Time
 
 	// value is the end points that were returned to the client.
-	value *pb.EndPoints
+	value *topodatapb.EndPoints
 
 	// originalValue is the end points that were returned from
 	// the topology server.
-	originalValue *pb.EndPoints
+	originalValue *topodatapb.EndPoints
 
 	lastError    error
 	lastErrorCtx context.Context
 }
 
-func endPointIsHealthy(ep *pb.EndPoint) bool {
+func endPointIsHealthy(ep *topodatapb.EndPoint) bool {
 	// if we are behind on replication, we're not 100% healthy
 	return ep.HealthMap == nil || ep.HealthMap[topo.ReplicationLag] != topo.ReplicationLagHigh
 }
 
 // filterUnhealthyServers removes the unhealthy servers from the list,
 // unless all servers are unhealthy, then it keeps them all.
-func filterUnhealthyServers(endPoints *pb.EndPoints) *pb.EndPoints {
+func filterUnhealthyServers(endPoints *topodatapb.EndPoints) *topodatapb.EndPoints {
 
 	// no endpoints, return right away
 	if endPoints == nil || len(endPoints.Entries) == 0 {
 		return endPoints
 	}
 
-	healthyEndPoints := make([]*pb.EndPoint, 0, len(endPoints.Entries))
+	healthyEndPoints := make([]*topodatapb.EndPoint, 0, len(endPoints.Entries))
 	for _, ep := range endPoints.Entries {
 		// if we are behind on replication, we're not 100% healthy
 		if !endPointIsHealthy(ep) {
@@ -193,7 +193,7 @@ func filterUnhealthyServers(endPoints *pb.EndPoints) *pb.EndPoints {
 
 	// we have healthy guys, we return them
 	if len(healthyEndPoints) > 0 {
-		return &pb.EndPoints{Entries: healthyEndPoints}
+		return &topodatapb.EndPoints{Entries: healthyEndPoints}
 	}
 
 	// we only have unhealthy guys, return them
@@ -270,7 +270,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 }
 
 // GetSrvKeyspace returns SrvKeyspace object for the given cell and keyspace.
-func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error) {
+func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
@@ -322,7 +322,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 }
 
 // GetSrvShard returns SrvShard object for the given cell, keyspace, and shard.
-func (server *ResilientSrvTopoServer) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error) {
+func (server *ResilientSrvTopoServer) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
 	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
@@ -375,7 +375,7 @@ func (server *ResilientSrvTopoServer) GetSrvShard(ctx context.Context, cell, key
 }
 
 // GetEndPoints return all endpoints for the given cell, keyspace, shard, and tablet type.
-func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (result *pb.EndPoints, version int64, err error) {
+func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (result *topodatapb.EndPoints, version int64, err error) {
 	shard = strings.ToLower(shard)
 	key := []string{cell, keyspace, shard, strings.ToLower(tabletType.String())}
 
@@ -440,11 +440,11 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 
 	result, _, err = server.topoServer.GetEndPoints(newCtx, cell, keyspace, shard, tabletType)
 	// get remote endpoints for master if enabled
-	if err != nil && server.enableRemoteMaster && tabletType == pb.TabletType_MASTER {
+	if err != nil && server.enableRemoteMaster && tabletType == topodatapb.TabletType_MASTER {
 		remote = true
 		server.counts.Add(remoteQueryCategory, 1)
 		server.endPointCounters.remoteLookups.Add(key, 1)
-		var ss *pb.SrvShard
+		var ss *topodatapb.SrvShard
 		ss, err = server.topoServer.GetSrvShard(newCtx, cell, keyspace, shard)
 		if err != nil {
 			server.counts.Add(remoteErrorCategory, 1)
@@ -513,7 +513,7 @@ func (skncsl SrvKeyspaceNamesCacheStatusList) Swap(i, j int) {
 type SrvKeyspaceCacheStatus struct {
 	Cell         string
 	Keyspace     string
-	Value        *pb.SrvKeyspace
+	Value        *topodatapb.SrvKeyspace
 	LastError    error
 	LastErrorCtx context.Context
 }
@@ -573,7 +573,7 @@ type SrvShardCacheStatus struct {
 	Cell         string
 	Keyspace     string
 	Shard        string
-	Value        *pb.SrvShard
+	Value        *topodatapb.SrvShard
 	LastError    error
 	LastErrorCtx context.Context
 }
@@ -616,9 +616,9 @@ type EndPointsCacheStatus struct {
 	Cell          string
 	Keyspace      string
 	Shard         string
-	TabletType    pb.TabletType
-	Value         *pb.EndPoints
-	OriginalValue *pb.EndPoints
+	TabletType    topodatapb.TabletType
+	Value         *topodatapb.EndPoints
+	OriginalValue *topodatapb.EndPoints
 	LastError     error
 	LastErrorCtx  context.Context
 }

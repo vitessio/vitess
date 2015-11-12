@@ -21,9 +21,9 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 //
@@ -59,7 +59,7 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 // Does a topo lookup for a single shard, and returns:
 //	1. Slice of all tablet aliases for the shard.
 //	2. Map of tablet alias : tablet record for all tablets.
-func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []*pb.TabletAlias, reloadTablets map[pb.TabletAlias]*topo.TabletInfo, err error) {
+func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []*topodatapb.TabletAlias, reloadTablets map[topodatapb.TabletAlias]*topo.TabletInfo, err error) {
 	// Keep a long timeout, because we really don't want the copying to succeed, and then the worker to fail at the end.
 	shortCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	reloadAliases, err = wr.TopoServer().FindAllTabletAliasesInShard(shortCtx, keyspace, shard)
@@ -407,7 +407,7 @@ func buildSQLFromChunks(wr *wrangler.Wrangler, td *tabletmanagerdatapb.TableDefi
 
 // makeValueString returns a string that contains all the passed-in rows
 // as an insert SQL command's parameters.
-func makeValueString(fields []*query.Field, rows [][]sqltypes.Value) string {
+func makeValueString(fields []*querypb.Field, rows [][]sqltypes.Value) string {
 	buf := bytes.Buffer{}
 	for i, row := range rows {
 		if i > 0 {

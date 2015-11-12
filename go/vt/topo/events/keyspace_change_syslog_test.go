@@ -4,14 +4,14 @@ import (
 	"log/syslog"
 	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestKeyspaceChangeSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123 [keyspace] status value: sharding_column_name:\"sharded_by_me\" "
 	kc := &KeyspaceChange{
 		KeyspaceName: "keyspace-123",
-		Keyspace: &pb.Keyspace{
+		Keyspace: &topodatapb.Keyspace{
 			ShardingColumnName: "sharded_by_me",
 		},
 		Status: "status",

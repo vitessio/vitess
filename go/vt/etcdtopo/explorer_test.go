@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func toJSON(t *testing.T, value interface{}) string {
@@ -84,8 +84,8 @@ func TestHandlePathRoot(t *testing.T) {
 func TestHandlePathKeyspace(t *testing.T) {
 	input := path.Join(explorerRoot, "global", keyspaceDirPath("test_keyspace"))
 	cells := []string{"cell1", "cell2", "cell3"}
-	keyspace := &pb.Keyspace{}
-	shard := &pb.Shard{}
+	keyspace := &topodatapb.Keyspace{}
+	shard := &topodatapb.Shard{}
 	want := toJSON(t, keyspace)
 
 	ctx := context.Background()
@@ -121,8 +121,8 @@ func TestHandlePathKeyspace(t *testing.T) {
 func TestHandlePathShard(t *testing.T) {
 	input := path.Join(explorerRoot, "global", shardDirPath("test_keyspace", "-80"))
 	cells := []string{"cell1", "cell2", "cell3"}
-	keyspace := &pb.Keyspace{}
-	shard := &pb.Shard{}
+	keyspace := &topodatapb.Keyspace{}
+	shard := &topodatapb.Shard{}
 	want := toJSON(t, shard)
 
 	ctx := context.Background()
@@ -155,8 +155,8 @@ func TestHandlePathShard(t *testing.T) {
 func TestHandlePathTablet(t *testing.T) {
 	input := path.Join(explorerRoot, "cell1", path.Join(tabletsDirPath, "cell1-0000000123"))
 	cells := []string{"cell1", "cell2", "cell3"}
-	tablet := &pb.Tablet{
-		Alias:    &pb.TabletAlias{Cell: "cell1", Uid: 123},
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 123},
 		Hostname: "example.com",
 		PortMap:  map[string]int32{"vt": 4321},
 	}

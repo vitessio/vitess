@@ -16,7 +16,7 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	gproto "github.com/youtube/vitess/go/vt/vtgate/proto"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
@@ -35,8 +35,8 @@ var (
 	}
 	keyspaceIDsEcho = "[[1 2 3 4] [5 6 7 8]]"
 
-	keyRanges = []*pbt.KeyRange{
-		&pbt.KeyRange{Start: []byte{1, 2, 3, 4}, End: []byte{5, 6, 7, 8}},
+	keyRanges = []*topodatapb.KeyRange{
+		&topodatapb.KeyRange{Start: []byte{1, 2, 3, 4}, End: []byte{5, 6, 7, 8}},
 	}
 	keyRangesEcho = "[start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\" ]"
 
@@ -59,8 +59,8 @@ var (
 	}
 	entityKeyspaceIDsEcho = "[xid_type:INT64 xid_value:\"123\" keyspace_id:\"\\001\\002\\003\"  xid_type:FLOAT64 xid_value:\"2\" keyspace_id:\"\\004\\005\\006\"  xid_type:VARBINARY xid_value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]"
 
-	tabletType     = pbt.TabletType_REPLICA
-	tabletTypeEcho = pbt.TabletType_name[int32(tabletType)]
+	tabletType     = topodatapb.TabletType_REPLICA
+	tabletTypeEcho = topodatapb.TabletType_name[int32(tabletType)]
 
 	bindVars = map[string]interface{}{
 		"int":   123,

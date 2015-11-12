@@ -15,7 +15,7 @@ import (
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var routerSchema = createTestSchema(`
@@ -237,14 +237,14 @@ func routerExec(router *Router, sql string, bv map[string]interface{}) (*sqltype
 	return router.Execute(context.Background(),
 		sql,
 		bv,
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false)
 }
 
 func routerStream(router *Router, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 10)
-	err = router.StreamExecute(context.Background(), sql, nil, pb.TabletType_MASTER, func(qr *sqltypes.Result) error {
+	err = router.StreamExecute(context.Background(), sql, nil, topodatapb.TabletType_MASTER, func(qr *sqltypes.Result) error {
 		results <- qr
 		return nil
 	})

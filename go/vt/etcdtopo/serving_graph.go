@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // WatchSleepDuration is how many seconds interval to poll for in case
@@ -25,7 +25,7 @@ import (
 var WatchSleepDuration = 30 * time.Second
 
 // GetSrvTabletTypesPerShard implements topo.Server.
-func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspace, shard string) ([]pb.TabletType, error) {
+func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspace, shard string) ([]topodatapb.TabletType, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspa
 		return nil, ErrBadResponse
 	}
 
-	tabletTypes := make([]pb.TabletType, 0, len(resp.Node.Nodes))
+	tabletTypes := make([]topodatapb.TabletType, 0, len(resp.Node.Nodes))
 	for _, n := range resp.Node.Nodes {
 		strType := path.Base(n.Key)
 		if tt, err := topoproto.ParseTabletType(strType); err == nil {
@@ -50,7 +50,7 @@ func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspa
 }
 
 // CreateEndPoints implements topo.Server.
-func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints) error {
+func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard 
 }
 
 // UpdateEndPoints implements topo.Server.
-func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints, existingVersion int64) error {
+func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints, existingVersion int64) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -89,7 +89,7 @@ func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard 
 }
 
 // updateEndPoints updates the EndPoints file only if the version matches.
-func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints, version int64) error {
+func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints, version int64) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -106,7 +106,7 @@ func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType pb
 }
 
 // GetEndPoints implements topo.Server.
-func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType pb.TabletType) (*pb.EndPoints, int64, error) {
+func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, -1, err
@@ -120,7 +120,7 @@ func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard str
 		return nil, -1, ErrBadResponse
 	}
 
-	value := &pb.EndPoints{}
+	value := &topodatapb.EndPoints{}
 	if resp.Node.Value != "" {
 		if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 			return nil, -1, fmt.Errorf("bad end points data (%v): %q", err, resp.Node.Value)
@@ -130,7 +130,7 @@ func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard str
 }
 
 // DeleteEndPoints implements topo.Server.
-func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType pb.TabletType, existingVersion int64) error {
+func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topodatapb.TabletType, existingVersion int64) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -161,7 +161,7 @@ func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard 
 }
 
 // UpdateSrvShard implements topo.Server.
-func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard string, srvShard *pb.SrvShard) error {
+func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard string, srvShard *topodatapb.SrvShard) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -177,7 +177,7 @@ func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard s
 }
 
 // GetSrvShard implements topo.Server.
-func (s *Server) GetSrvShard(ctx context.Context, cellName, keyspace, shard string) (*pb.SrvShard, error) {
+func (s *Server) GetSrvShard(ctx context.Context, cellName, keyspace, shard string) (*topodatapb.SrvShard, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -191,7 +191,7 @@ func (s *Server) GetSrvShard(ctx context.Context, cellName, keyspace, shard stri
 		return nil, ErrBadResponse
 	}
 
-	value := &pb.SrvShard{}
+	value := &topodatapb.SrvShard{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, fmt.Errorf("bad serving shard data (%v): %q", err, resp.Node.Value)
 	}
@@ -210,7 +210,7 @@ func (s *Server) DeleteSrvShard(ctx context.Context, cellName, keyspace, shard s
 }
 
 // UpdateSrvKeyspace implements topo.Server.
-func (s *Server) UpdateSrvKeyspace(ctx context.Context, cellName, keyspace string, srvKeyspace *pb.SrvKeyspace) error {
+func (s *Server) UpdateSrvKeyspace(ctx context.Context, cellName, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -237,7 +237,7 @@ func (s *Server) DeleteSrvKeyspace(ctx context.Context, cellName, keyspace strin
 }
 
 // GetSrvKeyspace implements topo.Server.
-func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) (*pb.SrvKeyspace, error) {
+func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -251,7 +251,7 @@ func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) 
 		return nil, ErrBadResponse
 	}
 
-	value := &pb.SrvKeyspace{}
+	value := &topodatapb.SrvKeyspace{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, fmt.Errorf("bad serving keyspace data (%v): %q", err, resp.Node.Value)
 	}
@@ -273,14 +273,14 @@ func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]st
 }
 
 // WatchSrvKeyspace is part of the topo.Server interface
-func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string) (<-chan *pb.SrvKeyspace, chan<- struct{}, error) {
+func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("WatchSrvKeyspace cannot get cell: %v", err)
 	}
 	filePath := srvKeyspaceFilePath(keyspace)
 
-	notifications := make(chan *pb.SrvKeyspace, 10)
+	notifications := make(chan *topodatapb.SrvKeyspace, 10)
 	stopWatching := make(chan struct{})
 
 	// The watch go routine will stop if the 'stop' channel is closed.
@@ -289,7 +289,7 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 	watch := make(chan *etcd.Response)
 	stop := make(chan bool)
 	go func() {
-		var srvKeyspace *pb.SrvKeyspace
+		var srvKeyspace *topodatapb.SrvKeyspace
 		var modifiedVersion int64
 
 		resp, err := cell.Get(filePath, false /* sort */, false /* recursive */)
@@ -297,7 +297,7 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 			// node doesn't exist
 		} else {
 			if resp.Node.Value != "" {
-				srvKeyspace = &pb.SrvKeyspace{}
+				srvKeyspace = &topodatapb.SrvKeyspace{}
 				if err := json.Unmarshal([]byte(resp.Node.Value), srvKeyspace); err != nil {
 					log.Warningf("bad SrvKeyspace data (%v): %q", err, resp.Node.Value)
 				} else {
@@ -335,9 +335,9 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 		for {
 			select {
 			case resp := <-watch:
-				var srvKeyspace *pb.SrvKeyspace
+				var srvKeyspace *topodatapb.SrvKeyspace
 				if resp.Node != nil && resp.Node.Value != "" {
-					srvKeyspace = &pb.SrvKeyspace{}
+					srvKeyspace = &topodatapb.SrvKeyspace{}
 					if err := json.Unmarshal([]byte(resp.Node.Value), srvKeyspace); err != nil {
 						log.Errorf("failed to Unmarshal EndPoints for %v: %v", filePath, err)
 						continue

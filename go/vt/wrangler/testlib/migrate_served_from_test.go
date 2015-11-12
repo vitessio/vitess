@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestMigrateServedFrom(t *testing.T) {
@@ -29,11 +29,11 @@ func TestMigrateServedFrom(t *testing.T) {
 	defer vp.Close()
 
 	// create the source keyspace tablets
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER, db,
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "source", "0"))
-	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, pb.TabletType_REPLICA, db,
+	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "source", "0"))
-	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, pb.TabletType_RDONLY, db,
+	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, topodatapb.TabletType_RDONLY, db,
 		TabletKeyspaceShard(t, "source", "0"))
 
 	// create the destination keyspace, served form source
@@ -50,11 +50,11 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// create the destination keyspace tablets
-	destMaster := NewFakeTablet(t, wr, "cell1", 20, pb.TabletType_MASTER, db,
+	destMaster := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "dest", "0"))
-	destReplica := NewFakeTablet(t, wr, "cell1", 21, pb.TabletType_REPLICA, db,
+	destReplica := NewFakeTablet(t, wr, "cell1", 21, topodatapb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "dest", "0"))
-	destRdonly := NewFakeTablet(t, wr, "cell1", 22, pb.TabletType_RDONLY, db,
+	destRdonly := NewFakeTablet(t, wr, "cell1", 22, topodatapb.TabletType_RDONLY, db,
 		TabletKeyspaceShard(t, "dest", "0"))
 
 	// sourceRdonly will see the refresh
@@ -115,7 +115,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetKeyspace failed: %v", err)
 	}
-	if len(ki.ServedFroms) != 2 || ki.GetServedFrom(pb.TabletType_RDONLY) != nil {
+	if len(ki.ServedFroms) != 2 || ki.GetServedFrom(topodatapb.TabletType_RDONLY) != nil {
 		t.Fatalf("bad initial dest ServedFroms: %v", ki.ServedFroms)
 	}
 
@@ -124,9 +124,9 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if len(si.TabletControls) != 1 || !reflect.DeepEqual(si.TabletControls, []*pb.Shard_TabletControl{
-		&pb.Shard_TabletControl{
-			TabletType:        pb.TabletType_RDONLY,
+	if len(si.TabletControls) != 1 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+		&topodatapb.Shard_TabletControl{
+			TabletType:        topodatapb.TabletType_RDONLY,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
 	}) {
@@ -143,7 +143,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetKeyspace failed: %v", err)
 	}
-	if len(ki.ServedFroms) != 1 || ki.GetServedFrom(pb.TabletType_REPLICA) != nil {
+	if len(ki.ServedFroms) != 1 || ki.GetServedFrom(topodatapb.TabletType_REPLICA) != nil {
 		t.Fatalf("bad initial dest ServedFrom: %+v", ki.ServedFroms)
 	}
 
@@ -152,13 +152,13 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if len(si.TabletControls) != 2 || !reflect.DeepEqual(si.TabletControls, []*pb.Shard_TabletControl{
-		&pb.Shard_TabletControl{
-			TabletType:        pb.TabletType_RDONLY,
+	if len(si.TabletControls) != 2 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+		&topodatapb.Shard_TabletControl{
+			TabletType:        topodatapb.TabletType_RDONLY,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
-		&pb.Shard_TabletControl{
-			TabletType:        pb.TabletType_REPLICA,
+		&topodatapb.Shard_TabletControl{
+			TabletType:        topodatapb.TabletType_REPLICA,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
 	}) {
@@ -184,17 +184,17 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if len(si.TabletControls) != 3 || !reflect.DeepEqual(si.TabletControls, []*pb.Shard_TabletControl{
-		&pb.Shard_TabletControl{
-			TabletType:        pb.TabletType_RDONLY,
+	if len(si.TabletControls) != 3 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+		&topodatapb.Shard_TabletControl{
+			TabletType:        topodatapb.TabletType_RDONLY,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
-		&pb.Shard_TabletControl{
-			TabletType:        pb.TabletType_REPLICA,
+		&topodatapb.Shard_TabletControl{
+			TabletType:        topodatapb.TabletType_REPLICA,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
-		&pb.Shard_TabletControl{
-			TabletType:        pb.TabletType_MASTER,
+		&topodatapb.Shard_TabletControl{
+			TabletType:        topodatapb.TabletType_MASTER,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
 	}) {

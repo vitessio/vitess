@@ -15,25 +15,25 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	pbs "github.com/youtube/vitess/go/vt/proto/binlogservice"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogservicepb "github.com/youtube/vitess/go/vt/proto/binlogservice"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // client implements a Client over go rpc
 type client struct {
 	cc *grpc.ClientConn
-	c  pbs.UpdateStreamClient
+	c  binlogservicepb.UpdateStreamClient
 }
 
-func (client *client) Dial(endPoint *pbt.EndPoint, connTimeout time.Duration) error {
+func (client *client) Dial(endPoint *topodatapb.EndPoint, connTimeout time.Duration) error {
 	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["grpc"])
 	var err error
 	client.cc, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(connTimeout))
 	if err != nil {
 		return err
 	}
-	client.c = pbs.NewUpdateStreamClient(client.cc)
+	client.c = binlogservicepb.NewUpdateStreamClient(client.cc)
 	return nil
 }
 
@@ -41,9 +41,9 @@ func (client *client) Close() {
 	client.cc.Close()
 }
 
-func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *pb.StreamEvent, binlogplayer.ErrFunc, error) {
-	response := make(chan *pb.StreamEvent, 10)
-	query := &pb.StreamUpdateRequest{
+func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *binlogdatapb.StreamEvent, binlogplayer.ErrFunc, error) {
+	response := make(chan *binlogdatapb.StreamEvent, 10)
+	query := &binlogdatapb.StreamUpdateRequest{
 		Position: position,
 	}
 
@@ -70,9 +70,9 @@ func (client *client) ServeUpdateStream(ctx context.Context, position string) (c
 	}, nil
 }
 
-func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	response := make(chan *pb.BinlogTransaction, 10)
-	query := &pb.StreamKeyRangeRequest{
+func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+	response := make(chan *binlogdatapb.BinlogTransaction, 10)
+	query := &binlogdatapb.StreamKeyRangeRequest{
 		Position:       position,
 		KeyspaceIdType: keyspaceIdType,
 		KeyRange:       keyRange,
@@ -102,9 +102,9 @@ func (client *client) StreamKeyRange(ctx context.Context, position string, keysp
 	}, nil
 }
 
-func (client *client) StreamTables(ctx context.Context, position string, tables []string, charset *pb.Charset) (chan *pb.BinlogTransaction, binlogplayer.ErrFunc, error) {
-	response := make(chan *pb.BinlogTransaction, 10)
-	query := &pb.StreamTablesRequest{
+func (client *client) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+	response := make(chan *binlogdatapb.BinlogTransaction, 10)
+	query := &binlogdatapb.StreamTablesRequest{
 		Position: position,
 		Tables:   tables,
 		Charset:  charset,

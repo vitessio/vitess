@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TestInitTablet will test the InitTablet code creates / updates the
@@ -26,7 +26,7 @@ func TestInitTablet(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	tabletAlias := &pb.TabletAlias{
+	tabletAlias := &topodatapb.TabletAlias{
 		Cell: "cell1",
 		Uid:  1,
 	}
@@ -54,7 +54,7 @@ func TestInitTablet(t *testing.T) {
 	*initTabletType = "replica"
 	*initKeyspace = "test_keyspace"
 	*initShard = "-80"
-	tabletAlias = &pb.TabletAlias{
+	tabletAlias = &topodatapb.TabletAlias{
 		Cell: "cell1",
 		Uid:  2,
 	}
@@ -73,7 +73,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != pb.TabletType_REPLICA {
+	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 	if ti.Hostname != "localhost" {
@@ -96,7 +96,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != pb.TabletType_SPARE {
+	if ti.Type != topodatapb.TabletType_SPARE {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
@@ -116,7 +116,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != pb.TabletType_MASTER {
+	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
@@ -133,7 +133,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != pb.TabletType_MASTER {
+	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 	if ti.DbNameOverride != "DBNAME" {

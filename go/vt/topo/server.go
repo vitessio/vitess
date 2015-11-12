@@ -12,7 +12,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -72,7 +72,7 @@ type Impl interface {
 
 	// CreateKeyspace creates the given keyspace, assuming it doesn't exist
 	// yet. Can return ErrNodeExists if it already exists.
-	CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error
+	CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error
 
 	// UpdateKeyspace updates the keyspace information
 	// pointed at by ki.keyspace to the *ki value.
@@ -81,7 +81,7 @@ type Impl interface {
 	// or ErrBadVersion if the version has changed.
 	//
 	// Do not use directly, but instead use topo.UpdateKeyspace.
-	UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (newVersion int64, err error)
+	UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (newVersion int64, err error)
 
 	// DeleteKeyspace deletes the specified keyspace.
 	// Can return ErrNoNode if the keyspace doesn't exist.
@@ -89,7 +89,7 @@ type Impl interface {
 
 	// GetKeyspace reads a keyspace and returns it, along with its version.
 	// Can return ErrNoNode
-	GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error)
+	GetKeyspace(ctx context.Context, keyspace string) (*topodatapb.Keyspace, int64, error)
 
 	// GetKeyspaces returns the known keyspace names. They shall be sorted.
 	GetKeyspaces(ctx context.Context) ([]string, error)
@@ -106,7 +106,7 @@ type Impl interface {
 	// yet. The contents of the shard will be a new Shard{} object,
 	// with KeyRange populated by the result of ValidateShardName().
 	// Can return ErrNodeExists if it already exists.
-	CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error
+	CreateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard) error
 
 	// UpdateShard updates the shard information
 	// pointed at by si.keyspace / si.shard to the *si value.
@@ -115,14 +115,14 @@ type Impl interface {
 	// or ErrBadVersion if the version has changed.
 	//
 	// Do not use directly, but instead use topo.UpdateShard.
-	UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (newVersion int64, err error)
+	UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (newVersion int64, err error)
 
 	// ValidateShard performs routine checks on the shard.
 	ValidateShard(ctx context.Context, keyspace, shard string) error
 
 	// GetShard reads a shard and returns it, along with its version.
 	// Can return ErrNoNode
-	GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error)
+	GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error)
 
 	// GetShardNames returns the known shards in a keyspace.
 	// Can return ErrNoNode if the keyspace wasn't created,
@@ -140,7 +140,7 @@ type Impl interface {
 	// CreateTablet creates the given tablet, assuming it doesn't exist
 	// yet. It does *not* create the tablet replication paths.
 	// Can return ErrNodeExists if it already exists.
-	CreateTablet(ctx context.Context, tablet *pb.Tablet) error
+	CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// UpdateTablet updates a given tablet. The version is used
 	// for atomic updates. UpdateTablet will return ErrNoNode if
@@ -148,26 +148,26 @@ type Impl interface {
 	// has changed.
 	//
 	// Do not use directly, but instead use topo.UpdateTablet.
-	UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVersion int64) (newVersion int64, err error)
+	UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, existingVersion int64) (newVersion int64, err error)
 
 	// UpdateTabletFields updates the current tablet record
 	// with new values, independently of the version
 	// Can return ErrNoNode if the tablet doesn't exist.
-	UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) (*pb.Tablet, error)
+	UpdateTabletFields(ctx context.Context, tabletAlias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error)
 
 	// DeleteTablet removes a tablet from the system.
 	// We assume no RPC is currently running to it.
 	// TODO(alainjobart) verify this assumption, link with RPC code.
 	// Can return ErrNoNode if the tablet doesn't exist.
-	DeleteTablet(ctx context.Context, alias *pb.TabletAlias) error
+	DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error
 
 	// GetTablet returns the tablet data (includes the current version).
 	// Can return ErrNoNode if the tablet doesn't exist.
-	GetTablet(ctx context.Context, alias *pb.TabletAlias) (*pb.Tablet, int64, error)
+	GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error)
 
 	// GetTabletsByCell returns all the tablets in the given cell.
 	// Can return ErrNoNode if no tablet was ever created in that cell.
-	GetTabletsByCell(ctx context.Context, cell string) ([]*pb.TabletAlias, error)
+	GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error)
 
 	//
 	// Replication graph management, per cell.
@@ -178,7 +178,7 @@ type Impl interface {
 	// ShardReplication object does not exist, an empty one will
 	// be passed to the update function. All necessary directories
 	// need to be created by this method, if applicable.
-	UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*pb.ShardReplication) error) error
+	UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error
 
 	// GetShardReplication returns the replication data.
 	// Can return ErrNoNode if the object doesn't exist.
@@ -210,12 +210,12 @@ type Impl interface {
 	// GetSrvTabletTypesPerShard returns the existing serving types
 	// for a shard.
 	// Can return ErrNoNode.
-	GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]pb.TabletType, error)
+	GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]topodatapb.TabletType, error)
 
 	// CreateEndPoints creates and sets the serving records for a cell,
 	// keyspace, shard, tabletType.
 	// It returns ErrNodeExists if the record already exists.
-	CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints) error
+	CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints) error
 
 	// UpdateEndPoints updates the serving records for a cell,
 	// keyspace, shard, tabletType.
@@ -224,19 +224,19 @@ type Impl interface {
 	// Otherwise, it will Compare-And-Set only if the version matches.
 	// Can return ErrBadVersion.
 	// Can return ErrNoNode only if existingVersion is not -1.
-	UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints, existingVersion int64) error
+	UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, addrs *topodatapb.EndPoints, existingVersion int64) error
 
 	// GetEndPoints returns the EndPoints list of serving addresses
 	// for a TabletType inside a shard, as well as the node version.
 	// Can return ErrNoNode.
-	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (ep *pb.EndPoints, version int64, err error)
+	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (ep *topodatapb.EndPoints, version int64, err error)
 
 	// DeleteEndPoints deletes the serving records for a cell,
 	// keyspace, shard, tabletType.
 	// If existingVersion is -1, it will delete the records unconditionally.
 	// Otherwise, it will Compare-And-Delete only if the version matches.
 	// Can return ErrNoNode or ErrBadVersion.
-	DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, existingVersion int64) error
+	DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType, existingVersion int64) error
 
 	// WatchSrvKeyspace returns a channel that receives notifications
 	// every time the SrvKeyspace for the given keyspace / cell changes.
@@ -251,22 +251,22 @@ type Impl interface {
 	// that are never going to work. Mutiple notifications with the
 	// same contents may be sent (for instance when the serving graph
 	// is rebuilt, but the content hasn't changed).
-	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *pb.SrvKeyspace, stopWatching chan<- struct{}, err error)
+	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *topodatapb.SrvKeyspace, stopWatching chan<- struct{}, err error)
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.
-	UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *pb.SrvShard) error
+	UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topodatapb.SrvShard) error
 
 	// GetSrvShard reads a SrvShard record.
 	// Can return ErrNoNode.
-	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error)
+	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error)
 
 	// DeleteSrvShard deletes a SrvShard record.
 	// Can return ErrNoNode.
 	DeleteSrvShard(ctx context.Context, cell, keyspace, shard string) error
 
 	// UpdateSrvKeyspace updates the serving records for a cell, keyspace.
-	UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *pb.SrvKeyspace) error
+	UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error
 
 	// DeleteSrvKeyspace deletes the cell-local serving records for a keyspace.
 	// Can return ErrNoNode.
@@ -274,7 +274,7 @@ type Impl interface {
 
 	// GetSrvKeyspace reads a SrvKeyspace record.
 	// Can return ErrNoNode.
-	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error)
+	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 
 	// GetSrvKeyspaceNames returns the list of visible Keyspaces
 	// in this cell. They shall be sorted.

@@ -15,8 +15,8 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Conn provides a fake implementation of sqldb.Conn.
@@ -26,7 +26,7 @@ type Conn struct {
 	id             int64
 	curQueryResult *sqltypes.Result
 	curQueryRow    int64
-	charset        *pb.Charset
+	charset        *binlogdatapb.Charset
 }
 
 // DB is a fake database and all its methods are thread safe.
@@ -149,7 +149,7 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sql
 	}
 
 	if wantfields {
-		qr.Fields = make([]*pbq.Field, len(result.Fields))
+		qr.Fields = make([]*querypb.Field, len(result.Fields))
 		copy(qr.Fields, result.Fields)
 	}
 
@@ -228,8 +228,8 @@ func (conn *Conn) Shutdown() {
 }
 
 // Fields returns the current fields description for the query
-func (conn *Conn) Fields() []*pbq.Field {
-	return make([]*pbq.Field, 0)
+func (conn *Conn) Fields() []*querypb.Field {
+	return make([]*querypb.Field, 0)
 }
 
 // ID returns the connection id.
@@ -260,12 +260,12 @@ func (conn *Conn) SendCommand(command uint32, data []byte) error {
 
 // GetCharset returns the current numerical values of the per-session character
 // set variables.
-func (conn *Conn) GetCharset() (cs *pb.Charset, err error) {
+func (conn *Conn) GetCharset() (cs *binlogdatapb.Charset, err error) {
 	return conn.charset, nil
 }
 
 // SetCharset changes the per-session character set variables.
-func (conn *Conn) SetCharset(cs *pb.Charset) error {
+func (conn *Conn) SetCharset(cs *binlogdatapb.Charset) error {
 	conn.charset = cs
 	return nil
 }

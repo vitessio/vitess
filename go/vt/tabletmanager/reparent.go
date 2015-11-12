@@ -22,7 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -72,9 +72,9 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	ev := &events.Reparent{
 		ShardInfo: *si,
 		NewMaster: *tablet.Tablet,
-		OldMaster: pb.Tablet{
+		OldMaster: topodatapb.Tablet{
 			Alias: si.MasterAlias,
-			Type:  pb.TabletType_MASTER,
+			Type:  topodatapb.TabletType_MASTER,
 		},
 		ExternalID: externalID,
 	}
@@ -90,7 +90,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	log.Infof("fastTabletExternallyReparented: executing change callback for state change to MASTER")
 	oldTablet := *tablet.Tablet
 	newTablet := oldTablet
-	newTablet.Type = pb.TabletType_MASTER
+	newTablet.Type = topodatapb.TabletType_MASTER
 	newTablet.HealthMap = nil
 	agent.setTablet(topo.NewTabletInfo(&newTablet, -1))
 	if err := agent.updateState(ctx, &oldTablet, "fastTabletExternallyReparented"); err != nil {
@@ -116,8 +116,8 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		return fmt.Errorf("fastTabletExternallyReparented: failed to generate EndPoint for tablet %v: %v", tablet.Alias, err)
 	}
 	err = topo.UpdateEndPoints(ctx, agent.TopoServer, tablet.Alias.Cell,
-		si.Keyspace(), si.ShardName(), pb.TabletType_MASTER,
-		&pb.EndPoints{Entries: []*pb.EndPoint{ep}}, -1)
+		si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER,
+		&topodatapb.EndPoints{Entries: []*topodatapb.EndPoint{ep}}, -1)
 	if err != nil {
 		return fmt.Errorf("fastTabletExternallyReparented: failed to update master endpoint: %v", err)
 	}
@@ -157,10 +157,10 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	go func() {
 		defer wg.Done()
 		// Update our own record to master.
-		var updatedTablet *pb.Tablet
+		var updatedTablet *topodatapb.Tablet
 		err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
-			func(tablet *pb.Tablet) error {
-				tablet.Type = pb.TabletType_MASTER
+			func(tablet *topodatapb.Tablet) error {
+				tablet.Type = topodatapb.TabletType_MASTER
 				tablet.HealthMap = nil
 				updatedTablet = tablet
 				return nil
@@ -181,10 +181,10 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		wg.Add(1)
 		go func() {
 			// Force the old master to spare.
-			var oldMasterTablet *pb.Tablet
+			var oldMasterTablet *topodatapb.Tablet
 			err := agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
-				func(tablet *pb.Tablet) error {
-					tablet.Type = pb.TabletType_SPARE
+				func(tablet *topodatapb.Tablet) error {
+					tablet.Type = topodatapb.TabletType_SPARE
 					oldMasterTablet = tablet
 					return nil
 				})
@@ -226,7 +226,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// write it back. Now we use an update loop pattern to do that instead.
 	event.DispatchUpdate(ev, "updating global shard record")
 	log.Infof("finalizeTabletExternallyReparented: updating global shard record")
-	si, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(shard *pb.Shard) error {
+	si, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(shard *topodatapb.Shard) error {
 		shard.MasterAlias = tablet.Alias
 		return nil
 	})

@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -35,11 +35,11 @@ var (
 // Since we don't want to use them all, we require at least
 // minHealthyEndPoints servers to be healthy.
 // May block up to -wait_for_healthy_rdonly_endpoints_timeout.
-func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string) (*pb.TabletAlias, error) {
+func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string) (*topodatapb.TabletAlias, error) {
 	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, *WaitForHealthyEndPointsTimeout)
 	defer busywaitCancel()
 
-	var healthyEndpoints []*pb.EndPoint
+	var healthyEndpoints []*topodatapb.EndPoint
 	for {
 		select {
 		case <-busywaitCtx.Done():
@@ -48,17 +48,17 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 		}
 
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		endPoints, _, err := wr.TopoServer().GetEndPoints(shortCtx, cell, keyspace, shard, pb.TabletType_RDONLY)
+		endPoints, _, err := wr.TopoServer().GetEndPoints(shortCtx, cell, keyspace, shard, topodatapb.TabletType_RDONLY)
 		cancel()
 		if err != nil {
 			if err == topo.ErrNoNode {
 				// If the node doesn't exist, count that as 0 available rdonly instances.
-				endPoints = &pb.EndPoints{}
+				endPoints = &topodatapb.EndPoints{}
 			} else {
 				return nil, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
 			}
 		}
-		healthyEndpoints = make([]*pb.EndPoint, 0, len(endPoints.Entries))
+		healthyEndpoints = make([]*topodatapb.EndPoint, 0, len(endPoints.Entries))
 		for _, entry := range endPoints.Entries {
 			if len(entry.HealthMap) == 0 {
 				healthyEndpoints = append(healthyEndpoints, entry)
@@ -81,7 +81,7 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 
 	// random server in the list is what we want
 	index := rand.Intn(len(healthyEndpoints))
-	return &pb.TabletAlias{
+	return &topodatapb.TabletAlias{
 		Cell: cell,
 		Uid:  healthyEndpoints[index].Uid,
 	}, nil
@@ -91,7 +91,7 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 // - find a rdonly instance in the keyspace / shard
 // - mark it as worker
 // - tag it with our worker process
-func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (*pb.TabletAlias, error) {
+func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (*topodatapb.TabletAlias, error) {
 	tabletAlias, err := FindHealthyRdonlyEndPoint(ctx, wr, cell, keyspace, shard)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	ourURL := servenv.ListeningURL.String()
 	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, topoproto.TabletAliasString(tabletAlias))
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = wr.TopoServer().UpdateTabletFields(shortCtx, tabletAlias, func(tablet *pb.Tablet) error {
+	err = wr.TopoServer().UpdateTabletFields(shortCtx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
 		}
@@ -118,9 +118,9 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	// slave type change in the cleaner.
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 
-	wr.Logger().Infof("Changing tablet %v to '%v'", topoproto.TabletAliasString(tabletAlias), pb.TabletType_WORKER)
+	wr.Logger().Infof("Changing tablet %v to '%v'", topoproto.TabletAliasString(tabletAlias), topodatapb.TabletType_WORKER)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = wr.ChangeSlaveType(shortCtx, tabletAlias, pb.TabletType_WORKER)
+	err = wr.ChangeSlaveType(shortCtx, tabletAlias, topodatapb.TabletType_WORKER)
 	cancel()
 	if err != nil {
 		return nil, err
@@ -129,7 +129,7 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	// Record a clean-up action to take the tablet back to rdonly.
 	// We will alter this one later on and let the tablet go back to
 	// 'spare' if we have stopped replication for too long on it.
-	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, pb.TabletType_RDONLY)
+	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_RDONLY)
 	return tabletAlias, nil
 }
 

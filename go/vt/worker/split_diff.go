@@ -19,8 +19,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // SplitDiffWorker executes a diff between a destination shard and its
@@ -42,12 +42,12 @@ type SplitDiffWorker struct {
 	shardInfo    *topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAliases    []*pb.TabletAlias
-	destinationAlias *pb.TabletAlias
+	sourceAliases    []*topodatapb.TabletAlias
+	destinationAlias *topodatapb.TabletAlias
 
 	// populated during WorkerStateDiff
-	sourceSchemaDefinitions     []*pbt.SchemaDefinition
-	destinationSchemaDefinition *pbt.SchemaDefinition
+	sourceSchemaDefinitions     []*tabletmanagerdatapb.SchemaDefinition
+	destinationSchemaDefinition *tabletmanagerdatapb.SchemaDefinition
 }
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
@@ -193,7 +193,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	}
 
 	// find an appropriate endpoint in the source shards
-	sdw.sourceAliases = make([]*pb.TabletAlias, len(sdw.shardInfo.SourceShards))
+	sdw.sourceAliases = make([]*topodatapb.TabletAlias, len(sdw.shardInfo.SourceShards))
 	for i, ss := range sdw.shardInfo.SourceShards {
 		sdw.sourceAliases[i], err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard)
 		if err != nil {
@@ -244,7 +244,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 
 	// 2 - stop all the source tablets at a binlog position
 	//     higher than the destination master
-	stopPositionList := make([]*pbt.BlpPosition, len(sdw.shardInfo.SourceShards))
+	stopPositionList := make([]*tabletmanagerdatapb.BlpPosition, len(sdw.shardInfo.SourceShards))
 	for i, ss := range sdw.shardInfo.SourceShards {
 		// find where we should be stopping
 		blpPos := tmutils.FindBlpPositionByID(blpPositionList, ss.Uid)
@@ -268,7 +268,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
 		}
-		stopPositionList[i] = &pbt.BlpPosition{
+		stopPositionList[i] = &tabletmanagerdatapb.BlpPosition{
 			Uid:      ss.Uid,
 			Position: stoppedAt,
 		}
@@ -280,7 +280,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.sourceAliases[i], err)
 		}
-		action.TabletType = pb.TabletType_SPARE
+		action.TabletType = topodatapb.TabletType_SPARE
 	}
 
 	// 3 - ask the master of the destination shard to resume filtered
@@ -313,7 +313,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.destinationAlias, err)
 	}
-	action.TabletType = pb.TabletType_SPARE
+	action.TabletType = topodatapb.TabletType_SPARE
 
 	// 5 - restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
@@ -339,7 +339,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	sdw.SetState(WorkerStateDiff)
 
 	sdw.wr.Logger().Infof("Gathering schema information...")
-	sdw.sourceSchemaDefinitions = make([]*pbt.SchemaDefinition, len(sdw.sourceAliases))
+	sdw.sourceSchemaDefinitions = make([]*tabletmanagerdatapb.SchemaDefinition, len(sdw.sourceAliases))
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	wg.Add(1)
@@ -355,7 +355,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	}()
 	for i, sourceAlias := range sdw.sourceAliases {
 		wg.Add(1)
-		go func(i int, sourceAlias pb.TabletAlias) {
+		go func(i int, sourceAlias topodatapb.TabletAlias) {
 			var err error
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(
@@ -390,7 +390,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition *pbt.TableDefinition) {
+		go func(tableDefinition *tabletmanagerdatapb.TableDefinition) {
 			defer wg.Done()
 			sem.Acquire()
 			defer sem.Release()

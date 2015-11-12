@@ -24,8 +24,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -75,13 +75,13 @@ func (f *fakeVTGateService) checkCallerID(ctx context.Context, name string) {
 type queryExecute struct {
 	SQL              string
 	BindVariables    map[string]interface{}
-	TabletType       pb.TabletType
+	TabletType       topodatapb.TabletType
 	Session          *pbg.Session
 	NotInTransaction bool
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -114,13 +114,13 @@ type queryExecuteShards struct {
 	BindVariables    map[string]interface{}
 	Keyspace         string
 	Shards           []string
-	TabletType       pb.TabletType
+	TabletType       topodatapb.TabletType
 	Session          *pbg.Session
 	NotInTransaction bool
 }
 
 // ExecuteShards is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -156,13 +156,13 @@ type queryExecuteKeyspaceIds struct {
 	BindVariables    map[string]interface{}
 	Keyspace         string
 	KeyspaceIds      [][]byte
-	TabletType       pb.TabletType
+	TabletType       topodatapb.TabletType
 	Session          *pbg.Session
 	NotInTransaction bool
 }
 
 // ExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -196,14 +196,14 @@ type queryExecuteKeyRanges struct {
 	SQL              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
-	KeyRanges        []*pb.KeyRange
-	TabletType       pb.TabletType
+	KeyRanges        []*topodatapb.KeyRange
+	TabletType       topodatapb.TabletType
 	Session          *pbg.Session
 	NotInTransaction bool
 }
 
 // ExecuteKeyRanges is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -239,13 +239,13 @@ type queryExecuteEntityIds struct {
 	Keyspace          string
 	EntityColumnName  string
 	EntityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId
-	TabletType        pb.TabletType
+	TabletType        topodatapb.TabletType
 	Session           *pbg.Session
 	NotInTransaction  bool
 }
 
 // ExecuteEntityIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -282,13 +282,13 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bi
 // ExecuteBatchShards
 type queryExecuteBatchShards struct {
 	Queries       []proto.BoundShardQuery
-	TabletType    pb.TabletType
+	TabletType    topodatapb.TabletType
 	AsTransaction bool
 	Session       *pbg.Session
 }
 
 // ExecuteBatchShards is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *pbg.Session, reply *proto.QueryResultList) error {
+func (f *fakeVTGateService) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *pbg.Session, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -323,13 +323,13 @@ func (f *fakeVTGateService) ExecuteBatchShards(ctx context.Context, queries []pr
 // ExecuteBatchKeyspaceIds
 type queryExecuteBatchKeyspaceIds struct {
 	Queries       []proto.BoundKeyspaceIdQuery
-	TabletType    pb.TabletType
+	TabletType    topodatapb.TabletType
 	AsTransaction bool
 	Session       *pbg.Session
 }
 
 // ExecuteBatchKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *pbg.Session, reply *proto.QueryResultList) error {
+func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *pbg.Session, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -361,7 +361,7 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -407,7 +407,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 }
 
 // StreamExecuteShards is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -455,7 +455,7 @@ func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string,
 }
 
 // StreamExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -503,7 +503,7 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql st
 }
 
 // StreamExecuteKeyRanges is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -627,7 +627,7 @@ func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql
 }
 
 // GetSrvKeyspace is part of the VTGateService interface
-func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
+func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	if f.hasError {
 		return nil, errTestVtGateError
 	}
@@ -641,7 +641,7 @@ func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string)
 }
 
 // GetSrvShard is part of the VTGateService interface
-func (f *fakeVTGateService) GetSrvShard(ctx context.Context, keyspace, shard string) (*pb.SrvShard, error) {
+func (f *fakeVTGateService) GetSrvShard(ctx context.Context, keyspace, shard string) (*topodatapb.SrvShard, error) {
 	panic(fmt.Errorf("GetSrvShard is not tested here"))
 }
 
@@ -842,7 +842,7 @@ func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.Execute(ctx, "none", nil, pb.TabletType_RDONLY)
+	_, err = conn.Execute(ctx, "none", nil, topodatapb.TabletType_RDONLY)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -888,7 +888,7 @@ func testExecuteShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteShards(ctx, "none", "", []string{}, nil, pb.TabletType_RDONLY)
+	_, err = conn.ExecuteShards(ctx, "none", "", []string{}, nil, topodatapb.TabletType_RDONLY)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -933,7 +933,7 @@ func testExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteKeyspaceIds(ctx, "none", "", [][]byte{}, nil, pb.TabletType_REPLICA)
+	_, err = conn.ExecuteKeyspaceIds(ctx, "none", "", [][]byte{}, nil, topodatapb.TabletType_REPLICA)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -978,7 +978,7 @@ func testExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteKeyRanges(ctx, "none", "", []*pb.KeyRange{}, nil, pb.TabletType_REPLICA)
+	_, err = conn.ExecuteKeyRanges(ctx, "none", "", []*topodatapb.KeyRange{}, nil, topodatapb.TabletType_REPLICA)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -1023,7 +1023,7 @@ func testExecuteEntityIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteEntityIds(ctx, "none", "", "", []*pbg.ExecuteEntityIdsRequest_EntityId{}, nil, pb.TabletType_REPLICA)
+	_, err = conn.ExecuteEntityIds(ctx, "none", "", "", []*pbg.ExecuteEntityIdsRequest_EntityId{}, nil, topodatapb.TabletType_REPLICA)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -1068,7 +1068,7 @@ func testExecuteBatchShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", ql, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteBatchShards(ctx, []proto.BoundShardQuery{proto.BoundShardQuery{Sql: "none"}}, pb.TabletType_REPLICA, true)
+	_, err = conn.ExecuteBatchShards(ctx, []proto.BoundShardQuery{proto.BoundShardQuery{Sql: "none"}}, topodatapb.TabletType_REPLICA, true)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -1113,7 +1113,7 @@ func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", ql, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteBatchKeyspaceIds(ctx, []proto.BoundKeyspaceIdQuery{proto.BoundKeyspaceIdQuery{Sql: "none", KeyspaceIds: [][]byte{}}}, pb.TabletType_REPLICA, false)
+	_, err = conn.ExecuteBatchKeyspaceIds(ctx, []proto.BoundKeyspaceIdQuery{proto.BoundKeyspaceIdQuery{Sql: "none", KeyspaceIds: [][]byte{}}}, topodatapb.TabletType_REPLICA, false)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -1173,7 +1173,7 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	packets, errFunc, err = conn.StreamExecute(ctx, "none", nil, pb.TabletType_RDONLY)
+	packets, errFunc, err = conn.StreamExecute(ctx, "none", nil, topodatapb.TabletType_RDONLY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1293,7 +1293,7 @@ func testStreamExecuteShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	packets, errFunc, err = conn.StreamExecuteShards(ctx, "none", "", []string{}, nil, pb.TabletType_REPLICA)
+	packets, errFunc, err = conn.StreamExecuteShards(ctx, "none", "", []string{}, nil, topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1413,7 +1413,7 @@ func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	packets, errFunc, err = conn.StreamExecuteKeyRanges(ctx, "none", "", []*pb.KeyRange{}, nil, pb.TabletType_REPLICA)
+	packets, errFunc, err = conn.StreamExecuteKeyRanges(ctx, "none", "", []*topodatapb.KeyRange{}, nil, topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1533,7 +1533,7 @@ func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	packets, errFunc, err = conn.StreamExecuteKeyspaceIds(ctx, "none", "", [][]byte{}, nil, pb.TabletType_REPLICA)
+	packets, errFunc, err = conn.StreamExecuteKeyspaceIds(ctx, "none", "", [][]byte{}, nil, topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2061,43 +2061,43 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Commit: %v, want %v", err, want)
 	}
 
-	_, err = tx.Execute(ctx, "", nil, pb.TabletType_REPLICA, false)
+	_, err = tx.Execute(ctx, "", nil, topodatapb.TabletType_REPLICA, false)
 	want = "execute: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteShards(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteShards(ctx, "", "", nil, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeShards: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeKeyRanges: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeEntityIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchShards(ctx, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteBatchShards(ctx, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeBatchShards: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeBatchKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
@@ -2138,43 +2138,43 @@ func testTx2Fail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Commit2: %v, want %v", err, want)
 	}
 
-	_, err = tx.Execute(ctx, "", nil, pb.TabletType_REPLICA, false)
+	_, err = tx.Execute(ctx, "", nil, topodatapb.TabletType_REPLICA, false)
 	want = "execute: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteShards(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteShards(ctx, "", "", nil, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeShards: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeKeyRanges: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeEntityIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchShards(ctx, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteBatchShards(ctx, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeBatchShards: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, pb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, topodatapb.TabletType_REPLICA, false)
 	want = "executeBatchKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
@@ -2277,7 +2277,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		shardQuery: &queryExecuteShards{
@@ -2287,7 +2287,7 @@ var execMap = map[string]struct {
 			},
 			Keyspace:   "ks",
 			Shards:     []string{"1", "2"},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		keyspaceIDQuery: &queryExecuteKeyspaceIds{
@@ -2299,7 +2299,7 @@ var execMap = map[string]struct {
 			KeyspaceIds: [][]byte{
 				[]byte{0x61},
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		keyRangeQuery: &queryExecuteKeyRanges{
@@ -2308,13 +2308,13 @@ var execMap = map[string]struct {
 				"bind1": int64(0),
 			},
 			Keyspace: "ks",
-			KeyRanges: []*pb.KeyRange{
-				&pb.KeyRange{
+			KeyRanges: []*topodatapb.KeyRange{
+				&topodatapb.KeyRange{
 					Start: []byte{0x72},
 					End:   []byte{0x90},
 				},
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		entityIdsQuery: &queryExecuteEntityIds{
@@ -2331,7 +2331,7 @@ var execMap = map[string]struct {
 					KeyspaceId: []byte{0x6B},
 				},
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		batchQueryShard: &queryExecuteBatchShards{
@@ -2345,7 +2345,7 @@ var execMap = map[string]struct {
 					Shards:   []string{"-80", "80-"},
 				},
 			},
-			TabletType:    pb.TabletType_RDONLY,
+			TabletType:    topodatapb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       nil,
 		},
@@ -2362,7 +2362,7 @@ var execMap = map[string]struct {
 					},
 				},
 			},
-			TabletType:    pb.TabletType_RDONLY,
+			TabletType:    topodatapb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       nil,
 		},
@@ -2378,7 +2378,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		shardQuery: &queryExecuteShards{
@@ -2386,7 +2386,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Keyspace:   "",
 			Shards:     []string{"s1", "s2"},
 			Session:    nil,
@@ -2400,7 +2400,7 @@ var execMap = map[string]struct {
 			KeyspaceIds: [][]byte{
 				[]byte{0x61},
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		keyRangeQuery: &queryExecuteKeyRanges{
@@ -2409,13 +2409,13 @@ var execMap = map[string]struct {
 				"bind1": int64(0),
 			},
 			Keyspace: "ks",
-			KeyRanges: []*pb.KeyRange{
-				&pb.KeyRange{
+			KeyRanges: []*topodatapb.KeyRange{
+				&topodatapb.KeyRange{
 					Start: []byte{0x73},
 					End:   []byte{0x99},
 				},
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		entityIdsQuery: &queryExecuteEntityIds{
@@ -2432,7 +2432,7 @@ var execMap = map[string]struct {
 					KeyspaceId: []byte{0x6B},
 				},
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
 		batchQueryShard: &queryExecuteBatchShards{
@@ -2446,7 +2446,7 @@ var execMap = map[string]struct {
 					Shards:   []string{"-80", "80-"},
 				},
 			},
-			TabletType:    pb.TabletType_RDONLY,
+			TabletType:    topodatapb.TabletType_RDONLY,
 			AsTransaction: false,
 			Session:       nil,
 		},
@@ -2463,7 +2463,7 @@ var execMap = map[string]struct {
 					},
 				},
 			},
-			TabletType:    pb.TabletType_RDONLY,
+			TabletType:    topodatapb.TabletType_RDONLY,
 			AsTransaction: false,
 			Session:       nil,
 		},
@@ -2483,7 +2483,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType: pb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_MASTER,
 			Session:    session1,
 		},
 		shardQuery: &queryExecuteShards{
@@ -2491,7 +2491,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType: pb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_MASTER,
 			Keyspace:   "",
 			Shards:     []string{"s1", "s2"},
 			Session:    session1,
@@ -2505,7 +2505,7 @@ var execMap = map[string]struct {
 			KeyspaceIds: [][]byte{
 				[]byte{0x61},
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    session1,
 		},
 		keyRangeQuery: &queryExecuteKeyRanges{
@@ -2514,13 +2514,13 @@ var execMap = map[string]struct {
 				"bind1": int64(0),
 			},
 			Keyspace: "ks",
-			KeyRanges: []*pb.KeyRange{
-				&pb.KeyRange{
+			KeyRanges: []*topodatapb.KeyRange{
+				&topodatapb.KeyRange{
 					Start: []byte{0x23},
 					End:   []byte{0x66},
 				},
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    session1,
 		},
 		entityIdsQuery: &queryExecuteEntityIds{
@@ -2537,7 +2537,7 @@ var execMap = map[string]struct {
 					KeyspaceId: []byte{0x6B},
 				},
 			},
-			TabletType: pb.TabletType_RDONLY,
+			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    session1,
 		},
 		batchQueryShard: &queryExecuteBatchShards{
@@ -2551,7 +2551,7 @@ var execMap = map[string]struct {
 					Shards:   []string{"-80", "80-"},
 				},
 			},
-			TabletType:    pb.TabletType_RDONLY,
+			TabletType:    topodatapb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       session1,
 		},
@@ -2568,7 +2568,7 @@ var execMap = map[string]struct {
 					},
 				},
 			},
-			TabletType:    pb.TabletType_RDONLY,
+			TabletType:    topodatapb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       session1,
 		},
@@ -2584,7 +2584,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType:       pb.TabletType_MASTER,
+			TabletType:       topodatapb.TabletType_MASTER,
 			Session:          session1,
 			NotInTransaction: true,
 		},
@@ -2593,7 +2593,7 @@ var execMap = map[string]struct {
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType:       pb.TabletType_MASTER,
+			TabletType:       topodatapb.TabletType_MASTER,
 			Keyspace:         "",
 			Shards:           []string{"s1", "s2"},
 			Session:          session1,
@@ -2608,7 +2608,7 @@ var execMap = map[string]struct {
 			KeyspaceIds: [][]byte{
 				[]byte{0x61},
 			},
-			TabletType:       pb.TabletType_RDONLY,
+			TabletType:       topodatapb.TabletType_RDONLY,
 			Session:          session1,
 			NotInTransaction: true,
 		},
@@ -2618,13 +2618,13 @@ var execMap = map[string]struct {
 				"bind1": int64(0),
 			},
 			Keyspace: "ks",
-			KeyRanges: []*pb.KeyRange{
-				&pb.KeyRange{
+			KeyRanges: []*topodatapb.KeyRange{
+				&topodatapb.KeyRange{
 					Start: []byte{0x34},
 					End:   []byte{0x77},
 				},
 			},
-			TabletType:       pb.TabletType_RDONLY,
+			TabletType:       topodatapb.TabletType_RDONLY,
 			Session:          session1,
 			NotInTransaction: true,
 		},
@@ -2642,7 +2642,7 @@ var execMap = map[string]struct {
 					KeyspaceId: []byte{0x6B},
 				},
 			},
-			TabletType:       pb.TabletType_RDONLY,
+			TabletType:       topodatapb.TabletType_RDONLY,
 			Session:          session1,
 			NotInTransaction: true,
 		},
@@ -2657,7 +2657,7 @@ var execMap = map[string]struct {
 					Shards:   []string{"-80", "80-"},
 				},
 			},
-			TabletType:    pb.TabletType_RDONLY,
+			TabletType:    topodatapb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       session1,
 		},
@@ -2674,7 +2674,7 @@ var execMap = map[string]struct {
 					},
 				},
 			},
-			TabletType:    pb.TabletType_RDONLY,
+			TabletType:    topodatapb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       session1,
 		},
@@ -2687,12 +2687,12 @@ var execMap = map[string]struct {
 }
 
 var result1 = sqltypes.Result{
-	Fields: []*pbq.Field{
-		&pbq.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
 			Type: sqltypes.Int16,
 		},
-		&pbq.Field{
+		&querypb.Field{
 			Name: "field2",
 			Type: sqltypes.Int32,
 		},
@@ -2712,12 +2712,12 @@ var result1 = sqltypes.Result{
 }
 
 var streamResult1 = sqltypes.Result{
-	Fields: []*pbq.Field{
-		&pbq.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
 			Type: sqltypes.Int16,
 		},
-		&pbq.Field{
+		&querypb.Field{
 			Name: "field2",
 			Type: sqltypes.Int32,
 		},
@@ -2735,10 +2735,10 @@ var session2 = &pbg.Session{
 	InTransaction: true,
 	ShardSessions: []*pbg.Session_ShardSession{
 		&pbg.Session_ShardSession{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "ks",
 				Shard:      "1",
-				TabletType: pb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
 		},
@@ -2757,10 +2757,10 @@ var splitQueryRequest = &querySplitQuery{
 
 var splitQueryResult = []*pbg.SplitQueryResponse_Part{
 	&pbg.SplitQueryResponse_Part{
-		Query: &pbq.BoundQuery{
+		Query: &querypb.BoundQuery{
 			Sql: "out for SplitQuery",
-			BindVariables: map[string]*pbq.BindVariable{
-				"bind1": &pbq.BindVariable{
+			BindVariables: map[string]*querypb.BindVariable{
+				"bind1": &querypb.BindVariable{
 					Type:  sqltypes.Int64,
 					Value: []byte("1114444"),
 				},
@@ -2768,8 +2768,8 @@ var splitQueryResult = []*pbg.SplitQueryResponse_Part{
 		},
 		KeyRangePart: &pbg.SplitQueryResponse_KeyRangePart{
 			Keyspace: "ksout",
-			KeyRanges: []*pb.KeyRange{
-				&pb.KeyRange{
+			KeyRanges: []*topodatapb.KeyRange{
+				&topodatapb.KeyRange{
 					Start: []byte{'s'},
 					End:   []byte{'e'},
 				},
@@ -2781,14 +2781,14 @@ var splitQueryResult = []*pbg.SplitQueryResponse_Part{
 
 var getSrvKeyspaceKeyspace = "test_keyspace"
 
-var getSrvKeyspaceResult = &pb.SrvKeyspace{
-	Partitions: []*pb.SrvKeyspace_KeyspacePartition{
-		&pb.SrvKeyspace_KeyspacePartition{
-			ServedType: pb.TabletType_REPLICA,
-			ShardReferences: []*pb.ShardReference{
-				&pb.ShardReference{
+var getSrvKeyspaceResult = &topodatapb.SrvKeyspace{
+	Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+		&topodatapb.SrvKeyspace_KeyspacePartition{
+			ServedType: topodatapb.TabletType_REPLICA,
+			ShardReferences: []*topodatapb.ShardReference{
+				&topodatapb.ShardReference{
 					Name: "shard0",
-					KeyRange: &pb.KeyRange{
+					KeyRange: &topodatapb.KeyRange{
 						Start: []byte{'s'},
 						End:   []byte{'e'},
 					},
@@ -2797,10 +2797,10 @@ var getSrvKeyspaceResult = &pb.SrvKeyspace{
 		},
 	},
 	ShardingColumnName: "sharding_column_name",
-	ShardingColumnType: pb.KeyspaceIdType_UINT64,
-	ServedFrom: []*pb.SrvKeyspace_ServedFrom{
-		&pb.SrvKeyspace_ServedFrom{
-			TabletType: pb.TabletType_MASTER,
+	ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+	ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
+		&topodatapb.SrvKeyspace_ServedFrom{
+			TabletType: topodatapb.TabletType_MASTER,
 			Keyspace:   "other_keyspace",
 		},
 	},

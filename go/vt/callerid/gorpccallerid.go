@@ -1,14 +1,14 @@
 package callerid
 
 import (
-	qrpb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
-// GoRPCImmediateCallerID creates new ImmediateCallerID(qrpb.VTGateCallerID)
+// GoRPCImmediateCallerID creates new ImmediateCallerID(querypb.VTGateCallerID)
 // from GoRPC's VTGateCallerID
-func GoRPCImmediateCallerID(v *proto.VTGateCallerID) *qrpb.VTGateCallerID {
+func GoRPCImmediateCallerID(v *proto.VTGateCallerID) *querypb.VTGateCallerID {
 	if v == nil {
 		return nil
 	}
