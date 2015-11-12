@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
@@ -1005,7 +1005,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	if flags&enableSchemaOverrides > 0 {
 		schemaOverrides = getTestTableSchemaOverrides()
 	}
-	target := querypb.Target{TabletType: topodata.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	tsv.StartService(target, dbconfigs, schemaOverrides, testUtils.newMysqld(&dbconfigs))
 	return tsv
 }

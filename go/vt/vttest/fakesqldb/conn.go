@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -26,7 +26,7 @@ type Conn struct {
 	id             int64
 	curQueryResult *sqltypes.Result
 	curQueryRow    int64
-	charset        *pb.Charset
+	charset        *binlogdatapb.Charset
 }
 
 // DB is a fake database and all its methods are thread safe.
@@ -260,12 +260,12 @@ func (conn *Conn) SendCommand(command uint32, data []byte) error {
 
 // GetCharset returns the current numerical values of the per-session character
 // set variables.
-func (conn *Conn) GetCharset() (cs *pb.Charset, err error) {
+func (conn *Conn) GetCharset() (cs *binlogdatapb.Charset, err error) {
 	return conn.charset, nil
 }
 
 // SetCharset changes the per-session character set variables.
-func (conn *Conn) SetCharset(cs *pb.Charset) error {
+func (conn *Conn) SetCharset(cs *binlogdatapb.Charset) error {
 	conn.charset = cs
 	return nil
 }

@@ -24,8 +24,8 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -88,12 +88,12 @@ func NewStats() *Stats {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	endPoint *pbt.EndPoint
+	endPoint *topodatapb.EndPoint
 	dbClient VtClient
 
 	// for key range base requests
-	keyspaceIDType pbt.KeyspaceIdType
-	keyRange       *pbt.KeyRange
+	keyspaceIDType topodatapb.KeyspaceIdType
+	keyRange       *topodatapb.KeyRange
 
 	// for table base requests
 	tables []string
@@ -103,15 +103,15 @@ type BinlogPlayer struct {
 	position       replication.Position
 	stopPosition   replication.Position
 	blplStats      *Stats
-	defaultCharset *pb.Charset
-	currentCharset *pb.Charset
+	defaultCharset *binlogdatapb.Charset
+	currentCharset *binlogdatapb.Charset
 }
 
 // NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pbt.EndPoint, keyspaceIDType pbt.KeyspaceIdType, keyRange *pbt.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
+func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *topodatapb.EndPoint, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
 	result := &BinlogPlayer{
 		endPoint:       endPoint,
 		dbClient:       dbClient,
@@ -138,7 +138,7 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pbt.EndPoint, keyspace
 // replicating the provided tables, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient VtClient, endPoint *pbt.EndPoint, tables []string, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
+func NewBinlogPlayerTables(dbClient VtClient, endPoint *topodatapb.EndPoint, tables []string, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
 	result := &BinlogPlayer{
 		endPoint:  endPoint,
 		dbClient:  dbClient,
@@ -170,7 +170,7 @@ func NewBinlogPlayerTables(dbClient VtClient, endPoint *pbt.EndPoint, tables []s
 // - otherwise (the statements are probably filtered out), we leave
 //   transaction_timestamp alone (keeping the old value), and we don't
 //   change SecondsBehindMaster
-func (blp *BinlogPlayer) writeRecoveryPosition(tx *pb.BinlogTransaction) error {
+func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
 	gtid, err := replication.DecodeGTID(tx.TransactionId)
 	if err != nil {
 		return err
@@ -209,7 +209,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (string, string, error) {
 	return qr.Rows[0][0].String(), qr.Rows[0][1].String(), nil
 }
 
-func (blp *BinlogPlayer) processTransaction(tx *pb.BinlogTransaction) (ok bool, err error) {
+func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) (ok bool, err error) {
 	txnStartTime := time.Now()
 	if err = blp.dbClient.Begin(); err != nil {
 		return false, fmt.Errorf("failed query BEGIN, err: %s", err)
@@ -220,7 +220,7 @@ func (blp *BinlogPlayer) processTransaction(tx *pb.BinlogTransaction) (ok bool, 
 	for i, stmt := range tx.Statements {
 		// Make sure the statement is replayed in the proper charset.
 		if dbClient, ok := blp.dbClient.(*DBClient); ok {
-			var stmtCharset *pb.Charset
+			var stmtCharset *binlogdatapb.Charset
 			if stmt.Charset != nil {
 				stmtCharset = stmt.Charset
 			} else {
@@ -337,7 +337,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		}()
 	}
 
-	var responseChan chan *pb.BinlogTransaction
+	var responseChan chan *binlogdatapb.BinlogTransaction
 	var errFunc ErrFunc
 	if len(blp.tables) > 0 {
 		responseChan, errFunc, err = blplClient.StreamTables(ctx, replication.EncodePosition(blp.position), blp.tables, blp.defaultCharset)

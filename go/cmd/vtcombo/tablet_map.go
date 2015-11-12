@@ -23,7 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // tablet contains all the data for an individual tablet.
@@ -31,7 +31,7 @@ type tablet struct {
 	// configuration parameters
 	keyspace   string
 	shard      string
-	tabletType pb.TabletType
+	tabletType topodatapb.TabletType
 	dbname     string
 
 	// objects built at construction time
@@ -71,7 +71,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		if _, ok := keyspaceMap[keyspace]; !ok {
 			// only set for sharding key info for sharded keyspaces
 			scn := ""
-			sct := pb.KeyspaceIdType_UNSET
+			sct := topodatapb.KeyspaceIdType_UNSET
 			if shard != "0" {
 				var err error
 				sct, err = key.ParseKeyspaceIDType(*shardingColumnType)
@@ -81,7 +81,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 				scn = *shardingColumnName
 			}
 
-			if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{
+			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
 				ShardingColumnName: scn,
 				ShardingColumnType: sct,
 			}); err != nil {
@@ -91,7 +91,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		}
 
 		// create the master
-		alias := &pb.TabletAlias{
+		alias := &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  uid,
 		}
@@ -105,7 +105,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		tabletMap[uid] = &tablet{
 			keyspace:   keyspace,
 			shard:      shard,
-			tabletType: pb.TabletType_MASTER,
+			tabletType: topodatapb.TabletType_MASTER,
 			dbname:     dbname,
 
 			qsc:   masterController,
@@ -114,7 +114,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		uid++
 
 		// create a replica slave
-		alias = &pb.TabletAlias{
+		alias = &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  uid,
 		}
@@ -124,7 +124,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		tabletMap[uid] = &tablet{
 			keyspace:   keyspace,
 			shard:      shard,
-			tabletType: pb.TabletType_REPLICA,
+			tabletType: topodatapb.TabletType_REPLICA,
 			dbname:     dbname,
 
 			qsc:   replicaController,
@@ -133,7 +133,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		uid++
 
 		// create a rdonly slave
-		alias = &pb.TabletAlias{
+		alias = &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  uid,
 		}
@@ -143,7 +143,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		tabletMap[uid] = &tablet{
 			keyspace:   keyspace,
 			shard:      shard,
-			tabletType: pb.TabletType_RDONLY,
+			tabletType: topodatapb.TabletType_RDONLY,
 			dbname:     dbname,
 
 			qsc:   rdonlyController,
@@ -167,7 +167,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 }
 
 // dialer is our tabletconn.Dialer
-func dialer(ctx context.Context, endPoint *pb.EndPoint, keyspace, shard string, tabletType pb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func dialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	tablet, ok := tabletMap[endPoint.Uid]
 	if !ok {
 		return nil, tabletconn.OperationalError("connection refused")
@@ -183,7 +183,7 @@ func dialer(ctx context.Context, endPoint *pb.EndPoint, keyspace, shard string, 
 // to the tablet
 type internalTabletConn struct {
 	tablet   *tablet
-	endPoint *pb.EndPoint
+	endPoint *topodatapb.EndPoint
 }
 
 // Execute is part of tabletconn.TabletConn
@@ -353,12 +353,12 @@ func (itc *internalTabletConn) Close() {
 }
 
 // SetTarget is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SetTarget(keyspace, shard string, tabletType pb.TabletType) error {
+func (itc *internalTabletConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
 	return nil
 }
 
 // EndPoint is part of tabletconn.TabletConn
-func (itc *internalTabletConn) EndPoint() *pb.EndPoint {
+func (itc *internalTabletConn) EndPoint() *topodatapb.EndPoint {
 	return itc.endPoint
 }
 

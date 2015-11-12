@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // testCallerID adds a caller ID to a context, and makes sure the server
@@ -33,7 +33,7 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn) {
 	query := services.CallerIDPrefix + string(data)
 
 	// test Execute forwards the callerID
-	if _, err := conn.Execute(ctx, query, nil, pb.TabletType_MASTER); err != nil {
+	if _, err := conn.Execute(ctx, query, nil, topodatapb.TabletType_MASTER); err != nil {
 		if !strings.Contains(err.Error(), "SUCCESS: ") {
 			t.Errorf("failed to pass callerid: %v", err)
 		}

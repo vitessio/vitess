@@ -24,7 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestTabletExternallyReparented(t *testing.T) {
@@ -38,11 +38,11 @@ func TestTabletExternallyReparented(t *testing.T) {
 	defer vp.Close()
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, pb.TabletType_REPLICA, db)
-	badSlave := NewFakeTablet(t, wr, "cell1", 4, pb.TabletType_REPLICA, db)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
+	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, db)
+	badSlave := NewFakeTablet(t, wr, "cell1", 4, topodatapb.TabletType_REPLICA, db)
 
 	// Add a new Cell to the Shard, that doesn't map to any read topo cell,
 	// to simulate a data center being unreachable.
@@ -153,7 +153,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 	// Now double-check the serving graph is good.
 	// Should only have one good replica left.
-	addrs, _, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", pb.TabletType_REPLICA)
+	addrs, _, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatalf("GetEndPoints failed at the end: %v", err)
 	}
@@ -174,9 +174,9 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
-	goodSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 
 	// Now we're restarting mysql on a different port, 3301->3303
 	// but without updating the Tablet record in topology.
@@ -223,9 +223,9 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
-	goodSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 
 	// On the elected master, we will respond to
 	// TabletActionSlaveWasPromoted, so we need a MysqlDaemon
@@ -266,9 +266,9 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master, a new master, and a good slave.
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
-	goodSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 
 	// Reparent to a replica, and pretend the old master is not responding.
 
@@ -301,7 +301,7 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 
 	// Now double-check the serving graph is good.
 	// Should only have one good replica left.
-	addrs, _, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", pb.TabletType_REPLICA)
+	addrs, _, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatalf("GetEndPoints failed at the end: %v", err)
 	}
@@ -314,7 +314,7 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 	}
-	if tablet.Type != pb.TabletType_SPARE {
+	if tablet.Type != topodatapb.TabletType_SPARE {
 		t.Fatalf("old master should be spare but is: %v", tablet.Type)
 	}
 }

@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -28,7 +28,7 @@ var (
 	streamCommentStartLen = len(streamCommentStart)
 )
 
-type sendEventFunc func(event *pb.StreamEvent) error
+type sendEventFunc func(event *binlogdatapb.StreamEvent) error
 
 // EventStreamer is an adapter on top of a binlog Streamer that convert
 // the events into StreamEvent objects.
@@ -51,12 +51,12 @@ func (evs *EventStreamer) Stream(ctx *sync2.ServiceContext) error {
 	return evs.bls.Stream(ctx)
 }
 
-func (evs *EventStreamer) transactionToEvent(trans *pb.BinlogTransaction) error {
+func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransaction) error {
 	var err error
 	var insertid int64
 	for _, stmt := range trans.Statements {
 		switch stmt.Category {
-		case pb.BinlogTransaction_Statement_BL_SET:
+		case binlogdatapb.BinlogTransaction_Statement_BL_SET:
 			if strings.HasPrefix(stmt.Sql, binlogSetInsertID) {
 				insertid, err = strconv.ParseInt(stmt.Sql[binlogSetInsertIDLen:], 10, 64)
 				if err != nil {
@@ -64,12 +64,12 @@ func (evs *EventStreamer) transactionToEvent(trans *pb.BinlogTransaction) error 
 					log.Errorf("%v: %s", err, stmt.Sql)
 				}
 			}
-		case pb.BinlogTransaction_Statement_BL_DML:
-			var dmlEvent *pb.StreamEvent
+		case binlogdatapb.BinlogTransaction_Statement_BL_DML:
+			var dmlEvent *binlogdatapb.StreamEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
-				dmlEvent = &pb.StreamEvent{
-					Category: pb.StreamEvent_SE_ERR,
+				dmlEvent = &binlogdatapb.StreamEvent{
+					Category: binlogdatapb.StreamEvent_SE_ERR,
 					Sql:      stmt.Sql,
 				}
 			}
@@ -77,18 +77,18 @@ func (evs *EventStreamer) transactionToEvent(trans *pb.BinlogTransaction) error 
 			if err = evs.sendEvent(dmlEvent); err != nil {
 				return err
 			}
-		case pb.BinlogTransaction_Statement_BL_DDL:
-			ddlEvent := &pb.StreamEvent{
-				Category:  pb.StreamEvent_SE_DDL,
+		case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
+			ddlEvent := &binlogdatapb.StreamEvent{
+				Category:  binlogdatapb.StreamEvent_SE_DDL,
 				Sql:       stmt.Sql,
 				Timestamp: trans.Timestamp,
 			}
 			if err = evs.sendEvent(ddlEvent); err != nil {
 				return err
 			}
-		case pb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
-			unrecognized := &pb.StreamEvent{
-				Category:  pb.StreamEvent_SE_ERR,
+		case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
+			unrecognized := &binlogdatapb.StreamEvent{
+				Category:  binlogdatapb.StreamEvent_SE_ERR,
 				Sql:       stmt.Sql,
 				Timestamp: trans.Timestamp,
 			}
@@ -100,8 +100,8 @@ func (evs *EventStreamer) transactionToEvent(trans *pb.BinlogTransaction) error 
 			log.Errorf("Unrecognized event: %v: %s", stmt.Category, stmt.Sql)
 		}
 	}
-	posEvent := &pb.StreamEvent{
-		Category:      pb.StreamEvent_SE_POS,
+	posEvent := &binlogdatapb.StreamEvent{
+		Category:      binlogdatapb.StreamEvent_SE_POS,
 		TransactionId: trans.TransactionId,
 		Timestamp:     trans.Timestamp,
 	}
@@ -117,7 +117,7 @@ The _stream comment is extracted into a StreamEvent.
 */
 // Example query: insert into _table_(foo) values ('foo') /* _stream _table_ (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
-func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*pb.StreamEvent, int64, error) {
+func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*binlogdatapb.StreamEvent, int64, error) {
 	// first extract the comment
 	commentIndex := strings.LastIndex(sql, streamCommentStart)
 	if commentIndex == -1 {
@@ -126,8 +126,8 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*pb.StreamE
 	dmlComment := sql[commentIndex+streamCommentStartLen:]
 
 	// then strat building the response
-	dmlEvent := &pb.StreamEvent{
-		Category: pb.StreamEvent_SE_DML,
+	dmlEvent := &binlogdatapb.StreamEvent{
+		Category: binlogdatapb.StreamEvent_SE_DML,
 	}
 	tokenizer := sqlparser.NewStringTokenizer(dmlComment)
 

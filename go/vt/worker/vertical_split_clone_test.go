@@ -27,7 +27,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // verticalTabletServer is a local QueryService implementation to support the tests
@@ -234,25 +234,25 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
-		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
 	// Create the destination keyspace with the appropriate ServedFromMap
-	ki := &pbt.Keyspace{
-		ServedFroms: []*pbt.Keyspace_ServedFrom{
-			&pbt.Keyspace_ServedFrom{
-				TabletType: pbt.TabletType_MASTER,
+	ki := &topodatapb.Keyspace{
+		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
+			&topodatapb.Keyspace_ServedFrom{
+				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   "source_ks",
 			},
-			&pbt.Keyspace_ServedFrom{
-				TabletType: pbt.TabletType_REPLICA,
+			&topodatapb.Keyspace_ServedFrom{
+				TabletType: topodatapb.TabletType_REPLICA,
 				Keyspace:   "source_ks",
 			},
-			&pbt.Keyspace_ServedFrom{
-				TabletType: pbt.TabletType_RDONLY,
+			&topodatapb.Keyspace_ServedFrom{
+				TabletType: topodatapb.TabletType_RDONLY,
 				Keyspace:   "source_ks",
 			},
 		},
@@ -260,9 +260,9 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	wi.wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
 	destMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
-		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	destRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, destMaster, destRdonly} {
 		ft.StartActionLoop(t, wi.wr)

@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 var (
@@ -30,28 +30,28 @@ var (
 	ErrServerEOF = fmt.Errorf("binlog stream connection was closed by mysqld")
 
 	// statementPrefixes are normal sql statement prefixes.
-	statementPrefixes = map[string]pb.BinlogTransaction_Statement_Category{
-		"begin":    pb.BinlogTransaction_Statement_BL_BEGIN,
-		"commit":   pb.BinlogTransaction_Statement_BL_COMMIT,
-		"rollback": pb.BinlogTransaction_Statement_BL_ROLLBACK,
-		"insert":   pb.BinlogTransaction_Statement_BL_DML,
-		"update":   pb.BinlogTransaction_Statement_BL_DML,
-		"delete":   pb.BinlogTransaction_Statement_BL_DML,
-		"create":   pb.BinlogTransaction_Statement_BL_DDL,
-		"alter":    pb.BinlogTransaction_Statement_BL_DDL,
-		"drop":     pb.BinlogTransaction_Statement_BL_DDL,
-		"truncate": pb.BinlogTransaction_Statement_BL_DDL,
-		"rename":   pb.BinlogTransaction_Statement_BL_DDL,
-		"set":      pb.BinlogTransaction_Statement_BL_SET,
+	statementPrefixes = map[string]binlogdatapb.BinlogTransaction_Statement_Category{
+		"begin":    binlogdatapb.BinlogTransaction_Statement_BL_BEGIN,
+		"commit":   binlogdatapb.BinlogTransaction_Statement_BL_COMMIT,
+		"rollback": binlogdatapb.BinlogTransaction_Statement_BL_ROLLBACK,
+		"insert":   binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"update":   binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"delete":   binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"create":   binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"alter":    binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"drop":     binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"truncate": binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"rename":   binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"set":      binlogdatapb.BinlogTransaction_Statement_BL_SET,
 	}
 )
 
 // sendTransactionFunc is used to send binlog events.
-// reply is of type pb.BinlogTransaction.
-type sendTransactionFunc func(trans *pb.BinlogTransaction) error
+// reply is of type binlogdatapb.BinlogTransaction.
+type sendTransactionFunc func(trans *binlogdatapb.BinlogTransaction) error
 
-// getStatementCategory returns the pb.BL_* category for a SQL statement.
-func getStatementCategory(sql string) pb.BinlogTransaction_Statement_Category {
+// getStatementCategory returns the binlogdatapb.BL_* category for a SQL statement.
+func getStatementCategory(sql string) binlogdatapb.BinlogTransaction_Statement_Category {
 	if i := strings.IndexByte(sql, byte(' ')); i >= 0 {
 		sql = sql[:i]
 	}
@@ -65,7 +65,7 @@ type Streamer struct {
 	// dbname and mysqld are set at creation.
 	dbname          string
 	mysqld          mysqlctl.MysqlDaemon
-	clientCharset   *pb.Charset
+	clientCharset   *binlogdatapb.Charset
 	startPos        replication.Position
 	sendTransaction sendTransactionFunc
 
@@ -79,7 +79,7 @@ type Streamer struct {
 // charset is the default character set on the BinlogPlayer side.
 // startPos is the position to start streaming at.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *pb.Charset, startPos replication.Position, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *binlogdatapb.Charset, startPos replication.Position, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
@@ -140,7 +140,7 @@ func (bls *Streamer) Stream(ctx *sync2.ServiceContext) (err error) {
 // If the sendTransaction func returns io.EOF, parseEvents returns ErrClientEOF.
 // If the events channel is closed, parseEvents returns ErrServerEOF.
 func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replication.BinlogEvent) (replication.Position, error) {
-	var statements []*pb.BinlogTransaction_Statement
+	var statements []*binlogdatapb.BinlogTransaction_Statement
 	var format replication.BinlogFormat
 	var gtid replication.GTID
 	var pos = bls.startPos
@@ -154,13 +154,13 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 			log.Errorf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements)
 			binlogStreamerErrors.Add("ParseEvents", 1)
 		}
-		statements = make([]*pb.BinlogTransaction_Statement, 0, 10)
+		statements = make([]*binlogdatapb.BinlogTransaction_Statement, 0, 10)
 		autocommit = false
 	}
 	// A commit can be triggered either by a COMMIT query, or by an XID_EVENT.
 	// Statements that aren't wrapped in BEGIN/COMMIT are committed immediately.
 	commit := func(timestamp uint32) error {
-		trans := &pb.BinlogTransaction{
+		trans := &binlogdatapb.BinlogTransaction{
 			Statements:    statements,
 			Timestamp:     int64(timestamp),
 			TransactionId: replication.EncodeGTID(gtid),
@@ -252,8 +252,8 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 			if err != nil {
 				return pos, fmt.Errorf("can't parse INTVAR_EVENT: %v, event data: %#v", err, ev)
 			}
-			statements = append(statements, &pb.BinlogTransaction_Statement{
-				Category: pb.BinlogTransaction_Statement_BL_SET,
+			statements = append(statements, &binlogdatapb.BinlogTransaction_Statement{
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      fmt.Sprintf("SET %s=%d", name, value),
 			})
 		case ev.IsRand(): // RAND_EVENT
@@ -261,8 +261,8 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 			if err != nil {
 				return pos, fmt.Errorf("can't parse RAND_EVENT: %v, event data: %#v", err, ev)
 			}
-			statements = append(statements, &pb.BinlogTransaction_Statement{
-				Category: pb.BinlogTransaction_Statement_BL_SET,
+			statements = append(statements, &binlogdatapb.BinlogTransaction_Statement{
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2),
 			})
 		case ev.IsQuery(): // QUERY_EVENT
@@ -272,16 +272,16 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 				return pos, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 			}
 			switch cat := getStatementCategory(q.SQL); cat {
-			case pb.BinlogTransaction_Statement_BL_BEGIN:
+			case binlogdatapb.BinlogTransaction_Statement_BL_BEGIN:
 				begin()
-			case pb.BinlogTransaction_Statement_BL_ROLLBACK:
+			case binlogdatapb.BinlogTransaction_Statement_BL_ROLLBACK:
 				// Rollbacks are possible under some circumstances. Since the stream
 				// client keeps track of its replication position by updating the set
 				// of GTIDs it's seen, we must commit an empty transaction so the client
 				// can update its position.
 				statements = nil
 				fallthrough
-			case pb.BinlogTransaction_Statement_BL_COMMIT:
+			case binlogdatapb.BinlogTransaction_Statement_BL_COMMIT:
 				if err = commit(ev.Timestamp()); err != nil {
 					return pos, err
 				}
@@ -290,11 +290,11 @@ func (bls *Streamer) parseEvents(ctx *sync2.ServiceContext, events <-chan replic
 					// Skip cross-db statements.
 					continue
 				}
-				setTimestamp := &pb.BinlogTransaction_Statement{
-					Category: pb.BinlogTransaction_Statement_BL_SET,
+				setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 					Sql:      fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp()),
 				}
-				statement := &pb.BinlogTransaction_Statement{
+				statement := &binlogdatapb.BinlogTransaction_Statement{
 					Category: cat,
 					Sql:      q.SQL,
 				}

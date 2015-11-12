@@ -9,7 +9,7 @@ import (
 
 	log "github.com/golang/glog"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 const (
@@ -22,17 +22,17 @@ const (
 // passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, TablesFilterFunc(sendTransaction))
 func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransactionFunc {
-	return func(reply *pb.BinlogTransaction) error {
+	return func(reply *binlogdatapb.BinlogTransaction) error {
 		matched := false
-		filtered := make([]*pb.BinlogTransaction_Statement, 0, len(reply.Statements))
+		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(reply.Statements))
 		for _, statement := range reply.Statements {
 			switch statement.Category {
-			case pb.BinlogTransaction_Statement_BL_SET:
+			case binlogdatapb.BinlogTransaction_Statement_BL_SET:
 				filtered = append(filtered, statement)
-			case pb.BinlogTransaction_Statement_BL_DDL:
+			case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
-			case pb.BinlogTransaction_Statement_BL_DML:
+			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
 				tableIndex := strings.LastIndex(statement.Sql, streamComment)
 				if tableIndex == -1 {
 					updateStreamErrors.Add("TablesStream", 1)
@@ -54,7 +54,7 @@ func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransa
 						break
 					}
 				}
-			case pb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
+			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("TablesStream", 1)
 				log.Errorf("Error parsing table name: %s", statement.Sql)
 				continue

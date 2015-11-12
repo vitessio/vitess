@@ -24,7 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // VerticalSplitCloneWorker will clone the data from a source keyspace/shard
@@ -50,7 +50,7 @@ type VerticalSplitCloneWorker struct {
 	sourceKeyspace string
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAlias  *pb.TabletAlias
+	sourceAlias  *topodatapb.TabletAlias
 	sourceTablet *topo.TabletInfo
 
 	// populated during WorkerStateCopy
@@ -58,8 +58,8 @@ type VerticalSplitCloneWorker struct {
 	startTime   time.Time
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
-	reloadAliases []*pb.TabletAlias
-	reloadTablets map[pb.TabletAlias]*topo.TabletInfo
+	reloadAliases []*topodatapb.TabletAlias
+	reloadTablets map[topodatapb.TabletAlias]*topo.TabletInfo
 
 	ev *events.VerticalSplitClone
 
@@ -219,7 +219,7 @@ func (vscw *VerticalSplitCloneWorker) init(ctx context.Context) error {
 	}
 
 	// validate all serving types, find sourceKeyspace
-	servingTypes := []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY}
+	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 	servedFrom := ""
 	for _, st := range servingTypes {
 		sf := destinationKeyspaceInfo.GetServedFrom(st)
@@ -275,7 +275,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(vscw.sourceAlias), err)
 	}
-	action.TabletType = pb.TabletType_SPARE
+	action.TabletType = topodatapb.TabletType_SPARE
 
 	return vscw.ResolveDestinationMasters(ctx)
 }
@@ -495,7 +495,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	} else {
 		vscw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		err := vscw.wr.SetSourceShards(shortCtx, vscw.destinationKeyspace, vscw.destinationShard, []*pb.TabletAlias{vscw.sourceAlias}, vscw.tables)
+		err := vscw.wr.SetSourceShards(shortCtx, vscw.destinationKeyspace, vscw.destinationShard, []*topodatapb.TabletAlias{vscw.sourceAlias}, vscw.tables)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("Failed to set source shards: %v", err)

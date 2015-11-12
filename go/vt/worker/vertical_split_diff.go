@@ -19,8 +19,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // VerticalSplitDiffWorker executes a diff between a destination shard and its
@@ -42,12 +42,12 @@ type VerticalSplitDiffWorker struct {
 	shardInfo    *topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAlias      *pb.TabletAlias
-	destinationAlias *pb.TabletAlias
+	sourceAlias      *topodatapb.TabletAlias
+	destinationAlias *topodatapb.TabletAlias
 
 	// populated during WorkerStateDiff
-	sourceSchemaDefinition      *pbt.SchemaDefinition
-	destinationSchemaDefinition *pbt.SchemaDefinition
+	sourceSchemaDefinition      *tabletmanagerdatapb.SchemaDefinition
+	destinationSchemaDefinition *tabletmanagerdatapb.SchemaDefinition
 }
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
@@ -246,7 +246,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 
 	// 2 - stop the source tablet at a binlog position
 	//     higher than the destination master
-	stopPositionList := make([]*pbt.BlpPosition, 1)
+	stopPositionList := make([]*tabletmanagerdatapb.BlpPosition, 1)
 	ss := vsdw.shardInfo.SourceShards[0]
 	// find where we should be stopping
 	blpPos := tmutils.FindBlpPositionByID(blpPositionList, ss.Uid)
@@ -268,7 +268,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	if err != nil {
 		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), blpPos.Position, err)
 	}
-	stopPositionList[0] = &pbt.BlpPosition{
+	stopPositionList[0] = &tabletmanagerdatapb.BlpPosition{
 		Uid:      ss.Uid,
 		Position: stoppedAt,
 	}
@@ -280,7 +280,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), err)
 	}
-	action.TabletType = pb.TabletType_SPARE
+	action.TabletType = topodatapb.TabletType_SPARE
 
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
@@ -312,7 +312,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(vsdw.destinationAlias), err)
 	}
-	action.TabletType = pb.TabletType_SPARE
+	action.TabletType = topodatapb.TabletType_SPARE
 
 	// 5 - restart filtered replication on destination master
 	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias))
@@ -378,7 +378,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	}
 
 	// Remove the tables we don't need from the source schema
-	newSourceTableDefinitions := make([]*pbt.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
+	newSourceTableDefinitions := make([]*tabletmanagerdatapb.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
 	for _, tableDefinition := range vsdw.sourceSchemaDefinition.TableDefinitions {
 		found := false
 		for _, tableRegexp := range tableRegexps {
@@ -410,7 +410,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range vsdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition *pbt.TableDefinition) {
+		go func(tableDefinition *tabletmanagerdatapb.TableDefinition) {
 			defer wg.Done()
 			sem.Acquire()
 			defer sem.Release()

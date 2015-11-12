@@ -9,7 +9,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func testVersionedObjectCache(t *testing.T, voc *VersionedObjectCache, vo VersionedObject, expectedVO VersionedObject) {
@@ -168,10 +168,10 @@ func TestKnownCellsCache(t *testing.T) {
 func TestKeyspacesCache(t *testing.T) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace(ctx, "ks1", &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateKeyspace(ctx, "ks2", &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 	kc := newKeyspacesCache(ts)
@@ -186,12 +186,12 @@ func TestKeyspacesCache(t *testing.T) {
 func TestKeyspaceCache(t *testing.T) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace(ctx, "ks1", &pb.Keyspace{
+	if err := ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
 		ShardingColumnName: "sharding_key",
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateKeyspace(ctx, "ks2", &pb.Keyspace{
+	if err := ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{
 		SplitShardCount: 10,
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
@@ -201,7 +201,7 @@ func TestKeyspaceCache(t *testing.T) {
 
 	expectedK := Keyspace{
 		KeyspaceName: "ks1",
-		Keyspace: &pb.Keyspace{
+		Keyspace: &topodatapb.Keyspace{
 			ShardingColumnName: "sharding_key",
 		},
 	}
@@ -210,7 +210,7 @@ func TestKeyspaceCache(t *testing.T) {
 	k = Keyspace{}
 	expectedK = Keyspace{
 		KeyspaceName: "ks2",
-		Keyspace: &pb.Keyspace{
+		Keyspace: &topodatapb.Keyspace{
 			SplitShardCount: 10,
 		},
 	}
@@ -220,18 +220,18 @@ func TestKeyspaceCache(t *testing.T) {
 func TestShardNamesCache(t *testing.T) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace(ctx, "ks1", &pb.Keyspace{
+	if err := ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
 		ShardingColumnName: "sharding_key",
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.Impl.CreateShard(ctx, "ks1", "s1", &pb.Shard{
+	if err := ts.Impl.CreateShard(ctx, "ks1", "s1", &topodatapb.Shard{
 		Cells: []string{"cell1", "cell2"},
 	}); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	if err := ts.Impl.CreateShard(ctx, "ks1", "s2", &pb.Shard{
-		MasterAlias: &pb.TabletAlias{
+	if err := ts.Impl.CreateShard(ctx, "ks1", "s2", &topodatapb.Shard{
+		MasterAlias: &topodatapb.TabletAlias{
 			Cell: "cell1",
 			Uid:  12,
 		},
@@ -251,18 +251,18 @@ func TestShardNamesCache(t *testing.T) {
 func TestShardCache(t *testing.T) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace(ctx, "ks1", &pb.Keyspace{
+	if err := ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
 		ShardingColumnName: "sharding_key",
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.Impl.CreateShard(ctx, "ks1", "s1", &pb.Shard{
+	if err := ts.Impl.CreateShard(ctx, "ks1", "s1", &topodatapb.Shard{
 		Cells: []string{"cell1", "cell2"},
 	}); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	if err := ts.Impl.CreateShard(ctx, "ks1", "s2", &pb.Shard{
-		MasterAlias: &pb.TabletAlias{
+	if err := ts.Impl.CreateShard(ctx, "ks1", "s2", &topodatapb.Shard{
+		MasterAlias: &topodatapb.TabletAlias{
 			Cell: "cell1",
 			Uid:  12,
 		},
@@ -275,7 +275,7 @@ func TestShardCache(t *testing.T) {
 	expectedS := Shard{
 		KeyspaceName: "ks1",
 		ShardName:    "s1",
-		Shard: &pb.Shard{
+		Shard: &topodatapb.Shard{
 			Cells: []string{"cell1", "cell2"},
 		},
 	}
@@ -285,8 +285,8 @@ func TestShardCache(t *testing.T) {
 	expectedS = Shard{
 		KeyspaceName: "ks1",
 		ShardName:    "s2",
-		Shard: &pb.Shard{
-			MasterAlias: &pb.TabletAlias{
+		Shard: &topodatapb.Shard{
+			MasterAlias: &topodatapb.TabletAlias{
 				Cell: "cell1",
 				Uid:  12,
 			},
@@ -298,16 +298,16 @@ func TestShardCache(t *testing.T) {
 func TestCellShardTabletsCache(t *testing.T) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.UpdateShardReplicationFields(ctx, "cell1", "ks1", "s1", func(sr *pb.ShardReplication) error {
-		sr.Nodes = []*pb.ShardReplication_Node{
-			&pb.ShardReplication_Node{
-				TabletAlias: &pb.TabletAlias{
+	if err := ts.UpdateShardReplicationFields(ctx, "cell1", "ks1", "s1", func(sr *topodatapb.ShardReplication) error {
+		sr.Nodes = []*topodatapb.ShardReplication_Node{
+			&topodatapb.ShardReplication_Node{
+				TabletAlias: &topodatapb.TabletAlias{
 					Cell: "cell1",
 					Uid:  12,
 				},
 			},
-			&pb.ShardReplication_Node{
-				TabletAlias: &pb.TabletAlias{
+			&topodatapb.ShardReplication_Node{
+				TabletAlias: &topodatapb.TabletAlias{
 					Cell: "cell1",
 					Uid:  13,
 				},
@@ -324,12 +324,12 @@ func TestCellShardTabletsCache(t *testing.T) {
 		Cell:         "cell1",
 		KeyspaceName: "ks1",
 		ShardName:    "s1",
-		TabletAliases: []*pb.TabletAlias{
-			&pb.TabletAlias{
+		TabletAliases: []*topodatapb.TabletAlias{
+			&topodatapb.TabletAlias{
 				Cell: "cell1",
 				Uid:  12,
 			},
-			&pb.TabletAlias{
+			&topodatapb.TabletAlias{
 				Cell: "cell1",
 				Uid:  13,
 			},

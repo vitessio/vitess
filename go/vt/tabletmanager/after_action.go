@@ -22,7 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -34,7 +34,7 @@ var (
 const blacklistQueryRules string = "BlacklistQueryRules"
 
 // loadBlacklistRules loads and builds the blacklist query rules
-func (agent *ActionAgent) loadBlacklistRules(tablet *pbt.Tablet, blacklistedTables []string) (err error) {
+func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklistedTables []string) (err error) {
 	blacklistRules := tabletserver.NewQueryRules()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
@@ -57,11 +57,11 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *pbt.Tablet, blacklistedTabl
 	return nil
 }
 
-func (agent *ActionAgent) allowQueries(tabletType pbt.TabletType) error {
+func (agent *ActionAgent) allowQueries(tabletType topodatapb.TabletType) error {
 	return agent.QueryServiceControl.SetServingType(tabletType, true)
 }
 
-func (agent *ActionAgent) disallowQueries(tabletType pbt.TabletType, reason string) error {
+func (agent *ActionAgent) disallowQueries(tabletType topodatapb.TabletType, reason string) error {
 	log.Infof("Agent is going to disallow queries, reason: %v", reason)
 
 	return agent.QueryServiceControl.SetServingType(tabletType, false)
@@ -132,7 +132,7 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 
 // updateState will use the provided tablet record as a base, the current
 // tablet record as the new one, run changeCallback, and dispatch the event.
-func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pbt.Tablet, reason string) error {
+func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topodatapb.Tablet, reason string) error {
 	agent.mutex.Lock()
 	newTablet := agent._tablet.Tablet
 	agent.mutex.Unlock()
@@ -162,7 +162,7 @@ func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pbt.Tablet
 // It owns starting and stopping the update stream service.
 //
 // It owns reading the TabletControl for the current tablet, and storing it.
-func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *pbt.Tablet) error {
+func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("ActionAgent.changeCallback")
 	defer span.Finish()
@@ -172,7 +172,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
 	var shardInfo *topo.ShardInfo
-	var tabletControl *pbt.Shard_TabletControl
+	var tabletControl *topodatapb.Shard_TabletControl
 	var err error
 	var disallowQueryReason string
 	var blacklistedTables []string
@@ -183,7 +183,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 			updateBlacklistedTables = false
 		} else {
-			if newTablet.Type == pbt.TabletType_MASTER {
+			if newTablet.Type == topodatapb.TabletType_MASTER {
 				if len(shardInfo.SourceShards) > 0 {
 					allowQuery = false
 					disallowQueryReason = "master tablet with filtered replication on"
@@ -236,7 +236,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 
 	// See if we need to start or stop any binlog player
 	if agent.BinlogPlayerMap != nil {
-		if newTablet.Type == pbt.TabletType_MASTER {
+		if newTablet.Type == topodatapb.TabletType_MASTER {
 			// Read the keyspace on masters to get
 			// ShardingColumnType, for binlog replication,
 			// only if source shards are set.

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	tpb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestFilterByReplicationLag(t *testing.T) {
@@ -16,12 +16,12 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 	// 1 serving endpoint
 	eps1 := &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 1},
+		EndPoint: &topodatapb.EndPoint{Uid: 1},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{},
 	}
 	eps2 := &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 2},
+		EndPoint: &topodatapb.EndPoint{Uid: 2},
 		Serving:  false,
 		Stats:    &querypb.RealtimeStats{},
 	}
@@ -34,22 +34,22 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 	// lags of (1s, 1s, 1s, 30s)
 	eps1 = &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 1},
+		EndPoint: &topodatapb.EndPoint{Uid: 1},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
 	eps2 = &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 2},
+		EndPoint: &topodatapb.EndPoint{Uid: 2},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
 	eps3 := &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 3},
+		EndPoint: &topodatapb.EndPoint{Uid: 3},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
 	eps4 := &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 4},
+		EndPoint: &topodatapb.EndPoint{Uid: 4},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 30},
 	}
@@ -59,22 +59,22 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 	// lags of (5s, 10s, 15s, 120s)
 	eps1 = &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 1},
+		EndPoint: &topodatapb.EndPoint{Uid: 1},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 5},
 	}
 	eps2 = &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 2},
+		EndPoint: &topodatapb.EndPoint{Uid: 2},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 10},
 	}
 	eps3 = &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 3},
+		EndPoint: &topodatapb.EndPoint{Uid: 3},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 15},
 	}
 	eps4 = &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 4},
+		EndPoint: &topodatapb.EndPoint{Uid: 4},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 120},
 	}
@@ -84,22 +84,22 @@ func TestFilterByReplicationLag(t *testing.T) {
 	}
 	// lags of (30m, 35m, 40m, 45m)
 	eps1 = &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 1},
+		EndPoint: &topodatapb.EndPoint{Uid: 1},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 30 * 60},
 	}
 	eps2 = &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 2},
+		EndPoint: &topodatapb.EndPoint{Uid: 2},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 35 * 60},
 	}
 	eps3 = &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 3},
+		EndPoint: &topodatapb.EndPoint{Uid: 3},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 40 * 60},
 	}
 	eps4 = &EndPointStats{
-		EndPoint: &tpb.EndPoint{Uid: 4},
+		EndPoint: &topodatapb.EndPoint{Uid: 4},
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 45 * 60},
 	}

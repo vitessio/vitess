@@ -22,7 +22,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // QueryResultReader will stream rows towards the output channel.
@@ -35,7 +35,7 @@ type QueryResultReader struct {
 
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
 // the provided tablet / sql query
-func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, sql string) (*QueryResultReader, error) {
+func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, sql string) (*QueryResultReader, error) {
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	tablet, err := ts.GetTablet(shortCtx, tabletAlias)
 	cancel()
@@ -49,7 +49,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 	}
 
 	// use sessionId for now
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, tablet.Keyspace, tablet.Shard, pb.TabletType_UNKNOWN, *remoteActionsTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, tablet.Keyspace, tablet.Shard, topodatapb.TabletType_UNKNOWN, *remoteActionsTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func uint64FromKeyspaceID(keyspaceID []byte) string {
 // TableScan returns a QueryResultReader that gets all the rows from a
 // table, ordered by Primary Key. The returned columns are ordered
 // with the Primary Key columns in front.
-func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition) (*QueryResultReader, error) {
+func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition) (*QueryResultReader, error) {
 	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
@@ -114,11 +114,11 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *pb.KeyRange, keyspaceIDType pb.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceIDType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
 	if keyRange != nil {
 		switch keyspaceIDType {
-		case pb.KeyspaceIdType_UINT64:
+		case topodatapb.KeyspaceIdType_UINT64:
 			if len(keyRange.Start) > 0 {
 				if len(keyRange.End) > 0 {
 					// have start & end
@@ -133,7 +133,7 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 					where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceID(keyRange.End))
 				}
 			}
-		case pb.KeyspaceIdType_BYTES:
+		case topodatapb.KeyspaceIdType_BYTES:
 			if len(keyRange.Start) > 0 {
 				if len(keyRange.End) > 0 {
 					// have start & end

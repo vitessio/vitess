@@ -22,7 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -48,7 +48,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	}
 
 	// figure out our default target type
-	var tabletType pb.TabletType
+	var tabletType topodatapb.TabletType
 	if *initTabletType != "" {
 		if *targetTabletType != "" {
 			log.Fatalf("cannot specify both target_tablet_type and init_tablet_type parameters (as they might conflict)")
@@ -61,20 +61,20 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			log.Fatalf("Invalid init tablet type %v: %v", *initTabletType, err)
 		}
 
-		if tabletType == pb.TabletType_MASTER {
+		if tabletType == topodatapb.TabletType_MASTER {
 			// We disallow MASTER, so we don't have to change
 			// shard.MasterAlias, and deal with the corner cases.
 			log.Fatalf("init_tablet_type cannot be %v", tabletType)
 		}
 
 	} else if *targetTabletType != "" {
-		if strings.ToUpper(*targetTabletType) == pb.TabletType_name[int32(pb.TabletType_MASTER)] {
-			log.Fatalf("target_tablet_type cannot be '%v'. Use '%v' instead.", tabletType, pb.TabletType_REPLICA)
+		if strings.ToUpper(*targetTabletType) == topodatapb.TabletType_name[int32(topodatapb.TabletType_MASTER)] {
+			log.Fatalf("target_tablet_type cannot be '%v'. Use '%v' instead.", tabletType, topodatapb.TabletType_REPLICA)
 		}
 
 		// use spare, the healthcheck will turn us into what
 		// we need to be eventually
-		tabletType = pb.TabletType_SPARE
+		tabletType = topodatapb.TabletType_SPARE
 
 	} else {
 		log.Fatalf("if init tablet is enabled, one of init_tablet_type or target_tablet_type needs to be specified")
@@ -105,7 +105,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		// we are the current master for this shard (probably
 		// means the master tablet process was just restarted),
 		// so InitTablet as master.
-		tabletType = pb.TabletType_MASTER
+		tabletType = topodatapb.TabletType_MASTER
 	}
 
 	// See if we need to add the tablet's cell to the shard's cell
@@ -153,7 +153,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	}
 
 	// create and populate tablet record
-	tablet := &pb.Tablet{
+	tablet := &topodatapb.Tablet{
 		Alias:          agent.TabletAlias,
 		Hostname:       hostname,
 		PortMap:        make(map[string]int32),

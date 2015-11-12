@@ -18,7 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // streamHealthTabletServer is a local QueryService implementation to support the tests
@@ -82,14 +82,14 @@ func TestTabletData(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
+	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
 		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	tablet1.StartActionLoop(t, wr)
 	defer tablet1.StopActionLoop(t)
 	shsq := newStreamHealthTabletServer(t)

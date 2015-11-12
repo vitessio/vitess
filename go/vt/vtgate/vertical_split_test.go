@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
@@ -23,7 +23,7 @@ import (
 func TestExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, false, func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
-		return stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, pb.TabletType_RDONLY, nil, false)
+		return stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, topodatapb.TabletType_RDONLY, nil, false)
 	})
 }
 
@@ -37,7 +37,7 @@ func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 			Shards:        shards,
 		}}
 		scatterRequest := boundShardQueriesToScatterBatchRequest(queries)
-		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, pb.TabletType_RDONLY, false, nil)
+		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_RDONLY, false, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -49,7 +49,7 @@ func TestStreamExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, true, func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
 		qr := new(sqltypes.Result)
-		err := stc.StreamExecute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, pb.TabletType_RDONLY, func(r *sqltypes.Result) error {
+		err := stc.StreamExecute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, topodatapb.TabletType_RDONLY, func(r *sqltypes.Result) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -69,12 +69,12 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   KsTestUnshardedServedFrom,
 				Shard:      "0",
-				TabletType: pb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
 		}},
 	})
-	_, err := stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, []string{"0"}, pb.TabletType_MASTER, session, false)
+	_, err := stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, []string{"0"}, topodatapb.TabletType_MASTER, session, false)
 	want := "shard, host: TestUnshardedServedFrom.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want '%v', got '%v'", want, err)

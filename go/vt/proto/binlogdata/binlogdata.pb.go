@@ -24,7 +24,7 @@ package binlogdata
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import querypb "github.com/youtube/vitess/go/vt/proto/query"
+import query "github.com/youtube/vitess/go/vt/proto/query"
 import topodata "github.com/youtube/vitess/go/vt/proto/topodata"
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -153,9 +153,9 @@ func (m *BinlogTransaction_Statement) GetCharset() *Charset {
 type StreamEvent struct {
 	Category StreamEvent_Category `protobuf:"varint,1,opt,name=category,enum=binlogdata.StreamEvent_Category" json:"category,omitempty"`
 	// table_name, primary_key_fields and primary_key_values are set for SE_DML
-	TableName        string           `protobuf:"bytes,2,opt,name=table_name" json:"table_name,omitempty"`
-	PrimaryKeyFields []*querypb.Field `protobuf:"bytes,3,rep,name=primary_key_fields" json:"primary_key_fields,omitempty"`
-	PrimaryKeyValues []*querypb.Row   `protobuf:"bytes,4,rep,name=primary_key_values" json:"primary_key_values,omitempty"`
+	TableName        string         `protobuf:"bytes,2,opt,name=table_name" json:"table_name,omitempty"`
+	PrimaryKeyFields []*query.Field `protobuf:"bytes,3,rep,name=primary_key_fields" json:"primary_key_fields,omitempty"`
+	PrimaryKeyValues []*query.Row   `protobuf:"bytes,4,rep,name=primary_key_values" json:"primary_key_values,omitempty"`
 	// sql is set for SE_DDL or SE_ERR
 	Sql string `protobuf:"bytes,5,opt,name=sql" json:"sql,omitempty"`
 	// timestamp is set for SE_DML, SE_DDL or SE_ERR
@@ -168,14 +168,14 @@ func (m *StreamEvent) Reset()         { *m = StreamEvent{} }
 func (m *StreamEvent) String() string { return proto.CompactTextString(m) }
 func (*StreamEvent) ProtoMessage()    {}
 
-func (m *StreamEvent) GetPrimaryKeyFields() []*querypb.Field {
+func (m *StreamEvent) GetPrimaryKeyFields() []*query.Field {
 	if m != nil {
 		return m.PrimaryKeyFields
 	}
 	return nil
 }
 
-func (m *StreamEvent) GetPrimaryKeyValues() []*querypb.Row {
+func (m *StreamEvent) GetPrimaryKeyValues() []*query.Row {
 	if m != nil {
 		return m.PrimaryKeyValues
 	}

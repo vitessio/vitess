@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // As with all distributed systems, things can skew. These functions
@@ -80,7 +80,7 @@ func (wr *Wrangler) validateAllTablets(ctx context.Context, wg *sync.WaitGroup, 
 
 		for _, alias := range aliases {
 			wg.Add(1)
-			go func(alias *pb.TabletAlias) {
+			go func(alias *topodatapb.TabletAlias) {
 				defer wg.Done()
 				if err := topo.Validate(ctx, wr.ts, alias); err != nil {
 					results <- fmt.Errorf("Validate(%v) failed: %v", topoproto.TabletAliasString(alias), err)
@@ -125,14 +125,14 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 
 	tabletMap, _ := wr.ts.GetTabletMap(ctx, aliases)
 
-	var masterAlias *pb.TabletAlias
+	var masterAlias *topodatapb.TabletAlias
 	for _, alias := range aliases {
 		tabletInfo, ok := tabletMap[*alias]
 		if !ok {
 			results <- fmt.Errorf("tablet %v not found in map", topoproto.TabletAliasString(alias))
 			continue
 		}
-		if tabletInfo.Type == pb.TabletType_MASTER {
+		if tabletInfo.Type == topodatapb.TabletType_MASTER {
 			if masterAlias != nil {
 				results <- fmt.Errorf("shard %v/%v already has master %v but found other master %v", keyspace, shard, topoproto.TabletAliasString(masterAlias), topoproto.TabletAliasString(alias))
 			} else {
@@ -149,7 +149,7 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 
 	for _, alias := range aliases {
 		wg.Add(1)
-		go func(alias *pb.TabletAlias) {
+		go func(alias *topodatapb.TabletAlias) {
 			defer wg.Done()
 			if err := topo.Validate(ctx, wr.ts, alias); err != nil {
 				results <- fmt.Errorf("Validate(%v) failed: %v", topoproto.TabletAliasString(alias), err)
@@ -177,7 +177,7 @@ func normalizeIP(ip string) string {
 	return ip
 }
 
-func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[pb.TabletAlias]*topo.TabletInfo, results chan<- error) {
+func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, results chan<- error) {
 	masterTablet, ok := tabletMap[*shardInfo.MasterAlias]
 	if !ok {
 		results <- fmt.Errorf("master %v not in tablet map", topoproto.TabletAliasString(shardInfo.MasterAlias))
@@ -194,7 +194,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 		return
 	}
 
-	tabletIPMap := make(map[string]*pb.Tablet)
+	tabletIPMap := make(map[string]*topodatapb.Tablet)
 	slaveIPMap := make(map[string]bool)
 	for _, tablet := range tabletMap {
 		tabletIPMap[normalizeIP(tablet.Ip)] = tablet.Tablet
@@ -220,10 +220,10 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 	}
 }
 
-func (wr *Wrangler) pingTablets(ctx context.Context, tabletMap map[pb.TabletAlias]*topo.TabletInfo, wg *sync.WaitGroup, results chan<- error) {
+func (wr *Wrangler) pingTablets(ctx context.Context, tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, wg *sync.WaitGroup, results chan<- error) {
 	for tabletAlias, tabletInfo := range tabletMap {
 		wg.Add(1)
-		go func(tabletAlias pb.TabletAlias, tabletInfo *topo.TabletInfo) {
+		go func(tabletAlias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
 			defer wg.Done()
 
 			if err := wr.tmc.Ping(ctx, tabletInfo); err != nil {

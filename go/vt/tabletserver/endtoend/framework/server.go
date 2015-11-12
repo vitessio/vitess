@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/vttest"
 )
@@ -63,7 +63,7 @@ func StartServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.Sch
 	Target = querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
-		TabletType: topodata.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_MASTER,
 	}
 
 	Server = tabletserver.NewTabletServer(BaseConfig)

@@ -21,7 +21,7 @@ import (
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
@@ -51,7 +51,7 @@ func TestVTGateExecute(t *testing.T) {
 	err := rpcVTGate.Execute(context.Background(),
 		"select * from t1",
 		nil,
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		qr)
@@ -75,7 +75,7 @@ func TestVTGateExecute(t *testing.T) {
 	rpcVTGate.Execute(context.Background(),
 		"select * from t1",
 		nil,
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		session,
 		false,
 		qr)
@@ -85,7 +85,7 @@ func TestVTGateExecute(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   KsTestUnsharded,
 				Shard:      "0",
-				TabletType: pb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
 		}},
@@ -104,7 +104,7 @@ func TestVTGateExecute(t *testing.T) {
 	rpcVTGate.Execute(context.Background(),
 		"select * from t1",
 		nil,
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		session,
 		false,
 		qr)
@@ -121,7 +121,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 		nil,
 		"TestVTGateExecuteShards",
 		[]string{"0"},
-		pb.TabletType_REPLICA,
+		topodatapb.TabletType_REPLICA,
 		nil,
 		false,
 		qr)
@@ -147,7 +147,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 		nil,
 		"TestVTGateExecuteShards",
 		[]string{"0"},
-		pb.TabletType_REPLICA,
+		topodatapb.TabletType_REPLICA,
 		session,
 		false,
 		qr)
@@ -157,7 +157,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteShards",
 				Shard:      "0",
-				TabletType: pb.TabletType_REPLICA,
+				TabletType: topodatapb.TabletType_REPLICA,
 			},
 			TransactionId: 1,
 		}},
@@ -178,7 +178,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 		nil,
 		"TestVTGateExecuteShards",
 		[]string{"0"},
-		pb.TabletType_REPLICA,
+		topodatapb.TabletType_REPLICA,
 		session,
 		false,
 		qr)
@@ -205,7 +205,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		nil,
 		"TestVTGateExecuteKeyspaceIds",
 		[][]byte{[]byte{0x10}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		qr)
@@ -234,7 +234,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		nil,
 		"TestVTGateExecuteKeyspaceIds",
 		[][]byte{[]byte{0x10}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		session,
 		false,
 		qr)
@@ -244,7 +244,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteKeyspaceIds",
 				Shard:      "-20",
-				TabletType: pb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
 		}},
@@ -262,7 +262,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		nil,
 		"TestVTGateExecuteKeyspaceIds",
 		[][]byte{[]byte{0x10}, []byte{0x30}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		session,
 		false,
 		qr)
@@ -283,8 +283,8 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]*pb.KeyRange{&pb.KeyRange{End: []byte{0x20}}},
-		pb.TabletType_MASTER,
+		[]*topodatapb.KeyRange{&topodatapb.KeyRange{End: []byte{0x20}}},
+		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		qr)
@@ -312,8 +312,8 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]*pb.KeyRange{&pb.KeyRange{End: []byte{0x20}}},
-		pb.TabletType_MASTER,
+		[]*topodatapb.KeyRange{&topodatapb.KeyRange{End: []byte{0x20}}},
+		topodatapb.TabletType_MASTER,
 		session,
 		false,
 		qr)
@@ -326,7 +326,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteKeyRanges",
 				Shard:      "-20",
-				TabletType: pb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
 		}},
@@ -342,8 +342,8 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	rpcVTGate.ExecuteKeyRanges(context.Background(), "query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x30}}},
-		pb.TabletType_MASTER,
+		[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x30}}},
+		topodatapb.TabletType_MASTER,
 		nil,
 		false, qr)
 	if qr.Result.RowsAffected != 2 {
@@ -371,7 +371,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 				KeyspaceId: []byte{0x10},
 			},
 		},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		qr)
@@ -407,7 +407,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 				KeyspaceId: []byte{0x10},
 			},
 		},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		session,
 		false,
 		qr)
@@ -417,7 +417,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteEntityIds",
 				Shard:      "-20",
-				TabletType: pb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_MASTER,
 			},
 			TransactionId: 1,
 		}},
@@ -447,7 +447,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 				KeyspaceId: []byte{0x30},
 			},
 		},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		qr)
@@ -473,7 +473,7 @@ func TestVTGateExecuteBatchShards(t *testing.T) {
 			Keyspace:      "TestVTGateExecuteBatchShards",
 			Shards:        []string{"-20", "20-40"},
 		}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		false,
 		nil,
 		qrl)
@@ -504,7 +504,7 @@ func TestVTGateExecuteBatchShards(t *testing.T) {
 			Keyspace:      "TestVTGateExecuteBatchShards",
 			Shards:        []string{"-20", "20-40"},
 		}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		false,
 		session,
 		qrl)
@@ -532,7 +532,7 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
 			KeyspaceIds:   [][]byte{kid10, kid30},
 		}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		false,
 		nil,
 		qrl)
@@ -563,7 +563,7 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
 			KeyspaceIds:   [][]byte{kid10, kid30},
 		}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		false,
 		session,
 		qrl)
@@ -580,7 +580,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	err := rpcVTGate.StreamExecute(context.Background(),
 		"select * from t1",
 		nil,
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
 			return nil
@@ -609,7 +609,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		nil,
 		"TestVTGateStreamExecuteKeyspaceIds",
 		[][]byte{[]byte{0x10}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
 			return nil
@@ -631,7 +631,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		nil,
 		"TestVTGateStreamExecuteKeyspaceIds",
 		[][]byte{[]byte{0x10}, []byte{0x15}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
 			return nil
@@ -651,7 +651,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		nil,
 		"TestVTGateStreamExecuteKeyspaceIds",
 		[][]byte{[]byte{0x10}, []byte{0x30}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
 			return nil
@@ -673,8 +673,8 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyRanges",
-		[]*pb.KeyRange{&pb.KeyRange{End: []byte{0x20}}},
-		pb.TabletType_MASTER,
+		[]*topodatapb.KeyRange{&topodatapb.KeyRange{End: []byte{0x20}}},
+		topodatapb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
 			return nil
@@ -694,8 +694,8 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyRanges",
-		[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x40}}},
-		pb.TabletType_MASTER,
+		[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x40}}},
+		topodatapb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
 			return nil
@@ -716,7 +716,7 @@ func TestVTGateStreamExecuteShards(t *testing.T) {
 		nil,
 		"TestVTGateStreamExecuteShards",
 		[]string{"0"},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
 			return nil
@@ -842,7 +842,7 @@ func TestAnnotatingExecuteKeyspaceIds(t *testing.T) {
 		nil,
 		keyspace,
 		[][]byte{[]byte{0x10}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		&proto.QueryResult{})
@@ -862,7 +862,7 @@ func TestAnnotatingExecuteKeyspaceIdsMultipleIds(t *testing.T) {
 		nil,
 		keyspace,
 		[][]byte{[]byte{0x10}, []byte{0x15}},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		&proto.QueryResult{})
@@ -883,8 +883,8 @@ func TestAnnotatingExecuteKeyRanges(t *testing.T) {
 		"UPDATE table SET col1=1 WHERE col2>3;",
 		nil,
 		keyspace,
-		[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x40}}},
-		pb.TabletType_MASTER,
+		[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x40}}},
+		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		&proto.QueryResult{})
@@ -918,7 +918,7 @@ func TestAnnotatingExecuteEntityIds(t *testing.T) {
 				KeyspaceId: []byte{0x25}, // Second shard.
 			},
 		},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		&proto.QueryResult{})
@@ -938,7 +938,7 @@ func TestAnnotatingExecuteShards(t *testing.T) {
 		nil,
 		keyspace,
 		[]string{"20-40"},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		&proto.QueryResult{})
@@ -970,7 +970,7 @@ func TestAnnotatingExecuteBatchKeyspaceIds(t *testing.T) {
 				KeyspaceIds: [][]byte{[]byte{0x25}},
 			},
 		},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		false,
 		nil,
 		&proto.QueryResultList{})
@@ -1002,7 +1002,7 @@ func TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds(t *testing.T) {
 				},
 			},
 		},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		false,
 		nil,
 		&proto.QueryResultList{})
@@ -1043,7 +1043,7 @@ func TestAnnotatingExecuteBatchShards(t *testing.T) {
 				Shards:   []string{"20-40"},
 			},
 		},
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		false,
 		nil,
 		&proto.QueryResultList{})

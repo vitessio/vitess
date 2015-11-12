@@ -13,8 +13,8 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayertest"
 	"github.com/youtube/vitess/go/vt/binlog/grpcbinlogstreamer"
 
-	pbs "github.com/youtube/vitess/go/vt/proto/binlogservice"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	binlogservicepb "github.com/youtube/vitess/go/vt/proto/binlogservice"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // the test here creates a fake server implementation, a fake client
@@ -31,14 +31,14 @@ func TestGRPCBinlogStreamer(t *testing.T) {
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
 	fakeUpdateStream := binlogplayertest.NewFakeBinlogStreamer(t)
-	pbs.RegisterUpdateStreamServer(server, grpcbinlogstreamer.New(fakeUpdateStream))
+	binlogservicepb.RegisterUpdateStreamServer(server, grpcbinlogstreamer.New(fakeUpdateStream))
 	go server.Serve(listener)
 
 	// Create a GRPC client to talk to the fake tablet
 	c := &client{}
 
 	// and send it to the test suite
-	binlogplayertest.Run(t, c, &pbt.EndPoint{
+	binlogplayertest.Run(t, c, &topodatapb.EndPoint{
 		Host: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),

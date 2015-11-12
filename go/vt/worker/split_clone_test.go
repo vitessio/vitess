@@ -27,7 +27,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // testQueryService is a local QueryService implementation to support the tests
@@ -248,29 +248,29 @@ func testSplitClone(t *testing.T, strategy string) {
 	ctx := context.Background()
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &pbt.Keyspace{
+	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
 		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
-		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
 	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
-		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	rightMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 20,
-		pbt.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 	rightRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 21,
-		pbt.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, rightMaster, rightRdonly} {
 		ft.StartActionLoop(t, wi.wr)
@@ -281,7 +281,7 @@ func testSplitClone(t *testing.T, strategy string) {
 	if err := ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
-	if err := wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", pbt.KeyspaceIdType_UINT64, 4, false); err != nil {
+	if err := wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, 4, false); err != nil {
 		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
 	if err := wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil, true); err != nil {

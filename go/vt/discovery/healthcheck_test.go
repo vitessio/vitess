@@ -9,7 +9,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -44,7 +44,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// one endpoint after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
-		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving: true,
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
@@ -52,7 +52,7 @@ func TestHealthCheck(t *testing.T) {
 	want := &EndPointStats{
 		EndPoint: ep,
 		Cell:     "cell",
-		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Up:       true,
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
@@ -71,11 +71,11 @@ func TestHealthCheck(t *testing.T) {
 	epcsl := hc.CacheStatus()
 	epcslWant := EndPointsCacheStatusList{{
 		Cell:   "cell",
-		Target: &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+		Target: &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		EndPointsStats: EndPointStatsList{{
 			EndPoint: ep,
 			Cell:     "cell",
-			Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_MASTER},
+			Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 			Up:       true,
 			Serving:  true,
 			Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
@@ -88,7 +88,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// TabletType changed
 	shr = &querypb.StreamHealthResponse{
-		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving: true,
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
@@ -96,7 +96,7 @@ func TestHealthCheck(t *testing.T) {
 	want = &EndPointStats{
 		EndPoint: ep,
 		Cell:     "cell",
-		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:       true,
 		Serving:  true,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
@@ -108,14 +108,14 @@ func TestHealthCheck(t *testing.T) {
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
-	epsList = hc.GetEndPointStatsFromTarget("k", "s", pbt.TabletType_REPLICA)
+	epsList = hc.GetEndPointStatsFromTarget("k", "s", topodatapb.TabletType_REPLICA)
 	if len(epsList) != 1 || !reflect.DeepEqual(epsList[0], want) {
 		t.Errorf(`hc.GetEndPointStatsFromTarget("k", "s", REPLICA) = %+v; want %+v`, epsList, want)
 	}
 
 	// Serving & RealtimeStats changed
 	shr = &querypb.StreamHealthResponse{
-		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving: false,
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
@@ -123,7 +123,7 @@ func TestHealthCheck(t *testing.T) {
 	want = &EndPointStats{
 		EndPoint: ep,
 		Cell:     "cell",
-		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:       true,
 		Serving:  false,
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
@@ -138,7 +138,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// HealthError
 	shr = &querypb.StreamHealthResponse{
-		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving: true,
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
@@ -146,7 +146,7 @@ func TestHealthCheck(t *testing.T) {
 	want = &EndPointStats{
 		EndPoint: ep,
 		Cell:     "cell",
-		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:       true,
 		Serving:  false,
 		Stats:    &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
@@ -166,7 +166,7 @@ func TestHealthCheck(t *testing.T) {
 	want = &EndPointStats{
 		EndPoint: ep,
 		Cell:     "cell",
-		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:       false,
 		Serving:  false,
 		Stats:    &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
@@ -195,20 +195,20 @@ func (l *listener) StatsUpdate(eps *EndPointStats) {
 	l.output <- eps
 }
 
-func createFakeConn(endPoint *pbt.EndPoint, c chan *querypb.StreamHealthResponse) *fakeConn {
+func createFakeConn(endPoint *topodatapb.EndPoint, c chan *querypb.StreamHealthResponse) *fakeConn {
 	key := EndPointToMapKey(endPoint)
 	conn := &fakeConn{endPoint: endPoint, hcChan: c}
 	connMap[key] = conn
 	return conn
 }
 
-func discoveryDialer(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func discoveryDialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	key := EndPointToMapKey(endPoint)
 	return connMap[key], nil
 }
 
 type fakeConn struct {
-	endPoint *pbt.EndPoint
+	endPoint *topodatapb.EndPoint
 	hcChan   chan *querypb.StreamHealthResponse
 }
 
@@ -268,11 +268,11 @@ func (fc *fakeConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, spl
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (fc *fakeConn) SetTarget(keyspace, shard string, tabletType pbt.TabletType) error {
+func (fc *fakeConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (fc *fakeConn) EndPoint() *pbt.EndPoint {
+func (fc *fakeConn) EndPoint() *topodatapb.EndPoint {
 	return fc.endPoint
 }
 

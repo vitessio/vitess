@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func checkShardServedTypes(t *testing.T, ts topo.Server, shard string, expected int) {
@@ -39,35 +39,35 @@ func TestMigrateServedTypes(t *testing.T) {
 	defer vp.Close()
 
 	// create keyspace
-	if err := ts.CreateKeyspace(context.Background(), "ks", &pb.Keyspace{
+	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
 		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: pb.KeyspaceIdType_UINT64,
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
 	// create the source shard
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER, db,
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "ks", "0"))
-	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, pb.TabletType_REPLICA, db,
+	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "ks", "0"))
-	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, pb.TabletType_RDONLY, db,
+	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, topodatapb.TabletType_RDONLY, db,
 		TabletKeyspaceShard(t, "ks", "0"))
 
 	// create the first destination shard
-	dest1Master := NewFakeTablet(t, wr, "cell1", 20, pb.TabletType_MASTER, db,
+	dest1Master := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "ks", "-80"))
-	dest1Replica := NewFakeTablet(t, wr, "cell1", 21, pb.TabletType_REPLICA, db,
+	dest1Replica := NewFakeTablet(t, wr, "cell1", 21, topodatapb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "ks", "-80"))
-	dest1Rdonly := NewFakeTablet(t, wr, "cell1", 22, pb.TabletType_RDONLY, db,
+	dest1Rdonly := NewFakeTablet(t, wr, "cell1", 22, topodatapb.TabletType_RDONLY, db,
 		TabletKeyspaceShard(t, "ks", "-80"))
 
 	// create the second destination shard
-	dest2Master := NewFakeTablet(t, wr, "cell1", 30, pb.TabletType_MASTER, db,
+	dest2Master := NewFakeTablet(t, wr, "cell1", 30, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "ks", "80-"))
-	dest2Replica := NewFakeTablet(t, wr, "cell1", 31, pb.TabletType_REPLICA, db,
+	dest2Replica := NewFakeTablet(t, wr, "cell1", 31, topodatapb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "ks", "80-"))
-	dest2Rdonly := NewFakeTablet(t, wr, "cell1", 32, pb.TabletType_RDONLY, db,
+	dest2Rdonly := NewFakeTablet(t, wr, "cell1", 32, topodatapb.TabletType_RDONLY, db,
 		TabletKeyspaceShard(t, "ks", "80-"))
 
 	// double check the shards have the right served types

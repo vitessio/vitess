@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestKeyRangeToShardMap(t *testing.T) {
@@ -41,10 +41,10 @@ func TestKeyRangeToShardMap(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		var keyRange *pb.KeyRange
+		var keyRange *topodatapb.KeyRange
 		var err error
 		if testCase.keyRange == "" {
-			keyRange = &pb.KeyRange{}
+			keyRange = &topodatapb.KeyRange{}
 		} else {
 			krArray, err := key.ParseShardingSpec(testCase.keyRange)
 			if err != nil {
@@ -52,7 +52,7 @@ func TestKeyRangeToShardMap(t *testing.T) {
 			}
 			keyRange = krArray[0]
 		}
-		_, _, allShards, err := getKeyspaceShards(context.Background(), ts, "", testCase.keyspace, pb.TabletType_MASTER)
+		_, _, allShards, err := getKeyspaceShards(context.Background(), ts, "", testCase.keyspace, topodatapb.TabletType_MASTER)
 		gotShards, err := resolveKeyRangeToShards(allShards, keyRange)
 		if err != nil {
 			t.Errorf("want nil, got %v", err)
@@ -85,10 +85,10 @@ func TestMapExactShards(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		var keyRange *pb.KeyRange
+		var keyRange *topodatapb.KeyRange
 		var err error
 		if testCase.keyRange == "" {
-			keyRange = &pb.KeyRange{}
+			keyRange = &topodatapb.KeyRange{}
 		} else {
 			krArray, err := key.ParseShardingSpec(testCase.keyRange)
 			if err != nil {
@@ -96,7 +96,7 @@ func TestMapExactShards(t *testing.T) {
 			}
 			keyRange = krArray[0]
 		}
-		_, gotShards, err := mapExactShards(context.Background(), ts, "", testCase.keyspace, pb.TabletType_MASTER, keyRange)
+		_, gotShards, err := mapExactShards(context.Background(), ts, "", testCase.keyspace, topodatapb.TabletType_MASTER, keyRange)
 		if err != nil && err.Error() != testCase.err {
 			t.Errorf("gotShards: %v, want %s", err, testCase.err)
 		}
@@ -249,7 +249,7 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(context.Background(), ts, "", pb.TabletType_MASTER, testCase.idQueries)
+		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(context.Background(), ts, "", topodatapb.TabletType_MASTER, testCase.idQueries)
 		if err != nil {
 			t.Error(err)
 		}

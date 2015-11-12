@@ -31,12 +31,12 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // ConfigureTabletHook configures the right parameters for a hook
 // running locally on a tablet.
-func ConfigureTabletHook(hk *hook.Hook, tabletAlias *pb.TabletAlias) {
+func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 	if hk.ExtraEnv == nil {
 		hk.ExtraEnv = make(map[string]string, 1)
 	}
@@ -50,8 +50,8 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *pb.TabletAlias) {
 // - if health is nil, we don't touch the Tablet's Health record.
 // - if health is an empty map, we clear the Tablet's Health record.
 // - if health has values, we overwrite the Tablet's Health record.
-func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, newType pb.TabletType, health map[string]string) error {
-	return ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *pb.Tablet) error {
+func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, health map[string]string) error {
+	return ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if !topo.IsTrivialTypeChange(tablet.Type, newType) {
 			return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, tabletAlias)
 		}
@@ -71,7 +71,7 @@ func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias
 // DeleteTablet removes a tablet record from the topology:
 // - the replication data record if any
 // - the tablet record
-func DeleteTablet(ctx context.Context, ts topo.Server, tablet *pb.Tablet) error {
+func DeleteTablet(ctx context.Context, ts topo.Server, tablet *topodatapb.Tablet) error {
 	// try to remove replication data, no fatal if we fail
 	if err := topo.DeleteTabletReplicationData(ctx, ts, tablet); err != nil {
 		if err == topo.ErrNoNode {

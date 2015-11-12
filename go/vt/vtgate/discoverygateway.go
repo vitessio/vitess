@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/discovery"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -66,7 +66,7 @@ func (dg *discoveryGateway) InitializeConnections(ctx context.Context) error {
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (qr *sqltypes.Result, err error) {
+func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (qr *sqltypes.Result, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		qr, innerErr = conn.Execute2(ctx, query, bindVars, transactionID)
@@ -76,7 +76,7 @@ func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string,
 }
 
 // ExecuteBatch executes a group of queries for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (qrs *tproto.QueryResultList, err error) {
+func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (qrs *tproto.QueryResultList, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		qrs, innerErr = conn.ExecuteBatch2(ctx, queries, asTransaction, transactionID)
@@ -86,7 +86,7 @@ func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard st
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
+func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
 	var usedConn tabletconn.TabletConn
 	var erFunc tabletconn.ErrFunc
 	var results <-chan *sqltypes.Result
@@ -107,7 +107,7 @@ func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard s
 
 // Begin starts a transaction for the specified keyspace, shard, and tablet type.
 // It returns the transaction ID.
-func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard string, tabletType pbt.TabletType) (transactionID int64, err error) {
+func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType) (transactionID int64, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		transactionID, innerErr = conn.Begin2(ctx)
@@ -117,21 +117,21 @@ func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard st
 }
 
 // Commit commits the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) Commit(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, transactionID int64) error {
+func (dg *discoveryGateway) Commit(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
 	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		return conn.Commit2(ctx, transactionID)
 	}, transactionID, false)
 }
 
 // Rollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) Rollback(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, transactionID int64) error {
+func (dg *discoveryGateway) Rollback(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
 	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		return conn.Rollback2(ctx, transactionID)
 	}, transactionID, false)
 }
 
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) SplitQuery(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
+func (dg *discoveryGateway) SplitQuery(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		queries, innerErr = conn.SplitQuery(ctx, tproto.BoundQuery{
@@ -160,14 +160,14 @@ func (dg *discoveryGateway) StatsUpdate(*discovery.EndPointStats) {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard string, tabletType pbt.TabletType, action func(conn tabletconn.TabletConn) error, transactionID int64, isStreaming bool) error {
-	var endPointLastUsed *pbt.EndPoint
+func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, action func(conn tabletconn.TabletConn) error, transactionID int64, isStreaming bool) error {
+	var endPointLastUsed *topodatapb.EndPoint
 	var err error
 	inTransaction := (transactionID != 0)
 	invalidEndPoints := make(map[string]bool)
 
 	for i := 0; i < dg.retryCount+1; i++ {
-		var endPoint *pbt.EndPoint
+		var endPoint *topodatapb.EndPoint
 		endPoints := dg.getEndPoints(keyspace, shard, tabletType)
 		if len(endPoints) == 0 {
 			// fail fast if there is no endpoint
@@ -247,7 +247,7 @@ func (dg *discoveryGateway) canRetry(ctx context.Context, err error, transaction
 	return false
 }
 
-func shuffleEndPoints(endPoints []*pbt.EndPoint) {
+func shuffleEndPoints(endPoints []*topodatapb.EndPoint) {
 	index := 0
 	length := len(endPoints)
 	for i := length - 1; i > 0; i-- {
@@ -261,12 +261,12 @@ func shuffleEndPoints(endPoints []*pbt.EndPoint) {
 // master - return one from any cells with latest reparent timestamp;
 // replica - return all from local cell.
 // TODO(liang): select replica by replication lag.
-func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.TabletType) []*pbt.EndPoint {
+func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType topodatapb.TabletType) []*topodatapb.EndPoint {
 	epsList := dg.hc.GetEndPointStatsFromTarget(keyspace, shard, tabletType)
 	// for master, use any cells and return the one with max reparent timestamp.
-	if tabletType == pbt.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_MASTER {
 		var maxTimestamp int64
-		var ep *pbt.EndPoint
+		var ep *topodatapb.EndPoint
 		for _, eps := range epsList {
 			if eps.LastError != nil || !eps.Serving {
 				continue
@@ -279,7 +279,7 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 		if ep == nil {
 			return nil
 		}
-		return []*pbt.EndPoint{ep}
+		return []*topodatapb.EndPoint{ep}
 	}
 	// for non-master, use only endpoints from local cell and filter by replication lag.
 	list := make([]*discovery.EndPointStats, 0, len(epsList))
@@ -293,7 +293,7 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 		list = append(list, eps)
 	}
 	list = discovery.FilterByReplicationLag(list)
-	epList := make([]*pbt.EndPoint, 0, len(list))
+	epList := make([]*topodatapb.EndPoint, 0, len(list))
 	for _, eps := range list {
 		epList = append(epList, eps.EndPoint)
 	}
@@ -304,7 +304,7 @@ func (dg *discoveryGateway) getEndPoints(keyspace, shard string, tabletType pbt.
 // adds the connection context
 // and adds a bit to determine whether the keyspace/shard needs to be
 // re-resolved for a potential sharding event.
-func WrapError(in error, keyspace, shard string, tabletType pbt.TabletType, endPoint *pbt.EndPoint, inTransaction bool) (wrapped error) {
+func WrapError(in error, keyspace, shard string, tabletType topodatapb.TabletType, endPoint *topodatapb.EndPoint, inTransaction bool) (wrapped error) {
 	if in == nil {
 		return nil
 	}

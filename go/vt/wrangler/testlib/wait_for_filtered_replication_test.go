@@ -23,7 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const keyspace = "ks"
@@ -85,25 +85,25 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	defer vp.Close()
 
 	// create keyspace
-	if err := ts.CreateKeyspace(context.Background(), keyspace, &pbt.Keyspace{
+	if err := ts.CreateKeyspace(context.Background(), keyspace, &topodatapb.Keyspace{
 		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: pbt.KeyspaceIdType_UINT64,
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
 	// source of the filtered replication. We don't start its loop because we don't connect to it.
-	source := NewFakeTablet(t, wr, "cell1", 0, pbt.TabletType_MASTER, db,
+	source := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, keyspace, "0"))
 	// dest is the master of the dest shard which receives filtered replication events.
-	dest := NewFakeTablet(t, wr, "cell1", 1, pbt.TabletType_MASTER, db,
+	dest := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, keyspace, destShard))
 	dest.StartActionLoop(t, wr)
 	defer dest.StopActionLoop(t)
 
 	// Build topology state as we would expect it when filtered replication is enabled.
 	ctx := context.Background()
-	wr.SetSourceShards(ctx, keyspace, destShard, []*pbt.TabletAlias{source.Tablet.GetAlias()}, nil)
+	wr.SetSourceShards(ctx, keyspace, destShard, []*topodatapb.TabletAlias{source.Tablet.GetAlias()}, nil)
 
 	// Set a BinlogPlayerMap to avoid a nil panic when the explicit RunHealthCheck
 	// is called by WaitForFilteredReplication.

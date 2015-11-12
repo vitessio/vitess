@@ -16,7 +16,7 @@ import (
 	ctlproto "github.com/youtube/vitess/go/cmd/vtctld/proto"
 	"github.com/youtube/vitess/go/netutil"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -55,12 +55,12 @@ func (ex Explorer) GetSrvShardPath(cell, keyspace, shard string) string {
 }
 
 // GetSrvTypePath implements vtctld Explorer.
-func (ex Explorer) GetSrvTypePath(cell, keyspace, shard string, tabletType pb.TabletType) string {
+func (ex Explorer) GetSrvTypePath(cell, keyspace, shard string, tabletType topodatapb.TabletType) string {
 	return path.Join(explorerRoot, cell, endPointsDirPath(keyspace, shard, tabletType))
 }
 
 // GetTabletPath implements vtctld Explorer.
-func (ex Explorer) GetTabletPath(alias *pb.TabletAlias) string {
+func (ex Explorer) GetTabletPath(alias *topodatapb.TabletAlias) string {
 	return path.Join(explorerRoot, alias.Cell, tabletDirPath(alias))
 }
 
@@ -195,7 +195,7 @@ func splitShardDirPath(p string) (keyspace, shard string, err error) {
 }
 
 func addTabletLinks(result *explorerResult, data string) {
-	t := &pb.Tablet{}
+	t := &topodatapb.Tablet{}
 	err := json.Unmarshal([]byte(data), t)
 	if err != nil {
 		return

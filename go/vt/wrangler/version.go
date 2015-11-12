@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
@@ -57,7 +57,7 @@ func ResetDebugVarsGetVersion() {
 }
 
 // GetVersion returns the version string from a tablet
-func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias *pb.TabletAlias) (string, error) {
+func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (string, error) {
 	tablet, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return "", err
@@ -72,7 +72,7 @@ func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias *pb.TabletAlias)
 }
 
 // helper method to asynchronously get and diff a version
-func (wr *Wrangler) diffVersion(ctx context.Context, masterVersion string, masterAlias *pb.TabletAlias, alias *pb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffVersion(ctx context.Context, masterVersion string, masterAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering version for %v", topoproto.TabletAliasString(alias))
 	slaveVersion, err := wr.GetVersion(ctx, alias)

@@ -20,7 +20,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/vtgate/grpcvtgateservice"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// load the gRPC vtgate conn driver
 	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
@@ -80,7 +80,7 @@ func TestDial(t *testing.T) {
 		TabletType: "replica",
 		Streaming:  false,
 		Timeout:    30 * time.Second,
-		tabletType: pb.TabletType_REPLICA,
+		tabletType: topodatapb.TabletType_REPLICA,
 	}
 	newc := *(c.(*conn))
 	newc.Address = ""

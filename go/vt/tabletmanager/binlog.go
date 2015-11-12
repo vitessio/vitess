@@ -31,8 +31,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -54,12 +54,12 @@ type BinlogPlayerController struct {
 
 	// Information about us (set at construction, immutable).
 	cell           string
-	keyspaceIDType pb.KeyspaceIdType
-	keyRange       *pb.KeyRange
+	keyspaceIDType topodatapb.KeyspaceIdType
+	keyRange       *topodatapb.KeyRange
 	dbName         string
 
 	// Information about the source (set at construction, immutable).
-	sourceShard *pb.Shard_SourceShard
+	sourceShard *topodatapb.Shard_SourceShard
 
 	// binlogPlayerStats has the stats for the players we're going to use
 	// (pointer is set at construction, immutable, values are thread-safe).
@@ -94,13 +94,13 @@ type BinlogPlayerController struct {
 	stopPosition string
 
 	// information about the individual tablet we're replicating from.
-	sourceTablet *pb.TabletAlias
+	sourceTablet *topodatapb.TabletAlias
 
 	// last error we've seen by the player.
 	lastError error
 }
 
-func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange *pb.KeyRange, sourceShard *pb.Shard_SourceShard, dbName string) *BinlogPlayerController {
+func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
 		ts:                   ts,
 		vtClientFactory:      vtClientFactory,
@@ -289,21 +289,21 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 			t.Stop()
 			break
 		case <-t.C:
-			return fmt.Errorf("healthcheck has no endpoint for %v %v %v", bpc.cell, bpc.sourceShard.String(), pb.TabletType_REPLICA)
+			return fmt.Errorf("healthcheck has no endpoint for %v %v %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA)
 		}
 	}
 
 	// Find the server list from the health check
-	addrs := bpc.healthCheck.GetEndPointStatsFromTarget(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, pb.TabletType_REPLICA)
+	addrs := bpc.healthCheck.GetEndPointStatsFromTarget(bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topodatapb.TabletType_REPLICA)
 	if len(addrs) == 0 {
-		return fmt.Errorf("can't find any source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), pb.TabletType_REPLICA)
+		return fmt.Errorf("can't find any source tablet for %v %v %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA)
 	}
 	newServerIndex := rand.Intn(len(addrs))
 	endPoint := addrs[newServerIndex].EndPoint
 
 	// save our current server
 	bpc.playerMutex.Lock()
-	bpc.sourceTablet = &pb.TabletAlias{
+	bpc.sourceTablet = &topodatapb.TabletAlias{
 		Cell: bpc.cell,
 		Uid:  endPoint.Uid,
 	}
@@ -340,12 +340,12 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 }
 
 // BlpPosition returns the current position for a controller, as read from the database.
-func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.VtClient) (*pbt.BlpPosition, string, error) {
+func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.VtClient) (*tabletmanagerdatapb.BlpPosition, string, error) {
 	pos, flags, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 	if err != nil {
 		return nil, "", err
 	}
-	return &pbt.BlpPosition{
+	return &tabletmanagerdatapb.BlpPosition{
 		Uid:      bpc.sourceShard.Uid,
 		Position: pos,
 	}, flags, nil
@@ -449,7 +449,7 @@ func (blm *BinlogPlayerMap) maxSecondsBehindMasterUNGUARDED() int64 {
 }
 
 // addPlayer adds a new player to the map. It assumes we have the lock.
-func (blm *BinlogPlayerMap) addPlayer(ctx context.Context, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange *pb.KeyRange, sourceShard *pb.Shard_SourceShard, dbName string) {
+func (blm *BinlogPlayerMap) addPlayer(ctx context.Context, cell string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) {
 	bpc, ok := blm.players[sourceShard.Uid]
 	if ok {
 		log.Infof("Already playing logs for %v", sourceShard)
@@ -484,7 +484,7 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 
 // RefreshMap reads the right data from topo.Server and makes sure
 // we're playing the right logs.
-func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *pb.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
+func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topodatapb.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
 	log.Infof("Refreshing map of binlog players")
 	if shardInfo == nil {
 		log.Warningf("Could not read shardInfo, not changing anything")
@@ -559,7 +559,7 @@ func (blm *BinlogPlayerMap) Start(ctx context.Context) {
 }
 
 // BlpPositionList returns the current position of all the players.
-func (blm *BinlogPlayerMap) BlpPositionList() ([]*pbt.BlpPosition, error) {
+func (blm *BinlogPlayerMap) BlpPositionList() ([]*tabletmanagerdatapb.BlpPosition, error) {
 	// create a db connection for this purpose
 	vtClient := blm.vtClientFactory()
 	if err := vtClient.Connect(); err != nil {
@@ -567,7 +567,7 @@ func (blm *BinlogPlayerMap) BlpPositionList() ([]*pbt.BlpPosition, error) {
 	}
 	defer vtClient.Close()
 
-	var result []*pbt.BlpPosition
+	var result []*tabletmanagerdatapb.BlpPosition
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
 	for _, bpc := range blm.players {
@@ -583,7 +583,7 @@ func (blm *BinlogPlayerMap) BlpPositionList() ([]*pbt.BlpPosition, error) {
 
 // RunUntil will run all the players until they reach the given position.
 // Holds the map lock during that exercise, shouldn't take long at all.
-func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList []*pbt.BlpPosition, waitTimeout time.Duration) error {
+func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList []*tabletmanagerdatapb.BlpPosition, waitTimeout time.Duration) error {
 	// lock and check state
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
@@ -633,7 +633,7 @@ func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList []*pbt
 type BinlogPlayerControllerStatus struct {
 	// configuration values
 	Index        uint32
-	SourceShard  *pb.Shard_SourceShard
+	SourceShard  *topodatapb.Shard_SourceShard
 	StopPosition string
 
 	// stats and current values
@@ -642,7 +642,7 @@ type BinlogPlayerControllerStatus struct {
 	Counts              map[string]int64
 	Rates               map[string][]float64
 	State               string
-	SourceTablet        *pb.TabletAlias
+	SourceTablet        *topodatapb.TabletAlias
 	LastError           string
 }
 

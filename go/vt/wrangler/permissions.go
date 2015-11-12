@@ -16,11 +16,11 @@ import (
 	"golang.org/x/net/context"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // GetPermissions returns the permissions set on a remote tablet
-func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias *pb.TabletAlias) (*tabletmanagerdatapb.Permissions, error) {
+func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*tabletmanagerdatapb.Permissions, error) {
 	tablet, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias *pb.TabletAl
 }
 
 // diffPermissions is a helper method to asynchronously diff a permissions
-func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *tabletmanagerdatapb.Permissions, masterAlias *pb.TabletAlias, alias *pb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *tabletmanagerdatapb.Permissions, masterAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering permissions for %v", topoproto.TabletAliasString(alias))
 	slavePermissions, err := wr.GetPermissions(ctx, alias)

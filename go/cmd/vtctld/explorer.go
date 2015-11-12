@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/cmd/vtctld/proto"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Explorer allows exploring a topology server.
@@ -43,11 +43,11 @@ type Explorer interface {
 	// GetShardTypePath returns an explorer path that will contain
 	// information about the named tablet type in the named shard
 	// in the named keyspace in the serving graph for cell.
-	GetSrvTypePath(cell, keyspace, shard string, tabletType pb.TabletType) string
+	GetSrvTypePath(cell, keyspace, shard string, tabletType topodatapb.TabletType) string
 
 	// GetTabletPath returns an explorer path that will contain
 	// information about the tablet named by alias.
-	GetTabletPath(alias *pb.TabletAlias) string
+	GetTabletPath(alias *topodatapb.TabletAlias) string
 
 	// GetReplicationSlaves returns an explorer path that contains
 	// replication slaves for the named cell, keyspace, and shard.

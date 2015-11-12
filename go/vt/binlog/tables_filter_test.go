@@ -7,7 +7,7 @@ package binlog
 import (
 	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 var testTables = []string{
@@ -16,22 +16,22 @@ var testTables = []string{
 }
 
 func TestTablesFilterPass(t *testing.T) {
-	input := pb.BinlogTransaction{
-		Statements: []*pb.BinlogTransaction_Statement{
+	input := binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: pb.BinlogTransaction_Statement_BL_SET,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "set1",
 			}, {
-				Category: pb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "dml1 /* _stream included1 (id ) (500 ); */",
 			}, {
-				Category: pb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "dml2 /* _stream included2 (id ) (500 ); */",
 			},
 		},
 	}
 	var got string
-	f := TablesFilterFunc(testTables, func(reply *pb.BinlogTransaction) error {
+	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -43,19 +43,19 @@ func TestTablesFilterPass(t *testing.T) {
 }
 
 func TestTablesFilterSkip(t *testing.T) {
-	input := pb.BinlogTransaction{
-		Statements: []*pb.BinlogTransaction_Statement{
+	input := binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: pb.BinlogTransaction_Statement_BL_SET,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "set1",
 			}, {
-				Category: pb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "dml1 /* _stream excluded1 (id ) (500 ); */",
 			},
 		},
 	}
 	var got string
-	f := TablesFilterFunc(testTables, func(reply *pb.BinlogTransaction) error {
+	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -67,19 +67,19 @@ func TestTablesFilterSkip(t *testing.T) {
 }
 
 func TestTablesFilterDDL(t *testing.T) {
-	input := pb.BinlogTransaction{
-		Statements: []*pb.BinlogTransaction_Statement{
+	input := binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: pb.BinlogTransaction_Statement_BL_SET,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "set1",
 			}, {
-				Category: pb.BinlogTransaction_Statement_BL_DDL,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DDL,
 				Sql:      "ddl",
 			},
 		},
 	}
 	var got string
-	f := TablesFilterFunc(testTables, func(reply *pb.BinlogTransaction) error {
+	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -91,22 +91,22 @@ func TestTablesFilterDDL(t *testing.T) {
 }
 
 func TestTablesFilterMalformed(t *testing.T) {
-	input := pb.BinlogTransaction{
-		Statements: []*pb.BinlogTransaction_Statement{
+	input := binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: pb.BinlogTransaction_Statement_BL_SET,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      "set1",
 			}, {
-				Category: pb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "ddl",
 			}, {
-				Category: pb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
 				Sql:      "dml1 /* _stream excluded1*/",
 			},
 		},
 	}
 	var got string
-	f := TablesFilterFunc(testTables, func(reply *pb.BinlogTransaction) error {
+	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})

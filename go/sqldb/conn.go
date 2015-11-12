@@ -11,7 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -58,9 +58,9 @@ type Conn interface {
 	SendCommand(command uint32, data []byte) error
 	// GetCharset returns the current numerical values of the per-session character
 	// set variables.
-	GetCharset() (cs *pb.Charset, err error)
+	GetCharset() (cs *binlogdatapb.Charset, err error)
 	// SetCharset changes the per-session character set variables.
-	SetCharset(cs *pb.Charset) error
+	SetCharset(cs *binlogdatapb.Charset) error
 }
 
 // RegisterDefault registers the default connection function.

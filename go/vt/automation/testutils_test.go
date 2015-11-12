@@ -8,7 +8,7 @@ import (
 	"errors"
 	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 )
 
 func testingTaskCreator(taskName string) Task {
@@ -31,7 +31,7 @@ func testingTaskCreator(taskName string) Task {
 type TestingEchoTask struct {
 }
 
-func (t *TestingEchoTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
+func (t *TestingEchoTask) Run(parameters map[string]string) (newTasks []*automationpb.TaskContainer, output string, err error) {
 	for _, v := range parameters {
 		output += v
 	}
@@ -50,7 +50,7 @@ func (t *TestingEchoTask) OptionalParameters() []string {
 type TestingFailTask struct {
 }
 
-func (t *TestingFailTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
+func (t *TestingFailTask) Run(parameters map[string]string) (newTasks []*automationpb.TaskContainer, output string, err error) {
 	return nil, "something went wrong", errors.New("full error message")
 }
 
@@ -66,8 +66,8 @@ func (t *TestingFailTask) OptionalParameters() []string {
 type TestingEmitEchoTask struct {
 }
 
-func (t *TestingEmitEchoTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
-	return []*pb.TaskContainer{
+func (t *TestingEmitEchoTask) Run(parameters map[string]string) (newTasks []*automationpb.TaskContainer, output string, err error) {
+	return []*automationpb.TaskContainer{
 		NewTaskContainerWithSingleTask("TestingEchoTask", parameters),
 	}, "emitted TestingEchoTask", nil
 }
@@ -85,8 +85,8 @@ func (t *TestingEmitEchoTask) OptionalParameters() []string {
 type TestingEmitEchoFailEchoTask struct {
 }
 
-func (t *TestingEmitEchoFailEchoTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
-	newTasks = []*pb.TaskContainer{
+func (t *TestingEmitEchoFailEchoTask) Run(parameters map[string]string) (newTasks []*automationpb.TaskContainer, output string, err error) {
+	newTasks = []*automationpb.TaskContainer{
 		NewTaskContainerWithSingleTask("TestingEchoTask", parameters),
 		NewTaskContainerWithSingleTask("TestingFailTask", parameters),
 		NewTaskContainerWithSingleTask("TestingEchoTask", parameters),

@@ -7,7 +7,7 @@ package automation
 import (
 	"fmt"
 
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
 )
 
@@ -16,7 +16,7 @@ type SplitDiffTask struct {
 }
 
 // Run is part of the Task interface.
-func (t *SplitDiffTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
+func (t *SplitDiffTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
 	keyspaceAndDestShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["dest_shard"])
 
 	args := []string{"SplitDiff"}

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -18,25 +18,25 @@ var (
 
 var counter = 0
 
-func endPoints3() (*pb.EndPoints, error) {
+func endPoints3() (*topodatapb.EndPoints, error) {
 	counter++
-	return &pb.EndPoints{
-		Entries: []*pb.EndPoint{
-			&pb.EndPoint{
+	return &topodatapb.EndPoints{
+		Entries: []*topodatapb.EndPoint{
+			&topodatapb.EndPoint{
 				Uid:  0,
 				Host: "0",
 				PortMap: map[string]int32{
 					"vt": 1,
 				},
 			},
-			&pb.EndPoint{
+			&topodatapb.EndPoint{
 				Uid:  1,
 				Host: "1",
 				PortMap: map[string]int32{
 					"vt": 2,
 				},
 			},
-			&pb.EndPoint{
+			&topodatapb.EndPoint{
 				Uid:  2,
 				Host: "2",
 				PortMap: map[string]int32{
@@ -71,9 +71,9 @@ func TestFindAddress(t *testing.T) {
 
 func TestFindDeleteAddrNode(t *testing.T) {
 	addrNodes := []*addressStatus{
-		{endPoint: &pb.EndPoint{Uid: 0}},
-		{endPoint: &pb.EndPoint{Uid: 1}},
-		{endPoint: &pb.EndPoint{Uid: 2}},
+		{endPoint: &topodatapb.EndPoint{Uid: 0}},
+		{endPoint: &topodatapb.EndPoint{Uid: 1}},
+		{endPoint: &topodatapb.EndPoint{Uid: 2}},
 	}
 	goti := findAddrNode(addrNodes, 1)
 	if goti != 1 {
@@ -89,11 +89,11 @@ func TestFindDeleteAddrNode(t *testing.T) {
 	}
 }
 
-func endPointsError() (*pb.EndPoints, error) {
+func endPointsError() (*topodatapb.EndPoints, error) {
 	return nil, fmt.Errorf("expected error")
 }
 
-func endPointsNone() (*pb.EndPoints, error) {
+func endPointsNone() (*topodatapb.EndPoints, error) {
 	return nil, nil
 }
 
@@ -182,25 +182,25 @@ func TestMarkDown(t *testing.T) {
 
 var addrNum uint32 = 10
 
-func endPointsMorph() (*pb.EndPoints, error) {
+func endPointsMorph() (*topodatapb.EndPoints, error) {
 	addrNum++
-	return &pb.EndPoints{
-		Entries: []*pb.EndPoint{
-			&pb.EndPoint{
+	return &topodatapb.EndPoints{
+		Entries: []*topodatapb.EndPoint{
+			&topodatapb.EndPoint{
 				Uid:  addrNum,
 				Host: fmt.Sprintf("%d", addrNum),
 				PortMap: map[string]int32{
 					"vt": 1,
 				},
 			},
-			&pb.EndPoint{
+			&topodatapb.EndPoint{
 				Uid:  1,
 				Host: "1",
 				PortMap: map[string]int32{
 					"vt": int32(addrNum),
 				},
 			},
-			&pb.EndPoint{
+			&topodatapb.EndPoint{
 				Uid:  2,
 				Host: "2",
 				PortMap: map[string]int32{

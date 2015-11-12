@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
-	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // fakeEvent implements replication.BinlogEvent.
@@ -148,7 +148,7 @@ var (
 	mariadbInsertEvent         = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0x2, 0x88, 0xf3, 0x0, 0x0, 0xa8, 0x0, 0x0, 0x0, 0x79, 0xa, 0x0, 0x0, 0x0, 0x0, 0x27, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x20, 0x69, 0x6e, 0x74, 0x6f, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x28, 0x6d, 0x73, 0x67, 0x29, 0x20, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x20, 0x28, 0x27, 0x74, 0x65, 0x73, 0x74, 0x20, 0x30, 0x27, 0x29, 0x20, 0x2f, 0x2a, 0x20, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x20, 0x28, 0x69, 0x64, 0x20, 0x29, 0x20, 0x28, 0x6e, 0x75, 0x6c, 0x6c, 0x20, 0x29, 0x3b, 0x20, 0x2a, 0x2f})
 	mariadbXidEvent            = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0x10, 0x88, 0xf3, 0x0, 0x0, 0x1b, 0x0, 0x0, 0x0, 0xe0, 0xc, 0x0, 0x0, 0x0, 0x0, 0x85, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})
 
-	charset = &pb.Charset{Client: 33, Conn: 33, Server: 33}
+	charset = &binlogdatapb.Charset{Client: 33, Conn: 33, Server: 33}
 )
 
 func sendTestEvents(channel chan<- replication.BinlogEvent, events []replication.BinlogEvent) {
@@ -173,11 +173,11 @@ func TestStreamerParseEventsXID(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []pb.BinlogTransaction{
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []binlogdatapb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -187,8 +187,8 @@ func TestStreamerParseEventsXID(t *testing.T) {
 			}),
 		},
 	}
-	var got []pb.BinlogTransaction
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -226,11 +226,11 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []pb.BinlogTransaction{
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []binlogdatapb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -240,8 +240,8 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 			}),
 		},
 	}
-	var got []pb.BinlogTransaction
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -265,7 +265,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 func TestStreamerStop(t *testing.T) {
 	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -309,7 +309,7 @@ func TestStreamerParseEventsClientEOF(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return io.EOF
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -335,7 +335,7 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 	events := make(chan replication.BinlogEvent)
 	close(events)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -370,7 +370,7 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -409,7 +409,7 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -444,7 +444,7 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -481,7 +481,7 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -518,7 +518,7 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -553,7 +553,7 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -601,8 +601,8 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []pb.BinlogTransaction{
-		pb.BinlogTransaction{
+	want := []binlogdatapb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
 			Statements: nil,
 			Timestamp:  1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -611,10 +611,10 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 				Sequence: 0x0d,
 			}),
 		},
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -624,8 +624,8 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 			}),
 		},
 	}
-	var got []pb.BinlogTransaction
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -658,11 +658,11 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []pb.BinlogTransaction{
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []binlogdatapb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -671,7 +671,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 				Sequence: 0x0d,
 			}),
 		},
-		pb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
 			Statements: nil,
 			Timestamp:  1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -681,8 +681,8 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 			}),
 		},
 	}
-	var got []pb.BinlogTransaction
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -718,11 +718,11 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []pb.BinlogTransaction{
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []binlogdatapb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -731,8 +731,8 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 				Sequence: 0x0d,
 			}),
 		},
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{},
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{},
 			Timestamp:  1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
 				Domain:   0,
@@ -741,8 +741,8 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 			}),
 		},
 	}
-	var got []pb.BinlogTransaction
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -779,12 +779,12 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []pb.BinlogTransaction{
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET INSERT_ID=101"},
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []binlogdatapb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET INSERT_ID=101"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -794,8 +794,8 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 			}),
 		},
 	}
-	var got []pb.BinlogTransaction
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -833,7 +833,7 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -872,11 +872,11 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []pb.BinlogTransaction{
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []binlogdatapb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -886,8 +886,8 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 			}),
 		},
 	}
-	var got []pb.BinlogTransaction
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -926,11 +926,11 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []pb.BinlogTransaction{
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
-				{Category: pb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
+	want := []binlogdatapb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -940,8 +940,8 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 			}),
 		},
 	}
-	var got []pb.BinlogTransaction
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -979,7 +979,7 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
@@ -1011,11 +1011,11 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []pb.BinlogTransaction{
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Charset: charset, Sql: "SET TIMESTAMP=1409892744"},
-				{Category: pb.BinlogTransaction_Statement_BL_DML, Charset: charset, Sql: "insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */"},
+	want := []binlogdatapb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Charset: charset, Sql: "SET TIMESTAMP=1409892744"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Charset: charset, Sql: "insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */"},
 			},
 			Timestamp: 1409892744,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -1025,8 +1025,8 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 			}),
 		},
 	}
-	var got []pb.BinlogTransaction
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -1057,11 +1057,11 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []pb.BinlogTransaction{
-		pb.BinlogTransaction{
-			Statements: []*pb.BinlogTransaction_Statement{
-				{Category: pb.BinlogTransaction_Statement_BL_SET, Charset: &pb.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "SET TIMESTAMP=1409892744"},
-				{Category: pb.BinlogTransaction_Statement_BL_DDL, Charset: &pb.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB"},
+	want := []binlogdatapb.BinlogTransaction{
+		binlogdatapb.BinlogTransaction{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Charset: &binlogdatapb.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "SET TIMESTAMP=1409892744"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DDL, Charset: &binlogdatapb.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB"},
 			},
 			Timestamp: 1409892744,
 			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
@@ -1071,8 +1071,8 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 			}),
 		},
 	}
-	var got []pb.BinlogTransaction
-	sendTransaction := func(trans *pb.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
@@ -1094,24 +1094,24 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 }
 
 func TestGetStatementCategory(t *testing.T) {
-	table := map[string]pb.BinlogTransaction_Statement_Category{
-		"":  pb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
-		" ": pb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
-		" UPDATE we don't try to fix leading spaces": pb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
-		"FOOBAR unknown query prefix":                pb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
+	table := map[string]binlogdatapb.BinlogTransaction_Statement_Category{
+		"":  binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
+		" ": binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
+		" UPDATE we don't try to fix leading spaces": binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
+		"FOOBAR unknown query prefix":                binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
 
-		"BEGIN":    pb.BinlogTransaction_Statement_BL_BEGIN,
-		"COMMIT":   pb.BinlogTransaction_Statement_BL_COMMIT,
-		"ROLLBACK": pb.BinlogTransaction_Statement_BL_ROLLBACK,
-		"INSERT something (something, something)": pb.BinlogTransaction_Statement_BL_DML,
-		"UPDATE something SET something=nothing":  pb.BinlogTransaction_Statement_BL_DML,
-		"DELETE something":                        pb.BinlogTransaction_Statement_BL_DML,
-		"CREATE something":                        pb.BinlogTransaction_Statement_BL_DDL,
-		"ALTER something":                         pb.BinlogTransaction_Statement_BL_DDL,
-		"DROP something":                          pb.BinlogTransaction_Statement_BL_DDL,
-		"TRUNCATE something":                      pb.BinlogTransaction_Statement_BL_DDL,
-		"RENAME something":                        pb.BinlogTransaction_Statement_BL_DDL,
-		"SET something=nothing":                   pb.BinlogTransaction_Statement_BL_SET,
+		"BEGIN":    binlogdatapb.BinlogTransaction_Statement_BL_BEGIN,
+		"COMMIT":   binlogdatapb.BinlogTransaction_Statement_BL_COMMIT,
+		"ROLLBACK": binlogdatapb.BinlogTransaction_Statement_BL_ROLLBACK,
+		"INSERT something (something, something)": binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"UPDATE something SET something=nothing":  binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"DELETE something":                        binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"CREATE something":                        binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"ALTER something":                         binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"DROP something":                          binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"TRUNCATE something":                      binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"RENAME something":                        binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"SET something=nothing":                   binlogdatapb.BinlogTransaction_Statement_BL_SET,
 	}
 
 	for input, want := range table {

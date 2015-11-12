@@ -13,28 +13,28 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 func TestDiscoveryGatewayExecute(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error {
+	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		_, err := dg.Execute(context.Background(), keyspace, shard, tabletType, "query", nil, 0)
 		return err
 	})
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error {
+	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		_, err := dg.Execute(context.Background(), keyspace, shard, tabletType, "query", nil, 1)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error {
+	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		queries := []tproto.BoundQuery{{"query", nil}}
 		_, err := dg.ExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, 0)
 		return err
 	})
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error {
+	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		queries := []tproto.BoundQuery{{"query", nil}}
 		_, err := dg.ExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, 1)
 		return err
@@ -42,31 +42,31 @@ func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 }
 
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, true, func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error {
+	testDiscoveryGatewayGeneric(t, true, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		_, errfunc := dg.StreamExecute(context.Background(), keyspace, shard, tabletType, "query", nil, 0)
 		return errfunc()
 	})
-	testDiscoveryGatewayTransact(t, true, func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error {
+	testDiscoveryGatewayTransact(t, true, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		_, errfunc := dg.StreamExecute(context.Background(), keyspace, shard, tabletType, "query", nil, 1)
 		return errfunc()
 	})
 }
 
 func TestDiscoveryGatewayBegin(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error {
+	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		_, err := dg.Begin(context.Background(), keyspace, shard, tabletType)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayCommit(t *testing.T) {
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error {
+	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		return dg.Commit(context.Background(), keyspace, shard, tabletType, 1)
 	})
 }
 
 func TestDiscoveryGatewayRollback(t *testing.T) {
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error {
+	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
 		return dg.Rollback(context.Background(), keyspace, shard, tabletType, 1)
 	})
 }
@@ -79,27 +79,27 @@ func TestDiscoveryGatewayGetEndPoints(t *testing.T) {
 
 	// replica should only use local ones
 	hc.Reset()
-	hc.addTestEndPoint("remote", "1.1.1.1", 1001, keyspace, shard, pbt.TabletType_REPLICA, true, 10, nil, nil)
-	ep1 := hc.addTestEndPoint("local", "2.2.2.2", 1001, keyspace, shard, pbt.TabletType_REPLICA, true, 10, nil, nil)
-	eps := dg.getEndPoints(keyspace, shard, pbt.TabletType_REPLICA)
+	hc.addTestEndPoint("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil, nil)
+	ep1 := hc.addTestEndPoint("local", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil, nil)
+	eps := dg.getEndPoints(keyspace, shard, topodatapb.TabletType_REPLICA)
 	if len(eps) != 1 || !topo.EndPointEquality(eps[0], ep1) {
 		t.Errorf("want %+v, got %+v", ep1, eps)
 	}
 
 	// master should use the one with newer timestamp regardless of cell
 	hc.Reset()
-	hc.addTestEndPoint("remote", "1.1.1.1", 1001, keyspace, shard, pbt.TabletType_MASTER, true, 5, nil, nil)
-	ep1 = hc.addTestEndPoint("remote", "2.2.2.2", 1001, keyspace, shard, pbt.TabletType_MASTER, true, 10, nil, nil)
-	eps = dg.getEndPoints(keyspace, shard, pbt.TabletType_MASTER)
+	hc.addTestEndPoint("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil, nil)
+	ep1 = hc.addTestEndPoint("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 10, nil, nil)
+	eps = dg.getEndPoints(keyspace, shard, topodatapb.TabletType_MASTER)
 	if len(eps) != 1 || !topo.EndPointEquality(eps[0], ep1) {
 		t.Errorf("want %+v, got %+v", ep1, eps)
 	}
 }
 
-func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error) {
+func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error) {
 	keyspace := "ks"
 	shard := "0"
-	tabletType := pbt.TabletType_REPLICA
+	tabletType := topodatapb.TabletType_REPLICA
 	hc := newFakeHealthCheck()
 	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", time.Millisecond, 2, time.Second, time.Second, time.Second, nil)
 
@@ -201,10 +201,10 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	}
 }
 
-func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gateway, keyspace, shard string, tabletType pbt.TabletType) error) {
+func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error) {
 	keyspace := "ks"
 	shard := "0"
-	tabletType := pbt.TabletType_REPLICA
+	tabletType := topodatapb.TabletType_REPLICA
 	hc := newFakeHealthCheck()
 	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", time.Millisecond, 2, time.Second, time.Second, time.Second, nil)
 
@@ -263,7 +263,7 @@ func (fhc *fakeHealthCheck) SetListener(listener discovery.HealthCheckStatsListe
 }
 
 // AddEndPoint adds the endpoint, and starts health check.
-func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *pbt.EndPoint) {
+func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *topodatapb.EndPoint) {
 	key := discovery.EndPointToMapKey(endPoint)
 	item := &fhcItem{
 		eps: &discovery.EndPointStats{
@@ -276,7 +276,7 @@ func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *pbt.EndPoin
 }
 
 // RemoveEndPoint removes the endpoint, and stops the health check.
-func (fhc *fakeHealthCheck) RemoveEndPoint(endPoint *pbt.EndPoint) {
+func (fhc *fakeHealthCheck) RemoveEndPoint(endPoint *topodatapb.EndPoint) {
 	key := discovery.EndPointToMapKey(endPoint)
 	delete(fhc.items, key)
 }
@@ -297,7 +297,7 @@ func (fhc *fakeHealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard st
 }
 
 // GetEndPointStatsFromTarget returns all EndPointStats for the given target.
-func (fhc *fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*discovery.EndPointStats {
+func (fhc *fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*discovery.EndPointStats {
 	fhc.GetStatsFromTargetCounter++
 	var res []*discovery.EndPointStats
 	for _, item := range fhc.items {
@@ -312,7 +312,7 @@ func (fhc *fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, t
 }
 
 // GetConnection returns the TabletConn of the given endpoint.
-func (fhc *fakeHealthCheck) GetConnection(endPoint *pbt.EndPoint) tabletconn.TabletConn {
+func (fhc *fakeHealthCheck) GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn {
 	key := discovery.EndPointToMapKey(endPoint)
 	if item := fhc.items[key]; item != nil {
 		return item.conn
@@ -325,7 +325,7 @@ func (fhc *fakeHealthCheck) CacheStatus() discovery.EndPointsCacheStatusList {
 	return nil
 }
 
-func (fhc *fakeHealthCheck) addTestEndPoint(cell, host string, port int32, keyspace, shard string, tabletType pbt.TabletType, serving bool, reparentTS int64, err error, conn tabletconn.TabletConn) *pbt.EndPoint {
+func (fhc *fakeHealthCheck) addTestEndPoint(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, conn tabletconn.TabletConn) *topodatapb.EndPoint {
 	ep := topo.NewEndPoint(0, host)
 	ep.PortMap["vt"] = port
 	key := discovery.EndPointToMapKey(ep)

@@ -7,7 +7,7 @@ package vtgate
 import (
 	"sync"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
@@ -36,7 +36,7 @@ func (session *SafeSession) InTransaction() bool {
 }
 
 // Find returns the transactionId, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType pb.TabletType) int64 {
+func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) int64 {
 	if session == nil {
 		return 0
 	}

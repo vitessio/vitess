@@ -13,10 +13,10 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func shardEqual(left, right *pb.Shard) (bool, error) {
+func shardEqual(left, right *topodatapb.Shard) (bool, error) {
 	lj, err := json.Marshal(left)
 	if err != nil {
 		return false, err
@@ -32,11 +32,11 @@ func shardEqual(left, right *pb.Shard) (bool, error) {
 func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	tts := topo.Server{Impl: ts}
 
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	shard := &pb.Shard{
+	shard := &topodatapb.Shard{
 		KeyRange: newKeyRange("b0-c0"),
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", shard); err != nil {
@@ -73,23 +73,23 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if want := newKeyRange("b0-c0"); !key.KeyRangeEqual(shard.KeyRange, want) {
 		t.Errorf("shard.KeyRange: want %v, got %v", want, shard.KeyRange)
 	}
-	master := &pb.TabletAlias{Cell: "ny", Uid: 1}
+	master := &topodatapb.TabletAlias{Cell: "ny", Uid: 1}
 	shard.MasterAlias = master
 	shard.KeyRange = newKeyRange("b0-c0")
-	shard.ServedTypes = []*pb.Shard_ServedType{
-		&pb.Shard_ServedType{
-			TabletType: pb.TabletType_MASTER,
+	shard.ServedTypes = []*topodatapb.Shard_ServedType{
+		&topodatapb.Shard_ServedType{
+			TabletType: topodatapb.TabletType_MASTER,
 		},
-		&pb.Shard_ServedType{
-			TabletType: pb.TabletType_REPLICA,
+		&topodatapb.Shard_ServedType{
+			TabletType: topodatapb.TabletType_REPLICA,
 			Cells:      []string{"c1"},
 		},
-		&pb.Shard_ServedType{
-			TabletType: pb.TabletType_RDONLY,
+		&topodatapb.Shard_ServedType{
+			TabletType: topodatapb.TabletType_RDONLY,
 		},
 	}
-	shard.SourceShards = []*pb.Shard_SourceShard{
-		&pb.Shard_SourceShard{
+	shard.SourceShards = []*topodatapb.Shard_SourceShard{
+		&topodatapb.Shard_SourceShard{
 			Uid:      1,
 			Keyspace: "source_ks",
 			Shard:    "b8-c0",
@@ -97,14 +97,14 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 			Tables:   []string{"table1", "table2"},
 		},
 	}
-	shard.TabletControls = []*pb.Shard_TabletControl{
-		&pb.Shard_TabletControl{
-			TabletType:        pb.TabletType_MASTER,
+	shard.TabletControls = []*topodatapb.Shard_TabletControl{
+		&topodatapb.Shard_TabletControl{
+			TabletType:        topodatapb.TabletType_MASTER,
 			Cells:             []string{"c1", "c2"},
 			BlacklistedTables: []string{"black1", "black2"},
 		},
-		&pb.Shard_TabletControl{
-			TabletType:          pb.TabletType_REPLICA,
+		&topodatapb.Shard_TabletControl{
+			TabletType:          topodatapb.TabletType_REPLICA,
 			DisableQueryService: true,
 		},
 	}
@@ -112,8 +112,8 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("UpdateShard: %v", err)
 	}
 
-	other := &pb.TabletAlias{Cell: "ny", Uid: 82873}
-	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
+	other := &topodatapb.TabletAlias{Cell: "ny", Uid: 82873}
+	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(shard *topodatapb.Shard) error {
 		shard.MasterAlias = other
 		return nil
 	})
@@ -127,7 +127,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if *s.MasterAlias != *other {
 		t.Fatalf("shard.MasterAlias = %v, want %v", s.MasterAlias, other)
 	}
-	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
+	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(shard *topodatapb.Shard) error {
 		shard.MasterAlias = master
 		return nil
 	})

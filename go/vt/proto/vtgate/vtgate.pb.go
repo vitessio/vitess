@@ -50,7 +50,7 @@ package vtgate
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import querypb "github.com/youtube/vitess/go/vt/proto/query"
+import query "github.com/youtube/vitess/go/vt/proto/query"
 import topodata "github.com/youtube/vitess/go/vt/proto/topodata"
 import vtrpc "github.com/youtube/vitess/go/vt/proto/vtrpc"
 
@@ -79,15 +79,15 @@ func (m *Session) GetShardSessions() []*Session_ShardSession {
 }
 
 type Session_ShardSession struct {
-	Target        *querypb.Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
-	TransactionId int64           `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	Target        *query.Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	TransactionId int64         `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *Session_ShardSession) Reset()         { *m = Session_ShardSession{} }
 func (m *Session_ShardSession) String() string { return proto.CompactTextString(m) }
 func (*Session_ShardSession) ProtoMessage()    {}
 
-func (m *Session_ShardSession) GetTarget() *querypb.Target {
+func (m *Session_ShardSession) GetTarget() *query.Target {
 	if m != nil {
 		return m.Target
 	}
@@ -103,7 +103,7 @@ type ExecuteRequest struct {
 	// Do not fill it in if outside of a transaction.
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
 	TabletType topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// not_in_transaction is deprecated and should not be used.
@@ -128,7 +128,7 @@ func (m *ExecuteRequest) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteRequest) GetQuery() *querypb.BoundQuery {
+func (m *ExecuteRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -144,7 +144,7 @@ type ExecuteResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result *querypb.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *ExecuteResponse) Reset()         { *m = ExecuteResponse{} }
@@ -165,7 +165,7 @@ func (m *ExecuteResponse) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteResponse) GetResult() *querypb.QueryResult {
+func (m *ExecuteResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}
@@ -181,7 +181,7 @@ type ExecuteShardsRequest struct {
 	// Do not fill it in if outside of a transaction.
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
 	// shards to target the query to. A DML can only target one shard.
@@ -210,7 +210,7 @@ func (m *ExecuteShardsRequest) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteShardsRequest) GetQuery() *querypb.BoundQuery {
+func (m *ExecuteShardsRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -226,7 +226,7 @@ type ExecuteShardsResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result *querypb.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *ExecuteShardsResponse) Reset()         { *m = ExecuteShardsResponse{} }
@@ -247,7 +247,7 @@ func (m *ExecuteShardsResponse) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteShardsResponse) GetResult() *querypb.QueryResult {
+func (m *ExecuteShardsResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}
@@ -263,7 +263,7 @@ type ExecuteKeyspaceIdsRequest struct {
 	// Do not fill it in if outside of a transaction.
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
 	// keyspace_ids contains the list of keyspace_ids affected by this query.
@@ -293,7 +293,7 @@ func (m *ExecuteKeyspaceIdsRequest) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteKeyspaceIdsRequest) GetQuery() *querypb.BoundQuery {
+func (m *ExecuteKeyspaceIdsRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -309,7 +309,7 @@ type ExecuteKeyspaceIdsResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result *querypb.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *ExecuteKeyspaceIdsResponse) Reset()         { *m = ExecuteKeyspaceIdsResponse{} }
@@ -330,7 +330,7 @@ func (m *ExecuteKeyspaceIdsResponse) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteKeyspaceIdsResponse) GetResult() *querypb.QueryResult {
+func (m *ExecuteKeyspaceIdsResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}
@@ -346,7 +346,7 @@ type ExecuteKeyRangesRequest struct {
 	// Do not fill it in if outside of a transaction.
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 	// keyspace to target the query to
 	Keyspace string `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
 	// key_ranges contains the list of key ranges affected by this query.
@@ -376,7 +376,7 @@ func (m *ExecuteKeyRangesRequest) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteKeyRangesRequest) GetQuery() *querypb.BoundQuery {
+func (m *ExecuteKeyRangesRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -399,7 +399,7 @@ type ExecuteKeyRangesResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result *querypb.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *ExecuteKeyRangesResponse) Reset()         { *m = ExecuteKeyRangesResponse{} }
@@ -420,7 +420,7 @@ func (m *ExecuteKeyRangesResponse) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteKeyRangesResponse) GetResult() *querypb.QueryResult {
+func (m *ExecuteKeyRangesResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}
@@ -436,7 +436,7 @@ type ExecuteEntityIdsRequest struct {
 	// Do not fill it in if outside of a transaction.
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
 	// entity_column_name is the column name to use.
@@ -468,7 +468,7 @@ func (m *ExecuteEntityIdsRequest) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteEntityIdsRequest) GetQuery() *querypb.BoundQuery {
+func (m *ExecuteEntityIdsRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -484,7 +484,7 @@ func (m *ExecuteEntityIdsRequest) GetEntityKeyspaceIds() []*ExecuteEntityIdsRequ
 
 type ExecuteEntityIdsRequest_EntityId struct {
 	// xid_type is the type of the entity's value. Can be NULL.
-	XidType querypb.Type `protobuf:"varint,1,opt,name=xid_type,enum=querypb.Type" json:"xid_type,omitempty"`
+	XidType query.Type `protobuf:"varint,1,opt,name=xid_type,enum=query.Type" json:"xid_type,omitempty"`
 	// xid_value is the value for the entity. Not set if xid_type is NULL.
 	XidValue []byte `protobuf:"bytes,2,opt,name=xid_value,proto3" json:"xid_value,omitempty"`
 	// keyspace_id is the associated keyspace_id for the entity.
@@ -504,7 +504,7 @@ type ExecuteEntityIdsResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result *querypb.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *ExecuteEntityIdsResponse) Reset()         { *m = ExecuteEntityIdsResponse{} }
@@ -525,7 +525,7 @@ func (m *ExecuteEntityIdsResponse) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteEntityIdsResponse) GetResult() *querypb.QueryResult {
+func (m *ExecuteEntityIdsResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}
@@ -537,7 +537,7 @@ func (m *ExecuteEntityIdsResponse) GetResult() *querypb.QueryResult {
 // ExecuteBatchShardsRequest.
 type BoundShardQuery struct {
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
 	// shards to target the query to. A DML can only target one shard.
@@ -548,7 +548,7 @@ func (m *BoundShardQuery) Reset()         { *m = BoundShardQuery{} }
 func (m *BoundShardQuery) String() string { return proto.CompactTextString(m) }
 func (*BoundShardQuery) ProtoMessage()    {}
 
-func (m *BoundShardQuery) GetQuery() *querypb.BoundQuery {
+func (m *BoundShardQuery) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -607,7 +607,7 @@ type ExecuteBatchShardsResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Results []*querypb.QueryResult `protobuf:"bytes,3,rep,name=results" json:"results,omitempty"`
+	Results []*query.QueryResult `protobuf:"bytes,3,rep,name=results" json:"results,omitempty"`
 }
 
 func (m *ExecuteBatchShardsResponse) Reset()         { *m = ExecuteBatchShardsResponse{} }
@@ -628,7 +628,7 @@ func (m *ExecuteBatchShardsResponse) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteBatchShardsResponse) GetResults() []*querypb.QueryResult {
+func (m *ExecuteBatchShardsResponse) GetResults() []*query.QueryResult {
 	if m != nil {
 		return m.Results
 	}
@@ -640,7 +640,7 @@ func (m *ExecuteBatchShardsResponse) GetResults() []*querypb.QueryResult {
 // ExecuteBatchKeyspaceIdsRequest.
 type BoundKeyspaceIdQuery struct {
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
 	// keyspace_ids contains the list of keyspace_ids affected by this query.
@@ -652,7 +652,7 @@ func (m *BoundKeyspaceIdQuery) Reset()         { *m = BoundKeyspaceIdQuery{} }
 func (m *BoundKeyspaceIdQuery) String() string { return proto.CompactTextString(m) }
 func (*BoundKeyspaceIdQuery) ProtoMessage()    {}
 
-func (m *BoundKeyspaceIdQuery) GetQuery() *querypb.BoundQuery {
+func (m *BoundKeyspaceIdQuery) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -710,7 +710,7 @@ type ExecuteBatchKeyspaceIdsResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Results []*querypb.QueryResult `protobuf:"bytes,3,rep,name=results" json:"results,omitempty"`
+	Results []*query.QueryResult `protobuf:"bytes,3,rep,name=results" json:"results,omitempty"`
 }
 
 func (m *ExecuteBatchKeyspaceIdsResponse) Reset()         { *m = ExecuteBatchKeyspaceIdsResponse{} }
@@ -731,7 +731,7 @@ func (m *ExecuteBatchKeyspaceIdsResponse) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteBatchKeyspaceIdsResponse) GetResults() []*querypb.QueryResult {
+func (m *ExecuteBatchKeyspaceIdsResponse) GetResults() []*query.QueryResult {
 	if m != nil {
 		return m.Results
 	}
@@ -744,7 +744,7 @@ type StreamExecuteRequest struct {
 	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
 	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
@@ -760,7 +760,7 @@ func (m *StreamExecuteRequest) GetCallerId() *vtrpc.CallerID {
 	return nil
 }
 
-func (m *StreamExecuteRequest) GetQuery() *querypb.BoundQuery {
+func (m *StreamExecuteRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -772,14 +772,14 @@ type StreamExecuteResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result *querypb.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
 func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteResponse) ProtoMessage()    {}
 
-func (m *StreamExecuteResponse) GetResult() *querypb.QueryResult {
+func (m *StreamExecuteResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}
@@ -792,7 +792,7 @@ type StreamExecuteShardsRequest struct {
 	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
 	// shards to target the query to.
@@ -812,7 +812,7 @@ func (m *StreamExecuteShardsRequest) GetCallerId() *vtrpc.CallerID {
 	return nil
 }
 
-func (m *StreamExecuteShardsRequest) GetQuery() *querypb.BoundQuery {
+func (m *StreamExecuteShardsRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -824,14 +824,14 @@ type StreamExecuteShardsResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result *querypb.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *StreamExecuteShardsResponse) Reset()         { *m = StreamExecuteShardsResponse{} }
 func (m *StreamExecuteShardsResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteShardsResponse) ProtoMessage()    {}
 
-func (m *StreamExecuteShardsResponse) GetResult() *querypb.QueryResult {
+func (m *StreamExecuteShardsResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}
@@ -844,7 +844,7 @@ type StreamExecuteKeyspaceIdsRequest struct {
 	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
 	// keyspace_ids contains the list of keyspace_ids affected by this query.
@@ -865,7 +865,7 @@ func (m *StreamExecuteKeyspaceIdsRequest) GetCallerId() *vtrpc.CallerID {
 	return nil
 }
 
-func (m *StreamExecuteKeyspaceIdsRequest) GetQuery() *querypb.BoundQuery {
+func (m *StreamExecuteKeyspaceIdsRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -877,14 +877,14 @@ type StreamExecuteKeyspaceIdsResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result *querypb.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *StreamExecuteKeyspaceIdsResponse) Reset()         { *m = StreamExecuteKeyspaceIdsResponse{} }
 func (m *StreamExecuteKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteKeyspaceIdsResponse) ProtoMessage()    {}
 
-func (m *StreamExecuteKeyspaceIdsResponse) GetResult() *querypb.QueryResult {
+func (m *StreamExecuteKeyspaceIdsResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}
@@ -897,7 +897,7 @@ type StreamExecuteKeyRangesRequest struct {
 	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
 	// key_ranges contains the list of key ranges affected by this query.
@@ -918,7 +918,7 @@ func (m *StreamExecuteKeyRangesRequest) GetCallerId() *vtrpc.CallerID {
 	return nil
 }
 
-func (m *StreamExecuteKeyRangesRequest) GetQuery() *querypb.BoundQuery {
+func (m *StreamExecuteKeyRangesRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -937,14 +937,14 @@ type StreamExecuteKeyRangesResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result *querypb.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *StreamExecuteKeyRangesResponse) Reset()         { *m = StreamExecuteKeyRangesResponse{} }
 func (m *StreamExecuteKeyRangesResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteKeyRangesResponse) ProtoMessage()    {}
 
-func (m *StreamExecuteKeyRangesResponse) GetResult() *querypb.QueryResult {
+func (m *StreamExecuteKeyRangesResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}
@@ -1064,7 +1064,7 @@ type SplitQueryRequest struct {
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
 	// query is the query and bind variables to produce splits for.
-	Query *querypb.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 	// split_column is an optional hint on the column to use to split the query.
 	SplitColumn string `protobuf:"bytes,4,opt,name=split_column" json:"split_column,omitempty"`
 	// split_count describes how many splits we want for this query.
@@ -1082,7 +1082,7 @@ func (m *SplitQueryRequest) GetCallerId() *vtrpc.CallerID {
 	return nil
 }
 
-func (m *SplitQueryRequest) GetQuery() *querypb.BoundQuery {
+func (m *SplitQueryRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
@@ -1137,7 +1137,7 @@ func (*SplitQueryResponse_ShardPart) ProtoMessage()    {}
 
 type SplitQueryResponse_Part struct {
 	// query is the query and bind variables to execute.
-	Query *querypb.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
 	// key_range_part is set if the query should be executed by ExecuteKeyRanges.
 	KeyRangePart *SplitQueryResponse_KeyRangePart `protobuf:"bytes,2,opt,name=key_range_part" json:"key_range_part,omitempty"`
 	// shard_part is set if the query should be executed by ExecuteShards.
@@ -1150,7 +1150,7 @@ func (m *SplitQueryResponse_Part) Reset()         { *m = SplitQueryResponse_Part
 func (m *SplitQueryResponse_Part) String() string { return proto.CompactTextString(m) }
 func (*SplitQueryResponse_Part) ProtoMessage()    {}
 
-func (m *SplitQueryResponse_Part) GetQuery() *querypb.BoundQuery {
+func (m *SplitQueryResponse_Part) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}

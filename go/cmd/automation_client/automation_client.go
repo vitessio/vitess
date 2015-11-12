@@ -15,8 +15,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
-	pbs "github.com/youtube/vitess/go/vt/proto/automationservice"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationservicepb "github.com/youtube/vitess/go/vt/proto/automationservice"
 )
 
 var (
@@ -72,9 +72,9 @@ func main() {
 		os.Exit(3)
 	}
 	defer conn.Close()
-	client := pbs.NewAutomationClient(conn)
+	client := automationservicepb.NewAutomationClient(conn)
 
-	enqueueRequest := &pb.EnqueueClusterOperationRequest{
+	enqueueRequest := &automationpb.EnqueueClusterOperationRequest{
 		Name:       *task,
 		Parameters: params.parameters,
 	}
@@ -94,9 +94,9 @@ func main() {
 }
 
 // waitForClusterOp polls and blocks until the ClusterOperation invocation specified by "id" has finished. If an error occured, it will be returned.
-func waitForClusterOp(client pbs.AutomationClient, id string) (*pb.GetClusterOperationDetailsResponse, error) {
+func waitForClusterOp(client automationservicepb.AutomationClient, id string) (*automationpb.GetClusterOperationDetailsResponse, error) {
 	for {
-		req := &pb.GetClusterOperationDetailsRequest{
+		req := &automationpb.GetClusterOperationDetailsRequest{
 			Id: id,
 		}
 
@@ -106,9 +106,9 @@ func waitForClusterOp(client pbs.AutomationClient, id string) (*pb.GetClusterOpe
 		}
 
 		switch resp.ClusterOp.State {
-		case pb.ClusterOperationState_UNKNOWN_CLUSTER_OPERATION_STATE:
+		case automationpb.ClusterOperationState_UNKNOWN_CLUSTER_OPERATION_STATE:
 			return resp, fmt.Errorf("ClusterOperation is in an unknown state. Details: %v", resp)
-		case pb.ClusterOperationState_CLUSTER_OPERATION_DONE:
+		case automationpb.ClusterOperationState_CLUSTER_OPERATION_DONE:
 			if resp.ClusterOp.Error != "" {
 				return resp, fmt.Errorf("ClusterOperation failed. Details:\n%v", proto.MarshalTextString(resp))
 			}

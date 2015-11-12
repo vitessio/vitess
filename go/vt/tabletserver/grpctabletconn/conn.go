@@ -19,8 +19,8 @@ import (
 	"google.golang.org/grpc"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pbs "github.com/youtube/vitess/go/vt/proto/queryservice"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	queryservicepb "github.com/youtube/vitess/go/vt/proto/queryservice"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const protocolName = "grpc"
@@ -32,32 +32,32 @@ func init() {
 // gRPCQueryClient implements a gRPC implementation for TabletConn
 type gRPCQueryClient struct {
 	// endPoint is set at construction time, and never changed
-	endPoint *pbt.EndPoint
+	endPoint *topodatapb.EndPoint
 
 	// mu protects the next fields
 	mu        sync.RWMutex
 	cc        *grpc.ClientConn
-	c         pbs.QueryClient
+	c         queryservicepb.QueryClient
 	sessionID int64
 	target    *querypb.Target
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
 	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["grpc"])
 	cc, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(timeout))
 	if err != nil {
 		return nil, err
 	}
-	c := pbs.NewQueryClient(cc)
+	c := queryservicepb.NewQueryClient(cc)
 
 	result := &gRPCQueryClient{
 		endPoint: endPoint,
 		cc:       cc,
 		c:        c,
 	}
-	if tabletType == pbt.TabletType_UNKNOWN {
+	if tabletType == topodatapb.TabletType_UNKNOWN {
 		// we use session
 		gsir, err := c.GetSessionId(ctx, &querypb.GetSessionIdRequest{
 			Keyspace: keyspace,
@@ -358,13 +358,13 @@ func (conn *gRPCQueryClient) Close() {
 }
 
 // SetTarget can be called to change the target used for subsequent calls.
-func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType pbt.TabletType) error {
+func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
 	if conn.target == nil {
 		return fmt.Errorf("cannot set target on sessionId based conn")
 	}
-	if tabletType == pbt.TabletType_UNKNOWN {
+	if tabletType == topodatapb.TabletType_UNKNOWN {
 		return fmt.Errorf("cannot set tablet type to UNKNOWN")
 	}
 	conn.target = &querypb.Target{
@@ -376,6 +376,6 @@ func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType pbt.Ta
 }
 
 // EndPoint returns the rpc end point.
-func (conn *gRPCQueryClient) EndPoint() *pbt.EndPoint {
+func (conn *gRPCQueryClient) EndPoint() *topodatapb.EndPoint {
 	return conn.endPoint
 }

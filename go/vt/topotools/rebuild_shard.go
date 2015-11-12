@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // RebuildShard updates the SrvShard objects and underlying serving graph.
@@ -84,7 +84,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		}
 
 		// Build up the serving graph from scratch.
-		serving := make(map[pb.TabletType]*pb.EndPoints)
+		serving := make(map[topodatapb.TabletType]*topodatapb.EndPoints)
 		for _, tablet := range tablets {
 			// Only add serving types.
 			if !tablet.IsInServingGraph() {
@@ -117,7 +117,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		// Write nodes that should exist.
 		for tabletType, endpoints := range serving {
 			wg.Add(1)
-			go func(tabletType pb.TabletType, endpoints *pb.EndPoints) {
+			go func(tabletType topodatapb.TabletType, endpoints *topodatapb.EndPoints) {
 				defer wg.Done()
 
 				log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", cell, si.Keyspace(), si.ShardName(), tabletType)
@@ -155,7 +155,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		for tabletType, version := range versions {
 			if _, ok := serving[tabletType]; !ok {
 				wg.Add(1)
-				go func(tabletType pb.TabletType, version int64) {
+				go func(tabletType topodatapb.TabletType, version int64) {
 					defer wg.Done()
 					log.Infof("removing stale db type from serving graph: %v", tabletType)
 					if err := ts.DeleteEndPoints(ctx, cell, si.Keyspace(), si.ShardName(), tabletType, version); err != nil && err != topo.ErrNoNode {
@@ -199,7 +199,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 	}
 }
 
-func getEndPointsVersions(ctx context.Context, ts topo.Server, cell, keyspace, shard string) (map[pb.TabletType]int64, error) {
+func getEndPointsVersions(ctx context.Context, ts topo.Server, cell, keyspace, shard string) (map[topodatapb.TabletType]int64, error) {
 	// Get all existing tablet types.
 	tabletTypes, err := ts.GetSrvTabletTypesPerShard(ctx, cell, keyspace, shard)
 	if err != nil {
@@ -213,12 +213,12 @@ func getEndPointsVersions(ctx context.Context, ts topo.Server, cell, keyspace, s
 	// Get node versions.
 	wg := sync.WaitGroup{}
 	errs := concurrency.AllErrorRecorder{}
-	versions := make(map[pb.TabletType]int64)
+	versions := make(map[topodatapb.TabletType]int64)
 	mu := sync.Mutex{}
 
 	for _, tabletType := range tabletTypes {
 		wg.Add(1)
-		go func(tabletType pb.TabletType) {
+		go func(tabletType topodatapb.TabletType) {
 			defer wg.Done()
 
 			_, version, err := ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
@@ -237,9 +237,9 @@ func getEndPointsVersions(ctx context.Context, ts topo.Server, cell, keyspace, s
 	return versions, errs.Error()
 }
 
-func updateEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType pb.TabletType, endpoint *pb.EndPoint) error {
+func updateEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topodatapb.TabletType, endpoint *topodatapb.EndPoint) error {
 	return retryUpdateEndpoints(ctx, ts, cell, keyspace, shard, tabletType, true, /* create */
-		func(endpoints *pb.EndPoints) bool {
+		func(endpoints *topodatapb.EndPoints) bool {
 			// Look for an existing entry to update.
 			for i := range endpoints.Entries {
 				if endpoints.Entries[i].Uid == endpoint.Uid {
@@ -258,11 +258,11 @@ func updateEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard s
 		})
 }
 
-func removeEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType pb.TabletType, tabletUID uint32) error {
+func removeEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topodatapb.TabletType, tabletUID uint32) error {
 	err := retryUpdateEndpoints(ctx, ts, cell, keyspace, shard, tabletType, false, /* create */
-		func(endpoints *pb.EndPoints) bool {
+		func(endpoints *topodatapb.EndPoints) bool {
 			// Make a new list, excluding the given UID.
-			entries := make([]*pb.EndPoint, 0, len(endpoints.Entries))
+			entries := make([]*topodatapb.EndPoint, 0, len(endpoints.Entries))
 			for _, ep := range endpoints.Entries {
 				if ep.Uid != tabletUID {
 					entries = append(entries, ep)
@@ -284,7 +284,7 @@ func removeEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard s
 	return err
 }
 
-func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType pb.TabletType, create bool, updateFunc func(*pb.EndPoints) bool) error {
+func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topodatapb.TabletType, create bool, updateFunc func(*topodatapb.EndPoints) bool) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -296,7 +296,7 @@ func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, s
 		endpoints, version, err := ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err == topo.ErrNoNode && create {
 			// Create instead of updating.
-			endpoints = &pb.EndPoints{}
+			endpoints = &topodatapb.EndPoints{}
 			if !updateFunc(endpoints) {
 				// Nothing changed.
 				return nil
@@ -343,7 +343,7 @@ func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, s
 
 // UpdateTabletEndpoints fixes up any entries in the serving graph that relate
 // to a given tablet.
-func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *pb.Tablet) (err error) {
+func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topodatapb.Tablet) (err error) {
 	srvTypes, err := ts.GetSrvTabletTypesPerShard(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		if err != topo.ErrNoNode {
@@ -376,7 +376,7 @@ func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *pb.Table
 	for _, srvType := range srvTypes {
 		if srvType != tablet.Type {
 			wg.Add(1)
-			go func(tabletType pb.TabletType) {
+			go func(tabletType topodatapb.TabletType) {
 				defer wg.Done()
 				errs.RecordError(
 					removeEndpoint(ctx, ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard,
@@ -392,7 +392,7 @@ func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *pb.Table
 // UpdateSrvShard creates the SrvShard object based on the global ShardInfo,
 // and writes it to the given cell.
 func UpdateSrvShard(ctx context.Context, ts topo.Server, cell string, si *topo.ShardInfo) error {
-	srvShard := &pb.SrvShard{
+	srvShard := &topodatapb.SrvShard{
 		Name:     si.ShardName(),
 		KeyRange: si.KeyRange,
 	}

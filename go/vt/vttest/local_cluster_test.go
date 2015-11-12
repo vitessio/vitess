@@ -12,7 +12,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -49,7 +49,7 @@ func TestVitess(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	_, err = conn.ExecuteShards(ctx, "select 1 from dual", "test_keyspace", []string{"0"}, nil, topodata.TabletType_MASTER)
+	_, err = conn.ExecuteShards(ctx, "select 1 from dual", "test_keyspace", []string{"0"}, nil, topodatapb.TabletType_MASTER)
 	if err != nil {
 		t.Error(err)
 		return

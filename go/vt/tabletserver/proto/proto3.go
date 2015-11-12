@@ -11,7 +11,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TargetToProto3 transform the bson RPC target to proto3
@@ -22,7 +22,7 @@ func TargetToProto3(target *Target) *querypb.Target {
 	return &querypb.Target{
 		Keyspace:   target.Keyspace,
 		Shard:      target.Shard,
-		TabletType: pbt.TabletType(target.TabletType),
+		TabletType: topodatapb.TabletType(target.TabletType),
 	}
 }
 

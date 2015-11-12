@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -85,7 +85,7 @@ func (sg *shardGateway) InitializeConnections(ctx context.Context) error {
 				tt := ksPartition.ServedType
 				for _, shard := range ksPartition.ShardReferences {
 					wg.Add(1)
-					go func(shardName string, tabletType pb.TabletType) {
+					go func(shardName string, tabletType topodatapb.TabletType) {
 						defer wg.Done()
 						err = sg.getConnection(ctx, keyspace, shardName, tabletType).Dial(ctx)
 						if err != nil {
@@ -105,38 +105,38 @@ func (sg *shardGateway) InitializeConnections(ctx context.Context) error {
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) Execute(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+func (sg *shardGateway) Execute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).Execute(ctx, query, bindVars, transactionID)
 }
 
 // ExecuteBatch executes a group of queries for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) ExecuteBatch(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (sg *shardGateway) ExecuteBatch(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
+func (sg *shardGateway) StreamExecute(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).StreamExecute(ctx, query, bindVars, transactionID)
 }
 
 // Begin starts a transaction for the specified keyspace, shard, and tablet type.
 // It returns the transaction ID.
-func (sg *shardGateway) Begin(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType) (int64, error) {
+func (sg *shardGateway) Begin(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType) (int64, error) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).Begin(ctx)
 }
 
 // Commit commits the current transaction for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) Commit(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType, transactionID int64) error {
+func (sg *shardGateway) Commit(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).Commit(ctx, transactionID)
 }
 
 // Rollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) Rollback(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType, transactionID int64) error {
+func (sg *shardGateway) Rollback(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).Rollback(ctx, transactionID)
 }
 
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) SplitQuery(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType, sql string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
+func (sg *shardGateway) SplitQuery(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, sql string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).SplitQuery(ctx, sql, bindVars, splitColumn, splitCount)
 }
 
@@ -151,7 +151,7 @@ func (sg *shardGateway) Close(ctx context.Context) error {
 	return nil
 }
 
-func (sg *shardGateway) getConnection(ctx context.Context, keyspace, shard string, tabletType pb.TabletType) *ShardConn {
+func (sg *shardGateway) getConnection(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType) *ShardConn {
 	sg.mu.Lock()
 	defer sg.mu.Unlock()
 

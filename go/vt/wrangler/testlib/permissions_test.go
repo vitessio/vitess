@@ -17,7 +17,7 @@ import (
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestPermissions(t *testing.T) {
@@ -29,8 +29,8 @@ func TestPermissions(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
-	replica := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
+	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	replica := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 
 	// mark the master inside the shard
 	si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)

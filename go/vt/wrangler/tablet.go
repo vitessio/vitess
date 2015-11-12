@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Tablet related methods for wrangler
@@ -29,7 +29,7 @@ import (
 // allowDifferentShard must be set to accept the update.
 // If a tablet is created as master, and there is already a different
 // master in the shard, allowMasterOverride must be set.
-func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, allowMasterOverride, allowDifferentShard, createShardAndKeyspace, allowUpdate bool) error {
+func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, allowMasterOverride, allowDifferentShard, createShardAndKeyspace, allowUpdate bool) error {
 	if err := topo.TabletComplete(tablet); err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, allowMast
 	if !key.KeyRangeEqual(si.KeyRange, tablet.KeyRange) {
 		return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
 	}
-	if tablet.Type == pb.TabletType_MASTER && si.HasMaster() && !topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) && !allowMasterOverride {
+	if tablet.Type == topodatapb.TabletType_MASTER && si.HasMaster() && !topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) && !allowMasterOverride {
 		return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v, use allow_master_override flag", topoproto.TabletAliasString(si.MasterAlias), tablet.Keyspace, tablet.Shard)
 	}
 
@@ -95,14 +95,14 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, allowMast
 // - if allowMaster is set, we can Delete a master tablet (and clear
 // its record from the Shard record if it was the master).
 // - if skipRebuild is set, we do not rebuild the serving graph.
-func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias, allowMaster, skipRebuild bool) error {
+func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias, allowMaster, skipRebuild bool) error {
 	// load the tablet, see if we'll need to rebuild
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
 	rebuildRequired := ti.IsInServingGraph()
-	wasMaster := ti.Type == pb.TabletType_MASTER
+	wasMaster := ti.Type == topodatapb.TabletType_MASTER
 	if wasMaster && !allowMaster {
 		return fmt.Errorf("cannot delete tablet %v as it is a master, use allow_master flag", topoproto.TabletAliasString(tabletAlias))
 	}
@@ -162,7 +162,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlia
 //
 // Note we don't update the master record in the Shard here, as we
 // can't ChangeType from and out of master anyway.
-func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *pb.TabletAlias, tabletType pb.TabletType) error {
+func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *topodatapb.TabletAlias, tabletType topodatapb.TabletType) error {
 	// Load tablet to find endpoint, and keyspace and shard assignment.
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -186,7 +186,7 @@ func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *pb.TabletA
 
 // same as ChangeType, but assume we already have the shard lock,
 // and do not have the option to force anything.
-func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias *pb.TabletAlias, dbType pb.TabletType) error {
+func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias *topodatapb.TabletAlias, dbType topodatapb.TabletType) error {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
@@ -209,7 +209,7 @@ func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias *pb.Tabl
 }
 
 // ExecuteFetchAsDba executes a query remotely using the DBA pool
-func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *pb.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool, reloadSchema bool) (*sqltypes.Result, error) {
+func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool, reloadSchema bool) (*sqltypes.Result, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err

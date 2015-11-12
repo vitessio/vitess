@@ -9,7 +9,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 )
@@ -79,7 +79,7 @@ func (tqsc *Controller) InitDBConfig(target querypb.Target, dbConfigs dbconfigs.
 }
 
 // SetServingType is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetServingType(tabletType topodata.TabletType, serving bool) error {
+func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving bool) error {
 	if tqsc.SetServingTypeError == nil {
 		tqsc.CurrentTarget.TabletType = tabletType
 		tqsc.QueryServiceEnabled = serving

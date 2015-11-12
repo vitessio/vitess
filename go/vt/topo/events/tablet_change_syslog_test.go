@@ -4,16 +4,16 @@ import (
 	"log/syslog"
 	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestTabletChangeSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123/cell-0000012345 [tablet] status"
 	tc := &TabletChange{
-		Tablet: pb.Tablet{
+		Tablet: topodatapb.Tablet{
 			Keyspace: "keyspace-123",
 			Shard:    "shard-123",
-			Alias: &pb.TabletAlias{
+			Alias: &topodatapb.TabletAlias{
 				Cell: "cell",
 				Uid:  12345,
 			},

@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
@@ -61,7 +61,7 @@ func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, stat
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *pbg.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if bindVariables == nil {
 		bindVariables = make(map[string]interface{})
 	}
@@ -109,7 +109,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[st
 }
 
 // StreamExecute executes a streaming query.
-func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*sqltypes.Result) error) error {
+func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if bindVariables == nil {
 		bindVariables = make(map[string]interface{})
 	}
@@ -203,7 +203,7 @@ func (rtr *Router) paramsSelectKeyrange(vcursor *requestContext, plan *planbuild
 	return newScatterParams(plan.Rewritten, ks, vcursor.bindVariables, shards), nil
 }
 
-func getKeyRange(keys []interface{}) (*pb.KeyRange, error) {
+func getKeyRange(keys []interface{}) (*topodatapb.KeyRange, error) {
 	var ksids [][]byte
 	for _, k := range keys {
 		switch k := k.(type) {
@@ -213,7 +213,7 @@ func getKeyRange(keys []interface{}) (*pb.KeyRange, error) {
 			return nil, fmt.Errorf("expecting strings for keyrange: %+v", keys)
 		}
 	}
-	return &pb.KeyRange{
+	return &topodatapb.KeyRange{
 		Start: ksids[0],
 		End:   ksids[1],
 	}, nil
@@ -551,7 +551,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 	return generated, nil
 }
 
-func (rtr *Router) getRouting(ctx context.Context, keyspace string, tabletType pb.TabletType, ksid []byte) (newKeyspace, shard string, err error) {
+func (rtr *Router) getRouting(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ksid []byte) (newKeyspace, shard string, err error) {
 	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, rtr.serv, rtr.cell, keyspace, tabletType)
 	if err != nil {
 		return "", "", err

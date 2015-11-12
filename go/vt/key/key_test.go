@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestKey(t *testing.T) {
@@ -36,7 +36,7 @@ func TestKey(t *testing.T) {
 func TestParseShardingSpec(t *testing.T) {
 	x40 := []byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	x80 := []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	goodTable := map[string][]*pb.KeyRange{
+	goodTable := map[string][]*topodatapb.KeyRange{
 		"-": {{}},
 		"-4000000000000000-8000000000000000-": {
 			{End: x40},
@@ -96,7 +96,7 @@ func TestContains(t *testing.T) {
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		kr := &pb.KeyRange{
+		kr := &topodatapb.KeyRange{
 			Start: s,
 			End:   e,
 		}
@@ -147,7 +147,7 @@ func TestIntersectOverlap(t *testing.T) {
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		left := &pb.KeyRange{Start: a, End: b}
+		left := &topodatapb.KeyRange{Start: a, End: b}
 		c, err := hex.DecodeString(el.c)
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
@@ -156,7 +156,7 @@ func TestIntersectOverlap(t *testing.T) {
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		right := &pb.KeyRange{Start: c, End: d}
+		right := &topodatapb.KeyRange{Start: c, End: d}
 		if c := KeyRangesIntersect(left, right); c != el.intersects {
 			t.Errorf("Unexpected result: KeyRangesIntersect for %v and %v yields %v.", left, right, c)
 		}

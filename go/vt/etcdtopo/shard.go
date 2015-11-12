@@ -10,11 +10,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CreateShard implements topo.Server.
-func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error {
+func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
@@ -28,7 +28,7 @@ func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value 
 }
 
 // UpdateShard implements topo.Server.
-func (s *Server) UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (int64, error) {
+func (s *Server) UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (int64, error) {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
@@ -52,7 +52,7 @@ func (s *Server) ValidateShard(ctx context.Context, keyspace, shard string) erro
 }
 
 // GetShard implements topo.Server.
-func (s *Server) GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error) {
+func (s *Server) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
 	resp, err := s.getGlobal().Get(shardFilePath(keyspace, shard), false /* sort */, false /* recursive */)
 	if err != nil {
 		return nil, 0, convertError(err)
@@ -61,7 +61,7 @@ func (s *Server) GetShard(ctx context.Context, keyspace, shard string) (*pb.Shar
 		return nil, 0, ErrBadResponse
 	}
 
-	value := &pb.Shard{}
+	value := &topodatapb.Shard{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, 0, fmt.Errorf("bad shard data (%v): %q", err, resp.Node.Value)
 	}

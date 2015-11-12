@@ -22,7 +22,7 @@ import (
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -86,7 +86,7 @@ func verifyErrorExceptServerCode(t *testing.T, err error, method string) {
 var testTarget = &querypb.Target{
 	Keyspace:   "test_keyspace",
 	Shard:      "test_shard",
-	TabletType: pbt.TabletType_REPLICA,
+	TabletType: topodatapb.TabletType_REPLICA,
 }
 
 var testCallerID = &vtrpc.CallerID{
@@ -959,7 +959,7 @@ var testStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 	Target: &querypb.Target{
 		Keyspace:   "test_keyspace",
 		Shard:      "test_shard",
-		TabletType: pbt.TabletType_RDONLY,
+		TabletType: topodatapb.TabletType_RDONLY,
 	},
 	Serving: true,
 	TabletExternallyReparentedTimestamp: 1234589,
@@ -1054,13 +1054,13 @@ func CreateFakeServer(t *testing.T) *FakeQueryService {
 }
 
 // TestSuite runs all the tests
-func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *FakeQueryService) {
+func TestSuite(t *testing.T, protocol string, endPoint *topodatapb.EndPoint, fake *FakeQueryService) {
 	// make sure we use the right client
 	*tabletconn.TabletProtocol = protocol
 
 	// create a connection, using sessionId
 	ctx := context.Background()
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_UNKNOWN, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -1077,7 +1077,7 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 
 	// create a new connection that expects the extra fields
 	conn.Close()
-	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_REPLICA, 30*time.Second)
+	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_REPLICA, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -1105,7 +1105,7 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 
 	// force panic without extra fields
 	conn.Close()
-	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_UNKNOWN, 30*time.Second)
+	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
@@ -1121,13 +1121,13 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 }
 
 // TestErrorSuite runs all the tests that expect errors
-func TestErrorSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *FakeQueryService) {
+func TestErrorSuite(t *testing.T, protocol string, endPoint *topodatapb.EndPoint, fake *FakeQueryService) {
 	// make sure we use the right client
 	*tabletconn.TabletProtocol = protocol
 
 	// create a connection, using sessionId
 	ctx := context.Background()
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_UNKNOWN, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, topodatapb.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

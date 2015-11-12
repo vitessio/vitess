@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -336,7 +336,7 @@ func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op O
 		} else {
 			goto Error
 		}
-	case *pb.KeyRange:
+	case *topodatapb.KeyRange:
 		if op < QRIn || op > QRNotIn {
 			goto Error
 		}
@@ -691,7 +691,7 @@ func (reval bvcre) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	panic("unexpected:")
 }
 
-type bvcKeyRange pb.KeyRange
+type bvcKeyRange topodatapb.KeyRange
 
 func (krval *bvcKeyRange) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	switch op {
@@ -699,27 +699,27 @@ func (krval *bvcKeyRange) eval(bv interface{}, op Operator, onMismatch bool) boo
 		switch num, status := getuint64(bv); status {
 		case QROK:
 			k := key.Uint64Key(num).Bytes()
-			return key.KeyRangeContains((*pb.KeyRange)(krval), k)
+			return key.KeyRangeContains((*topodatapb.KeyRange)(krval), k)
 		case QROutOfRange:
 			return false
 		}
 		// Not a number. Check string.
 		switch str, status := getstring(bv); status {
 		case QROK:
-			return key.KeyRangeContains((*pb.KeyRange)(krval), []byte(str))
+			return key.KeyRangeContains((*topodatapb.KeyRange)(krval), []byte(str))
 		}
 	case QRNotIn:
 		switch num, status := getuint64(bv); status {
 		case QROK:
 			k := key.Uint64Key(num).Bytes()
-			return !key.KeyRangeContains((*pb.KeyRange)(krval), k)
+			return !key.KeyRangeContains((*topodatapb.KeyRange)(krval), k)
 		case QROutOfRange:
 			return true
 		}
 		// Not a number. Check string.
 		switch str, status := getstring(bv); status {
 		case QROK:
-			return !key.KeyRangeContains((*pb.KeyRange)(krval), []byte(str))
+			return !key.KeyRangeContains((*topodatapb.KeyRange)(krval), []byte(str))
 		}
 	default:
 		panic("unexpected:")
@@ -973,7 +973,7 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 			err = NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "want keyrange for Value")
 			return
 		}
-		keyrange := &pb.KeyRange{}
+		keyrange := &topodatapb.KeyRange{}
 		strstart, ok := kr["Start"]
 		if !ok {
 			err = NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "Start missing in KeyRange")

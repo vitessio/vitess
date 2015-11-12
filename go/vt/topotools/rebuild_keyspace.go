@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // RebuildKeyspace rebuilds the serving graph data while locking out other changes.
@@ -34,14 +34,14 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, ke
 
 // findCellsForRebuild will find all the cells in the given keyspace
 // and create an entry if the map for them
-func findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardInfo, cells []string, srvKeyspaceMap map[string]*pb.SrvKeyspace) {
+func findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardInfo, cells []string, srvKeyspaceMap map[string]*topodatapb.SrvKeyspace) {
 	for _, si := range shardMap {
 		for _, cell := range si.Cells {
 			if !topo.InCellList(cell, cells) {
 				continue
 			}
 			if _, ok := srvKeyspaceMap[cell]; !ok {
-				srvKeyspaceMap[cell] = &pb.SrvKeyspace{
+				srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
 					ShardingColumnName: ki.ShardingColumnName,
 					ShardingColumnType: ki.ShardingColumnType,
 					ServedFrom:         ki.ComputeCellServedFrom(cell),
@@ -109,7 +109,7 @@ func rebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, ke
 	// srvKeyspaceMap is a map:
 	//   key: cell
 	//   value: topo.SrvKeyspace object being built
-	srvKeyspaceMap := make(map[string]*pb.SrvKeyspace)
+	srvKeyspaceMap := make(map[string]*topodatapb.SrvKeyspace)
 	findCellsForRebuild(ki, shardCache, cells, srvKeyspaceMap)
 
 	// Then we add the cells from the keyspaces we might be 'ServedFrom'.
@@ -136,12 +136,12 @@ func rebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, ke
 			for _, tabletType := range servedTypes {
 				partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)
 				if partition == nil {
-					partition = &pb.SrvKeyspace_KeyspacePartition{
+					partition = &topodatapb.SrvKeyspace_KeyspacePartition{
 						ServedType: tabletType,
 					}
 					srvKeyspace.Partitions = append(srvKeyspace.Partitions, partition)
 				}
-				partition.ShardReferences = append(partition.ShardReferences, &pb.ShardReference{
+				partition.ShardReferences = append(partition.ShardReferences, &topodatapb.ShardReference{
 					Name:     si.ShardName(),
 					KeyRange: si.KeyRange,
 				})
@@ -165,7 +165,7 @@ func rebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, ke
 
 // orderAndCheckPartitions will re-order the partition list, and check
 // it's correct.
-func orderAndCheckPartitions(cell string, srvKeyspace *pb.SrvKeyspace) error {
+func orderAndCheckPartitions(cell string, srvKeyspace *topodatapb.SrvKeyspace) error {
 
 	// now check them all
 	for _, partition := range srvKeyspace.Partitions {

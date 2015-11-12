@@ -18,7 +18,7 @@ import (
 	"golang.org/x/net/context"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
@@ -287,22 +287,22 @@ func (topoServer *fakeTopo) GetShardNames(ctx context.Context, keyspace string) 
 	return []string{"0", "1", "2"}, nil
 }
 
-func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*pb.Shard, int64, error) {
-	var masterAlias *pb.TabletAlias
+func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topodatapb.Shard, int64, error) {
+	var masterAlias *topodatapb.TabletAlias
 	if !topoServer.WithEmptyMasterAlias {
-		masterAlias = &pb.TabletAlias{
+		masterAlias = &topodatapb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  0,
 		}
 	}
-	value := &pb.Shard{
+	value := &topodatapb.Shard{
 		MasterAlias: masterAlias,
 	}
 	return value, 0, nil
 }
 
-func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*pb.Tablet, int64, error) {
-	return &pb.Tablet{
+func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
+	return &topodatapb.Tablet{
 		Alias:    tabletAlias,
 		Keyspace: "test_keyspace",
 	}, 0, nil

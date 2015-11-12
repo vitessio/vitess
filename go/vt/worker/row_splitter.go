@@ -12,23 +12,23 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // RowSplitter is a helper class to split rows into multiple
 // subsets targeted to different shards.
 type RowSplitter struct {
-	KeyspaceIdType pb.KeyspaceIdType
+	KeyspaceIdType topodatapb.KeyspaceIdType
 	ValueIndex     int
-	KeyRanges      []*pb.KeyRange
+	KeyRanges      []*topodatapb.KeyRange
 }
 
 // NewRowSplitter returns a new row splitter for the given shard distribution.
-func NewRowSplitter(shardInfos []*topo.ShardInfo, keyspaceIdType pb.KeyspaceIdType, valueIndex int) *RowSplitter {
+func NewRowSplitter(shardInfos []*topo.ShardInfo, keyspaceIdType topodatapb.KeyspaceIdType, valueIndex int) *RowSplitter {
 	result := &RowSplitter{
 		KeyspaceIdType: keyspaceIdType,
 		ValueIndex:     valueIndex,
-		KeyRanges:      make([]*pb.KeyRange, len(shardInfos)),
+		KeyRanges:      make([]*topodatapb.KeyRange, len(shardInfos)),
 	}
 	for i, si := range shardInfos {
 		result.KeyRanges[i] = si.KeyRange
@@ -43,7 +43,7 @@ func (rs *RowSplitter) StartSplit() [][][]sqltypes.Value {
 
 // Split will split the rows into subset for each distribution
 func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Value) error {
-	if rs.KeyspaceIdType == pb.KeyspaceIdType_UINT64 {
+	if rs.KeyspaceIdType == topodatapb.KeyspaceIdType_UINT64 {
 		for _, row := range rows {
 			v := sqltypes.MakeNumeric(row[rs.ValueIndex].Raw())
 			i, err := v.ParseUint64()

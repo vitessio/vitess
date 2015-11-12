@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -196,7 +196,7 @@ type Controller interface {
 	InitDBConfig(querypb.Target, dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
-	SetServingType(tabletType topodata.TabletType, serving bool) error
+	SetServingType(tabletType topodatapb.TabletType, serving bool) error
 
 	// IsServing returns true if the query service is running
 	IsServing() bool

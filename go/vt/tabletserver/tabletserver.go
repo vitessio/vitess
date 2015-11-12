@@ -27,7 +27,7 @@ import (
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -245,7 +245,7 @@ const (
 
 // SetServingType changes the serving type of the tabletserver. It starts or
 // stops internal services as deemed necessary.
-func (tsv *TabletServer) SetServingType(tabletType topodata.TabletType, serving bool) error {
+func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool) error {
 	action, err := tsv.decideAction(tabletType, serving)
 	if err != nil {
 		return err
@@ -264,7 +264,7 @@ func (tsv *TabletServer) SetServingType(tabletType topodata.TabletType, serving 
 	panic("unreachable")
 }
 
-func (tsv *TabletServer) decideAction(tabletType topodata.TabletType, serving bool) (action int, err error) {
+func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving bool) (action int, err error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	// Handle the case where the requested TabletType and serving state
@@ -350,7 +350,7 @@ func (tsv *TabletServer) needInvalidator(target querypb.Target) bool {
 	if !tsv.config.RowCache.Enabled {
 		return false
 	}
-	return target.TabletType != topodata.TabletType_MASTER
+	return target.TabletType != topodatapb.TabletType_MASTER
 }
 
 func (tsv *TabletServer) gracefulStop() {
