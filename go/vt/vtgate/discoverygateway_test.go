@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -334,10 +334,10 @@ func (fhc *fakeHealthCheck) addTestEndPoint(cell, host string, port int32, keysp
 		fhc.AddEndPoint(cell, "", ep)
 		item = fhc.items[key]
 	}
-	item.eps.Target = &pbq.Target{Keyspace: keyspace, Shard: shard, TabletType: tabletType}
+	item.eps.Target = &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: tabletType}
 	item.eps.Serving = serving
 	item.eps.TabletExternallyReparentedTimestamp = reparentTS
-	item.eps.Stats = &pbq.RealtimeStats{}
+	item.eps.Stats = &querypb.RealtimeStats{}
 	item.eps.LastError = err
 	item.conn = conn
 	return ep

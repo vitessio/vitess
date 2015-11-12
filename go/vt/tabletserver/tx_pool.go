@@ -20,7 +20,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/callerid"
-	qrpb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
 )
@@ -250,11 +250,11 @@ type TxConnection struct {
 	Queries           []string
 	Conclusion        string
 	LogToFile         sync2.AtomicInt32
-	ImmediateCallerID *qrpb.VTGateCallerID
+	ImmediateCallerID *querypb.VTGateCallerID
 	EffectiveCallerID *vtrpc.CallerID
 }
 
-func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate *qrpb.VTGateCallerID, effective *vtrpc.CallerID) *TxConnection {
+func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate *querypb.VTGateCallerID, effective *vtrpc.CallerID) *TxConnection {
 	return &TxConnection{
 		DBConn:            conn,
 		TransactionID:     transactionID,

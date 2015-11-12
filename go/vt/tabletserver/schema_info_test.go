@@ -16,7 +16,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -236,7 +236,7 @@ func TestSchemaInfoReload(t *testing.T) {
 	})
 
 	db.AddQuery("select * from `test_table_04` where 1 != 1", &sqltypes.Result{
-		Fields: []*query.Field{{
+		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
@@ -497,7 +497,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	})
 	q = fmt.Sprintf("select * from `%s` where 1 != 1", tableName)
 	db.AddQuery(q, &sqltypes.Result{
-		Fields: []*query.Field{{
+		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
@@ -810,7 +810,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"select * from `test_table_01` where 1 != 1": &sqltypes.Result{
-			Fields: []*query.Field{{
+			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
@@ -829,7 +829,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"select * from `test_table_02` where 1 != 1": &sqltypes.Result{
-			Fields: []*query.Field{{
+			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
@@ -848,7 +848,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"select * from `test_table_03` where 1 != 1": &sqltypes.Result{
-			Fields: []*query.Field{{
+			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},

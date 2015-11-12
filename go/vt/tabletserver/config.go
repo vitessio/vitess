@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -129,8 +129,7 @@ type Config struct {
 	TableAclExemptACL    string
 }
 
-// DefaultQSConfig is the default value for the query service config.
-//
+// DefaultQsConfig is the default value for the query service config.
 // The value for StreamBufferSize was chosen after trying out a few of
 // them. Too small buffers force too many packets to be sent. Too big
 // buffers force the clients to read them in multiple chunks and make
@@ -194,7 +193,7 @@ type Controller interface {
 	AddStatusPart()
 
 	// InitDBConfig sets up the db config vars.
-	InitDBConfig(pb.Target, dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
+	InitDBConfig(querypb.Target, dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
 	SetServingType(tabletType topodata.TabletType, serving bool) error
@@ -224,7 +223,7 @@ type Controller interface {
 	QueryService() queryservice.QueryService
 
 	// BroadcastHealth sends the current health to all listeners
-	BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats)
+	BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats)
 }
 
 // Ensure TabletServer satisfies Controller interface.

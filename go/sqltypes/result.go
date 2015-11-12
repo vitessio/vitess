@@ -7,12 +7,12 @@ package sqltypes
 import (
 	"strconv"
 
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Result represents a query result.
 type Result struct {
-	Fields       []*query.Field
+	Fields       []*querypb.Field
 	RowsAffected uint64
 	InsertID     uint64
 	Rows         [][]Value
@@ -25,7 +25,7 @@ type Result struct {
 // - float64 for floating point values
 // - []byte for everything else
 // TODO(sougou): move this to Value once it's full-featured.
-func Convert(field *query.Field, val Value) (interface{}, error) {
+func Convert(field *querypb.Field, val Value) (interface{}, error) {
 	switch {
 	case field.Type == Null:
 		return nil, nil

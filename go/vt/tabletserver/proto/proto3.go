@@ -10,16 +10,16 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TargetToProto3 transform the bson RPC target to proto3
-func TargetToProto3(target *Target) *pb.Target {
+func TargetToProto3(target *Target) *querypb.Target {
 	if target == nil {
 		return nil
 	}
-	return &pb.Target{
+	return &querypb.Target{
 		Keyspace:   target.Keyspace,
 		Shard:      target.Shard,
 		TabletType: pbt.TabletType(target.TabletType),
@@ -27,26 +27,26 @@ func TargetToProto3(target *Target) *pb.Target {
 }
 
 // BoundQueryToProto3 converts internal types to proto3 BoundQuery
-func BoundQueryToProto3(sql string, bindVars map[string]interface{}) (*pb.BoundQuery, error) {
+func BoundQueryToProto3(sql string, bindVars map[string]interface{}) (*querypb.BoundQuery, error) {
 	bv, err := BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.BoundQuery{
+	return &querypb.BoundQuery{
 		Sql:           sql,
 		BindVariables: bv,
 	}, nil
 }
 
 // BindVariablesToProto3 converts internal type to proto3 BindVariable array
-func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.BindVariable, error) {
+func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*querypb.BindVariable, error) {
 	if len(bindVars) == 0 {
 		return nil, nil
 	}
 
-	result := make(map[string]*pb.BindVariable)
+	result := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {
-		bv := new(pb.BindVariable)
+		bv := new(querypb.BindVariable)
 		switch v := v.(type) {
 		case []interface{}:
 			// This is how the list variables will normally appear.
@@ -54,8 +54,8 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
 			bv.Type = sqltypes.Tuple
-			bv.Values = make([]*pb.Value, len(v))
-			values := make([]pb.Value, len(v))
+			bv.Values = make([]*querypb.Value, len(v))
+			values := make([]querypb.Value, len(v))
 			for i, lv := range v {
 				val, err := BindVariableToValue(lv)
 				if err != nil {
@@ -71,8 +71,8 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
 			bv.Type = sqltypes.Tuple
-			bv.Values = make([]*pb.Value, len(v))
-			values := make([]pb.Value, len(v))
+			bv.Values = make([]*querypb.Value, len(v))
+			values := make([]querypb.Value, len(v))
 			for i, lv := range v {
 				values[i].Type = sqltypes.VarChar
 				values[i].Value = []byte(lv)
@@ -83,8 +83,8 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
 			bv.Type = sqltypes.Tuple
-			bv.Values = make([]*pb.Value, len(v))
-			values := make([]pb.Value, len(v))
+			bv.Values = make([]*querypb.Value, len(v))
+			values := make([]querypb.Value, len(v))
 			for i, lv := range v {
 				values[i].Type = sqltypes.VarBinary
 				values[i].Value = lv
@@ -95,8 +95,8 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
 			bv.Type = sqltypes.Tuple
-			bv.Values = make([]*pb.Value, len(v))
-			values := make([]pb.Value, len(v))
+			bv.Values = make([]*querypb.Value, len(v))
+			values := make([]querypb.Value, len(v))
 			for i, lv := range v {
 				values[i].Type = sqltypes.Int64
 				values[i].Value = strconv.AppendInt(nil, int64(lv), 10)
@@ -107,8 +107,8 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
 			bv.Type = sqltypes.Tuple
-			bv.Values = make([]*pb.Value, len(v))
-			values := make([]pb.Value, len(v))
+			bv.Values = make([]*querypb.Value, len(v))
+			values := make([]querypb.Value, len(v))
 			for i, lv := range v {
 				values[i].Type = sqltypes.Int64
 				values[i].Value = strconv.AppendInt(nil, lv, 10)
@@ -119,8 +119,8 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 				return nil, fmt.Errorf("empty list not allowed: %s", k)
 			}
 			bv.Type = sqltypes.Tuple
-			bv.Values = make([]*pb.Value, len(v))
-			values := make([]pb.Value, len(v))
+			bv.Values = make([]*querypb.Value, len(v))
+			values := make([]querypb.Value, len(v))
 			for i, lv := range v {
 				values[i].Type = sqltypes.Uint64
 				values[i].Value = strconv.AppendUint(nil, lv, 10)
@@ -141,98 +141,98 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*pb.Bind
 
 // BindVariableToValue converts a native bind variable value
 // to a proto Value.
-func BindVariableToValue(v interface{}) (pb.Value, error) {
+func BindVariableToValue(v interface{}) (querypb.Value, error) {
 	switch v := v.(type) {
 	case string:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.VarChar,
 			Value: []byte(v),
 		}, nil
 	case []byte:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.VarBinary,
 			Value: v,
 		}, nil
 	case int:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Int64,
 			Value: strconv.AppendInt(nil, int64(v), 10),
 		}, nil
 	case int8:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Int64,
 			Value: strconv.AppendInt(nil, int64(v), 10),
 		}, nil
 	case int16:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Int64,
 			Value: strconv.AppendInt(nil, int64(v), 10),
 		}, nil
 	case int32:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Int64,
 			Value: strconv.AppendInt(nil, int64(v), 10),
 		}, nil
 	case int64:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Int64,
 			Value: strconv.AppendInt(nil, v, 10),
 		}, nil
 	case uint:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Uint64,
 			Value: strconv.AppendUint(nil, uint64(v), 10),
 		}, nil
 	case uint8:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Uint64,
 			Value: strconv.AppendUint(nil, uint64(v), 10),
 		}, nil
 	case uint16:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Uint64,
 			Value: strconv.AppendUint(nil, uint64(v), 10),
 		}, nil
 	case uint32:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Uint64,
 			Value: strconv.AppendUint(nil, uint64(v), 10),
 		}, nil
 	case uint64:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Uint64,
 			Value: strconv.AppendUint(nil, v, 10),
 		}, nil
 	case float32:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Float64,
 			Value: strconv.AppendFloat(nil, float64(v), 'f', -1, 64),
 		}, nil
 	case float64:
-		return pb.Value{
+		return querypb.Value{
 			Type:  sqltypes.Float64,
 			Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
 		}, nil
 	case sqltypes.Value:
 		switch {
 		case v.IsNull():
-			return pb.Value{}, nil
+			return querypb.Value{}, nil
 		case v.IsNumeric():
 			// TODO(sougou): This will fail for large uint64 values.
 			// Revisit after the QueryResult revamp.
-			return pb.Value{Type: sqltypes.Int64, Value: v.Raw()}, nil
+			return querypb.Value{Type: sqltypes.Int64, Value: v.Raw()}, nil
 		case v.IsFractional():
-			return pb.Value{Type: sqltypes.Float64, Value: v.Raw()}, nil
+			return querypb.Value{Type: sqltypes.Float64, Value: v.Raw()}, nil
 		}
-		return pb.Value{Type: sqltypes.VarBinary, Value: v.Raw()}, nil
+		return querypb.Value{Type: sqltypes.VarBinary, Value: v.Raw()}, nil
 	case nil:
-		return pb.Value{}, nil
+		return querypb.Value{}, nil
 	}
-	return pb.Value{}, fmt.Errorf("unexpected type %T", v)
+	return querypb.Value{}, fmt.Errorf("unexpected type %T", v)
 }
 
 // Proto3ToBoundQuery converts a proto.BoundQuery to the internal data structure
-func Proto3ToBoundQuery(query *pb.BoundQuery) (*BoundQuery, error) {
+func Proto3ToBoundQuery(query *querypb.BoundQuery) (*BoundQuery, error) {
 	bv, err := Proto3ToBindVariables(query.BindVariables)
 	if err != nil {
 		return nil, err
@@ -244,7 +244,7 @@ func Proto3ToBoundQuery(query *pb.BoundQuery) (*BoundQuery, error) {
 }
 
 // Proto3ToBoundQueryList converts am array of proto.BoundQuery to the internal data structure
-func Proto3ToBoundQueryList(queries []*pb.BoundQuery) ([]BoundQuery, error) {
+func Proto3ToBoundQueryList(queries []*querypb.BoundQuery) ([]BoundQuery, error) {
 	if len(queries) == 0 {
 		return nil, nil
 	}
@@ -260,7 +260,7 @@ func Proto3ToBoundQueryList(queries []*pb.BoundQuery) ([]BoundQuery, error) {
 }
 
 // Proto3ToBindVariables converts a proto.BinVariable map to internal data structure
-func Proto3ToBindVariables(bv map[string]*pb.BindVariable) (map[string]interface{}, error) {
+func Proto3ToBindVariables(bv map[string]*querypb.BindVariable) (map[string]interface{}, error) {
 	if len(bv) == 0 {
 		return nil, nil
 	}
@@ -291,7 +291,7 @@ func Proto3ToBindVariables(bv map[string]*pb.BindVariable) (map[string]interface
 
 // SQLToNative converts a SQL type & value to a native go type.
 // This does not work for sqltypes.Tuple.
-func SQLToNative(typ pb.Type, val []byte) (interface{}, error) {
+func SQLToNative(typ querypb.Type, val []byte) (interface{}, error) {
 	if typ == sqltypes.Null {
 		return nil, nil
 	} else if sqltypes.IsSigned(typ) {
@@ -305,7 +305,7 @@ func SQLToNative(typ pb.Type, val []byte) (interface{}, error) {
 }
 
 // Proto3ToQueryResultList converts a proto3 QueryResult to an internal data structure.
-func Proto3ToQueryResultList(results []*pb.QueryResult) *QueryResultList {
+func Proto3ToQueryResultList(results []*querypb.QueryResult) *QueryResultList {
 	result := &QueryResultList{
 		List: make([]sqltypes.Result, len(results)),
 	}
@@ -316,11 +316,11 @@ func Proto3ToQueryResultList(results []*pb.QueryResult) *QueryResultList {
 }
 
 // QueryResultListToProto3 changes the internal array of QueryResult to the proto3 version
-func QueryResultListToProto3(results []sqltypes.Result) []*pb.QueryResult {
+func QueryResultListToProto3(results []sqltypes.Result) []*querypb.QueryResult {
 	if len(results) == 0 {
 		return nil
 	}
-	result := make([]*pb.QueryResult, len(results))
+	result := make([]*querypb.QueryResult, len(results))
 	for i := range results {
 		result[i] = sqltypes.ResultToProto3(&results[i])
 	}
@@ -328,7 +328,7 @@ func QueryResultListToProto3(results []sqltypes.Result) []*pb.QueryResult {
 }
 
 // Proto3ToQuerySplits converts a proto3 QuerySplit array to a native QuerySplit array
-func Proto3ToQuerySplits(queries []*pb.QuerySplit) ([]QuerySplit, error) {
+func Proto3ToQuerySplits(queries []*querypb.QuerySplit) ([]QuerySplit, error) {
 	if len(queries) == 0 {
 		return nil, nil
 	}
@@ -347,17 +347,17 @@ func Proto3ToQuerySplits(queries []*pb.QuerySplit) ([]QuerySplit, error) {
 }
 
 // QuerySplitsToProto3 converts a native QuerySplit array to the proto3 version
-func QuerySplitsToProto3(queries []QuerySplit) ([]*pb.QuerySplit, error) {
+func QuerySplitsToProto3(queries []QuerySplit) ([]*querypb.QuerySplit, error) {
 	if len(queries) == 0 {
 		return nil, nil
 	}
-	result := make([]*pb.QuerySplit, len(queries))
+	result := make([]*querypb.QuerySplit, len(queries))
 	for i, qs := range queries {
 		q, err := BoundQueryToProto3(qs.Query.Sql, qs.Query.BindVariables)
 		if err != nil {
 			return nil, err
 		}
-		result[i] = &pb.QuerySplit{
+		result[i] = &querypb.QuerySplit{
 			Query:    q,
 			RowCount: qs.RowCount,
 		}

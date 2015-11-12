@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // NewConnFunc is a factory method that creates a Conn instance
@@ -47,7 +47,7 @@ type Conn interface {
 	// a connection to stop ongoing communication.
 	Shutdown()
 	// Fields returns the current fields description for the query
-	Fields() []*query.Field
+	Fields() []*querypb.Field
 	// ID returns the connection id.
 	ID() int64
 	// FetchNext returns the next row for a query

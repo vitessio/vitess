@@ -20,7 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -82,7 +82,7 @@ func TestVTGateExecute(t *testing.T) {
 	wantSession := &pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   KsTestUnsharded,
 				Shard:      "0",
 				TabletType: pb.TabletType_MASTER,
@@ -154,7 +154,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 	wantSession := &pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteShards",
 				Shard:      "0",
 				TabletType: pb.TabletType_REPLICA,
@@ -241,7 +241,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	wantSession := &pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteKeyspaceIds",
 				Shard:      "-20",
 				TabletType: pb.TabletType_MASTER,
@@ -323,7 +323,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	wantSession := &pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteKeyRanges",
 				Shard:      "-20",
 				TabletType: pb.TabletType_MASTER,
@@ -414,7 +414,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	wantSession := &pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteEntityIds",
 				Shard:      "-20",
 				TabletType: pb.TabletType_MASTER,

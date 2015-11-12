@@ -13,21 +13,21 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var packet1 = sqltypes.Result{
-	Fields: []*query.Field{
-		&query.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
 			Type: sqltypes.Int32,
 		},
-		&query.Field{
+		&querypb.Field{
 			Name: "field2",
 			Type: sqltypes.Float32,
 		},
-		&query.Field{
+		&querypb.Field{
 			Name: "field3",
 			Type: sqltypes.VarChar,
 		},

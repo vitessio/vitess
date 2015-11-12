@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -29,13 +29,13 @@ type streamHealthTabletServer struct {
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex sync.Mutex
 	streamHealthIndex int
-	streamHealthMap   map[int]chan<- *pb.StreamHealthResponse
+	streamHealthMap   map[int]chan<- *querypb.StreamHealthResponse
 }
 
 func newStreamHealthTabletServer(t *testing.T) *streamHealthTabletServer {
 	return &streamHealthTabletServer{
 		t:               t,
-		streamHealthMap: make(map[int]chan<- *pb.StreamHealthResponse),
+		streamHealthMap: make(map[int]chan<- *querypb.StreamHealthResponse),
 	}
 }
 
@@ -45,7 +45,7 @@ func (s *streamHealthTabletServer) count() int {
 	return len(s.streamHealthMap)
 }
 
-func (s *streamHealthTabletServer) StreamHealthRegister(c chan<- *pb.StreamHealthResponse) (int, error) {
+func (s *streamHealthTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 
@@ -64,8 +64,8 @@ func (s *streamHealthTabletServer) StreamHealthUnregister(id int) error {
 }
 
 // BroadcastHealth will broadcast the current health to all listeners
-func (s *streamHealthTabletServer) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
-	shr := &pb.StreamHealthResponse{
+func (s *streamHealthTabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats) {
+	shr := &querypb.StreamHealthResponse{
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}
@@ -97,7 +97,7 @@ func TestTabletData(t *testing.T) {
 
 	thc := newTabletHealthCache(ts)
 
-	stats := &pb.RealtimeStats{
+	stats := &querypb.RealtimeStats{
 		HealthError:         "testHealthError",
 		SecondsBehindMaster: 72,
 		CpuUsage:            1.1,

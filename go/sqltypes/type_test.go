@@ -7,12 +7,12 @@ package sqltypes
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestTypeValues(t *testing.T) {
 	testcases := []struct {
-		defined  query.Type
+		defined  querypb.Type
 		expected int
 	}{{
 		defined:  Null,

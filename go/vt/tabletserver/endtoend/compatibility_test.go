@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 )
 
@@ -21,7 +21,7 @@ func TestCharaterSet(t *testing.T) {
 		return
 	}
 	want := sqltypes.Result{
-		Fields: []*query.Field{
+		Fields: []*querypb.Field{
 			{
 				Name: "intval",
 				Type: sqltypes.Int32,
@@ -82,7 +82,7 @@ func TestInts(t *testing.T) {
 		return
 	}
 	want := sqltypes.Result{
-		Fields: []*query.Field{
+		Fields: []*querypb.Field{
 			{
 				Name: "tiny",
 				Type: sqltypes.Int8,
@@ -164,7 +164,7 @@ func TestFractionals(t *testing.T) {
 		return
 	}
 	want := sqltypes.Result{
-		Fields: []*query.Field{
+		Fields: []*querypb.Field{
 			{
 				Name: "id",
 				Type: sqltypes.Int32,
@@ -228,7 +228,7 @@ func TestStrings(t *testing.T) {
 		return
 	}
 	want := sqltypes.Result{
-		Fields: []*query.Field{
+		Fields: []*querypb.Field{
 			{
 				Name: "vb",
 				Type: sqltypes.VarBinary,
@@ -306,7 +306,7 @@ func TestMiscTypes(t *testing.T) {
 		return
 	}
 	want := sqltypes.Result{
-		Fields: []*query.Field{
+		Fields: []*querypb.Field{
 			{
 				Name: "id",
 				Type: sqltypes.Int32,
@@ -348,7 +348,7 @@ func TestNull(t *testing.T) {
 		return
 	}
 	want := sqltypes.Result{
-		Fields: []*query.Field{
+		Fields: []*querypb.Field{
 			{
 				Name: "NULL",
 				Type: sqltypes.Null,

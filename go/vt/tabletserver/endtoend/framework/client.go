@@ -9,12 +9,11 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
-	qrpb "github.com/youtube/vitess/go/vt/proto/query"
 	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -23,7 +22,7 @@ import (
 // same server.
 type QueryClient struct {
 	ctx           context.Context
-	target        query.Target
+	target        querypb.Target
 	server        *tabletserver.TabletServer
 	transactionID int64
 }
@@ -34,7 +33,7 @@ func NewClient() *QueryClient {
 		ctx: callerid.NewContext(
 			context.Background(),
 			&vtpb.CallerID{},
-			&qrpb.VTGateCallerID{Username: "dev"},
+			&querypb.VTGateCallerID{Username: "dev"},
 		),
 		target: Target,
 		server: Server,

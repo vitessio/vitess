@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -67,13 +67,13 @@ func echoQueryResult(vals map[string]interface{}) *sqltypes.Result {
 	// The first two returned fields are always a field with a MySQL NULL value,
 	// and another field with a zero-length string.
 	// Client tests can use this to check that they correctly distinguish the two.
-	qr.Fields = append(qr.Fields, &pbq.Field{Name: "null", Type: sqltypes.VarBinary})
+	qr.Fields = append(qr.Fields, &querypb.Field{Name: "null", Type: sqltypes.VarBinary})
 	row = append(row, sqltypes.NULL)
-	qr.Fields = append(qr.Fields, &pbq.Field{Name: "emptyString", Type: sqltypes.VarBinary})
+	qr.Fields = append(qr.Fields, &querypb.Field{Name: "emptyString", Type: sqltypes.VarBinary})
 	row = append(row, sqltypes.MakeString([]byte("")))
 
 	for k, v := range vals {
-		qr.Fields = append(qr.Fields, &pbq.Field{Name: k, Type: sqltypes.VarBinary})
+		qr.Fields = append(qr.Fields, &querypb.Field{Name: k, Type: sqltypes.VarBinary})
 
 		val := reflect.ValueOf(v)
 		if val.Kind() == reflect.Map {
@@ -286,7 +286,7 @@ func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string
 		}
 		return []*pbg.SplitQueryResponse_Part{
 			&pbg.SplitQueryResponse_Part{
-				Query: &pbq.BoundQuery{
+				Query: &querypb.BoundQuery{
 					Sql:           fmt.Sprintf("%v:%v:%v", sql, splitColumn, splitCount),
 					BindVariables: bv,
 				},

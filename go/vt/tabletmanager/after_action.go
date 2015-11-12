@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -77,7 +77,7 @@ func (agent *ActionAgent) broadcastHealth() {
 
 	// send it to our observers
 	// FIXME(alainjobart,liguo) add CpuUsage
-	stats := &pb.RealtimeStats{
+	stats := &querypb.RealtimeStats{
 		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
 	}
 	if agent.BinlogPlayerMap != nil {

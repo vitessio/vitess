@@ -13,7 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -103,7 +103,7 @@ func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 	db := fakesqldb.Register()
 	db.AddQuery("show index from `test_table`", &sqltypes.Result{})
 	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
-		Fields: []*query.Field{{
+		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
@@ -152,7 +152,7 @@ func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 		},
 	})
 	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
-		Fields: []*query.Field{{
+		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Decimal,
 		}},
@@ -322,7 +322,7 @@ func newTestTableInfoCachePool() *CachePool {
 func getTestTableInfoQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		"select * from `test_table` where 1 != 1": &sqltypes.Result{
-			Fields: []*query.Field{{
+			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}, {

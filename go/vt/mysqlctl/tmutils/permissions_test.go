@@ -8,17 +8,17 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-func mapToSQLResults(row map[string]string) ([]*query.Field, []sqltypes.Value) {
-	fields := make([]*query.Field, len(row))
+func mapToSQLResults(row map[string]string) ([]*querypb.Field, []sqltypes.Value) {
+	fields := make([]*querypb.Field, len(row))
 	values := make([]sqltypes.Value, len(row))
 	index := 0
 	for key, value := range row {
-		fields[index] = &query.Field{Name: key}
+		fields[index] = &querypb.Field{Name: key}
 		values[index] = sqltypes.MakeString(([]byte)(value))
 		index++
 	}

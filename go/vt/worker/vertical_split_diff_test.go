@@ -24,7 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -37,7 +37,7 @@ type verticalDiffTabletServer struct {
 	excludedTable string
 }
 
-func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Vertical Split Diff operation should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -50,12 +50,12 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *p
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
-		Fields: []*pbq.Field{
-			&pbq.Field{
+		Fields: []*querypb.Field{
+			&querypb.Field{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&pbq.Field{
+			&querypb.Field{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},

@@ -11,7 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -27,7 +27,7 @@ type tabletHealth struct {
 	mu sync.Mutex
 
 	// result stores the most recent response.
-	result *pb.StreamHealthResponse
+	result *querypb.StreamHealthResponse
 	// accessed stores the time of the most recent access.
 	accessed time.Time
 
@@ -47,7 +47,7 @@ func newTabletHealth() *tabletHealth {
 	}
 }
 
-func (th *tabletHealth) lastResult(ctx context.Context) (*pb.StreamHealthResponse, error) {
+func (th *tabletHealth) lastResult(ctx context.Context) (*querypb.StreamHealthResponse, error) {
 	// Wait until at least the first result comes in, or the stream ends.
 	select {
 	case <-ctx.Done():
@@ -139,7 +139,7 @@ func newTabletHealthCache(ts topo.Server) *tabletHealthCache {
 	}
 }
 
-func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *pbt.TabletAlias) (*pb.StreamHealthResponse, error) {
+func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *pbt.TabletAlias) (*querypb.StreamHealthResponse, error) {
 	thc.mu.Lock()
 
 	th, ok := thc.tabletMap[*tabletAlias]

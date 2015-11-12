@@ -13,7 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -44,7 +44,7 @@ func printPrivileges(priv map[string]string) string {
 }
 
 // NewUserPermission is a helper method to create a tabletmanagerdatapb.UserPermission
-func NewUserPermission(fields []*query.Field, values []sqltypes.Value) *tabletmanagerdatapb.UserPermission {
+func NewUserPermission(fields []*querypb.Field, values []sqltypes.Value) *tabletmanagerdatapb.UserPermission {
 	up := &tabletmanagerdatapb.UserPermission{
 		Privileges: make(map[string]string),
 	}
@@ -90,7 +90,7 @@ func (upl userPermissionList) Len() int {
 }
 
 // NewDbPermission is a helper method to create a tabletmanagerdatapb.DbPermission
-func NewDbPermission(fields []*query.Field, values []sqltypes.Value) *tabletmanagerdatapb.DbPermission {
+func NewDbPermission(fields []*querypb.Field, values []sqltypes.Value) *tabletmanagerdatapb.DbPermission {
 	up := &tabletmanagerdatapb.DbPermission{
 		Privileges: make(map[string]string),
 	}

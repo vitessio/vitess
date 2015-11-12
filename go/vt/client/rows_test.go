@@ -7,30 +7,30 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var rowsResult1 = sqltypes.Result{
-	Fields: []*query.Field{
-		&query.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
 			Type: sqltypes.Int32,
 		},
-		&query.Field{
+		&querypb.Field{
 			Name: "field2",
 			Type: sqltypes.Float32,
 		},
-		&query.Field{
+		&querypb.Field{
 			Name: "field3",
 			Type: sqltypes.VarChar,
 		},
 		// Signed types which are smaller than uint64, will become an int64.
-		&query.Field{
+		&querypb.Field{
 			Name: "field4",
 			Type: sqltypes.Uint32,
 		},
 		// Signed uint64 values must be mapped to uint64.
-		&query.Field{
+		&querypb.Field{
 			Name: "field5",
 			Type: sqltypes.Uint64,
 		},
@@ -123,8 +123,8 @@ func TestRows(t *testing.T) {
 }
 
 var badResult1 = sqltypes.Result{
-	Fields: []*query.Field{
-		&query.Field{},
+	Fields: []*querypb.Field{
+		&querypb.Field{},
 	},
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{},
@@ -132,8 +132,8 @@ var badResult1 = sqltypes.Result{
 }
 
 var badResult2 = sqltypes.Result{
-	Fields: []*query.Field{
-		&query.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
 			Type: sqltypes.Int32,
 		},

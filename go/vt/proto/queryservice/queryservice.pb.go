@@ -15,7 +15,7 @@ package queryservice
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import query "github.com/youtube/vitess/go/vt/proto/query"
+import querypb "github.com/youtube/vitess/go/vt/proto/query"
 
 import (
 	context "golang.org/x/net/context"
@@ -37,30 +37,30 @@ type QueryClient interface {
 	// GetSessionId gets a session id from the server. This call is being
 	// deprecated in favor of using the Target field of the subsequent
 	// queries, but is still here for backward compatibility.
-	GetSessionId(ctx context.Context, in *query.GetSessionIdRequest, opts ...grpc.CallOption) (*query.GetSessionIdResponse, error)
+	GetSessionId(ctx context.Context, in *querypb.GetSessionIdRequest, opts ...grpc.CallOption) (*querypb.GetSessionIdResponse, error)
 	// Execute executes the specified SQL query (might be in a
 	// transaction context, if Query.transaction_id is set).
-	Execute(ctx context.Context, in *query.ExecuteRequest, opts ...grpc.CallOption) (*query.ExecuteResponse, error)
+	Execute(ctx context.Context, in *querypb.ExecuteRequest, opts ...grpc.CallOption) (*querypb.ExecuteResponse, error)
 	// ExecuteBatch executes a list of queries, and returns the result
 	// for each query.
-	ExecuteBatch(ctx context.Context, in *query.ExecuteBatchRequest, opts ...grpc.CallOption) (*query.ExecuteBatchResponse, error)
+	ExecuteBatch(ctx context.Context, in *querypb.ExecuteBatchRequest, opts ...grpc.CallOption) (*querypb.ExecuteBatchResponse, error)
 	// StreamExecute executes a streaming query. Use this method if the
 	// query returns a large number of rows. The first QueryResult will
 	// contain the Fields, subsequent QueryResult messages will contain
 	// the rows.
-	StreamExecute(ctx context.Context, in *query.StreamExecuteRequest, opts ...grpc.CallOption) (Query_StreamExecuteClient, error)
+	StreamExecute(ctx context.Context, in *querypb.StreamExecuteRequest, opts ...grpc.CallOption) (Query_StreamExecuteClient, error)
 	// Begin a transaction.
-	Begin(ctx context.Context, in *query.BeginRequest, opts ...grpc.CallOption) (*query.BeginResponse, error)
+	Begin(ctx context.Context, in *querypb.BeginRequest, opts ...grpc.CallOption) (*querypb.BeginResponse, error)
 	// Commit a transaction.
-	Commit(ctx context.Context, in *query.CommitRequest, opts ...grpc.CallOption) (*query.CommitResponse, error)
+	Commit(ctx context.Context, in *querypb.CommitRequest, opts ...grpc.CallOption) (*querypb.CommitResponse, error)
 	// Rollback a transaction.
-	Rollback(ctx context.Context, in *query.RollbackRequest, opts ...grpc.CallOption) (*query.RollbackResponse, error)
+	Rollback(ctx context.Context, in *querypb.RollbackRequest, opts ...grpc.CallOption) (*querypb.RollbackResponse, error)
 	// SplitQuery is the API to facilitate MapReduce-type iterations
 	// over large data sets (like full table dumps).
-	SplitQuery(ctx context.Context, in *query.SplitQueryRequest, opts ...grpc.CallOption) (*query.SplitQueryResponse, error)
+	SplitQuery(ctx context.Context, in *querypb.SplitQueryRequest, opts ...grpc.CallOption) (*querypb.SplitQueryResponse, error)
 	// StreamHealth runs a streaming RPC to the tablet, that returns the
 	// current health of the tablet on a regular basis.
-	StreamHealth(ctx context.Context, in *query.StreamHealthRequest, opts ...grpc.CallOption) (Query_StreamHealthClient, error)
+	StreamHealth(ctx context.Context, in *querypb.StreamHealthRequest, opts ...grpc.CallOption) (Query_StreamHealthClient, error)
 }
 
 type queryClient struct {
@@ -71,8 +71,8 @@ func NewQueryClient(cc *grpc.ClientConn) QueryClient {
 	return &queryClient{cc}
 }
 
-func (c *queryClient) GetSessionId(ctx context.Context, in *query.GetSessionIdRequest, opts ...grpc.CallOption) (*query.GetSessionIdResponse, error) {
-	out := new(query.GetSessionIdResponse)
+func (c *queryClient) GetSessionId(ctx context.Context, in *querypb.GetSessionIdRequest, opts ...grpc.CallOption) (*querypb.GetSessionIdResponse, error) {
+	out := new(querypb.GetSessionIdResponse)
 	err := grpc.Invoke(ctx, "/queryservice.Query/GetSessionId", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -80,8 +80,8 @@ func (c *queryClient) GetSessionId(ctx context.Context, in *query.GetSessionIdRe
 	return out, nil
 }
 
-func (c *queryClient) Execute(ctx context.Context, in *query.ExecuteRequest, opts ...grpc.CallOption) (*query.ExecuteResponse, error) {
-	out := new(query.ExecuteResponse)
+func (c *queryClient) Execute(ctx context.Context, in *querypb.ExecuteRequest, opts ...grpc.CallOption) (*querypb.ExecuteResponse, error) {
+	out := new(querypb.ExecuteResponse)
 	err := grpc.Invoke(ctx, "/queryservice.Query/Execute", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -89,8 +89,8 @@ func (c *queryClient) Execute(ctx context.Context, in *query.ExecuteRequest, opt
 	return out, nil
 }
 
-func (c *queryClient) ExecuteBatch(ctx context.Context, in *query.ExecuteBatchRequest, opts ...grpc.CallOption) (*query.ExecuteBatchResponse, error) {
-	out := new(query.ExecuteBatchResponse)
+func (c *queryClient) ExecuteBatch(ctx context.Context, in *querypb.ExecuteBatchRequest, opts ...grpc.CallOption) (*querypb.ExecuteBatchResponse, error) {
+	out := new(querypb.ExecuteBatchResponse)
 	err := grpc.Invoke(ctx, "/queryservice.Query/ExecuteBatch", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -98,7 +98,7 @@ func (c *queryClient) ExecuteBatch(ctx context.Context, in *query.ExecuteBatchRe
 	return out, nil
 }
 
-func (c *queryClient) StreamExecute(ctx context.Context, in *query.StreamExecuteRequest, opts ...grpc.CallOption) (Query_StreamExecuteClient, error) {
+func (c *queryClient) StreamExecute(ctx context.Context, in *querypb.StreamExecuteRequest, opts ...grpc.CallOption) (Query_StreamExecuteClient, error) {
 	stream, err := grpc.NewClientStream(ctx, &_Query_serviceDesc.Streams[0], c.cc, "/queryservice.Query/StreamExecute", opts...)
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func (c *queryClient) StreamExecute(ctx context.Context, in *query.StreamExecute
 }
 
 type Query_StreamExecuteClient interface {
-	Recv() (*query.StreamExecuteResponse, error)
+	Recv() (*querypb.StreamExecuteResponse, error)
 	grpc.ClientStream
 }
 
@@ -122,16 +122,16 @@ type queryStreamExecuteClient struct {
 	grpc.ClientStream
 }
 
-func (x *queryStreamExecuteClient) Recv() (*query.StreamExecuteResponse, error) {
-	m := new(query.StreamExecuteResponse)
+func (x *queryStreamExecuteClient) Recv() (*querypb.StreamExecuteResponse, error) {
+	m := new(querypb.StreamExecuteResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *queryClient) Begin(ctx context.Context, in *query.BeginRequest, opts ...grpc.CallOption) (*query.BeginResponse, error) {
-	out := new(query.BeginResponse)
+func (c *queryClient) Begin(ctx context.Context, in *querypb.BeginRequest, opts ...grpc.CallOption) (*querypb.BeginResponse, error) {
+	out := new(querypb.BeginResponse)
 	err := grpc.Invoke(ctx, "/queryservice.Query/Begin", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -139,8 +139,8 @@ func (c *queryClient) Begin(ctx context.Context, in *query.BeginRequest, opts ..
 	return out, nil
 }
 
-func (c *queryClient) Commit(ctx context.Context, in *query.CommitRequest, opts ...grpc.CallOption) (*query.CommitResponse, error) {
-	out := new(query.CommitResponse)
+func (c *queryClient) Commit(ctx context.Context, in *querypb.CommitRequest, opts ...grpc.CallOption) (*querypb.CommitResponse, error) {
+	out := new(querypb.CommitResponse)
 	err := grpc.Invoke(ctx, "/queryservice.Query/Commit", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -148,8 +148,8 @@ func (c *queryClient) Commit(ctx context.Context, in *query.CommitRequest, opts 
 	return out, nil
 }
 
-func (c *queryClient) Rollback(ctx context.Context, in *query.RollbackRequest, opts ...grpc.CallOption) (*query.RollbackResponse, error) {
-	out := new(query.RollbackResponse)
+func (c *queryClient) Rollback(ctx context.Context, in *querypb.RollbackRequest, opts ...grpc.CallOption) (*querypb.RollbackResponse, error) {
+	out := new(querypb.RollbackResponse)
 	err := grpc.Invoke(ctx, "/queryservice.Query/Rollback", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -157,8 +157,8 @@ func (c *queryClient) Rollback(ctx context.Context, in *query.RollbackRequest, o
 	return out, nil
 }
 
-func (c *queryClient) SplitQuery(ctx context.Context, in *query.SplitQueryRequest, opts ...grpc.CallOption) (*query.SplitQueryResponse, error) {
-	out := new(query.SplitQueryResponse)
+func (c *queryClient) SplitQuery(ctx context.Context, in *querypb.SplitQueryRequest, opts ...grpc.CallOption) (*querypb.SplitQueryResponse, error) {
+	out := new(querypb.SplitQueryResponse)
 	err := grpc.Invoke(ctx, "/queryservice.Query/SplitQuery", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -166,7 +166,7 @@ func (c *queryClient) SplitQuery(ctx context.Context, in *query.SplitQueryReques
 	return out, nil
 }
 
-func (c *queryClient) StreamHealth(ctx context.Context, in *query.StreamHealthRequest, opts ...grpc.CallOption) (Query_StreamHealthClient, error) {
+func (c *queryClient) StreamHealth(ctx context.Context, in *querypb.StreamHealthRequest, opts ...grpc.CallOption) (Query_StreamHealthClient, error) {
 	stream, err := grpc.NewClientStream(ctx, &_Query_serviceDesc.Streams[1], c.cc, "/queryservice.Query/StreamHealth", opts...)
 	if err != nil {
 		return nil, err
@@ -182,7 +182,7 @@ func (c *queryClient) StreamHealth(ctx context.Context, in *query.StreamHealthRe
 }
 
 type Query_StreamHealthClient interface {
-	Recv() (*query.StreamHealthResponse, error)
+	Recv() (*querypb.StreamHealthResponse, error)
 	grpc.ClientStream
 }
 
@@ -190,8 +190,8 @@ type queryStreamHealthClient struct {
 	grpc.ClientStream
 }
 
-func (x *queryStreamHealthClient) Recv() (*query.StreamHealthResponse, error) {
-	m := new(query.StreamHealthResponse)
+func (x *queryStreamHealthClient) Recv() (*querypb.StreamHealthResponse, error) {
+	m := new(querypb.StreamHealthResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -204,30 +204,30 @@ type QueryServer interface {
 	// GetSessionId gets a session id from the server. This call is being
 	// deprecated in favor of using the Target field of the subsequent
 	// queries, but is still here for backward compatibility.
-	GetSessionId(context.Context, *query.GetSessionIdRequest) (*query.GetSessionIdResponse, error)
+	GetSessionId(context.Context, *querypb.GetSessionIdRequest) (*querypb.GetSessionIdResponse, error)
 	// Execute executes the specified SQL query (might be in a
 	// transaction context, if Query.transaction_id is set).
-	Execute(context.Context, *query.ExecuteRequest) (*query.ExecuteResponse, error)
+	Execute(context.Context, *querypb.ExecuteRequest) (*querypb.ExecuteResponse, error)
 	// ExecuteBatch executes a list of queries, and returns the result
 	// for each query.
-	ExecuteBatch(context.Context, *query.ExecuteBatchRequest) (*query.ExecuteBatchResponse, error)
+	ExecuteBatch(context.Context, *querypb.ExecuteBatchRequest) (*querypb.ExecuteBatchResponse, error)
 	// StreamExecute executes a streaming query. Use this method if the
 	// query returns a large number of rows. The first QueryResult will
 	// contain the Fields, subsequent QueryResult messages will contain
 	// the rows.
-	StreamExecute(*query.StreamExecuteRequest, Query_StreamExecuteServer) error
+	StreamExecute(*querypb.StreamExecuteRequest, Query_StreamExecuteServer) error
 	// Begin a transaction.
-	Begin(context.Context, *query.BeginRequest) (*query.BeginResponse, error)
+	Begin(context.Context, *querypb.BeginRequest) (*querypb.BeginResponse, error)
 	// Commit a transaction.
-	Commit(context.Context, *query.CommitRequest) (*query.CommitResponse, error)
+	Commit(context.Context, *querypb.CommitRequest) (*querypb.CommitResponse, error)
 	// Rollback a transaction.
-	Rollback(context.Context, *query.RollbackRequest) (*query.RollbackResponse, error)
+	Rollback(context.Context, *querypb.RollbackRequest) (*querypb.RollbackResponse, error)
 	// SplitQuery is the API to facilitate MapReduce-type iterations
 	// over large data sets (like full table dumps).
-	SplitQuery(context.Context, *query.SplitQueryRequest) (*query.SplitQueryResponse, error)
+	SplitQuery(context.Context, *querypb.SplitQueryRequest) (*querypb.SplitQueryResponse, error)
 	// StreamHealth runs a streaming RPC to the tablet, that returns the
 	// current health of the tablet on a regular basis.
-	StreamHealth(*query.StreamHealthRequest, Query_StreamHealthServer) error
+	StreamHealth(*querypb.StreamHealthRequest, Query_StreamHealthServer) error
 }
 
 func RegisterQueryServer(s *grpc.Server, srv QueryServer) {
@@ -235,7 +235,7 @@ func RegisterQueryServer(s *grpc.Server, srv QueryServer) {
 }
 
 func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
-	in := new(query.GetSessionIdRequest)
+	in := new(querypb.GetSessionIdRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, dec func(
 }
 
 func _Query_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
-	in := new(query.ExecuteRequest)
+	in := new(querypb.ExecuteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -259,7 +259,7 @@ func _Query_Execute_Handler(srv interface{}, ctx context.Context, dec func(inter
 }
 
 func _Query_ExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
-	in := new(query.ExecuteBatchRequest)
+	in := new(querypb.ExecuteBatchRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -271,7 +271,7 @@ func _Query_ExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func(
 }
 
 func _Query_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(query.StreamExecuteRequest)
+	m := new(querypb.StreamExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -279,7 +279,7 @@ func _Query_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) err
 }
 
 type Query_StreamExecuteServer interface {
-	Send(*query.StreamExecuteResponse) error
+	Send(*querypb.StreamExecuteResponse) error
 	grpc.ServerStream
 }
 
@@ -287,12 +287,12 @@ type queryStreamExecuteServer struct {
 	grpc.ServerStream
 }
 
-func (x *queryStreamExecuteServer) Send(m *query.StreamExecuteResponse) error {
+func (x *queryStreamExecuteServer) Send(m *querypb.StreamExecuteResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
 func _Query_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
-	in := new(query.BeginRequest)
+	in := new(querypb.BeginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -304,7 +304,7 @@ func _Query_Begin_Handler(srv interface{}, ctx context.Context, dec func(interfa
 }
 
 func _Query_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
-	in := new(query.CommitRequest)
+	in := new(querypb.CommitRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -316,7 +316,7 @@ func _Query_Commit_Handler(srv interface{}, ctx context.Context, dec func(interf
 }
 
 func _Query_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
-	in := new(query.RollbackRequest)
+	in := new(querypb.RollbackRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func _Query_Rollback_Handler(srv interface{}, ctx context.Context, dec func(inte
 }
 
 func _Query_SplitQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
-	in := new(query.SplitQueryRequest)
+	in := new(querypb.SplitQueryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -340,7 +340,7 @@ func _Query_SplitQuery_Handler(srv interface{}, ctx context.Context, dec func(in
 }
 
 func _Query_StreamHealth_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(query.StreamHealthRequest)
+	m := new(querypb.StreamHealthRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func _Query_StreamHealth_Handler(srv interface{}, stream grpc.ServerStream) erro
 }
 
 type Query_StreamHealthServer interface {
-	Send(*query.StreamHealthResponse) error
+	Send(*querypb.StreamHealthResponse) error
 	grpc.ServerStream
 }
 
@@ -356,7 +356,7 @@ type queryStreamHealthServer struct {
 	grpc.ServerStream
 }
 
-func (x *queryStreamHealthServer) Send(m *query.StreamHealthResponse) error {
+func (x *queryStreamHealthServer) Send(m *querypb.StreamHealthResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 

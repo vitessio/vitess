@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -554,7 +554,7 @@ func (sbc *sandboxConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 }
 
 // StreamHealth does nothing
-func (sbc *sandboxConn) StreamHealth(ctx context.Context) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
+func (sbc *sandboxConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
 	return nil, nil, fmt.Errorf("Not implemented in test")
 }
 
@@ -585,7 +585,7 @@ func (sbc *sandboxConn) getNextResult() *sqltypes.Result {
 }
 
 var singleRowResult = &sqltypes.Result{
-	Fields: []*pbq.Field{
+	Fields: []*querypb.Field{
 		{"id", sqltypes.Int32},
 		{"value", sqltypes.VarChar},
 	},

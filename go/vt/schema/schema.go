@@ -10,7 +10,7 @@ package schema
 import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Cache types
@@ -23,7 +23,7 @@ const (
 // TableColumn contains info about a table's column.
 type TableColumn struct {
 	Name    string
-	Type    query.Type
+	Type    querypb.Type
 	IsAuto  bool
 	Default sqltypes.Value
 }
@@ -53,7 +53,7 @@ func NewTable(name string) *Table {
 }
 
 // AddColumn adds a column to the Table.
-func (ta *Table) AddColumn(name string, columnType query.Type, defval sqltypes.Value, extra string) {
+func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes.Value, extra string) {
 	index := len(ta.Columns)
 	ta.Columns = append(ta.Columns, TableColumn{Name: name})
 	ta.Columns[index].Type = columnType

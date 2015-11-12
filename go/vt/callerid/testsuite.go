@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	qrpb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -22,7 +22,7 @@ const (
 )
 
 // Tests performs the necessary testsuite for CallerID operations
-func Tests(t *testing.T, im *qrpb.VTGateCallerID, ef *vtpb.CallerID) {
+func Tests(t *testing.T, im *querypb.VTGateCallerID, ef *vtpb.CallerID) {
 	ctx := context.TODO()
 	ctxim := ImmediateCallerIDFromContext(ctx)
 	// For Contexts without immediate CallerID, ImmediateCallerIDFromContext should fail

@@ -22,7 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -198,7 +198,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 		return nil, err
 	}
 	reply := &sqltypes.Result{}
-	if err := itc.tablet.qsc.QueryService().Execute(ctx, &pbq.Target{
+	if err := itc.tablet.qsc.QueryService().Execute(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -229,7 +229,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tprot
 		q[i].BindVariables = bindVars
 	}
 	reply := &tproto.QueryResultList{}
-	if err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &pbq.Target{
+	if err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -258,7 +258,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 	var finalErr error
 
 	go func() {
-		finalErr = itc.tablet.qsc.QueryService().StreamExecute(ctx, &pbq.Target{
+		finalErr = itc.tablet.qsc.QueryService().StreamExecute(ctx, &querypb.Target{
 			Keyspace:   itc.tablet.keyspace,
 			Shard:      itc.tablet.shard,
 			TabletType: itc.tablet.tabletType,
@@ -284,7 +284,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 // Begin is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, err error) {
 	result := &tproto.TransactionInfo{}
-	if err := itc.tablet.qsc.QueryService().Begin(ctx, &pbq.Target{
+	if err := itc.tablet.qsc.QueryService().Begin(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -296,7 +296,7 @@ func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, 
 
 // Commit is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) error {
-	err := itc.tablet.qsc.QueryService().Commit(ctx, &pbq.Target{
+	err := itc.tablet.qsc.QueryService().Commit(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -308,7 +308,7 @@ func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) 
 
 // Rollback is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64) error {
-	err := itc.tablet.qsc.QueryService().Rollback(ctx, &pbq.Target{
+	err := itc.tablet.qsc.QueryService().Rollback(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -365,7 +365,7 @@ func (itc *internalTabletConn) EndPoint() *pb.EndPoint {
 // SplitQuery is part of tabletconn.TabletConn
 func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
 	reply := &tproto.SplitQueryResult{}
-	if err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &pbq.Target{
+	if err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
@@ -380,8 +380,8 @@ func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.Boun
 }
 
 // StreamHealth is part of tabletconn.TabletConn
-func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
-	result := make(chan *pbq.StreamHealthResponse, 10)
+func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	result := make(chan *querypb.StreamHealthResponse, 10)
 
 	id, err := itc.tablet.qsc.QueryService().StreamHealthRegister(result)
 	if err != nil {

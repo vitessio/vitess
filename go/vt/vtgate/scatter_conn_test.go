@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -294,7 +294,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	wantSession := pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "TestScatterConnCommitSuccess",
 				Shard:      "0",
 				TabletType: pb.TabletType_REPLICA,
@@ -309,14 +309,14 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	wantSession = pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "TestScatterConnCommitSuccess",
 				Shard:      "0",
 				TabletType: pb.TabletType_REPLICA,
 			},
 			TransactionId: 1,
 		}, {
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "TestScatterConnCommitSuccess",
 				Shard:      "1",
 				TabletType: pb.TabletType_REPLICA,
@@ -425,7 +425,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	wantSession := pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "TestScatterConnQueryNotInTransaction",
 				Shard:      "1",
 				TabletType: pb.TabletType_REPLICA,
@@ -465,7 +465,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	wantSession = pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "TestScatterConnQueryNotInTransaction",
 				Shard:      "0",
 				TabletType: pb.TabletType_REPLICA,
@@ -505,7 +505,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	wantSession = pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "TestScatterConnQueryNotInTransaction",
 				Shard:      "0",
 				TabletType: pb.TabletType_REPLICA,
@@ -535,11 +535,11 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 func TestAppendResult(t *testing.T) {
 	qr := new(sqltypes.Result)
 	innerqr1 := &sqltypes.Result{
-		Fields: []*pbq.Field{},
+		Fields: []*querypb.Field{},
 		Rows:   [][]sqltypes.Value{},
 	}
 	innerqr2 := &sqltypes.Result{
-		Fields: []*pbq.Field{
+		Fields: []*querypb.Field{
 			{Name: "foo", Type: sqltypes.Int8},
 		},
 		RowsAffected: 1,

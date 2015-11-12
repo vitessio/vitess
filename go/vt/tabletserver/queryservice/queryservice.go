@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // QueryService is the interface implemented by the tablet's query service.
@@ -22,20 +22,20 @@ type QueryService interface {
 	GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error
 
 	// Transaction management
-	Begin(ctx context.Context, target *pb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error
-	Commit(ctx context.Context, target *pb.Target, session *proto.Session) error
-	Rollback(ctx context.Context, target *pb.Target, session *proto.Session) error
+	Begin(ctx context.Context, target *querypb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error
+	Commit(ctx context.Context, target *querypb.Target, session *proto.Session) error
+	Rollback(ctx context.Context, target *querypb.Target, session *proto.Session) error
 
 	// Query execution
-	Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *sqltypes.Result) error
-	StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error
-	ExecuteBatch(ctx context.Context, target *pb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error
+	Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) error
+	StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error
+	ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error
 
 	// Map reduce helper
-	SplitQuery(ctx context.Context, target *pb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
+	SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
 
 	// StreamHealthRegister registers a listener for StreamHealth
-	StreamHealthRegister(chan<- *pb.StreamHealthResponse) (int, error)
+	StreamHealthRegister(chan<- *querypb.StreamHealthResponse) (int, error)
 
 	// StreamHealthUnregister unregisters a listener for StreamHealth
 	StreamHealthUnregister(int) error
@@ -57,42 +57,42 @@ func (e *ErrorQueryService) GetSessionId(sessionParams *proto.SessionParams, ses
 }
 
 // Begin is part of QueryService interface
-func (e *ErrorQueryService) Begin(ctx context.Context, target *pb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
+func (e *ErrorQueryService) Begin(ctx context.Context, target *querypb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Commit is part of QueryService interface
-func (e *ErrorQueryService) Commit(ctx context.Context, target *pb.Target, session *proto.Session) error {
+func (e *ErrorQueryService) Commit(ctx context.Context, target *querypb.Target, session *proto.Session) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Rollback is part of QueryService interface
-func (e *ErrorQueryService) Rollback(ctx context.Context, target *pb.Target, session *proto.Session) error {
+func (e *ErrorQueryService) Rollback(ctx context.Context, target *querypb.Target, session *proto.Session) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Execute is part of QueryService interface
-func (e *ErrorQueryService) Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *sqltypes.Result) error {
+func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // StreamExecute is part of QueryService interface
-func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error {
+func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // ExecuteBatch is part of QueryService interface
-func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *pb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // SplitQuery is part of QueryService interface
-func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *pb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // StreamHealthRegister is part of QueryService interface
-func (e *ErrorQueryService) StreamHealthRegister(chan<- *pb.StreamHealthResponse) (int, error) {
+func (e *ErrorQueryService) StreamHealthRegister(chan<- *querypb.StreamHealthResponse) (int, error) {
 	return 0, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 

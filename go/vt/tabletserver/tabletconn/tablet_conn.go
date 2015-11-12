@@ -13,7 +13,7 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -119,7 +119,7 @@ type TabletConn interface {
 	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error)
 
 	// StreamHealth streams StreamHealthResponse to the client
-	StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, ErrFunc, error)
+	StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, ErrFunc, error)
 }
 
 type ErrFunc func() error

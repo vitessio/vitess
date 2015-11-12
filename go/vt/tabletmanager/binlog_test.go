@@ -22,7 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -223,18 +223,18 @@ func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQue
 }
 
 // StreamHealth is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
-	c := make(chan *pbq.StreamHealthResponse)
+func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	c := make(chan *querypb.StreamHealthResponse)
 	var finalErr error
 	go func() {
-		c <- &pbq.StreamHealthResponse{
+		c <- &querypb.StreamHealthResponse{
 			Serving: true,
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   ftc.keyspace,
 				Shard:      ftc.shard,
 				TabletType: ftc.tabletType,
 			},
-			RealtimeStats: &pbq.RealtimeStats{},
+			RealtimeStats: &querypb.RealtimeStats{},
 		}
 		select {
 		case <-ctx.Done():

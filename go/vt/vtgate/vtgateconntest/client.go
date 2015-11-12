@@ -24,7 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -2687,12 +2687,12 @@ var execMap = map[string]struct {
 }
 
 var result1 = sqltypes.Result{
-	Fields: []*pbq.Field{
-		&pbq.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
 			Type: sqltypes.Int16,
 		},
-		&pbq.Field{
+		&querypb.Field{
 			Name: "field2",
 			Type: sqltypes.Int32,
 		},
@@ -2712,12 +2712,12 @@ var result1 = sqltypes.Result{
 }
 
 var streamResult1 = sqltypes.Result{
-	Fields: []*pbq.Field{
-		&pbq.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
 			Type: sqltypes.Int16,
 		},
-		&pbq.Field{
+		&querypb.Field{
 			Name: "field2",
 			Type: sqltypes.Int32,
 		},
@@ -2735,7 +2735,7 @@ var session2 = &pbg.Session{
 	InTransaction: true,
 	ShardSessions: []*pbg.Session_ShardSession{
 		&pbg.Session_ShardSession{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "ks",
 				Shard:      "1",
 				TabletType: pb.TabletType_MASTER,
@@ -2757,10 +2757,10 @@ var splitQueryRequest = &querySplitQuery{
 
 var splitQueryResult = []*pbg.SplitQueryResponse_Part{
 	&pbg.SplitQueryResponse_Part{
-		Query: &pbq.BoundQuery{
+		Query: &querypb.BoundQuery{
 			Sql: "out for SplitQuery",
-			BindVariables: map[string]*pbq.BindVariable{
-				"bind1": &pbq.BindVariable{
+			BindVariables: map[string]*querypb.BindVariable{
+				"bind1": &querypb.BindVariable{
 					Type:  sqltypes.Int64,
 					Value: []byte("1114444"),
 				},

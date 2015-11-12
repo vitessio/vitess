@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/vttest"
@@ -25,7 +25,7 @@ var (
 	// BaseConfig is the base config of the server.
 	BaseConfig tabletserver.Config
 	// Target is the target info for the server.
-	Target query.Target
+	Target querypb.Target
 	// Server is the TabletServer for the framework.
 	Server *tabletserver.TabletServer
 	// ServerAddress is the http URL for the server.
@@ -60,7 +60,7 @@ func StartServer(connParams sqldb.ConnParams, schemaOverrides []tabletserver.Sch
 	BaseConfig.EnableAutoCommit = true
 	BaseConfig.StrictTableAcl = true
 
-	Target = query.Target{
+	Target = querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
 		TabletType: topodata.TabletType_MASTER,

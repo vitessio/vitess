@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -407,7 +407,7 @@ func buildSQLFromChunks(wr *wrangler.Wrangler, td *tabletmanagerdatapb.TableDefi
 
 // makeValueString returns a string that contains all the passed-in rows
 // as an insert SQL command's parameters.
-func makeValueString(fields []*query.Field, rows [][]sqltypes.Value) string {
+func makeValueString(fields []*querypb.Field, rows [][]sqltypes.Value) string {
 	buf := bytes.Buffer{}
 	for i, row := range rows {
 		if i > 0 {

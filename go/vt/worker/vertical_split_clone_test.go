@@ -25,7 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -36,7 +36,7 @@ type verticalTabletServer struct {
 	t *testing.T
 }
 
-func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
@@ -56,12 +56,12 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *pbq.T
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
-		Fields: []*pbq.Field{
-			&pbq.Field{
+		Fields: []*querypb.Field{
+			&querypb.Field{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&pbq.Field{
+			&querypb.Field{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
@@ -167,12 +167,12 @@ func VerticalSourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection
 				ExpectedExecuteFetch{
 					Query: "SELECT MIN(id), MAX(id) FROM vt_source_ks.moving1",
 					QueryResult: &sqltypes.Result{
-						Fields: []*pbq.Field{
-							&pbq.Field{
+						Fields: []*querypb.Field{
+							&querypb.Field{
 								Name: "min",
 								Type: sqltypes.Int64,
 							},
-							&pbq.Field{
+							&querypb.Field{
 								Name: "max",
 								Type: sqltypes.Int64,
 							},

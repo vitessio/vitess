@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/hack"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -53,7 +53,7 @@ type Fractional []byte
 type String []byte
 
 // MakeValue builds a Value from type & bytes.
-func MakeValue(typ query.Type, b []byte) Value {
+func MakeValue(typ querypb.Type, b []byte) Value {
 	switch {
 	case IsIntegral(typ):
 		return MakeNumeric(b)

@@ -10,7 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -37,11 +37,11 @@ type EndPointStats struct {
 	EndPoint                            *pbt.EndPoint
 	Name                                string // name is an optional tag (e.g. alternative address)
 	Cell                                string
-	Target                              *pbq.Target
+	Target                              *querypb.Target
 	Up                                  bool // whether the endpoint is added
 	Serving                             bool // whether the server is serving
 	TabletExternallyReparentedTimestamp int64
-	Stats                               *pbq.RealtimeStats
+	Stats                               *querypb.RealtimeStats
 	LastError                           error
 }
 
@@ -100,11 +100,11 @@ type healthCheckConn struct {
 	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
 	mu                                  sync.RWMutex
 	conn                                tabletconn.TabletConn
-	target                              *pbq.Target
+	target                              *querypb.Target
 	up                                  bool
 	serving                             bool
 	tabletExternallyReparentedTimestamp int64
-	stats                               *pbq.RealtimeStats
+	stats                               *querypb.RealtimeStats
 	lastError                           error
 }
 
@@ -179,7 +179,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 }
 
 // connect creates connection to the endpoint and starts streaming.
-func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, endPoint *pbt.EndPoint) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
+func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, endPoint *pbt.EndPoint) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
 	conn, err := tabletconn.GetDialer()(hcc.ctx, endPoint, "" /*keyspace*/, "" /*shard*/, pbt.TabletType_RDONLY, hc.connTimeout)
 	if err != nil {
 		return nil, nil, err
@@ -198,7 +198,7 @@ func (hcc *healthCheckConn) connect(hc *HealthCheckImpl, endPoint *pbt.EndPoint)
 
 // processResponse reads one health check response, and notifies HealthCheckStatsListener.
 // It returns bool to indicate if the caller should reconnect. We do not need to reconnect when the streaming is working.
-func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *pbt.EndPoint, stream <-chan *pbq.StreamHealthResponse, errfunc tabletconn.ErrFunc) (bool, error) {
+func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *pbt.EndPoint, stream <-chan *querypb.StreamHealthResponse, errfunc tabletconn.ErrFunc) (bool, error) {
 	select {
 	case <-hcc.ctx.Done():
 		return false, hcc.ctx.Err()
@@ -309,7 +309,7 @@ func (hc *HealthCheckImpl) AddEndPoint(cell, name string, endPoint *pbt.EndPoint
 		ctx:        ctx,
 		cancelFunc: cancelFunc,
 		endPoint:   endPoint,
-		target:     &pbq.Target{},
+		target:     &querypb.Target{},
 		up:         true,
 	}
 	key := EndPointToMapKey(endPoint)
@@ -428,7 +428,7 @@ func (hc *HealthCheckImpl) GetConnection(endPoint *pbt.EndPoint) tabletconn.Tabl
 
 // addEndPointToTargetProtected adds the endpoint to the given target.
 // LOCK_REQUIRED hc.mu
-func (hc *HealthCheckImpl) addEndPointToTargetProtected(target *pbq.Target, endPoint *pbt.EndPoint) {
+func (hc *HealthCheckImpl) addEndPointToTargetProtected(target *querypb.Target, endPoint *pbt.EndPoint) {
 	shardMap, ok := hc.targetToEPs[target.Keyspace]
 	if !ok {
 		shardMap = make(map[string]map[pbt.TabletType][]*pbt.EndPoint)
@@ -455,7 +455,7 @@ func (hc *HealthCheckImpl) addEndPointToTargetProtected(target *pbq.Target, endP
 
 // deleteEndPointFromTargetProtected deletes the endpoint for the given target.
 // LOCK_REQUIRED hc.mu
-func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *pbq.Target, endPoint *pbt.EndPoint) {
+func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *querypb.Target, endPoint *pbt.EndPoint) {
 	shardMap, ok := hc.targetToEPs[target.Keyspace]
 	if !ok {
 		return
@@ -482,7 +482,7 @@ func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *pbq.Target,
 // TODO: change this to reflect the e2e information about the endpoints.
 type EndPointsCacheStatus struct {
 	Cell           string
-	Target         *pbq.Target
+	Target         *querypb.Target
 	EndPointsStats EndPointStatsList
 }
 

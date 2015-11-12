@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -451,7 +451,7 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 				return err
 			}
 			splits[i] = &pbg.SplitQueryResponse_Part{
-				Query: &pbq.BoundQuery{
+				Query: &querypb.BoundQuery{
 					Sql:           query.Query.Sql,
 					BindVariables: q,
 				},
@@ -505,7 +505,7 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 				return err
 			}
 			splits[i] = &pbg.SplitQueryResponse_Part{
-				Query: &pbq.BoundQuery{
+				Query: &querypb.BoundQuery{
 					Sql:           query.Query.Sql,
 					BindVariables: q,
 				},
@@ -679,7 +679,7 @@ func (stc *ScatterConn) updateSession(
 		return 0, err
 	}
 	session.Append(&pbg.Session_ShardSession{
-		Target: &pbq.Target{
+		Target: &querypb.Target{
 			Keyspace:   keyspace,
 			Shard:      shard,
 			TabletType: tabletType,

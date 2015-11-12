@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -101,7 +101,7 @@ func (qs *QuerySplitter) validateQuery() error {
 
 // split splits the query into multiple queries. validateQuery() must return
 // nil error before split() is called.
-func (qs *QuerySplitter) split(columnType query.Type, pkMinMax *sqltypes.Result) ([]proto.QuerySplit, error) {
+func (qs *QuerySplitter) split(columnType querypb.Type, pkMinMax *sqltypes.Result) ([]proto.QuerySplit, error) {
 	boundaries, err := qs.splitBoundaries(columnType, pkMinMax)
 	if err != nil {
 		return nil, err
@@ -211,7 +211,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 	}
 }
 
-func (qs *QuerySplitter) splitBoundaries(columnType query.Type, pkMinMax *sqltypes.Result) ([]sqltypes.Value, error) {
+func (qs *QuerySplitter) splitBoundaries(columnType querypb.Type, pkMinMax *sqltypes.Result) ([]sqltypes.Value, error) {
 	switch {
 	case sqltypes.IsSigned(columnType):
 		return qs.splitBoundariesIntColumn(pkMinMax)

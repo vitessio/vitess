@@ -10,7 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -226,12 +226,12 @@ var execMap = map[string]struct {
 }
 
 var result1 = sqltypes.Result{
-	Fields: []*pbq.Field{
-		&pbq.Field{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
 			Type: sqltypes.Int16,
 		},
-		&pbq.Field{
+		&querypb.Field{
 			Name: "field2",
 			Type: sqltypes.VarChar,
 		},
@@ -258,7 +258,7 @@ var session2 = &pbg.Session{
 	InTransaction: true,
 	ShardSessions: []*pbg.Session_ShardSession{
 		&pbg.Session_ShardSession{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   "ks",
 				Shard:      "1",
 				TabletType: pb.TabletType_MASTER,

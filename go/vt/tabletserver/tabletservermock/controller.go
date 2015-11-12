@@ -8,7 +8,7 @@ package tabletservermock
 import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	pb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
@@ -21,13 +21,13 @@ type BroadcastData struct {
 	TERTimestamp int64
 
 	// RealtimeStats stores the last broadcast stats
-	RealtimeStats pb.RealtimeStats
+	RealtimeStats querypb.RealtimeStats
 }
 
 // Controller is a mock tabletserver.Controller
 type Controller struct {
 	// CurrentTarget stores the last known target
-	CurrentTarget pb.Target
+	CurrentTarget querypb.Target
 
 	// QueryServiceEnabled is a state variable
 	QueryServiceEnabled bool
@@ -68,7 +68,7 @@ func (tqsc *Controller) AddStatusPart() {
 }
 
 // InitDBConfig is part of the tabletserver.Controller interface
-func (tqsc *Controller) InitDBConfig(target pb.Target, dbConfigs dbconfigs.DBConfigs, schemaOverrides []tabletserver.SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
+func (tqsc *Controller) InitDBConfig(target querypb.Target, dbConfigs dbconfigs.DBConfigs, schemaOverrides []tabletserver.SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
 	if tqsc.InitDBConfigError == nil {
 		tqsc.CurrentTarget = target
 		tqsc.QueryServiceEnabled = true
@@ -125,7 +125,7 @@ func (tqsc *Controller) QueryService() queryservice.QueryService {
 }
 
 // BroadcastHealth is part of the tabletserver.Controller interface
-func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
+func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats) {
 	tqsc.BroadcastData <- &BroadcastData{
 		TERTimestamp:  terTimestamp,
 		RealtimeStats: *stats,

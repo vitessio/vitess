@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -388,7 +388,7 @@ func newSession(
 	shardSessions := make([]*pbg.Session_ShardSession, len(shards))
 	for _, shard := range shards {
 		shardSessions = append(shardSessions, &pbg.Session_ShardSession{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      shard,
 				TabletType: tabletType,

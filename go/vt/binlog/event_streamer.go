@@ -18,7 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -150,7 +150,7 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*pb.StreamE
 		switch typ {
 		case '(':
 			// pkTuple is a list of pk values
-			var pkTuple *pbq.Row
+			var pkTuple *querypb.Row
 			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid, dmlEvent.PrimaryKeyFields)
 			if err != nil {
 				return nil, insertid, err
@@ -165,15 +165,15 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*pb.StreamE
 }
 
 // parsePkNames parses something like (eid id name )
-func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*pbq.Field, error) {
-	var columns []*pbq.Field
+func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*querypb.Field, error) {
+	var columns []*querypb.Field
 	if typ, _ := tokenizer.Scan(); typ != '(' {
 		return nil, fmt.Errorf("expecting '('")
 	}
 	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
 		switch typ {
 		case sqlparser.ID:
-			columns = append(columns, &pbq.Field{
+			columns = append(columns, &querypb.Field{
 				Name: string(val),
 			})
 		default:
@@ -184,8 +184,8 @@ func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*pbq.Field, error) {
 }
 
 // parsePkTuple parses something like (null 1 'bmFtZQ==' )
-func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*pbq.Field) (*pbq.Row, int64, error) {
-	result := &pbq.Row{}
+func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*querypb.Field) (*querypb.Row, int64, error) {
+	result := &querypb.Row{}
 
 	// start scanning the list
 	index := 0

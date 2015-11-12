@@ -24,7 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -37,7 +37,7 @@ type destinationTabletServer struct {
 	excludedTable string
 }
 
-func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -50,16 +50,16 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *pb
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
-		Fields: []*pbq.Field{
-			&pbq.Field{
+		Fields: []*querypb.Field{
+			&querypb.Field{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&pbq.Field{
+			&querypb.Field{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
-			&pbq.Field{
+			&querypb.Field{
 				Name: "keyspace_id",
 				Type: sqltypes.Int64,
 			},
@@ -93,7 +93,7 @@ type sourceTabletServer struct {
 	excludedTable string
 }
 
-func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pbq.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -109,16 +109,16 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pbq.Tar
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
-		Fields: []*pbq.Field{
-			&pbq.Field{
+		Fields: []*querypb.Field{
+			&querypb.Field{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&pbq.Field{
+			&querypb.Field{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
-			&pbq.Field{
+			&querypb.Field{
 				Name: "keyspace_id",
 				Type: sqltypes.Int64,
 			},

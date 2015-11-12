@@ -24,7 +24,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -279,7 +279,7 @@ func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 }
 
 // Fields returns the current fields description for the query
-func (conn *Connection) Fields() (fields []*query.Field) {
+func (conn *Connection) Fields() (fields []*querypb.Field) {
 	nfields := int(conn.c.num_fields)
 	if nfields == 0 {
 		return nil
@@ -289,8 +289,8 @@ func (conn *Connection) Fields() (fields []*query.Field) {
 	for i := 0; i < nfields; i++ {
 		totalLength += uint64(cfields[i].name_length)
 	}
-	fields = make([]*query.Field, nfields)
-	fvals := make([]query.Field, nfields)
+	fields = make([]*querypb.Field, nfields)
+	fvals := make([]querypb.Field, nfields)
 	for i := 0; i < nfields; i++ {
 		length := cfields[i].name_length
 		fname := (*[maxSize]byte)(unsafe.Pointer(cfields[i].name))[:length]

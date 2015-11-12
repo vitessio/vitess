@@ -9,156 +9,156 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestBindVariablesToProto3(t *testing.T) {
 	testcases := []struct {
 		name string
 		in   interface{}
-		out  *query.BindVariable
+		out  *querypb.BindVariable
 	}{{
 		name: "string",
 		in:   "aa",
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.VarChar,
 			Value: []byte("aa"),
 		},
 	}, {
 		name: "[]byte",
 		in:   []byte("aa"),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.VarBinary,
 			Value: []byte("aa"),
 		},
 	}, {
 		name: "int",
 		in:   int(1),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Int64,
 			Value: []byte("1"),
 		},
 	}, {
 		name: "int8",
 		in:   int8(-1),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Int64,
 			Value: []byte("-1"),
 		},
 	}, {
 		name: "int16",
 		in:   int16(-1),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Int64,
 			Value: []byte("-1"),
 		},
 	}, {
 		name: "int32",
 		in:   int32(-1),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Int64,
 			Value: []byte("-1"),
 		},
 	}, {
 		name: "int64",
 		in:   int64(-1),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Int64,
 			Value: []byte("-1"),
 		},
 	}, {
 		name: "uint",
 		in:   uint(1),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Uint64,
 			Value: []byte("1"),
 		},
 	}, {
 		name: "uint8",
 		in:   uint8(1),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Uint64,
 			Value: []byte("1"),
 		},
 	}, {
 		name: "uint16",
 		in:   uint16(1),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Uint64,
 			Value: []byte("1"),
 		},
 	}, {
 		name: "uint32",
 		in:   uint32(1),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Uint64,
 			Value: []byte("1"),
 		},
 	}, {
 		name: "uint64",
 		in:   uint64(1),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Uint64,
 			Value: []byte("1"),
 		},
 	}, {
 		name: "float32",
 		in:   float32(1.5),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Float64,
 			Value: []byte("1.5"),
 		},
 	}, {
 		name: "float64",
 		in:   float64(1.5),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Float64,
 			Value: []byte("1.5"),
 		},
 	}, {
 		name: "sqltypes.NULL",
 		in:   sqltypes.NULL,
-		out:  &query.BindVariable{},
+		out:  &querypb.BindVariable{},
 	}, {
 		name: "nil",
 		in:   nil,
-		out:  &query.BindVariable{},
+		out:  &querypb.BindVariable{},
 	}, {
 		name: "sqltypes.Integral",
 		in:   sqltypes.MakeNumeric([]byte("1")),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Int64,
 			Value: []byte("1"),
 		},
 	}, {
 		name: "sqltypes.Fractional",
 		in:   sqltypes.MakeFractional([]byte("1.5")),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.Float64,
 			Value: []byte("1.5"),
 		},
 	}, {
 		name: "sqltypes.String",
 		in:   sqltypes.MakeString([]byte("aa")),
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type:  sqltypes.VarBinary,
 			Value: []byte("aa"),
 		},
 	}, {
 		name: "[]interface{}",
 		in:   []interface{}{1, "aa", sqltypes.MakeFractional([]byte("1.5"))},
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type: sqltypes.Tuple,
-			Values: []*query.Value{
-				&query.Value{
+			Values: []*querypb.Value{
+				&querypb.Value{
 					Type:  sqltypes.Int64,
 					Value: []byte("1"),
 				},
-				&query.Value{
+				&querypb.Value{
 					Type:  sqltypes.VarChar,
 					Value: []byte("aa"),
 				},
-				&query.Value{
+				&querypb.Value{
 					Type:  sqltypes.Float64,
 					Value: []byte("1.5"),
 				},
@@ -167,14 +167,14 @@ func TestBindVariablesToProto3(t *testing.T) {
 	}, {
 		name: "[]string",
 		in:   []string{"aa", "bb"},
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type: sqltypes.Tuple,
-			Values: []*query.Value{
-				&query.Value{
+			Values: []*querypb.Value{
+				&querypb.Value{
 					Type:  sqltypes.VarChar,
 					Value: []byte("aa"),
 				},
-				&query.Value{
+				&querypb.Value{
 					Type:  sqltypes.VarChar,
 					Value: []byte("bb"),
 				},
@@ -183,14 +183,14 @@ func TestBindVariablesToProto3(t *testing.T) {
 	}, {
 		name: "[][]byte",
 		in:   [][]byte{[]byte("aa"), []byte("bb")},
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type: sqltypes.Tuple,
-			Values: []*query.Value{
-				&query.Value{
+			Values: []*querypb.Value{
+				&querypb.Value{
 					Type:  sqltypes.VarBinary,
 					Value: []byte("aa"),
 				},
-				&query.Value{
+				&querypb.Value{
 					Type:  sqltypes.VarBinary,
 					Value: []byte("bb"),
 				},
@@ -199,14 +199,14 @@ func TestBindVariablesToProto3(t *testing.T) {
 	}, {
 		name: "[]int",
 		in:   []int{1, 2},
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type: sqltypes.Tuple,
-			Values: []*query.Value{
-				&query.Value{
+			Values: []*querypb.Value{
+				&querypb.Value{
 					Type:  sqltypes.Int64,
 					Value: []byte("1"),
 				},
-				&query.Value{
+				&querypb.Value{
 					Type:  sqltypes.Int64,
 					Value: []byte("2"),
 				},
@@ -215,14 +215,14 @@ func TestBindVariablesToProto3(t *testing.T) {
 	}, {
 		name: "[]int64",
 		in:   []int64{1, 2},
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type: sqltypes.Tuple,
-			Values: []*query.Value{
-				&query.Value{
+			Values: []*querypb.Value{
+				&querypb.Value{
 					Type:  sqltypes.Int64,
 					Value: []byte("1"),
 				},
-				&query.Value{
+				&querypb.Value{
 					Type:  sqltypes.Int64,
 					Value: []byte("2"),
 				},
@@ -231,14 +231,14 @@ func TestBindVariablesToProto3(t *testing.T) {
 	}, {
 		name: "[]uint64",
 		in:   []uint64{1, 2},
-		out: &query.BindVariable{
+		out: &querypb.BindVariable{
 			Type: sqltypes.Tuple,
-			Values: []*query.Value{
-				&query.Value{
+			Values: []*querypb.Value{
+				&querypb.Value{
 					Type:  sqltypes.Uint64,
 					Value: []byte("1"),
 				},
-				&query.Value{
+				&querypb.Value{
 					Type:  sqltypes.Uint64,
 					Value: []byte("2"),
 				},
@@ -311,39 +311,39 @@ func TestBindVariablesToProto3Errors(t *testing.T) {
 func TestProto3ToBindVariables(t *testing.T) {
 	testcases := []struct {
 		name string
-		in   *query.BindVariable
+		in   *querypb.BindVariable
 		out  interface{}
 	}{{
 		name: "Int16",
-		in: &query.BindVariable{
+		in: &querypb.BindVariable{
 			Type:  sqltypes.Int16,
 			Value: []byte("-1"),
 		},
 		out: int64(-1),
 	}, {
 		name: "Uint16",
-		in: &query.BindVariable{
+		in: &querypb.BindVariable{
 			Type:  sqltypes.Uint16,
 			Value: []byte("1"),
 		},
 		out: uint64(1),
 	}, {
 		name: "Float64",
-		in: &query.BindVariable{
+		in: &querypb.BindVariable{
 			Type:  sqltypes.Float64,
 			Value: []byte("1.5"),
 		},
 		out: float64(1.5),
 	}, {
 		name: "VarChar",
-		in: &query.BindVariable{
+		in: &querypb.BindVariable{
 			Type:  sqltypes.VarChar,
 			Value: []byte("aa"),
 		},
 		out: []byte("aa"),
 	}, {
 		name: "Null",
-		in: &query.BindVariable{
+		in: &querypb.BindVariable{
 			Type: sqltypes.Null,
 		},
 		out: nil,
@@ -353,18 +353,18 @@ func TestProto3ToBindVariables(t *testing.T) {
 		out:  nil,
 	}, {
 		name: "Tuple",
-		in: &query.BindVariable{
+		in: &querypb.BindVariable{
 			Type: sqltypes.Tuple,
-			Values: []*query.Value{
-				&query.Value{
+			Values: []*querypb.Value{
+				&querypb.Value{
 					Type:  sqltypes.Int64,
 					Value: []byte("1"),
 				},
-				&query.Value{
+				&querypb.Value{
 					Type:  sqltypes.VarChar,
 					Value: []byte("aa"),
 				},
-				&query.Value{
+				&querypb.Value{
 					Type:  sqltypes.Float64,
 					Value: []byte("1.5"),
 				},
@@ -373,7 +373,7 @@ func TestProto3ToBindVariables(t *testing.T) {
 		out: []interface{}{int64(1), []byte("aa"), float64(1.5)},
 	}}
 	for _, tcase := range testcases {
-		p3 := map[string]*query.BindVariable{
+		p3 := map[string]*querypb.BindVariable{
 			"bv": tcase.in,
 		}
 		bv, err := Proto3ToBindVariables(p3)
@@ -389,35 +389,35 @@ func TestProto3ToBindVariables(t *testing.T) {
 func TestProto3ToBindVariablesErrors(t *testing.T) {
 	testcases := []struct {
 		name string
-		in   *query.BindVariable
+		in   *querypb.BindVariable
 		out  string
 	}{{
 		name: "Int64",
-		in: &query.BindVariable{
+		in: &querypb.BindVariable{
 			Type:  sqltypes.Int64,
 			Value: []byte("aa"),
 		},
 		out: `strconv.ParseInt: parsing "aa": invalid syntax`,
 	}, {
 		name: "Uint64",
-		in: &query.BindVariable{
+		in: &querypb.BindVariable{
 			Type:  sqltypes.Uint64,
 			Value: []byte("-1"),
 		},
 		out: `strconv.ParseUint: parsing "-1": invalid syntax`,
 	}, {
 		name: "Float64",
-		in: &query.BindVariable{
+		in: &querypb.BindVariable{
 			Type:  sqltypes.Float64,
 			Value: []byte("aa"),
 		},
 		out: `strconv.ParseFloat: parsing "aa": invalid syntax`,
 	}, {
 		name: "Tuple",
-		in: &query.BindVariable{
+		in: &querypb.BindVariable{
 			Type: sqltypes.Tuple,
-			Values: []*query.Value{
-				&query.Value{
+			Values: []*querypb.Value{
+				&querypb.Value{
 					Type:  sqltypes.Int64,
 					Value: []byte("aa"),
 				},
@@ -426,7 +426,7 @@ func TestProto3ToBindVariablesErrors(t *testing.T) {
 		out: `strconv.ParseInt: parsing "aa": invalid syntax`,
 	}}
 	for _, tcase := range testcases {
-		p3 := map[string]*query.BindVariable{
+		p3 := map[string]*querypb.BindVariable{
 			"bv": tcase.in,
 		}
 		_, err := Proto3ToBindVariables(p3)

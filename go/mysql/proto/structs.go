@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // QueryResult is the structure returned by the mysql library.
@@ -16,7 +16,7 @@ import (
 // and lose their original sqltypes. use Fields.Type to convert
 // them back if needed, using the following functions.
 type QueryResult struct {
-	Fields       []*query.Field
+	Fields       []*querypb.Field
 	RowsAffected uint64
 	InsertId     uint64
 	Rows         [][]sqltypes.Value
@@ -38,7 +38,7 @@ type RPCError struct {
 // - int64 for all other integer values (signed and unsigned)
 // - float64 for floating point values that fit in a float
 // - []byte for everything else
-func Convert(field *query.Field, val sqltypes.Value) (interface{}, error) {
+func Convert(field *querypb.Field, val sqltypes.Value) (interface{}, error) {
 	if field.Type == sqltypes.Null {
 		return nil, nil
 	} else if sqltypes.IsSigned(field.Type) {

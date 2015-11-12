@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Conn provides a fake implementation of sqldb.Conn.
@@ -149,7 +149,7 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sql
 	}
 
 	if wantfields {
-		qr.Fields = make([]*pbq.Field, len(result.Fields))
+		qr.Fields = make([]*querypb.Field, len(result.Fields))
 		copy(qr.Fields, result.Fields)
 	}
 
@@ -228,8 +228,8 @@ func (conn *Conn) Shutdown() {
 }
 
 // Fields returns the current fields description for the query
-func (conn *Conn) Fields() []*pbq.Field {
-	return make([]*pbq.Field, 0)
+func (conn *Conn) Fields() []*querypb.Field {
+	return make([]*querypb.Field, 0)
 }
 
 // ID returns the connection id.

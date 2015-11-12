@@ -9,7 +9,7 @@ package callerid
 import (
 	"golang.org/x/net/context"
 
-	qrpb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -23,13 +23,13 @@ var (
 	effectiveCallerIDKey callerIDKey = 1
 )
 
-// NewImmediateCallerID creates a qrpb.VTGateCallerID initialized with username
-func NewImmediateCallerID(username string) *qrpb.VTGateCallerID {
-	return &qrpb.VTGateCallerID{Username: username}
+// NewImmediateCallerID creates a querypb.VTGateCallerID initialized with username
+func NewImmediateCallerID(username string) *querypb.VTGateCallerID {
+	return &querypb.VTGateCallerID{Username: username}
 }
 
 // GetUsername returns the immediate caller of VTGate
-func GetUsername(im *qrpb.VTGateCallerID) string {
+func GetUsername(im *querypb.VTGateCallerID) string {
 	if im == nil {
 		return ""
 	}
@@ -75,9 +75,9 @@ func GetSubcomponent(ef *vtpb.CallerID) string {
 	return ef.Subcomponent
 }
 
-// NewContext adds the provided EffectiveCallerID(vtpb.CallerID) and ImmediateCallerID(qrpb.VTGateCallerID)
+// NewContext adds the provided EffectiveCallerID(vtpb.CallerID) and ImmediateCallerID(querypb.VTGateCallerID)
 // into the Context
-func NewContext(ctx context.Context, ef *vtpb.CallerID, im *qrpb.VTGateCallerID) context.Context {
+func NewContext(ctx context.Context, ef *vtpb.CallerID, im *querypb.VTGateCallerID) context.Context {
 	ctx = context.WithValue(
 		context.WithValue(ctx, effectiveCallerIDKey, ef),
 		immediateCallerIDKey,
@@ -96,10 +96,10 @@ func EffectiveCallerIDFromContext(ctx context.Context) *vtpb.CallerID {
 	return nil
 }
 
-// ImmediateCallerIDFromContext returns the ImmediateCallerID(qrpb.VTGateCallerID)
+// ImmediateCallerIDFromContext returns the ImmediateCallerID(querypb.VTGateCallerID)
 // stored in the Context, if any
-func ImmediateCallerIDFromContext(ctx context.Context) *qrpb.VTGateCallerID {
-	im, ok := ctx.Value(immediateCallerIDKey).(*qrpb.VTGateCallerID)
+func ImmediateCallerIDFromContext(ctx context.Context) *querypb.VTGateCallerID {
+	im, ok := ctx.Value(immediateCallerIDKey).(*querypb.VTGateCallerID)
 	if ok && im != nil {
 		return im
 	}

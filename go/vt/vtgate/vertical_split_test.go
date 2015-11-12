@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -66,7 +66,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	session := NewSafeSession(&pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{
-			Target: &pbq.Target{
+			Target: &querypb.Target{
 				Keyspace:   KsTestUnshardedServedFrom,
 				Shard:      "0",
 				TabletType: pb.TabletType_MASTER,

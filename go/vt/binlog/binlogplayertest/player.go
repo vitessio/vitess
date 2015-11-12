@@ -18,7 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -60,13 +60,13 @@ var testUpdateStreamRequest = "UpdateStream starting position"
 var testStreamEvent = &pb.StreamEvent{
 	Category:  pb.StreamEvent_SE_DML,
 	TableName: "table1",
-	PrimaryKeyFields: []*pbq.Field{
-		&pbq.Field{
+	PrimaryKeyFields: []*querypb.Field{
+		&querypb.Field{
 			Name: "id",
 			Type: sqltypes.Binary,
 		},
 	},
-	PrimaryKeyValues: []*pbq.Row{
+	PrimaryKeyValues: []*querypb.Row{
 		{
 			Lengths: []int64{3},
 			Values:  []byte{'1', '2', '3'},

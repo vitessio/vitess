@@ -18,7 +18,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -58,7 +58,7 @@ func TestBinary(t *testing.T) {
 		return
 	}
 	want := sqltypes.Result{
-		Fields: []*pbq.Field{
+		Fields: []*querypb.Field{
 			{
 				Name: "binval",
 				Type: sqltypes.VarBinary,
@@ -289,7 +289,7 @@ func TestBindInSelect(t *testing.T) {
 		return
 	}
 	want := &sqltypes.Result{
-		Fields: []*pbq.Field{{
+		Fields: []*querypb.Field{{
 			Name: "1",
 			Type: sqltypes.Int64,
 		}},
@@ -314,7 +314,7 @@ func TestBindInSelect(t *testing.T) {
 		return
 	}
 	want = &sqltypes.Result{
-		Fields: []*pbq.Field{{
+		Fields: []*querypb.Field{{
 			Name: "abcd",
 			Type: sqltypes.VarChar,
 		}},
@@ -339,7 +339,7 @@ func TestBindInSelect(t *testing.T) {
 		return
 	}
 	want = &sqltypes.Result{
-		Fields: []*pbq.Field{{
+		Fields: []*querypb.Field{{
 			Name: "",
 			Type: sqltypes.VarChar,
 		}},
@@ -373,7 +373,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestStreamHealth(t *testing.T) {
-	ch := make(chan *pbq.StreamHealthResponse, 10)
+	ch := make(chan *querypb.StreamHealthResponse, 10)
 	id, _ := framework.Server.StreamHealthRegister(ch)
 	defer framework.Server.StreamHealthUnregister(id)
 	framework.Server.BroadcastHealth(0, nil)

@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // buildValueList builds the set of PK reference rows used to drive the next query.
@@ -221,7 +221,7 @@ func getLimit(limit interface{}, bv map[string]interface{}) (int64, error) {
 	}
 }
 
-func buildKeyFromRow(fields []*pbq.Field, row *pbq.Row) (key string) {
+func buildKeyFromRow(fields []*querypb.Field, row *querypb.Row) (key string) {
 	// TODO(sougou): Make this a convenience function after
 	// QueryResults is moved to sqltypes.
 	sqlRow := make([]sqltypes.Value, len(row.Lengths))

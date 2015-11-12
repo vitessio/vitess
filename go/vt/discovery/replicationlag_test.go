@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	qpb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tpb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -18,12 +18,12 @@ func TestFilterByReplicationLag(t *testing.T) {
 	eps1 := &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 1},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{},
+		Stats:    &querypb.RealtimeStats{},
 	}
 	eps2 := &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 2},
 		Serving:  false,
-		Stats:    &qpb.RealtimeStats{},
+		Stats:    &querypb.RealtimeStats{},
 	}
 	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2})
 	if len(got) != 1 {
@@ -36,22 +36,22 @@ func TestFilterByReplicationLag(t *testing.T) {
 	eps1 = &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 1},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
 	eps2 = &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 2},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
 	eps3 := &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 3},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1},
 	}
 	eps4 := &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 4},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 30},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 30},
 	}
 	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2, eps3, eps4})
 	if len(got) != 4 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) || !reflect.DeepEqual(got[2], eps3) || !reflect.DeepEqual(got[3], eps4) {
@@ -61,22 +61,22 @@ func TestFilterByReplicationLag(t *testing.T) {
 	eps1 = &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 1},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 5},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 5},
 	}
 	eps2 = &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 2},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 10},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 10},
 	}
 	eps3 = &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 3},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 15},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 15},
 	}
 	eps4 = &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 4},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 120},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 120},
 	}
 	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2, eps3, eps4})
 	if len(got) != 3 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) || !reflect.DeepEqual(got[2], eps3) {
@@ -86,22 +86,22 @@ func TestFilterByReplicationLag(t *testing.T) {
 	eps1 = &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 1},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 30 * 60},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 30 * 60},
 	}
 	eps2 = &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 2},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 35 * 60},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 35 * 60},
 	}
 	eps3 = &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 3},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 40 * 60},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 40 * 60},
 	}
 	eps4 = &EndPointStats{
 		EndPoint: &tpb.EndPoint{Uid: 4},
 		Serving:  true,
-		Stats:    &qpb.RealtimeStats{SecondsBehindMaster: 45 * 60},
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 45 * 60},
 	}
 	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2, eps3, eps4})
 	if len(got) != 4 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) || !reflect.DeepEqual(got[2], eps3) || !reflect.DeepEqual(got[3], eps4) {
