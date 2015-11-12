@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -62,9 +63,9 @@ type RPCAgent interface {
 
 	ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error)
 
-	ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*sqltypes.Result, error)
+	ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error)
 
-	ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*sqltypes.Result, error)
+	ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*querypb.QueryResult, error)
 
 	// Replication related methods
 
@@ -228,7 +229,7 @@ func (agent *ActionAgent) ApplySchema(ctx context.Context, change *tmutils.Schem
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields bool, disableBinlogs bool, reloadSchema bool) (*sqltypes.Result, error) {
+func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields bool, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetDbaConnection()
 	if err != nil {
@@ -251,7 +252,7 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, d
 	}
 
 	// run the query
-	qr, err := conn.ExecuteFetch(query, maxrows, wantFields)
+	result, err := conn.ExecuteFetch(query, maxrows, wantFields)
 
 	// re-enable binlogs if necessary
 	if disableBinlogs && !conn.IsClosed() {
@@ -266,19 +267,20 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, d
 	if err == nil && reloadSchema {
 		agent.QueryServiceControl.ReloadSchema()
 	}
-	return qr, err
+	return sqltypes.ResultToProto3(result), err
 }
 
 // ExecuteFetchAsApp will execute the given query, possibly disabling binlogs.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*sqltypes.Result, error) {
+func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetAppConnection()
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return conn.ExecuteFetch(query, maxrows, wantFields)
+	result, err := conn.ExecuteFetch(query, maxrows, wantFields)
+	return sqltypes.ResultToProto3(result), err
 }
 
 // SlaveStatus returns the replication status

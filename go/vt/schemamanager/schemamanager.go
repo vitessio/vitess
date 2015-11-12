@@ -10,8 +10,9 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqltypes"
 	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -57,7 +58,7 @@ type Executor interface {
 type ExecuteResult struct {
 	FailedShards   []ShardWithError
 	SuccessShards  []ShardResult
-	CurSqlIndex    int
+	CurSQLIndex    int
 	Sqls           []string
 	ExecutorErr    string
 	TotalTimeSpent time.Duration
@@ -72,7 +73,7 @@ type ShardWithError struct {
 // ShardResult contains sql execute information on a particula shard
 type ShardResult struct {
 	Shard  string
-	Result *sqltypes.Result
+	Result *querypb.QueryResult
 }
 
 // Run schema changes on Vitess through VtGate

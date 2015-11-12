@@ -464,7 +464,7 @@ func agentRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmcl
 
 var testExecuteFetchQuery = "fetch this"
 var testExecuteFetchMaxRows = 100
-var testExecuteFetchResult = &sqltypes.Result{
+var testExecuteFetchResult = &querypb.QueryResult{
 	Fields: []*querypb.Field{
 		&querypb.Field{
 			Name: "column1",
@@ -476,15 +476,21 @@ var testExecuteFetchResult = &sqltypes.Result{
 		},
 	},
 	RowsAffected: 10,
-	InsertID:     32,
-	Rows: [][]sqltypes.Value{
-		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("ABC")),
+	InsertId:     32,
+	Rows: []*querypb.Row{
+		{
+			Lengths: []int64{
+				3,
+				-1,
+			},
+			Values: []byte{
+				'A', 'B', 'C',
+			},
 		},
 	},
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*sqltypes.Result, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -497,7 +503,7 @@ func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, db
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*sqltypes.Result, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
