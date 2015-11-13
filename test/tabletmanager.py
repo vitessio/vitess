@@ -188,15 +188,12 @@ class TestTabletManager(unittest.TestCase):
       logging.debug('vars: %s', v)
 
       # then the Zookeeper connections
-      if v['ZkMetaConn']['test_nj']['Current'] != 'Connected':
+      if v['ZkCachedConn']['test_nj'] != 'Connected':
         self.fail('invalid zk test_nj state: %s' %
-                  v['ZkMetaConn']['test_nj']['Current'])
-      if v['ZkMetaConn']['global']['Current'] != 'Connected':
+                  v['ZkCachedConn']['test_nj'])
+      if v['ZkCachedConn']['global'] != 'Connected':
         self.fail('invalid zk global state: %s' %
-                  v['ZkMetaConn']['global']['Current'])
-      if v['ZkMetaConn']['test_nj']['DurationConnected'] < 10e9:
-        self.fail('not enough time in Connected state: %d' %
-                  v['ZkMetaConn']['test_nj']['DurationConnected'])
+                  v['ZkCachedConn']['global'])
       if v['TabletType'] != 'master':
         self.fail('TabletType not exported correctly')
 
