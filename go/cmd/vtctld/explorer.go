@@ -8,11 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/cmd/vtctld/proto"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
 // Explorer allows exploring a topology server.
@@ -20,38 +19,7 @@ type Explorer interface {
 	// HandlePath returns a result (suitable to be passed to a
 	// template) appropriate for url, using actionRepo to populate
 	// the actions in result.
-	HandlePath(actionRepo proto.ActionRepository, url string, r *http.Request) interface{}
-
-	// GetKeyspacePath returns an explorer path that will contain
-	// information about the named keyspace.
-	GetKeyspacePath(keyspace string) string
-
-	// GetShardPath returns an explorer path that will contain
-	// information about the named shard in the named keyspace.
-	GetShardPath(keyspace, shard string) string
-
-	// GetSrvKeyspacePath returns an explorer path that will
-	// contain information about the named keyspace in the serving
-	// graph for cell.
-	GetSrvKeyspacePath(cell, keyspace string) string
-
-	// GetShardPath returns an explorer path that will contain
-	// information about the named shard in the named keyspace in
-	// the serving graph for cell.
-	GetSrvShardPath(cell, keyspace, shard string) string
-
-	// GetShardTypePath returns an explorer path that will contain
-	// information about the named tablet type in the named shard
-	// in the named keyspace in the serving graph for cell.
-	GetSrvTypePath(cell, keyspace, shard string, tabletType topodatapb.TabletType) string
-
-	// GetTabletPath returns an explorer path that will contain
-	// information about the tablet named by alias.
-	GetTabletPath(alias *topodatapb.TabletAlias) string
-
-	// GetReplicationSlaves returns an explorer path that contains
-	// replication slaves for the named cell, keyspace, and shard.
-	GetReplicationSlaves(cell, keyspace, shard string) string
+	HandlePath(url string, r *http.Request) interface{}
 }
 
 var (
@@ -75,35 +43,22 @@ func HandleExplorer(name, url, templateName string, exp Explorer) {
 
 	// Topo explorer API for client-side vtctld app.
 	handleCollection("topodata", func(r *http.Request) (interface{}, error) {
-		return exp.HandlePath(actionRepo, path.Clean(url+getItemPath(r.URL.Path)), r), nil
+		return exp.HandlePath(path.Clean(url+getItemPath(r.URL.Path)), r), nil
 	})
 
 	// Old server-side explorer.
 	explorer = exp
 	explorerName = name
-	indexContent.ToplevelLinks[name+" Explorer"] = url
 	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			httpErrorf(w, r, "cannot parse form: %s", err)
-			return
-		}
-		topoPath := r.URL.Path[strings.Index(r.URL.Path, url):]
-		if cleanPath := path.Clean(topoPath); topoPath != cleanPath && topoPath != cleanPath+"/" {
-			log.Infof("redirecting to %v", cleanPath)
-			http.Redirect(w, r, cleanPath, http.StatusTemporaryRedirect)
-			return
-		}
-
-		if strings.HasSuffix(topoPath, "/") {
-			topoPath = topoPath[:len(topoPath)-1]
-		}
-		result := explorer.HandlePath(actionRepo, topoPath, r)
-		templateLoader.ServeTemplate(templateName, result, w, r)
+		// Get the part after the prefix url.
+		topoPath := r.URL.Path[strings.Index(r.URL.Path, url)+len(url):]
+		// Redirect to the new client-side topo browser.
+		http.Redirect(w, r, appPrefix+"#"+path.Join("/topo", topoPath), http.StatusFound)
 	})
 }
 
 // handleExplorerRedirect returns the redirect target URL.
-func handleExplorerRedirect(r *http.Request) (string, error) {
+func handleExplorerRedirect(ctx context.Context, ts topo.Server, r *http.Request) (string, error) {
 	keyspace := r.FormValue("keyspace")
 	shard := r.FormValue("shard")
 	cell := r.FormValue("cell")
@@ -113,32 +68,28 @@ func handleExplorerRedirect(r *http.Request) (string, error) {
 		if keyspace == "" {
 			return "", errors.New("keyspace is required for this redirect")
 		}
-		return explorer.GetKeyspacePath(keyspace), nil
+		return appPrefix + "#/keyspaces/", nil
 	case "shard":
 		if keyspace == "" || shard == "" {
 			return "", errors.New("keyspace and shard are required for this redirect")
 		}
-		return explorer.GetShardPath(keyspace, shard), nil
+		return appPrefix + fmt.Sprintf("#/shard/%s/%s", keyspace, shard), nil
 	case "srv_keyspace":
 		if keyspace == "" || cell == "" {
 			return "", errors.New("keyspace and cell are required for this redirect")
 		}
-		return explorer.GetSrvKeyspacePath(cell, keyspace), nil
+		return appPrefix + "#/keyspaces/", nil
 	case "srv_shard":
 		if keyspace == "" || shard == "" || cell == "" {
 			return "", errors.New("keyspace, shard, and cell are required for this redirect")
 		}
-		return explorer.GetSrvShardPath(cell, keyspace, shard), nil
+		return appPrefix + fmt.Sprintf("#/shard/%s/%s", keyspace, shard), nil
 	case "srv_type":
 		tabletType := r.FormValue("tablet_type")
 		if keyspace == "" || shard == "" || cell == "" || tabletType == "" {
 			return "", errors.New("keyspace, shard, cell, and tablet_type are required for this redirect")
 		}
-		tt, err := topoproto.ParseTabletType(tabletType)
-		if err != nil {
-			return "", fmt.Errorf("cannot parse tablet type %v: %v", tabletType, err)
-		}
-		return explorer.GetSrvTypePath(cell, keyspace, shard, tt), nil
+		return appPrefix + fmt.Sprintf("#/shard/%s/%s", keyspace, shard), nil
 	case "tablet":
 		alias := r.FormValue("alias")
 		if alias == "" {
@@ -148,12 +99,16 @@ func handleExplorerRedirect(r *http.Request) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("bad tablet alias %q: %v", alias, err)
 		}
-		return explorer.GetTabletPath(tabletAlias), nil
+		ti, err := ts.GetTablet(ctx, tabletAlias)
+		if err != nil {
+			return "", fmt.Errorf("can't get tablet %q: %v", alias, err)
+		}
+		return appPrefix + fmt.Sprintf("#/shard/%s/%s", ti.Keyspace, ti.Shard), nil
 	case "replication":
 		if keyspace == "" || shard == "" || cell == "" {
 			return "", errors.New("keyspace, shard, and cell are required for this redirect")
 		}
-		return explorer.GetReplicationSlaves(cell, keyspace, shard), nil
+		return appPrefix + fmt.Sprintf("#/shard/%s/%s", keyspace, shard), nil
 	default:
 		return "", errors.New("bad redirect type")
 	}

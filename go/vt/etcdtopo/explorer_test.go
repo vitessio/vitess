@@ -6,8 +6,6 @@ package etcdtopo
 
 import (
 	"encoding/json"
-	"html/template"
-	"net/http"
 	"path"
 	"reflect"
 	"strings"
@@ -60,7 +58,7 @@ func TestSplitShardDirPath(t *testing.T) {
 func TestHandlePathInvalid(t *testing.T) {
 	// Don't panic!
 	ex := NewExplorer(nil)
-	result := ex.HandlePath(nil, "xxx", nil)
+	result := ex.HandlePath("xxx", nil)
 	exResult := result.(*explorerResult)
 	if want := "invalid"; !strings.Contains(exResult.Error, want) {
 		t.Errorf("HandlePath returned wrong error: got %q, want %q", exResult.Error, want)
@@ -74,7 +72,7 @@ func TestHandlePathRoot(t *testing.T) {
 
 	ts := newTestServer(t, cells)
 	ex := NewExplorer(ts)
-	result := ex.HandlePath(nil, input, nil)
+	result := ex.HandlePath(input, nil)
 	exResult := result.(*explorerResult)
 	if got := exResult.Children; !reflect.DeepEqual(got, want) {
 		t.Errorf("HandlePath(%q) = %v, want %v", input, got, want)
@@ -100,21 +98,14 @@ func TestHandlePathKeyspace(t *testing.T) {
 		t.Fatalf("CreateShard error: %v", err)
 	}
 
-	m := &mockActionRepo{}
 	ex := NewExplorer(ts)
-	result := ex.HandlePath(m, input, nil)
+	result := ex.HandlePath(input, nil)
 	exResult := result.(*explorerResult)
 	if got := exResult.Data; got != want {
 		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
 	}
 	if got, want := exResult.Children, []string{"10-20", "20-30"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("Children = %v, want %v", got, want)
-	}
-	if m.keyspaceActions == nil {
-		t.Errorf("ActionRepository.PopulateKeyspaceActions not called")
-	}
-	if m.keyspace != "test_keyspace" {
-		t.Errorf("ActionRepository called with keyspace %q, want %q", m.keyspace, "test_keyspace")
 	}
 }
 
@@ -134,21 +125,11 @@ func TestHandlePathShard(t *testing.T) {
 		t.Fatalf("CreateShard error: %v", err)
 	}
 
-	m := &mockActionRepo{}
 	ex := NewExplorer(ts)
-	result := ex.HandlePath(m, input, nil)
+	result := ex.HandlePath(input, nil)
 	exResult := result.(*explorerResult)
 	if got := exResult.Data; got != want {
 		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
-	}
-	if m.shardActions == nil {
-		t.Errorf("ActionRepository.PopulateShardActions not called")
-	}
-	if m.keyspace != "test_keyspace" {
-		t.Errorf("ActionRepository called with keyspace %q, want %q", m.keyspace, "test_keyspace")
-	}
-	if m.shard != "-80" {
-		t.Errorf("ActionRepository called with shard %q, want %q", m.shard, "-80")
 	}
 }
 
@@ -168,44 +149,10 @@ func TestHandlePathTablet(t *testing.T) {
 		t.Fatalf("CreateTablet error: %v", err)
 	}
 
-	m := &mockActionRepo{}
 	ex := NewExplorer(ts)
-	result := ex.HandlePath(m, input, nil)
+	result := ex.HandlePath(input, nil)
 	exResult := result.(*explorerResult)
 	if got := exResult.Data; got != want {
 		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
 	}
-	wantLinks := map[string]template.URL{
-		"status": template.URL("http://example.com:4321/debug/status"),
-	}
-	for k, want := range wantLinks {
-		if got := exResult.Links[k]; got != want {
-			t.Errorf("Links[%q] = %v, want %v", k, got, want)
-		}
-	}
-	if m.tabletActions == nil {
-		t.Errorf("ActionRepository.PopulateTabletActions not called")
-	}
-	if m.tablet != "cell1-0000000123" {
-		t.Errorf("ActionRepository called with tablet %q, want %q", m.tablet, "cell1-0000000123")
-	}
-}
-
-type mockActionRepo struct {
-	keyspace, shard, tablet                      string
-	keyspaceActions, shardActions, tabletActions map[string]template.URL
-}
-
-func (m *mockActionRepo) PopulateKeyspaceActions(actions map[string]template.URL, keyspace string) {
-	m.keyspace = keyspace
-	m.keyspaceActions = actions
-}
-func (m *mockActionRepo) PopulateShardActions(actions map[string]template.URL, keyspace, shard string) {
-	m.keyspace = keyspace
-	m.shard = shard
-	m.shardActions = actions
-}
-func (m *mockActionRepo) PopulateTabletActions(actions map[string]template.URL, tablet string, r *http.Request) {
-	m.tablet = tablet
-	m.tabletActions = actions
 }

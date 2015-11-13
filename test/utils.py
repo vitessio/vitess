@@ -1035,13 +1035,6 @@ class Vtctld(object):
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
 
-  def dbtopo(self):
-    data = json.load(
-        urllib2.urlopen('http://localhost:%d/dbtopo?format=json' % self.port))
-    if data['Error']:
-      raise VtctldError(data)
-    return data['Topology']
-
   def serving_graph(self):
     data = json.load(
         urllib2.urlopen(
@@ -1055,7 +1048,6 @@ class Vtctld(object):
     args = environment.binary_args('vtctld') + [
         '-debug',
         '-web_dir', environment.vttop + '/web/vtctld',
-        '--templates', environment.vttop + '/go/cmd/vtctld/templates',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),
         '--schema_change_dir', self.schema_change_dir,

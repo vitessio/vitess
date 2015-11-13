@@ -5,7 +5,6 @@
 package etcdtopo
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -13,10 +12,6 @@ import (
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
-	ctlproto "github.com/youtube/vitess/go/cmd/vtctld/proto"
-	"github.com/youtube/vitess/go/netutil"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -34,43 +29,8 @@ func NewExplorer(ts *Server) *Explorer {
 	return &Explorer{ts: ts}
 }
 
-// GetKeyspacePath implements vtctld Explorer.
-func (ex Explorer) GetKeyspacePath(keyspace string) string {
-	return path.Join(explorerRoot, globalCell, keyspaceDirPath(keyspace))
-}
-
-// GetShardPath implements vtctld Explorer.
-func (ex Explorer) GetShardPath(keyspace, shard string) string {
-	return path.Join(explorerRoot, globalCell, shardDirPath(keyspace, shard))
-}
-
-// GetSrvKeyspacePath implements vtctld Explorer.
-func (ex Explorer) GetSrvKeyspacePath(cell, keyspace string) string {
-	return path.Join(explorerRoot, cell, srvKeyspaceDirPath(keyspace))
-}
-
-// GetSrvShardPath implements vtctld Explorer.
-func (ex Explorer) GetSrvShardPath(cell, keyspace, shard string) string {
-	return path.Join(explorerRoot, cell, srvShardDirPath(keyspace, shard))
-}
-
-// GetSrvTypePath implements vtctld Explorer.
-func (ex Explorer) GetSrvTypePath(cell, keyspace, shard string, tabletType topodatapb.TabletType) string {
-	return path.Join(explorerRoot, cell, endPointsDirPath(keyspace, shard, tabletType))
-}
-
-// GetTabletPath implements vtctld Explorer.
-func (ex Explorer) GetTabletPath(alias *topodatapb.TabletAlias) string {
-	return path.Join(explorerRoot, alias.Cell, tabletDirPath(alias))
-}
-
-// GetReplicationSlaves implements vtctld Explorer.
-func (ex Explorer) GetReplicationSlaves(cell, keyspace, shard string) string {
-	return path.Join(explorerRoot, cell, shardReplicationDirPath(keyspace, shard))
-}
-
 // HandlePath implements vtctld Explorer.
-func (ex Explorer) HandlePath(actionRepo ctlproto.ActionRepository, rPath string, r *http.Request) interface{} {
+func (ex Explorer) HandlePath(rPath string, r *http.Request) interface{} {
 	result := newExplorerResult(rPath)
 
 	// Cut off explorerRoot prefix.
@@ -125,17 +85,6 @@ func (ex Explorer) HandlePath(actionRepo ctlproto.ActionRepository, rPath string
 		result.Children = append(result.Children, path.Base(node.Key))
 	}
 
-	// Populate actions.
-	if m, _ := path.Match(keyspaceDirPath("*"), rPath); m {
-		actionRepo.PopulateKeyspaceActions(result.Actions, path.Base(rPath))
-	} else if m, _ := path.Match(shardDirPath("*", "*"), rPath); m {
-		if keyspace, shard, err := splitShardDirPath(rPath); err == nil {
-			actionRepo.PopulateShardActions(result.Actions, keyspace, shard)
-		}
-	} else if m, _ := path.Match(path.Join(tabletsDirPath, "*"), rPath); m {
-		actionRepo.PopulateTabletActions(result.Actions, path.Base(rPath), r)
-		addTabletLinks(result, result.Data)
-	}
 	return result
 }
 
@@ -192,16 +141,4 @@ func splitShardDirPath(p string) (keyspace, shard string, err error) {
 		return "", "", fmt.Errorf("invalid shard dir path: %v", p)
 	}
 	return parts[3], parts[4], nil
-}
-
-func addTabletLinks(result *explorerResult, data string) {
-	t := &topodatapb.Tablet{}
-	err := json.Unmarshal([]byte(data), t)
-	if err != nil {
-		return
-	}
-
-	if port, ok := t.PortMap["vt"]; ok {
-		result.Links["status"] = template.URL(fmt.Sprintf("http://%v/debug/status", netutil.JoinHostPort(t.Hostname, port)))
-	}
 }
