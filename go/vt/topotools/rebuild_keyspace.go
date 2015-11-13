@@ -166,7 +166,6 @@ func rebuildKeyspace(ctx context.Context, log logutil.Logger, ts topo.Server, ke
 // orderAndCheckPartitions will re-order the partition list, and check
 // it's correct.
 func orderAndCheckPartitions(cell string, srvKeyspace *topodatapb.SrvKeyspace) error {
-
 	// now check them all
 	for _, partition := range srvKeyspace.Partitions {
 		tabletType := partition.ServedType
@@ -183,17 +182,19 @@ func orderAndCheckPartitions(cell string, srvKeyspace *topodatapb.SrvKeyspace) e
 			return fmt.Errorf("keyspace partition for %v in cell %v does not end with max key", tabletType, cell)
 		}
 		for i := range partition.ShardReferences[0 : len(partition.ShardReferences)-1] {
-			fn := partition.ShardReferences[i].KeyRange == nil
-			sn := partition.ShardReferences[i+1].KeyRange == nil
-			if fn != sn {
-				return fmt.Errorf("shards with unconsistent KeyRanges for %v in cell %v at shard %v", tabletType, cell, i)
+			currShard := partition.ShardReferences[i]
+			nextShard := partition.ShardReferences[i+1]
+			currHasKeyRange := currShard.KeyRange != nil
+			nextHasKeyRange := nextShard.KeyRange != nil
+			if currHasKeyRange != nextHasKeyRange {
+				return fmt.Errorf("shards with inconsistent KeyRanges for %v in cell %v. shards: %v, %v", tabletType, cell, currShard, nextShard)
 			}
-			if fn {
+			if currHasKeyRange {
 				// this is the custom sharding case, all KeyRanges must be nil
 				continue
 			}
-			if bytes.Compare(partition.ShardReferences[i].KeyRange.End, partition.ShardReferences[i+1].KeyRange.Start) != 0 {
-				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, hex.EncodeToString(partition.ShardReferences[i].KeyRange.End), hex.EncodeToString(partition.ShardReferences[i+1].KeyRange.Start))
+			if bytes.Compare(currShard.KeyRange.End, nextShard.KeyRange.Start) != 0 {
+				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, hex.EncodeToString(currShard.KeyRange.End), hex.EncodeToString(nextShard.KeyRange.Start))
 			}
 		}
 	}
