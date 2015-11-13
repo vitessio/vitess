@@ -21,7 +21,7 @@ gems:
 markdown: redcarpet
 
 redcarpet:
-  extensions: ["no_intra_emphasis", "fenced_code_blocks", "autolink", "highlight", "prettify", "tables", "with_toc_data"]
+  extensions: ["autolink", "fenced_code_blocks", "highlight", "no_intra_emphasis", "prettify", "tables", "with_toc_data"]
 
 # Site owner
 owner:
