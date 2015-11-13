@@ -33,13 +33,14 @@ import (
 type fakeRPCAgent struct {
 	t      *testing.T
 	panics bool
+	// slow if true will let Ping() sleep and effectively not respond to an RPC.
+	slow bool
 }
 
 // NewFakeRPCAgent returns a fake tabletmanager.RPCAgent that's just a mirror.
 func NewFakeRPCAgent(t *testing.T) tabletmanager.RPCAgent {
 	return &fakeRPCAgent{
-		t:      t,
-		panics: false,
+		t: t,
 	}
 }
 
@@ -124,6 +125,9 @@ func (fra *fakeRPCAgent) Ping(ctx context.Context, args string) string {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
+	if fra.slow {
+		time.Sleep(time.Minute)
+	}
 	return args
 }
 
@@ -137,6 +141,42 @@ func agentRPCTestPing(ctx context.Context, t *testing.T, client tmclient.TabletM
 func agentRPCTestPingPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	err := client.Ping(ctx, ti)
 	expectRPCWrapPanic(t, err)
+}
+
+// agentRPCTestIsTimeoutErrorDial verifies that client.IsTimeoutError() returns
+// true for RPCs failed due to an expired context before .Dial().
+func agentRPCTestIsTimeoutErrorDial(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	// Using a timeout of 0 here such that .Dial() will fail immediately.
+	expiredCtx, cancel := context.WithTimeout(ctx, 0)
+	defer cancel()
+	err := client.Ping(expiredCtx, ti)
+	if err == nil {
+		t.Fatal("agentRPCTestIsTimeoutError_Dial: RPC with expired context did not fail")
+	}
+	if !client.IsTimeoutError(err) {
+		t.Errorf("agentRPCTestIsTimeoutError_Dial: want: IsTimeoutError() = true. error: %v", err)
+	}
+}
+
+// agentRPCTestIsTimeoutErrorRPC verifies that client.IsTimeoutError() returns
+// true for RPCs failed due to an expired context during RPC execution.
+func agentRPCTestIsTimeoutErrorRPC(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo, fakeAgent *fakeRPCAgent) {
+	// We must use a timeout > 0 such that the context deadline hasn't expired
+	// yet in grpctmclient.Client.dial().
+	// NOTE: This might still race e.g. when test execution takes too long the
+	//       context will be expired in dial() already. In such cases coverage
+	//       will be reduced but the test will not flake.
+	shortCtx, cancel := context.WithTimeout(ctx, time.Millisecond)
+	defer cancel()
+	fakeAgent.slow = true
+	defer func() { fakeAgent.slow = false }()
+	err := client.Ping(shortCtx, ti)
+	if err == nil {
+		t.Fatal("agentRPCTestIsTimeoutError_RPC: RPC with expired context did not fail")
+	}
+	if !client.IsTimeoutError(err) {
+		t.Errorf("agentRPCTestIsTimeoutError_RPC: want: IsTimeoutError() = true. error: %v", err)
+	}
 }
 
 var testGetSchemaTables = []string{"table1", "table2"}
@@ -1081,6 +1121,10 @@ func (fra *fakeRPCAgent) RPCWrapLockAction(ctx context.Context, name string, arg
 // by NewFakeRPCAgent)
 func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo, fakeAgent tabletmanager.RPCAgent) {
 	ctx := context.Background()
+
+	// Test RPC specific methods of the interface.
+	agentRPCTestIsTimeoutErrorDial(ctx, t, client, ti)
+	agentRPCTestIsTimeoutErrorRPC(ctx, t, client, ti, fakeAgent.(*fakeRPCAgent))
 
 	// Various read-only methods
 	agentRPCTestPing(ctx, t, client, ti)
