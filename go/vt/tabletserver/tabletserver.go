@@ -53,7 +53,7 @@ const (
 // stateName names every state. The number of elements must
 // match the number of states. Names can overlap.
 var stateName = []string{
-	"NOT_SERVING",
+	"NOT_CONNECTED",
 	"NOT_SERVING",
 	"SERVING",
 	"NOT_SERVING",
@@ -75,10 +75,11 @@ type TabletServer struct {
 	// the state to a transient value and release the lock.
 	// Once the operation is complete, you can then transition
 	// the state back to a stable value.
-	// Only the function that moved the state to a transient one is
-	// allowed to change it to a stable value.
+	// The lameduck mode causes tablet server to respond as NOT_SERVING
+	// for health checks. This does not affect how queries are served.
 	mu       sync.Mutex
 	state    int64
+	lameduck sync2.AtomicInt32
 	requests sync.WaitGroup
 	begins   sync.WaitGroup
 
@@ -184,6 +185,9 @@ func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *QueryRules) error
 
 // GetState returns the name of the current TabletServer state.
 func (tsv *TabletServer) GetState() string {
+	if tsv.lameduck.Get() != 0 {
+		return "LAMEDUCK"
+	}
 	tsv.mu.Lock()
 	name := stateName[tsv.state]
 	tsv.mu.Unlock()
@@ -236,6 +240,19 @@ func (tsv *TabletServer) StartService(target querypb.Target, dbconfigs dbconfigs
 	return tsv.SetServingType(tabletType, true)
 }
 
+// EnterLameduck causes tabletserver to enter the lameduck state. This
+// state causes health checks to fail, but the behavior of tabletserver
+// otherwise remains the same. Any subsequent calls to SetServingType will
+// cause the tabletserver to exit this mode.
+func (tsv *TabletServer) EnterLameduck() {
+	tsv.lameduck.Set(1)
+}
+
+// ExitLameduck causes the tabletserver to exit the lameduck mode.
+func (tsv *TabletServer) ExitLameduck() {
+	tsv.lameduck.Set(0)
+}
+
 const (
 	actionNone = iota
 	actionFullStart
@@ -246,6 +263,8 @@ const (
 // SetServingType changes the serving type of the tabletserver. It starts or
 // stops internal services as deemed necessary.
 func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool) error {
+	defer tsv.ExitLameduck()
+
 	action, err := tsv.decideAction(tabletType, serving)
 	if err != nil {
 		return err

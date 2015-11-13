@@ -31,7 +31,7 @@ func TestTabletServerGetState(t *testing.T) {
 	}
 	// Don't reuse stateName.
 	names := []string{
-		"NOT_SERVING",
+		"NOT_CONNECTED",
 		"NOT_SERVING",
 		"SERVING",
 		"NOT_SERVING",
@@ -46,6 +46,10 @@ func TestTabletServerGetState(t *testing.T) {
 		if stateName := tsv.GetState(); stateName != names[i] {
 			t.Errorf("GetState: %s, want %s", stateName, names[i])
 		}
+	}
+	tsv.EnterLameduck()
+	if stateName := tsv.GetState(); stateName != "LAMEDUCK" {
+		t.Errorf("GetState: %s, want LAMEDUCK", stateName)
 	}
 }
 
@@ -268,6 +272,20 @@ func TestSetServingType(t *testing.T) {
 		t.Error(err)
 	}
 	checkTabletServerState(t, tsv, StateNotServing)
+
+	// Verify that we exit lameduck when SetServingType is called.
+	tsv.EnterLameduck()
+	if stateName := tsv.GetState(); stateName != "LAMEDUCK" {
+		t.Errorf("GetState: %s, want LAMEDUCK", stateName)
+	}
+	err = tsv.SetServingType(topodatapb.TabletType_SPARE, false)
+	if err != nil {
+		t.Error(err)
+	}
+	checkTabletServerState(t, tsv, StateNotServing)
+	if stateName := tsv.GetState(); stateName != "NOT_SERVING" {
+		t.Errorf("GetState: %s, want NOT_SERVING", stateName)
+	}
 
 	tsv.StopService()
 	checkTabletServerState(t, tsv, StateNotConnected)
