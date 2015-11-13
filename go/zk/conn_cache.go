@@ -133,8 +133,8 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan 
 					cached.zconn.Close()
 				}
 				cached.zconn = nil
-				cached.mutex.Unlock()
 				cc.setState(cell, cached, DISCONNECTED)
+				cached.mutex.Unlock()
 			}
 
 			log.Infof("zk conn cache: session for cell %v ended: %v", cell, event)
