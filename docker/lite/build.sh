@@ -19,7 +19,6 @@ cp -R base/vt/dist lite/vt/
 
 mkdir -p $lite/$vttop/go/cmd/vtctld
 mkdir -p $lite/$vttop/web
-cp -R base/$vttop/go/cmd/vtctld/templates $lite/$vttop/go/cmd/vtctld/
 cp -R base/$vttop/web/vtctld $lite/$vttop/web/
 
 mkdir -p $lite/$vttop/config

@@ -7,23 +7,13 @@ package main
 // Imports and register the Zookeeper TopologyServer
 
 import (
-	"encoding/json"
-	"fmt"
-	"html/template"
 	"net/http"
-	"path"
 	"sort"
-	"strings"
 
-	"github.com/youtube/vitess/go/cmd/vtctld/proto"
-	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func init() {
@@ -45,43 +35,8 @@ func NewZkExplorer(zconn zk.Conn) *ZkExplorer {
 	return &ZkExplorer{zconn}
 }
 
-// GetKeyspacePath is part of the Explorer interface
-func (ex ZkExplorer) GetKeyspacePath(keyspace string) string {
-	return path.Join("/zk/global/vt/keyspaces", keyspace)
-}
-
-// GetShardPath is part of the Explorer interface
-func (ex ZkExplorer) GetShardPath(keyspace, shard string) string {
-	return path.Join("/zk/global/vt/keyspaces", keyspace, "shards", shard)
-}
-
-// GetSrvKeyspacePath is part of the Explorer interface
-func (ex ZkExplorer) GetSrvKeyspacePath(cell, keyspace string) string {
-	return path.Join("/zk", cell, "vt/ns", keyspace)
-}
-
-// GetSrvShardPath is part of the Explorer interface
-func (ex ZkExplorer) GetSrvShardPath(cell, keyspace, shard string) string {
-	return path.Join("/zk", cell, "/vt/ns", keyspace, shard)
-}
-
-// GetSrvTypePath is part of the Explorer interface
-func (ex ZkExplorer) GetSrvTypePath(cell, keyspace, shard string, tabletType topodatapb.TabletType) string {
-	return path.Join("/zk", cell, "/vt/ns", keyspace, shard, strings.ToLower(tabletType.String()))
-}
-
-// GetTabletPath is part of the Explorer interface
-func (ex ZkExplorer) GetTabletPath(alias *topodatapb.TabletAlias) string {
-	return path.Join("/zk", alias.Cell, "vt/tablets", topoproto.TabletAliasUIDStr(alias))
-}
-
-// GetReplicationSlaves is part of the Explorer interface
-func (ex ZkExplorer) GetReplicationSlaves(cell, keyspace, shard string) string {
-	return path.Join("/zk", cell, "vt/replication", keyspace, shard)
-}
-
 // HandlePath is part of the Explorer interface
-func (ex ZkExplorer) HandlePath(actionRepo proto.ActionRepository, zkPath string, r *http.Request) interface{} {
+func (ex ZkExplorer) HandlePath(zkPath string, r *http.Request) interface{} {
 	result := NewZkResult(zkPath)
 
 	if zkPath == "/zk" {
@@ -103,20 +58,6 @@ func (ex ZkExplorer) HandlePath(actionRepo proto.ActionRepository, zkPath string
 		result.Error = err.Error()
 		return result
 	}
-	if m, _ := path.Match("/zk/global/vt/keyspaces/*", zkPath); m {
-		keyspace := path.Base(zkPath)
-		actionRepo.PopulateKeyspaceActions(result.Actions, keyspace)
-	} else if m, _ := path.Match("/zk/global/vt/keyspaces/*/shards/*", zkPath); m {
-		zkPathParts := strings.Split(zkPath, "/")
-		keyspace := zkPathParts[5]
-		shard := zkPathParts[7]
-		actionRepo.PopulateShardActions(result.Actions, keyspace, shard)
-	} else if m, _ := path.Match("/zk/*/vt/tablets/*", result.Path); m {
-		zkPathParts := strings.Split(result.Path, "/")
-		alias := zkPathParts[2] + "-" + zkPathParts[5]
-		actionRepo.PopulateTabletActions(result.Actions, alias, r)
-		ex.addTabletLinks(data, result)
-	}
 	result.Data = data
 	children, _, err := ex.zconn.Children(zkPath)
 	if err != nil {
@@ -128,33 +69,17 @@ func (ex ZkExplorer) HandlePath(actionRepo proto.ActionRepository, zkPath string
 	return result
 }
 
-func (ex ZkExplorer) addTabletLinks(data string, result *ZkResult) {
-	t := &topodatapb.Tablet{}
-	err := json.Unmarshal([]byte(data), t)
-	if err != nil {
-		return
-	}
-
-	if port, ok := t.PortMap["vt"]; ok {
-		result.Links["status"] = template.URL(fmt.Sprintf("http://%v/debug/status", netutil.JoinHostPort(t.Hostname, port)))
-	}
-}
-
 // ZkResult is the node for a zk path
 type ZkResult struct {
 	Path     string
 	Data     string
-	Links    map[string]template.URL
 	Children []string
-	Actions  map[string]template.URL
 	Error    string
 }
 
-// NewZkResult creates a new ZkResult for the path with no links nor actions.
+// NewZkResult creates a new ZkResult for the path.
 func NewZkResult(zkPath string) *ZkResult {
 	return &ZkResult{
-		Links:   make(map[string]template.URL),
-		Actions: make(map[string]template.URL),
-		Path:    zkPath,
+		Path: zkPath,
 	}
 }
