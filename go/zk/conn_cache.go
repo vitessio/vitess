@@ -26,12 +26,6 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-/* When you need to talk to multiple zk cells, you need a simple
-abstraction so you aren't caching clients all over the place.
-
-ConnCache guarantees that you have at most one zookeeper connection per cell.
-*/
-
 const (
 	DISCONNECTED = 0
 	CONNECTING   = 1
@@ -39,11 +33,14 @@ const (
 )
 
 type cachedConn struct {
-	mutex  sync.Mutex // used to notify if multiple goroutine simultaneously want a connection
+	mutex sync.Mutex
+	// guarded by mutex
 	zconn  Conn
 	states *stats.States
 }
 
+// ConnCache is a cache for Zookeeper connections which guarantees that you have
+// at most one zookeeper connection per cell.
 type ConnCache struct {
 	mutex        sync.Mutex
 	zconnCellMap map[string]*cachedConn // map cell name to connection
@@ -56,6 +53,8 @@ func (cc *ConnCache) setState(zcell string, conn *cachedConn, state int64) {
 	cachedConnStates.Set(zcell, state)
 }
 
+// ConnForPath returns a connection for a given Zookeeper path. If no connection
+// is cached, it creates a new one.
 func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	zcell, err := ZkCellFromZkPath(zkPath)
 	if err != nil {
@@ -145,6 +144,7 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan 
 	}
 }
 
+// Close closes all cached connections.
 func (cc *ConnCache) Close() error {
 	cc.mutex.Lock()
 	defer cc.mutex.Unlock()
@@ -182,6 +182,7 @@ func (cc *ConnCache) String() string {
 	return b.String()
 }
 
+// NewConnCache creates a new Zookeeper connection cache.
 func NewConnCache() *ConnCache {
 	return &ConnCache{
 		zconnCellMap: make(map[string]*cachedConn),
