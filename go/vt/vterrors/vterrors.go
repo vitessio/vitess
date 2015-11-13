@@ -162,9 +162,9 @@ func WithSuffix(in error, suffix string) error {
 	}
 }
 
-// This is the string that we prefix gRPC server errors with. This is necessary
-// because there is currently no good way, in gRPC, to differentiate between an
-// error from a server vs the client.
+// GRPCServerErrPrefix is the string we prefix gRPC server errors with. This is
+// necessary because there is currently no good way, in gRPC, to differentiate
+// between an error from a server vs the client.
 // See: https://github.com/grpc/grpc-go/issues/319
 const GRPCServerErrPrefix = "gRPCServerError:"
 
