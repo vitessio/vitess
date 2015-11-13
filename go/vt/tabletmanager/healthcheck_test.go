@@ -281,7 +281,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	// shut down query service and prevent it from starting again
 	// (this is to simulate mysql going away, tablet server detecting it
 	// and shutting itself down)
-	agent.QueryServiceControl.SetServingType(topodatapb.TabletType_REPLICA, false)
+	agent.QueryServiceControl.SetServingType(topodatapb.TabletType_REPLICA, false, nil)
 	agent.QueryServiceControl.(*tabletservermock.Controller).SetServingTypeError = fmt.Errorf("test cannot start query service")
 
 	// health check should now fail
