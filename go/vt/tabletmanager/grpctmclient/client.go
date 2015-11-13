@@ -48,7 +48,7 @@ func (client *Client) dial(ctx context.Context, tablet *topo.TabletInfo) (*grpc.
 	deadline, ok := ctx.Deadline()
 	if ok {
 		connectTimeout = deadline.Sub(time.Now())
-		if connectTimeout < 0 {
+		if connectTimeout <= 0 {
 			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager on %v", tablet.Alias)}
 		}
 	}
