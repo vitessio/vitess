@@ -75,18 +75,22 @@ type TabletServer struct {
 	// the state to a transient value and release the lock.
 	// Once the operation is complete, you can then transition
 	// the state back to a stable value.
-	// Only the function that moved the state to a transient one is
-	// allowed to change it to a stable value.
-	mu       sync.Mutex
-	state    int64
-	requests sync.WaitGroup
-	begins   sync.WaitGroup
+	// The lameduck mode causes tablet server to respond as unhealthy
+	// for health checks. This does not affect how queries are served.
+	// target specifies the primary target type, and also allow specifies
+	// secondary types that should be additionally allowed.
+	mu        sync.Mutex
+	state     int64
+	lameduck  sync2.AtomicInt32
+	target    querypb.Target
+	alsoAllow []topodatapb.TabletType
+	requests  sync.WaitGroup
+	begins    sync.WaitGroup
 
 	// The following variables should be initialized only once
 	// before starting the tabletserver. For backward compatibility,
 	// we temporarily allow them to be changed until the migration
 	// to the new API is complete.
-	target          querypb.Target
 	dbconfigs       dbconfigs.DBConfigs
 	schemaOverrides []SchemaOverride
 	mysqld          mysqlctl.MysqlDaemon
@@ -184,6 +188,9 @@ func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *QueryRules) error
 
 // GetState returns the name of the current TabletServer state.
 func (tsv *TabletServer) GetState() string {
+	if tsv.lameduck.Get() != 0 {
+		return "NOT_SERVING"
+	}
 	tsv.mu.Lock()
 	name := stateName[tsv.state]
 	tsv.mu.Unlock()
@@ -233,7 +240,20 @@ func (tsv *TabletServer) StartService(target querypb.Target, dbconfigs dbconfigs
 	if err != nil {
 		return err
 	}
-	return tsv.SetServingType(tabletType, true)
+	return tsv.SetServingType(tabletType, true, nil)
+}
+
+// EnterLameduck causes tabletserver to enter the lameduck state. This
+// state causes health checks to fail, but the behavior of tabletserver
+// otherwise remains the same. Any subsequent calls to SetServingType will
+// cause the tabletserver to exit this mode.
+func (tsv *TabletServer) EnterLameduck() {
+	tsv.lameduck.Set(1)
+}
+
+// ExitLameduck causes the tabletserver to exit the lameduck mode.
+func (tsv *TabletServer) ExitLameduck() {
+	tsv.lameduck.Set(0)
 }
 
 const (
@@ -244,9 +264,13 @@ const (
 )
 
 // SetServingType changes the serving type of the tabletserver. It starts or
-// stops internal services as deemed necessary.
-func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool) error {
-	action, err := tsv.decideAction(tabletType, serving)
+// stops internal services as deemed necessary. The tabletType determines the
+// primary serving type, while alsoAllow specifies other tablet types that
+// should also be honored for serving.
+func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) error {
+	defer tsv.ExitLameduck()
+
+	action, err := tsv.decideAction(tabletType, serving, alsoAllow)
 	if err != nil {
 		return err
 	}
@@ -264,9 +288,12 @@ func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, servin
 	panic("unreachable")
 }
 
-func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving bool) (action int, err error) {
+func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (action int, err error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
+
+	tsv.alsoAllow = alsoAllow
+
 	// Handle the case where the requested TabletType and serving state
 	// match our current state. This avoids an unnecessary transition.
 	// There's no similar shortcut if serving is false, because there
@@ -895,7 +922,12 @@ verifySession:
 			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid shard %v", target.Shard)
 		}
 		if target.TabletType != tsv.target.TabletType {
-			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type %v", target.TabletType)
+			for _, otherType := range tsv.alsoAllow {
+				if target.TabletType == otherType {
+					goto ok
+				}
+			}
+			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
 		}
 		goto ok
 	}

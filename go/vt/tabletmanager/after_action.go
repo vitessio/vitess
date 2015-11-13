@@ -58,13 +58,13 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklis
 }
 
 func (agent *ActionAgent) allowQueries(tabletType topodatapb.TabletType) error {
-	return agent.QueryServiceControl.SetServingType(tabletType, true)
+	return agent.QueryServiceControl.SetServingType(tabletType, true, nil)
 }
 
 func (agent *ActionAgent) disallowQueries(tabletType topodatapb.TabletType, reason string) error {
 	log.Infof("Agent is going to disallow queries, reason: %v", reason)
 
-	return agent.QueryServiceControl.SetServingType(tabletType, false)
+	return agent.QueryServiceControl.SetServingType(tabletType, false, nil)
 }
 
 func (agent *ActionAgent) broadcastHealth() {

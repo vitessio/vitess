@@ -47,6 +47,10 @@ func TestTabletServerGetState(t *testing.T) {
 			t.Errorf("GetState: %s, want %s", stateName, names[i])
 		}
 	}
+	tsv.EnterLameduck()
+	if stateName := tsv.GetState(); stateName != "NOT_SERVING" {
+		t.Errorf("GetState: %s, want NOT_SERVING", stateName)
+	}
 }
 
 func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
@@ -140,7 +144,7 @@ func TestDecideAction(t *testing.T) {
 	}
 
 	tsv.setState(StateNotConnected)
-	action, err := tsv.decideAction(topodatapb.TabletType_MASTER, false)
+	action, err := tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -149,7 +153,7 @@ func TestDecideAction(t *testing.T) {
 	}
 
 	tsv.setState(StateNotConnected)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -161,7 +165,7 @@ func TestDecideAction(t *testing.T) {
 	}
 
 	tsv.setState(StateNotServing)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -170,7 +174,7 @@ func TestDecideAction(t *testing.T) {
 	}
 
 	tsv.setState(StateNotServing)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -182,7 +186,7 @@ func TestDecideAction(t *testing.T) {
 	}
 
 	tsv.setState(StateServing)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -194,7 +198,7 @@ func TestDecideAction(t *testing.T) {
 	}
 
 	tsv.setState(StateServing)
-	action, err = tsv.decideAction(topodatapb.TabletType_REPLICA, true)
+	action, err = tsv.decideAction(topodatapb.TabletType_REPLICA, true, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -207,7 +211,7 @@ func TestDecideAction(t *testing.T) {
 	tsv.target.TabletType = topodatapb.TabletType_MASTER
 
 	tsv.setState(StateServing)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -219,14 +223,14 @@ func TestDecideAction(t *testing.T) {
 	}
 
 	tsv.setState(StateTransitioning)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	want := "cannot SetServingType"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("decideAction: %v, must contain %s", err, want)
 	}
 
 	tsv.setState(StateShuttingDown)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	want = "cannot SetServingType"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("decideAction: %v, must contain %s", err, want)
@@ -245,29 +249,43 @@ func TestSetServingType(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = tsv.SetServingType(topodatapb.TabletType_REPLICA, false)
+	err = tsv.SetServingType(topodatapb.TabletType_REPLICA, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	checkTabletServerState(t, tsv, StateNotConnected)
 
-	err = tsv.SetServingType(topodatapb.TabletType_REPLICA, true)
+	err = tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	checkTabletServerState(t, tsv, StateServing)
 
-	err = tsv.SetServingType(topodatapb.TabletType_RDONLY, true)
+	err = tsv.SetServingType(topodatapb.TabletType_RDONLY, true, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	checkTabletServerState(t, tsv, StateServing)
 
-	err = tsv.SetServingType(topodatapb.TabletType_SPARE, false)
+	err = tsv.SetServingType(topodatapb.TabletType_SPARE, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	checkTabletServerState(t, tsv, StateNotServing)
+
+	// Verify that we exit lameduck when SetServingType is called.
+	tsv.EnterLameduck()
+	if stateName := tsv.GetState(); stateName != "NOT_SERVING" {
+		t.Errorf("GetState: %s, want NOT_SERVING", stateName)
+	}
+	err = tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	checkTabletServerState(t, tsv, StateServing)
+	if stateName := tsv.GetState(); stateName != "SERVING" {
+		t.Errorf("GetState: %s, want SERVING", stateName)
+	}
 
 	tsv.StopService()
 	checkTabletServerState(t, tsv, StateNotConnected)
@@ -288,7 +306,7 @@ func TestTabletServerCheckMysql(t *testing.T) {
 	if !tsv.isMySQLReachable() {
 		t.Error("isMySQLReachable should return true")
 	}
-	err = tsv.SetServingType(topodatapb.TabletType_SPARE, false)
+	err = tsv.SetServingType(topodatapb.TabletType_SPARE, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -527,6 +545,47 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 	}
 	if err = tsv.SplitQuery(ctx, nil, &splitQuery, &splitQueryReply); err == nil {
 		t.Fatalf("call TabletServer.SplitQuery should fail because of an invalid session id: 0")
+	}
+}
+
+func TestTabletServerTarget(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target1 := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target2 := querypb.Target{TabletType: topodatapb.TabletType_REPLICA}
+	err := tsv.StartService(target1, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	ctx := context.Background()
+
+	db.AddQuery("select * from test_table limit 1000", &sqltypes.Result{})
+	query := proto.Query{
+		Sql:           "select * from test_table limit 1000",
+		BindVariables: nil,
+	}
+	reply := sqltypes.Result{}
+	err = tsv.Execute(ctx, &target1, &query, &reply)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tsv.Execute(ctx, &target2, &query, &reply)
+	want := "Invalid tablet type"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
+	tsv.SetServingType(topodatapb.TabletType_MASTER, true, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	err = tsv.Execute(ctx, &target1, &query, &reply)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tsv.Execute(ctx, &target2, &query, &reply)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

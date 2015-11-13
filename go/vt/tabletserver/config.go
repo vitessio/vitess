@@ -196,7 +196,7 @@ type Controller interface {
 	InitDBConfig(querypb.Target, dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
-	SetServingType(tabletType topodatapb.TabletType, serving bool) error
+	SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) error
 
 	// IsServing returns true if the query service is running
 	IsServing() bool
