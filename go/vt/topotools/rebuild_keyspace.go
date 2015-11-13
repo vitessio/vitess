@@ -189,7 +189,7 @@ func orderAndCheckPartitions(cell string, srvKeyspace *topodatapb.SrvKeyspace) e
 			if currHasKeyRange != nextHasKeyRange {
 				return fmt.Errorf("shards with inconsistent KeyRanges for %v in cell %v. shards: %v, %v", tabletType, cell, currShard, nextShard)
 			}
-			if currHasKeyRange {
+			if !currHasKeyRange {
 				// this is the custom sharding case, all KeyRanges must be nil
 				continue
 			}
