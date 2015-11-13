@@ -53,7 +53,7 @@ const (
 // stateName names every state. The number of elements must
 // match the number of states. Names can overlap.
 var stateName = []string{
-	"NOT_CONNECTED",
+	"NOT_SERVING",
 	"NOT_SERVING",
 	"SERVING",
 	"NOT_SERVING",
@@ -189,7 +189,7 @@ func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *QueryRules) error
 // GetState returns the name of the current TabletServer state.
 func (tsv *TabletServer) GetState() string {
 	if tsv.lameduck.Get() != 0 {
-		return "LAMEDUCK"
+		return "NOT_SERVING"
 	}
 	tsv.mu.Lock()
 	name := stateName[tsv.state]
