@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
@@ -181,7 +182,7 @@ func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerda
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetchAsDba, request, response, func() error {
 		qr, err := s.agent.ExecuteFetchAsDba(ctx, request.Query, request.DbName, int(request.MaxRows), request.WantFields, request.DisableBinlogs, request.ReloadSchema)
 		if err != nil {
-			return err
+			return vterrors.ToGRPCError(err)
 		}
 		response.Result = qr
 		return nil
@@ -194,7 +195,7 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *tabletmanagerda
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetchAsApp, request, response, func() error {
 		qr, err := s.agent.ExecuteFetchAsApp(ctx, request.Query, int(request.MaxRows), request.WantFields)
 		if err != nil {
-			return err
+			return vterrors.ToGRPCError(err)
 		}
 		response.Result = qr
 		return nil

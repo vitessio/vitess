@@ -162,9 +162,9 @@ func WithSuffix(in error, suffix string) error {
 	}
 }
 
-// This is the string that we prefix gRPC server errors with. This is necessary
-// because there is currently no good way, in gRPC, to differentiate between an
-// error from a server vs the client.
+// GRPCServerErrPrefix is the string we prefix gRPC server errors with. This is
+// necessary because there is currently no good way, in gRPC, to differentiate
+// between an error from a server vs the client.
 // See: https://github.com/grpc/grpc-go/issues/319
 const GRPCServerErrPrefix = "gRPCServerError:"
 
@@ -248,12 +248,27 @@ func toGRPCCode(err error) codes.Code {
 	return grpc.Code(err)
 }
 
+// truncateError shortens errors because gRPC has a size restriction on them.
+func truncateError(err error) error {
+	// For more details see: https://github.com/grpc/grpc-go/issues/443
+	// The gRPC spec says "Clients may limit the size of Response-Headers,
+	// Trailers, and Trailers-Only, with a default of 8 KiB each suggested."
+	// Therefore, we assume 8 KiB minus some headroom.
+	GRPCErrorLimit := 8*1024 - 512
+	if len(err.Error()) <= GRPCErrorLimit {
+		return err
+	}
+	truncateInfo := "[...] [remainder of the error is truncated because gRPC has a size limit on errors.]"
+	truncatedErr := err.Error()[:GRPCErrorLimit]
+	return fmt.Errorf("%v %v", truncatedErr, truncateInfo)
+}
+
 // ToGRPCError returns an error as a grpc error, with the appropriate error code
 func ToGRPCError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return grpc.Errorf(toGRPCCode(err), "%v %v", GRPCServerErrPrefix, err)
+	return grpc.Errorf(toGRPCCode(err), "%v %v", GRPCServerErrPrefix, truncateError(err))
 }
 
 // FromGRPCError return a grpc error as a VitessError, translating between error codes
