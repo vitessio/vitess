@@ -54,8 +54,20 @@ func TestFilterByReplicationLag(t *testing.T) {
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 30},
 	}
 	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2, eps3, eps4})
-	if len(got) != 4 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) || !reflect.DeepEqual(got[2], eps3) || !reflect.DeepEqual(got[3], eps4) {
-		t.Errorf("FilterByReplicationLag([1s, 1s, 1s, 30s]) = %+v, want all", got)
+	if len(got) != 4 {
+		t.Errorf("len(FilterByReplicationLag([1s, 1s, 1s, 30s])) = %v, want 4", len(got))
+	}
+	for _, epsWant := range []*EndPointStats{eps1, eps2, eps3, eps4} {
+		found := false
+		for _, epsGot := range got {
+			if reflect.DeepEqual(epsWant, epsGot) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("FilterByReplicationLag([1s, 1s, 1s, 30s]) = %+v, want all", got)
+		}
 	}
 	// lags of (5s, 10s, 15s, 120s)
 	eps1 = &EndPointStats{
@@ -79,8 +91,20 @@ func TestFilterByReplicationLag(t *testing.T) {
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 120},
 	}
 	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2, eps3, eps4})
-	if len(got) != 3 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) || !reflect.DeepEqual(got[2], eps3) {
-		t.Errorf("FilterByReplicationLag([5s, 10s, 15s, 120s]) = %+v, want [5s, 10s, 15s]", got)
+	if len(got) != 3 {
+		t.Errorf("len(FilterByReplicationLag([5s, 10s, 15s, 120s])) = %v, want 3", len(got))
+	}
+	for _, epsWant := range []*EndPointStats{eps1, eps2, eps3} {
+		found := false
+		for _, epsGot := range got {
+			if reflect.DeepEqual(epsWant, epsGot) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("FilterByReplicationLag([5s, 10s, 15s, 120s]) = %+v, want [5s, 10s, 15s]", got)
+		}
 	}
 	// lags of (30m, 35m, 40m, 45m)
 	eps1 = &EndPointStats{
@@ -104,7 +128,19 @@ func TestFilterByReplicationLag(t *testing.T) {
 		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 45 * 60},
 	}
 	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2, eps3, eps4})
-	if len(got) != 4 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) || !reflect.DeepEqual(got[2], eps3) || !reflect.DeepEqual(got[3], eps4) {
-		t.Errorf("FilterByReplicationLag([30m, 35m, 40m, 45m]) = %+v, want all", got)
+	if len(got) != 4 {
+		t.Errorf("len(FilterByReplicationLag([30m, 35m, 40m, 45m])) = %v, want 4", len(got))
+	}
+	for _, epsWant := range []*EndPointStats{eps1, eps2, eps3, eps4} {
+		found := false
+		for _, epsGot := range got {
+			if reflect.DeepEqual(epsWant, epsGot) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("FilterByReplicationLag([30m, 35m, 40m, 45m]) = %+v, want all", got)
+		}
 	}
 }
