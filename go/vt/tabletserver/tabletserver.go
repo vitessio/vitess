@@ -14,6 +14,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
@@ -110,6 +111,10 @@ type TabletServer struct {
 	streamHealthIndex        int
 	streamHealthMap          map[int]chan<- *querypb.StreamHealthResponse
 	lastStreamHealthResponse *querypb.StreamHealthResponse
+
+	// history records changes in state for display on the status page.
+	// It has its own internal mutex.
+	history *history.History
 }
 
 // RegisterFunction is a callback type to be called when we
@@ -137,6 +142,7 @@ func NewTabletServer(config Config) *TabletServer {
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
 		streamHealthMap:     make(map[int]chan<- *querypb.StreamHealthResponse),
 		sessionID:           Rand(),
+		history:             history.New(10),
 	}
 	tsv.qe = NewQueryEngine(tsv, config)
 	tsv.invalidator = NewRowcacheInvalidator(config.StatsPrefix, tsv, tsv.qe, config.EnablePublishStats)
@@ -202,6 +208,11 @@ func (tsv *TabletServer) GetState() string {
 func (tsv *TabletServer) setState(state int64) {
 	log.Infof("TabletServer state: %v -> %v", stateName[tsv.state], stateName[state])
 	tsv.state = state
+	tsv.history.Add(&historyRecord{
+		Time:         time.Now(),
+		ServingState: stateName[state],
+		TabletType:   tsv.target.TabletType.String(),
+	})
 }
 
 // transition obtains a lock and changes the state.
