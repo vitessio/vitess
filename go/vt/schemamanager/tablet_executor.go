@@ -169,7 +169,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 
 	for index, sql := range sqls {
-		execResult.CurSqlIndex = index
+		execResult.CurSQLIndex = index
 		exec.executeOnAllTablets(ctx, &execResult, sql)
 		if len(execResult.FailedShards) > 0 {
 			break

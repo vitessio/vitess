@@ -293,14 +293,23 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot get min and max", td.Name)
 		return result, nil
 	}
-	if qr.Rows[0][0].IsNull() || qr.Rows[0][1].IsNull() {
-		wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v %v", td.Name, qr.Rows[0][0], qr.Rows[0][1])
+
+	// FIXME(alainjobart) this code is a bit clunky. I'd like to
+	// convert the first row into an array of Values, and then
+	// see which type they are and go from there. Can only happen after
+	// Value has a full type.
+	l0 := qr.Rows[0].Lengths[0]
+	l1 := qr.Rows[0].Lengths[1]
+	if l0 < 0 || l1 < 0 {
+		wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v", td.Name, qr.Rows[0])
 		return result, nil
 	}
+	minValue := qr.Rows[0].Values[:l0]
+	maxValue := qr.Rows[0].Values[l0 : l0+l1]
 	switch {
 	case sqltypes.IsSigned(qr.Fields[0].Type):
-		minNumeric := sqltypes.MakeNumeric(qr.Rows[0][0].Raw())
-		maxNumeric := sqltypes.MakeNumeric(qr.Rows[0][1].Raw())
+		minNumeric := sqltypes.MakeNumeric(minValue)
+		maxNumeric := sqltypes.MakeNumeric(maxValue)
 		min, err := minNumeric.ParseInt64()
 		if err != nil {
 			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
@@ -326,8 +335,8 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 		return result, nil
 
 	case sqltypes.IsUnsigned(qr.Fields[0].Type):
-		minNumeric := sqltypes.MakeNumeric(qr.Rows[0][0].Raw())
-		maxNumeric := sqltypes.MakeNumeric(qr.Rows[0][1].Raw())
+		minNumeric := sqltypes.MakeNumeric(minValue)
+		maxNumeric := sqltypes.MakeNumeric(maxValue)
 		min, err := minNumeric.ParseUint64()
 		if err != nil {
 			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
@@ -353,14 +362,14 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 		return result, nil
 
 	case sqltypes.IsFloat(qr.Fields[0].Type):
-		min, err := strconv.ParseFloat(qr.Rows[0][0].String(), 64)
+		min, err := strconv.ParseFloat(string(minValue), 64)
 		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, qr.Rows[0][0], err)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, string(minValue), err)
 			return result, nil
 		}
-		max, err := strconv.ParseFloat(qr.Rows[0][1].String(), 64)
+		max, err := strconv.ParseFloat(string(maxValue), 64)
 		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, qr.Rows[0][1].String(), err)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, string(maxValue), err)
 			return result, nil
 		}
 		interval := (max - min) / float64(sourceReaderCount)

@@ -243,7 +243,7 @@ primary key (name)
 
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
-  def _insert_value(self, tablet_obj, table, id, msg, keyspace_id):
+  def _insert_value(self, tablet_obj, table, mid, msg, keyspace_id):
     k = utils.uint64_to_hex(keyspace_id)
     tablet_obj.mquery(
         'vt_test_keyspace',
@@ -251,33 +251,33 @@ primary key (name)
          'insert into %s(id, msg, keyspace_id) '
          'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
          '/* user_id:%d */' %
-         (table, id, msg, keyspace_id, k, id),
+         (table, mid, msg, keyspace_id, k, mid),
          'commit'],
         write=True)
 
-  def _get_value(self, tablet_obj, table, id):
+  def _get_value(self, tablet_obj, table, mid):
     return tablet_obj.mquery(
         'vt_test_keyspace',
-        'select id, msg, keyspace_id from %s where id=%d' % (table, id))
+        'select id, msg, keyspace_id from %s where id=%d' % (table, mid))
 
-  def _check_value(self, tablet_obj, table, id, msg, keyspace_id,
+  def _check_value(self, tablet_obj, table, mid, msg, keyspace_id,
                    should_be_here=True):
-    result = self._get_value(tablet_obj, table, id)
+    result = self._get_value(tablet_obj, table, mid)
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = '%s'
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
       fmt = '%x'
     if should_be_here:
-      self.assertEqual(result, ((id, msg, keyspace_id),),
+      self.assertEqual(result, ((mid, msg, keyspace_id),),
                        ('Bad row in tablet %s for id=%d, keyspace_id=' +
-                        fmt + ', row=%s') % (tablet_obj.tablet_alias, id,
+                        fmt + ', row=%s') % (tablet_obj.tablet_alias, mid,
                                              keyspace_id, str(result)))
     else:
       self.assertEqual(
           len(result), 0,
           ('Extra row in tablet %s for id=%d, keyspace_id=' +
-           fmt + ': %s') % (tablet_obj.tablet_alias, id, keyspace_id,
+           fmt + ': %s') % (tablet_obj.tablet_alias, mid, keyspace_id,
                             str(result)))
 
   # _is_value_present_and_correct tries to read a value.
@@ -285,8 +285,8 @@ primary key (name)
   # if not correct, it will self.fail.
   # if not there, it will return False.
   def _is_value_present_and_correct(
-      self, tablet_obj, table, id, msg, keyspace_id):
-    result = self._get_value(tablet_obj, table, id)
+      self, tablet_obj, table, mid, msg, keyspace_id):
+    result = self._get_value(tablet_obj, table, mid)
     if not result:
       return False
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
@@ -294,9 +294,9 @@ primary key (name)
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
       fmt = '%x'
-    self.assertEqual(result, ((id, msg, keyspace_id),),
+    self.assertEqual(result, ((mid, msg, keyspace_id),),
                      ('Bad row in tablet %s for id=%d, keyspace_id=' + fmt) % (
-                         tablet_obj.tablet_alias, id, keyspace_id))
+                         tablet_obj.tablet_alias, mid, keyspace_id))
     return True
 
   def _insert_startup_values(self):
@@ -452,6 +452,9 @@ primary key (name)
       )
 
   def test_resharding(self):
+    # we're going to reparent and swap these two
+    global shard_2_master, shard_2_replica1
+
     utils.run_vtctl(['CreateKeyspace',
                      '--sharding_column_name', 'bad_column',
                      '--sharding_column_type', 'bytes',
@@ -753,8 +756,8 @@ primary key (name)
     # see it flow through still
     utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/80-c0',
                      shard_2_replica1.tablet_alias])
+
     # update our test variables to point at the new master
-    global shard_2_master, shard_2_replica1
     shard_2_master, shard_2_replica1 = shard_2_replica1, shard_2_master
 
     logging.debug('Inserting lots of data on source shard after reparenting')

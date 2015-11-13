@@ -12,7 +12,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -184,7 +183,7 @@ func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerda
 		if err != nil {
 			return err
 		}
-		response.Result = sqltypes.ResultToProto3(qr)
+		response.Result = qr
 		return nil
 	})
 }
@@ -197,7 +196,7 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *tabletmanagerda
 		if err != nil {
 			return err
 		}
-		response.Result = sqltypes.ResultToProto3(qr)
+		response.Result = qr
 		return nil
 	})
 }

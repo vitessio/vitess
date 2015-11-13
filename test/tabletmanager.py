@@ -1,10 +1,5 @@
 #!/usr/bin/env python
 
-import warnings
-# Dropping a table inexplicably produces a warning despite
-# the 'IF EXISTS' clause. Squelch these warnings.
-warnings.simplefilter('ignore')
-
 import json
 import logging
 import time
@@ -73,9 +68,9 @@ class TestTabletManager(unittest.TestCase):
       t.clean_dbs()
 
   def _check_srv_shard(self):
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
-                                     'test_keyspace/0'])
-    self.assertEqual(srvShard['master_cell'], 'test_nj')
+    srv_shard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
+                                      'test_keyspace/0'])
+    self.assertEqual(srv_shard['master_cell'], 'test_nj')
 
   # run twice to check behavior with existing znode data
   def test_sanity(self):
@@ -110,10 +105,10 @@ class TestTabletManager(unittest.TestCase):
         ['ExecuteFetchAsDba', '-want_fields', tablet_62344.tablet_alias,
          'select * from vt_test_keyspace.vt_select_test'])
     self.assertEqual(
-        len(query_result['Rows']), 4,
+        len(query_result['rows']), 4,
         'expected 4 rows in vt_select_test: %s' % str(query_result))
     self.assertEqual(
-        len(query_result['Fields']), 2,
+        len(query_result['fields']), 2,
         'expected 2 fields in vt_select_test: %s' % str(query_result))
 
     # check Ping / RefreshState
@@ -200,35 +195,36 @@ class TestTabletManager(unittest.TestCase):
         self.fail('invalid zk global state: %s' %
                   v['ZkMetaConn']['global']['Current'])
       if v['ZkMetaConn']['test_nj']['DurationConnected'] < 10e9:
-        self.fail('not enough time in Connected state: %d',
+        self.fail('not enough time in Connected state: %d' %
                   v['ZkMetaConn']['test_nj']['DurationConnected'])
       if v['TabletType'] != 'master':
         self.fail('TabletType not exported correctly')
 
     tablet_62344.kill_vttablet()
 
-  def _run_hook(self, params, expectedStatus, expectedStdout, expectedStderr):
+  def _run_hook(self, params, expected_status, expected_stdout,
+                expected_stderr):
     hr = utils.run_vtctl_json(['ExecuteHook', tablet_62344.tablet_alias] +
                               params)
-    self.assertEqual(hr['ExitStatus'], expectedStatus)
-    if isinstance(expectedStdout, basestring):
-      if expectedStdout[-1:] == '%':
+    self.assertEqual(hr['ExitStatus'], expected_status)
+    if isinstance(expected_stdout, basestring):
+      if expected_stdout[-1:] == '%':
         self.assertEqual(
-            hr['Stdout'][:len(expectedStdout)-1],
-            expectedStdout[:len(expectedStdout)-1])
+            hr['Stdout'][:len(expected_stdout)-1],
+            expected_stdout[:len(expected_stdout)-1])
       else:
-        self.assertEqual(hr['Stdout'], expectedStdout)
+        self.assertEqual(hr['Stdout'], expected_stdout)
     else:
       found = False
-      for exp in expectedStdout:
+      for exp in expected_stdout:
         if hr['Stdout'] == exp:
           found = True
           break
       if not found:
         self.assertFail(
             'cannot find expected %s in %s' %
-            (str(expectedStdout), hr['Stdout']))
-    self.assertEqual(hr['Stderr'], expectedStderr)
+            (str(expected_stdout), hr['Stdout']))
+    self.assertEqual(hr['Stderr'], expected_stderr)
 
   def test_hook(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -240,23 +236,23 @@ class TestTabletManager(unittest.TestCase):
 
     # test a regular program works
     self._run_hook(['test.sh', '--flag1', '--param1=hello'], 0,
-                   ['TABLET_ALIAS: test_nj-0000062344\n' +
-                    'PARAM: --flag1\n' +
+                   ['TABLET_ALIAS: test_nj-0000062344\n'
+                    'PARAM: --flag1\n'
                     'PARAM: --param1=hello\n',
-                    'TABLET_ALIAS: test_nj-0000062344\n' +
-                    'PARAM: --param1=hello\n' +
+                    'TABLET_ALIAS: test_nj-0000062344\n'
+                    'PARAM: --param1=hello\n'
                     'PARAM: --flag1\n'],
                    '')
 
     # test stderr output
     self._run_hook(['test.sh', '--to-stderr'], 0,
-                   'TABLET_ALIAS: test_nj-0000062344\n' +
+                   'TABLET_ALIAS: test_nj-0000062344\n'
                    'PARAM: --to-stderr\n',
                    'ERR: --to-stderr\n')
 
     # test commands that fail
     self._run_hook(['test.sh', '--exit-error'], 1,
-                   'TABLET_ALIAS: test_nj-0000062344\n' +
+                   'TABLET_ALIAS: test_nj-0000062344\n'
                    'PARAM: --exit-error\n',
                    'ERROR: exit status 1\n')
 
@@ -346,12 +342,12 @@ class TestTabletManager(unittest.TestCase):
                      'wrong shard replication nodes after fix: %s' %
                      str(after_fix))
 
-  def check_healthz(self, tablet, expected):
+  def check_healthz(self, t, expected):
     if expected:
-      self.assertEqual('ok\n', tablet.get_healthz())
+      self.assertEqual('ok\n', t.get_healthz())
     else:
       with self.assertRaises(urllib2.HTTPError):
-        tablet.get_healthz()
+        t.get_healthz()
 
   def wait_for_tablet_type_change(self, tablet_alias, expected_type):
     t = topodata_pb2.TabletType.Value(expected_type.upper())
@@ -439,10 +435,10 @@ class TestTabletManager(unittest.TestCase):
     self.assertEqual(v['LastHealthMapCount'], 0)
 
     # now test VtTabletStreamHealth returns the right thing
-    stdout, stderr = utils.run_vtctl(['VtTabletStreamHealth',
-                                      '-count', '2',
-                                      tablet_62044.tablet_alias],
-                                     trap_output=True, auto_log=True)
+    stdout, _ = utils.run_vtctl(['VtTabletStreamHealth',
+                                 '-count', '2',
+                                 tablet_62044.tablet_alias],
+                                trap_output=True, auto_log=True)
     lines = stdout.splitlines()
     self.assertEqual(len(lines), 2)
     for line in lines:
@@ -468,7 +464,8 @@ class TestTabletManager(unittest.TestCase):
         "tablet didn't go to spare while in lameduck mode: %s" % str(ti))
 
     # Also the replica should be gone from the serving graph.
-    utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_keyspace/0', 'replica'], expect_fail=True)
+    utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_keyspace/0', 'replica'],
+                    expect_fail=True)
 
   def test_health_check_worker_state_does_not_shutdown_query_service(self):
     # This test is similar to test_health_check, but has the following
@@ -543,13 +540,12 @@ class TestTabletManager(unittest.TestCase):
     pos = mysql_flavor().master_position(tablet_62344)
     # Use 'localhost' as hostname because Travis CI worker hostnames
     # are too long for MySQL replication.
-    changeMasterCmds = mysql_flavor().change_master_commands(
+    change_master_cmds = mysql_flavor().change_master_commands(
         'localhost',
         tablet_62344.mysql_port,
         pos)
-    tablet_62044.mquery(
-        '', ['RESET MASTER', 'RESET SLAVE'] +
-        changeMasterCmds + ['START SLAVE'])
+    tablet_62044.mquery('', ['RESET MASTER', 'RESET SLAVE'] +
+                        change_master_cmds + ['START SLAVE'])
 
     # now shutdown all mysqld
     shutdown_procs = [
@@ -579,12 +575,12 @@ class TestTabletManager(unittest.TestCase):
 
     # the master should still be healthy
     utils.run_vtctl(['RunHealthCheck', tablet_62344.tablet_alias, 'replica'],
-                      auto_log=True)
+                    auto_log=True)
     self.check_healthz(tablet_62344, True)
 
     # the slave won't be healthy at first, as replication is not running
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'],
-                      auto_log=True)
+                    auto_log=True)
     self.check_healthz(tablet_62044, False)
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')
 
