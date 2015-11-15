@@ -356,8 +356,6 @@ class TestBaseSplitClone(unittest.TestCase):
     See the kill_tablets method in tablet.py.
     """
 
-    utils.run_vtctl(['ListAllTablets', 'test_nj'])
-    
     for shard_tablet in [all_shard_tablets, shard_0_tablets, shard_1_tablets]:
       for tablet in shard_tablet.all_tablets:
         tablet.reset_replication()
