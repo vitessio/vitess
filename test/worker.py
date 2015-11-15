@@ -360,6 +360,7 @@ class TestBaseSplitClone(unittest.TestCase):
       logging.debug('Replication on source rdonly tablet is caught up')
     except:
       self.tearDown()
+      raise
 
   def tearDown(self):
     """Does the minimum to reset topology and tablets to their initial states.
@@ -395,6 +396,7 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
       self.copy_schema_to_destination_shards()
     except:
       self.tearDown()
+      raise
 
   def verify_successful_worker_copy_with_reparent(self, mysql_down=False):
     """Verifies that vtworker can successfully copy data for a SplitClone.
@@ -537,6 +539,7 @@ class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
       logging.debug('Finished MysqlDownDuringWorkerCopy-specific setup')
     except:
       self.tearDown()
+      raise
 
   def tearDown(self):
     """Restarts the MySQL processes that were killed during the setup."""
