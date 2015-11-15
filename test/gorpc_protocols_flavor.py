@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+"""Defines which protocols to use for the Go (BSON) RPC flavor."""
+
+from net import gorpc
 
 import protocols_flavor
 
@@ -38,6 +41,9 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def vtgate_python_protocol(self):
     return 'gorpc'
+
+  def client_error_exception_type(self):
+    return gorpc.AppError
 
   def rpc_timeout_message(self):
     return 'context deadline exceeded'

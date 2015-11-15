@@ -11,6 +11,7 @@ import utils
 from vtdb import dbexceptions
 from vtdb import update_stream
 from mysql_flavor import mysql_flavor
+from protocols_flavor import protocols_flavor
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
@@ -102,7 +103,7 @@ def setUpModule():
         master_tablet.execute('select count(1) from vt_insert_test')
         replica_tablet.execute('select count(1) from vt_insert_test')
         break
-      except:
+      except protocols_flavor().client_error_exception_type():
         logging.exception('query failed')
         timeout = utils.wait_step('slave tablet having correct schema', timeout)
         # also re-run ReloadSchema on slave, it case the first one

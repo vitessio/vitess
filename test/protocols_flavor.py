@@ -56,6 +56,10 @@ class ProtocolsFlavor(object):
     """The protocol to use to talk to vtgate with python clients."""
     raise NotImplementedError('Not implemented in the base class')
 
+  def client_error_exception_type(self):
+    """The exception type the RPC client implementation returns for errors."""
+    raise NotImplementedError('Not implemented in the base class')
+
   def rpc_timeout_message(self):
     """The error message used by the protocol to indicate a timeout."""
     raise NotImplementedError('Not implemented in the base class')
@@ -69,29 +73,29 @@ class ProtocolsFlavor(object):
     raise NotImplementedError('Not implemented in the base class')
 
 
-__knows_protocols_flavor_map = {}
-__protocols_flavor = None
+_knows_protocols_flavor_map = {}
+_protocols_flavor = None
 
 
 def protocols_flavor():
-  return __protocols_flavor
+  return _protocols_flavor
 
 
 def set_protocols_flavor(flavor):
   """Set the protocols flavor by flavor name."""
-  global __protocols_flavor
+  global _protocols_flavor
 
   if not flavor:
     flavor = 'gorpc'
 
-  cls = __knows_protocols_flavor_map.get(flavor, None)
+  cls = _knows_protocols_flavor_map.get(flavor, None)
   if not cls:
     logging.error('Unknown protocols flavor %s', flavor)
     exit(1)
-  __protocols_flavor = cls()
+  _protocols_flavor = cls()
 
   logging.debug('Using protocols flavor %s', flavor)
 
 
 def register_flavor(key, cls):
-  __knows_protocols_flavor_map[key] = cls
+  _knows_protocols_flavor_map[key] = cls

@@ -391,7 +391,7 @@ class TestTabletManager(unittest.TestCase):
       try:
         utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0',
                               'replica'])
-      except:
+      except protocols_flavor().client_error_exception_type():
         logging.debug('Tablet is gone from serving graph, good')
         break
       timeout = utils.wait_step(
