@@ -53,6 +53,16 @@ class ShardTablets(namedtuple('ShardTablets', 'master replicas rdonlys')):
     else:
       return None
 
+  def __str__(self):
+    return """master %s
+replicas:
+%s
+rdonlys:
+%s
+""" % (self.master,
+       '\n'.join('       %s' % replica for replica in self.replicas),
+       '\n'.join('       %s' % rdonly for rdonly in self.rdonlys))
+
 # initial shard, covers everything
 shard_master = tablet.Tablet()
 shard_replica = tablet.Tablet()
@@ -99,6 +109,11 @@ def setUpModule():
         ]
     utils.wait_procs(setup_procs)
     init_keyspace()
+    logging.debug('environment set up with the following shards and tablets:')
+    logging.debug('=========================================================')
+    logging.debug('TABLETS: test_keyspace/0:\n%s', all_shard_tablets)
+    logging.debug('TABLETS: test_keyspace/-80:\n%s', shard_0_tablets)
+    logging.debug('TABLETS: test_keyspace/80-:\n%s', shard_1_tablets)
   except:
     tearDownModule()
     raise

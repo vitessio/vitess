@@ -109,6 +109,10 @@ class Tablet(object):
     self.zk_tablet_path = (
         '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid))
 
+  def __str__(self):
+    return 'tablet: uid: %d web: http://localhost:%d/ rpc port: %d' % (
+        self.tablet_uid, self.port, self.grpc_port)
+
   def update_stream_python_endpoint(self):
     protocol = protocols_flavor().binlog_player_python_protocol()
     port = self.port
