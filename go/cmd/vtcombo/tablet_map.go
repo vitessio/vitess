@@ -267,7 +267,9 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 			BindVariables: bindVars,
 			TransactionId: transactionID,
 		}, func(reply *sqltypes.Result) error {
-			result <- reply
+			// We need to deep-copy the reply before returning,
+			// because the underlying buffers are reused.
+			result <- sqltypes.Proto3ToResult(sqltypes.ResultToProto3(reply))
 			return nil
 		})
 
