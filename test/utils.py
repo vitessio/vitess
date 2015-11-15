@@ -448,11 +448,19 @@ def apply_vschema(vschema):
 def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
   """Waits for a given tablet's SlaveType to become the expected value.
 
-  If the SlaveType does not become expected_type within timeout seconds,
-  it will raise a TestError.
+  Args:
+    tablet_alias: Alias of the tablet.
+    expected_type: Type of the tablet e.g. "replica".
+    timeout: Timeout in seconds.
+
+  Raises:
+    TestError: SlaveType did not become expected_type within timeout seconds.
   """
+  type_as_int = topodata_pb2.TabletType.Value(expected_type.upper())
   while True:
-    if run_vtctl_json(['GetTablet', tablet_alias])['type'] == expected_type:
+    if run_vtctl_json(['GetTablet', tablet_alias])['type'] == type_as_int:
+      logging.debug('tablet %s went to expected type: %s',
+                    tablet_alias, expected_type)
       break
     timeout = wait_step(
         "%s's SlaveType to be %s" % (tablet_alias, expected_type),

@@ -346,16 +346,6 @@ class TestTabletManager(unittest.TestCase):
       with self.assertRaises(urllib2.HTTPError):
         t.get_healthz()
 
-  def wait_for_tablet_type_change(self, tablet_alias, expected_type):
-    t = topodata_pb2.TabletType.Value(expected_type.upper())
-    timeout = 10
-    while True:
-      ti = utils.run_vtctl_json(['GetTablet', tablet_alias])
-      if ti['type'] == t:
-        logging.debug('Slave tablet went to %s, good', expected_type)
-        break
-      timeout = utils.wait_step('slave becomes ' + expected_type, timeout)
-
   def test_health_check(self):
     # one master, one replica that starts in spare
     # (for the replica, we let vttablet do the InitTablet)
@@ -380,7 +370,7 @@ class TestTabletManager(unittest.TestCase):
                      tablet_62344.tablet_alias])
 
     # make sure the 'spare' slave goes to 'replica'
-    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, 'replica')
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'replica')
     self.check_healthz(tablet_62044, True)
 
     # make sure the master is still master
@@ -390,7 +380,7 @@ class TestTabletManager(unittest.TestCase):
 
     # stop replication, make sure we go unhealthy.
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
-    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, 'spare')
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'spare')
     self.check_healthz(tablet_62044, False)
 
     # make sure the serving graph was updated
@@ -422,7 +412,7 @@ class TestTabletManager(unittest.TestCase):
 
     # then restart replication, and write data, make sure we go back to healthy
     utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
-    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, 'replica')
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'replica')
 
     # make sure status web page is healthy
     self.assertIn('>healthy</span></div>', tablet_62044.get_status())
@@ -493,7 +483,7 @@ class TestTabletManager(unittest.TestCase):
                      tablet_62344.tablet_alias])
     # Trigger healthcheck to save time waiting for the next interval.
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'rdonly'])
-    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, 'rdonly')
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'rdonly')
     self.check_healthz(tablet_62044, True)
     tablet_62044.wait_for_vttablet_state('SERVING')
 
@@ -505,7 +495,7 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
     # Trigger healthcheck explicitly to avoid waiting for the next interval.
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'rdonly'])
-    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, 'worker')
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'worker')
     self.check_healthz(tablet_62044, False)
     # Make sure that replication got disabled.
     self.assertIn(
@@ -516,10 +506,10 @@ class TestTabletManager(unittest.TestCase):
 
     # Restart replication. Tablet will become healthy again.
     utils.run_vtctl(['ChangeSlaveType', tablet_62044.tablet_alias, 'spare'])
-    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, 'spare')
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'spare')
     utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'rdonly'])
-    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, 'rdonly')
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'rdonly')
     self.check_healthz(tablet_62044, True)
     tablet_62044.wait_for_vttablet_state('SERVING')
 
