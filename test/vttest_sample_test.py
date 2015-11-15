@@ -4,7 +4,9 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-"""This sample test demonstrates how to setup and teardown a test
+"""Sample test for vttest framework.
+
+This sample test demonstrates how to setup and teardown a test
 database with the associated Vitess processes. It is meant to be used
 as a template for unit tests, by developers writing applications
 on top of Vitess. The recommended workflow is to have the schema for the
@@ -29,6 +31,7 @@ import urllib
 import unittest
 
 from vtdb import vtgate_client
+from vtdb import vtgate_cursor
 from vtdb import dbexceptions
 
 import utils
@@ -57,7 +60,7 @@ class TestMysqlctl(unittest.TestCase):
             'test_keyspace/80-:test_keyspace_1',
             '--schema_dir', os.path.join(environment.vttop, 'test',
                                          'vttest_schema'),
-    ]
+           ]
     sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     config = json.loads(sp.stdout.readline())
 
@@ -93,8 +96,8 @@ class TestMysqlctl(unittest.TestCase):
         'test_keyspace', 'master', keyspace_ids=[pack_kid(keyspace_id)],
         writable=True)
     cursor.begin()
-    insert = 'insert into test_table (id, msg, keyspace_id) values (%(id)s, '+\
-        '%(msg)s, %(keyspace_id)s)'
+    insert = ('insert into test_table (id, msg, keyspace_id) values (%(id)s, '
+              '%(msg)s, %(keyspace_id)s)')
     bind_variables = {
         'id': row_id,
         'msg': 'test %s' % row_id,
@@ -116,6 +119,26 @@ class TestMysqlctl(unittest.TestCase):
     with self.assertRaises(dbexceptions.IntegrityError):
       cursor.execute(insert, bind_variables)
     cursor.rollback()
+
+    # Insert a bunch of rows with long msg values.
+    bind_variables['msg'] = 'x' * 64
+    id_start = 1000
+    rowcount = 500
+    cursor.begin()
+    for i in xrange(id_start, id_start+rowcount):
+      bind_variables['id'] = i
+      cursor.execute(insert, bind_variables)
+    cursor.commit()
+
+    # Try to fetch a large number of rows
+    # (more than one streaming result packet).
+    stream_cursor = conn.cursor(
+        'test_keyspace', 'master', keyspace_ids=[pack_kid(keyspace_id)],
+        cursorclass=vtgate_cursor.StreamVTGateCursor)
+    stream_cursor.execute('select * from test_table where id >= %(id_start)s',
+                          {'id_start': id_start})
+    self.assertEqual(rowcount, len(list(stream_cursor.fetchall())))
+    stream_cursor.close()
 
     # Clean up.
     cursor.close()
