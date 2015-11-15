@@ -768,25 +768,22 @@ def _get_vtworker_cmd(clargs, auto_log=False):
 
 
 # vtworker client helpers
-def run_vtworker_client(args, rpc_port):
+def run_vtworker_client_bg(args, rpc_port):
   """Runs vtworkerclient to execute a command on a remote vtworker.
 
   Args:
-    args: Atr string to send to binary.
+    args: Full vtworker command.
     rpc_port: Port number.
 
   Returns:
-    out: stdout of the vtworkerclient invocation
-    err: stderr of the vtworkerclient invocation
+    proc: process returned by subprocess.Popen
   """
-  out, err = run(
+  return run_bg(
       environment.binary_args('vtworkerclient') +
       ['-vtworker_client_protocol',
        protocols_flavor().vtworker_client_protocol(),
        '-server', 'localhost:%d' % rpc_port,
-       '-stderrthreshold', get_log_level()] + args,
-      trap_output=True)
-  return out, err
+       '-stderrthreshold', get_log_level()] + args)
 
 
 def run_automation_server(auto_log=False):

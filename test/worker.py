@@ -109,7 +109,7 @@ def setUpModule():
         shard_1_master.init_mysql(),
         shard_1_replica.init_mysql(),
         shard_1_rdonly1.init_mysql(),
-        ]
+    ]
     utils.wait_procs(setup_procs)
     init_keyspace()
     logging.debug('environment set up with the following shards and tablets:')
@@ -136,7 +136,7 @@ def tearDownModule():
       shard_1_master.teardown_mysql(),
       shard_1_replica.teardown_mysql(),
       shard_1_rdonly1.teardown_mysql(),
-      ]
+  ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()
@@ -421,15 +421,18 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     Raises:
       AssertionError if things didn't go as expected.
     """
-    worker_proc, worker_port, _ = utils.run_vtworker_bg(
-        ['--cell', 'test_nj',
-         'SplitClone',
+    worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
+        ['--cell', 'test_nj'],
+        auto_log=True)
+
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
          '--source_reader_count', '1',
          '--destination_pack_count', '1',
          '--destination_writer_count', '1',
          '--strategy=-populate_blp_checkpoint',
          'test_keyspace/0'],
-        auto_log=True)
+        worker_rpc_port)
 
     if mysql_down:
       # If MySQL is down, we wait until resolving at least twice (to verify that
@@ -443,7 +446,7 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
           "expected vtworker to retry, but it didn't")
       logging.debug('Worker has resolved at least twice, starting reparent now')
 
-      # Original masters have no running MySQL, so need to force the reparent
+      # Original masters have no running MySQL, so need to force the reparent.
       utils.run_vtctl(
           ['EmergencyReparentShard', 'test_keyspace/-80',
            shard_0_replica.tablet_alias], auto_log=True)
@@ -465,41 +468,15 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
           ['PlannedReparentShard', 'test_keyspace/80-',
            shard_1_replica.tablet_alias], auto_log=True)
 
-    logging.debug('Polling for worker state')
-    # There are a couple of race conditions around this, that we need
-    # to be careful of:
-    #
-    # 1. It's possible for the reparent step to take so long that the
-    #   worker will actually finish before we get to the polling
-    #   step. To workaround this, the test takes a parameter to
-    #   increase the number of rows that the worker has to copy (with
-    #   the idea being to slow the worker down).
-    #
-    # 2. If the worker has a huge number of rows to copy, it's
-    #   possible for the polling to timeout before the worker has
-    #   finished copying the data.
-    #
-    # You should choose a value for num_insert_rows, such that this test passes
-    # for your environment (trial-and-error...)
-    worker_vars = utils.poll_for_vars(
-        'vtworker', worker_port,
-        'WorkerState == cleaning up',
-        condition_fn=lambda v: v.get('WorkerState') == 'cleaning up',
-        # We know that vars should already be ready, since we read them earlier
-        require_vars=True,
-        # We're willing to let the test run for longer to make it less flaky.
-        # This should still fail fast if something goes wrong with vtworker,
-        # because of the require_vars flag above.
-        timeout=5*60)
+    utils.wait_procs([workerclient_proc])
 
     # Verify that we were forced to reresolve and retry.
+    worker_vars = utils.get_vars(worker_port)
     self.assertGreater(worker_vars['WorkerDestinationActualResolves'], 1)
     self.assertGreater(worker_vars['WorkerDestinationAttemptedResolves'], 1)
-    self.assertNotEqual(
-        worker_vars['WorkerRetryCount'], {},
-        "expected vtworker to retry, but it didn't")
-
-    utils.wait_procs([worker_proc])
+    self.assertNotEqual(worker_vars['WorkerRetryCount'], {},
+                        "expected vtworker to retry, but it didn't")
+    utils.kill_sub_process(worker_proc, soft=True)
 
     # Make sure that everything is caught up to the same replication point
     self.run_split_diff('test_keyspace/-80', all_shard_tablets, shard_0_tablets)
