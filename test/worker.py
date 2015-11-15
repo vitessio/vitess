@@ -455,6 +455,17 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
            shard_1_replica.tablet_alias], auto_log=True)
 
     else:
+      # NOTE: There is a race condition around this:
+      #   It's possible that the SplitClone vtworker command finishes before the
+      #   PlannedReparentShard vtctl command, which we start below, succeeds.
+      #   Then the test would fail because vtworker did not have to resolve the
+      #   master tablet again (due to the missing reparent).
+      #
+      # To workaround this, the test takes a parameter to increase the number of
+      # rows that the worker has to copy (with the idea being to slow the worker
+      # down).
+      # You should choose a value for num_insert_rows, such that this test
+      # passes for your environment (trial-and-error...)
       utils.poll_for_vars(
           'vtworker', worker_port,
           'WorkerDestinationActualResolves >= 1',
