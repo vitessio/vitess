@@ -270,9 +270,11 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.kill_vttablet()
 
   def test_restart(self):
-    """test_restart tests that when starting a second vttablet with the same
-    configuration as another one, it will kill the previous process
-    and take over listening on the socket.
+    """Test restart behavior of vttablet.
+
+    Tests that when starting a second vttablet with the same configuration as
+    another one, it will kill the previous process and take over listening on
+    the socket.
 
     If vttablet listens to other ports (like gRPC), this feature will
     break. We believe it is not widely used, so we're OK with this for now.
@@ -518,6 +520,7 @@ class TestTabletManager(unittest.TestCase):
 
   def test_no_mysql_healthcheck(self):
     """This test starts a vttablet with no mysql port, while mysql is down.
+
     It makes sure vttablet will start properly and be unhealthy.
     Then we start mysql, and make sure vttablet becomes healthy.
     """

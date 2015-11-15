@@ -1,10 +1,5 @@
 #!/usr/bin/env python
 
-import warnings
-# Dropping a table inexplicably produces a warning despite
-# the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter('ignore')
-
 import logging
 import traceback
 import threading
@@ -170,7 +165,7 @@ class TestUpdateStream(unittest.TestCase):
     try:
       for _ in replica_conn.stream_update(start_position):
         break
-    except Exception as e:
+    except dbexceptions.DatabaseError as e:
       self.assertIn('update stream service is not enabled', str(e))
     replica_conn.close()
 
@@ -202,7 +197,7 @@ class TestUpdateStream(unittest.TestCase):
         if stream_event.category == update_stream.StreamEvent.DML:
           logging.debug('Test Service Enabled: Pass')
           break
-    except Exception as e:
+    except dbexceptions.DatabaseError as e:
       self.fail('Exception in getting stream from replica: %s\n Traceback %s' %
                 (str(e), traceback.format_exc()))
     thd.join(timeout=30)
@@ -254,10 +249,11 @@ class TestUpdateStream(unittest.TestCase):
     return
 
   def test_stream_parity(self):
-    """test_stream_parity checks the parity of streams received
-    from master and replica for the same writes. Also tests
-    transactions are retrieved properly.
+    """Tests parity of streams between master and replica for the same writes.
+
+    Also tests transactions are retrieved properly.
     """
+
     global master_start_position
 
     timeout = 30
