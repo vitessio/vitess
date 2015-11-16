@@ -669,7 +669,7 @@ func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concu
 
 // IsTimeoutError is part of the tmclient.TabletManagerClient interface
 func (client *Client) IsTimeoutError(err error) bool {
-	if grpc.Code(err) == codes.DeadlineExceeded {
+	if err == grpc.ErrClientConnTimeout || grpc.Code(err) == codes.DeadlineExceeded {
 		return true
 	}
 	switch err.(type) {
