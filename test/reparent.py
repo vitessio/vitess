@@ -10,6 +10,7 @@ import environment
 import utils
 import tablet
 from mysql_flavor import mysql_flavor
+from protocols_flavor import protocols_flavor
 
 
 tablet_62344 = tablet.Tablet(62344)
@@ -109,9 +110,9 @@ class TestReparent(unittest.TestCase):
           (host, 'localhost'))
 
   def _check_master_cell(self, cell, shard_id, master_cell):
-    srvShard = utils.run_vtctl_json(['GetSrvShard', cell,
-                                     'test_keyspace/%s' % (shard_id)])
-    self.assertEqual(srvShard['master_cell'], master_cell)
+    srv_shard = utils.run_vtctl_json(['GetSrvShard', cell,
+                                      'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srv_shard['master_cell'], master_cell)
 
   def test_master_to_spare_state_change_impossible(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -360,7 +361,7 @@ class TestReparent(unittest.TestCase):
       try:
         self._check_db_addr(shard_id, 'master', new_port)
         break
-      except:
+      except protocols_flavor().client_error_exception_type():
         timeout = utils.wait_step('waiting for new port to register',
                                   timeout, sleep_time=0.1)
 
@@ -472,19 +473,19 @@ class TestReparent(unittest.TestCase):
     logging.debug('New master position: %s', str(new_pos))
     # Use 'localhost' as hostname because Travis CI worker hostnames
     # are too long for MySQL replication.
-    changeMasterCmds = mysql_flavor().change_master_commands(
+    change_master_cmds = mysql_flavor().change_master_commands(
         'localhost',
         tablet_62044.mysql_port,
         new_pos)
 
     # 62344 will now be a slave of 62044
     tablet_62344.mquery('', ['RESET MASTER', 'RESET SLAVE'] +
-                        changeMasterCmds +
+                        change_master_cmds +
                         ['START SLAVE'])
 
     # 41983 will be a slave of 62044
     tablet_41983.mquery('', ['STOP SLAVE'] +
-                        changeMasterCmds +
+                        change_master_cmds +
                         ['START SLAVE'])
 
     # in brutal mode, we kill the old master first

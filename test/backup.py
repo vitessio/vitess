@@ -3,6 +3,8 @@
 import logging
 import unittest
 
+import MySQLdb
+
 import environment
 import tablet
 import utils
@@ -118,7 +120,7 @@ class TestBackup(unittest.TestCase):
             'vt_test_keyspace', 'select count(*) from vt_insert_test')
         if result[0][0] == 1:
           break
-      except:
+      except MySQLdb.DatabaseError:
         # ignore exceptions, we'll just timeout (the tablet creation
         # can take some time to replicate, and we get a 'table vt_insert_test
         # does not exist exception in some rare cases)

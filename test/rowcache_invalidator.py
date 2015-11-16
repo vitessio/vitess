@@ -277,18 +277,18 @@ class RowCacheInvalidator(unittest.TestCase):
                                 'select min(id) from vt_insert_test')
     self.assertNotEqual(res[0][0], None,
                         'Cannot proceed, no rows in vt_insert_test')
-    id = int(res[0][0])
+    mid = int(res[0][0])
     stats_dict = self.replica_stats()['vt_insert_test']
     misses = stats_dict['Misses']
     hits = stats_dict['Hits']
     replica_tablet.execute('select * from vt_insert_test where id=:id',
-                           bindvars={'id': id})
+                           bindvars={'id': mid})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1,
                      "This shouldn't have hit the cache")
 
     replica_tablet.execute('select * from vt_insert_test where id=:id',
-                           bindvars={'id': id})
+                           bindvars={'id': mid})
     hits2 = self.replica_stats()['vt_insert_test']['Hits']
     self.assertEqual(hits2 - hits, 1, 'This should have hit the cache')
 
