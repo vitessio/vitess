@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+"""Defines which protocols to use for the gRPC flavor."""
+
+from grpc.framework.interfaces.face import face
 
 import protocols_flavor
 
@@ -35,6 +38,9 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def vtgate_python_protocol(self):
     return 'gorpc'
+
+  def client_error_exception_type(self):
+    return face.RemoteError
 
   def rpc_timeout_message(self):
     return 'context deadline exceeded'
