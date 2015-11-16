@@ -804,7 +804,8 @@ def run_automation_server(auto_log=False):
   args = environment.binary_args('automation_server') + [
       '-log_dir', environment.vtlogroot,
       '-port', str(rpc_port),
-      '-vtctl_client_protocol', protocols_flavor().vtctl_client_protocol(),
+      '-vtctl_client_protocol',
+      protocols_flavor().vtctl_client_protocol(),
       '-vtworker_client_protocol',
       protocols_flavor().vtworker_client_protocol(),
   ]
