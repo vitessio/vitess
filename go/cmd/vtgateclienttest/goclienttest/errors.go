@@ -12,24 +12,26 @@ import (
 
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/sqltypes"
-	gproto "github.com/youtube/vitess/go/vt/vtgate/proto"
 
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
 	errorPrefix        = "error://"
 	partialErrorPrefix = "partialerror://"
 
-	executeErrors = map[string]vtrpc.ErrorCode{
-		"bad input":         vtrpc.ErrorCode_BAD_INPUT,
-		"deadline exceeded": vtrpc.ErrorCode_DEADLINE_EXCEEDED,
-		"integrity error":   vtrpc.ErrorCode_INTEGRITY_ERROR,
-		"transient error":   vtrpc.ErrorCode_TRANSIENT_ERROR,
-		"unauthenticated":   vtrpc.ErrorCode_UNAUTHENTICATED,
-		"unknown error":     vtrpc.ErrorCode_UNKNOWN_ERROR,
+	executeErrors = map[string]vtrpcpb.ErrorCode{
+		"bad input":         vtrpcpb.ErrorCode_BAD_INPUT,
+		"deadline exceeded": vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+		"integrity error":   vtrpcpb.ErrorCode_INTEGRITY_ERROR,
+		"transient error":   vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+		"unauthenticated":   vtrpcpb.ErrorCode_UNAUTHENTICATED,
+		"unknown error":     vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	}
 )
 
@@ -64,23 +66,27 @@ func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteBatchShards(ctx, []gproto.BoundShardQuery{
-			gproto.BoundShardQuery{
-				Sql:           query,
-				Keyspace:      keyspace,
-				Shards:        shards,
-				BindVariables: bindVars,
+		_, err := conn.ExecuteBatchShards(ctx, []*vtgatepb.BoundShardQuery{
+			{
+				Query: &querypb.BoundQuery{
+					Sql:           query,
+					BindVariables: bindVarsP3,
+				},
+				Keyspace: keyspace,
+				Shards:   shards,
 			},
 		}, tabletType, true)
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteBatchKeyspaceIds(ctx, []gproto.BoundKeyspaceIdQuery{
-			gproto.BoundKeyspaceIdQuery{
-				Sql:           query,
-				Keyspace:      keyspace,
-				KeyspaceIds:   keyspaceIDs,
-				BindVariables: bindVars,
+		_, err := conn.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
+			{
+				Query: &querypb.BoundQuery{
+					Sql:           query,
+					BindVariables: bindVarsP3,
+				},
+				Keyspace:    keyspace,
+				KeyspaceIds: keyspaceIDs,
 			},
 		}, tabletType, true)
 		return err
@@ -128,23 +134,27 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteBatchShards(ctx, []gproto.BoundShardQuery{
-			gproto.BoundShardQuery{
-				Sql:           query,
-				Keyspace:      keyspace,
-				Shards:        shards,
-				BindVariables: bindVars,
+		_, err := tx.ExecuteBatchShards(ctx, []*vtgatepb.BoundShardQuery{
+			{
+				Query: &querypb.BoundQuery{
+					Sql:           query,
+					BindVariables: bindVarsP3,
+				},
+				Keyspace: keyspace,
+				Shards:   shards,
 			},
 		}, tabletType, true)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteBatchKeyspaceIds(ctx, []gproto.BoundKeyspaceIdQuery{
-			gproto.BoundKeyspaceIdQuery{
-				Sql:           query,
-				Keyspace:      keyspace,
-				KeyspaceIds:   keyspaceIDs,
-				BindVariables: bindVars,
+		_, err := tx.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
+			{
+				Query: &querypb.BoundQuery{
+					Sql:           query,
+					BindVariables: bindVarsP3,
+				},
+				Keyspace:    keyspace,
+				KeyspaceIds: keyspaceIDs,
 			},
 		}, tabletType, true)
 		return err
@@ -214,7 +224,7 @@ func checkTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, ex
 	}
 }
 
-func checkError(t *testing.T, err error, query, errStr string, errCode vtrpc.ErrorCode) {
+func checkError(t *testing.T, err error, query, errStr string, errCode vtrpcpb.ErrorCode) {
 	if err == nil {
 		t.Errorf("[%v] expected error, got nil", query)
 		return

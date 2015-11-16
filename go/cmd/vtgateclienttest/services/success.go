@@ -10,7 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // successClient implements vtgateservice.VTGateService
@@ -26,19 +26,19 @@ func newSuccessClient(fallback vtgateservice.VTGateService) *successClient {
 	}
 }
 
-func (c *successClient) Begin(ctx context.Context, outSession *pbg.Session) error {
+func (c *successClient) Begin(ctx context.Context, outSession *vtgatepb.Session) error {
 	outSession.InTransaction = true
 	return nil
 }
 
-func (c *successClient) Commit(ctx context.Context, inSession *pbg.Session) error {
+func (c *successClient) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
 	if inSession != nil && inSession.InTransaction {
 		return nil
 	}
 	return c.fallback.Commit(ctx, inSession)
 }
 
-func (c *successClient) Rollback(ctx context.Context, inSession *pbg.Session) error {
+func (c *successClient) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
 	if inSession != nil && inSession.InTransaction {
 		return nil
 	}

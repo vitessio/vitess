@@ -10,12 +10,14 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 func TestKeyRangeToShardMap(t *testing.T) {
@@ -108,26 +110,47 @@ func TestMapExactShards(t *testing.T) {
 
 func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 	var testCases = []struct {
-		boundQueries []proto.BoundShardQuery
+		boundQueries []*vtgatepb.BoundShardQuery
 		requests     *scatterBatchRequest
 	}{
 		{
-			boundQueries: []proto.BoundShardQuery{
+			boundQueries: []*vtgatepb.BoundShardQuery{
 				{
-					Sql:           "q1",
-					BindVariables: map[string]interface{}{"q1var": 1},
-					Keyspace:      "ks1",
-					Shards:        []string{"0", "1"},
+					Query: &querypb.BoundQuery{
+						Sql: "q1",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q1var": &querypb.BindVariable{
+								Type:  sqltypes.Int64,
+								Value: []byte("1"),
+							},
+						},
+					},
+					Keyspace: "ks1",
+					Shards:   []string{"0", "1"},
 				}, {
-					Sql:           "q2",
-					BindVariables: map[string]interface{}{"q2var": 2},
-					Keyspace:      "ks1",
-					Shards:        []string{"1"},
+					Query: &querypb.BoundQuery{
+						Sql: "q2",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q2var": &querypb.BindVariable{
+								Type:  sqltypes.Int64,
+								Value: []byte("2"),
+							},
+						},
+					},
+					Keyspace: "ks1",
+					Shards:   []string{"1"},
 				}, {
-					Sql:           "q3",
-					BindVariables: map[string]interface{}{"q3var": 3},
-					Keyspace:      "ks2",
-					Shards:        []string{"1"},
+					Query: &querypb.BoundQuery{
+						Sql: "q3",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q3var": &querypb.BindVariable{
+								Type:  sqltypes.Int64,
+								Value: []byte("3"),
+							},
+						},
+					},
+					Keyspace: "ks2",
+					Shards:   []string{"1"},
 				},
 			},
 			requests: &scatterBatchRequest{
@@ -137,7 +160,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 						Queries: []tproto.BoundQuery{
 							{
 								Sql:           "q1",
-								BindVariables: map[string]interface{}{"q1var": 1},
+								BindVariables: map[string]interface{}{"q1var": int64(1)},
 							},
 						},
 						Keyspace:      "ks1",
@@ -148,10 +171,10 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 						Queries: []tproto.BoundQuery{
 							{
 								Sql:           "q1",
-								BindVariables: map[string]interface{}{"q1var": 1},
+								BindVariables: map[string]interface{}{"q1var": int64(1)},
 							}, {
 								Sql:           "q2",
-								BindVariables: map[string]interface{}{"q2var": 2},
+								BindVariables: map[string]interface{}{"q2var": int64(2)},
 							},
 						},
 						Keyspace:      "ks1",
@@ -162,7 +185,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 						Queries: []tproto.BoundQuery{
 							{
 								Sql:           "q3",
-								BindVariables: map[string]interface{}{"q3var": 3},
+								BindVariables: map[string]interface{}{"q3var": int64(3)},
 							},
 						},
 						Keyspace:      "ks2",
@@ -173,12 +196,19 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 			},
 		},
 		{
-			boundQueries: []proto.BoundShardQuery{
+			boundQueries: []*vtgatepb.BoundShardQuery{
 				{
-					Sql:           "q1",
-					BindVariables: map[string]interface{}{"q1var": 1},
-					Keyspace:      "ks1",
-					Shards:        []string{"0", "0"},
+					Query: &querypb.BoundQuery{
+						Sql: "q1",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q1var": &querypb.BindVariable{
+								Type:  sqltypes.Int64,
+								Value: []byte("1"),
+							},
+						},
+					},
+					Keyspace: "ks1",
+					Shards:   []string{"0", "0"},
 				},
 			},
 			requests: &scatterBatchRequest{
@@ -188,7 +218,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 						Queries: []tproto.BoundQuery{
 							{
 								Sql:           "q1",
-								BindVariables: map[string]interface{}{"q1var": 1},
+								BindVariables: map[string]interface{}{"q1var": int64(1)},
 							},
 						},
 						Keyspace:      "ks1",
@@ -201,11 +231,15 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		scatterRequest := boundShardQueriesToScatterBatchRequest(testCase.boundQueries)
+		scatterRequest, err := boundShardQueriesToScatterBatchRequest(testCase.boundQueries)
+		if err != nil {
+			t.Errorf("boundShardQueriesToScatterBatchRequest failed: %v", err)
+			continue
+		}
 		if !reflect.DeepEqual(testCase.requests, scatterRequest) {
 			got, _ := json.Marshal(scatterRequest)
 			want, _ := json.Marshal(testCase.requests)
-			t.Errorf("Bound Query: %#v\nResponse:   %s\nExepecting: %s", testCase.boundQueries, got, want)
+			t.Errorf("Bound Query: %#v\nResponse:  %s\nExpecting: %s", testCase.boundQueries, got, want)
 		}
 	}
 }
@@ -215,34 +249,62 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 	kid10 := []byte{0x10}
 	kid25 := []byte{0x25}
 	var testCases = []struct {
-		idQueries    []proto.BoundKeyspaceIdQuery
-		shardQueries []proto.BoundShardQuery
+		idQueries    []*vtgatepb.BoundKeyspaceIdQuery
+		shardQueries []*vtgatepb.BoundShardQuery
 	}{
 		{
-			idQueries: []proto.BoundKeyspaceIdQuery{
+			idQueries: []*vtgatepb.BoundKeyspaceIdQuery{
 				{
-					Sql:           "q1",
-					BindVariables: map[string]interface{}{"q1var": 1},
-					Keyspace:      KsTestSharded,
-					KeyspaceIds:   [][]byte{kid10, kid25},
+					Query: &querypb.BoundQuery{
+						Sql: "q1",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q1var": &querypb.BindVariable{
+								Type:  sqltypes.Int64,
+								Value: []byte("1"),
+							},
+						},
+					},
+					Keyspace:    KsTestSharded,
+					KeyspaceIds: [][]byte{kid10, kid25},
 				}, {
-					Sql:           "q2",
-					BindVariables: map[string]interface{}{"q2var": 2},
-					Keyspace:      KsTestSharded,
-					KeyspaceIds:   [][]byte{kid25, kid25},
+					Query: &querypb.BoundQuery{
+						Sql: "q2",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q2var": &querypb.BindVariable{
+								Type:  sqltypes.Int64,
+								Value: []byte("2"),
+							},
+						},
+					},
+					Keyspace:    KsTestSharded,
+					KeyspaceIds: [][]byte{kid25, kid25},
 				},
 			},
-			shardQueries: []proto.BoundShardQuery{
+			shardQueries: []*vtgatepb.BoundShardQuery{
 				{
-					Sql:           "q1",
-					BindVariables: map[string]interface{}{"q1var": 1},
-					Keyspace:      KsTestSharded,
-					Shards:        []string{"-20", "20-40"},
+					Query: &querypb.BoundQuery{
+						Sql: "q1",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q1var": &querypb.BindVariable{
+								Type:  sqltypes.Int64,
+								Value: []byte("1"),
+							},
+						},
+					},
+					Keyspace: KsTestSharded,
+					Shards:   []string{"-20", "20-40"},
 				}, {
-					Sql:           "q2",
-					BindVariables: map[string]interface{}{"q2var": 2},
-					Keyspace:      KsTestSharded,
-					Shards:        []string{"20-40"},
+					Query: &querypb.BoundQuery{
+						Sql: "q2",
+						BindVariables: map[string]*querypb.BindVariable{
+							"q2var": &querypb.BindVariable{
+								Type:  sqltypes.Int64,
+								Value: []byte("2"),
+							},
+						},
+					},
+					Keyspace: KsTestSharded,
+					Shards:   []string{"20-40"},
 				},
 			},
 		},
@@ -260,7 +322,7 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 		if !reflect.DeepEqual(testCase.shardQueries, shardQueries) {
 			got, _ := json.Marshal(shardQueries)
 			want, _ := json.Marshal(testCase.shardQueries)
-			t.Errorf("idQueries: %#v\nResponse:   %s\nExepecting: %s", testCase.idQueries, got, want)
+			t.Errorf("idQueries: %#v\nResponse:   %s\nExpecting: %s", testCase.idQueries, got, want)
 		}
 	}
 }

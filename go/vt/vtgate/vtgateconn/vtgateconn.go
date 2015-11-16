@@ -11,11 +11,10 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 const (
@@ -60,19 +59,19 @@ func (conn *VTGateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 }
 
 // ExecuteEntityIds executes a non-streaming query for multiple entities.
-func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (*sqltypes.Result, error) {
+func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (*sqltypes.Result, error) {
 	res, _, err := conn.impl.ExecuteEntityIds(ctx, query, keyspace, entityColumnName, entityKeyspaceIDs, bindVars, tabletType, false, nil)
 	return res, err
 }
 
 // ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
-func (conn *VTGateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
+func (conn *VTGateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
 	res, _, err := conn.impl.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, nil)
 	return res, err
 }
 
 // ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
+func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
 	res, _, err := conn.impl.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, nil)
 	return res, err
 }
@@ -183,7 +182,7 @@ func (conn *VTGateConn) Close() {
 
 // SplitQuery splits a query into equally sized smaller queries by
 // appending primary key range clauses to the original query
-func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
+func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	return conn.impl.SplitQuery(ctx, keyspace, query, bindVars, splitColumn, splitCount)
 }
 
@@ -240,7 +239,7 @@ func (tx *VTGateTx) ExecuteKeyRanges(ctx context.Context, query string, keyspace
 }
 
 // ExecuteEntityIds executes a non-streaming query for multiple entities.
-func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool) (*sqltypes.Result, error) {
+func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool) (*sqltypes.Result, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeEntityIds: not in transaction")
 	}
@@ -250,7 +249,7 @@ func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace
 }
 
 // ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
-func (tx *VTGateTx) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
+func (tx *VTGateTx) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeBatchShards: not in transaction")
 	}
@@ -260,7 +259,7 @@ func (tx *VTGateTx) ExecuteBatchShards(ctx context.Context, queries []proto.Boun
 }
 
 // ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
+func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeBatchKeyspaceIds: not in transaction")
 	}
@@ -332,13 +331,13 @@ type Impl interface {
 	ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error)
 
 	// ExecuteEntityIds executes a non-streaming query for multiple entities.
-	ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error)
+	ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error)
 
 	// ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
-	ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error)
+	ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error)
 
 	// ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-	ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error)
+	ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error)
 
 	// StreamExecute executes a streaming query on vtgate.
 	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, ErrFunc, error)
@@ -384,7 +383,7 @@ type Impl interface {
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query.
-	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error)
+	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error)
 
 	// GetSrvKeyspace returns a topo.SrvKeyspace.
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error)
