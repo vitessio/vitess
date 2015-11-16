@@ -35,45 +35,51 @@ var _ = math.Inf
 type StartRequest struct {
 }
 
-func (m *StartRequest) Reset()         { *m = StartRequest{} }
-func (m *StartRequest) String() string { return proto.CompactTextString(m) }
-func (*StartRequest) ProtoMessage()    {}
+func (m *StartRequest) Reset()                    { *m = StartRequest{} }
+func (m *StartRequest) String() string            { return proto.CompactTextString(m) }
+func (*StartRequest) ProtoMessage()               {}
+func (*StartRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
 type StartResponse struct {
 }
 
-func (m *StartResponse) Reset()         { *m = StartResponse{} }
-func (m *StartResponse) String() string { return proto.CompactTextString(m) }
-func (*StartResponse) ProtoMessage()    {}
+func (m *StartResponse) Reset()                    { *m = StartResponse{} }
+func (m *StartResponse) String() string            { return proto.CompactTextString(m) }
+func (*StartResponse) ProtoMessage()               {}
+func (*StartResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
 type ShutdownRequest struct {
 	WaitForMysqld bool `protobuf:"varint,1,opt,name=wait_for_mysqld" json:"wait_for_mysqld,omitempty"`
 }
 
-func (m *ShutdownRequest) Reset()         { *m = ShutdownRequest{} }
-func (m *ShutdownRequest) String() string { return proto.CompactTextString(m) }
-func (*ShutdownRequest) ProtoMessage()    {}
+func (m *ShutdownRequest) Reset()                    { *m = ShutdownRequest{} }
+func (m *ShutdownRequest) String() string            { return proto.CompactTextString(m) }
+func (*ShutdownRequest) ProtoMessage()               {}
+func (*ShutdownRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
 type ShutdownResponse struct {
 }
 
-func (m *ShutdownResponse) Reset()         { *m = ShutdownResponse{} }
-func (m *ShutdownResponse) String() string { return proto.CompactTextString(m) }
-func (*ShutdownResponse) ProtoMessage()    {}
+func (m *ShutdownResponse) Reset()                    { *m = ShutdownResponse{} }
+func (m *ShutdownResponse) String() string            { return proto.CompactTextString(m) }
+func (*ShutdownResponse) ProtoMessage()               {}
+func (*ShutdownResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
 type RunMysqlUpgradeRequest struct {
 }
 
-func (m *RunMysqlUpgradeRequest) Reset()         { *m = RunMysqlUpgradeRequest{} }
-func (m *RunMysqlUpgradeRequest) String() string { return proto.CompactTextString(m) }
-func (*RunMysqlUpgradeRequest) ProtoMessage()    {}
+func (m *RunMysqlUpgradeRequest) Reset()                    { *m = RunMysqlUpgradeRequest{} }
+func (m *RunMysqlUpgradeRequest) String() string            { return proto.CompactTextString(m) }
+func (*RunMysqlUpgradeRequest) ProtoMessage()               {}
+func (*RunMysqlUpgradeRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
 type RunMysqlUpgradeResponse struct {
 }
 
-func (m *RunMysqlUpgradeResponse) Reset()         { *m = RunMysqlUpgradeResponse{} }
-func (m *RunMysqlUpgradeResponse) String() string { return proto.CompactTextString(m) }
-func (*RunMysqlUpgradeResponse) ProtoMessage()    {}
+func (m *RunMysqlUpgradeResponse) Reset()                    { *m = RunMysqlUpgradeResponse{} }
+func (m *RunMysqlUpgradeResponse) String() string            { return proto.CompactTextString(m) }
+func (*RunMysqlUpgradeResponse) ProtoMessage()               {}
+func (*RunMysqlUpgradeResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
 
 func init() {
 	proto.RegisterType((*StartRequest)(nil), "mysqlctl.StartRequest")
@@ -197,4 +203,22 @@ var _MysqlCtl_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{},
+}
+
+var fileDescriptor0 = []byte{
+	// 214 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0xcb, 0xad, 0x2c, 0x2e,
+	0xcc, 0x49, 0x2e, 0xc9, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x80, 0xf1, 0x95, 0xf8,
+	0xb8, 0x78, 0x82, 0x4b, 0x12, 0x8b, 0x4a, 0x82, 0x52, 0x0b, 0x4b, 0x53, 0x8b, 0x4b, 0x94, 0xf8,
+	0xb9, 0x78, 0xa1, 0xfc, 0xe2, 0x82, 0xfc, 0xbc, 0xe2, 0x54, 0x25, 0x2d, 0x2e, 0xfe, 0xe0, 0x8c,
+	0xd2, 0x92, 0x94, 0xfc, 0xf2, 0x3c, 0xa8, 0x1a, 0x21, 0x71, 0x2e, 0xfe, 0xf2, 0xc4, 0xcc, 0x92,
+	0xf8, 0xb4, 0xfc, 0xa2, 0x78, 0xb0, 0x41, 0x29, 0x12, 0x8c, 0x0a, 0x8c, 0x1a, 0x1c, 0x4a, 0x42,
+	0x5c, 0x02, 0x08, 0xb5, 0x50, 0xfd, 0x12, 0x5c, 0x62, 0x41, 0xa5, 0x79, 0xbe, 0x20, 0x65, 0xa1,
+	0x05, 0xe9, 0x45, 0x89, 0x29, 0xa9, 0x30, 0xab, 0x24, 0xb9, 0xc4, 0x31, 0x64, 0x20, 0x9a, 0x8c,
+	0x9e, 0x32, 0x72, 0x71, 0x80, 0x25, 0x9c, 0x4b, 0x72, 0x84, 0xac, 0xb8, 0x58, 0xc1, 0x4e, 0x12,
+	0x12, 0xd3, 0x83, 0x7b, 0x03, 0xd9, 0xcd, 0x52, 0xe2, 0x18, 0xe2, 0x50, 0xbb, 0x19, 0x84, 0x9c,
+	0xb9, 0x38, 0x60, 0x2e, 0x12, 0x92, 0x44, 0x52, 0x86, 0xea, 0x23, 0x29, 0x29, 0x6c, 0x52, 0x70,
+	0x43, 0x22, 0xb8, 0xf8, 0xd1, 0x1c, 0x2a, 0xa4, 0x80, 0xd0, 0x80, 0xdd, 0x77, 0x52, 0x8a, 0x78,
+	0x54, 0xc0, 0x4c, 0x4e, 0x62, 0x03, 0x47, 0x87, 0x31, 0x20, 0x00, 0x00, 0xff, 0xff, 0xe9, 0x5e,
+	0x81, 0xa3, 0xa0, 0x01, 0x00, 0x00,
 }

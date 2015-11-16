@@ -66,6 +66,9 @@ var BinlogTransaction_Statement_Category_value = map[string]int32{
 func (x BinlogTransaction_Statement_Category) String() string {
 	return proto.EnumName(BinlogTransaction_Statement_Category_name, int32(x))
 }
+func (BinlogTransaction_Statement_Category) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{1, 0, 0}
+}
 
 // the category of this event
 type StreamEvent_Category int32
@@ -93,6 +96,7 @@ var StreamEvent_Category_value = map[string]int32{
 func (x StreamEvent_Category) String() string {
 	return proto.EnumName(StreamEvent_Category_name, int32(x))
 }
+func (StreamEvent_Category) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{2, 0} }
 
 // Charset is the per-statement charset info from a QUERY_EVENT binlog entry.
 type Charset struct {
@@ -104,9 +108,10 @@ type Charset struct {
 	Server int32 `protobuf:"varint,3,opt,name=server" json:"server,omitempty"`
 }
 
-func (m *Charset) Reset()         { *m = Charset{} }
-func (m *Charset) String() string { return proto.CompactTextString(m) }
-func (*Charset) ProtoMessage()    {}
+func (m *Charset) Reset()                    { *m = Charset{} }
+func (m *Charset) String() string            { return proto.CompactTextString(m) }
+func (*Charset) ProtoMessage()               {}
+func (*Charset) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
 // BinlogTransaction describes a transaction inside the binlogs.
 type BinlogTransaction struct {
@@ -118,9 +123,10 @@ type BinlogTransaction struct {
 	TransactionId string `protobuf:"bytes,3,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
-func (m *BinlogTransaction) Reset()         { *m = BinlogTransaction{} }
-func (m *BinlogTransaction) String() string { return proto.CompactTextString(m) }
-func (*BinlogTransaction) ProtoMessage()    {}
+func (m *BinlogTransaction) Reset()                    { *m = BinlogTransaction{} }
+func (m *BinlogTransaction) String() string            { return proto.CompactTextString(m) }
+func (*BinlogTransaction) ProtoMessage()               {}
+func (*BinlogTransaction) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
 func (m *BinlogTransaction) GetStatements() []*BinlogTransaction_Statement {
 	if m != nil {
@@ -138,9 +144,10 @@ type BinlogTransaction_Statement struct {
 	Sql string `protobuf:"bytes,3,opt,name=sql" json:"sql,omitempty"`
 }
 
-func (m *BinlogTransaction_Statement) Reset()         { *m = BinlogTransaction_Statement{} }
-func (m *BinlogTransaction_Statement) String() string { return proto.CompactTextString(m) }
-func (*BinlogTransaction_Statement) ProtoMessage()    {}
+func (m *BinlogTransaction_Statement) Reset()                    { *m = BinlogTransaction_Statement{} }
+func (m *BinlogTransaction_Statement) String() string            { return proto.CompactTextString(m) }
+func (*BinlogTransaction_Statement) ProtoMessage()               {}
+func (*BinlogTransaction_Statement) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1, 0} }
 
 func (m *BinlogTransaction_Statement) GetCharset() *Charset {
 	if m != nil {
@@ -164,9 +171,10 @@ type StreamEvent struct {
 	TransactionId string `protobuf:"bytes,7,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
-func (m *StreamEvent) Reset()         { *m = StreamEvent{} }
-func (m *StreamEvent) String() string { return proto.CompactTextString(m) }
-func (*StreamEvent) ProtoMessage()    {}
+func (m *StreamEvent) Reset()                    { *m = StreamEvent{} }
+func (m *StreamEvent) String() string            { return proto.CompactTextString(m) }
+func (*StreamEvent) ProtoMessage()               {}
+func (*StreamEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
 func (m *StreamEvent) GetPrimaryKeyFields() []*query.Field {
 	if m != nil {
@@ -188,18 +196,20 @@ type StreamUpdateRequest struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
-func (m *StreamUpdateRequest) Reset()         { *m = StreamUpdateRequest{} }
-func (m *StreamUpdateRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamUpdateRequest) ProtoMessage()    {}
+func (m *StreamUpdateRequest) Reset()                    { *m = StreamUpdateRequest{} }
+func (m *StreamUpdateRequest) String() string            { return proto.CompactTextString(m) }
+func (*StreamUpdateRequest) ProtoMessage()               {}
+func (*StreamUpdateRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
 // StreamUpdateResponse is the response from StreamUpdate
 type StreamUpdateResponse struct {
 	StreamEvent *StreamEvent `protobuf:"bytes,1,opt,name=stream_event" json:"stream_event,omitempty"`
 }
 
-func (m *StreamUpdateResponse) Reset()         { *m = StreamUpdateResponse{} }
-func (m *StreamUpdateResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamUpdateResponse) ProtoMessage()    {}
+func (m *StreamUpdateResponse) Reset()                    { *m = StreamUpdateResponse{} }
+func (m *StreamUpdateResponse) String() string            { return proto.CompactTextString(m) }
+func (*StreamUpdateResponse) ProtoMessage()               {}
+func (*StreamUpdateResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
 func (m *StreamUpdateResponse) GetStreamEvent() *StreamEvent {
 	if m != nil {
@@ -220,9 +230,10 @@ type StreamKeyRangeRequest struct {
 	Charset *Charset `protobuf:"bytes,4,opt,name=charset" json:"charset,omitempty"`
 }
 
-func (m *StreamKeyRangeRequest) Reset()         { *m = StreamKeyRangeRequest{} }
-func (m *StreamKeyRangeRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamKeyRangeRequest) ProtoMessage()    {}
+func (m *StreamKeyRangeRequest) Reset()                    { *m = StreamKeyRangeRequest{} }
+func (m *StreamKeyRangeRequest) String() string            { return proto.CompactTextString(m) }
+func (*StreamKeyRangeRequest) ProtoMessage()               {}
+func (*StreamKeyRangeRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
 
 func (m *StreamKeyRangeRequest) GetKeyRange() *topodata.KeyRange {
 	if m != nil {
@@ -243,9 +254,10 @@ type StreamKeyRangeResponse struct {
 	BinlogTransaction *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction" json:"binlog_transaction,omitempty"`
 }
 
-func (m *StreamKeyRangeResponse) Reset()         { *m = StreamKeyRangeResponse{} }
-func (m *StreamKeyRangeResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamKeyRangeResponse) ProtoMessage()    {}
+func (m *StreamKeyRangeResponse) Reset()                    { *m = StreamKeyRangeResponse{} }
+func (m *StreamKeyRangeResponse) String() string            { return proto.CompactTextString(m) }
+func (*StreamKeyRangeResponse) ProtoMessage()               {}
+func (*StreamKeyRangeResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
 func (m *StreamKeyRangeResponse) GetBinlogTransaction() *BinlogTransaction {
 	if m != nil {
@@ -264,9 +276,10 @@ type StreamTablesRequest struct {
 	Charset *Charset `protobuf:"bytes,3,opt,name=charset" json:"charset,omitempty"`
 }
 
-func (m *StreamTablesRequest) Reset()         { *m = StreamTablesRequest{} }
-func (m *StreamTablesRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamTablesRequest) ProtoMessage()    {}
+func (m *StreamTablesRequest) Reset()                    { *m = StreamTablesRequest{} }
+func (m *StreamTablesRequest) String() string            { return proto.CompactTextString(m) }
+func (*StreamTablesRequest) ProtoMessage()               {}
+func (*StreamTablesRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
 func (m *StreamTablesRequest) GetCharset() *Charset {
 	if m != nil {
@@ -280,9 +293,10 @@ type StreamTablesResponse struct {
 	BinlogTransaction *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction" json:"binlog_transaction,omitempty"`
 }
 
-func (m *StreamTablesResponse) Reset()         { *m = StreamTablesResponse{} }
-func (m *StreamTablesResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamTablesResponse) ProtoMessage()    {}
+func (m *StreamTablesResponse) Reset()                    { *m = StreamTablesResponse{} }
+func (m *StreamTablesResponse) String() string            { return proto.CompactTextString(m) }
+func (*StreamTablesResponse) ProtoMessage()               {}
+func (*StreamTablesResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
 func (m *StreamTablesResponse) GetBinlogTransaction() *BinlogTransaction {
 	if m != nil {
@@ -304,4 +318,48 @@ func init() {
 	proto.RegisterType((*StreamTablesResponse)(nil), "binlogdata.StreamTablesResponse")
 	proto.RegisterEnum("binlogdata.BinlogTransaction_Statement_Category", BinlogTransaction_Statement_Category_name, BinlogTransaction_Statement_Category_value)
 	proto.RegisterEnum("binlogdata.StreamEvent_Category", StreamEvent_Category_name, StreamEvent_Category_value)
+}
+
+var fileDescriptor0 = []byte{
+	// 629 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xa4, 0x54, 0xcf, 0x6e, 0xd3, 0x4e,
+	0x10, 0xfe, 0x25, 0x4e, 0xd3, 0x78, 0xdc, 0x5f, 0xea, 0x6e, 0xa1, 0x44, 0x95, 0x90, 0x2a, 0x0b,
+	0x68, 0x2f, 0x44, 0xc8, 0x1c, 0x10, 0x70, 0x22, 0xa9, 0xa9, 0xa2, 0xa6, 0x0d, 0xd8, 0xe9, 0x05,
+	0x09, 0x59, 0x5b, 0x67, 0x29, 0x16, 0xfe, 0x57, 0xef, 0x36, 0xc8, 0xcf, 0xc2, 0x1b, 0xf0, 0x7a,
+	0x88, 0x3b, 0xe3, 0xb5, 0xdd, 0x38, 0x54, 0x46, 0x48, 0xdc, 0x66, 0x66, 0xbf, 0x9d, 0x99, 0xef,
+	0x9b, 0xd9, 0x05, 0xfd, 0xd2, 0x8f, 0x82, 0xf8, 0x6a, 0x41, 0x05, 0x1d, 0x26, 0x69, 0x2c, 0x62,
+	0x02, 0xab, 0xc8, 0xbe, 0x76, 0x7d, 0xc3, 0xd2, 0xac, 0x38, 0xd8, 0xef, 0x8b, 0x38, 0x89, 0x57,
+	0x40, 0xe3, 0x05, 0x6c, 0x8e, 0x3f, 0xd3, 0x94, 0x33, 0x41, 0xfa, 0xd0, 0xf5, 0x02, 0x9f, 0x45,
+	0x62, 0xd0, 0x3a, 0x68, 0x1d, 0x6d, 0x90, 0x2d, 0xe8, 0x78, 0x71, 0x14, 0x0d, 0xda, 0xd2, 0xc3,
+	0x53, 0xce, 0xd2, 0x25, 0x4b, 0x07, 0x4a, 0xee, 0x1b, 0x3f, 0xda, 0xb0, 0x33, 0x92, 0x45, 0xe6,
+	0x29, 0x8d, 0x38, 0xf5, 0x84, 0x1f, 0x47, 0xe4, 0x35, 0x00, 0x17, 0x54, 0xb0, 0x10, 0xd3, 0x70,
+	0xcc, 0xa3, 0x1c, 0x69, 0xe6, 0xe1, 0xb0, 0xd6, 0xde, 0x9d, 0x2b, 0x43, 0xa7, 0xc2, 0x93, 0x1d,
+	0x50, 0x85, 0x1f, 0x32, 0x4c, 0x10, 0x26, 0xb2, 0xaa, 0x42, 0xf6, 0xa0, 0x2f, 0x56, 0x58, 0xd7,
+	0x5f, 0xc8, 0xea, 0xea, 0xfe, 0xcf, 0x16, 0xa8, 0xab, 0x8b, 0x23, 0xe8, 0x79, 0x68, 0x5f, 0xc5,
+	0x69, 0x26, 0x7b, 0xef, 0x9b, 0xcf, 0xfe, 0xb2, 0xe6, 0x70, 0x5c, 0xde, 0x23, 0x8f, 0x60, 0xd3,
+	0x2b, 0x84, 0x90, 0xa5, 0x35, 0x73, 0xb7, 0x9e, 0xa2, 0xd2, 0x48, 0x03, 0x85, 0x5f, 0x07, 0x45,
+	0x13, 0xc6, 0x35, 0xf4, 0x6e, 0xaf, 0xef, 0xc2, 0xf6, 0x68, 0xea, 0x5e, 0x9c, 0xdb, 0xd6, 0x78,
+	0x76, 0x72, 0x3e, 0xf9, 0x60, 0x1d, 0xeb, 0xff, 0xa1, 0x82, 0x3d, 0x0c, 0x8e, 0xac, 0x93, 0xc9,
+	0xb9, 0xde, 0x22, 0xff, 0x83, 0x8a, 0xde, 0x78, 0x76, 0x76, 0x36, 0x99, 0xeb, 0x6d, 0xb2, 0x0d,
+	0x1a, 0xba, 0xf6, 0x6c, 0x3a, 0x1d, 0xbd, 0x19, 0x9f, 0xea, 0x0a, 0x01, 0xe8, 0x62, 0xe0, 0xf8,
+	0x6c, 0xaa, 0x77, 0x2a, 0xfb, 0x78, 0xaa, 0x6f, 0x94, 0xb6, 0x63, 0xcd, 0xf5, 0xae, 0xf1, 0xad,
+	0x0d, 0x9a, 0x23, 0x52, 0x46, 0x43, 0x6b, 0x99, 0x33, 0x37, 0xef, 0x30, 0x3f, 0xa8, 0xb7, 0x5d,
+	0x83, 0xae, 0x98, 0x62, 0x42, 0x41, 0x2f, 0x03, 0xe6, 0x46, 0x34, 0x64, 0x92, 0xac, 0x4a, 0x8e,
+	0x80, 0x24, 0xa9, 0x1f, 0xd2, 0x34, 0x73, 0xbf, 0xb0, 0xcc, 0xfd, 0xe4, 0xb3, 0x60, 0xc1, 0x91,
+	0x66, 0x3e, 0xbf, 0xad, 0x61, 0xb1, 0x40, 0x6f, 0xf3, 0x20, 0x79, 0xb2, 0x8e, 0x5c, 0xd2, 0xe0,
+	0x86, 0xf1, 0x41, 0x47, 0x22, 0xa1, 0x44, 0xda, 0xf1, 0xd7, 0x4a, 0xa9, 0x0d, 0x99, 0x7e, 0x6d,
+	0xb2, 0xdd, 0x86, 0xc9, 0x6e, 0x4a, 0x51, 0x5f, 0xd5, 0x44, 0x45, 0xe6, 0x8e, 0xe5, 0x5a, 0xb6,
+	0x8d, 0x5a, 0x16, 0x76, 0xae, 0x4e, 0xab, 0xb2, 0x51, 0x9d, 0x76, 0x69, 0xbf, 0x9b, 0x39, 0xba,
+	0x62, 0x1c, 0xc2, 0x6e, 0xc1, 0xf8, 0x22, 0x41, 0xfa, 0xcc, 0x66, 0xd8, 0x0e, 0x17, 0x44, 0x87,
+	0x5e, 0x12, 0x73, 0x3f, 0xaf, 0x23, 0x45, 0x52, 0x0d, 0x0b, 0xee, 0xad, 0x03, 0x79, 0x12, 0x47,
+	0x9c, 0x91, 0xa7, 0xb0, 0xc5, 0x65, 0xdc, 0x65, 0xcb, 0xea, 0x21, 0x68, 0xe6, 0x83, 0x06, 0x49,
+	0x8d, 0xef, 0x2d, 0xb8, 0x5f, 0xf8, 0xa7, 0x2c, 0xb3, 0x69, 0x74, 0xd5, 0x5c, 0x12, 0x27, 0xa5,
+	0xa3, 0x5e, 0x3c, 0xa1, 0x1e, 0x43, 0xb2, 0xae, 0xc8, 0x92, 0x42, 0xfb, 0xbe, 0x39, 0x18, 0xde,
+	0xbe, 0xc9, 0xd3, 0x12, 0x31, 0x59, 0xcc, 0xf1, 0x9c, 0x3c, 0x06, 0x35, 0xd7, 0x38, 0xcd, 0x33,
+	0xcb, 0x9d, 0xd3, 0x4c, 0xb2, 0x06, 0x96, 0x35, 0xeb, 0xab, 0xdb, 0x69, 0x5c, 0x5d, 0xc3, 0x81,
+	0xbd, 0xdf, 0x7b, 0x2d, 0x59, 0xbf, 0x04, 0x52, 0xe0, 0xdd, 0xda, 0x44, 0x4a, 0xee, 0x0f, 0xff,
+	0xf8, 0x90, 0x8c, 0x8f, 0x95, 0xe2, 0xf3, 0x7c, 0xa3, 0x78, 0x33, 0x7d, 0xfc, 0x3e, 0xe4, 0xd2,
+	0x71, 0x24, 0xad, 0xa0, 0x5f, 0xeb, 0x59, 0x69, 0xee, 0xf9, 0x7d, 0x35, 0xa7, 0x2a, 0xfd, 0x3f,
+	0x77, 0x7c, 0xd9, 0x95, 0xff, 0xde, 0xf3, 0x5f, 0x01, 0x00, 0x00, 0xff, 0xff, 0x43, 0x12, 0x44,
+	0x10, 0x34, 0x05, 0x00, 0x00,
 }

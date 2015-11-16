@@ -6,9 +6,9 @@ package schemamanager
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
@@ -55,32 +55,32 @@ func (controller *PlainController) Keyspace() string {
 // OnReadSuccess is called when schemamanager successfully
 // reads all sql statements.
 func (controller *PlainController) OnReadSuccess(ctx context.Context) error {
-	fmt.Println("Successfully read all schema changes.")
+	log.Info("Successfully read all schema changes.")
 	return nil
 }
 
 // OnReadFail is called when schemamanager fails to read all sql statements.
 func (controller *PlainController) OnReadFail(ctx context.Context, err error) error {
-	fmt.Printf("Failed to read schema changes, error: %v\n", err)
+	log.Errorf("Failed to read schema changes, error: %v\n", err)
 	return err
 }
 
 // OnValidationSuccess is called when schemamanager successfully validates all sql statements.
 func (controller *PlainController) OnValidationSuccess(ctx context.Context) error {
-	fmt.Println("Successfully validate all sqls.")
+	log.Info("Successfully validate all sqls.")
 	return nil
 }
 
 // OnValidationFail is called when schemamanager fails to validate sql statements.
 func (controller *PlainController) OnValidationFail(ctx context.Context, err error) error {
-	fmt.Printf("Failed to validate sqls, error: %v\n", err)
+	log.Errorf("Failed to validate sqls, error: %v\n", err)
 	return err
 }
 
 // OnExecutorComplete  is called when schemamanager finishes applying schema changes.
 func (controller *PlainController) OnExecutorComplete(ctx context.Context, result *ExecuteResult) error {
 	out, _ := json.MarshalIndent(result, "", "  ")
-	fmt.Printf("Executor finished, result: %s\n", string(out))
+	log.Infof("Executor finished, result: %s\n", string(out))
 	return nil
 }
 
