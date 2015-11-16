@@ -2,7 +2,6 @@
 
 import struct
 import unittest
-import utils
 
 from vtdb import dbexceptions
 from vtdb import keyrange
@@ -157,4 +156,4 @@ class TestKeyRange(unittest.TestCase):
     self.assertEqual(bind_vars, {})
 
 if __name__ == '__main__':
-  utils.main()
+  unittest.main()
