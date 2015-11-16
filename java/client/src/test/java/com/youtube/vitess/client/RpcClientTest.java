@@ -103,7 +103,7 @@ public abstract class RpcClientTest {
           .put("bytes", new byte[] {1, 2, 3})
           .build();
   private static final String BIND_VARS_ECHO = "map[bytes:[1 2 3] float:2.5 int:123]";
-  private static final String BIND_VARS_ECHO_P3 = "<map[bytes:[type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.5\"  int:type:INT64 value:\"123\" ]]>";
+  private static final String BIND_VARS_ECHO_P3 = "map[bytes:type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.5\"  int:type:INT64 value:\"123\" ]";
 
   private static final String SESSION_ECHO = "in_transaction:true ";
 
