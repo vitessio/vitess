@@ -125,7 +125,7 @@ func (wi *Instance) InstallSignalHandlers() {
 		if wi.currentCancelFunc != nil {
 			wi.currentCancelFunc()
 		} else {
-			fmt.Printf("Shutting down idle worker after receiving signal: %v", s)
+			log.Infof("Shutting down idle worker after receiving signal: %v", s)
 			os.Exit(0)
 		}
 	}()
