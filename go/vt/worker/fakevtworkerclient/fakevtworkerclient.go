@@ -8,10 +8,12 @@ package fakevtworkerclient
 import (
 	"time"
 
-	"github.com/youtube/vitess/go/vt/logutil"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/vtctl/fakevtctlclient"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
-	"golang.org/x/net/context"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
 // FakeVtworkerClient is a fake which implements the vtworkerclient interface.
@@ -32,7 +34,7 @@ func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string, dialTimeout 
 }
 
 // ExecuteVtworkerCommand is part of the vtworkerclient interface.
-func (f *FakeVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtworkerclient.ErrFunc, error) {
+func (f *FakeVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutilpb.Event, vtworkerclient.ErrFunc, error) {
 	return f.FakeLoggerEventStreamingClient.StreamResult(args)
 }
 

@@ -451,7 +451,7 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 				// has been broken. We'll just keep trying
 				// to send.
 				stream.Send(&tabletmanagerdatapb.BackupResponse{
-					Event: logutil.LoggerEventToProto(&e),
+					Event: e,
 				})
 
 			}

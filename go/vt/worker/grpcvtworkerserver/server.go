@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/worker"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	pb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
 	pbs "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
@@ -53,16 +52,7 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandR
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
 			stream.Send(&pb.ExecuteVtworkerCommandResponse{
-				Event: &logutilpb.Event{
-					Time: &logutilpb.Time{
-						Seconds:     e.Time.Unix(),
-						Nanoseconds: int32(e.Time.Nanosecond()),
-					},
-					Level: logutilpb.Level(e.Level),
-					File:  e.File,
-					Line:  int64(e.Line),
-					Value: e.Value,
-				},
+				Event: e,
 			})
 		}
 		wg.Done()

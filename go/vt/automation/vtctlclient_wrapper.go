@@ -13,9 +13,12 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
-// ExecuteVtctl runs vtctl using vtctlclient. The stream of LoggerEvent messages is concatenated into one output string.
+// ExecuteVtctl runs vtctl using vtctlclient. The stream of Event
+// messages is concatenated into one output string.
 func ExecuteVtctl(ctx context.Context, server string, args []string) (string, error) {
 	var output bytes.Buffer
 
@@ -33,9 +36,9 @@ func ExecuteVtctl(ctx context.Context, server string, args []string) (string, er
 // CreateLoggerEventToBufferFunction returns a function to add LoggerEvent
 // structs to a given buffer, one line per event.
 // The buffer can be used to return a multi-line string with all events.
-func CreateLoggerEventToBufferFunction(output *bytes.Buffer) func(*logutil.LoggerEvent) {
-	return func(e *logutil.LoggerEvent) {
-		e.ToBuffer(output)
+func CreateLoggerEventToBufferFunction(output *bytes.Buffer) func(*logutilpb.Event) {
+	return func(e *logutilpb.Event) {
+		logutil.EventToBuffer(e, output)
 		output.WriteRune('\n')
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -79,7 +80,7 @@ func logStuff(logger logutil.Logger, count int) {
 	}
 }
 
-func compareLoggedStuff(t *testing.T, name string, logChannel <-chan *logutil.LoggerEvent, count int) {
+func compareLoggedStuff(t *testing.T, name string, logChannel <-chan *logutilpb.Event, count int) {
 	for i := 0; i < count; i++ {
 		le, ok := <-logChannel
 		if !ok {

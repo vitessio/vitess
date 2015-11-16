@@ -9,18 +9,18 @@ import (
 	"io"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/youtube/vitess/go/vt/proto/vtctldata"
-	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	vtctldatapb "github.com/youtube/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "github.com/youtube/vitess/go/vt/proto/vtctlservice"
 )
 
 type gRPCVtctlClient struct {
 	cc *grpc.ClientConn
-	c  pbs.VtctlClient
+	c  vtctlservicepb.VtctlClient
 }
 
 func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
@@ -29,7 +29,7 @@ func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient
 	if err != nil {
 		return nil, err
 	}
-	c := pbs.NewVtctlClient(cc)
+	c := vtctlservicepb.NewVtctlClient(cc)
 
 	return &gRPCVtctlClient{
 		cc: cc,
@@ -38,8 +38,8 @@ func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient
 }
 
 // ExecuteVtctlCommand is part of the VtctlClient interface
-func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc, error) {
-	query := &pb.ExecuteVtctlCommandRequest{
+func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (<-chan *logutilpb.Event, vtctlclient.ErrFunc, error) {
+	query := &vtctldatapb.ExecuteVtctlCommandRequest{
 		Args:          args,
 		ActionTimeout: int64(actionTimeout.Nanoseconds()),
 	}
@@ -49,7 +49,7 @@ func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []s
 		return nil, nil, err
 	}
 
-	results := make(chan *logutil.LoggerEvent, 1)
+	results := make(chan *logutilpb.Event, 1)
 	var finalError error
 	go func() {
 		for {
@@ -61,7 +61,7 @@ func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []s
 				close(results)
 				return
 			}
-			results <- logutil.ProtoToLoggerEvent(le.Event)
+			results <- le.Event
 		}
 	}()
 	return results, func() error {
