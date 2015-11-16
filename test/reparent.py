@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-import warnings
-
 import logging
 import time
 import unittest
@@ -12,11 +10,7 @@ import environment
 import utils
 import tablet
 from mysql_flavor import mysql_flavor
-from protocols_flavor import protocols_flavor
 
-# Dropping a table inexplicably produces a warning despite
-# the 'IF EXISTS' clause. Squelch these warnings.
-warnings.simplefilter('ignore')
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)

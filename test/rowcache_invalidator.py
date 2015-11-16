@@ -49,8 +49,6 @@ def setUpModule():
     master_tablet.populate('vt_test_keyspace', create_vt_insert_test)
     replica_tablet.populate('vt_test_keyspace', create_vt_insert_test)
 
-    utils.VtGate().start()
-
     master_tablet.start_vttablet(memcache=True, wait_for_state=None)
     replica_tablet.start_vttablet(memcache=True, wait_for_state=None)
     master_tablet.wait_for_vttablet_state('SERVING')

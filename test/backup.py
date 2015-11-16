@@ -1,17 +1,11 @@
 #!/usr/bin/env python
 
-import warnings
-
 import logging
 import unittest
 
 import environment
 import tablet
 import utils
-
-# Dropping a table inexplicably produces a warning despite
-# the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter('ignore')
 
 use_mysqlctld = True
 
@@ -32,7 +26,7 @@ def setUpModule():
         tablet_master.init_mysql(),
         tablet_replica1.init_mysql(),
         tablet_replica2.init_mysql(),
-        ]
+    ]
     if use_mysqlctld:
       tablet_master.wait_for_mysqlctl_socket()
       tablet_replica1.wait_for_mysqlctl_socket()
@@ -58,7 +52,7 @@ def tearDownModule():
         tablet_master.teardown_mysql(),
         tablet_replica1.teardown_mysql(),
         tablet_replica2.teardown_mysql(),
-        ]
+    ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()

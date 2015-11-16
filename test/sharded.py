@@ -111,9 +111,6 @@ class TestSharded(unittest.TestCase):
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       utils.run_vtctl(['ReloadSchema', t.tablet_alias])
 
-    # start vtgate, we'll use it later
-    utils.VtGate().start()
-
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       t.reset_replication()
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
@@ -187,7 +184,6 @@ class TestSharded(unittest.TestCase):
                                 expect_fail=True)
     self.assertIn('fatal: Shard mismatch, expecting -80, received -90', stderr)
 
-    utils.vtgate.kill()
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
                          shard_1_replica])
 
