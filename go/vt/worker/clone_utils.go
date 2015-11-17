@@ -308,16 +308,14 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	maxValue := qr.Rows[0].Values[l0 : l0+l1]
 	switch {
 	case sqltypes.IsSigned(qr.Fields[0].Type):
-		minNumeric := sqltypes.MakeNumeric(minValue)
-		maxNumeric := sqltypes.MakeNumeric(maxValue)
-		min, err := minNumeric.ParseInt64()
+		min, err := strconv.ParseInt(string(minValue), 10, 64)
 		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, string(minValue), err)
 			return result, nil
 		}
-		max, err := maxNumeric.ParseInt64()
+		max, err := strconv.ParseInt(string(maxValue), 10, 64)
 		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, maxNumeric, err)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, string(maxValue), err)
 			return result, nil
 		}
 		interval := (max - min) / int64(sourceReaderCount)
@@ -335,16 +333,14 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 		return result, nil
 
 	case sqltypes.IsUnsigned(qr.Fields[0].Type):
-		minNumeric := sqltypes.MakeNumeric(minValue)
-		maxNumeric := sqltypes.MakeNumeric(maxValue)
-		min, err := minNumeric.ParseUint64()
+		min, err := strconv.ParseUint(string(minValue), 10, 64)
 		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, string(minValue), err)
 			return result, nil
 		}
-		max, err := maxNumeric.ParseUint64()
+		max, err := strconv.ParseUint(string(maxValue), 10, 64)
 		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, maxNumeric, err)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, string(maxValue), err)
 			return result, nil
 		}
 		interval := (max - min) / uint64(sourceReaderCount)
@@ -427,15 +423,6 @@ func makeValueString(fields []*querypb.Field, rows [][]sqltypes.Value) string {
 		for j, value := range row {
 			if j > 0 {
 				buf.WriteByte(',')
-			}
-			// convert value back to its original type
-			if !value.IsNull() {
-				switch {
-				case sqltypes.IsIntegral(fields[j].Type):
-					value = sqltypes.MakeNumeric(value.Raw())
-				case sqltypes.IsFloat(fields[j].Type):
-					value = sqltypes.MakeFractional(value.Raw())
-				}
 			}
 			value.EncodeSQL(&buf)
 		}

@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
@@ -99,6 +100,9 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, sessionFromRPC(result.Session), err
 	}
+	if result.Result != nil {
+		result.Result.Repair(result.Result.Fields)
+	}
 	return result.Result, sessionFromRPC(result.Session), nil
 }
 
@@ -120,6 +124,9 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, sessionFromRPC(result.Session), err
+	}
+	if result.Result != nil {
+		result.Result.Repair(result.Result.Fields)
 	}
 	return result.Result, sessionFromRPC(result.Session), nil
 }
@@ -143,6 +150,9 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, sessionFromRPC(result.Session), err
 	}
+	if result.Result != nil {
+		result.Result.Repair(result.Result.Fields)
+	}
 	return result.Result, sessionFromRPC(result.Session), nil
 }
 
@@ -164,6 +174,9 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, sessionFromRPC(result.Session), err
+	}
+	if result.Result != nil {
+		result.Result.Repair(result.Result.Fields)
 	}
 	return result.Result, sessionFromRPC(result.Session), nil
 }
@@ -188,6 +201,9 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, sessionFromRPC(result.Session), err
 	}
+	if result.Result != nil {
+		result.Result.Repair(result.Result.Fields)
+	}
 	return result.Result, sessionFromRPC(result.Session), nil
 }
 
@@ -207,6 +223,9 @@ func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []proto.
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, sessionFromRPC(result.Session), err
 	}
+	for _, r := range result.List {
+		r.Repair(r.Fields)
+	}
 	return result.List, sessionFromRPC(result.Session), nil
 }
 
@@ -225,6 +244,9 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 	}
 	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, sessionFromRPC(result.Session), err
+	}
+	for _, r := range result.List {
+		r.Repair(r.Fields)
 	}
 	return result.List, sessionFromRPC(result.Session), nil
 }
@@ -350,11 +372,16 @@ func sendStreamResults(c *rpcplus.Call, sr chan *proto.QueryResult) (<-chan *sql
 	var vtErr error
 	go func() {
 		defer close(srout)
+		var fields []*querypb.Field
 		for r := range sr {
 			vtErr = vterrors.FromRPCError(r.Err)
 			// If we get a QueryResult with an RPCError, that was an extra QueryResult sent by
 			// the server specifically to indicate an error, and we shouldn't surface it to clients.
 			if vtErr == nil {
+				if fields == nil {
+					fields = r.Result.Fields
+				}
+				r.Result.Repair(fields)
 				srout <- r.Result
 			}
 		}

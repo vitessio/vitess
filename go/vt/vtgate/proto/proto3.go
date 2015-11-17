@@ -5,6 +5,7 @@
 package proto
 
 import (
+	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/vtgate"
@@ -37,12 +38,12 @@ func ProtoToEntityIds(l []*pb.ExecuteEntityIdsRequest_EntityId) []EntityId {
 	}
 	result := make([]EntityId, len(l))
 	for i, e := range l {
-		result[i].KeyspaceID = e.KeyspaceId
-		v, err := tproto.SQLToNative(e.XidType, e.XidValue)
+		v, err := sqltypes.ValueFromBytes(e.XidType, e.XidValue)
 		if err != nil {
 			panic(err)
 		}
-		result[i].ExternalID = v
+		result[i].KeyspaceID = e.KeyspaceId
+		result[i].ExternalID = v.ToNative()
 	}
 	return result
 }

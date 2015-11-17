@@ -13,7 +13,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -272,14 +271,8 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // TODO: This can panic if types for left and right don't match.
 func CompareRows(fields []*querypb.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
-		lv, err := mproto.Convert(fields[i], left[i])
-		if err != nil {
-			return 0, err
-		}
-		rv, err := mproto.Convert(fields[i], right[i])
-		if err != nil {
-			return 0, err
-		}
+		lv := left[i].ToNative()
+		rv := right[i].ToNative()
 		switch l := lv.(type) {
 		case int64:
 			r := rv.(int64)

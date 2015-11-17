@@ -40,10 +40,10 @@ func TestBatchRead(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeNumeric([]byte("2")),
-				sqltypes.MakeString([]byte("bcde")),
-				sqltypes.MakeString([]byte("fghi")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("bcde")),
+				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("fghi")),
 			},
 		},
 	}
@@ -58,8 +58,8 @@ func TestBatchRead(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeNumeric([]byte("2")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
 			},
 		},
 	}
@@ -89,7 +89,7 @@ func TestBatchTransaction(t *testing.T) {
 
 	wantRows := [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.MakeNumeric([]byte("4")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 			sqltypes.Value{},
 			sqltypes.Value{},
 			sqltypes.Value{},

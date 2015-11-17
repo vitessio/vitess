@@ -187,13 +187,13 @@ class RowCacheInvalidator(unittest.TestCase):
     self._exec_vt_txn(
         "insert into vt_insert_test (id, msg) values (1000000, 'start')")
     self._wait_for_replica()
-    self._wait_for_value([['1000000', 'start']])
+    self._wait_for_value([[1000000, 'start']])
     utils.mysql_write_query(
         master_tablet.tablet_uid,
         'vt_test_keyspace',
         "update vt_insert_test set msg = 'foo' where id = 1000000")
     self._wait_for_replica()
-    self._wait_for_value([['1000000', 'foo']])
+    self._wait_for_value([[1000000, 'foo']])
     end1 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(start, end1)
 
@@ -202,7 +202,7 @@ class RowCacheInvalidator(unittest.TestCase):
                             'vt_test_keyspace',
                             'delete from vt_insert_test where id = 1000000')
     self._wait_for_replica()
-    self._wait_for_value([])
+    self._wait_for_value(None)
     end2 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(end1, end2)
 
@@ -212,7 +212,7 @@ class RowCacheInvalidator(unittest.TestCase):
         'vt_test_keyspace',
         "insert into vt_insert_test (id, msg) values(1000000, 'bar')")
     self._wait_for_replica()
-    self._wait_for_value([['1000000', 'bar']])
+    self._wait_for_value([[1000000, 'bar']])
     end3 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(end2, end3)
 

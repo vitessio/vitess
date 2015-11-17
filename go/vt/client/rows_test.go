@@ -39,18 +39,18 @@ var rowsResult1 = sqltypes.Result{
 	InsertID:     0,
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("1")),
-			sqltypes.MakeString([]byte("1.1")),
-			sqltypes.MakeString([]byte("value1")),
-			sqltypes.MakeString([]byte("2147483647")),          // 2^31-1, NOT out of range for int32 => should become int64
-			sqltypes.MakeString([]byte("9223372036854775807")), // 2^63-1, NOT out of range for int64
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Float32, []byte("1.1")),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("value1")),
+			sqltypes.MakeTrusted(sqltypes.Uint32, []byte("2147483647")),          // 2^31-1, NOT out of range for int32 => should become int64
+			sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775807")), // 2^63-1, NOT out of range for int64
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("2")),
-			sqltypes.MakeString([]byte("2.2")),
-			sqltypes.MakeString([]byte("value2")),
-			sqltypes.MakeString([]byte("4294967295")),           // 2^32, out of range for int32 => should become int64
-			sqltypes.MakeString([]byte("18446744073709551615")), // 2^64, out of range for int64
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.2")),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("value2")),
+			sqltypes.MakeTrusted(sqltypes.Uint32, []byte("4294967295")),           // 2^32, out of range for int32 => should become int64
+			sqltypes.MakeTrusted(sqltypes.Uint64, []byte("18446744073709551615")), // 2^64, out of range for int64
 		},
 	},
 }
@@ -120,53 +120,4 @@ func TestRows(t *testing.T) {
 	}
 
 	_ = ri.Close()
-}
-
-var badResult1 = sqltypes.Result{
-	Fields: []*querypb.Field{
-		&querypb.Field{},
-	},
-	Rows: [][]sqltypes.Value{
-		[]sqltypes.Value{},
-	},
-}
-
-var badResult2 = sqltypes.Result{
-	Fields: []*querypb.Field{
-		&querypb.Field{
-			Name: "field1",
-			Type: sqltypes.Int32,
-		},
-	},
-	Rows: [][]sqltypes.Value{
-		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("value")),
-		},
-	},
-}
-
-func TestRowsFail(t *testing.T) {
-	ri := newRows(&badResult1)
-	var dest []driver.Value
-	err := ri.Next(dest)
-	want := "length mismatch: dest is 0, fields are 1"
-	if err == nil || err.Error() != want {
-		t.Errorf("Next: %v, want %s", err, want)
-	}
-
-	ri = newRows(&badResult1)
-	dest = make([]driver.Value, 1)
-	err = ri.Next(dest)
-	want = "internal error: length mismatch: dest is 1, fields are 0"
-	if err == nil || err.Error() != want {
-		t.Errorf("Next: %v, want %s", err, want)
-	}
-
-	ri = newRows(&badResult2)
-	dest = make([]driver.Value, 1)
-	err = ri.Next(dest)
-	want = `conversion error: field: name:"field1" type:INT32 , val: value: strconv.ParseInt: parsing "value": invalid syntax`
-	if err == nil || err.Error() != want {
-		t.Errorf("Next:\n%v, want\n%s", err, want)
-	}
 }
