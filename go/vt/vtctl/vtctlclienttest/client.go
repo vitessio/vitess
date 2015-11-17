@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
@@ -64,7 +65,7 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	count := 0
 	for e := range logs {
 		expected := "cell1-0000000001 test_keyspace <null> master localhost:3333 localhost:3334 [tag: \"value\"]\n"
-		if e.String() != expected {
+		if logutil.EventString(e) != expected {
 			t.Errorf("Got unexpected log line '%v' expected '%v'", e.String(), expected)
 		}
 		count++

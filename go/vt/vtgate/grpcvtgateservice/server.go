@@ -183,12 +183,8 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBa
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
 	reply := new(proto.QueryResultList)
-	bsq, err := proto.ProtoToBoundShardQueries(request.Queries)
-	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
-	}
 	executeErr := vtg.server.ExecuteBatchShards(ctx,
-		bsq,
+		request.Queries,
 		request.TabletType,
 		request.AsTransaction,
 		request.Session,
@@ -212,12 +208,8 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.Exec
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
 	reply := new(proto.QueryResultList)
-	bq, err := proto.ProtoToBoundKeyspaceIdQueries(request.Queries)
-	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
-	}
 	executeErr := vtg.server.ExecuteBatchKeyspaceIds(ctx,
-		bq,
+		request.Queries,
 		request.TabletType,
 		request.AsTransaction,
 		request.Session,

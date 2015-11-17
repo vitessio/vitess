@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
 // FakeLoggerEventStreamingClient is the base for the fakes for the vtctlclient and vtworkerclient.
@@ -50,19 +52,19 @@ func (f *FakeLoggerEventStreamingClient) RegisterResult(args []string, output st
 }
 
 // StreamResult returns a channel which streams back a registered result as logging events.
-func (f *FakeLoggerEventStreamingClient) StreamResult(args []string) (<-chan *logutil.LoggerEvent, func() error, error) {
+func (f *FakeLoggerEventStreamingClient) StreamResult(args []string) (<-chan *logutilpb.Event, func() error, error) {
 	result, ok := f.results[fromSlice(args)]
 	if !ok {
 		return nil, nil, fmt.Errorf("No response was registered for args: %v", args)
 	}
 
-	stream := make(chan *logutil.LoggerEvent)
+	stream := make(chan *logutilpb.Event)
 	go func() {
 		// Each line of the multi-line string "output" is streamed as console text.
 		for _, line := range strings.Split(result.output, "\n") {
-			stream <- &logutil.LoggerEvent{
-				Time:  time.Now(),
-				Level: logutil.LOGGER_CONSOLE,
+			stream <- &logutilpb.Event{
+				Time:  logutil.TimeToProto(time.Now()),
+				Level: logutilpb.Level_CONSOLE,
 				File:  "fakevtctlclient",
 				Line:  -1,
 				Value: line,

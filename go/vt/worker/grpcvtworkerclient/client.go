@@ -9,18 +9,18 @@ import (
 	"io"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
-	pbs "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	vtworkerdatapb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
+	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
 
 type gRPCVtworkerClient struct {
 	cc *grpc.ClientConn
-	c  pbs.VtworkerClient
+	c  vtworkerservicepb.VtworkerClient
 }
 
 func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.VtworkerClient, error) {
@@ -29,7 +29,7 @@ func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworker
 	if err != nil {
 		return nil, err
 	}
-	c := pbs.NewVtworkerClient(cc)
+	c := vtworkerservicepb.NewVtworkerClient(cc)
 
 	return &gRPCVtworkerClient{
 		cc: cc,
@@ -38,8 +38,8 @@ func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworker
 }
 
 // ExecuteVtworkerCommand is part of the VtworkerClient interface.
-func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtworkerclient.ErrFunc, error) {
-	query := &pb.ExecuteVtworkerCommandRequest{
+func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutilpb.Event, vtworkerclient.ErrFunc, error) {
+	query := &vtworkerdatapb.ExecuteVtworkerCommandRequest{
 		Args: args,
 	}
 
@@ -48,7 +48,7 @@ func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, ar
 		return nil, nil, err
 	}
 
-	results := make(chan *logutil.LoggerEvent, 1)
+	results := make(chan *logutilpb.Event, 1)
 	var finalError error
 	go func() {
 		for {
@@ -60,13 +60,7 @@ func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, ar
 				close(results)
 				return
 			}
-			results <- &logutil.LoggerEvent{
-				Time:  time.Unix(le.Event.Time.Seconds, int64(le.Event.Time.Nanoseconds)),
-				Level: int(le.Event.Level),
-				File:  le.Event.File,
-				Line:  int(le.Event.Line),
-				Value: le.Event.Value,
-			}
+			results <- le.Event
 		}
 	}()
 	return results, func() error {

@@ -106,7 +106,7 @@ class TestVtctld(unittest.TestCase):
 
   def _check_all_tablets(self, result):
     lines = result.splitlines()
-    self.assertEqual(len(lines), len(tablets))
+    self.assertEqual(len(lines), len(tablets), 'got lines:\n%s' % lines)
     line_map = {}
     for line in lines:
       parts = line.split()

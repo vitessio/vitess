@@ -15,19 +15,7 @@ import (
 // SetSourceShards is a utility function to override the SourceShards fields
 // on a Shard.
 func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string, sources []*topodatapb.TabletAlias, tables []string) error {
-	// read the shard
-	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-
-	// If the shard already has sources, maybe it's already been restored,
-	// so let's be safe and abort right here.
-	if len(shardInfo.SourceShards) > 0 {
-		return fmt.Errorf("Shard %v/%v already has SourceShards, not overwriting them", keyspace, shard)
-	}
-
-	// read the source tablets
+	// Read the source tablets.
 	sourceTablets, err := wr.ts.GetTabletMap(ctx, sources)
 	if err != nil {
 		return err
@@ -36,10 +24,10 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 	// Insert their KeyRange in the SourceShards array.
 	// We use a linear 0-based id, that matches what mysqlctld/split.go
 	// inserts into _vt.blp_checkpoint.
-	shardInfo.SourceShards = make([]*topodatapb.Shard_SourceShard, len(sourceTablets))
+	sourceShards := make([]*topodatapb.Shard_SourceShard, len(sourceTablets))
 	i := 0
 	for _, ti := range sourceTablets {
-		shardInfo.SourceShards[i] = &topodatapb.Shard_SourceShard{
+		sourceShards[i] = &topodatapb.Shard_SourceShard{
 			Uid:      uint32(i),
 			Keyspace: ti.Keyspace,
 			Shard:    ti.Shard,
@@ -49,10 +37,16 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 		i++
 	}
 
-	// and write the shard
-	if err = wr.ts.UpdateShard(ctx, shardInfo); err != nil {
-		return err
-	}
+	// Update the shard with the new source shards.
+	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
+		// If the shard already has sources, maybe it's already been restored,
+		// so let's be safe and abort right here.
+		if len(s.SourceShards) > 0 {
+			return fmt.Errorf("Shard %v/%v already has SourceShards, not overwriting them (full record: %v)", keyspace, shard, s)
+		}
 
-	return nil
+		s.SourceShards = sourceShards
+		return nil
+	})
+	return err
 }

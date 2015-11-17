@@ -14,10 +14,10 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	gproto "github.com/youtube/vitess/go/vt/vtgate/proto"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 var (
@@ -40,18 +40,18 @@ var (
 	}
 	keyRangesEcho = "[start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\" ]"
 
-	entityKeyspaceIDs = []*pbg.ExecuteEntityIdsRequest_EntityId{
-		&pbg.ExecuteEntityIdsRequest_EntityId{
+	entityKeyspaceIDs = []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+		&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 			KeyspaceId: []byte{1, 2, 3},
 			XidType:    sqltypes.Int64,
 			XidValue:   []byte("123"),
 		},
-		&pbg.ExecuteEntityIdsRequest_EntityId{
+		&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 			KeyspaceId: []byte{4, 5, 6},
 			XidType:    sqltypes.Float64,
 			XidValue:   []byte("2"),
 		},
-		&pbg.ExecuteEntityIdsRequest_EntityId{
+		&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 			KeyspaceId: []byte{7, 8, 9},
 			XidType:    sqltypes.VarBinary,
 			XidValue:   []byte{1, 2, 3},
@@ -68,6 +68,21 @@ var (
 		"bytes": []byte{1, 2, 3},
 	}
 	bindVarsEcho = "map[bytes:[1 2 3] float:2 int:123]"
+	bindVarsP3   = map[string]*querypb.BindVariable{
+		"int": {
+			Type:  querypb.Type_INT64,
+			Value: []byte{'1', '2', '3'},
+		},
+		"float": {
+			Type:  querypb.Type_FLOAT64,
+			Value: []byte{'2', '.', '1'},
+		},
+		"bytes": {
+			Type:  querypb.Type_VARBINARY,
+			Value: []byte{1, 2, 3},
+		},
+	}
+	bindVarsP3Echo = "map[bytes:type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.1\"  int:type:INT64 value:\"123\" ]"
 
 	sessionEcho = "in_transaction:true "
 
@@ -140,12 +155,14 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	var qrs []sqltypes.Result
 
-	qrs, err = conn.ExecuteBatchShards(ctx, []gproto.BoundShardQuery{
-		gproto.BoundShardQuery{
-			Sql:           echoPrefix + query,
-			Keyspace:      keyspace,
-			Shards:        shards,
-			BindVariables: bindVars,
+	qrs, err = conn.ExecuteBatchShards(ctx, []*vtgatepb.BoundShardQuery{
+		{
+			Query: &querypb.BoundQuery{
+				Sql:           echoPrefix + query,
+				BindVariables: bindVarsP3,
+			},
+			Keyspace: keyspace,
+			Shards:   shards,
 		},
 	}, tabletType, true)
 	checkEcho(t, "ExecuteBatchShards", &qrs[0], err, map[string]string{
@@ -153,17 +170,19 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":         echoPrefix + query,
 		"keyspace":      keyspace,
 		"shards":        shardsEcho,
-		"bindVars":      bindVarsEcho,
+		"bindVars":      bindVarsP3Echo,
 		"tabletType":    tabletTypeEcho,
 		"asTransaction": "true",
 	})
 
-	qrs, err = conn.ExecuteBatchKeyspaceIds(ctx, []gproto.BoundKeyspaceIdQuery{
-		gproto.BoundKeyspaceIdQuery{
-			Sql:           echoPrefix + query,
-			Keyspace:      keyspace,
-			KeyspaceIds:   keyspaceIDs,
-			BindVariables: bindVars,
+	qrs, err = conn.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
+		{
+			Query: &querypb.BoundQuery{
+				Sql:           echoPrefix + query,
+				BindVariables: bindVarsP3,
+			},
+			Keyspace:    keyspace,
+			KeyspaceIds: keyspaceIDs,
 		},
 	}, tabletType, true)
 	checkEcho(t, "ExecuteBatchKeyspaceIds", &qrs[0], err, map[string]string{
@@ -171,7 +190,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":         echoPrefix + query,
 		"keyspace":      keyspace,
 		"keyspaceIds":   keyspaceIDsEcho,
-		"bindVars":      bindVarsEcho,
+		"bindVars":      bindVarsP3Echo,
 		"tabletType":    tabletTypeEcho,
 		"asTransaction": "true",
 	})
@@ -302,12 +321,14 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	var qrs []sqltypes.Result
 
-	qrs, err = tx.ExecuteBatchShards(ctx, []gproto.BoundShardQuery{
-		gproto.BoundShardQuery{
-			Sql:           echoPrefix + query,
-			Keyspace:      keyspace,
-			Shards:        shards,
-			BindVariables: bindVars,
+	qrs, err = tx.ExecuteBatchShards(ctx, []*vtgatepb.BoundShardQuery{
+		{
+			Query: &querypb.BoundQuery{
+				Sql:           echoPrefix + query,
+				BindVariables: bindVarsP3,
+			},
+			Keyspace: keyspace,
+			Shards:   shards,
 		},
 	}, tabletType, true)
 	checkEcho(t, "ExecuteBatchShards", &qrs[0], err, map[string]string{
@@ -315,18 +336,20 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":         echoPrefix + query,
 		"keyspace":      keyspace,
 		"shards":        shardsEcho,
-		"bindVars":      bindVarsEcho,
+		"bindVars":      bindVarsP3Echo,
 		"tabletType":    tabletTypeEcho,
 		"session":       sessionEcho,
 		"asTransaction": "true",
 	})
 
-	qrs, err = tx.ExecuteBatchKeyspaceIds(ctx, []gproto.BoundKeyspaceIdQuery{
-		gproto.BoundKeyspaceIdQuery{
-			Sql:           echoPrefix + query,
-			Keyspace:      keyspace,
-			KeyspaceIds:   keyspaceIDs,
-			BindVariables: bindVars,
+	qrs, err = tx.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
+		{
+			Query: &querypb.BoundQuery{
+				Sql:           echoPrefix + query,
+				BindVariables: bindVarsP3,
+			},
+			Keyspace:    keyspace,
+			KeyspaceIds: keyspaceIDs,
 		},
 	}, tabletType, true)
 	checkEcho(t, "ExecuteBatchKeyspaceIds", &qrs[0], err, map[string]string{
@@ -334,7 +357,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":         echoPrefix + query,
 		"keyspace":      keyspace,
 		"keyspaceIds":   keyspaceIDsEcho,
-		"bindVars":      bindVarsEcho,
+		"bindVars":      bindVarsP3Echo,
 		"tabletType":    tabletTypeEcho,
 		"session":       sessionEcho,
 		"asTransaction": "true",
@@ -346,9 +369,9 @@ func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Fatalf("BoundQueryToProto3 error: %v", err)
 	}
-	want := &pbg.SplitQueryResponse_Part{
+	want := &vtgatepb.SplitQueryResponse_Part{
 		Query:        q,
-		KeyRangePart: &pbg.SplitQueryResponse_KeyRangePart{Keyspace: keyspace},
+		KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{Keyspace: keyspace},
 	}
 	got, err := conn.SplitQuery(context.Background(), keyspace, echoPrefix+query, bindVars, "split_column", 123)
 	if err != nil {

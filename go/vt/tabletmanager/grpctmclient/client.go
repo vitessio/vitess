@@ -14,13 +14,13 @@ import (
 
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -628,13 +628,13 @@ func (client *Client) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo)
 //
 
 // Backup is part of the tmclient.TabletManagerClient interface
-func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutil.LoggerEvent, tmclient.ErrFunc, error) {
+func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutilpb.Event, tmclient.ErrFunc, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	logstream := make(chan *logutil.LoggerEvent, 10)
+	logstream := make(chan *logutilpb.Event, 10)
 	stream, err := c.Backup(ctx, &tabletmanagerdatapb.BackupRequest{
 		Concurrency: int64(concurrency),
 	})
@@ -654,7 +654,7 @@ func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concu
 				close(logstream)
 				return
 			}
-			logstream <- logutil.ProtoToLoggerEvent(br.Event)
+			logstream <- br.Event
 		}
 	}()
 	return logstream, func() error {
@@ -669,7 +669,7 @@ func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concu
 
 // IsTimeoutError is part of the tmclient.TabletManagerClient interface
 func (client *Client) IsTimeoutError(err error) bool {
-	if grpc.Code(err) == codes.DeadlineExceeded {
+	if err == grpc.ErrClientConnTimeout || grpc.Code(err) == codes.DeadlineExceeded {
 		return true
 	}
 	switch err.(type) {
