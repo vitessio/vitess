@@ -68,7 +68,6 @@ func requestToPartialError(request string, session *vtgatepb.Session, reply *pro
 	parts := strings.Split(request, "/")
 	rpcErr := vterrors.RPCErrFromVtError(trimmedRequestToError(parts[0]))
 	reply.Err = rpcErr
-	reply.Error = rpcErr.Message
 	reply.Session = session
 	if len(parts) > 1 && parts[1] == "close transaction" {
 		reply.Session.InTransaction = false
@@ -175,7 +174,6 @@ func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []*vtgatep
 		var partialReply proto.QueryResult
 		if requestToPartialError(queries[0].Query.Sql, session, &partialReply) {
 			reply.Err = partialReply.Err
-			reply.Error = partialReply.Error
 			reply.Session = partialReply.Session
 			return nil
 		}
@@ -191,7 +189,6 @@ func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vt
 		var partialReply proto.QueryResult
 		if requestToPartialError(queries[0].Query.Sql, session, &partialReply) {
 			reply.Err = partialReply.Err
-			reply.Error = partialReply.Error
 			reply.Session = partialReply.Session
 			return nil
 		}

@@ -85,10 +85,7 @@ type EntityIdsQuery struct {
 type QueryResult struct {
 	Result  *sqltypes.Result
 	Session *pb.Session
-	// Error field is deprecated, as it only returns a string. New users should use the
-	// Err field below, which contains a string and an error code.
-	Error string
-	Err   *mproto.RPCError
+	Err     *mproto.RPCError
 }
 
 // BoundShardQuery represents a single query request for the
@@ -133,10 +130,7 @@ type KeyspaceIdBatchQuery struct {
 type QueryResultList struct {
 	List    []sqltypes.Result
 	Session *pb.Session
-	// Error field is deprecated, as it only returns a string. New users should use the
-	// Err field below, which contains a string and an error code.
-	Error string
-	Err   *mproto.RPCError
+	Err     *mproto.RPCError
 }
 
 // SplitQueryRequest is a request to split a query into multiple parts
