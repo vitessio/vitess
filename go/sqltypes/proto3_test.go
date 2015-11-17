@@ -53,7 +53,7 @@ func TestResult(t *testing.T) {
 		t.Errorf("P3:\n%v, want\n%v", p3converted, p3Result)
 	}
 
-	reverse := Proto3ToResult(p3Result.Fields, p3Result)
+	reverse := Proto3ToResult(p3Result)
 	if !reflect.DeepEqual(reverse, sqlResult) {
 		t.Errorf("reverse:\n%#v, want\n%#v", reverse, sqlResult)
 	}
@@ -61,7 +61,7 @@ func TestResult(t *testing.T) {
 	// Test custom fields.
 	fields[1].Type = VarBinary
 	sqlResult.Rows[0][1] = testVal(VarBinary, "1")
-	reverse = Proto3ToResult(fields, p3Result)
+	reverse = CustomProto3ToResult(fields, p3Result)
 	if !reflect.DeepEqual(reverse, sqlResult) {
 		t.Errorf("reverse:\n%#v, want\n%#v", reverse, sqlResult)
 	}

@@ -105,7 +105,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
-	return sqltypes.Proto3ToResult(er.Result.Fields, er.Result), nil
+	return sqltypes.Proto3ToResult(er.Result), nil
 }
 
 // Execute2 is the same with Execute in gRPC, since Execute is already CallerID enabled
@@ -188,7 +188,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 			if fields == nil {
 				fields = ser.Result.Fields
 			}
-			sr <- sqltypes.Proto3ToResult(fields, ser.Result)
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {

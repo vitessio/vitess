@@ -69,9 +69,23 @@ func ResultToProto3(qr *Result) *querypb.QueryResult {
 }
 
 // Proto3ToResult converts a proto3 Result to an internal data structure. This function
+// should be used only if the field info is populated in qr.
+func Proto3ToResult(qr *querypb.QueryResult) *Result {
+	if qr == nil {
+		return nil
+	}
+	return &Result{
+		Fields:       qr.Fields,
+		RowsAffected: qr.RowsAffected,
+		InsertID:     qr.InsertId,
+		Rows:         proto3ToRows(qr.Fields, qr.Rows),
+	}
+}
+
+// CustomProto3ToResult converts a proto3 Result to an internal data structure. This function
 // takes a separate fields input because not all QueryResults contain the field info.
 // In particular, only the first packet of streaming queries contain the field info.
-func Proto3ToResult(fields []*querypb.Field, qr *querypb.QueryResult) *Result {
+func CustomProto3ToResult(fields []*querypb.Field, qr *querypb.QueryResult) *Result {
 	if qr == nil {
 		return nil
 	}
@@ -102,7 +116,7 @@ func Proto3ToResults(qr []*querypb.QueryResult) []Result {
 	}
 	result := make([]Result, len(qr))
 	for i, q := range qr {
-		result[i] = *Proto3ToResult(q.Fields, q)
+		result[i] = *Proto3ToResult(q)
 	}
 	return result
 }

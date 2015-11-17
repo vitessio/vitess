@@ -1,4 +1,4 @@
-// Copyright 2012, Google Inc. All rights reserved.
+// Copyright 2015, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -25,6 +25,36 @@ func (result *Result) Repair(fields []*querypb.Field) {
 			}
 		}
 	}
+}
+
+// Copy creates a deep copy of Result.
+func (result *Result) Copy() *Result {
+	out := &Result{
+		InsertID:     result.InsertID,
+		RowsAffected: result.RowsAffected,
+	}
+	if result.Fields != nil {
+		fieldsp := make([]*querypb.Field, len(result.Fields))
+		fields := make([]querypb.Field, len(result.Fields))
+		for i, f := range result.Fields {
+			fields[i] = *f
+			fieldsp[i] = &fields[i]
+		}
+		out.Fields = fieldsp
+	}
+	if result.Rows != nil {
+		rows := make([][]Value, len(result.Rows))
+		for i, r := range result.Rows {
+			rows[i] = make([]Value, len(r))
+			for j, c := range r {
+				bytes := make([]byte, len(c.val))
+				copy(bytes, c.val)
+				rows[i][j] = MakeTrusted(c.typ, bytes)
+			}
+		}
+		out.Rows = rows
+	}
+	return out
 }
 
 // MakeRowTrusted converts a *querypb.Row to []Value based on the types

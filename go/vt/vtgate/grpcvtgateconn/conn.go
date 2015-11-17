@@ -68,11 +68,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	if response.Error != nil {
 		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
-	var fields []*querypb.Field
-	if response.Result != nil {
-		fields = response.Result.Fields
-	}
-	return sqltypes.Proto3ToResult(fields, response.Result), response.Session, nil
+	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
 func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
@@ -100,11 +96,7 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 	if response.Error != nil {
 		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
-	var fields []*querypb.Field
-	if response.Result != nil {
-		fields = response.Result.Fields
-	}
-	return sqltypes.Proto3ToResult(fields, response.Result), response.Session, nil
+	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
 func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
@@ -132,11 +124,7 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	if response.Error != nil {
 		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
-	var fields []*querypb.Field
-	if response.Result != nil {
-		fields = response.Result.Fields
-	}
-	return sqltypes.Proto3ToResult(fields, response.Result), response.Session, nil
+	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
 func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
@@ -164,11 +152,7 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	if response.Error != nil {
 		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
-	var fields []*querypb.Field
-	if response.Result != nil {
-		fields = response.Result.Fields
-	}
-	return sqltypes.Proto3ToResult(fields, response.Result), response.Session, nil
+	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
 func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
@@ -197,11 +181,7 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	if response.Error != nil {
 		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
-	var fields []*querypb.Field
-	if response.Result != nil {
-		fields = response.Result.Fields
-	}
-	return sqltypes.Proto3ToResult(fields, response.Result), response.Session, nil
+	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
 func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
@@ -278,7 +258,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 			if fields == nil {
 				fields = ser.Result.Fields
 			}
-			sr <- sqltypes.Proto3ToResult(fields, ser.Result)
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -322,7 +302,7 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 			if fields == nil {
 				fields = ser.Result.Fields
 			}
-			sr <- sqltypes.Proto3ToResult(fields, ser.Result)
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -366,7 +346,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 			if fields == nil {
 				fields = ser.Result.Fields
 			}
-			sr <- sqltypes.Proto3ToResult(fields, ser.Result)
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -410,7 +390,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 			if fields == nil {
 				fields = ser.Result.Fields
 			}
-			sr <- sqltypes.Proto3ToResult(fields, ser.Result)
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
