@@ -1,6 +1,8 @@
 package discovery
 
 import (
+	"sync"
+
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 )
@@ -10,6 +12,7 @@ func newFakeHealthCheck() *fakeHealthCheck {
 }
 
 type fakeHealthCheck struct {
+	mu        sync.RWMutex
 	endPoints map[string]*topodatapb.EndPoint
 }
 
@@ -19,12 +22,16 @@ func (fhc *fakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
 
 // AddEndPoint adds the endpoint, and starts health check.
 func (fhc *fakeHealthCheck) AddEndPoint(cell, name string, endPoint *topodatapb.EndPoint) {
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
 	key := EndPointToMapKey(endPoint)
 	fhc.endPoints[key] = endPoint
 }
 
 // RemoveEndPoint removes the endpoint, and stops the health check.
 func (fhc *fakeHealthCheck) RemoveEndPoint(endPoint *topodatapb.EndPoint) {
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
 	key := EndPointToMapKey(endPoint)
 	delete(fhc.endPoints, key)
 }
@@ -47,4 +54,14 @@ func (fhc *fakeHealthCheck) GetConnection(endPoint *topodatapb.EndPoint) tabletc
 // CacheStatus returns a displayable version of the cache.
 func (fhc *fakeHealthCheck) CacheStatus() EndPointsCacheStatusList {
 	return nil
+}
+
+func (fhc *fakeHealthCheck) GetAllEndPoints() map[string]*topodatapb.EndPoint {
+	res := make(map[string]*topodatapb.EndPoint)
+	fhc.mu.RLock()
+	defer fhc.mu.RUnlock()
+	for key, ep := range fhc.endPoints {
+		res[key] = ep
+	}
+	return res
 }
