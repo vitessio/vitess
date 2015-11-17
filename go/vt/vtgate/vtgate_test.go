@@ -22,7 +22,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // This file uses the sandbox_test framework.
@@ -67,7 +67,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qr.Session)
 	}
 
-	session := new(pbg.Session)
+	session := new(vtgatepb.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
@@ -79,9 +79,9 @@ func TestVTGateExecute(t *testing.T) {
 		session,
 		false,
 		qr)
-	wantSession := &pbg.Session{
+	wantSession := &vtgatepb.Session{
 		InTransaction: true,
-		ShardSessions: []*pbg.Session_ShardSession{{
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
 			Target: &querypb.Target{
 				Keyspace:   KsTestUnsharded,
 				Shard:      "0",
@@ -99,7 +99,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	session = new(pbg.Session)
+	session = new(vtgatepb.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	rpcVTGate.Execute(context.Background(),
 		"select * from t1",
@@ -137,7 +137,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qr.Session)
 	}
 
-	session := new(pbg.Session)
+	session := new(vtgatepb.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
@@ -151,9 +151,9 @@ func TestVTGateExecuteShards(t *testing.T) {
 		session,
 		false,
 		qr)
-	wantSession := &pbg.Session{
+	wantSession := &vtgatepb.Session{
 		InTransaction: true,
-		ShardSessions: []*pbg.Session_ShardSession{{
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
 			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteShards",
 				Shard:      "0",
@@ -171,7 +171,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	session = new(pbg.Session)
+	session = new(vtgatepb.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	rpcVTGate.ExecuteShards(context.Background(),
 		"query",
@@ -224,7 +224,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	session := new(pbg.Session)
+	session := new(vtgatepb.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
@@ -238,9 +238,9 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		session,
 		false,
 		qr)
-	wantSession := &pbg.Session{
+	wantSession := &vtgatepb.Session{
 		InTransaction: true,
-		ShardSessions: []*pbg.Session_ShardSession{{
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
 			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteKeyspaceIds",
 				Shard:      "-20",
@@ -303,7 +303,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	session := new(pbg.Session)
+	session := new(vtgatepb.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
@@ -320,9 +320,9 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	wantSession := &pbg.Session{
+	wantSession := &vtgatepb.Session{
 		InTransaction: true,
-		ShardSessions: []*pbg.Session_ShardSession{{
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
 			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteKeyRanges",
 				Shard:      "-20",
@@ -364,8 +364,8 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		nil,
 		"TestVTGateExecuteEntityIds",
 		"kid",
-		[]*pbg.ExecuteEntityIdsRequest_EntityId{
-			&pbg.ExecuteEntityIdsRequest_EntityId{
+		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				XidType:    sqltypes.VarBinary,
 				XidValue:   []byte("id1"),
 				KeyspaceId: []byte{0x10},
@@ -390,7 +390,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	session := new(pbg.Session)
+	session := new(vtgatepb.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
@@ -400,8 +400,8 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		nil,
 		"TestVTGateExecuteEntityIds",
 		"kid",
-		[]*pbg.ExecuteEntityIdsRequest_EntityId{
-			&pbg.ExecuteEntityIdsRequest_EntityId{
+		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				XidType:    sqltypes.VarBinary,
 				XidValue:   []byte("id1"),
 				KeyspaceId: []byte{0x10},
@@ -411,9 +411,9 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		session,
 		false,
 		qr)
-	wantSession := &pbg.Session{
+	wantSession := &vtgatepb.Session{
 		InTransaction: true,
-		ShardSessions: []*pbg.Session_ShardSession{{
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
 			Target: &querypb.Target{
 				Keyspace:   "TestVTGateExecuteEntityIds",
 				Shard:      "-20",
@@ -435,13 +435,13 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		nil,
 		"TestVTGateExecuteEntityIds",
 		"kid",
-		[]*pbg.ExecuteEntityIdsRequest_EntityId{
-			&pbg.ExecuteEntityIdsRequest_EntityId{
+		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				XidType:    sqltypes.VarBinary,
 				XidValue:   []byte("id1"),
 				KeyspaceId: []byte{0x10},
 			},
-			&pbg.ExecuteEntityIdsRequest_EntityId{
+			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				XidType:    sqltypes.VarBinary,
 				XidValue:   []byte("id2"),
 				KeyspaceId: []byte{0x30},
@@ -462,16 +462,20 @@ func TestVTGateExecuteBatchShards(t *testing.T) {
 	s.MapTestConn("20-40", &sandboxConn{})
 	qrl := new(proto.QueryResultList)
 	err := rpcVTGate.ExecuteBatchShards(context.Background(),
-		[]proto.BoundShardQuery{{
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      "TestVTGateExecuteBatchShards",
-			Shards:        []string{"-20", "20-40"},
+		[]*vtgatepb.BoundShardQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestVTGateExecuteBatchShards",
+			Shards:   []string{"-20", "20-40"},
 		}, {
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      "TestVTGateExecuteBatchShards",
-			Shards:        []string{"-20", "20-40"},
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestVTGateExecuteBatchShards",
+			Shards:   []string{"-20", "20-40"},
 		}},
 		topodatapb.TabletType_MASTER,
 		false,
@@ -490,19 +494,23 @@ func TestVTGateExecuteBatchShards(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qrl.Session)
 	}
 
-	session := new(pbg.Session)
+	session := new(vtgatepb.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	rpcVTGate.ExecuteBatchShards(context.Background(),
-		[]proto.BoundShardQuery{{
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      "TestVTGateExecuteBatchShards",
-			Shards:        []string{"-20", "20-40"},
+		[]*vtgatepb.BoundShardQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestVTGateExecuteBatchShards",
+			Shards:   []string{"-20", "20-40"},
 		}, {
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      "TestVTGateExecuteBatchShards",
-			Shards:        []string{"-20", "20-40"},
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestVTGateExecuteBatchShards",
+			Shards:   []string{"-20", "20-40"},
 		}},
 		topodatapb.TabletType_MASTER,
 		false,
@@ -521,16 +529,20 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 	kid30 := []byte{0x30}
 	qrl := new(proto.QueryResultList)
 	err := rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
-		[]proto.BoundKeyspaceIdQuery{{
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
-			KeyspaceIds:   [][]byte{kid10, kid30},
+		[]*vtgatepb.BoundKeyspaceIdQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace:    "TestVTGateExecuteBatchKeyspaceIds",
+			KeyspaceIds: [][]byte{kid10, kid30},
 		}, {
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
-			KeyspaceIds:   [][]byte{kid10, kid30},
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace:    "TestVTGateExecuteBatchKeyspaceIds",
+			KeyspaceIds: [][]byte{kid10, kid30},
 		}},
 		topodatapb.TabletType_MASTER,
 		false,
@@ -549,19 +561,23 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qrl.Session)
 	}
 
-	session := new(pbg.Session)
+	session := new(vtgatepb.Session)
 	rpcVTGate.Begin(context.Background(), session)
 	rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
-		[]proto.BoundKeyspaceIdQuery{{
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
-			KeyspaceIds:   [][]byte{kid10, kid30},
+		[]*vtgatepb.BoundKeyspaceIdQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace:    "TestVTGateExecuteBatchKeyspaceIds",
+			KeyspaceIds: [][]byte{kid10, kid30},
 		}, {
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
-			KeyspaceIds:   [][]byte{kid10, kid30},
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace:    "TestVTGateExecuteBatchKeyspaceIds",
+			KeyspaceIds: [][]byte{kid10, kid30},
 		}},
 		topodatapb.TabletType_MASTER,
 		false,
@@ -906,13 +922,13 @@ func TestAnnotatingExecuteEntityIds(t *testing.T) {
 		nil,
 		keyspace,
 		"entity_column_name",
-		[]*pbg.ExecuteEntityIdsRequest_EntityId{
-			&pbg.ExecuteEntityIdsRequest_EntityId{
+		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				XidType:    sqltypes.Int64,
 				XidValue:   []byte("0"),
 				KeyspaceId: []byte{0x10}, // First shard.
 			},
-			&pbg.ExecuteEntityIdsRequest_EntityId{
+			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				XidType:    sqltypes.Int64,
 				XidValue:   []byte("1"),
 				KeyspaceId: []byte{0x25}, // Second shard.
@@ -953,19 +969,25 @@ func TestAnnotatingExecuteBatchKeyspaceIds(t *testing.T) {
 	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteBatchKeyspaceIds")
 	err := rpcVTGate.ExecuteBatchKeyspaceIds(
 		context.Background(),
-		[]proto.BoundKeyspaceIdQuery{
-			proto.BoundKeyspaceIdQuery{
-				Sql:         "INSERT INTO table () VALUES();",
+		[]*vtgatepb.BoundKeyspaceIdQuery{
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "INSERT INTO table () VALUES();",
+				},
 				Keyspace:    keyspace,
 				KeyspaceIds: [][]byte{[]byte{0x10}},
 			},
-			proto.BoundKeyspaceIdQuery{
-				Sql:         "UPDATE table SET col1=1 WHERE col2>3;",
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "UPDATE table SET col1=1 WHERE col2>3;",
+				},
 				Keyspace:    keyspace,
 				KeyspaceIds: [][]byte{[]byte{0x15}},
 			},
-			proto.BoundKeyspaceIdQuery{
-				Sql:         "DELETE FROM table WHERE col1==4;",
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "DELETE FROM table WHERE col1==4;",
+				},
 				Keyspace:    keyspace,
 				KeyspaceIds: [][]byte{[]byte{0x25}},
 			},
@@ -992,9 +1014,11 @@ func TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds(t *testing.T) {
 	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds")
 	err := rpcVTGate.ExecuteBatchKeyspaceIds(
 		context.Background(),
-		[]proto.BoundKeyspaceIdQuery{
-			proto.BoundKeyspaceIdQuery{
-				Sql:      "INSERT INTO table () VALUES();",
+		[]*vtgatepb.BoundKeyspaceIdQuery{
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "INSERT INTO table () VALUES();",
+				},
 				Keyspace: keyspace,
 				KeyspaceIds: [][]byte{
 					[]byte{0x10},
@@ -1021,24 +1045,32 @@ func TestAnnotatingExecuteBatchShards(t *testing.T) {
 
 	err := rpcVTGate.ExecuteBatchShards(
 		context.Background(),
-		[]proto.BoundShardQuery{
-			proto.BoundShardQuery{
-				Sql:      "INSERT INTO table () VALUES();",
+		[]*vtgatepb.BoundShardQuery{
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "INSERT INTO table () VALUES();",
+				},
 				Keyspace: keyspace,
 				Shards:   []string{"-20", "20-40"},
 			},
-			proto.BoundShardQuery{
-				Sql:      "UPDATE table SET col1=1 WHERE col2>3;",
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "UPDATE table SET col1=1 WHERE col2>3;",
+				},
 				Keyspace: keyspace,
 				Shards:   []string{"-20"},
 			},
-			proto.BoundShardQuery{
-				Sql:      "UPDATE table SET col1=1 WHERE col2>3;",
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "UPDATE table SET col1=1 WHERE col2>3;",
+				},
 				Keyspace: keyspace,
 				Shards:   []string{"20-40"},
 			},
-			proto.BoundShardQuery{
-				Sql:      "DELETE FROM table WHERE col1==4;",
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "DELETE FROM table WHERE col1==4;",
+				},
 				Keyspace: keyspace,
 				Shards:   []string{"20-40"},
 			},

@@ -52,7 +52,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
 			stream.Send(&pb.ExecuteVtctlCommandResponse{
-				Event: logutil.LoggerEventToProto(&e),
+				Event: e,
 			})
 		}
 		wg.Done()

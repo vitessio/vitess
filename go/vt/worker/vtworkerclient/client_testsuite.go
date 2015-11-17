@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -51,7 +52,7 @@ func commandSucceeds(t *testing.T, client VtworkerClient) {
 	count := 0
 	for e := range logs {
 		expected := "Ping command was called with message: 'pong'.\n"
-		if e.String() != expected {
+		if logutil.EventString(e) != expected {
 			t.Errorf("Got unexpected log line '%v' expected '%v'", e.String(), expected)
 		}
 		count++

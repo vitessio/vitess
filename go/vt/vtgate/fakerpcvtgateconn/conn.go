@@ -17,13 +17,12 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // queryExecute contains all the fields we use to test Execute
@@ -31,7 +30,7 @@ type queryExecute struct {
 	SQL              string
 	BindVariables    map[string]interface{}
 	TabletType       topodatapb.TabletType
-	Session          *pbg.Session
+	Session          *vtgatepb.Session
 	NotInTransaction bool
 }
 
@@ -42,7 +41,7 @@ type queryExecuteShards struct {
 	Keyspace         string
 	Shards           []string
 	TabletType       topodatapb.TabletType
-	Session          *pbg.Session
+	Session          *vtgatepb.Session
 	NotInTransaction bool
 }
 
@@ -64,7 +63,7 @@ type querySplitQuery struct {
 
 type splitQueryResponse struct {
 	splitQuery *querySplitQuery
-	reply      []*pbg.SplitQueryResponse_Part
+	reply      []*vtgatepb.SplitQueryResponse_Part
 	err        error
 }
 
@@ -94,7 +93,7 @@ func (conn *FakeVTGateConn) AddQuery(
 	sql string,
 	bindVariables map[string]interface{},
 	tabletType topodatapb.TabletType,
-	session *pbg.Session,
+	session *vtgatepb.Session,
 	notInTransaction bool,
 	expectedResult *sqltypes.Result) {
 	conn.execMap[sql] = &queryResponse{
@@ -116,7 +115,7 @@ func (conn *FakeVTGateConn) AddShardQuery(
 	keyspace string,
 	shards []string,
 	tabletType topodatapb.TabletType,
-	session *pbg.Session,
+	session *vtgatepb.Session,
 	notInTransaction bool,
 	expectedResult *sqltypes.Result) {
 	conn.execMap[getShardQueryKey(sql, shards)] = &queryResponse{
@@ -140,8 +139,8 @@ func (conn *FakeVTGateConn) AddSplitQuery(
 	bindVariables map[string]interface{},
 	splitColumn string,
 	splitCount int,
-	expectedResult []*pbg.SplitQueryResponse_Part) {
-	reply := make([]*pbg.SplitQueryResponse_Part, splitCount)
+	expectedResult []*vtgatepb.SplitQueryResponse_Part) {
+	reply := make([]*vtgatepb.SplitQueryResponse_Part, splitCount)
 	copy(reply, expectedResult)
 	key := getSplitQueryKey(keyspace, sql, splitColumn, splitCount)
 	conn.splitQueryMap[key] = &splitQueryResponse{
@@ -159,9 +158,9 @@ func (conn *FakeVTGateConn) AddSplitQuery(
 
 // Execute please see vtgateconn.Impl.Execute
 func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
-	var s *pbg.Session
+	var s *vtgatepb.Session
 	if session != nil {
-		s = session.(*pbg.Session)
+		s = session.(*vtgatepb.Session)
 	}
 	response, ok := conn.execMap[sql]
 	if !ok {
@@ -188,9 +187,9 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 
 // ExecuteShards please see vtgateconn.Impl.ExecuteShard
 func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
-	var s *pbg.Session
+	var s *vtgatepb.Session
 	if session != nil {
-		s = session.(*pbg.Session)
+		s = session.(*vtgatepb.Session)
 	}
 	response, ok := conn.execMap[getShardQueryKey(sql, shards)]
 	if !ok {
@@ -228,17 +227,17 @@ func (conn *FakeVTGateConn) ExecuteKeyRanges(ctx context.Context, query string, 
 }
 
 // ExecuteEntityIds please see vtgateconn.Impl.ExecuteEntityIds
-func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
 	panic("not implemented")
 }
 
 // ExecuteBatchShards please see vtgateconn.Impl.ExecuteBatchShards
-func (conn *FakeVTGateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
 	panic("not implemented")
 }
 
 // ExecuteBatchKeyspaceIds please see vtgateconn.Impl.ExecuteBatchKeyspaceIds
-func (conn *FakeVTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
 	panic("not implemented")
 }
 
@@ -316,7 +315,7 @@ func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query
 
 // Begin please see vtgateconn.Impl.Begin
 func (conn *FakeVTGateConn) Begin(ctx context.Context) (interface{}, error) {
-	return &pbg.Session{
+	return &vtgatepb.Session{
 		InTransaction: true,
 	}, nil
 }
@@ -350,14 +349,14 @@ func (conn *FakeVTGateConn) Rollback2(ctx context.Context, session interface{}) 
 }
 
 // SplitQuery please see vtgateconn.Impl.SplitQuery
-func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
+func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	response, ok := conn.splitQueryMap[getSplitQueryKey(keyspace, query, splitColumn, splitCount)]
 	if !ok {
 		return nil, fmt.Errorf(
 			"no match for keyspace: %s, query: %v, split column: %v, split count: %d",
 			keyspace, query, splitColumn, splitCount)
 	}
-	reply := make([]*pbg.SplitQueryResponse_Part, splitCount, splitCount)
+	reply := make([]*vtgatepb.SplitQueryResponse_Part, splitCount, splitCount)
 	copy(reply, response.reply)
 	return reply, nil
 }
@@ -384,10 +383,10 @@ func newSession(
 	inTransaction bool,
 	keyspace string,
 	shards []string,
-	tabletType topodatapb.TabletType) *pbg.Session {
-	shardSessions := make([]*pbg.Session_ShardSession, len(shards))
+	tabletType topodatapb.TabletType) *vtgatepb.Session {
+	shardSessions := make([]*vtgatepb.Session_ShardSession, len(shards))
 	for _, shard := range shards {
-		shardSessions = append(shardSessions, &pbg.Session_ShardSession{
+		shardSessions = append(shardSessions, &vtgatepb.Session_ShardSession{
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      shard,
@@ -396,7 +395,7 @@ func newSession(
 			TransactionId: rand.Int63(),
 		})
 	}
-	return &pbg.Session{
+	return &vtgatepb.Session{
 		InTransaction: inTransaction,
 		ShardSessions: shardSessions,
 	}

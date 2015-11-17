@@ -10,12 +10,11 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // This file uses the sandbox_test framework.
@@ -30,13 +29,18 @@ func TestExecuteKeyspaceAlias(t *testing.T) {
 func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, false, func(shards []string) (*sqltypes.Result, error) {
 		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
-		queries := []proto.BoundShardQuery{{
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      KsTestUnshardedServedFrom,
-			Shards:        shards,
+		queries := []*vtgatepb.BoundShardQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: KsTestUnshardedServedFrom,
+			Shards:   shards,
 		}}
-		scatterRequest := boundShardQueriesToScatterBatchRequest(queries)
+		scatterRequest, err := boundShardQueriesToScatterBatchRequest(queries)
+		if err != nil {
+			return nil, err
+		}
 		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_RDONLY, false, nil)
 		if err != nil {
 			return nil, err
@@ -63,9 +67,9 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	s.MapTestConn("0", sbc)
 
 	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
-	session := NewSafeSession(&pbg.Session{
+	session := NewSafeSession(&vtgatepb.Session{
 		InTransaction: true,
-		ShardSessions: []*pbg.Session_ShardSession{{
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
 			Target: &querypb.Target{
 				Keyspace:   KsTestUnshardedServedFrom,
 				Shard:      "0",
