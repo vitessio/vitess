@@ -6,8 +6,6 @@ import (
 	"reflect"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 
@@ -20,14 +18,23 @@ import (
 type fakeVTGateService struct {
 }
 
+// queryExecute contains all the fields we use to test Execute
+type queryExecute struct {
+	SQL              string
+	BindVariables    map[string]interface{}
+	TabletType       topodatapb.TabletType
+	Session          *vtgatepb.Session
+	NotInTransaction bool
+}
+
 // Execute is part of the VTGateService interface
 func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	execCase, ok := execMap[sql]
 	if !ok {
 		return nil, fmt.Errorf("no match for: %s", sql)
 	}
-	query := &proto.Query{
-		Sql:              sql,
+	query := &queryExecute{
+		SQL:              sql,
 		BindVariables:    bindVariables,
 		TabletType:       tabletType,
 		Session:          session,
@@ -36,10 +43,10 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		return nil, fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
 	}
-	if execCase.reply.Session != nil {
-		*session = *execCase.reply.Session
+	if execCase.session != nil {
+		*session = *execCase.session
 	}
-	return execCase.reply.Result, vterrors.FromRPCError(execCase.reply.Err)
+	return execCase.result, nil
 }
 
 // ExecuteShards is part of the VTGateService interface
@@ -78,22 +85,22 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 	if !ok {
 		return fmt.Errorf("no match for: %s", sql)
 	}
-	query := &proto.Query{
-		Sql:           sql,
+	query := &queryExecute{
+		SQL:           sql,
 		BindVariables: bindVariables,
 		TabletType:    tabletType,
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		return fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
 	}
-	if execCase.reply.Result != nil {
+	if execCase.result != nil {
 		result := &sqltypes.Result{
-			Fields: execCase.reply.Result.Fields,
+			Fields: execCase.result.Fields,
 		}
 		if err := sendReply(result); err != nil {
 			return err
 		}
-		for _, row := range execCase.reply.Result.Rows {
+		for _, row := range execCase.result.Rows {
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
@@ -169,58 +176,34 @@ func CreateFakeServer() vtgateservice.VTGateService {
 }
 
 var execMap = map[string]struct {
-	execQuery  *proto.Query
-	shardQuery *proto.QueryShard
-	reply      *proto.QueryResult
-	err        error
+	execQuery *queryExecute
+	result    *sqltypes.Result
+	session   *vtgatepb.Session
+	err       error
 }{
 	"request1": {
-		execQuery: &proto.Query{
-			Sql: "request1",
+		execQuery: &queryExecute{
+			SQL: "request1",
 			BindVariables: map[string]interface{}{
 				"v1": int64(0),
 			},
 			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
 		},
-		shardQuery: &proto.QueryShard{
-			Sql: "request1",
-			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
-			},
-			Keyspace:   "ks",
-			Shards:     []string{"1", "2"},
-			TabletType: topodatapb.TabletType_RDONLY,
-			Session:    nil,
-		},
-		reply: &proto.QueryResult{
-			Result:  &result1,
-			Session: nil,
-		},
+		result:  &result1,
+		session: nil,
 	},
 	"txRequest": {
-		execQuery: &proto.Query{
-			Sql: "txRequest",
+		execQuery: &queryExecute{
+			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
 				"v1": int64(0),
 			},
 			TabletType: topodatapb.TabletType_MASTER,
 			Session:    session1,
 		},
-		shardQuery: &proto.QueryShard{
-			Sql: "txRequest",
-			BindVariables: map[string]interface{}{
-				"v1": int64(0),
-			},
-			TabletType: topodatapb.TabletType_MASTER,
-			Keyspace:   "",
-			Shards:     []string{},
-			Session:    session1,
-		},
-		reply: &proto.QueryResult{
-			Result:  &sqltypes.Result{},
-			Session: session2,
-		},
+		result:  &sqltypes.Result{},
+		session: session2,
 	},
 }
 
