@@ -52,7 +52,7 @@ type Value struct {
 // Every place this function is called, a comment is needed that explains
 // why it's justified.
 func MakeTrusted(typ querypb.Type, val []byte) Value {
-	if typ == Null || val == nil {
+	if typ == Null {
 		return NULL
 	}
 	return Value{typ: typ, val: val}

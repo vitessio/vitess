@@ -19,10 +19,6 @@ func TestMake(t *testing.T) {
 	if !reflect.DeepEqual(v, NULL) {
 		t.Errorf("MakeTrusted(Null...) = %v, want null", makePretty(v))
 	}
-	v = MakeTrusted(Int64, nil)
-	if !reflect.DeepEqual(v, NULL) {
-		t.Errorf("MakeTrusted(..., nil) = %v, want null", makePretty(v))
-	}
 	v = MakeTrusted(Int64, []byte("1"))
 	want := testVal(Int64, "1")
 	if !reflect.DeepEqual(v, want) {

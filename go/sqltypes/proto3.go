@@ -45,7 +45,9 @@ func RowsToProto3(rows [][]Value) []*querypb.Row {
 // because it uses the trusted API.
 func proto3ToRows(fields []*querypb.Field, rows []*querypb.Row) [][]Value {
 	if len(rows) == 0 {
-		return nil
+		// TODO(sougou): This is needed for backward compatibility.
+		// Remove when it's not needed any more.
+		return [][]Value{}
 	}
 
 	result := make([][]Value, len(rows))
