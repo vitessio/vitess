@@ -253,10 +253,11 @@ func (vtg *VTGate) StreamExecute2(ctx context.Context, request *gorpcvtgatecommo
 	if vtgErr == nil {
 		return nil
 	}
+
 	// If there was an app error, send a QueryResult back with it.
-	qr := new(gorpcvtgatecommon.QueryResult)
-	vtgate.AddVtGateError(vtgErr, &qr.Err)
-	return sendReply(qr)
+	return sendReply(&gorpcvtgatecommon.QueryResult{
+		Err: vterrors.RPCErrFromVtError(vtgErr),
+	})
 }
 
 // StreamExecuteShard is the RPC version of vtgateservice.VTGateService method
@@ -298,10 +299,11 @@ func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *gorpcvtgate
 	if vtgErr == nil {
 		return nil
 	}
+
 	// If there was an app error, send a QueryResult back with it.
-	qr := new(gorpcvtgatecommon.QueryResult)
-	vtgate.AddVtGateError(vtgErr, &qr.Err)
-	return sendReply(qr)
+	return sendReply(&gorpcvtgatecommon.QueryResult{
+		Err: vterrors.RPCErrFromVtError(vtgErr),
+	})
 }
 
 // StreamExecuteKeyspaceIds is the RPC version of
@@ -345,10 +347,11 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *gorpc
 	if vtgErr == nil {
 		return nil
 	}
+
 	// If there was an app error, send a QueryResult back with it.
-	qr := new(gorpcvtgatecommon.QueryResult)
-	vtgate.AddVtGateError(vtgErr, &qr.Err)
-	return sendReply(qr)
+	return sendReply(&gorpcvtgatecommon.QueryResult{
+		Err: vterrors.RPCErrFromVtError(vtgErr),
+	})
 }
 
 // StreamExecuteKeyRanges is the RPC version of
@@ -392,10 +395,11 @@ func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *gorpcvt
 	if vtgErr == nil {
 		return nil
 	}
+
 	// If there was an app error, send a QueryResult back with it.
-	qr := new(gorpcvtgatecommon.QueryResult)
-	vtgate.AddVtGateError(vtgErr, &qr.Err)
-	return sendReply(qr)
+	return sendReply(&gorpcvtgatecommon.QueryResult{
+		Err: vterrors.RPCErrFromVtError(vtgErr),
+	})
 }
 
 // Begin is the RPC version of vtgateservice.VTGateService method
@@ -438,7 +442,7 @@ func (vtg *VTGate) Begin2(ctx context.Context, request *gorpcvtgatecommon.BeginR
 	// Don't pass in a nil pointer
 	session, vtgErr := vtg.server.Begin(ctx)
 	reply.Session = sessionToRPC(session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
@@ -452,7 +456,7 @@ func (vtg *VTGate) Commit2(ctx context.Context, request *gorpcvtgatecommon.Commi
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	vtgErr := vtg.server.Commit(ctx, request.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
@@ -466,7 +470,7 @@ func (vtg *VTGate) Rollback2(ctx context.Context, request *gorpcvtgatecommon.Rol
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	vtgErr := vtg.server.Rollback(ctx, request.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
@@ -478,14 +482,14 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *gorpcvtgatecommon.Sp
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	splits, vtgErr := vtg.server.SplitQuery(ctx,
+	var vtgErr error
+	reply.Splits, vtgErr = vtg.server.SplitQuery(ctx,
 		request.Keyspace,
 		request.Query.Sql,
 		request.Query.BindVariables,
 		request.SplitColumn,
 		request.SplitCount)
-	reply.Splits = splits
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 

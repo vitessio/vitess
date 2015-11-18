@@ -5,7 +5,6 @@
 package vtgate
 
 import (
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
@@ -70,23 +69,4 @@ func AggregateVtGateErrors(errors []error) error {
 		aggregateVtGateErrorCodes(errors),
 		vterrors.ConcatenateErrors(errors),
 	)
-}
-
-// AddVtGateError will update a mproto.RPCError with details from a VTGate error.
-func AddVtGateError(err error, replyErr **mproto.RPCError) {
-	if err == nil {
-		return
-	}
-	*replyErr = vterrors.RPCErrFromVtError(err)
-}
-
-// RPCErrorToVtRPCError converts a VTGate error into a vtrpc error.
-func RPCErrorToVtRPCError(rpcErr *mproto.RPCError) *vtrpc.RPCError {
-	if rpcErr == nil {
-		return nil
-	}
-	return &vtrpc.RPCError{
-		Code:    vtrpc.ErrorCode(rpcErr.Code),
-		Message: rpcErr.Message,
-	}
 }
