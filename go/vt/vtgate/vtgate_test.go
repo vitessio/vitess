@@ -59,8 +59,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
 	}
 
-	session := new(vtgatepb.Session)
-	rpcVTGate.Begin(context.Background(), session)
+	session, err := rpcVTGate.Begin(context.Background())
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
@@ -90,8 +89,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	session = new(vtgatepb.Session)
-	rpcVTGate.Begin(context.Background(), session)
+	session, err = rpcVTGate.Begin(context.Background())
 	rpcVTGate.Execute(context.Background(),
 		"select * from t1",
 		nil,
@@ -120,8 +118,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
 	}
 
-	session := new(vtgatepb.Session)
-	rpcVTGate.Begin(context.Background(), session)
+	session, err := rpcVTGate.Begin(context.Background())
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
@@ -153,8 +150,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	session = new(vtgatepb.Session)
-	rpcVTGate.Begin(context.Background(), session)
+	session, err = rpcVTGate.Begin(context.Background())
 	rpcVTGate.ExecuteShards(context.Background(),
 		"query",
 		nil,
@@ -198,8 +194,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	session := new(vtgatepb.Session)
-	rpcVTGate.Begin(context.Background(), session)
+	session, err := rpcVTGate.Begin(context.Background())
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
@@ -268,8 +263,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	session := new(vtgatepb.Session)
-	rpcVTGate.Begin(context.Background(), session)
+	session, err := rpcVTGate.Begin(context.Background())
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
@@ -347,8 +341,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	session := new(vtgatepb.Session)
-	rpcVTGate.Begin(context.Background(), session)
+	session, err := rpcVTGate.Begin(context.Background())
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
@@ -444,8 +437,7 @@ func TestVTGateExecuteBatchShards(t *testing.T) {
 		t.Errorf("want 2, got %v", qrl[0].RowsAffected)
 	}
 
-	session := new(vtgatepb.Session)
-	rpcVTGate.Begin(context.Background(), session)
+	session, err := rpcVTGate.Begin(context.Background())
 	rpcVTGate.ExecuteBatchShards(context.Background(),
 		[]*vtgatepb.BoundShardQuery{{
 			Query: &querypb.BoundQuery{
@@ -505,8 +497,7 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 		t.Errorf("want 2, got %v", qrl[0].RowsAffected)
 	}
 
-	session := new(vtgatepb.Session)
-	rpcVTGate.Begin(context.Background(), session)
+	session, err := rpcVTGate.Begin(context.Background())
 	rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
 		[]*vtgatepb.BoundKeyspaceIdQuery{{
 			Query: &querypb.BoundQuery{

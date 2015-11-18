@@ -403,9 +403,12 @@ func (vtg *VTGate) Begin(ctx context.Context, noInput *rpc.Unused, outSession *v
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	err = vtg.server.Begin(ctx, outSession)
-	outSession = sessionToRPC(outSession)
-	return err
+	session, err := vtg.server.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	*outSession = *sessionToRPC(session)
+	return nil
 }
 
 // Commit is the RPC version of vtgateservice.VTGateService method
@@ -433,9 +436,8 @@ func (vtg *VTGate) Begin2(ctx context.Context, request *proto.BeginRequest, repl
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	// Don't pass in a nil pointer
-	reply.Session = &vtgatepb.Session{}
-	vtgErr := vtg.server.Begin(ctx, reply.Session)
-	reply.Session = sessionToRPC(reply.Session)
+	session, vtgErr := vtg.server.Begin(ctx)
+	reply.Session = sessionToRPC(session)
 	vtgate.AddVtGateError(vtgErr, &reply.Err)
 	return nil
 }

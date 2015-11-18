@@ -121,22 +121,21 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 }
 
 // Begin is part of the VTGateService interface
-func (f *fakeVTGateService) Begin(ctx context.Context, outSession *vtgatepb.Session) error {
-	*outSession = *session1
-	return nil
+func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+	return session1, nil
 }
 
 // Commit is part of the VTGateService interface
-func (f *fakeVTGateService) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
-	if !reflect.DeepEqual(inSession, session2) {
+func (f *fakeVTGateService) Commit(ctx context.Context, session *vtgatepb.Session) error {
+	if !reflect.DeepEqual(session, session2) {
 		return errors.New("commit: session mismatch")
 	}
 	return nil
 }
 
 // Rollback is part of the VTGateService interface
-func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
-	if !reflect.DeepEqual(inSession, session2) {
+func (f *fakeVTGateService) Rollback(ctx context.Context, session *vtgatepb.Session) error {
+	if !reflect.DeepEqual(session, session2) {
 		return errors.New("rollback: session mismatch")
 	}
 	return nil

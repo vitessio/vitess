@@ -577,19 +577,20 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
-func (vtg *VTGate) Begin(ctx context.Context, outSession *vtgatepb.Session) error {
-	outSession.InTransaction = true
-	return nil
+func (vtg *VTGate) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+	return &vtgatepb.Session{
+		InTransaction: true,
+	}, nil
 }
 
 // Commit commits a transaction.
-func (vtg *VTGate) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
-	return formatError(vtg.resolver.Commit(ctx, inSession))
+func (vtg *VTGate) Commit(ctx context.Context, session *vtgatepb.Session) error {
+	return formatError(vtg.resolver.Commit(ctx, session))
 }
 
 // Rollback rolls back a transaction.
-func (vtg *VTGate) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
-	return formatError(vtg.resolver.Rollback(ctx, inSession))
+func (vtg *VTGate) Rollback(ctx context.Context, session *vtgatepb.Session) error {
+	return formatError(vtg.resolver.Rollback(ctx, session))
 }
 
 // SplitQuery splits a query into sub queries by appending keyranges and

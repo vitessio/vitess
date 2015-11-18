@@ -285,12 +285,11 @@ func (vtg *VTGate) Begin(ctx context.Context, request *pb.BeginRequest) (respons
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	outSession := new(pb.Session)
-	vtgErr := vtg.server.Begin(ctx, outSession)
-	response = &pb.BeginResponse{}
+	session, vtgErr := vtg.server.Begin(ctx)
 	if vtgErr == nil {
-		response.Session = outSession
-		return response, nil
+		return &pb.BeginResponse{
+			Session: session,
+		}, nil
 	}
 	return nil, vterrors.ToGRPCError(vtgErr)
 }

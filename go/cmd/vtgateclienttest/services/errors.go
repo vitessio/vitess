@@ -251,34 +251,34 @@ func (c *errorClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bi
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
 }
 
-func (c *errorClient) Begin(ctx context.Context, outSession *vtgatepb.Session) error {
+func (c *errorClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
 	// The client sends the error request through the callerid, as there are no other parameters
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)
 	if err := requestToError(request); err != nil {
-		return err
+		return nil, err
 	}
-	return c.fallbackClient.Begin(ctx, outSession)
+	return c.fallbackClient.Begin(ctx)
 }
 
-func (c *errorClient) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
+func (c *errorClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
 	// The client sends the error request through the callerid, as there are no other parameters
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)
 	if err := requestToError(request); err != nil {
 		return err
 	}
-	return c.fallbackClient.Commit(ctx, inSession)
+	return c.fallbackClient.Commit(ctx, session)
 }
 
-func (c *errorClient) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
+func (c *errorClient) Rollback(ctx context.Context, session *vtgatepb.Session) error {
 	// The client sends the error request through the callerid, as there are no other parameters
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)
 	if err := requestToError(request); err != nil {
 		return err
 	}
-	return c.fallbackClient.Rollback(ctx, inSession)
+	return c.fallbackClient.Rollback(ctx, session)
 }
 
 func (c *errorClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {

@@ -75,15 +75,15 @@ func (c *terminalClient) StreamExecuteKeyRanges(ctx context.Context, sql string,
 	return errTerminal
 }
 
-func (c *terminalClient) Begin(ctx context.Context, outSession *vtgatepb.Session) error {
+func (c *terminalClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+	return nil, errTerminal
+}
+
+func (c *terminalClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
 	return errTerminal
 }
 
-func (c *terminalClient) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
-	return errTerminal
-}
-
-func (c *terminalClient) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
+func (c *terminalClient) Rollback(ctx context.Context, session *vtgatepb.Session) error {
 	return errTerminal
 }
 

@@ -70,16 +70,16 @@ func (c fallbackClient) StreamExecuteKeyRanges(ctx context.Context, sql string, 
 	return c.fallback.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
 }
 
-func (c fallbackClient) Begin(ctx context.Context, outSession *vtgatepb.Session) error {
-	return c.fallback.Begin(ctx, outSession)
+func (c fallbackClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+	return c.fallback.Begin(ctx)
 }
 
-func (c fallbackClient) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
-	return c.fallback.Commit(ctx, inSession)
+func (c fallbackClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
+	return c.fallback.Commit(ctx, session)
 }
 
-func (c fallbackClient) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
-	return c.fallback.Rollback(ctx, inSession)
+func (c fallbackClient) Rollback(ctx context.Context, session *vtgatepb.Session) error {
+	return c.fallback.Rollback(ctx, session)
 }
 
 func (c fallbackClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {

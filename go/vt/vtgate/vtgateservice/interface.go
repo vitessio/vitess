@@ -34,9 +34,9 @@ type VTGateService interface {
 	StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error
 
 	// Transaction management
-	Begin(ctx context.Context, outSession *vtgatepb.Session) error
-	Commit(ctx context.Context, inSession *vtgatepb.Session) error
-	Rollback(ctx context.Context, inSession *vtgatepb.Session) error
+	Begin(ctx context.Context) (*vtgatepb.Session, error)
+	Commit(ctx context.Context, session *vtgatepb.Session) error
+	Rollback(ctx context.Context, session *vtgatepb.Session) error
 
 	// Map Reduce support
 	SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error)

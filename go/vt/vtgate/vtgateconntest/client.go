@@ -569,18 +569,17 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 }
 
 // Begin is part of the VTGateService interface
-func (f *fakeVTGateService) Begin(ctx context.Context, outSession *vtgatepb.Session) error {
+func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error) {
 	f.checkCallerID(ctx, "Begin")
 	switch {
 	case f.forceBeginSuccess:
 	case f.hasError:
-		return errTestVtGateError
+		return nil, errTestVtGateError
 	case f.panics:
 		panic(fmt.Errorf("test forced panic"))
 	default:
 	}
-	*outSession = *session1
-	return nil
+	return session1, nil
 }
 
 // Commit is part of the VTGateService interface
