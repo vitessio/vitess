@@ -180,7 +180,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 			"Session":          session,
 			"NotInTransaction": notInTransaction,
 		}
-		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecute).Error()
+		handleExecuteError(err, statsKey, query, vtg.logExecute)
 		reply.Err = vterrors.RPCErrFromVtError(err)
 	}
 	reply.Session = session
@@ -226,7 +226,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 			"Session":          session,
 			"NotInTransaction": notInTransaction,
 		}
-		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteShards).Error()
+		handleExecuteError(err, statsKey, query, vtg.logExecuteShards)
 		reply.Err = vterrors.RPCErrFromVtError(err)
 	}
 	reply.Session = session
@@ -261,7 +261,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 			"Session":          session,
 			"NotInTransaction": notInTransaction,
 		}
-		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyspaceIds).Error()
+		handleExecuteError(err, statsKey, query, vtg.logExecuteKeyspaceIds)
 		reply.Err = vterrors.RPCErrFromVtError(err)
 	}
 	reply.Session = session
@@ -296,7 +296,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 			"Session":          session,
 			"NotInTransaction": notInTransaction,
 		}
-		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyRanges).Error()
+		handleExecuteError(err, statsKey, query, vtg.logExecuteKeyRanges)
 		reply.Err = vterrors.RPCErrFromVtError(err)
 	}
 	reply.Session = session
@@ -332,7 +332,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 			"Session":           session,
 			"NotInTransaction":  notInTransaction,
 		}
-		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteEntityIds).Error()
+		handleExecuteError(err, statsKey, query, vtg.logExecuteEntityIds)
 		reply.Err = vterrors.RPCErrFromVtError(err)
 	}
 	reply.Session = session
@@ -375,7 +375,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.B
 			"AsTransaction": asTransaction,
 			"Session":       session,
 		}
-		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchShards).Error()
+		handleExecuteError(err, statsKey, query, vtg.logExecuteBatchShards)
 		reply.Err = vterrors.RPCErrFromVtError(err)
 	}
 	reply.Session = session
@@ -416,7 +416,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 			"AsTransaction": asTransaction,
 			"Session":       session,
 		}
-		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchKeyspaceIds).Error()
+		handleExecuteError(err, statsKey, query, vtg.logExecuteBatchKeyspaceIds)
 		reply.Err = vterrors.RPCErrFromVtError(err)
 	}
 	reply.Session = session
@@ -709,7 +709,7 @@ func isErrorCausedByVTGate(err error) bool {
 	return false
 }
 
-func handleExecuteError(err error, statsKey []string, query map[string]interface{}, logger *logutil.ThrottledLogger) error {
+func handleExecuteError(err error, statsKey []string, query map[string]interface{}, logger *logutil.ThrottledLogger) {
 	s := fmt.Sprintf(", vtgate: %v", servenv.ListeningURL.String())
 	newErr := vterrors.WithSuffix(err, s)
 	errStr := newErr.Error()
@@ -723,7 +723,6 @@ func handleExecuteError(err error, statsKey []string, query map[string]interface
 		normalErrors.Add(statsKey, 1)
 		logError(err, query, logger)
 	}
-	return newErr
 }
 
 func formatError(err error) error {
