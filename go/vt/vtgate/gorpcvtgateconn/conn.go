@@ -386,10 +386,20 @@ func sendStreamResults(c *rpcplus.Call, sr chan *proto.QueryResult) (<-chan *sql
 			// If we get a QueryResult with an RPCError, that was an extra QueryResult sent by
 			// the server specifically to indicate an error, and we shouldn't surface it to clients.
 			if vtErr == nil {
-				if fields == nil {
-					fields = r.Result.Fields
+				// for tests to be able to assert nil equality
+				if len(r.Result.Fields) == 0 {
+					r.Result.Fields = nil
 				}
-				r.Result.Repair(fields)
+				if len(r.Result.Rows) == 0 {
+					r.Result.Rows = nil
+				}
+				if fields == nil {
+					// first packet, we remember the fields
+					fields = r.Result.Fields
+				} else {
+					// next packet, fix the result
+					r.Result.Repair(fields)
+				}
 				srout <- r.Result
 			}
 		}

@@ -15,7 +15,6 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 
@@ -52,29 +51,23 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsR
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	reply := new(proto.QueryResult)
 	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	executeErr := vtg.server.ExecuteShards(ctx,
+	result, err := vtg.server.ExecuteShards(ctx,
 		string(request.Query.Sql),
 		bv,
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	response = &pb.ExecuteShardsResponse{
-		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
-	}
-	if executeErr != nil {
-		return nil, vterrors.ToGRPCError(executeErr)
-	}
-	response.Result = sqltypes.ResultToProto3(reply.Result)
-	response.Session = reply.Session
-	return response, nil
+		request.NotInTransaction)
+	return &pb.ExecuteShardsResponse{
+		Result:  sqltypes.ResultToProto3(result),
+		Session: request.Session,
+		Error:   vterrors.VtRPCErrorFromVtError(err),
+	}, nil
 }
 
 // ExecuteKeyspaceIds is the RPC version of vtgateservice.VTGateService method
@@ -83,29 +76,23 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	reply := new(proto.QueryResult)
 	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	executeErr := vtg.server.ExecuteKeyspaceIds(ctx,
+	result, err := vtg.server.ExecuteKeyspaceIds(ctx,
 		string(request.Query.Sql),
 		bv,
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	response = &pb.ExecuteKeyspaceIdsResponse{
-		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
-	}
-	if executeErr != nil {
-		return nil, vterrors.ToGRPCError(executeErr)
-	}
-	response.Result = sqltypes.ResultToProto3(reply.Result)
-	response.Session = reply.Session
-	return response, nil
+		request.NotInTransaction)
+	return &pb.ExecuteKeyspaceIdsResponse{
+		Result:  sqltypes.ResultToProto3(result),
+		Session: request.Session,
+		Error:   vterrors.VtRPCErrorFromVtError(err),
+	}, nil
 }
 
 // ExecuteKeyRanges is the RPC version of vtgateservice.VTGateService method
@@ -114,29 +101,23 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	reply := new(proto.QueryResult)
 	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	executeErr := vtg.server.ExecuteKeyRanges(ctx,
+	result, err := vtg.server.ExecuteKeyRanges(ctx,
 		string(request.Query.Sql),
 		bv,
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	response = &pb.ExecuteKeyRangesResponse{
-		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
-	}
-	if executeErr != nil {
-		return nil, vterrors.ToGRPCError(executeErr)
-	}
-	response.Result = sqltypes.ResultToProto3(reply.Result)
-	response.Session = reply.Session
-	return response, nil
+		request.NotInTransaction)
+	return &pb.ExecuteKeyRangesResponse{
+		Result:  sqltypes.ResultToProto3(result),
+		Session: request.Session,
+		Error:   vterrors.VtRPCErrorFromVtError(err),
+	}, nil
 }
 
 // ExecuteEntityIds is the RPC version of vtgateservice.VTGateService method
@@ -145,12 +126,11 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	reply := new(proto.QueryResult)
 	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	executeErr := vtg.server.ExecuteEntityIds(ctx,
+	result, err := vtg.server.ExecuteEntityIds(ctx,
 		string(request.Query.Sql),
 		bv,
 		request.Keyspace,
@@ -158,17 +138,12 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 		request.EntityKeyspaceIds,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	response = &pb.ExecuteEntityIdsResponse{
-		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
-	}
-	if executeErr != nil {
-		return nil, vterrors.ToGRPCError(executeErr)
-	}
-	response.Result = sqltypes.ResultToProto3(reply.Result)
-	response.Session = reply.Session
-	return response, nil
+		request.NotInTransaction)
+	return &pb.ExecuteEntityIdsResponse{
+		Result:  sqltypes.ResultToProto3(result),
+		Session: request.Session,
+		Error:   vterrors.VtRPCErrorFromVtError(err),
+	}, nil
 }
 
 // ExecuteBatchShards is the RPC version of vtgateservice.VTGateService method
@@ -177,22 +152,16 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBa
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	reply := new(proto.QueryResultList)
-	executeErr := vtg.server.ExecuteBatchShards(ctx,
+	result, err := vtg.server.ExecuteBatchShards(ctx,
 		request.Queries,
 		request.TabletType,
 		request.AsTransaction,
-		request.Session,
-		reply)
-	response = &pb.ExecuteBatchShardsResponse{
-		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
-	}
-	if executeErr != nil {
-		return nil, vterrors.ToGRPCError(executeErr)
-	}
-	response.Results = sqltypes.ResultsToProto3(reply.List)
-	response.Session = reply.Session
-	return response, nil
+		request.Session)
+	return &pb.ExecuteBatchShardsResponse{
+		Results: sqltypes.ResultsToProto3(result),
+		Session: request.Session,
+		Error:   vterrors.VtRPCErrorFromVtError(err),
+	}, nil
 }
 
 // ExecuteBatchKeyspaceIds is the RPC version of
@@ -202,22 +171,16 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.Exec
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	reply := new(proto.QueryResultList)
-	executeErr := vtg.server.ExecuteBatchKeyspaceIds(ctx,
+	result, err := vtg.server.ExecuteBatchKeyspaceIds(ctx,
 		request.Queries,
 		request.TabletType,
 		request.AsTransaction,
-		request.Session,
-		reply)
-	response = &pb.ExecuteBatchKeyspaceIdsResponse{
-		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
-	}
-	if executeErr != nil {
-		return nil, vterrors.ToGRPCError(executeErr)
-	}
-	response.Results = sqltypes.ResultsToProto3(reply.List)
-	response.Session = reply.Session
-	return response, nil
+		request.Session)
+	return &pb.ExecuteBatchKeyspaceIdsResponse{
+		Results: sqltypes.ResultsToProto3(result),
+		Session: request.Session,
+		Error:   vterrors.VtRPCErrorFromVtError(err),
+	}, nil
 }
 
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
@@ -234,9 +197,9 @@ func (vtg *VTGate) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Vi
 		string(request.Query.Sql),
 		bv,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
+		func(value *sqltypes.Result) error {
 			return stream.Send(&pb.StreamExecuteResponse{
-				Result: sqltypes.ResultToProto3(value.Result),
+				Result: sqltypes.ResultToProto3(value),
 			})
 		})
 	return vterrors.ToGRPCError(vtgErr)
@@ -258,9 +221,9 @@ func (vtg *VTGate) StreamExecuteShards(request *pb.StreamExecuteShardsRequest, s
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
+		func(value *sqltypes.Result) error {
 			return stream.Send(&pb.StreamExecuteShardsResponse{
-				Result: sqltypes.ResultToProto3(value.Result),
+				Result: sqltypes.ResultToProto3(value),
 			})
 		})
 	return vterrors.ToGRPCError(vtgErr)
@@ -283,9 +246,9 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *pb.StreamExecuteKeyspaceIds
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
+		func(value *sqltypes.Result) error {
 			return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{
-				Result: sqltypes.ResultToProto3(value.Result),
+				Result: sqltypes.ResultToProto3(value),
 			})
 		})
 	return vterrors.ToGRPCError(vtgErr)
@@ -308,9 +271,9 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *pb.StreamExecuteKeyRangesRequ
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
+		func(value *sqltypes.Result) error {
 			return stream.Send(&pb.StreamExecuteKeyRangesResponse{
-				Result: sqltypes.ResultToProto3(value.Result),
+				Result: sqltypes.ResultToProto3(value),
 			})
 		})
 	return vterrors.ToGRPCError(vtgErr)

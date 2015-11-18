@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -84,17 +85,17 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, request *proto.QueryShard, 
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.ExecuteShards(ctx,
+	var vtgErr error
+	reply.Result, vtgErr = vtg.server.ExecuteShards(ctx,
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.NotInTransaction)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
@@ -107,17 +108,17 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *proto.Keyspa
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.ExecuteKeyspaceIds(ctx,
+	var vtgErr error
+	reply.Result, vtgErr = vtg.server.ExecuteKeyspaceIds(ctx,
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.NotInTransaction)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
@@ -130,17 +131,17 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *proto.KeyRange
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.ExecuteKeyRanges(ctx,
+	var vtgErr error
+	reply.Result, vtgErr = vtg.server.ExecuteKeyRanges(ctx,
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.NotInTransaction)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
@@ -153,7 +154,8 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *proto.EntityId
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.ExecuteEntityIds(ctx,
+	var vtgErr error
+	reply.Result, vtgErr = vtg.server.ExecuteEntityIds(ctx,
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
@@ -161,10 +163,9 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *proto.EntityId
 		proto.EntityIdsToProto(request.EntityKeyspaceIDs),
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.NotInTransaction)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
@@ -181,14 +182,14 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, request *proto.BatchQu
 	if err != nil {
 		return err
 	}
-	vtgErr := vtg.server.ExecuteBatchShards(ctx,
+	var vtgErr error
+	reply.List, vtgErr = vtg.server.ExecuteBatchShards(ctx,
 		qs,
 		request.TabletType,
 		request.AsTransaction,
-		request.Session,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.Session)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
@@ -206,14 +207,14 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *proto.K
 	if err != nil {
 		return err
 	}
-	vtgErr := vtg.server.ExecuteBatchKeyspaceIds(ctx,
+	var vtgErr error
+	reply.List, vtgErr = vtg.server.ExecuteBatchKeyspaceIds(ctx,
 		qs,
 		request.TabletType,
 		request.AsTransaction,
-		request.Session,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.Session)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
@@ -227,8 +228,10 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, request *proto.Query, send
 		request.Sql,
 		request.BindVariables,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&proto.QueryResult{
+				Result: value,
+			})
 		})
 }
 
@@ -242,8 +245,10 @@ func (vtg *VTGate) StreamExecute2(ctx context.Context, request *proto.Query, sen
 		request.Sql,
 		request.BindVariables,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&proto.QueryResult{
+				Result: value,
+			})
 		})
 	if vtgErr == nil {
 		return nil
@@ -266,8 +271,10 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, request *proto.QueryS
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&proto.QueryResult{
+				Result: value,
+			})
 		})
 }
 
@@ -283,8 +290,10 @@ func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *proto.Query
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&proto.QueryResult{
+				Result: value,
+			})
 		})
 	if vtgErr == nil {
 		return nil
@@ -308,8 +317,10 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *proto.
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&proto.QueryResult{
+				Result: value,
+			})
 		})
 }
 
@@ -326,8 +337,10 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *proto
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&proto.QueryResult{
+				Result: value,
+			})
 		})
 	if vtgErr == nil {
 		return nil
@@ -351,8 +364,10 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *proto.Ke
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&proto.QueryResult{
+				Result: value,
+			})
 		})
 }
 
@@ -369,8 +384,10 @@ func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *proto.K
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&proto.QueryResult{
+				Result: value,
+			})
 		})
 	if vtgErr == nil {
 		return nil

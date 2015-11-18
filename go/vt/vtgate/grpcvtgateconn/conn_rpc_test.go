@@ -42,7 +42,7 @@ func TestGRPCVTGateConn(t *testing.T) {
 
 	// run the test suite
 	vtgateconntest.TestSuite(t, client, service)
-	//	vtgateconntest.TestErrorSuite(t, service)
+	vtgateconntest.TestErrorSuite(t, service)
 
 	// and clean up
 	client.Close()
