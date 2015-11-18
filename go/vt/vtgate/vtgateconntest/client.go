@@ -310,9 +310,8 @@ func (f *fakeVTGateService) ExecuteBatchShards(ctx context.Context, queries []*v
 		f.t.Errorf("ExecuteBatchShards: %+v, want %+v", query, execCase.batchQueryShard)
 		return nil
 	}
-	reply.Error = execCase.reply.Error
 	reply.Err = execCase.reply.Err
-	if reply.Error == "" && execCase.reply.Result != nil {
+	if execCase.reply.Result != nil {
 		reply.List = []sqltypes.Result{*execCase.reply.Result}
 	}
 	reply.Session = execCase.reply.Session
@@ -351,9 +350,8 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 		f.t.Errorf("ExecuteBatchKeyspaceIds: %+v, want %+v", query, execCase.keyspaceIDBatchQuery)
 		return nil
 	}
-	reply.Error = execCase.reply.Error
 	reply.Err = execCase.reply.Err
-	if reply.Error == "" && execCase.reply.Result != nil {
+	if execCase.reply.Result != nil {
 		reply.List = []sqltypes.Result{*execCase.reply.Result}
 	}
 	reply.Session = execCase.reply.Session
@@ -2387,7 +2385,6 @@ var execMap = map[string]struct {
 		reply: &proto.QueryResult{
 			Result:  &result1,
 			Session: nil,
-			Error:   "",
 		},
 	},
 	"errorRequst": {
@@ -2498,7 +2495,6 @@ var execMap = map[string]struct {
 		reply: &proto.QueryResult{
 			Result:  nil,
 			Session: nil,
-			Error:   executePartialErrString,
 			Err: &mproto.RPCError{
 				Code:    int64(expectedCode),
 				Message: executePartialErrString,
@@ -2613,7 +2609,6 @@ var execMap = map[string]struct {
 		reply: &proto.QueryResult{
 			Result:  nil,
 			Session: session2,
-			Error:   "",
 		},
 	},
 	"txRequestNIT": {
@@ -2729,7 +2724,6 @@ var execMap = map[string]struct {
 		reply: &proto.QueryResult{
 			Result:  nil,
 			Session: session1,
-			Error:   "",
 		},
 	},
 }

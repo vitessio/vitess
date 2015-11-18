@@ -97,9 +97,6 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 			}
 		}
 	}
-	if execCase.reply.Error != "" {
-		return errors.New(execCase.reply.Error)
-	}
 	return nil
 }
 
@@ -195,7 +192,6 @@ var execMap = map[string]struct {
 		reply: &proto.QueryResult{
 			Result:  &result1,
 			Session: nil,
-			Error:   "",
 		},
 	},
 	"txRequest": {
@@ -220,7 +216,6 @@ var execMap = map[string]struct {
 		reply: &proto.QueryResult{
 			Result:  &sqltypes.Result{},
 			Session: session2,
-			Error:   "",
 		},
 	},
 }
