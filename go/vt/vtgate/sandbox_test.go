@@ -592,7 +592,7 @@ var singleRowResult = &sqltypes.Result{
 	RowsAffected: 1,
 	InsertID:     0,
 	Rows: [][]sqltypes.Value{{
-		sqltypes.MakeNumeric([]byte("1")),
-		sqltypes.MakeString([]byte("foo")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("foo")),
 	}},
 }

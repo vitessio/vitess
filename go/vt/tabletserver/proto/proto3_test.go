@@ -125,14 +125,14 @@ func TestBindVariablesToProto3(t *testing.T) {
 		out:  &querypb.BindVariable{},
 	}, {
 		name: "sqltypes.Integral",
-		in:   sqltypes.MakeNumeric([]byte("1")),
+		in:   sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 		out: &querypb.BindVariable{
 			Type:  sqltypes.Int64,
 			Value: []byte("1"),
 		},
 	}, {
 		name: "sqltypes.Fractional",
-		in:   sqltypes.MakeFractional([]byte("1.5")),
+		in:   sqltypes.MakeTrusted(sqltypes.Float64, []byte("1.5")),
 		out: &querypb.BindVariable{
 			Type:  sqltypes.Float64,
 			Value: []byte("1.5"),
@@ -146,7 +146,7 @@ func TestBindVariablesToProto3(t *testing.T) {
 		},
 	}, {
 		name: "[]interface{}",
-		in:   []interface{}{1, "aa", sqltypes.MakeFractional([]byte("1.5"))},
+		in:   []interface{}{1, "aa", sqltypes.MakeTrusted(sqltypes.Float64, []byte("1.5"))},
 		out: &querypb.BindVariable{
 			Type: sqltypes.Tuple,
 			Values: []*querypb.Value{

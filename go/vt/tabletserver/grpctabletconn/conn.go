@@ -175,6 +175,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
+		var fields []*querypb.Field
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
@@ -184,7 +185,10 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 				close(sr)
 				return
 			}
-			sr <- sqltypes.Proto3ToResult(ser.Result)
+			if fields == nil {
+				fields = ser.Result.Fields
+			}
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {

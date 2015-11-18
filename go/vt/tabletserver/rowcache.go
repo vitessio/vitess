@@ -136,7 +136,7 @@ func (rc *RowCache) Delete(ctx context.Context, key string) {
 func (rc *RowCache) encodeRow(row []sqltypes.Value) (b []byte) {
 	length := 0
 	for _, v := range row {
-		length += len(v.Raw())
+		length += v.Len()
 		if length > maxDataLen {
 			return nil
 		}
@@ -151,7 +151,7 @@ func (rc *RowCache) encodeRow(row []sqltypes.Value) (b []byte) {
 			continue
 		}
 		data = append(data, v.Raw()...)
-		pack.PutUint32(b[4+i*4:], uint32(len(v.Raw())))
+		pack.PutUint32(b[4+i*4:], uint32(v.Len()))
 	}
 	return b
 }
@@ -169,11 +169,8 @@ func (rc *RowCache) decodeRow(b []byte) (row []sqltypes.Value) {
 			// Corrupt data
 			return nil
 		}
-		if sqltypes.IsIntegral(rc.tableInfo.Columns[i].Type) {
-			row[i] = sqltypes.MakeNumeric(data[:length])
-		} else {
-			row[i] = sqltypes.MakeString(data[:length])
-		}
+		// rowcache values are trusted.
+		row[i] = sqltypes.MakeTrusted(rc.tableInfo.Columns[i].Type, data[:length])
 		data = data[length:]
 	}
 	return row

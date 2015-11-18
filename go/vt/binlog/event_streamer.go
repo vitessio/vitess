@@ -141,6 +141,7 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*binlogdata
 	// then parse the PK names
 	var err error
 	dmlEvent.PrimaryKeyFields, err = parsePkNames(tokenizer)
+	hasNegatives := make([]bool, len(dmlEvent.PrimaryKeyFields))
 	if err != nil {
 		return nil, insertid, err
 	}
@@ -151,7 +152,7 @@ func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*binlogdata
 		case '(':
 			// pkTuple is a list of pk values
 			var pkTuple *querypb.Row
-			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid, dmlEvent.PrimaryKeyFields)
+			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid, dmlEvent.PrimaryKeyFields, hasNegatives)
 			if err != nil {
 				return nil, insertid, err
 			}
@@ -183,11 +184,13 @@ func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*querypb.Field, error) {
 	return columns, nil
 }
 
-// parsePkTuple parses something like (null 1 'bmFtZQ==' )
-func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*querypb.Field) (*querypb.Row, int64, error) {
+// parsePkTuple parses something like (null 1 'bmFtZQ==' ). For numbers, the default
+// type is Int64. If an unsigned number that can't fit in an int64 is seen, then the
+// type is set to Uint64. In such cases, if a negative number was previously seen, the
+// function returns an error.
+func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*querypb.Field, hasNegatives []bool) (*querypb.Row, int64, error) {
 	result := &querypb.Row{}
 
-	// start scanning the list
 	index := 0
 	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
 		if index >= len(fields) {
@@ -196,87 +199,82 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 
 		switch typ {
 		case '-':
-			// handle negative numbers
+			hasNegatives[index] = true
 			typ2, val2 := tokenizer.Scan()
 			if typ2 != sqlparser.NUMBER {
 				return nil, insertid, fmt.Errorf("expecting number after '-'")
 			}
-
-			// check value
 			fullVal := append([]byte{'-'}, val2...)
 			if _, err := strconv.ParseInt(string(fullVal), 0, 64); err != nil {
 				return nil, insertid, err
 			}
-
-			// update type
 			switch fields[index].Type {
 			case sqltypes.Null:
-				// we haven't updated the type yet
 				fields[index].Type = sqltypes.Int64
 			case sqltypes.Int64:
-				// nothing to do there
+				// no-op
 			default:
-				// we already set this to something incompatible!
 				return nil, insertid, fmt.Errorf("incompatible negative number field with type %v", fields[index].Type)
 			}
 
-			// update value
 			result.Lengths = append(result.Lengths, int64(len(fullVal)))
 			result.Values = append(result.Values, fullVal...)
-
 		case sqlparser.NUMBER:
-			// check value
-			if _, err := strconv.ParseUint(string(val), 0, 64); err != nil {
+			unsigned, err := strconv.ParseUint(string(val), 0, 64)
+			if err != nil {
 				return nil, insertid, err
 			}
-
-			// update type
-			switch fields[index].Type {
-			case sqltypes.Null:
-				// we haven't updated the type yet
-				fields[index].Type = sqltypes.Int64
-			case sqltypes.Int64:
-				// nothing to do there
-			default:
-				// we already set this to something incompatible!
-				return nil, insertid, fmt.Errorf("incompatible number field with type %v", fields[index].Type)
+			if unsigned > uint64(9223372036854775807) {
+				// Number is a uint64 that can't fit in an int64.
+				if hasNegatives[index] {
+					return nil, insertid, fmt.Errorf("incompatible unsigned number field with type %v", fields[index].Type)
+				}
+				switch fields[index].Type {
+				case sqltypes.Null, sqltypes.Int64:
+					fields[index].Type = sqltypes.Uint64
+				case sqltypes.Uint64:
+					// no-op
+				default:
+					return nil, insertid, fmt.Errorf("incompatible number field with type %v", fields[index].Type)
+				}
+			} else {
+				// Could be int64 or uint64.
+				switch fields[index].Type {
+				case sqltypes.Null:
+					fields[index].Type = sqltypes.Int64
+				case sqltypes.Int64, sqltypes.Uint64:
+					// no-op
+				default:
+					return nil, insertid, fmt.Errorf("incompatible number field with type %v", fields[index].Type)
+				}
 			}
 
-			// update value
 			result.Lengths = append(result.Lengths, int64(len(val)))
 			result.Values = append(result.Values, val...)
 		case sqlparser.NULL:
-			// update type
 			switch fields[index].Type {
 			case sqltypes.Null:
-				// we haven't updated the type yet
 				fields[index].Type = sqltypes.Int64
-			case sqltypes.Int64:
-				// nothing to do there
+			case sqltypes.Int64, sqltypes.Uint64:
+				// no-op
 			default:
-				// we already set this to something incompatible!
 				return nil, insertid, fmt.Errorf("incompatible auto-increment field with type %v", fields[index].Type)
 			}
 
-			// update value
-			v := sqltypes.MakeNumeric(strconv.AppendInt(nil, insertid, 10)).Raw()
+			v := strconv.AppendInt(nil, insertid, 10)
 			result.Lengths = append(result.Lengths, int64(len(v)))
 			result.Values = append(result.Values, v...)
 			insertid++
 		case sqlparser.STRING:
-			// update type
 			switch fields[index].Type {
 			case sqltypes.Null:
-				// we haven't updated the type yet
 				fields[index].Type = sqltypes.VarBinary
 			case sqltypes.VarBinary:
-				// nothing to do there
+				// no-op
 			default:
-				// we already set this to something incompatible!
 				return nil, insertid, fmt.Errorf("incompatible string field with type %v", fields[index].Type)
 			}
 
-			// update value
 			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(val)))
 			numDecoded, err := base64.StdEncoding.Decode(decoded, val)
 			if err != nil {
@@ -287,7 +285,6 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 		default:
 			return nil, insertid, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
 		}
-
 		index++
 	}
 

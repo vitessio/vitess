@@ -26,7 +26,7 @@ func RowsToProto3(rows [][]Value) []*querypb.Row {
 				row.Lengths = append(row.Lengths, -1)
 				continue
 			}
-			length := len(c.Raw())
+			length := c.Len()
 			row.Lengths = append(row.Lengths, int64(length))
 			total += length
 		}
@@ -41,25 +41,16 @@ func RowsToProto3(rows [][]Value) []*querypb.Row {
 	return result
 }
 
-// Proto3ToRows converts a proto3 rows to [][]Value.
-func Proto3ToRows(rows []*querypb.Row) [][]Value {
+// proto3ToRows converts a proto3 rows to [][]Value. The function is private
+// because it uses the trusted API.
+func proto3ToRows(fields []*querypb.Field, rows []*querypb.Row) [][]Value {
 	if len(rows) == 0 {
-		return [][]Value{}
+		return nil
 	}
 
 	result := make([][]Value, len(rows))
 	for i, r := range rows {
-		index := 0
-		result[i] = make([]Value, len(r.Lengths))
-		for j, l := range r.Lengths {
-			if l < 0 {
-				result[i][j] = NULL
-			} else {
-				end := index + int(l)
-				result[i][j] = MakeString(r.Values[index:end])
-				index = end
-			}
-		}
+		result[i] = MakeRowTrusted(fields, r)
 	}
 	return result
 }
@@ -77,7 +68,8 @@ func ResultToProto3(qr *Result) *querypb.QueryResult {
 	}
 }
 
-// Proto3ToResult converts a proto3 Result to an internal data structure.
+// Proto3ToResult converts a proto3 Result to an internal data structure. This function
+// should be used only if the field info is populated in qr.
 func Proto3ToResult(qr *querypb.QueryResult) *Result {
 	if qr == nil {
 		return nil
@@ -86,8 +78,35 @@ func Proto3ToResult(qr *querypb.QueryResult) *Result {
 		Fields:       qr.Fields,
 		RowsAffected: qr.RowsAffected,
 		InsertID:     qr.InsertId,
-		Rows:         Proto3ToRows(qr.Rows),
+		Rows:         proto3ToRows(qr.Fields, qr.Rows),
 	}
+}
+
+// CustomProto3ToResult converts a proto3 Result to an internal data structure. This function
+// takes a separate fields input because not all QueryResults contain the field info.
+// In particular, only the first packet of streaming queries contain the field info.
+func CustomProto3ToResult(fields []*querypb.Field, qr *querypb.QueryResult) *Result {
+	if qr == nil {
+		return nil
+	}
+	return &Result{
+		Fields:       qr.Fields,
+		RowsAffected: qr.RowsAffected,
+		InsertID:     qr.InsertId,
+		Rows:         proto3ToRows(fields, qr.Rows),
+	}
+}
+
+// ResultsToProto3 converts []Result to proto3.
+func ResultsToProto3(qr []Result) []*querypb.QueryResult {
+	if len(qr) == 0 {
+		return nil
+	}
+	result := make([]*querypb.QueryResult, len(qr))
+	for i, q := range qr {
+		result[i] = ResultToProto3(&q)
+	}
+	return result
 }
 
 // Proto3ToResults converts proto3 results to []Result.

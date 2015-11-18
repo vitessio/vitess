@@ -7,7 +7,6 @@ package vindexes
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
@@ -242,11 +241,7 @@ func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byt
 		if len(result.Rows) != 1 {
 			return nil, fmt.Errorf("lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, id)
 		}
-		inum, err := mproto.Convert(result.Fields[0], result.Rows[0][0])
-		if err != nil {
-			return nil, fmt.Errorf("lookup.Map: %v", err)
-		}
-		num, err := getNumber(inum)
+		num, err := getNumber(result.Rows[0][0].ToNative())
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -271,11 +266,7 @@ func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][][]b
 		}
 		var ksids [][]byte
 		for _, row := range result.Rows {
-			inum, err := mproto.Convert(result.Fields[0], row[0])
-			if err != nil {
-				return nil, fmt.Errorf("lookup.Map: %v", err)
-			}
-			num, err := getNumber(inum)
+			num, err := getNumber(row[0].ToNative())
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}

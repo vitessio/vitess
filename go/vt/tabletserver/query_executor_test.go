@@ -163,7 +163,7 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 	db.AddQuery(selectQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeNumeric([]byte("2"))},
+			[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
 		},
 	})
 
@@ -195,7 +195,7 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	db.AddQuery(selectQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeNumeric([]byte("2"))},
+			[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
 		},
 	})
 
@@ -477,9 +477,9 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeNumeric([]byte("20")),
-				sqltypes.MakeNumeric([]byte("30")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("20")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("30")),
 			},
 		},
 	}
@@ -507,9 +507,9 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeNumeric([]byte("20")),
-				sqltypes.MakeNumeric([]byte("30")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("20")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("30")),
 			},
 		},
 	})
@@ -1099,7 +1099,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 		"select unix_timestamp()": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeNumeric([]byte("1427325875"))},
+				[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
 			},
 		},
 		"select @@global.sql_mode": &sqltypes.Result{
@@ -1114,12 +1114,12 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeNumeric([]byte("1427325875")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeNumeric([]byte("1")),
-					sqltypes.MakeNumeric([]byte("2")),
-					sqltypes.MakeNumeric([]byte("3")),
-					sqltypes.MakeNumeric([]byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 				},
 			},
 		},
@@ -1196,12 +1196,12 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeNumeric([]byte("1427325875")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeNumeric([]byte("1")),
-					sqltypes.MakeNumeric([]byte("2")),
-					sqltypes.MakeNumeric([]byte("3")),
-					sqltypes.MakeNumeric([]byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 				},
 			},
 		},

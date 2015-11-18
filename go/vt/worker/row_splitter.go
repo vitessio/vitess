@@ -45,8 +45,7 @@ func (rs *RowSplitter) StartSplit() [][][]sqltypes.Value {
 func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Value) error {
 	if rs.KeyspaceIdType == topodatapb.KeyspaceIdType_UINT64 {
 		for _, row := range rows {
-			v := sqltypes.MakeNumeric(row[rs.ValueIndex].Raw())
-			i, err := v.ParseUint64()
+			i, err := row[rs.ValueIndex].ParseUint64()
 			if err != nil {
 				return fmt.Errorf("Non numerical value: %v", err)
 			}

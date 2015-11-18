@@ -155,7 +155,7 @@ func (vc *vcursor) Execute(query *tproto.BoundQuery) (*sqltypes.Result, error) {
 		}
 		for i := 0; i < vc.numRows; i++ {
 			result.Rows = append(result.Rows, []sqltypes.Value{
-				sqltypes.MakeNumeric([]byte(fmt.Sprintf("%d", i+1))),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", i+1))),
 			})
 		}
 		return result, nil

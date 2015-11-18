@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -102,8 +103,11 @@ func mapEntityIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 		if err != nil {
 			return "", nil, err
 		}
-		v, _ := tproto.SQLToNative(eid.XidType, eid.XidValue)
-		shards[shard] = append(shards[shard], v)
+		v, err := sqltypes.ValueFromBytes(eid.XidType, eid.XidValue)
+		if err != nil {
+			return "", nil, err
+		}
+		shards[shard] = append(shards[shard], v.ToNative())
 	}
 	return keyspace, shards, nil
 }

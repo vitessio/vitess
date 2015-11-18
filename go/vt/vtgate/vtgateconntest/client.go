@@ -839,7 +839,7 @@ func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(qr, execCase.reply.Result) {
-		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
+		t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.reply.Result)
 	}
 
 	_, err = conn.Execute(ctx, "none", nil, topodatapb.TabletType_RDONLY)
@@ -1209,7 +1209,7 @@ func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fak
 	}
 
 	if !reflect.DeepEqual(qr, &streamResult1) {
-		t.Errorf("Unexpected result from StreamExecute: got %#v want %#v", qr, &streamResult1)
+		t.Errorf("Unexpected result from StreamExecute: got\n%+v want\n%+v", qr, &streamResult1)
 	}
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
@@ -2732,12 +2732,12 @@ var result1 = sqltypes.Result{
 	InsertID:     72,
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row1 value1")),
+			sqltypes.MakeTrusted(sqltypes.Int16, []byte("1")),
 			sqltypes.NULL,
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row2 value1")),
-			sqltypes.MakeString([]byte("row2 value2")),
+			sqltypes.MakeTrusted(sqltypes.Int16, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		},
 	},
 }
@@ -2755,7 +2755,16 @@ var streamResult1 = sqltypes.Result{
 	},
 	RowsAffected: 0,
 	InsertID:     0,
-	Rows:         [][]sqltypes.Value{},
+	Rows: [][]sqltypes.Value{
+		[]sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.Int16, []byte("1")),
+			sqltypes.NULL,
+		},
+		[]sqltypes.Value{
+			sqltypes.MakeTrusted(sqltypes.Int16, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		},
+	},
 }
 
 var session1 = &vtgatepb.Session{

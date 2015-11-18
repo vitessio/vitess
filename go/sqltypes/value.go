@@ -8,8 +8,8 @@ package sqltypes
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -37,119 +37,255 @@ type BinWriter interface {
 	WriteByte(byte) error
 }
 
-// Value can store any SQL value. NULL is stored as nil.
+// Value can store any SQL value. If the value represents
+// an integral type, the bytes are always stored as a cannonical
+// representation that matches how MySQL returns such values.
 type Value struct {
-	inner innerValue
+	typ querypb.Type
+	val []byte
 }
 
-// Numeric represents non-fractional SQL number.
-type Numeric []byte
-
-// Fractional represents fractional types like float and decimal
-// It's functionally equivalent to Numeric other than how it's constructed
-type Fractional []byte
-
-// String represents any SQL type that needs to be represented using quotes.
-type String []byte
-
-// MakeValue builds a Value from type & bytes.
-func MakeValue(typ querypb.Type, b []byte) Value {
-	switch {
-	case IsIntegral(typ):
-		return MakeNumeric(b)
-	case IsQuoted(typ):
-		return MakeString(b)
+// MakeTrusted makes a new Value based on the type.
+// If val is nil, the Value is NULL. If the value is an integral,
+// then val must be in its cannonical form. This function should
+// only be used if you know the value and type conform to the rules.
+// Every place this function is called, a comment is needed that explains
+// why it's justified.
+func MakeTrusted(typ querypb.Type, val []byte) Value {
+	if typ == Null || val == nil {
+		return NULL
 	}
-	return MakeFractional(b)
+	return Value{typ: typ, val: val}
 }
 
-// MakeNumeric makes a Numeric from a []byte without validation.
-func MakeNumeric(b []byte) Value {
-	return Value{Numeric(b)}
+// MakeString makes a VarBinary Value.
+func MakeString(val []byte) Value {
+	return MakeTrusted(VarBinary, val)
 }
 
-// MakeFractional makes a Fractional value from a []byte without validation.
-func MakeFractional(b []byte) Value {
-	return Value{Fractional(b)}
+// BuildValue builds a value from any go type. sqltype.Value is
+// also allowed.
+func BuildValue(goval interface{}) (v Value, err error) {
+	// Look for the most common types first.
+	switch goval := goval.(type) {
+	case nil:
+		// no op
+	case []byte:
+		v = MakeTrusted(VarBinary, goval)
+	case int64:
+		v = MakeTrusted(Int64, strconv.AppendInt(nil, int64(goval), 10))
+	case uint64:
+		v = MakeTrusted(Uint64, strconv.AppendUint(nil, uint64(goval), 10))
+	case float64:
+		v = MakeTrusted(Float64, strconv.AppendFloat(nil, goval, 'f', -1, 64))
+	case int:
+		v = MakeTrusted(Int64, strconv.AppendInt(nil, int64(goval), 10))
+	case int8:
+		v = MakeTrusted(Int8, strconv.AppendInt(nil, int64(goval), 10))
+	case int16:
+		v = MakeTrusted(Int16, strconv.AppendInt(nil, int64(goval), 10))
+	case int32:
+		v = MakeTrusted(Int32, strconv.AppendInt(nil, int64(goval), 10))
+	case uint:
+		v = MakeTrusted(Uint64, strconv.AppendUint(nil, uint64(goval), 10))
+	case uint8:
+		v = MakeTrusted(Uint8, strconv.AppendUint(nil, uint64(goval), 10))
+	case uint16:
+		v = MakeTrusted(Uint16, strconv.AppendUint(nil, uint64(goval), 10))
+	case uint32:
+		v = MakeTrusted(Uint32, strconv.AppendUint(nil, uint64(goval), 10))
+	case float32:
+		v = MakeTrusted(Float32, strconv.AppendFloat(nil, float64(goval), 'f', -1, 64))
+	case string:
+		v = MakeTrusted(VarBinary, []byte(goval))
+	case time.Time:
+		v = MakeTrusted(Datetime, []byte(goval.Format("2006-01-02 15:04:05")))
+	case Value:
+		v = goval
+	default:
+		return v, fmt.Errorf("unexpected type %T: %v", goval, goval)
+	}
+	return v, nil
 }
 
-// MakeString makes a String value from a []byte.
-func MakeString(b []byte) Value {
-	return Value{String(b)}
+// ValueFromBytes builds a Value using typ and val. It ensures that val
+// matches the requested type. If type is an integral it's converted to
+// a cannonical form. Otherwise, the original representation is preserved.
+func ValueFromBytes(typ querypb.Type, val []byte) (v Value, err error) {
+	switch {
+	case IsSigned(typ):
+		signed, err := strconv.ParseInt(string(val), 0, 64)
+		if err != nil {
+			return NULL, err
+		}
+		v = MakeTrusted(typ, strconv.AppendInt(nil, signed, 10))
+	case IsUnsigned(typ):
+		unsigned, err := strconv.ParseUint(string(val), 0, 64)
+		if err != nil {
+			return NULL, err
+		}
+		v = MakeTrusted(typ, strconv.AppendUint(nil, unsigned, 10))
+	case typ == Tuple:
+		return NULL, errors.New("tuple not allowed for ValueFromBytes")
+	case IsFloat(typ) || typ == Decimal:
+		_, err := strconv.ParseFloat(string(val), 64)
+		if err != nil {
+			return NULL, err
+		}
+		// After verification, we preserve the original representation.
+		fallthrough
+	default:
+		v = MakeTrusted(typ, val)
+	}
+	return v, nil
+}
+
+// BuildIntegral builds an integral type from a string representaion.
+// The type will be Int64 or Uint64. Int64 will be preferred where possible.
+func BuildIntegral(val string) (n Value, err error) {
+	signed, err := strconv.ParseInt(val, 0, 64)
+	if err == nil {
+		return MakeTrusted(Int64, strconv.AppendInt(nil, signed, 10)), nil
+	}
+	unsigned, err := strconv.ParseUint(val, 0, 64)
+	if err != nil {
+		return Value{}, err
+	}
+	return MakeTrusted(Uint64, strconv.AppendUint(nil, unsigned, 10)), nil
+}
+
+// Type returns the type of Value.
+func (v Value) Type() querypb.Type {
+	return v.typ
 }
 
 // Raw returns the raw bytes. All types are currently implemented as []byte.
+// You should avoid using this function. If you do, you should treat the
+// bytes as read-only.
 func (v Value) Raw() []byte {
-	if v.inner == nil {
-		return nil
-	}
-	return v.inner.raw()
+	return v.val
 }
 
-// String returns the raw value as a string
+// Len returns the length.
+func (v Value) Len() int {
+	return len(v.val)
+}
+
+// String returns the raw value as a string.
 func (v Value) String() string {
-	if v.inner == nil {
-		return ""
-	}
-	return hack.String(v.inner.raw())
+	return hack.String(v.val)
 }
 
-// ParseInt64 will parse a Numeric value into an int64
+// ToNative converts Value to a native go type.
+// This does not work for sqltypes.Tuple. The function
+// panics if there are inconsistencies.
+func (v Value) ToNative() interface{} {
+	var out interface{}
+	var err error
+	switch {
+	case v.typ == Null:
+		// no-op
+	case IsSigned(v.typ):
+		out, err = v.ParseInt64()
+	case IsUnsigned(v.typ):
+		out, err = v.ParseUint64()
+	case IsFloat(v.typ):
+		out, err = v.ParseFloat64()
+	case v.typ == Tuple:
+		err = errors.New("unexpected tuple")
+	default:
+		out = v.val
+	}
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+// ParseInt64 will parse a Value into an int64. It does
+// not check the type.
 func (v Value) ParseInt64() (val int64, err error) {
-	if v.inner == nil {
-		return 0, fmt.Errorf("value is null")
-	}
-	n, ok := v.inner.(Numeric)
-	if !ok {
-		return 0, fmt.Errorf("value is not Numeric")
-	}
-	return strconv.ParseInt(string(n.raw()), 10, 64)
+	return strconv.ParseInt(v.String(), 10, 64)
 }
 
-// ParseUint64 will parse a Numeric value into a uint64
+// ParseUint64 will parse a Value into a uint64. It does
+// not check the type.
 func (v Value) ParseUint64() (val uint64, err error) {
-	if v.inner == nil {
-		return 0, fmt.Errorf("value is null")
-	}
-	n, ok := v.inner.(Numeric)
-	if !ok {
-		return 0, fmt.Errorf("value is not Numeric")
-	}
-	return strconv.ParseUint(string(n.raw()), 10, 64)
+	return strconv.ParseUint(v.String(), 10, 64)
 }
 
-// ParseFloat64 will parse a Fractional value into an float64
+// ParseFloat64 will parse a Value into an float64. It does
+// not check the type.
 func (v Value) ParseFloat64() (val float64, err error) {
-	if v.inner == nil {
-		return 0, fmt.Errorf("value is null")
-	}
-	n, ok := v.inner.(Fractional)
-	if !ok {
-		return 0, fmt.Errorf("value is not Fractional")
-	}
-	return strconv.ParseFloat(string(n.raw()), 64)
+	return strconv.ParseFloat(v.String(), 64)
 }
 
 // EncodeSQL encodes the value into an SQL statement. Can be binary.
 func (v Value) EncodeSQL(b BinWriter) {
-	if v.inner == nil {
-		if _, err := b.Write(nullstr); err != nil {
-			panic(err)
-		}
-	} else {
-		v.inner.encodeSQL(b)
+	// ToNative panics if v is invalid.
+	_ = v.ToNative()
+	switch {
+	case v.typ == Null:
+		writebytes(nullstr, b)
+	case IsQuoted(v.typ):
+		encodeBytesSQL(v.val, b)
+	default:
+		writebytes(v.val, b)
 	}
 }
 
 // EncodeASCII encodes the value using 7-bit clean ascii bytes.
 func (v Value) EncodeASCII(b BinWriter) {
-	if v.inner == nil {
-		if _, err := b.Write(nullstr); err != nil {
-			panic(err)
-		}
-	} else {
-		v.inner.encodeASCII(b)
+	// ToNative panics if v is invalid.
+	_ = v.ToNative()
+	switch {
+	case v.typ == Null:
+		writebytes(nullstr, b)
+	case IsQuoted(v.typ):
+		encodeBytesASCII(v.val, b)
+	default:
+		writebytes(v.val, b)
 	}
+}
+
+// IsNull returns true if Value is null.
+func (v Value) IsNull() bool {
+	return v.typ == Null
+}
+
+// IsIntegral returns true if Value is an integral.
+func (v Value) IsIntegral() bool {
+	return IsIntegral(v.typ)
+}
+
+// IsSigned returns true if Value is a signed integral.
+func (v Value) IsSigned() bool {
+	return IsSigned(v.typ)
+}
+
+// IsUnsigned returns true if Value is an unsigned integral.
+func (v Value) IsUnsigned() bool {
+	return IsUnsigned(v.typ)
+}
+
+// IsFloat returns true if Value is a float.
+func (v Value) IsFloat() bool {
+	return IsFloat(v.typ)
+}
+
+// IsQuoted returns true if Value must be SQL-quoted.
+func (v Value) IsQuoted() bool {
+	return IsQuoted(v.typ)
+}
+
+// IsText returns true if Value is a collatable text.
+func (v Value) IsText() bool {
+	return IsText(v.typ)
+}
+
+// IsBinary returns true if Value is binary.
+func (v Value) IsBinary() bool {
+	return IsBinary(v.typ)
 }
 
 // MarshalBson marshals Value into bson.
@@ -162,7 +298,7 @@ func (v Value) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	if v.IsNull() {
 		bson.EncodePrefix(buf, bson.Null, key)
 	} else {
-		bson.EncodeBinary(buf, key, v.Raw())
+		bson.EncodeBinary(buf, key, v.val)
 	}
 }
 
@@ -178,40 +314,16 @@ func (v *Value) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	}
 }
 
-// IsNull returns true if Value is null.
-func (v Value) IsNull() bool {
-	return v.inner == nil
-}
-
-// IsNumeric returns true if Value is numeric.
-func (v Value) IsNumeric() (ok bool) {
-	if v.inner != nil {
-		_, ok = v.inner.(Numeric)
-	}
-	return ok
-}
-
-// IsFractional returns true if Value is fractional.
-func (v Value) IsFractional() (ok bool) {
-	if v.inner != nil {
-		_, ok = v.inner.(Fractional)
-	}
-	return ok
-}
-
-// IsString returns true if Value is a string, or needs
-// to be quoted before sending to MySQL.
-func (v Value) IsString() (ok bool) {
-	if v.inner != nil {
-		_, ok = v.inner.(String)
-	}
-	return ok
-}
-
 // MarshalJSON should only be used for testing.
 // It's not a complete implementation.
 func (v Value) MarshalJSON() ([]byte, error) {
-	return json.Marshal(v.inner)
+	switch {
+	case v.IsQuoted():
+		return json.Marshal(v.String())
+	case v.typ == Null:
+		return nullstr, nil
+	}
+	return v.val, nil
 }
 
 // UnmarshalJSON should only be used for testing.
@@ -245,139 +357,40 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// innerValue defines methods that need to be supported by all non-null value types.
-type innerValue interface {
-	raw() []byte
-	encodeSQL(BinWriter)
-	encodeASCII(BinWriter)
-}
-
-// BuildValue builds a value from any go type. sqltype.Value is
-// also allowed.
-func BuildValue(goval interface{}) (v Value, err error) {
-	switch bindVal := goval.(type) {
-	case nil:
-		// no op
-	case int:
-		v = Value{Numeric(strconv.AppendInt(nil, int64(bindVal), 10))}
-	case int32:
-		v = Value{Numeric(strconv.AppendInt(nil, int64(bindVal), 10))}
-	case int64:
-		v = Value{Numeric(strconv.AppendInt(nil, int64(bindVal), 10))}
-	case uint:
-		v = Value{Numeric(strconv.AppendUint(nil, uint64(bindVal), 10))}
-	case uint32:
-		v = Value{Numeric(strconv.AppendUint(nil, uint64(bindVal), 10))}
-	case uint64:
-		v = Value{Numeric(strconv.AppendUint(nil, uint64(bindVal), 10))}
-	case float64:
-		v = Value{Fractional(strconv.AppendFloat(nil, bindVal, 'f', -1, 64))}
-	case string:
-		v = Value{String([]byte(bindVal))}
-	case []byte:
-		v = Value{String(bindVal)}
-	case time.Time:
-		v = Value{String([]byte(bindVal.Format("2006-01-02 15:04:05")))}
-	case Numeric, Fractional, String:
-		v = Value{bindVal.(innerValue)}
-	case Value:
-		v = bindVal
-	default:
-		return Value{}, fmt.Errorf("unsupported bind variable type %T: %v", goval, goval)
-	}
-	return v, nil
-}
-
-// BuildNumeric builds a Numeric type that represents any whole number.
-// It normalizes the representation to ensure 1:1 mapping between the
-// number and its representation.
-func BuildNumeric(val string) (n Value, err error) {
-	if val[0] == '-' || val[0] == '+' {
-		signed, err := strconv.ParseInt(val, 0, 64)
-		if err != nil {
-			return Value{}, err
-		}
-		n = Value{Numeric(strconv.AppendInt(nil, signed, 10))}
-	} else {
-		unsigned, err := strconv.ParseUint(val, 0, 64)
-		if err != nil {
-			return Value{}, err
-		}
-		n = Value{Numeric(strconv.AppendUint(nil, unsigned, 10))}
-	}
-	return n, nil
-}
-
-func (n Numeric) raw() []byte {
-	return []byte(n)
-}
-
-func (n Numeric) encodeSQL(b BinWriter) {
-	if _, err := b.Write(n.raw()); err != nil {
-		panic(err)
-	}
-}
-
-func (n Numeric) encodeASCII(b BinWriter) {
-	if _, err := b.Write(n.raw()); err != nil {
-		panic(err)
-	}
-}
-
-// MarshalJSON marshals Numeric into JSON.
-func (n Numeric) MarshalJSON() ([]byte, error) {
-	return n.raw(), nil
-}
-
-func (f Fractional) raw() []byte {
-	return []byte(f)
-}
-
-func (f Fractional) encodeSQL(b BinWriter) {
-	if _, err := b.Write(f.raw()); err != nil {
-		panic(err)
-	}
-}
-
-func (f Fractional) encodeASCII(b BinWriter) {
-	if _, err := b.Write(f.raw()); err != nil {
-		panic(err)
-	}
-}
-
-// MarshalJSON marshals String into JSON.
-func (s String) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(s.raw()))
-}
-
-func (s String) raw() []byte {
-	return []byte(s)
-}
-
-func (s String) encodeSQL(b BinWriter) {
-	writebyte(b, '\'')
-	for _, ch := range s.raw() {
+func encodeBytesSQL(val []byte, b BinWriter) {
+	writebyte('\'', b)
+	for _, ch := range val {
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
-			writebyte(b, ch)
+			writebyte(ch, b)
 		} else {
-			writebyte(b, '\\')
-			writebyte(b, encodedChar)
+			writebyte('\\', b)
+			writebyte(encodedChar, b)
 		}
 	}
-	writebyte(b, '\'')
+	writebyte('\'', b)
 }
 
-func (s String) encodeASCII(b BinWriter) {
-	writebyte(b, '\'')
+func encodeBytesASCII(val []byte, b BinWriter) {
+	writebyte('\'', b)
 	encoder := base64.NewEncoder(base64.StdEncoding, b)
-	encoder.Write(s.raw())
+	encoder.Write(val)
 	encoder.Close()
-	writebyte(b, '\'')
+	writebyte('\'', b)
 }
 
-func writebyte(b BinWriter, c byte) {
+func writebyte(c byte, b BinWriter) {
 	if err := b.WriteByte(c); err != nil {
 		panic(err)
+	}
+}
+
+func writebytes(val []byte, b BinWriter) {
+	n, err := b.Write(val)
+	if err != nil {
+		panic(err)
+	}
+	if n != len(val) {
+		panic(errors.New("short write"))
 	}
 }
 
@@ -411,7 +424,4 @@ func init() {
 			SQLDecodeMap[to] = byte(i)
 		}
 	}
-	gob.Register(Numeric(nil))
-	gob.Register(Fractional(nil))
-	gob.Register(String(nil))
 }

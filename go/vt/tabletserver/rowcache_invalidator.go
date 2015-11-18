@@ -10,6 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
@@ -193,11 +194,9 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *binlogdatapb.StreamEvent) 
 	}
 
 	for _, pkTuple := range event.PrimaryKeyValues {
-		newKey := validateKey(tableInfo, buildKeyFromRow(event.PrimaryKeyFields, pkTuple), rci.qe.queryServiceStats)
-		if newKey == "" {
-			continue
-		}
-		tableInfo.Cache.Delete(context.Background(), newKey)
+		// We can trust values coming from EventStreamer.
+		row := sqltypes.MakeRowTrusted(event.PrimaryKeyFields, pkTuple)
+		tableInfo.Cache.Delete(context.Background(), buildKey(row))
 		invalidations++
 	}
 	tableInfo.invalidations.Add(invalidations)
