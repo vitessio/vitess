@@ -6,6 +6,7 @@ package vindexes
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -69,20 +70,20 @@ func TestLookupHashUniqueAutoMapFail(t *testing.T) {
 func TestLookupHashUniqueAutoMapBadData(t *testing.T) {
 	result := &sqltypes.Result{
 		Fields: []*querypb.Field{{
-			Type: sqltypes.Int24,
+			Type: sqltypes.Float64,
 		}},
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeFractional([]byte("1.1")),
+				sqltypes.MakeTrusted(sqltypes.Float64, []byte("1.1")),
 			},
 		},
 		RowsAffected: 1,
 	}
 	vc := &vcursor{result: result}
 	_, err := lhua.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})
-	want := `lookup.Map: strconv.ParseInt: parsing "1.1": invalid syntax`
-	if err == nil || err.Error() != want {
-		t.Errorf("lhua.Map: %v, want %v", err, want)
+	want := "unexpected type"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("lhua.Map: %v, must contain %v", err, want)
 	}
 
 	result.Fields = []*querypb.Field{{

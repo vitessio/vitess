@@ -214,17 +214,7 @@ func BindVariableToValue(v interface{}) (querypb.Value, error) {
 			Value: strconv.AppendFloat(nil, v, 'f', -1, 64),
 		}, nil
 	case sqltypes.Value:
-		switch {
-		case v.IsNull():
-			return querypb.Value{}, nil
-		case v.IsNumeric():
-			// TODO(sougou): This will fail for large uint64 values.
-			// Revisit after the QueryResult revamp.
-			return querypb.Value{Type: sqltypes.Int64, Value: v.Raw()}, nil
-		case v.IsFractional():
-			return querypb.Value{Type: sqltypes.Float64, Value: v.Raw()}, nil
-		}
-		return querypb.Value{Type: sqltypes.VarBinary, Value: v.Raw()}, nil
+		return querypb.Value{Type: v.Type(), Value: v.Raw()}, nil
 	case nil:
 		return querypb.Value{}, nil
 	}
@@ -265,7 +255,6 @@ func Proto3ToBindVariables(bv map[string]*querypb.BindVariable) (map[string]inte
 		return nil, nil
 	}
 	result := make(map[string]interface{})
-	var err error
 	for k, v := range bv {
 		if v == nil {
 			continue
@@ -273,58 +262,31 @@ func Proto3ToBindVariables(bv map[string]*querypb.BindVariable) (map[string]inte
 		if v.Type == sqltypes.Tuple {
 			list := make([]interface{}, len(v.Values))
 			for i, lv := range v.Values {
-				list[i], err = SQLToNative(lv.Type, lv.Value)
+				v, err := sqltypes.ValueFromBytes(lv.Type, lv.Value)
 				if err != nil {
 					return nil, err
 				}
+				// TODO(sougou): Change this to just v.
+				list[i] = v.ToNative()
 			}
 			result[k] = list
 		} else {
-			result[k], err = SQLToNative(v.Type, v.Value)
+			v, err := sqltypes.ValueFromBytes(v.Type, v.Value)
 			if err != nil {
 				return nil, err
 			}
+			// TODO(sougou): Change this to just v.
+			result[k] = v.ToNative()
 		}
 	}
 	return result, nil
 }
 
-// SQLToNative converts a SQL type & value to a native go type.
-// This does not work for sqltypes.Tuple.
-func SQLToNative(typ querypb.Type, val []byte) (interface{}, error) {
-	if typ == sqltypes.Null {
-		return nil, nil
-	} else if sqltypes.IsSigned(typ) {
-		return strconv.ParseInt(string(val), 0, 64)
-	} else if sqltypes.IsUnsigned(typ) {
-		return strconv.ParseUint(string(val), 0, 64)
-	} else if sqltypes.IsFloat(typ) {
-		return strconv.ParseFloat(string(val), 64)
-	}
-	return val, nil
-}
-
 // Proto3ToQueryResultList converts a proto3 QueryResult to an internal data structure.
 func Proto3ToQueryResultList(results []*querypb.QueryResult) *QueryResultList {
-	result := &QueryResultList{
-		List: make([]sqltypes.Result, len(results)),
+	return &QueryResultList{
+		List: sqltypes.Proto3ToResults(results),
 	}
-	for i, qr := range results {
-		result.List[i] = *sqltypes.Proto3ToResult(qr)
-	}
-	return result
-}
-
-// QueryResultListToProto3 changes the internal array of QueryResult to the proto3 version
-func QueryResultListToProto3(results []sqltypes.Result) []*querypb.QueryResult {
-	if len(results) == 0 {
-		return nil
-	}
-	result := make([]*querypb.QueryResult, len(results))
-	for i := range results {
-		result[i] = sqltypes.ResultToProto3(&results[i])
-	}
-	return result
 }
 
 // Proto3ToQuerySplits converts a proto3 QuerySplit array to a native QuerySplit array

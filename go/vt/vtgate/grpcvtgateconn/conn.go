@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "github.com/youtube/vitess/go/vt/proto/vtgateservice"
@@ -244,6 +245,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
+		var fields []*querypb.Field
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
@@ -253,7 +255,10 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 				close(sr)
 				return
 			}
-			sr <- sqltypes.Proto3ToResult(ser.Result)
+			if fields == nil {
+				fields = ser.Result.Fields
+			}
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -284,6 +289,7 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
+		var fields []*querypb.Field
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
@@ -293,7 +299,10 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 				close(sr)
 				return
 			}
-			sr <- sqltypes.Proto3ToResult(ser.Result)
+			if fields == nil {
+				fields = ser.Result.Fields
+			}
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -324,6 +333,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
+		var fields []*querypb.Field
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
@@ -333,7 +343,10 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 				close(sr)
 				return
 			}
-			sr <- sqltypes.Proto3ToResult(ser.Result)
+			if fields == nil {
+				fields = ser.Result.Fields
+			}
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -364,6 +377,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
+		var fields []*querypb.Field
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
@@ -373,7 +387,10 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 				close(sr)
 				return
 			}
-			sr <- sqltypes.Proto3ToResult(ser.Result)
+			if fields == nil {
+				fields = ser.Result.Fields
+			}
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {

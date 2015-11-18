@@ -393,12 +393,12 @@ var executeQueryResult = sqltypes.Result{
 	InsertID:     72,
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row1 value1")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
 			sqltypes.NULL,
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row2 value1")),
-			sqltypes.MakeString([]byte("row2 value2")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
 		},
 	},
 }
@@ -516,12 +516,12 @@ var streamExecuteQueryResult1 = sqltypes.Result{
 var streamExecuteQueryResult2 = sqltypes.Result{
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row1 value1")),
-			sqltypes.MakeString([]byte("row1 value2")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Char, []byte("row1 value2")),
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row2 value1")),
-			sqltypes.MakeString([]byte("row2 value2")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
 		},
 	},
 }
@@ -804,10 +804,10 @@ var executeBatchQueryResultList = proto.QueryResultList{
 			InsertID:     712,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
-					sqltypes.MakeString([]byte("row1 value1")),
+					sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
 				},
 				[]sqltypes.Value{
-					sqltypes.MakeString([]byte("row2 value1")),
+					sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
 				},
 			},
 		},
@@ -815,7 +815,7 @@ var executeBatchQueryResultList = proto.QueryResultList{
 			Fields: []*querypb.Field{
 				&querypb.Field{
 					Name: "field1",
-					Type: sqltypes.Int8,
+					Type: sqltypes.VarBinary,
 				},
 			},
 			RowsAffected: 12333,
@@ -823,6 +823,8 @@ var executeBatchQueryResultList = proto.QueryResultList{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("row1 value1")),
+				},
+				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("row1 value2")),
 				},
 			},

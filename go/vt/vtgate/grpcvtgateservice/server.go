@@ -195,7 +195,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBa
 	if executeErr != nil {
 		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	response.Results = tproto.QueryResultListToProto3(reply.List)
+	response.Results = sqltypes.ResultsToProto3(reply.List)
 	response.Session = reply.Session
 	return response, nil
 }
@@ -220,7 +220,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.Exec
 	if executeErr != nil {
 		return nil, vterrors.ToGRPCError(executeErr)
 	}
-	response.Results = tproto.QueryResultListToProto3(reply.List)
+	response.Results = sqltypes.ResultsToProto3(reply.List)
 	response.Session = reply.Session
 	return response, nil
 }

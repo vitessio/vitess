@@ -411,7 +411,7 @@ func checkEcho(t *testing.T, name string, qr *sqltypes.Result, err error, want m
 	if !got["null"].IsNull() {
 		t.Errorf("MySQL NULL value wasn't preserved")
 	}
-	if !got["emptyString"].IsString() || got["emptyString"].String() != "" {
+	if !got["emptyString"].IsQuoted() || got["emptyString"].String() != "" {
 		t.Errorf("Empty string value wasn't preserved: %#v", got)
 	}
 }

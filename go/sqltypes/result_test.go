@@ -1,89 +1,72 @@
-// Copyright 2014, Google Inc. All rights reserved.
+// Copyright 2015, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package sqltypes
 
 import (
+	"reflect"
 	"testing"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-func TestConvert(t *testing.T) {
-	cases := []struct {
-		Field *querypb.Field
-		Val   Value
-		Want  interface{}
-	}{{
-		Field: &querypb.Field{Name: "null", Type: Null},
-		Val:   Value{},
-		Want:  nil,
+func TestRepair(t *testing.T) {
+	fields := []*querypb.Field{{
+		Type: Int64,
 	}, {
-		Field: &querypb.Field{Name: "decimal", Type: Decimal},
-		Val:   MakeString([]byte("aa")),
-		Want:  "aa",
-	}, {
-		Field: &querypb.Field{Name: "tiny", Type: Int8},
-		Val:   MakeString([]byte("1")),
-		Want:  int64(1),
-	}, {
-		Field: &querypb.Field{Name: "short", Type: Int16},
-		Val:   MakeString([]byte("1")),
-		Want:  int64(1),
-	}, {
-		Field: &querypb.Field{Name: "long", Type: Int32},
-		Val:   MakeString([]byte("1")),
-		Want:  int64(1),
-	}, {
-		Field: &querypb.Field{Name: "unsigned long", Type: Uint8},
-		Val:   MakeString([]byte("1")),
-		Want:  uint64(1),
-	}, {
-		Field: &querypb.Field{Name: "longlong", Type: Int64},
-		Val:   MakeString([]byte("1")),
-		Want:  int64(1),
-	}, {
-		Field: &querypb.Field{Name: "int24", Type: Int24},
-		Val:   MakeString([]byte("1")),
-		Want:  int64(1),
-	}, {
-		Field: &querypb.Field{Name: "float", Type: Float32},
-		Val:   MakeString([]byte("1")),
-		Want:  float64(1),
-	}, {
-		Field: &querypb.Field{Name: "double", Type: Float64},
-		Val:   MakeString([]byte("1")),
-		Want:  float64(1),
-	}, {
-		Field: &querypb.Field{Name: "large int out of range for int64", Type: Int64},
-		// 2^63, out of range for int64
-		Val:  MakeString([]byte("9223372036854775808")),
-		Want: `strconv.ParseInt: parsing "9223372036854775808": value out of range`,
-	}, {
-		Field: &querypb.Field{Name: "large int", Type: Uint64},
-		// 2^63, not out of range for uint64
-		Val:  MakeString([]byte("9223372036854775808")),
-		Want: uint64(9223372036854775808),
-	}, {
-		Field: &querypb.Field{Name: "float for int", Type: Int64},
-		Val:   MakeString([]byte("1.1")),
-		Want:  `strconv.ParseInt: parsing "1.1": invalid syntax`,
-	}, {
-		Field: &querypb.Field{Name: "string for float", Type: Float64},
-		Val:   MakeString([]byte("aa")),
-		Want:  `strconv.ParseFloat: parsing "aa": invalid syntax`,
+		Type: VarChar,
 	}}
+	in := Result{
+		Rows: [][]Value{
+			{testVal(VarBinary, "1"), testVal(VarBinary, "aa")},
+			{testVal(VarBinary, "2"), testVal(VarBinary, "bb")},
+		},
+	}
+	want := Result{
+		Rows: [][]Value{
+			{testVal(Int64, "1"), testVal(VarChar, "aa")},
+			{testVal(Int64, "2"), testVal(VarChar, "bb")},
+		},
+	}
+	in.Repair(fields)
+	if !reflect.DeepEqual(in, want) {
+		t.Errorf("Repair:\n%#v, want\n%#v", in, want)
+	}
+}
 
-	for _, c := range cases {
-		r, err := Convert(c.Field, c.Val)
-		if err != nil {
-			r = err.Error()
-		} else if _, ok := r.([]byte); ok {
-			r = string(r.([]byte))
-		}
-		if r != c.Want {
-			t.Errorf("%s: %+v, want %+v", c.Field.Name, r, c.Want)
-		}
+func TestCopy(t *testing.T) {
+	in := &Result{
+		Fields: []*querypb.Field{{
+			Type: Int64,
+		}, {
+			Type: VarChar,
+		}},
+		InsertID:     1,
+		RowsAffected: 2,
+		Rows: [][]Value{
+			{testVal(Int64, "1"), testVal(VarChar, "aa")},
+			{testVal(Int64, "2"), testVal(VarChar, "bb")},
+		},
+	}
+	want := &Result{
+		Fields: []*querypb.Field{{
+			Type: Int64,
+		}, {
+			Type: VarChar,
+		}},
+		InsertID:     1,
+		RowsAffected: 2,
+		Rows: [][]Value{
+			{testVal(Int64, "1"), testVal(VarChar, "aa")},
+			{testVal(Int64, "2"), testVal(VarChar, "bb")},
+		},
+	}
+	out := in.Copy()
+	// Change in so we're sure out got actually copied
+	in.Fields[0].Type = VarChar
+	in.Rows[0][0] = testVal(VarChar, "aa")
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Copy:\n%#v, want\n%#v", out, want)
 	}
 }

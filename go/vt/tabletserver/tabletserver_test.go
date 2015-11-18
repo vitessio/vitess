@@ -1110,8 +1110,8 @@ func TestTabletServerSplitQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeNumeric([]byte("100")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
 			},
 		},
 	})
@@ -1122,7 +1122,7 @@ func TestTabletServerSplitQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			},
 		},
 	})
@@ -1172,8 +1172,8 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeNumeric([]byte("100")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
 			},
 		},
 	})
@@ -1184,7 +1184,7 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			},
 		},
 	})
@@ -1249,7 +1249,7 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			},
 		},
 	})

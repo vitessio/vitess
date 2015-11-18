@@ -159,15 +159,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 			Left:     pk,
 			Right:    sqlparser.ValArg([]byte(":" + startBindVarName)),
 		}
-		if start.IsNumeric() {
-			v, _ := start.ParseInt64()
-			bindVars[startBindVarName] = v
-		} else if start.IsString() {
-			bindVars[startBindVarName] = start.Raw()
-		} else if start.IsFractional() {
-			v, _ := start.ParseFloat64()
-			bindVars[startBindVarName] = v
-		}
+		bindVars[startBindVarName] = start.ToNative()
 	}
 	// splitColumn < end
 	if !end.IsNull() {
@@ -176,15 +168,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 			Left:     pk,
 			Right:    sqlparser.ValArg([]byte(":" + endBindVarName)),
 		}
-		if end.IsNumeric() {
-			v, _ := end.ParseInt64()
-			bindVars[endBindVarName] = v
-		} else if end.IsString() {
-			bindVars[endBindVarName] = end.Raw()
-		} else if end.IsFractional() {
-			v, _ := end.ParseFloat64()
-			bindVars[endBindVarName] = v
-		}
+		bindVars[endBindVarName] = end.ToNative()
 	}
 	if startClause == nil {
 		clauses = endClause
@@ -230,8 +214,8 @@ func (qs *QuerySplitter) splitBoundariesIntColumn(pkMinMax *sqltypes.Result) ([]
 	if pkMinMax == nil || len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
 		return boundaries, nil
 	}
-	minNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][0].Raw())
-	maxNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][1].Raw())
+	minNumeric := pkMinMax.Rows[0][0]
+	maxNumeric := pkMinMax.Rows[0][1]
 	min, err := minNumeric.ParseInt64()
 	if err != nil {
 		return nil, err
@@ -260,8 +244,8 @@ func (qs *QuerySplitter) splitBoundariesUintColumn(pkMinMax *sqltypes.Result) ([
 	if pkMinMax == nil || len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
 		return boundaries, nil
 	}
-	minNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][0].Raw())
-	maxNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][1].Raw())
+	minNumeric := pkMinMax.Rows[0][0]
+	maxNumeric := pkMinMax.Rows[0][1]
 	min, err := minNumeric.ParseUint64()
 	if err != nil {
 		return nil, err

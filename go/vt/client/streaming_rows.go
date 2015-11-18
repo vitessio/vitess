@@ -65,9 +65,9 @@ func (ri *streamingRows) Next(dest []driver.Value) error {
 		}
 		ri.index = 0
 	}
-	err := populateRow(dest, ri.fields, ri.qr.Rows[ri.index])
+	populateRow(dest, ri.qr.Rows[ri.index])
 	ri.index++
-	return err
+	return nil
 }
 
 // checkFields fetches the first packet from the channel, which
