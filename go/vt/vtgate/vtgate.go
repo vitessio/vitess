@@ -157,7 +157,7 @@ func (vtg *VTGate) InitializeConnections(ctx context.Context) (err error) {
 }
 
 // Execute executes a non-streaming query by routing based on the values in the query.
-func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	startTime := time.Now()
 	statsKey := []string{"Execute", "Any", strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -165,26 +165,24 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return errTooManyInFlight
+		return nil, errTooManyInFlight
 	}
 
 	qr, err := vtg.router.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction)
 	if err == nil {
-		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
-	} else {
-		query := map[string]interface{}{
-			"Sql":              sql,
-			"BindVariables":    bindVariables,
-			"TabletType":       strings.ToLower(tabletType.String()),
-			"Session":          session,
-			"NotInTransaction": notInTransaction,
-		}
-		handleExecuteError(err, statsKey, query, vtg.logExecute)
-		reply.Err = vterrors.RPCErrFromVtError(err)
+		return qr, nil
 	}
-	reply.Session = session
-	return nil
+
+	query := map[string]interface{}{
+		"Sql":              sql,
+		"BindVariables":    bindVariables,
+		"TabletType":       strings.ToLower(tabletType.String()),
+		"Session":          session,
+		"NotInTransaction": notInTransaction,
+	}
+	handleExecuteError(err, statsKey, query, vtg.logExecute)
+	return nil, err
 }
 
 // ExecuteShards executes a non-streaming query on the specified shards.

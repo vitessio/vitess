@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -62,15 +63,15 @@ func (vtg *VTGate) Execute(ctx context.Context, request *proto.Query, reply *pro
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.Execute(ctx,
+	var vtgErr error
+	reply.Result, vtgErr = vtg.server.Execute(ctx,
 		request.Sql,
 		request.BindVariables,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.NotInTransaction)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 

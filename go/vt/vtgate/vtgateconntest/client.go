@@ -81,9 +81,9 @@ type queryExecute struct {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if f.hasError {
-		return errTestVtGateError
+		return nil, errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
@@ -91,7 +91,7 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	f.checkCallerID(ctx, "Execute")
 	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", sql)
+		return nil, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &queryExecute{
 		SQL:              sql,
@@ -102,10 +102,12 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		f.t.Errorf("Execute: %+v, want %+v", query, execCase.execQuery)
-		return nil
+		return nil, nil
 	}
-	*reply = *execCase.reply
-	return nil
+	if execCase.reply.Session != nil {
+		*session = *execCase.reply.Session
+	}
+	return execCase.reply.Result, nil
 }
 
 // queryExecuteShards contains all the fields we use to test ExecuteShards
@@ -845,26 +847,13 @@ func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
-
-	// TODO(aaijazi): get rid of this case from testExecute*, and instead have only testExecute*Error
-	execCase = execMap["errorRequst"]
-	_, err = conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
-	want = executePartialErrString
-	if err == nil || err.Error() != want {
-		t.Errorf("errorRequst: %v, want %v", err, want)
-	}
 }
 
 func testExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["errorRequst"]
 
-	fake.hasError = false
 	_, err := conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
-	verifyExecutePartialError(t, err, "Execute")
-
-	fake.hasError = true
-	_, err = conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	verifyError(t, err, "Execute")
 }
 

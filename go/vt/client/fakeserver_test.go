@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
@@ -20,10 +21,10 @@ type fakeVTGateService struct {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", sql)
+		return nil, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &proto.Query{
 		Sql:              sql,
@@ -33,10 +34,12 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 		NotInTransaction: notInTransaction,
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
-		return fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
+		return nil, fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
 	}
-	*reply = *execCase.reply
-	return nil
+	if execCase.reply.Session != nil {
+		*session = *execCase.reply.Session
+	}
+	return execCase.reply.Result, vterrors.FromRPCError(execCase.reply.Err)
 }
 
 // ExecuteShards is part of the VTGateService interface

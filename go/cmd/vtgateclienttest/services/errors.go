@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -119,14 +120,19 @@ func trimmedRequestToError(received string) error {
 	}
 }
 
-func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+	// not this will be refactored once we can change requestToPartialError signature.
+	reply := &proto.QueryResult{}
 	if requestToPartialError(sql, session, reply) {
-		return nil
+		if reply.Session != nil {
+			*session = *reply.Session
+		}
+		return reply.Result, vterrors.FromRPCError(reply.Err)
 	}
 	if err := requestToError(sql); err != nil {
-		return err
+		return nil, err
 	}
-	return c.fallbackClient.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
+	return c.fallbackClient.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction)
 }
 
 func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, reply *proto.QueryResult) error {

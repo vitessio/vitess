@@ -47,24 +47,17 @@ func TestVTGateExecute(t *testing.T) {
 	sandbox := createSandbox(KsTestUnsharded)
 	sbc := &sandboxConn{}
 	sandbox.MapTestConn("0", sbc)
-	qr := new(proto.QueryResult)
-	err := rpcVTGate.Execute(context.Background(),
+	qr, err := rpcVTGate.Execute(context.Background(),
 		"select * from t1",
 		nil,
 		topodatapb.TabletType_MASTER,
 		nil,
-		false,
-		qr)
+		false)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	wantqr := new(proto.QueryResult)
-	wantqr.Result = singleRowResult
-	if !reflect.DeepEqual(wantqr, qr) {
+	if !reflect.DeepEqual(singleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
-	}
-	if qr.Session != nil {
-		t.Errorf("want nil, got %+v\n", qr.Session)
 	}
 
 	session := new(vtgatepb.Session)
@@ -77,8 +70,7 @@ func TestVTGateExecute(t *testing.T) {
 		nil,
 		topodatapb.TabletType_MASTER,
 		session,
-		false,
-		qr)
+		false)
 	wantSession := &vtgatepb.Session{
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
@@ -106,8 +98,7 @@ func TestVTGateExecute(t *testing.T) {
 		nil,
 		topodatapb.TabletType_MASTER,
 		session,
-		false,
-		qr)
+		false)
 	rpcVTGate.Rollback(context.Background(), session)
 }
 

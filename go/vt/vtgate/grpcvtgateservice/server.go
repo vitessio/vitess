@@ -34,21 +34,16 @@ func (vtg *VTGate) Execute(ctx context.Context, request *pb.ExecuteRequest) (res
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	reply := new(proto.QueryResult)
 	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	executeErr := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.TabletType, request.Session, request.NotInTransaction, reply)
-	response = &pb.ExecuteResponse{
-		Error: vtgate.RPCErrorToVtRPCError(reply.Err),
-	}
-	if executeErr != nil {
-		return nil, vterrors.ToGRPCError(executeErr)
-	}
-	response.Result = sqltypes.ResultToProto3(reply.Result)
-	response.Session = reply.Session
-	return response, nil
+	result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.TabletType, request.Session, request.NotInTransaction)
+	return &pb.ExecuteResponse{
+		Result:  sqltypes.ResultToProto3(result),
+		Session: request.Session,
+		Error:   vterrors.VtRPCErrorFromVtError(err),
+	}, nil
 }
 
 // ExecuteShards is the RPC version of vtgateservice.VTGateService method
