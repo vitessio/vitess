@@ -42,9 +42,10 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 		Host:    "host1",
 		PortMap: map[string]int32{"vt": 123},
 	}
+	allEPs := fhc.GetAllEndPoints()
 	key := EndPointToMapKey(want)
-	if ep, ok := fhc.endPoints[key]; !ok || len(fhc.endPoints) != 1 {
-		t.Errorf("fhc.endPoints[key] = %+v; want %+v", ep, want)
+	if _, ok := allEPs[key]; !ok || len(allEPs) != 1 {
+		t.Errorf("fhc.GetAllEndPoints() = %+v; want %+v", allEPs, want)
 	}
 
 	// same tablet, different port, should update (previous
@@ -57,9 +58,10 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 		Host:    "host1",
 		PortMap: map[string]int32{"vt": 456},
 	}
+	allEPs = fhc.GetAllEndPoints()
 	key = EndPointToMapKey(want)
-	if ep, ok := fhc.endPoints[key]; !ok || len(fhc.endPoints) != 1 {
-		t.Errorf("fhc.endPoints[key] = %+v; want %+v", ep, want)
+	if _, ok := allEPs[key]; !ok || len(allEPs) != 1 {
+		t.Errorf("fhc.GetAllEndPoints() = %+v; want %+v", allEPs, want)
 	}
 
 	ctw.Stop()
