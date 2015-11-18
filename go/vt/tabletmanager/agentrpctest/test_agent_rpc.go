@@ -1152,7 +1152,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	ctx := context.Background()
 
 	// Test RPC specific methods of the interface.
-    agentRPCTestIsTimeoutErrorDialExpiredContext(ctx, t, client, ti)
+	agentRPCTestIsTimeoutErrorDialExpiredContext(ctx, t, client, ti)
 	agentRPCTestIsTimeoutErrorDialTimeout(ctx, t, client, ti)
 	agentRPCTestIsTimeoutErrorRPC(ctx, t, client, ti, fakeAgent.(*fakeRPCAgent))
 

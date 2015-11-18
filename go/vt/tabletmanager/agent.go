@@ -103,6 +103,11 @@ type ActionAgent struct {
 	// replication.  It is protected by actionMutex.
 	initReplication bool
 
+	// initialTablet remembers the state of the tablet record at startup.
+	// It can be used to notice, for example, if another tablet has taken over
+	// the record.
+	initialTablet *topodatapb.Tablet
+
 	// mutex protects the following fields, only hold the mutex
 	// to update the fields, nothing else.
 	mutex            sync.Mutex
@@ -462,6 +467,9 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	if err != nil {
 		return err
 	}
+
+	// Save the original tablet record as it is now (at startup).
+	agent.initialTablet = tablet.Tablet
 
 	if err = agent.verifyTopology(ctx); err != nil {
 		return err
