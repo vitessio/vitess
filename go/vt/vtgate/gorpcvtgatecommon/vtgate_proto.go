@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+// Package gorpcvtgatecommon contains common data structures for go rpc
+// vtgate client and server.
+package gorpcvtgatecommon
 
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -10,7 +12,7 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // Query represents a keyspace agnostic query request.
@@ -19,7 +21,7 @@ type Query struct {
 	Sql              string
 	BindVariables    map[string]interface{}
 	TabletType       topodatapb.TabletType
-	Session          *pb.Session
+	Session          *vtgatepb.Session
 	NotInTransaction bool
 }
 
@@ -32,7 +34,7 @@ type QueryShard struct {
 	Keyspace         string
 	Shards           []string
 	TabletType       topodatapb.TabletType
-	Session          *pb.Session
+	Session          *vtgatepb.Session
 	NotInTransaction bool
 }
 
@@ -45,7 +47,7 @@ type KeyspaceIdQuery struct {
 	Keyspace         string
 	KeyspaceIds      [][]byte
 	TabletType       topodatapb.TabletType
-	Session          *pb.Session
+	Session          *vtgatepb.Session
 	NotInTransaction bool
 }
 
@@ -58,7 +60,7 @@ type KeyRangeQuery struct {
 	Keyspace         string
 	KeyRanges        []*topodatapb.KeyRange
 	TabletType       topodatapb.TabletType
-	Session          *pb.Session
+	Session          *vtgatepb.Session
 	NotInTransaction bool
 }
 
@@ -77,14 +79,14 @@ type EntityIdsQuery struct {
 	EntityColumnName  string
 	EntityKeyspaceIDs []EntityId
 	TabletType        topodatapb.TabletType
-	Session           *pb.Session
+	Session           *vtgatepb.Session
 	NotInTransaction  bool
 }
 
 // QueryResult is sqltypes.Result+Session (for now).
 type QueryResult struct {
 	Result  *sqltypes.Result
-	Session *pb.Session
+	Session *vtgatepb.Session
 	Err     *mproto.RPCError
 }
 
@@ -104,7 +106,7 @@ type BatchQueryShard struct {
 	Queries       []BoundShardQuery
 	TabletType    topodatapb.TabletType
 	AsTransaction bool
-	Session       *pb.Session
+	Session       *vtgatepb.Session
 }
 
 // BoundKeyspaceIdQuery represents a single query request for the
@@ -123,13 +125,13 @@ type KeyspaceIdBatchQuery struct {
 	Queries       []BoundKeyspaceIdQuery
 	TabletType    topodatapb.TabletType
 	AsTransaction bool
-	Session       *pb.Session
+	Session       *vtgatepb.Session
 }
 
 // QueryResultList is sqltypes.ResultList+Session
 type QueryResultList struct {
 	List    []sqltypes.Result
-	Session *pb.Session
+	Session *vtgatepb.Session
 	Err     *mproto.RPCError
 }
 
@@ -152,13 +154,13 @@ type BeginResponse struct {
 	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
 	// consistent with other BSON structs.
 	Err     *mproto.RPCError
-	Session *pb.Session
+	Session *vtgatepb.Session
 }
 
 // CommitRequest is the BSON implementation of the proto3 vtgate.CommitRequest
 type CommitRequest struct {
 	CallerID *tproto.CallerID // only used by BSON
-	Session  *pb.Session
+	Session  *vtgatepb.Session
 }
 
 // CommitResponse is the BSON implementation of the proto3 vtgate.CommitResponse
@@ -171,7 +173,7 @@ type CommitResponse struct {
 // RollbackRequest is the BSON implementation of the proto3 vtgate.RollbackRequest
 type RollbackRequest struct {
 	CallerID *tproto.CallerID // only used by BSON
-	Session  *pb.Session
+	Session  *vtgatepb.Session
 }
 
 // RollbackResponse is the BSON implementation of the proto3 vtgate.RollbackResponse
@@ -179,4 +181,15 @@ type RollbackResponse struct {
 	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
 	// consistent with other BSON structs.
 	Err *mproto.RPCError
+}
+
+// GetSrvKeyspaceRequest is the payload to GetSrvRequest
+type GetSrvKeyspaceRequest struct {
+	Keyspace string
+}
+
+// SplitQueryResult is the response from SplitQueryRequest
+type SplitQueryResult struct {
+	Splits []*vtgatepb.SplitQueryResponse_Part
+	Err    *mproto.RPCError
 }
