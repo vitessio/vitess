@@ -112,7 +112,8 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		return err
 	}
 
-	// update the Shard object if the master was scrapped
+	// update the Shard object if the master was scrapped.
+	// we lock the shard to not conflict with reparent operations.
 	if wasMaster {
 		actionNode := actionnode.UpdateShard()
 		lockPath, err := wr.lockShard(ctx, ti.Keyspace, ti.Shard, actionNode)
@@ -120,22 +121,21 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 			return err
 		}
 
-		// read the shard with the lock
-		si, err := wr.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
-		if err != nil {
+		// update the shard record's master
+		echoWarning := false
+		if _, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(s *topodatapb.Shard) error {
+			if topoproto.TabletAliasEqual(s.MasterAlias, tabletAlias) {
+				s.MasterAlias = nil
+				echoWarning = false
+			} else {
+				echoWarning = true
+			}
+			return nil
+		}); err != nil {
 			return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 		}
-
-		// update it if the right alias is there
-		if topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
-			si.MasterAlias = nil
-
-			// write it back
-			if err := wr.ts.UpdateShard(ctx, si); err != nil {
-				return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
-			}
-		} else {
-			wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, si.MasterAlias)
+		if echoWarning {
+			wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was different", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard)
 		}
 
 		// and unlock

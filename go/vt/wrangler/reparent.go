@@ -292,8 +292,10 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}
 	if !topoproto.TabletAliasEqual(shardInfo.MasterAlias, masterElectTabletAlias) {
-		shardInfo.MasterAlias = masterElectTabletAlias
-		if err := wr.ts.UpdateShard(ctx, shardInfo); err != nil {
+		if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
+			s.MasterAlias = masterElectTabletAlias
+			return nil
+		}); err != nil {
 			wgSlaves.Wait()
 			return fmt.Errorf("failed to update shard master record: %v", err)
 		}
@@ -435,8 +437,10 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}
 	wr.logger.Infof("updating shard record with new master %v", masterElectTabletAlias)
-	shardInfo.MasterAlias = masterElectTabletAlias
-	if err := wr.ts.UpdateShard(ctx, shardInfo); err != nil {
+	if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
+		s.MasterAlias = masterElectTabletAlias
+		return nil
+	}); err != nil {
 		wgSlaves.Wait()
 		return fmt.Errorf("failed to update shard master record: %v", err)
 	}
@@ -631,8 +635,10 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}
 	wr.logger.Infof("updating shard record with new master %v", topoproto.TabletAliasString(masterElectTabletAlias))
-	shardInfo.MasterAlias = masterElectTabletAlias
-	if err := wr.ts.UpdateShard(ctx, shardInfo); err != nil {
+	if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
+		s.MasterAlias = masterElectTabletAlias
+		return nil
+	}); err != nil {
 		wgSlaves.Wait()
 		return fmt.Errorf("failed to update shard master record: %v", err)
 	}
