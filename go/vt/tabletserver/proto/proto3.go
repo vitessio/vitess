@@ -11,20 +11,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-// TargetToProto3 transform the bson RPC target to proto3
-func TargetToProto3(target *Target) *querypb.Target {
-	if target == nil {
-		return nil
-	}
-	return &querypb.Target{
-		Keyspace:   target.Keyspace,
-		Shard:      target.Shard,
-		TabletType: topodatapb.TabletType(target.TabletType),
-	}
-}
 
 // BoundQueryToProto3 converts internal types to proto3 BoundQuery
 func BoundQueryToProto3(sql string, bindVars map[string]interface{}) (*querypb.BoundQuery, error) {
