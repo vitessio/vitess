@@ -289,6 +289,18 @@ func Proto3ToQueryResultList(results []*querypb.QueryResult) *QueryResultList {
 	}
 }
 
+// QueryResultListToProto3 temporarily resurrected.
+func QueryResultListToProto3(results []sqltypes.Result) []*querypb.QueryResult {
+	if len(results) == 0 {
+		return nil
+	}
+	result := make([]*querypb.QueryResult, len(results))
+	for i := range results {
+		result[i] = sqltypes.ResultToProto3(&results[i])
+	}
+	return result
+}
+
 // Proto3ToQuerySplits converts a proto3 QuerySplit array to a native QuerySplit array
 func Proto3ToQuerySplits(queries []*querypb.QuerySplit) ([]QuerySplit, error) {
 	if len(queries) == 0 {
