@@ -200,7 +200,7 @@ class RowCacheInvalidator(unittest.TestCase):
                             'vt_test_keyspace',
                             'delete from vt_insert_test where id = 1000000')
     self._wait_for_replica()
-    self._wait_for_value(None)
+    self._wait_for_value([])
     end2 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(end1, end2)
 
