@@ -1102,7 +1102,7 @@ func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fak
 	}
 
 	if !reflect.DeepEqual(qr, &streamResultFields) {
-		t.Errorf("Unexpected result from StreamExecute: got\n%#v want\n%#v", qr, &streamResultFields)
+		t.Errorf("Unexpected result from StreamExecute: got %#v want %#v", qr, &streamResultFields)
 	}
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
@@ -2585,6 +2585,7 @@ var result1 = sqltypes.Result{
 // streamResultFields is only the fields, sent as the first packet
 var streamResultFields = sqltypes.Result{
 	Fields: result1.Fields,
+	Rows:   [][]sqltypes.Value{},
 }
 
 var session1 = &vtgatepb.Session{

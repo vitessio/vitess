@@ -386,13 +386,6 @@ func sendStreamResults(c *rpcplus.Call, sr chan *gorpcvtgatecommon.QueryResult) 
 			// If we get a QueryResult with an RPCError, that was an extra QueryResult sent by
 			// the server specifically to indicate an error, and we shouldn't surface it to clients.
 			if vtErr == nil {
-				// for tests to be able to assert nil equality
-				if len(r.Result.Fields) == 0 {
-					r.Result.Fields = nil
-				}
-				if len(r.Result.Rows) == 0 {
-					r.Result.Rows = nil
-				}
 				if fields == nil {
 					// first packet, we remember the fields
 					fields = r.Result.Fields
