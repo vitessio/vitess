@@ -410,9 +410,6 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 			}
 		}
 	}
-	//	if execCase.reply.Err != nil {
-	//		return vterrors.FromRPCError(execCase.reply.Err)
-	//	}
 	return nil
 }
 
@@ -460,9 +457,6 @@ func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string,
 			}
 		}
 	}
-	//	if execCase.reply.Err != nil {
-	//		return vterrors.FromRPCError(execCase.reply.Err)
-	//	}
 	return nil
 }
 
@@ -510,9 +504,6 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql st
 			}
 		}
 	}
-	//	if execCase.reply.Err != nil {
-	//		return vterrors.FromRPCError(execCase.reply.Err)
-	//	}
 	return nil
 }
 
@@ -560,9 +551,6 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 			}
 		}
 	}
-	//	if execCase.reply.Err != nil {
-	//		return vterrors.FromRPCError(execCase.reply.Err)
-	//	}
 	return nil
 }
 
@@ -1114,7 +1102,7 @@ func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fak
 	}
 
 	if !reflect.DeepEqual(qr, &streamResultFields) {
-		t.Errorf("Unexpected result from StreamExecute: got\n%+v want\n%+v", qr, &streamResultFields)
+		t.Errorf("Unexpected result from StreamExecute: got\n%#v want\n%#v", qr, &streamResultFields)
 	}
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
