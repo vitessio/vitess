@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -42,7 +42,7 @@ func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[
 		if length == -1 {
 			length = len(list)
 		} else if len(list) != length {
-			return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "mismatched lengths for values %v", pkValues)
+			return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "mismatched lengths for values %v", pkValues)
 		}
 		return nil
 	}
@@ -93,14 +93,14 @@ func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[
 func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]interface{}) ([]sqltypes.Value, error) {
 	val, _, err := sqlparser.FetchBindVar(key, bindVars)
 	if err != nil {
-		return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "%v", err)
+		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
 	}
 	list := val.([]interface{})
 	resolved := make([]sqltypes.Value, len(list))
 	for i, v := range list {
 		sqlval, err := sqltypes.BuildValue(v)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "%v", err)
+			return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
 		}
 		if err = validateValue(col, sqlval); err != nil {
 			return nil, err
@@ -137,17 +137,17 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 	case string:
 		val, _, err := sqlparser.FetchBindVar(v, bindVars)
 		if err != nil {
-			return result, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "%v", err)
+			return result, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
 		}
 		sqlval, err := sqltypes.BuildValue(val)
 		if err != nil {
-			return result, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "%v", err)
+			return result, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
 		}
 		result = sqlval
 	case sqltypes.Value:
 		result = v
 	default:
-		return result, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "incompatible value type %v", v)
+		return result, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "incompatible value type %v", v)
 	}
 
 	if err = validateValue(col, result); err != nil {
@@ -158,7 +158,7 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 
 func validateRow(tableInfo *TableInfo, columnNumbers []int, row []sqltypes.Value) error {
 	if len(row) != len(columnNumbers) {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "data inconsistency %d vs %d", len(row), len(columnNumbers))
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "data inconsistency %d vs %d", len(row), len(columnNumbers))
 	}
 	for j, value := range row {
 		if err := validateValue(&tableInfo.Columns[columnNumbers[j]], value); err != nil {
@@ -175,11 +175,11 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 	}
 	if sqltypes.IsIntegral(col.Type) {
 		if !value.IsIntegral() {
-			return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "type mismatch, expecting numeric type for %v for column: %v", value, col)
+			return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "type mismatch, expecting numeric type for %v for column: %v", value, col)
 		}
 	} else if col.Type == sqltypes.VarBinary {
 		if !value.IsQuoted() {
-			return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "type mismatch, expecting string type for %v for column: %v", value, col)
+			return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "type mismatch, expecting string type for %v for column: %v", value, col)
 		}
 	}
 	return nil
@@ -192,7 +192,7 @@ func getLimit(limit interface{}, bv map[string]interface{}) (int64, error) {
 	case string:
 		lookup, ok := bv[lim[1:]]
 		if !ok {
-			return -1, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "missing bind var %s", lim)
+			return -1, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "missing bind var %s", lim)
 		}
 		var newlim int64
 		switch l := lookup.(type) {
@@ -203,10 +203,10 @@ func getLimit(limit interface{}, bv map[string]interface{}) (int64, error) {
 		case int:
 			newlim = int64(l)
 		default:
-			return -1, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "want number type for %s, got %T", lim, lookup)
+			return -1, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "want number type for %s, got %T", lim, lookup)
 		}
 		if newlim < 0 {
-			return -1, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "negative limit %d", newlim)
+			return -1, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "negative limit %d", newlim)
 		}
 		return newlim, nil
 	case int64:

@@ -2,7 +2,7 @@ package callerid
 
 import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -15,9 +15,9 @@ func GoRPCImmediateCallerID(v *proto.VTGateCallerID) *querypb.VTGateCallerID {
 	return NewImmediateCallerID(v.Username)
 }
 
-// GoRPCEffectiveCallerID creates new EffectiveCallerID(vtpb.CallerID)
+// GoRPCEffectiveCallerID creates new EffectiveCallerID(vtrpcpb.CallerID)
 // from GoRPC's CallerID
-func GoRPCEffectiveCallerID(c *proto.CallerID) *vtpb.CallerID {
+func GoRPCEffectiveCallerID(c *proto.CallerID) *vtrpcpb.CallerID {
 	if c == nil {
 		return nil
 	}

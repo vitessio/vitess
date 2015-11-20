@@ -19,7 +19,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
@@ -374,7 +374,7 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_RETRY,
 			Err:        "retry: err",
-			ServerCode: vtrpc.ErrorCode_QUERY_NOT_SERVED,
+			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
 		}
 	}
 	if sbc.mustFailFatal > 0 {
@@ -382,7 +382,7 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_FATAL,
 			Err:        "fatal: err",
-			ServerCode: vtrpc.ErrorCode_INTERNAL_ERROR,
+			ServerCode: vtrpcpb.ErrorCode_INTERNAL_ERROR,
 		}
 	}
 	if sbc.mustFailServer > 0 {
@@ -390,7 +390,7 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_NORMAL,
 			Err:        "error: err",
-			ServerCode: vtrpc.ErrorCode_BAD_INPUT,
+			ServerCode: vtrpcpb.ErrorCode_BAD_INPUT,
 		}
 	}
 	if sbc.mustFailConn > 0 {
@@ -402,7 +402,7 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_TX_POOL_FULL,
 			Err:        "tx_pool_full: err",
-			ServerCode: vtrpc.ErrorCode_RESOURCE_EXHAUSTED,
+			ServerCode: vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED,
 		}
 	}
 	if sbc.mustFailNotTx > 0 {
@@ -410,7 +410,7 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_NOT_IN_TX,
 			Err:        "not_in_tx: err",
-			ServerCode: vtrpc.ErrorCode_NOT_IN_TX,
+			ServerCode: vtrpcpb.ErrorCode_NOT_IN_TX,
 		}
 	}
 	return nil

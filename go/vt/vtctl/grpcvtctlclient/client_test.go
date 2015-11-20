@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclienttest"
 	"google.golang.org/grpc"
 
-	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
+	vtctlservicepb "github.com/youtube/vitess/go/vt/proto/vtctlservice"
 )
 
 // the test here creates a fake server implementation, a fake client
@@ -31,7 +31,7 @@ func TestVtctlServer(t *testing.T) {
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
-	pbs.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts))
+	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts))
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server

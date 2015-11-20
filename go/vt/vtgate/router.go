@@ -16,7 +16,7 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 const (
@@ -60,7 +60,7 @@ func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, stat
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if bindVariables == nil {
 		bindVariables = make(map[string]interface{})
 	}

@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"google.golang.org/grpc"
 
-	pbs "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
+	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
 
 // Test gRPC interface using a vtworker and vtworkerclient.
@@ -30,7 +30,7 @@ func TestVtworkerServer(t *testing.T) {
 
 	// Create a gRPC server and listen on the port.
 	server := grpc.NewServer()
-	pbs.RegisterVtworkerServer(server, grpcvtworkerserver.NewVtworkerServer(wi))
+	vtworkerservicepb.RegisterVtworkerServer(server, grpcvtworkerserver.NewVtworkerServer(wi))
 	go server.Serve(listener)
 
 	// Create a VtworkerClient gRPC client to talk to the vtworker.

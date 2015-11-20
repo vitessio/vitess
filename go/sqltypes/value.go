@@ -50,6 +50,7 @@ type Value struct {
 // form. This function should only be used if you know the value
 // and type conform to the rules.  Every place this function is
 // called, a comment is needed that explains why it's justified.
+// Functions within this package are exempt.
 func MakeTrusted(typ querypb.Type, val []byte) Value {
 	if typ == Null {
 		return NULL

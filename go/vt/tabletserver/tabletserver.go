@@ -29,7 +29,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -233,7 +233,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "InitDBConfig failed, current state: %d", tsv.state)
+		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "InitDBConfig failed, current state: %d", tsv.state)
 	}
 	tsv.target = target
 	tsv.dbconfigs = dbconfigs
@@ -335,7 +335,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 		tsv.setState(StateTransitioning)
 		return actionServeNewType, nil
 	case StateTransitioning, StateShuttingDown:
-		return actionNone, NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "cannot SetServingType, current state: %s", tsv.state)
+		return actionNone, NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "cannot SetServingType, current state: %s", tsv.state)
 	default:
 		panic("uncreachable")
 	}
@@ -536,13 +536,13 @@ func (tsv *TabletServer) GetSessionId(sessionParams *proto.SessionParams, sessio
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateServing {
-		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
+		return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
 	}
 	if sessionParams.Keyspace != tsv.dbconfigs.App.Keyspace {
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", tsv.dbconfigs.App.Keyspace, sessionParams.Keyspace)
+		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", tsv.dbconfigs.App.Keyspace, sessionParams.Keyspace)
 	}
 	if strings.ToLower(sessionParams.Shard) != strings.ToLower(tsv.dbconfigs.App.Shard) {
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", tsv.dbconfigs.App.Shard, sessionParams.Shard)
+		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", tsv.dbconfigs.App.Shard, sessionParams.Shard)
 	}
 	sessionInfo.SessionId = tsv.sessionID
 	return nil
@@ -633,7 +633,7 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 	if !ok {
 		log.Errorf("Uncaught panic for %v:\n%v\n%s", query, err, tb.Stack(4))
 		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-		terr = NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, query)
+		terr = NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, query)
 		return terr
 	}
 	var myError error
@@ -715,7 +715,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, qu
 func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) (err error) {
 	// check cases we don't handle yet
 	if query.TransactionId != 0 {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Transactions not supported with streaming")
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Transactions not supported with streaming")
 	}
 
 	logStats := newLogStats("StreamExecute", ctx)
@@ -752,10 +752,10 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // transaction. If AsTransaction is true, TransactionId must be 0.
 func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	if len(queryList.Queries) == 0 {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Empty query list")
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Empty query list")
 	}
 	if queryList.AsTransaction && queryList.TransactionId != 0 {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
 	}
 
 	allowShutdown := (queryList.TransactionId != 0)
@@ -823,7 +823,7 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target,
 	splitter := NewQuerySplitter(&(req.Query), req.SplitColumn, req.SplitCount, tsv.qe.schemaInfo)
 	err = splitter.validateQuery()
 	if err != nil {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %#v", err, req)
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %#v", err, req)
 	}
 
 	defer func(start time.Time) {
@@ -848,7 +848,7 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target,
 	}
 	reply.Queries, err = splitter.split(columnType, pkMinMax)
 	if err != nil {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %#v", err, req)
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %#v", err, req)
 	}
 	return nil
 }
@@ -921,16 +921,16 @@ func (tsv *TabletServer) startRequest(target *querypb.Target, sessionID int64, i
 	if (isBegin || allowShutdown) && tsv.state == StateShuttingDown {
 		goto verifySession
 	}
-	return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
+	return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
 
 verifySession:
 	if target != nil {
 		// a valid target can be used instead of a valid session
 		if target.Keyspace != tsv.target.Keyspace {
-			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid keyspace %v", target.Keyspace)
+			return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid keyspace %v", target.Keyspace)
 		}
 		if target.Shard != tsv.target.Shard {
-			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid shard %v", target.Shard)
+			return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid shard %v", target.Shard)
 		}
 		if target.TabletType != tsv.target.TabletType {
 			for _, otherType := range tsv.alsoAllow {
@@ -938,12 +938,12 @@ verifySession:
 					goto ok
 				}
 			}
-			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+			return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
 		}
 		goto ok
 	}
 	if sessionID != tsv.sessionID {
-		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid session Id %v", sessionID)
+		return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid session Id %v", sessionID)
 	}
 
 ok:
@@ -1130,7 +1130,7 @@ func getColumnType(qre *QueryExecutor, columnName, tableName string) (querypb.Ty
 		return sqltypes.Null, err
 	}
 	if result == nil || len(result.Fields) != 1 {
-		return sqltypes.Null, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "failed to get column type for column: %v, invalid result: %v", columnName, result)
+		return sqltypes.Null, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "failed to get column type for column: %v, invalid result: %v", columnName, result)
 	}
 	return result.Fields[0].Type, nil
 }

@@ -23,7 +23,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // FakeQueryService has the server side of this fake
@@ -47,7 +47,7 @@ func (f *FakeQueryService) HandlePanic(err *error) {
 }
 
 const expectedErrMatch string = "error: generic error"
-const expectedCode vtrpc.ErrorCode = vtrpc.ErrorCode_BAD_INPUT
+const expectedCode vtrpcpb.ErrorCode = vtrpcpb.ErrorCode_BAD_INPUT
 
 var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, expectedCode, "generic error")
 
@@ -89,7 +89,7 @@ var testTarget = &querypb.Target{
 	TabletType: topodatapb.TabletType_REPLICA,
 }
 
-var testCallerID = &vtrpc.CallerID{
+var testCallerID = &vtrpcpb.CallerID{
 	Principal:    "test_principal",
 	Component:    "test_component",
 	Subcomponent: "test_subcomponent",

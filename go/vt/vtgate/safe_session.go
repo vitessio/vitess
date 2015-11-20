@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // SafeSession is a mutex-protected version of the Session.
@@ -17,11 +17,11 @@ import (
 // for a single shard)
 type SafeSession struct {
 	mu sync.Mutex
-	*pbg.Session
+	*vtgatepb.Session
 }
 
 // NewSafeSession returns a new SafeSession based on the Session
-func NewSafeSession(sessn *pbg.Session) *SafeSession {
+func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
 	return &SafeSession{Session: sessn}
 }
 
@@ -51,7 +51,7 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 }
 
 // Append adds a new ShardSession
-func (session *SafeSession) Append(shardSession *pbg.Session_ShardSession) {
+func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.ShardSessions = append(session.ShardSessions, shardSession)
