@@ -838,8 +838,8 @@ func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
-	if !reflect.DeepEqual(*qrl, executeBatchQueryResultList) {
-		t.Errorf("Unexpected result from Execute: got %v wanted %v", qrl, executeBatchQueryResultList)
+	if !reflect.DeepEqual(qrl, executeBatchQueryResultList.List) {
+		t.Errorf("Unexpected result from Execute: got %v wanted %v", qrl, executeBatchQueryResultList.List)
 	}
 }
 
@@ -863,8 +863,8 @@ func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
-	if !reflect.DeepEqual(*qrl, executeBatchQueryResultList) {
-		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, executeBatchQueryResultList)
+	if !reflect.DeepEqual(qrl, executeBatchQueryResultList.List) {
+		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, executeBatchQueryResultList.List)
 	}
 }
 
