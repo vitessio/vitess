@@ -443,7 +443,7 @@ func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map
 	return sbc.Execute(ctx, query, bindVars, transactionID)
 }
 
-func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	if asTransaction {
 		sbc.AsTransactionCount.Add(1)
@@ -455,15 +455,14 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 		return nil, err
 	}
 	sbc.BatchQueries = append(sbc.BatchQueries, queries)
-	qrl := &tproto.QueryResultList{}
-	qrl.List = make([]sqltypes.Result, 0, len(queries))
+	result := make([]sqltypes.Result, 0, len(queries))
 	for _ = range queries {
-		qrl.List = append(qrl.List, *(sbc.getNextResult()))
+		result = append(result, *(sbc.getNextResult()))
 	}
-	return qrl, nil
+	return result, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 

@@ -16,7 +16,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -245,7 +244,7 @@ func (res *Resolver) ExecuteEntityIds(
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session) (*tproto.QueryResultList, error) {
+func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session) ([]sqltypes.Result, error) {
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
 		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(ctx, res.toposerv, res.cell, tabletType, queries)
 		if err != nil {
@@ -264,7 +263,7 @@ func (res *Resolver) ExecuteBatch(
 	asTransaction bool,
 	session *vtgatepb.Session,
 	buildBatchRequest func() (*scatterBatchRequest, error),
-) (*tproto.QueryResultList, error) {
+) ([]sqltypes.Result, error) {
 	batchRequest, err := buildBatchRequest()
 	if err != nil {
 		return nil, err

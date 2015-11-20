@@ -226,11 +226,10 @@ func (stc *ScatterConn) ExecuteBatch(
 	batchRequest *scatterBatchRequest,
 	tabletType topodatapb.TabletType,
 	asTransaction bool,
-	session *SafeSession) (qrs *tproto.QueryResultList, err error) {
+	session *SafeSession) (qrs []sqltypes.Result, err error) {
 	allErrors := new(concurrency.AllErrorRecorder)
 
-	qrs = &tproto.QueryResultList{}
-	qrs.List = make([]sqltypes.Result, batchRequest.Length)
+	results := make([]sqltypes.Result, batchRequest.Length)
 	var resMutex sync.Mutex
 
 	var wg sync.WaitGroup
@@ -264,8 +263,8 @@ func (stc *ScatterConn) ExecuteBatch(
 			func() {
 				resMutex.Lock()
 				defer resMutex.Unlock()
-				for i, result := range innerqrs.List {
-					appendResult(&qrs.List[req.ResultIndexes[i]], &result)
+				for i, result := range innerqrs {
+					appendResult(&results[req.ResultIndexes[i]], &result)
 				}
 			}()
 		}(req)
@@ -284,7 +283,7 @@ func (stc *ScatterConn) ExecuteBatch(
 		}
 		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
-	return qrs, nil
+	return results, nil
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.

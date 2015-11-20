@@ -214,7 +214,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 
 // ExecuteBatch is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	q := make([]tproto.BoundQuery, len(queries))
 	for i, query := range queries {
 		bv, err := tproto.BindVariablesToProto3(query.BindVariables)
@@ -240,7 +240,7 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tprot
 	}, reply); err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return reply, nil
+	return reply.List, nil
 }
 
 // StreamExecute is part of tabletconn.TabletConn
@@ -326,7 +326,7 @@ func (itc *internalTabletConn) Execute2(ctx context.Context, query string, bindV
 }
 
 // ExecuteBatch2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (itc *internalTabletConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return itc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 

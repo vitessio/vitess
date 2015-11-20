@@ -352,11 +352,11 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.B
 		})
 	if err == nil {
 		var rowCount int64
-		for _, qr := range qrs.List {
+		for _, qr := range qrs {
 			rowCount += int64(len(qr.Rows))
 		}
 		vtg.rowsReturned.Add(statsKey, rowCount)
-		return qrs.List, nil
+		return qrs, nil
 	}
 
 	query := map[string]interface{}{
@@ -391,11 +391,11 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 		session)
 	if err == nil {
 		var rowCount int64
-		for _, qr := range qrs.List {
+		for _, qr := range qrs {
 			rowCount += int64(len(qr.Rows))
 		}
 		vtg.rowsReturned.Add(statsKey, rowCount)
-		return qrs.List, nil
+		return qrs, nil
 	}
 
 	query := map[string]interface{}{

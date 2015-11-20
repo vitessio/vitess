@@ -35,7 +35,7 @@ type Gateway interface {
 	Execute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error)
 
 	// ExecuteBatch executes a group of queries for the specified keyspace, shard, and tablet type.
-	ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error)
+	ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
 
 	// StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
 	StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc)

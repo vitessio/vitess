@@ -110,7 +110,7 @@ func (sg *shardGateway) Execute(ctx context.Context, keyspace string, shard stri
 }
 
 // ExecuteBatch executes a group of queries for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) ExecuteBatch(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (sg *shardGateway) ExecuteBatch(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 

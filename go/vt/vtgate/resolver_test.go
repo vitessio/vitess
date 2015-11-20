@@ -100,7 +100,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		return &qrs.List[0], err
+		return &qrs[0], err
 	})
 }
 
