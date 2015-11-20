@@ -46,10 +46,15 @@ func (result *Result) Copy() *Result {
 		rows := make([][]Value, len(result.Rows))
 		for i, r := range result.Rows {
 			rows[i] = make([]Value, len(r))
+			totalLen := 0
+			for _, c := range r {
+				totalLen += len(c.val)
+			}
+			arena := make([]byte, 0, totalLen)
 			for j, c := range r {
-				bytes := make([]byte, len(c.val))
-				copy(bytes, c.val)
-				rows[i][j] = MakeTrusted(c.typ, bytes)
+				start := len(arena)
+				arena = append(arena, c.val...)
+				rows[i][j] = MakeTrusted(c.typ, arena[start:start+len(c.val)])
 			}
 		}
 		out.Rows = rows

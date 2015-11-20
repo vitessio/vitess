@@ -46,11 +46,10 @@ type Value struct {
 }
 
 // MakeTrusted makes a new Value based on the type.
-// If val is nil, the Value is NULL. If the value is an integral,
-// then val must be in its cannonical form. This function should
-// only be used if you know the value and type conform to the rules.
-// Every place this function is called, a comment is needed that explains
-// why it's justified.
+// If the value is an integral, then val must be in its cannonical
+// form. This function should only be used if you know the value
+// and type conform to the rules.  Every place this function is
+// called, a comment is needed that explains why it's justified.
 func MakeTrusted(typ querypb.Type, val []byte) Value {
 	if typ == Null {
 		return NULL
