@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -36,7 +36,7 @@ var (
 	`)
 	txlogzFuncMap = template.FuncMap{
 		"stampMicro":         func(t time.Time) string { return t.Format(time.StampMicro) },
-		"getEffectiveCaller": func(e *vtpb.CallerID) string { return callerid.GetPrincipal(e) },
+		"getEffectiveCaller": func(e *vtrpcpb.CallerID) string { return callerid.GetPrincipal(e) },
 		"getImmediateCaller": func(i *querypb.VTGateCallerID) string { return callerid.GetUsername(i) },
 	}
 	txlogzTmpl = template.Must(template.New("example").Funcs(txlogzFuncMap).Parse(`

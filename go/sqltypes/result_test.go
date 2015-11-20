@@ -45,8 +45,9 @@ func TestCopy(t *testing.T) {
 		InsertID:     1,
 		RowsAffected: 2,
 		Rows: [][]Value{
-			{testVal(Int64, "1"), testVal(VarChar, "aa")},
-			{testVal(Int64, "2"), testVal(VarChar, "bb")},
+			{testVal(Int64, "1"), MakeTrusted(Null, nil)},
+			{testVal(Int64, "2"), MakeTrusted(VarChar, nil)},
+			{testVal(Int64, "3"), testVal(VarChar, "")},
 		},
 	}
 	want := &Result{
@@ -58,8 +59,9 @@ func TestCopy(t *testing.T) {
 		InsertID:     1,
 		RowsAffected: 2,
 		Rows: [][]Value{
-			{testVal(Int64, "1"), testVal(VarChar, "aa")},
-			{testVal(Int64, "2"), testVal(VarChar, "bb")},
+			{testVal(Int64, "1"), MakeTrusted(Null, nil)},
+			{testVal(Int64, "2"), testVal(VarChar, "")},
+			{testVal(Int64, "3"), testVal(VarChar, "")},
 		},
 	}
 	out := in.Copy()

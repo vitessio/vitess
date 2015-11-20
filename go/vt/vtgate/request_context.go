@@ -10,7 +10,7 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 type requestContext struct {
@@ -18,12 +18,12 @@ type requestContext struct {
 	sql              string
 	bindVariables    map[string]interface{}
 	tabletType       topodatapb.TabletType
-	session          *pbg.Session
+	session          *vtgatepb.Session
 	notInTransaction bool
 	router           *Router
 }
 
-func newRequestContext(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool, router *Router) *requestContext {
+func newRequestContext(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, router *Router) *requestContext {
 	return &requestContext{
 		ctx:              ctx,
 		sql:              sql,

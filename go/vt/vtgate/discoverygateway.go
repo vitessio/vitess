@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/discovery"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -171,7 +171,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		endPoints := dg.getEndPoints(keyspace, shard, tabletType)
 		if len(endPoints) == 0 {
 			// fail fast if there is no endpoint
-			err = vterrors.FromError(vtrpc.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid endpoint"))
+			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid endpoint"))
 			break
 		}
 		shuffleEndPoints(endPoints)
@@ -186,7 +186,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		if endPoint == nil {
 			if err == nil {
 				// do not override error from last attempt.
-				err = vterrors.FromError(vtrpc.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no available connection"))
+				err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no available connection"))
 			}
 			break
 		}
@@ -195,7 +195,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		endPointLastUsed = endPoint
 		conn := dg.hc.GetConnection(endPoint)
 		if conn == nil {
-			err = vterrors.FromError(vtrpc.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for %+v", endPoint))
+			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for %+v", endPoint))
 			invalidEndPoints[discovery.EndPointToMapKey(endPoint)] = true
 			continue
 		}

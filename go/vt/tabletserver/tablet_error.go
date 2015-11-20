@@ -18,7 +18,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
@@ -51,7 +51,7 @@ const (
 var ErrConnPoolClosed = NewTabletError(ErrFatal,
 	// connection pool being closed is not the query's fault, it can be retried on a
 	// different VtTablet.
-	vtrpc.ErrorCode_INTERNAL_ERROR,
+	vtrpcpb.ErrorCode_INTERNAL_ERROR,
 	"connection pool is closed")
 
 var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
@@ -62,7 +62,7 @@ type TabletError struct {
 	Message   string
 	SQLError  int
 	// ErrorCode will be used to transmit the error across RPC boundaries
-	ErrorCode vtrpc.ErrorCode
+	ErrorCode vtrpcpb.ErrorCode
 }
 
 // This is how go-mysql exports its error number
@@ -71,7 +71,7 @@ type hasNumber interface {
 }
 
 // NewTabletError returns a TabletError of the given type
-func NewTabletError(errorType int, errCode vtrpc.ErrorCode, format string, args ...interface{}) *TabletError {
+func NewTabletError(errorType int, errCode vtrpcpb.ErrorCode, format string, args ...interface{}) *TabletError {
 	return &TabletError{
 		ErrorType: errorType,
 		Message:   printable(fmt.Sprintf(format, args...)),
@@ -80,7 +80,7 @@ func NewTabletError(errorType int, errCode vtrpc.ErrorCode, format string, args 
 }
 
 // NewTabletErrorSQL returns a TabletError based on the error
-func NewTabletErrorSQL(errorType int, errCode vtrpc.ErrorCode, err error) *TabletError {
+func NewTabletErrorSQL(errorType int, errCode vtrpcpb.ErrorCode, err error) *TabletError {
 	var errnum int
 	errstr := err.Error()
 	if sqlErr, ok := err.(hasNumber); ok {
@@ -91,10 +91,10 @@ func NewTabletErrorSQL(errorType int, errCode vtrpc.ErrorCode, err error) *Table
 			// there was a remaster and there are old clients still connected.
 			if strings.Contains(errstr, "read-only") {
 				errorType = ErrRetry
-				errCode = vtrpc.ErrorCode_QUERY_NOT_SERVED
+				errCode = vtrpcpb.ErrorCode_QUERY_NOT_SERVED
 			}
 		case mysql.ErrDupEntry:
-			errCode = vtrpc.ErrorCode_INTEGRITY_ERROR
+			errCode = vtrpcpb.ErrorCode_INTEGRITY_ERROR
 		default:
 		}
 	}
@@ -109,7 +109,7 @@ func NewTabletErrorSQL(errorType int, errCode vtrpc.ErrorCode, err error) *Table
 // PrefixTabletError attempts to add a string prefix to a TabletError, while preserving its
 // ErrorType. If the given error is not a TabletError, a new TabletError is returned
 // with the desired ErrorType.
-func PrefixTabletError(errorType int, errCode vtrpc.ErrorCode, err error, prefix string) error {
+func PrefixTabletError(errorType int, errCode vtrpcpb.ErrorCode, err error, prefix string) error {
 	if terr, ok := err.(*TabletError); ok {
 		return NewTabletError(terr.ErrorType, terr.ErrorCode, "%s%s", prefix, terr.Message)
 	}
@@ -177,7 +177,7 @@ func (te *TabletError) Error() string {
 }
 
 // VtErrorCode returns the underlying Vitess error code
-func (te *TabletError) VtErrorCode() vtrpc.ErrorCode {
+func (te *TabletError) VtErrorCode() vtrpcpb.ErrorCode {
 	return te.ErrorCode
 }
 
@@ -236,7 +236,7 @@ func handleError(err *error, logStats *LogStats, queryServiceStats *QueryService
 		terr, ok := x.(*TabletError)
 		if !ok {
 			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-			terr = NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic", x)
+			terr = NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic", x)
 			*err = terr
 			queryServiceStats.InternalErrors.Add("Panic", 1)
 			return
@@ -296,7 +296,7 @@ func rpcErrFromTabletError(err error) *mproto.RPCError {
 
 	// We don't know exactly what the passed in error was
 	return &mproto.RPCError{
-		Code:    int64(vtrpc.ErrorCode_UNKNOWN_ERROR),
+		Code:    int64(vtrpcpb.ErrorCode_UNKNOWN_ERROR),
 		Message: err.Error(),
 	}
 }
