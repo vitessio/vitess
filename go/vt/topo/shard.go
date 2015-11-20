@@ -210,6 +210,8 @@ func (ts Server) UpdateShard(ctx context.Context, si *ShardInfo) error {
 // update function on it, and then write it back. If the write fails due to
 // a version mismatch, it will re-read the record and retry the update.
 // If the update succeeds, it returns the updated ShardInfo.
+// If the update method returns ErrNoUpdateNeeded, nothing is written,
+// and nil,nil is returned.
 func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, update func(*topodatapb.Shard) error) (*ShardInfo, error) {
 	for {
 		si, err := ts.GetShard(ctx, keyspace, shard)
@@ -217,6 +219,9 @@ func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, 
 			return nil, err
 		}
 		if err = update(si.Shard); err != nil {
+			if err == ErrNoUpdateNeeded {
+				return nil, nil
+			}
 			return nil, err
 		}
 		if err = ts.UpdateShard(ctx, si); err != ErrBadVersion {

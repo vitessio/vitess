@@ -122,20 +122,15 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		}
 
 		// update the shard record's master
-		echoWarning := false
 		if _, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(s *topodatapb.Shard) error {
-			if topoproto.TabletAliasEqual(s.MasterAlias, tabletAlias) {
-				s.MasterAlias = nil
-				echoWarning = false
-			} else {
-				echoWarning = true
+			if !topoproto.TabletAliasEqual(s.MasterAlias, tabletAlias) {
+				wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(s.MasterAlias))
+				return topo.ErrNoUpdateNeeded
 			}
+			s.MasterAlias = nil
 			return nil
 		}); err != nil {
 			return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
-		}
-		if echoWarning {
-			wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was different", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard)
 		}
 
 		// and unlock
