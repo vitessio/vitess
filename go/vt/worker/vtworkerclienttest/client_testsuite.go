@@ -2,10 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtworkerclient
+// Package vtworkerclienttest contains the testsuite against which each
+// RPC implementation of the vtworkerclient interface must be tested.
+package vtworkerclienttest
 
 // NOTE: This file is not test-only code because it is referenced by tests in
 //			 other packages and therefore it has to be regularly visible.
+
+// NOTE: This code is in its own package such that its dependencies (e.g.
+//       zookeeper) won't be drawn into production binaries as well.
 
 import (
 	"strings"
@@ -15,6 +20,8 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/worker"
+	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
+
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
@@ -35,7 +42,7 @@ func CreateWorkerInstance(t *testing.T) *worker.Instance {
 }
 
 // TestSuite runs the test suite on the given vtworker and vtworkerclient
-func TestSuite(t *testing.T, wi *worker.Instance, c VtworkerClient) {
+func TestSuite(t *testing.T, wi *worker.Instance, c vtworkerclient.Client) {
 	commandSucceeds(t, c)
 
 	commandErrors(t, c)
@@ -43,7 +50,7 @@ func TestSuite(t *testing.T, wi *worker.Instance, c VtworkerClient) {
 	commandPanics(t, c)
 }
 
-func commandSucceeds(t *testing.T, client VtworkerClient) {
+func commandSucceeds(t *testing.T, client vtworkerclient.Client) {
 	logs, errFunc, err := client.ExecuteVtworkerCommand(context.Background(), []string{"Ping", "pong"})
 	if err != nil {
 		t.Fatalf("Cannot execute remote command: %v", err)
@@ -76,7 +83,7 @@ func commandSucceeds(t *testing.T, client VtworkerClient) {
 	}
 }
 
-func commandErrors(t *testing.T, client VtworkerClient) {
+func commandErrors(t *testing.T, client vtworkerclient.Client) {
 	logs, errFunc, err := client.ExecuteVtworkerCommand(context.Background(), []string{"NonexistingCommand"})
 	// The expected error could already be seen now or after the output channel is closed.
 	// To avoid checking for the same error twice, we don't check it here yet.
@@ -100,7 +107,7 @@ func commandErrors(t *testing.T, client VtworkerClient) {
 	}
 }
 
-func commandPanics(t *testing.T, client VtworkerClient) {
+func commandPanics(t *testing.T, client vtworkerclient.Client) {
 	logs, errFunc, err := client.ExecuteVtworkerCommand(context.Background(), []string{"Panic"})
 	// The expected error could already be seen now or after the output channel is closed.
 	// To avoid checking for the same error twice, we don't check it here yet.
