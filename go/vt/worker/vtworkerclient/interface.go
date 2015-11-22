@@ -16,8 +16,8 @@ import (
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
-// VtworkerClientProtocol specifices which RPC client implementation should be used.
-var VtworkerClientProtocol = flag.String("vtworker_client_protocol", "grpc", "the protocol to use to talk to the vtworker server")
+// protocol specifices which RPC client implementation should be used.
+var protocol = flag.String("vtworker_client_protocol", "grpc", "the protocol to use to talk to the vtworker server")
 
 // ErrFunc is returned by streaming queries to get the error
 type ErrFunc func() error
@@ -48,9 +48,9 @@ func RegisterFactory(name string, factory Factory) {
 
 // New allows a user of the client library to get its implementation.
 func New(addr string, connectTimeout time.Duration) (VtworkerClient, error) {
-	factory, ok := factories[*VtworkerClientProtocol]
+	factory, ok := factories[*protocol]
 	if !ok {
-		return nil, fmt.Errorf("unknown vtworker client protocol: %v", *VtworkerClientProtocol)
+		return nil, fmt.Errorf("unknown vtworker client protocol: %v", *protocol)
 	}
 	return factory(addr, connectTimeout)
 }
