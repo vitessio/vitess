@@ -22,8 +22,8 @@ var protocol = flag.String("vtworker_client_protocol", "grpc", "the protocol to 
 // ErrFunc is returned by streaming queries to get the error
 type ErrFunc func() error
 
-// VtworkerClient defines the interface used to send remote vtworker commands
-type VtworkerClient interface {
+// Client defines the interface used to send remote vtworker commands
+type Client interface {
 	// ExecuteVtworkerCommand will execute the command remotely.
 	// NOTE: ErrFunc should only be checked after the returned channel was closed to avoid races.
 	ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutilpb.Event, ErrFunc, error)
@@ -34,7 +34,7 @@ type VtworkerClient interface {
 }
 
 // Factory functions are registered by client implementations.
-type Factory func(addr string, connectTimeout time.Duration) (VtworkerClient, error)
+type Factory func(addr string, connectTimeout time.Duration) (Client, error)
 
 var factories = make(map[string]Factory)
 
@@ -47,7 +47,7 @@ func RegisterFactory(name string, factory Factory) {
 }
 
 // New allows a user of the client library to get its implementation.
-func New(addr string, connectTimeout time.Duration) (VtworkerClient, error) {
+func New(addr string, connectTimeout time.Duration) (Client, error) {
 	factory, ok := factories[*protocol]
 	if !ok {
 		return nil, fmt.Errorf("unknown vtworker client protocol: %v", *protocol)

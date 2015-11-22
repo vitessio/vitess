@@ -23,7 +23,7 @@ type gRPCVtworkerClient struct {
 	c  vtworkerservicepb.VtworkerClient
 }
 
-func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.VtworkerClient, error) {
+func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.Client, error) {
 	// create the RPC client
 	cc, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
