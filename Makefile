@@ -61,7 +61,7 @@ unit_test_cover: build
 	godep go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
 unit_test_race: build
-	godep go test $(VT_GO_PARALLEL) -race ./go/...
+	tools/unit_test_race.sh
 
 # Run coverage and upload to coveralls.io.
 # Requires the secret COVERALLS_TOKEN env variable to be set.
