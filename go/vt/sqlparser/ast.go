@@ -401,12 +401,13 @@ type JoinTableExpr struct {
 
 // JoinTableExpr.Join
 const (
-	JoinStr         = "join"
-	StraightJoinStr = "straight_join"
-	LeftJoinStr     = "left join"
-	RightJoinStr    = "right join"
-	CrossJoinStr    = "cross join"
-	NaturalJoinStr  = "natural join"
+	JoinStr             = "join"
+	StraightJoinStr     = "straight_join"
+	LeftJoinStr         = "left join"
+	RightJoinStr        = "right join"
+	NaturalJoinStr      = "natural join"
+	NaturalLeftJoinStr  = "natural left join"
+	NaturalRightJoinStr = "natural right join"
 )
 
 // Format formats the node.
