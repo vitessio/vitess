@@ -2,9 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package vtctlclienttest provides testing library for vtctl
-// implementations to use in their tests.
+// Package vtctlclienttest contains the testsuite against which each
+// RPC implementation of the vtctlclient interface must be tested.
 package vtctlclienttest
+
+// NOTE: This file is not test-only code because it is referenced by tests in
+//			 other packages and therefore it has to be regularly visible.
+
+// NOTE: This code is in its own package such that its dependencies (e.g.
+//       zookeeper) won't be drawn into production binaries as well.
 
 import (
 	"strings"

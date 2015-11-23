@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/worker/grpcvtworkerserver"
-	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
+	"github.com/youtube/vitess/go/vt/worker/vtworkerclienttest"
 	"google.golang.org/grpc"
 
 	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
@@ -19,7 +19,7 @@ import (
 
 // Test gRPC interface using a vtworker and vtworkerclient.
 func TestVtworkerServer(t *testing.T) {
-	wi := vtworkerclient.CreateWorkerInstance(t)
+	wi := vtworkerclienttest.CreateWorkerInstance(t)
 
 	// Listen on a random port.
 	listener, err := net.Listen("tcp", ":0")
@@ -40,5 +40,5 @@ func TestVtworkerServer(t *testing.T) {
 	}
 	defer client.Close()
 
-	vtworkerclient.TestSuite(t, wi, client)
+	vtworkerclienttest.TestSuite(t, wi, client)
 }

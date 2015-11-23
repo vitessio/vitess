@@ -29,7 +29,7 @@ func NewFakeVtworkerClient() *FakeVtworkerClient {
 }
 
 // FakeVtworkerClientFactory always returns the current instance.
-func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.VtworkerClient, error) {
+func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.Client, error) {
 	return f, nil
 }
 
