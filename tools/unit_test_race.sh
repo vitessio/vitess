@@ -21,8 +21,7 @@ trap '[ -f "$temp_log_file" ] && rm $temp_log_file' EXIT
 # To work-around bugged go (<1.5) binaries, we enable "halt_on_error".
 GORACE=halt_on_error=1 go test $VT_GO_PARALLEL -race ./go/vt/... 2>&1 | tee $temp_log_file
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
-  grep "WARNING: DATA RACE" -q $temp_log_file
-  if [ $? -eq 0 ]; then
+  if grep "WARNING: DATA RACE" -q $temp_log_file; then
     echo
     echo "ERROR: go test -race found a data race. See log above."
     exit 2
