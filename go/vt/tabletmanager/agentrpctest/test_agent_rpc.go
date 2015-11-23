@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +38,14 @@ type fakeRPCAgent struct {
 	panics bool
 	// slow if true will let Ping() sleep and effectively not respond to an RPC.
 	slow bool
+	// mu guards accesses of "slow".
+	mu sync.Mutex
+}
+
+func (fra *fakeRPCAgent) setSlow(slow bool) {
+	fra.mu.Lock()
+	fra.slow = slow
+	fra.mu.Unlock()
 }
 
 // NewFakeRPCAgent returns a fake tabletmanager.RPCAgent that's just a mirror.
@@ -127,7 +136,10 @@ func (fra *fakeRPCAgent) Ping(ctx context.Context, args string) string {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if fra.slow {
+	fra.mu.Lock()
+	slow := fra.slow
+	fra.mu.Unlock()
+	if slow {
 		time.Sleep(time.Minute)
 	}
 	return args
@@ -191,8 +203,8 @@ func agentRPCTestIsTimeoutErrorRPC(ctx context.Context, t *testing.T, client tmc
 	//       will be reduced but the test will not flake.
 	shortCtx, cancel := context.WithTimeout(ctx, time.Millisecond)
 	defer cancel()
-	fakeAgent.slow = true
-	defer func() { fakeAgent.slow = false }()
+	fakeAgent.setSlow(true)
+	defer func() { fakeAgent.setSlow(false) }()
 	err := client.Ping(shortCtx, ti)
 	if err == nil {
 		t.Fatal("agentRPCTestIsTimeoutErrorRPC: RPC with expired context did not fail")
@@ -1152,7 +1164,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	ctx := context.Background()
 
 	// Test RPC specific methods of the interface.
-    agentRPCTestIsTimeoutErrorDialExpiredContext(ctx, t, client, ti)
+	agentRPCTestIsTimeoutErrorDialExpiredContext(ctx, t, client, ti)
 	agentRPCTestIsTimeoutErrorDialTimeout(ctx, t, client, ti)
 	agentRPCTestIsTimeoutErrorRPC(ctx, t, client, ti, fakeAgent.(*fakeRPCAgent))
 
