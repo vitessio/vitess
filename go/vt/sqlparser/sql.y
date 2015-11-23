@@ -415,9 +415,9 @@ table_factor:
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
-| openb table_reference closeb
+| openb table_references closeb
   {
-    $$ = &ParenTableExpr{Expr: $2}
+    $$ = &ParenTableExpr{Exprs: $2}
   }
 
 // There is a grammar conflict here:

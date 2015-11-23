@@ -381,14 +381,14 @@ func (node *TableName) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Name)
 }
 
-// ParenTableExpr represents a parenthesized TableExpr.
+// ParenTableExpr represents a parenthesized list of TableExpr.
 type ParenTableExpr struct {
-	Expr TableExpr
+	Exprs TableExprs
 }
 
 // Format formats the node.
 func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("(%v)", node.Expr)
+	buf.Myprintf("(%v)", node.Exprs)
 }
 
 // JoinTableExpr represents a TableExpr that's a JOIN operation.

@@ -102,6 +102,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* parenthesis */ 1 from (t)",
 	}, {
+		input: "select /* parenthesis multi-table */ 1 from (t1, t2)",
+	}, {
 		input: "select /* table list */ 1 from t1, t2",
 	}, {
 		input: "select /* parenthessis in table list 1 */ 1 from (t1), t2",
