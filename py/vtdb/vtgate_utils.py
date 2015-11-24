@@ -171,6 +171,7 @@ def convert_exception_kwarg(key, value):
       'entity_column_name',
       'keyspace',
       'num_queries',
+      'sql',
       'tablet_type'):
     return key, value
   elif key == 'entity_keyspace_id_map':
