@@ -20,7 +20,7 @@ import (
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
-func TestKeyRangeToShardMap(t *testing.T) {
+func TestMapKeyRangesToShards(t *testing.T) {
 	ts := new(sandboxTopo)
 	var testCases = []struct {
 		keyspace string
@@ -54,11 +54,12 @@ func TestKeyRangeToShardMap(t *testing.T) {
 			}
 			keyRange = krArray[0]
 		}
-		_, _, allShards, err := getKeyspaceShards(context.Background(), ts, "", testCase.keyspace, topodatapb.TabletType_MASTER)
-		gotShards, err := resolveKeyRangeToShards(allShards, keyRange)
+		krs := []*topodatapb.KeyRange{keyRange}
+		_, gotShards, err := mapKeyRangesToShards(context.Background(), ts, "", testCase.keyspace, topodatapb.TabletType_MASTER, krs)
 		if err != nil {
 			t.Errorf("want nil, got %v", err)
 		}
+		sort.Strings(gotShards)
 		if !reflect.DeepEqual(testCase.shards, gotShards) {
 			t.Errorf("want \n%#v, got \n%#v", testCase.shards, gotShards)
 		}
@@ -324,5 +325,23 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 			want, _ := json.Marshal(testCase.shardQueries)
 			t.Errorf("idQueries: %#v\nResponse:   %s\nExpecting: %s", testCase.idQueries, got, want)
 		}
+	}
+}
+
+func BenchmarkResolveKeyRangeToShards(b *testing.B) {
+	ts := new(sandboxTopo)
+	kr := &topodatapb.KeyRange{
+		Start: []byte{0x40, 0, 0, 0, 0, 0, 0, 0},
+		End:   []byte{0x60, 0, 0, 0, 0, 0, 0, 0},
+	}
+	_, _, allShards, err := getKeyspaceShards(context.Background(), ts, "", KsTestSharded, topodatapb.TabletType_MASTER)
+	if err != nil {
+		b.Fatal(err)
+	}
+	uniqueShards := map[string]bool{}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		resolveKeyRangeToShards(allShards, uniqueShards, kr)
 	}
 }

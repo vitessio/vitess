@@ -122,13 +122,7 @@ func mapKeyRangesToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 	}
 	uniqueShards := make(map[string]bool)
 	for _, kr := range krs {
-		shards, err := resolveKeyRangeToShards(allShards, kr)
-		if err != nil {
-			return "", nil, err
-		}
-		for _, shard := range shards {
-			uniqueShards[shard] = true
-		}
+		resolveKeyRangeToShards(allShards, uniqueShards, kr)
 	}
 	var res = make([]string, 0, len(uniqueShards))
 	for s := range uniqueShards {
@@ -138,22 +132,18 @@ func mapKeyRangesToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 }
 
 // This maps a list of keyranges to shard names.
-func resolveKeyRangeToShards(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyRange) ([]string, error) {
-	shards := make([]string, 0, 1)
-
+func resolveKeyRangeToShards(allShards []*topodatapb.ShardReference, matches map[string]bool, kr *topodatapb.KeyRange) {
 	if !key.KeyRangeIsPartial(kr) {
-		for j := 0; j < len(allShards); j++ {
-			shards = append(shards, allShards[j].Name)
+		for _, shard := range allShards {
+			matches[shard.Name] = true
 		}
-		return shards, nil
+		return
 	}
-	for j := 0; j < len(allShards); j++ {
-		shard := allShards[j]
+	for _, shard := range allShards {
 		if key.KeyRangesIntersect(kr, shard.KeyRange) {
-			shards = append(shards, shard.Name)
+			matches[shard.Name] = true
 		}
 	}
-	return shards, nil
 }
 
 // mapExactShards maps a keyrange to shards only if there's a complete

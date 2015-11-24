@@ -217,7 +217,7 @@ func getLimit(limit interface{}, bv map[string]interface{}) (int64, error) {
 }
 
 func buildKey(row []sqltypes.Value) (key string) {
-	buf := bytes.NewBuffer(make([]byte, 0, 32))
+	buf := &bytes.Buffer{}
 	for i, pkValue := range row {
 		if pkValue.IsNull() {
 			return ""
