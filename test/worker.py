@@ -34,6 +34,9 @@ class ShardTablets(namedtuple('ShardTablets', 'master replicas rdonlys')):
     """Returns a list of all the tablets of the shard.
 
     Does not guarantee any ordering on the returned tablets.
+
+    Returns:
+      List of all tablets of the shard.
     """
     return [self.master] + self.replicas + self.rdonlys
 
@@ -52,6 +55,16 @@ class ShardTablets(namedtuple('ShardTablets', 'master replicas rdonlys')):
       return self.rdonlys[0]
     else:
       return None
+
+  def __str__(self):
+    return """master %s
+replicas:
+%s
+rdonlys:
+%s
+""" % (self.master,
+       '\n'.join('       %s' % replica for replica in self.replicas),
+       '\n'.join('       %s' % rdonly for rdonly in self.rdonlys))
 
 # initial shard, covers everything
 shard_master = tablet.Tablet()
@@ -96,9 +109,14 @@ def setUpModule():
         shard_1_master.init_mysql(),
         shard_1_replica.init_mysql(),
         shard_1_rdonly1.init_mysql(),
-        ]
+    ]
     utils.wait_procs(setup_procs)
     init_keyspace()
+    logging.debug('environment set up with the following shards and tablets:')
+    logging.debug('=========================================================')
+    logging.debug('TABLETS: test_keyspace/0:\n%s', all_shard_tablets)
+    logging.debug('TABLETS: test_keyspace/-80:\n%s', shard_0_tablets)
+    logging.debug('TABLETS: test_keyspace/80-:\n%s', shard_1_tablets)
   except:
     tearDownModule()
     raise
@@ -118,7 +136,7 @@ def tearDownModule():
       shard_1_master.teardown_mysql(),
       shard_1_replica.teardown_mysql(),
       shard_1_rdonly1.teardown_mysql(),
-      ]
+  ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()
@@ -166,19 +184,19 @@ class TestBaseSplitClone(unittest.TestCase):
     shard_tablets.master.start_vttablet(
         wait_for_state=None, target_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard=shard_name)
-    for tablet in shard_tablets.replicas:
-      tablet.start_vttablet(
+    for t in shard_tablets.replicas:
+      t.start_vttablet(
           wait_for_state=None, target_tablet_type='replica',
           init_keyspace='test_keyspace', init_shard=shard_name)
-    for tablet in shard_tablets.rdonlys:
-      tablet.start_vttablet(
+    for t in shard_tablets.rdonlys:
+      t.start_vttablet(
           wait_for_state=None, target_tablet_type='rdonly',
           init_keyspace='test_keyspace', init_shard=shard_name)
 
     # Block until tablets are up and we can enable replication.
     # All tables should be NOT_SERVING until we run InitShardMaster.
-    for tablet in shard_tablets.all_tablets:
-      tablet.wait_for_vttablet_state('NOT_SERVING')
+    for t in shard_tablets.all_tablets:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     # Reparent to choose an initial master and enable replication.
     utils.run_vtctl(
@@ -188,17 +206,17 @@ class TestBaseSplitClone(unittest.TestCase):
 
     # Enforce a health check instead of waiting for the next periodic one.
     # (saves up to 1 second execution time on average)
-    for tablet in shard_tablets.replicas:
-      utils.run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'replica'])
-    for tablet in shard_tablets.rdonlys:
-      utils.run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'])
+    for t in shard_tablets.replicas:
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'])
+    for t in shard_tablets.rdonlys:
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
 
     # Wait for tablet state to change after starting all tablets. This allows
     # us to start all tablets at once, instead of sequentially waiting.
     # NOTE: Replication has to be enabled first or the health check will
     #       set a a replica or rdonly tablet back to NOT_SERVING.
-    for tablet in shard_tablets.all_tablets:
-      tablet.wait_for_vttablet_state('SERVING')
+    for t in shard_tablets.all_tablets:
+      t.wait_for_vttablet_state('SERVING')
 
     create_table_sql = (
         'create table worker_test('
@@ -224,14 +242,15 @@ class TestBaseSplitClone(unittest.TestCase):
                        keyspace_shard],
                       auto_log=True)
 
-  def _insert_values(self, tablet, id_offset, msg, keyspace_id, num_values):
+  def _insert_values(self, vttablet, id_offset, msg, keyspace_id, num_values):
     """Inserts values into MySQL along with the required routing comments.
 
     Args:
-      tablet: the Tablet instance to modify.
-      id: the value of `id` column.
+      vttablet: the Tablet instance to modify.
+      id_offset: offset for the value of `id` column.
       msg: the value of `msg` column.
       keyspace_id: the value of `keyspace_id` column.
+      num_values: number of rows to be inserted.
     """
 
     # For maximum performance, multiple values are inserted in one statement.
@@ -251,7 +270,7 @@ class TestBaseSplitClone(unittest.TestCase):
         if i != chunk[0]:
           values_str += ','
         values_str += "(%d, '%s', 0x%x)" % (id_offset + i, msg, keyspace_id)
-      tablet.mquery(
+      vttablet.mquery(
           'vt_test_keyspace', [
               'begin',
               'insert into worker_test(id, msg, keyspace_id) values%s '
@@ -259,15 +278,15 @@ class TestBaseSplitClone(unittest.TestCase):
               'commit'],
           write=True)
 
-  def insert_values(
-      self, tablet, num_values, num_shards, offset=0, keyspace_id_range=2**64):
+  def insert_values(self, vttablet, num_values, num_shards, offset=0,
+                    keyspace_id_range=2**64):
     """Inserts simple values, one for each potential shard.
 
     Each row is given a message that contains the shard number, so we can easily
     verify that the source and destination shards have the same data.
 
     Args:
-      tablet: the Tablet instance to modify.
+      vttablet: the Tablet instance to modify.
       num_values: The number of values to insert.
       num_shards: the number of shards that we expect to have.
       offset: amount that we should offset the `id`s by. This is useful for
@@ -279,7 +298,7 @@ class TestBaseSplitClone(unittest.TestCase):
     shard_offsets = [i * shard_width for i in xrange(num_shards)]
     for shard_num in xrange(num_shards):
       self._insert_values(
-          tablet,
+          vttablet,
           shard_offsets[shard_num] + offset,
           'msg-shard-%d' % shard_num,
           shard_offsets[shard_num],
@@ -336,8 +355,8 @@ class TestBaseSplitClone(unittest.TestCase):
       self.run_shard_tablets(
           '80-', shard_1_tablets, create_table=False)
 
-      logging.debug(
-          'Start inserting initial data: %s rows', utils.options.num_insert_rows)
+      logging.debug('Start inserting initial data: %s rows',
+                    utils.options.num_insert_rows)
       self.insert_values(shard_master, utils.options.num_insert_rows, 2)
       logging.debug(
           'Done inserting initial data, waiting for replication to catch up')
@@ -345,6 +364,7 @@ class TestBaseSplitClone(unittest.TestCase):
       logging.debug('Replication on source rdonly tablet is caught up')
     except:
       self.tearDown()
+      raise
 
   def tearDown(self):
     """Does the minimum to reset topology and tablets to their initial states.
@@ -356,16 +376,14 @@ class TestBaseSplitClone(unittest.TestCase):
     See the kill_tablets method in tablet.py.
     """
 
-    utils.run_vtctl(['ListAllTablets', 'test_nj'])
-    
     for shard_tablet in [all_shard_tablets, shard_0_tablets, shard_1_tablets]:
-      for tablet in shard_tablet.all_tablets:
-        tablet.reset_replication()
-        tablet.clean_dbs()
-        tablet.kill_vttablet()
+      for t in shard_tablet.all_tablets:
+        t.reset_replication()
+        t.clean_dbs()
+        t.kill_vttablet()
         # we allow failures here as some tablets will be gone sometimes
         # (the master tablets after an emergency reparent)
-        utils.run_vtctl(['DeleteTablet', '-allow_master', tablet.tablet_alias],
+        utils.run_vtctl(['DeleteTablet', '-allow_master', t.tablet_alias],
                         auto_log=True, raise_on_error=False)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     for shard in ['0', '-80', '80-']:
@@ -382,6 +400,7 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
       self.copy_schema_to_destination_shards()
     except:
       self.tearDown()
+      raise
 
   def verify_successful_worker_copy_with_reparent(self, mysql_down=False):
     """Verifies that vtworker can successfully copy data for a SplitClone.
@@ -402,15 +421,18 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     Raises:
       AssertionError if things didn't go as expected.
     """
-    worker_proc, worker_port, _ = utils.run_vtworker_bg(
-        ['--cell', 'test_nj',
-         'SplitClone',
+    worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
+        ['--cell', 'test_nj'],
+        auto_log=True)
+
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
          '--source_reader_count', '1',
          '--destination_pack_count', '1',
          '--destination_writer_count', '1',
          '--strategy=-populate_blp_checkpoint',
          'test_keyspace/0'],
-        auto_log=True)
+        worker_rpc_port)
 
     if mysql_down:
       # If MySQL is down, we wait until resolving at least twice (to verify that
@@ -424,7 +446,7 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
           "expected vtworker to retry, but it didn't")
       logging.debug('Worker has resolved at least twice, starting reparent now')
 
-      # Original masters have no running MySQL, so need to force the reparent
+      # Original masters have no running MySQL, so need to force the reparent.
       utils.run_vtctl(
           ['EmergencyReparentShard', 'test_keyspace/-80',
            shard_0_replica.tablet_alias], auto_log=True)
@@ -433,6 +455,17 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
            shard_1_replica.tablet_alias], auto_log=True)
 
     else:
+      # NOTE: There is a race condition around this:
+      #   It's possible that the SplitClone vtworker command finishes before the
+      #   PlannedReparentShard vtctl command, which we start below, succeeds.
+      #   Then the test would fail because vtworker did not have to resolve the
+      #   master tablet again (due to the missing reparent).
+      #
+      # To workaround this, the test takes a parameter to increase the number of
+      # rows that the worker has to copy (with the idea being to slow the worker
+      # down).
+      # You should choose a value for num_insert_rows, such that this test
+      # passes for your environment (trial-and-error...)
       utils.poll_for_vars(
           'vtworker', worker_port,
           'WorkerDestinationActualResolves >= 1',
@@ -446,41 +479,15 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
           ['PlannedReparentShard', 'test_keyspace/80-',
            shard_1_replica.tablet_alias], auto_log=True)
 
-    logging.debug('Polling for worker state')
-    # There are a couple of race conditions around this, that we need
-    # to be careful of:
-    #
-    # 1. It's possible for the reparent step to take so long that the
-    #   worker will actually finish before we get to the polling
-    #   step. To workaround this, the test takes a parameter to
-    #   increase the number of rows that the worker has to copy (with
-    #   the idea being to slow the worker down).
-    #
-    # 2. If the worker has a huge number of rows to copy, it's
-    #   possible for the polling to timeout before the worker has
-    #   finished copying the data.
-    #
-    # You should choose a value for num_insert_rows, such that this test passes
-    # for your environment (trial-and-error...)
-    worker_vars = utils.poll_for_vars(
-        'vtworker', worker_port,
-        'WorkerState == cleaning up',
-        condition_fn=lambda v: v.get('WorkerState') == 'cleaning up',
-        # We know that vars should already be ready, since we read them earlier
-        require_vars=True,
-        # We're willing to let the test run for longer to make it less flaky.
-        # This should still fail fast if something goes wrong with vtworker,
-        # because of the require_vars flag above.
-        timeout=5*60)
+    utils.wait_procs([workerclient_proc])
 
     # Verify that we were forced to reresolve and retry.
+    worker_vars = utils.get_vars(worker_port)
     self.assertGreater(worker_vars['WorkerDestinationActualResolves'], 1)
     self.assertGreater(worker_vars['WorkerDestinationAttemptedResolves'], 1)
-    self.assertNotEqual(
-        worker_vars['WorkerRetryCount'], {},
-        "expected vtworker to retry, but it didn't")
-
-    utils.wait_procs([worker_proc])
+    self.assertNotEqual(worker_vars['WorkerRetryCount'], {},
+                        "expected vtworker to retry, but it didn't")
+    utils.kill_sub_process(worker_proc, soft=True)
 
     # Make sure that everything is caught up to the same replication point
     self.run_split_diff('test_keyspace/-80', all_shard_tablets, shard_0_tablets)
@@ -524,6 +531,7 @@ class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
       logging.debug('Finished MysqlDownDuringWorkerCopy-specific setup')
     except:
       self.tearDown()
+      raise
 
   def tearDown(self):
     """Restarts the MySQL processes that were killed during the setup."""
@@ -559,7 +567,7 @@ class TestVtworkerWebinterface(unittest.TestCase):
       try:
         urllib2.urlopen(worker_base_url + '/status').read()
         done = True
-      except:
+      except urllib2.URLError:
         pass
       if done:
         break

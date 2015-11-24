@@ -49,8 +49,6 @@ def setUpModule():
     master_tablet.populate('vt_test_keyspace', create_vt_insert_test)
     replica_tablet.populate('vt_test_keyspace', create_vt_insert_test)
 
-    utils.VtGate().start()
-
     master_tablet.start_vttablet(memcache=True, wait_for_state=None)
     replica_tablet.start_vttablet(memcache=True, wait_for_state=None)
     master_tablet.wait_for_vttablet_state('SERVING')
@@ -187,13 +185,13 @@ class RowCacheInvalidator(unittest.TestCase):
     self._exec_vt_txn(
         "insert into vt_insert_test (id, msg) values (1000000, 'start')")
     self._wait_for_replica()
-    self._wait_for_value([['1000000', 'start']])
+    self._wait_for_value([[1000000, 'start']])
     utils.mysql_write_query(
         master_tablet.tablet_uid,
         'vt_test_keyspace',
         "update vt_insert_test set msg = 'foo' where id = 1000000")
     self._wait_for_replica()
-    self._wait_for_value([['1000000', 'foo']])
+    self._wait_for_value([[1000000, 'foo']])
     end1 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(start, end1)
 
@@ -212,7 +210,7 @@ class RowCacheInvalidator(unittest.TestCase):
         'vt_test_keyspace',
         "insert into vt_insert_test (id, msg) values(1000000, 'bar')")
     self._wait_for_replica()
-    self._wait_for_value([['1000000', 'bar']])
+    self._wait_for_value([[1000000, 'bar']])
     end3 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(end2, end3)
 
@@ -279,18 +277,18 @@ class RowCacheInvalidator(unittest.TestCase):
                                 'select min(id) from vt_insert_test')
     self.assertNotEqual(res[0][0], None,
                         'Cannot proceed, no rows in vt_insert_test')
-    id = int(res[0][0])
+    mid = int(res[0][0])
     stats_dict = self.replica_stats()['vt_insert_test']
     misses = stats_dict['Misses']
     hits = stats_dict['Hits']
     replica_tablet.execute('select * from vt_insert_test where id=:id',
-                           bindvars={'id': id})
+                           bindvars={'id': mid})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1,
                      "This shouldn't have hit the cache")
 
     replica_tablet.execute('select * from vt_insert_test where id=:id',
-                           bindvars={'id': id})
+                           bindvars={'id': mid})
     hits2 = self.replica_stats()['vt_insert_test']['Hits']
     self.assertEqual(hits2 - hits, 1, 'This should have hit the cache')
 

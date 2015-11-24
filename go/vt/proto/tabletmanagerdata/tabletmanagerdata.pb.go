@@ -126,9 +126,10 @@ type TableDefinition struct {
 	RowCount uint64 `protobuf:"varint,7,opt,name=row_count" json:"row_count,omitempty"`
 }
 
-func (m *TableDefinition) Reset()         { *m = TableDefinition{} }
-func (m *TableDefinition) String() string { return proto.CompactTextString(m) }
-func (*TableDefinition) ProtoMessage()    {}
+func (m *TableDefinition) Reset()                    { *m = TableDefinition{} }
+func (m *TableDefinition) String() string            { return proto.CompactTextString(m) }
+func (*TableDefinition) ProtoMessage()               {}
+func (*TableDefinition) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
 type SchemaDefinition struct {
 	DatabaseSchema   string             `protobuf:"bytes,1,opt,name=database_schema" json:"database_schema,omitempty"`
@@ -136,9 +137,10 @@ type SchemaDefinition struct {
 	Version          string             `protobuf:"bytes,3,opt,name=version" json:"version,omitempty"`
 }
 
-func (m *SchemaDefinition) Reset()         { *m = SchemaDefinition{} }
-func (m *SchemaDefinition) String() string { return proto.CompactTextString(m) }
-func (*SchemaDefinition) ProtoMessage()    {}
+func (m *SchemaDefinition) Reset()                    { *m = SchemaDefinition{} }
+func (m *SchemaDefinition) String() string            { return proto.CompactTextString(m) }
+func (*SchemaDefinition) ProtoMessage()               {}
+func (*SchemaDefinition) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
 func (m *SchemaDefinition) GetTableDefinitions() []*TableDefinition {
 	if m != nil {
@@ -157,9 +159,10 @@ type UserPermission struct {
 	Privileges       map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
-func (m *UserPermission) Reset()         { *m = UserPermission{} }
-func (m *UserPermission) String() string { return proto.CompactTextString(m) }
-func (*UserPermission) ProtoMessage()    {}
+func (m *UserPermission) Reset()                    { *m = UserPermission{} }
+func (m *UserPermission) String() string            { return proto.CompactTextString(m) }
+func (*UserPermission) ProtoMessage()               {}
+func (*UserPermission) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
 func (m *UserPermission) GetPrivileges() map[string]string {
 	if m != nil {
@@ -177,9 +180,10 @@ type DbPermission struct {
 	Privileges map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
-func (m *DbPermission) Reset()         { *m = DbPermission{} }
-func (m *DbPermission) String() string { return proto.CompactTextString(m) }
-func (*DbPermission) ProtoMessage()    {}
+func (m *DbPermission) Reset()                    { *m = DbPermission{} }
+func (m *DbPermission) String() string            { return proto.CompactTextString(m) }
+func (*DbPermission) ProtoMessage()               {}
+func (*DbPermission) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
 func (m *DbPermission) GetPrivileges() map[string]string {
 	if m != nil {
@@ -195,9 +199,10 @@ type Permissions struct {
 	DbPermissions   []*DbPermission   `protobuf:"bytes,2,rep,name=db_permissions" json:"db_permissions,omitempty"`
 }
 
-func (m *Permissions) Reset()         { *m = Permissions{} }
-func (m *Permissions) String() string { return proto.CompactTextString(m) }
-func (*Permissions) ProtoMessage()    {}
+func (m *Permissions) Reset()                    { *m = Permissions{} }
+func (m *Permissions) String() string            { return proto.CompactTextString(m) }
+func (*Permissions) ProtoMessage()               {}
+func (*Permissions) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
 func (m *Permissions) GetUserPermissions() []*UserPermission {
 	if m != nil {
@@ -219,41 +224,46 @@ type BlpPosition struct {
 	Position string `protobuf:"bytes,2,opt,name=position" json:"position,omitempty"`
 }
 
-func (m *BlpPosition) Reset()         { *m = BlpPosition{} }
-func (m *BlpPosition) String() string { return proto.CompactTextString(m) }
-func (*BlpPosition) ProtoMessage()    {}
+func (m *BlpPosition) Reset()                    { *m = BlpPosition{} }
+func (m *BlpPosition) String() string            { return proto.CompactTextString(m) }
+func (*BlpPosition) ProtoMessage()               {}
+func (*BlpPosition) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
 
 type PingRequest struct {
 	Payload string `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
 }
 
-func (m *PingRequest) Reset()         { *m = PingRequest{} }
-func (m *PingRequest) String() string { return proto.CompactTextString(m) }
-func (*PingRequest) ProtoMessage()    {}
+func (m *PingRequest) Reset()                    { *m = PingRequest{} }
+func (m *PingRequest) String() string            { return proto.CompactTextString(m) }
+func (*PingRequest) ProtoMessage()               {}
+func (*PingRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
 type PingResponse struct {
 	Payload string `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
 }
 
-func (m *PingResponse) Reset()         { *m = PingResponse{} }
-func (m *PingResponse) String() string { return proto.CompactTextString(m) }
-func (*PingResponse) ProtoMessage()    {}
+func (m *PingResponse) Reset()                    { *m = PingResponse{} }
+func (m *PingResponse) String() string            { return proto.CompactTextString(m) }
+func (*PingResponse) ProtoMessage()               {}
+func (*PingResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
 type SleepRequest struct {
 	// duration is in nanoseconds
 	Duration int64 `protobuf:"varint,1,opt,name=duration" json:"duration,omitempty"`
 }
 
-func (m *SleepRequest) Reset()         { *m = SleepRequest{} }
-func (m *SleepRequest) String() string { return proto.CompactTextString(m) }
-func (*SleepRequest) ProtoMessage()    {}
+func (m *SleepRequest) Reset()                    { *m = SleepRequest{} }
+func (m *SleepRequest) String() string            { return proto.CompactTextString(m) }
+func (*SleepRequest) ProtoMessage()               {}
+func (*SleepRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
 type SleepResponse struct {
 }
 
-func (m *SleepResponse) Reset()         { *m = SleepResponse{} }
-func (m *SleepResponse) String() string { return proto.CompactTextString(m) }
-func (*SleepResponse) ProtoMessage()    {}
+func (m *SleepResponse) Reset()                    { *m = SleepResponse{} }
+func (m *SleepResponse) String() string            { return proto.CompactTextString(m) }
+func (*SleepResponse) ProtoMessage()               {}
+func (*SleepResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
 
 type ExecuteHookRequest struct {
 	Name       string            `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
@@ -261,9 +271,10 @@ type ExecuteHookRequest struct {
 	ExtraEnv   map[string]string `protobuf:"bytes,3,rep,name=extra_env" json:"extra_env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
-func (m *ExecuteHookRequest) Reset()         { *m = ExecuteHookRequest{} }
-func (m *ExecuteHookRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteHookRequest) ProtoMessage()    {}
+func (m *ExecuteHookRequest) Reset()                    { *m = ExecuteHookRequest{} }
+func (m *ExecuteHookRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteHookRequest) ProtoMessage()               {}
+func (*ExecuteHookRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
 
 func (m *ExecuteHookRequest) GetExtraEnv() map[string]string {
 	if m != nil {
@@ -278,9 +289,10 @@ type ExecuteHookResponse struct {
 	Stderr     string `protobuf:"bytes,3,opt,name=stderr" json:"stderr,omitempty"`
 }
 
-func (m *ExecuteHookResponse) Reset()         { *m = ExecuteHookResponse{} }
-func (m *ExecuteHookResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteHookResponse) ProtoMessage()    {}
+func (m *ExecuteHookResponse) Reset()                    { *m = ExecuteHookResponse{} }
+func (m *ExecuteHookResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteHookResponse) ProtoMessage()               {}
+func (*ExecuteHookResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
 
 type GetSchemaRequest struct {
 	Tables        []string `protobuf:"bytes,1,rep,name=tables" json:"tables,omitempty"`
@@ -288,17 +300,19 @@ type GetSchemaRequest struct {
 	ExcludeTables []string `protobuf:"bytes,3,rep,name=exclude_tables" json:"exclude_tables,omitempty"`
 }
 
-func (m *GetSchemaRequest) Reset()         { *m = GetSchemaRequest{} }
-func (m *GetSchemaRequest) String() string { return proto.CompactTextString(m) }
-func (*GetSchemaRequest) ProtoMessage()    {}
+func (m *GetSchemaRequest) Reset()                    { *m = GetSchemaRequest{} }
+func (m *GetSchemaRequest) String() string            { return proto.CompactTextString(m) }
+func (*GetSchemaRequest) ProtoMessage()               {}
+func (*GetSchemaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{12} }
 
 type GetSchemaResponse struct {
 	SchemaDefinition *SchemaDefinition `protobuf:"bytes,1,opt,name=schema_definition" json:"schema_definition,omitempty"`
 }
 
-func (m *GetSchemaResponse) Reset()         { *m = GetSchemaResponse{} }
-func (m *GetSchemaResponse) String() string { return proto.CompactTextString(m) }
-func (*GetSchemaResponse) ProtoMessage()    {}
+func (m *GetSchemaResponse) Reset()                    { *m = GetSchemaResponse{} }
+func (m *GetSchemaResponse) String() string            { return proto.CompactTextString(m) }
+func (*GetSchemaResponse) ProtoMessage()               {}
+func (*GetSchemaResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{13} }
 
 func (m *GetSchemaResponse) GetSchemaDefinition() *SchemaDefinition {
 	if m != nil {
@@ -310,17 +324,19 @@ func (m *GetSchemaResponse) GetSchemaDefinition() *SchemaDefinition {
 type GetPermissionsRequest struct {
 }
 
-func (m *GetPermissionsRequest) Reset()         { *m = GetPermissionsRequest{} }
-func (m *GetPermissionsRequest) String() string { return proto.CompactTextString(m) }
-func (*GetPermissionsRequest) ProtoMessage()    {}
+func (m *GetPermissionsRequest) Reset()                    { *m = GetPermissionsRequest{} }
+func (m *GetPermissionsRequest) String() string            { return proto.CompactTextString(m) }
+func (*GetPermissionsRequest) ProtoMessage()               {}
+func (*GetPermissionsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{14} }
 
 type GetPermissionsResponse struct {
 	Permissions *Permissions `protobuf:"bytes,1,opt,name=permissions" json:"permissions,omitempty"`
 }
 
-func (m *GetPermissionsResponse) Reset()         { *m = GetPermissionsResponse{} }
-func (m *GetPermissionsResponse) String() string { return proto.CompactTextString(m) }
-func (*GetPermissionsResponse) ProtoMessage()    {}
+func (m *GetPermissionsResponse) Reset()                    { *m = GetPermissionsResponse{} }
+func (m *GetPermissionsResponse) String() string            { return proto.CompactTextString(m) }
+func (*GetPermissionsResponse) ProtoMessage()               {}
+func (*GetPermissionsResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{15} }
 
 func (m *GetPermissionsResponse) GetPermissions() *Permissions {
 	if m != nil {
@@ -332,105 +348,119 @@ func (m *GetPermissionsResponse) GetPermissions() *Permissions {
 type SetReadOnlyRequest struct {
 }
 
-func (m *SetReadOnlyRequest) Reset()         { *m = SetReadOnlyRequest{} }
-func (m *SetReadOnlyRequest) String() string { return proto.CompactTextString(m) }
-func (*SetReadOnlyRequest) ProtoMessage()    {}
+func (m *SetReadOnlyRequest) Reset()                    { *m = SetReadOnlyRequest{} }
+func (m *SetReadOnlyRequest) String() string            { return proto.CompactTextString(m) }
+func (*SetReadOnlyRequest) ProtoMessage()               {}
+func (*SetReadOnlyRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{16} }
 
 type SetReadOnlyResponse struct {
 }
 
-func (m *SetReadOnlyResponse) Reset()         { *m = SetReadOnlyResponse{} }
-func (m *SetReadOnlyResponse) String() string { return proto.CompactTextString(m) }
-func (*SetReadOnlyResponse) ProtoMessage()    {}
+func (m *SetReadOnlyResponse) Reset()                    { *m = SetReadOnlyResponse{} }
+func (m *SetReadOnlyResponse) String() string            { return proto.CompactTextString(m) }
+func (*SetReadOnlyResponse) ProtoMessage()               {}
+func (*SetReadOnlyResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{17} }
 
 type SetReadWriteRequest struct {
 }
 
-func (m *SetReadWriteRequest) Reset()         { *m = SetReadWriteRequest{} }
-func (m *SetReadWriteRequest) String() string { return proto.CompactTextString(m) }
-func (*SetReadWriteRequest) ProtoMessage()    {}
+func (m *SetReadWriteRequest) Reset()                    { *m = SetReadWriteRequest{} }
+func (m *SetReadWriteRequest) String() string            { return proto.CompactTextString(m) }
+func (*SetReadWriteRequest) ProtoMessage()               {}
+func (*SetReadWriteRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{18} }
 
 type SetReadWriteResponse struct {
 }
 
-func (m *SetReadWriteResponse) Reset()         { *m = SetReadWriteResponse{} }
-func (m *SetReadWriteResponse) String() string { return proto.CompactTextString(m) }
-func (*SetReadWriteResponse) ProtoMessage()    {}
+func (m *SetReadWriteResponse) Reset()                    { *m = SetReadWriteResponse{} }
+func (m *SetReadWriteResponse) String() string            { return proto.CompactTextString(m) }
+func (*SetReadWriteResponse) ProtoMessage()               {}
+func (*SetReadWriteResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{19} }
 
 type ChangeTypeRequest struct {
 	TabletType topodata.TabletType `protobuf:"varint,1,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
-func (m *ChangeTypeRequest) Reset()         { *m = ChangeTypeRequest{} }
-func (m *ChangeTypeRequest) String() string { return proto.CompactTextString(m) }
-func (*ChangeTypeRequest) ProtoMessage()    {}
+func (m *ChangeTypeRequest) Reset()                    { *m = ChangeTypeRequest{} }
+func (m *ChangeTypeRequest) String() string            { return proto.CompactTextString(m) }
+func (*ChangeTypeRequest) ProtoMessage()               {}
+func (*ChangeTypeRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{20} }
 
 type ChangeTypeResponse struct {
 }
 
-func (m *ChangeTypeResponse) Reset()         { *m = ChangeTypeResponse{} }
-func (m *ChangeTypeResponse) String() string { return proto.CompactTextString(m) }
-func (*ChangeTypeResponse) ProtoMessage()    {}
+func (m *ChangeTypeResponse) Reset()                    { *m = ChangeTypeResponse{} }
+func (m *ChangeTypeResponse) String() string            { return proto.CompactTextString(m) }
+func (*ChangeTypeResponse) ProtoMessage()               {}
+func (*ChangeTypeResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{21} }
 
 type RefreshStateRequest struct {
 }
 
-func (m *RefreshStateRequest) Reset()         { *m = RefreshStateRequest{} }
-func (m *RefreshStateRequest) String() string { return proto.CompactTextString(m) }
-func (*RefreshStateRequest) ProtoMessage()    {}
+func (m *RefreshStateRequest) Reset()                    { *m = RefreshStateRequest{} }
+func (m *RefreshStateRequest) String() string            { return proto.CompactTextString(m) }
+func (*RefreshStateRequest) ProtoMessage()               {}
+func (*RefreshStateRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{22} }
 
 type RefreshStateResponse struct {
 }
 
-func (m *RefreshStateResponse) Reset()         { *m = RefreshStateResponse{} }
-func (m *RefreshStateResponse) String() string { return proto.CompactTextString(m) }
-func (*RefreshStateResponse) ProtoMessage()    {}
+func (m *RefreshStateResponse) Reset()                    { *m = RefreshStateResponse{} }
+func (m *RefreshStateResponse) String() string            { return proto.CompactTextString(m) }
+func (*RefreshStateResponse) ProtoMessage()               {}
+func (*RefreshStateResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{23} }
 
 type RunHealthCheckRequest struct {
 	TabletType topodata.TabletType `protobuf:"varint,1,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
-func (m *RunHealthCheckRequest) Reset()         { *m = RunHealthCheckRequest{} }
-func (m *RunHealthCheckRequest) String() string { return proto.CompactTextString(m) }
-func (*RunHealthCheckRequest) ProtoMessage()    {}
+func (m *RunHealthCheckRequest) Reset()                    { *m = RunHealthCheckRequest{} }
+func (m *RunHealthCheckRequest) String() string            { return proto.CompactTextString(m) }
+func (*RunHealthCheckRequest) ProtoMessage()               {}
+func (*RunHealthCheckRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{24} }
 
 type RunHealthCheckResponse struct {
 }
 
-func (m *RunHealthCheckResponse) Reset()         { *m = RunHealthCheckResponse{} }
-func (m *RunHealthCheckResponse) String() string { return proto.CompactTextString(m) }
-func (*RunHealthCheckResponse) ProtoMessage()    {}
+func (m *RunHealthCheckResponse) Reset()                    { *m = RunHealthCheckResponse{} }
+func (m *RunHealthCheckResponse) String() string            { return proto.CompactTextString(m) }
+func (*RunHealthCheckResponse) ProtoMessage()               {}
+func (*RunHealthCheckResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{25} }
 
 type ReloadSchemaRequest struct {
 }
 
-func (m *ReloadSchemaRequest) Reset()         { *m = ReloadSchemaRequest{} }
-func (m *ReloadSchemaRequest) String() string { return proto.CompactTextString(m) }
-func (*ReloadSchemaRequest) ProtoMessage()    {}
+func (m *ReloadSchemaRequest) Reset()                    { *m = ReloadSchemaRequest{} }
+func (m *ReloadSchemaRequest) String() string            { return proto.CompactTextString(m) }
+func (*ReloadSchemaRequest) ProtoMessage()               {}
+func (*ReloadSchemaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{26} }
 
 type ReloadSchemaResponse struct {
 }
 
-func (m *ReloadSchemaResponse) Reset()         { *m = ReloadSchemaResponse{} }
-func (m *ReloadSchemaResponse) String() string { return proto.CompactTextString(m) }
-func (*ReloadSchemaResponse) ProtoMessage()    {}
+func (m *ReloadSchemaResponse) Reset()                    { *m = ReloadSchemaResponse{} }
+func (m *ReloadSchemaResponse) String() string            { return proto.CompactTextString(m) }
+func (*ReloadSchemaResponse) ProtoMessage()               {}
+func (*ReloadSchemaResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{27} }
 
 type PreflightSchemaRequest struct {
 	Change string `protobuf:"bytes,1,opt,name=change" json:"change,omitempty"`
 }
 
-func (m *PreflightSchemaRequest) Reset()         { *m = PreflightSchemaRequest{} }
-func (m *PreflightSchemaRequest) String() string { return proto.CompactTextString(m) }
-func (*PreflightSchemaRequest) ProtoMessage()    {}
+func (m *PreflightSchemaRequest) Reset()                    { *m = PreflightSchemaRequest{} }
+func (m *PreflightSchemaRequest) String() string            { return proto.CompactTextString(m) }
+func (*PreflightSchemaRequest) ProtoMessage()               {}
+func (*PreflightSchemaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{28} }
 
 type PreflightSchemaResponse struct {
 	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema" json:"before_schema,omitempty"`
 	AfterSchema  *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema" json:"after_schema,omitempty"`
 }
 
-func (m *PreflightSchemaResponse) Reset()         { *m = PreflightSchemaResponse{} }
-func (m *PreflightSchemaResponse) String() string { return proto.CompactTextString(m) }
-func (*PreflightSchemaResponse) ProtoMessage()    {}
+func (m *PreflightSchemaResponse) Reset()                    { *m = PreflightSchemaResponse{} }
+func (m *PreflightSchemaResponse) String() string            { return proto.CompactTextString(m) }
+func (*PreflightSchemaResponse) ProtoMessage()               {}
+func (*PreflightSchemaResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{29} }
 
 func (m *PreflightSchemaResponse) GetBeforeSchema() *SchemaDefinition {
 	if m != nil {
@@ -454,9 +484,10 @@ type ApplySchemaRequest struct {
 	AfterSchema      *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema" json:"after_schema,omitempty"`
 }
 
-func (m *ApplySchemaRequest) Reset()         { *m = ApplySchemaRequest{} }
-func (m *ApplySchemaRequest) String() string { return proto.CompactTextString(m) }
-func (*ApplySchemaRequest) ProtoMessage()    {}
+func (m *ApplySchemaRequest) Reset()                    { *m = ApplySchemaRequest{} }
+func (m *ApplySchemaRequest) String() string            { return proto.CompactTextString(m) }
+func (*ApplySchemaRequest) ProtoMessage()               {}
+func (*ApplySchemaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{30} }
 
 func (m *ApplySchemaRequest) GetBeforeSchema() *SchemaDefinition {
 	if m != nil {
@@ -477,9 +508,10 @@ type ApplySchemaResponse struct {
 	AfterSchema  *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema" json:"after_schema,omitempty"`
 }
 
-func (m *ApplySchemaResponse) Reset()         { *m = ApplySchemaResponse{} }
-func (m *ApplySchemaResponse) String() string { return proto.CompactTextString(m) }
-func (*ApplySchemaResponse) ProtoMessage()    {}
+func (m *ApplySchemaResponse) Reset()                    { *m = ApplySchemaResponse{} }
+func (m *ApplySchemaResponse) String() string            { return proto.CompactTextString(m) }
+func (*ApplySchemaResponse) ProtoMessage()               {}
+func (*ApplySchemaResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{31} }
 
 func (m *ApplySchemaResponse) GetBeforeSchema() *SchemaDefinition {
 	if m != nil {
@@ -504,17 +536,19 @@ type ExecuteFetchAsDbaRequest struct {
 	ReloadSchema   bool   `protobuf:"varint,6,opt,name=reload_schema" json:"reload_schema,omitempty"`
 }
 
-func (m *ExecuteFetchAsDbaRequest) Reset()         { *m = ExecuteFetchAsDbaRequest{} }
-func (m *ExecuteFetchAsDbaRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteFetchAsDbaRequest) ProtoMessage()    {}
+func (m *ExecuteFetchAsDbaRequest) Reset()                    { *m = ExecuteFetchAsDbaRequest{} }
+func (m *ExecuteFetchAsDbaRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsDbaRequest) ProtoMessage()               {}
+func (*ExecuteFetchAsDbaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{32} }
 
 type ExecuteFetchAsDbaResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *ExecuteFetchAsDbaResponse) Reset()         { *m = ExecuteFetchAsDbaResponse{} }
-func (m *ExecuteFetchAsDbaResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteFetchAsDbaResponse) ProtoMessage()    {}
+func (m *ExecuteFetchAsDbaResponse) Reset()                    { *m = ExecuteFetchAsDbaResponse{} }
+func (m *ExecuteFetchAsDbaResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsDbaResponse) ProtoMessage()               {}
+func (*ExecuteFetchAsDbaResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{33} }
 
 func (m *ExecuteFetchAsDbaResponse) GetResult() *query.QueryResult {
 	if m != nil {
@@ -529,17 +563,19 @@ type ExecuteFetchAsAppRequest struct {
 	WantFields bool   `protobuf:"varint,3,opt,name=want_fields" json:"want_fields,omitempty"`
 }
 
-func (m *ExecuteFetchAsAppRequest) Reset()         { *m = ExecuteFetchAsAppRequest{} }
-func (m *ExecuteFetchAsAppRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteFetchAsAppRequest) ProtoMessage()    {}
+func (m *ExecuteFetchAsAppRequest) Reset()                    { *m = ExecuteFetchAsAppRequest{} }
+func (m *ExecuteFetchAsAppRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsAppRequest) ProtoMessage()               {}
+func (*ExecuteFetchAsAppRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{34} }
 
 type ExecuteFetchAsAppResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *ExecuteFetchAsAppResponse) Reset()         { *m = ExecuteFetchAsAppResponse{} }
-func (m *ExecuteFetchAsAppResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteFetchAsAppResponse) ProtoMessage()    {}
+func (m *ExecuteFetchAsAppResponse) Reset()                    { *m = ExecuteFetchAsAppResponse{} }
+func (m *ExecuteFetchAsAppResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsAppResponse) ProtoMessage()               {}
+func (*ExecuteFetchAsAppResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{35} }
 
 func (m *ExecuteFetchAsAppResponse) GetResult() *query.QueryResult {
 	if m != nil {
@@ -551,17 +587,19 @@ func (m *ExecuteFetchAsAppResponse) GetResult() *query.QueryResult {
 type SlaveStatusRequest struct {
 }
 
-func (m *SlaveStatusRequest) Reset()         { *m = SlaveStatusRequest{} }
-func (m *SlaveStatusRequest) String() string { return proto.CompactTextString(m) }
-func (*SlaveStatusRequest) ProtoMessage()    {}
+func (m *SlaveStatusRequest) Reset()                    { *m = SlaveStatusRequest{} }
+func (m *SlaveStatusRequest) String() string            { return proto.CompactTextString(m) }
+func (*SlaveStatusRequest) ProtoMessage()               {}
+func (*SlaveStatusRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{36} }
 
 type SlaveStatusResponse struct {
 	Status *replicationdata.Status `protobuf:"bytes,1,opt,name=status" json:"status,omitempty"`
 }
 
-func (m *SlaveStatusResponse) Reset()         { *m = SlaveStatusResponse{} }
-func (m *SlaveStatusResponse) String() string { return proto.CompactTextString(m) }
-func (*SlaveStatusResponse) ProtoMessage()    {}
+func (m *SlaveStatusResponse) Reset()                    { *m = SlaveStatusResponse{} }
+func (m *SlaveStatusResponse) String() string            { return proto.CompactTextString(m) }
+func (*SlaveStatusResponse) ProtoMessage()               {}
+func (*SlaveStatusResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{37} }
 
 func (m *SlaveStatusResponse) GetStatus() *replicationdata.Status {
 	if m != nil {
@@ -573,62 +611,70 @@ func (m *SlaveStatusResponse) GetStatus() *replicationdata.Status {
 type MasterPositionRequest struct {
 }
 
-func (m *MasterPositionRequest) Reset()         { *m = MasterPositionRequest{} }
-func (m *MasterPositionRequest) String() string { return proto.CompactTextString(m) }
-func (*MasterPositionRequest) ProtoMessage()    {}
+func (m *MasterPositionRequest) Reset()                    { *m = MasterPositionRequest{} }
+func (m *MasterPositionRequest) String() string            { return proto.CompactTextString(m) }
+func (*MasterPositionRequest) ProtoMessage()               {}
+func (*MasterPositionRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{38} }
 
 type MasterPositionResponse struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
-func (m *MasterPositionResponse) Reset()         { *m = MasterPositionResponse{} }
-func (m *MasterPositionResponse) String() string { return proto.CompactTextString(m) }
-func (*MasterPositionResponse) ProtoMessage()    {}
+func (m *MasterPositionResponse) Reset()                    { *m = MasterPositionResponse{} }
+func (m *MasterPositionResponse) String() string            { return proto.CompactTextString(m) }
+func (*MasterPositionResponse) ProtoMessage()               {}
+func (*MasterPositionResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{39} }
 
 type StopSlaveRequest struct {
 }
 
-func (m *StopSlaveRequest) Reset()         { *m = StopSlaveRequest{} }
-func (m *StopSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveRequest) ProtoMessage()    {}
+func (m *StopSlaveRequest) Reset()                    { *m = StopSlaveRequest{} }
+func (m *StopSlaveRequest) String() string            { return proto.CompactTextString(m) }
+func (*StopSlaveRequest) ProtoMessage()               {}
+func (*StopSlaveRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{40} }
 
 type StopSlaveResponse struct {
 }
 
-func (m *StopSlaveResponse) Reset()         { *m = StopSlaveResponse{} }
-func (m *StopSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveResponse) ProtoMessage()    {}
+func (m *StopSlaveResponse) Reset()                    { *m = StopSlaveResponse{} }
+func (m *StopSlaveResponse) String() string            { return proto.CompactTextString(m) }
+func (*StopSlaveResponse) ProtoMessage()               {}
+func (*StopSlaveResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{41} }
 
 type StopSlaveMinimumRequest struct {
 	Position    string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 	WaitTimeout int64  `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
 }
 
-func (m *StopSlaveMinimumRequest) Reset()         { *m = StopSlaveMinimumRequest{} }
-func (m *StopSlaveMinimumRequest) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveMinimumRequest) ProtoMessage()    {}
+func (m *StopSlaveMinimumRequest) Reset()                    { *m = StopSlaveMinimumRequest{} }
+func (m *StopSlaveMinimumRequest) String() string            { return proto.CompactTextString(m) }
+func (*StopSlaveMinimumRequest) ProtoMessage()               {}
+func (*StopSlaveMinimumRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{42} }
 
 type StopSlaveMinimumResponse struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
-func (m *StopSlaveMinimumResponse) Reset()         { *m = StopSlaveMinimumResponse{} }
-func (m *StopSlaveMinimumResponse) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveMinimumResponse) ProtoMessage()    {}
+func (m *StopSlaveMinimumResponse) Reset()                    { *m = StopSlaveMinimumResponse{} }
+func (m *StopSlaveMinimumResponse) String() string            { return proto.CompactTextString(m) }
+func (*StopSlaveMinimumResponse) ProtoMessage()               {}
+func (*StopSlaveMinimumResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{43} }
 
 type StartSlaveRequest struct {
 }
 
-func (m *StartSlaveRequest) Reset()         { *m = StartSlaveRequest{} }
-func (m *StartSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*StartSlaveRequest) ProtoMessage()    {}
+func (m *StartSlaveRequest) Reset()                    { *m = StartSlaveRequest{} }
+func (m *StartSlaveRequest) String() string            { return proto.CompactTextString(m) }
+func (*StartSlaveRequest) ProtoMessage()               {}
+func (*StartSlaveRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{44} }
 
 type StartSlaveResponse struct {
 }
 
-func (m *StartSlaveResponse) Reset()         { *m = StartSlaveResponse{} }
-func (m *StartSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*StartSlaveResponse) ProtoMessage()    {}
+func (m *StartSlaveResponse) Reset()                    { *m = StartSlaveResponse{} }
+func (m *StartSlaveResponse) String() string            { return proto.CompactTextString(m) }
+func (*StartSlaveResponse) ProtoMessage()               {}
+func (*StartSlaveResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{45} }
 
 type TabletExternallyReparentedRequest struct {
 	// external_id is an string value that may be provided by an external
@@ -640,6 +686,9 @@ type TabletExternallyReparentedRequest struct {
 func (m *TabletExternallyReparentedRequest) Reset()         { *m = TabletExternallyReparentedRequest{} }
 func (m *TabletExternallyReparentedRequest) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyReparentedRequest) ProtoMessage()    {}
+func (*TabletExternallyReparentedRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{46}
+}
 
 type TabletExternallyReparentedResponse struct {
 }
@@ -647,13 +696,17 @@ type TabletExternallyReparentedResponse struct {
 func (m *TabletExternallyReparentedResponse) Reset()         { *m = TabletExternallyReparentedResponse{} }
 func (m *TabletExternallyReparentedResponse) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyReparentedResponse) ProtoMessage()    {}
+func (*TabletExternallyReparentedResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{47}
+}
 
 type TabletExternallyElectedRequest struct {
 }
 
-func (m *TabletExternallyElectedRequest) Reset()         { *m = TabletExternallyElectedRequest{} }
-func (m *TabletExternallyElectedRequest) String() string { return proto.CompactTextString(m) }
-func (*TabletExternallyElectedRequest) ProtoMessage()    {}
+func (m *TabletExternallyElectedRequest) Reset()                    { *m = TabletExternallyElectedRequest{} }
+func (m *TabletExternallyElectedRequest) String() string            { return proto.CompactTextString(m) }
+func (*TabletExternallyElectedRequest) ProtoMessage()               {}
+func (*TabletExternallyElectedRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{48} }
 
 type TabletExternallyElectedResponse struct {
 }
@@ -661,30 +714,36 @@ type TabletExternallyElectedResponse struct {
 func (m *TabletExternallyElectedResponse) Reset()         { *m = TabletExternallyElectedResponse{} }
 func (m *TabletExternallyElectedResponse) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyElectedResponse) ProtoMessage()    {}
+func (*TabletExternallyElectedResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{49}
+}
 
 type GetSlavesRequest struct {
 }
 
-func (m *GetSlavesRequest) Reset()         { *m = GetSlavesRequest{} }
-func (m *GetSlavesRequest) String() string { return proto.CompactTextString(m) }
-func (*GetSlavesRequest) ProtoMessage()    {}
+func (m *GetSlavesRequest) Reset()                    { *m = GetSlavesRequest{} }
+func (m *GetSlavesRequest) String() string            { return proto.CompactTextString(m) }
+func (*GetSlavesRequest) ProtoMessage()               {}
+func (*GetSlavesRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{50} }
 
 type GetSlavesResponse struct {
 	Addrs []string `protobuf:"bytes,1,rep,name=addrs" json:"addrs,omitempty"`
 }
 
-func (m *GetSlavesResponse) Reset()         { *m = GetSlavesResponse{} }
-func (m *GetSlavesResponse) String() string { return proto.CompactTextString(m) }
-func (*GetSlavesResponse) ProtoMessage()    {}
+func (m *GetSlavesResponse) Reset()                    { *m = GetSlavesResponse{} }
+func (m *GetSlavesResponse) String() string            { return proto.CompactTextString(m) }
+func (*GetSlavesResponse) ProtoMessage()               {}
+func (*GetSlavesResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{51} }
 
 type WaitBlpPositionRequest struct {
 	BlpPosition *BlpPosition `protobuf:"bytes,1,opt,name=blp_position" json:"blp_position,omitempty"`
 	WaitTimeout int64        `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
 }
 
-func (m *WaitBlpPositionRequest) Reset()         { *m = WaitBlpPositionRequest{} }
-func (m *WaitBlpPositionRequest) String() string { return proto.CompactTextString(m) }
-func (*WaitBlpPositionRequest) ProtoMessage()    {}
+func (m *WaitBlpPositionRequest) Reset()                    { *m = WaitBlpPositionRequest{} }
+func (m *WaitBlpPositionRequest) String() string            { return proto.CompactTextString(m) }
+func (*WaitBlpPositionRequest) ProtoMessage()               {}
+func (*WaitBlpPositionRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{52} }
 
 func (m *WaitBlpPositionRequest) GetBlpPosition() *BlpPosition {
 	if m != nil {
@@ -696,24 +755,27 @@ func (m *WaitBlpPositionRequest) GetBlpPosition() *BlpPosition {
 type WaitBlpPositionResponse struct {
 }
 
-func (m *WaitBlpPositionResponse) Reset()         { *m = WaitBlpPositionResponse{} }
-func (m *WaitBlpPositionResponse) String() string { return proto.CompactTextString(m) }
-func (*WaitBlpPositionResponse) ProtoMessage()    {}
+func (m *WaitBlpPositionResponse) Reset()                    { *m = WaitBlpPositionResponse{} }
+func (m *WaitBlpPositionResponse) String() string            { return proto.CompactTextString(m) }
+func (*WaitBlpPositionResponse) ProtoMessage()               {}
+func (*WaitBlpPositionResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{53} }
 
 type StopBlpRequest struct {
 }
 
-func (m *StopBlpRequest) Reset()         { *m = StopBlpRequest{} }
-func (m *StopBlpRequest) String() string { return proto.CompactTextString(m) }
-func (*StopBlpRequest) ProtoMessage()    {}
+func (m *StopBlpRequest) Reset()                    { *m = StopBlpRequest{} }
+func (m *StopBlpRequest) String() string            { return proto.CompactTextString(m) }
+func (*StopBlpRequest) ProtoMessage()               {}
+func (*StopBlpRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{54} }
 
 type StopBlpResponse struct {
 	BlpPositions []*BlpPosition `protobuf:"bytes,1,rep,name=blp_positions" json:"blp_positions,omitempty"`
 }
 
-func (m *StopBlpResponse) Reset()         { *m = StopBlpResponse{} }
-func (m *StopBlpResponse) String() string { return proto.CompactTextString(m) }
-func (*StopBlpResponse) ProtoMessage()    {}
+func (m *StopBlpResponse) Reset()                    { *m = StopBlpResponse{} }
+func (m *StopBlpResponse) String() string            { return proto.CompactTextString(m) }
+func (*StopBlpResponse) ProtoMessage()               {}
+func (*StopBlpResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{55} }
 
 func (m *StopBlpResponse) GetBlpPositions() []*BlpPosition {
 	if m != nil {
@@ -725,25 +787,28 @@ func (m *StopBlpResponse) GetBlpPositions() []*BlpPosition {
 type StartBlpRequest struct {
 }
 
-func (m *StartBlpRequest) Reset()         { *m = StartBlpRequest{} }
-func (m *StartBlpRequest) String() string { return proto.CompactTextString(m) }
-func (*StartBlpRequest) ProtoMessage()    {}
+func (m *StartBlpRequest) Reset()                    { *m = StartBlpRequest{} }
+func (m *StartBlpRequest) String() string            { return proto.CompactTextString(m) }
+func (*StartBlpRequest) ProtoMessage()               {}
+func (*StartBlpRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{56} }
 
 type StartBlpResponse struct {
 }
 
-func (m *StartBlpResponse) Reset()         { *m = StartBlpResponse{} }
-func (m *StartBlpResponse) String() string { return proto.CompactTextString(m) }
-func (*StartBlpResponse) ProtoMessage()    {}
+func (m *StartBlpResponse) Reset()                    { *m = StartBlpResponse{} }
+func (m *StartBlpResponse) String() string            { return proto.CompactTextString(m) }
+func (*StartBlpResponse) ProtoMessage()               {}
+func (*StartBlpResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{57} }
 
 type RunBlpUntilRequest struct {
 	BlpPositions []*BlpPosition `protobuf:"bytes,1,rep,name=blp_positions" json:"blp_positions,omitempty"`
 	WaitTimeout  int64          `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
 }
 
-func (m *RunBlpUntilRequest) Reset()         { *m = RunBlpUntilRequest{} }
-func (m *RunBlpUntilRequest) String() string { return proto.CompactTextString(m) }
-func (*RunBlpUntilRequest) ProtoMessage()    {}
+func (m *RunBlpUntilRequest) Reset()                    { *m = RunBlpUntilRequest{} }
+func (m *RunBlpUntilRequest) String() string            { return proto.CompactTextString(m) }
+func (*RunBlpUntilRequest) ProtoMessage()               {}
+func (*RunBlpUntilRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{58} }
 
 func (m *RunBlpUntilRequest) GetBlpPositions() []*BlpPosition {
 	if m != nil {
@@ -756,38 +821,43 @@ type RunBlpUntilResponse struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
-func (m *RunBlpUntilResponse) Reset()         { *m = RunBlpUntilResponse{} }
-func (m *RunBlpUntilResponse) String() string { return proto.CompactTextString(m) }
-func (*RunBlpUntilResponse) ProtoMessage()    {}
+func (m *RunBlpUntilResponse) Reset()                    { *m = RunBlpUntilResponse{} }
+func (m *RunBlpUntilResponse) String() string            { return proto.CompactTextString(m) }
+func (*RunBlpUntilResponse) ProtoMessage()               {}
+func (*RunBlpUntilResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{59} }
 
 type ResetReplicationRequest struct {
 }
 
-func (m *ResetReplicationRequest) Reset()         { *m = ResetReplicationRequest{} }
-func (m *ResetReplicationRequest) String() string { return proto.CompactTextString(m) }
-func (*ResetReplicationRequest) ProtoMessage()    {}
+func (m *ResetReplicationRequest) Reset()                    { *m = ResetReplicationRequest{} }
+func (m *ResetReplicationRequest) String() string            { return proto.CompactTextString(m) }
+func (*ResetReplicationRequest) ProtoMessage()               {}
+func (*ResetReplicationRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{60} }
 
 type ResetReplicationResponse struct {
 }
 
-func (m *ResetReplicationResponse) Reset()         { *m = ResetReplicationResponse{} }
-func (m *ResetReplicationResponse) String() string { return proto.CompactTextString(m) }
-func (*ResetReplicationResponse) ProtoMessage()    {}
+func (m *ResetReplicationResponse) Reset()                    { *m = ResetReplicationResponse{} }
+func (m *ResetReplicationResponse) String() string            { return proto.CompactTextString(m) }
+func (*ResetReplicationResponse) ProtoMessage()               {}
+func (*ResetReplicationResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{61} }
 
 type InitMasterRequest struct {
 }
 
-func (m *InitMasterRequest) Reset()         { *m = InitMasterRequest{} }
-func (m *InitMasterRequest) String() string { return proto.CompactTextString(m) }
-func (*InitMasterRequest) ProtoMessage()    {}
+func (m *InitMasterRequest) Reset()                    { *m = InitMasterRequest{} }
+func (m *InitMasterRequest) String() string            { return proto.CompactTextString(m) }
+func (*InitMasterRequest) ProtoMessage()               {}
+func (*InitMasterRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{62} }
 
 type InitMasterResponse struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
-func (m *InitMasterResponse) Reset()         { *m = InitMasterResponse{} }
-func (m *InitMasterResponse) String() string { return proto.CompactTextString(m) }
-func (*InitMasterResponse) ProtoMessage()    {}
+func (m *InitMasterResponse) Reset()                    { *m = InitMasterResponse{} }
+func (m *InitMasterResponse) String() string            { return proto.CompactTextString(m) }
+func (*InitMasterResponse) ProtoMessage()               {}
+func (*InitMasterResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{63} }
 
 type PopulateReparentJournalRequest struct {
 	TimeCreatedNs       int64                 `protobuf:"varint,1,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
@@ -796,9 +866,10 @@ type PopulateReparentJournalRequest struct {
 	ReplicationPosition string                `protobuf:"bytes,4,opt,name=replication_position" json:"replication_position,omitempty"`
 }
 
-func (m *PopulateReparentJournalRequest) Reset()         { *m = PopulateReparentJournalRequest{} }
-func (m *PopulateReparentJournalRequest) String() string { return proto.CompactTextString(m) }
-func (*PopulateReparentJournalRequest) ProtoMessage()    {}
+func (m *PopulateReparentJournalRequest) Reset()                    { *m = PopulateReparentJournalRequest{} }
+func (m *PopulateReparentJournalRequest) String() string            { return proto.CompactTextString(m) }
+func (*PopulateReparentJournalRequest) ProtoMessage()               {}
+func (*PopulateReparentJournalRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{64} }
 
 func (m *PopulateReparentJournalRequest) GetMasterAlias() *topodata.TabletAlias {
 	if m != nil {
@@ -813,6 +884,9 @@ type PopulateReparentJournalResponse struct {
 func (m *PopulateReparentJournalResponse) Reset()         { *m = PopulateReparentJournalResponse{} }
 func (m *PopulateReparentJournalResponse) String() string { return proto.CompactTextString(m) }
 func (*PopulateReparentJournalResponse) ProtoMessage()    {}
+func (*PopulateReparentJournalResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{65}
+}
 
 type InitSlaveRequest struct {
 	Parent              *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
@@ -820,9 +894,10 @@ type InitSlaveRequest struct {
 	TimeCreatedNs       int64                 `protobuf:"varint,3,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
 }
 
-func (m *InitSlaveRequest) Reset()         { *m = InitSlaveRequest{} }
-func (m *InitSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*InitSlaveRequest) ProtoMessage()    {}
+func (m *InitSlaveRequest) Reset()                    { *m = InitSlaveRequest{} }
+func (m *InitSlaveRequest) String() string            { return proto.CompactTextString(m) }
+func (*InitSlaveRequest) ProtoMessage()               {}
+func (*InitSlaveRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{66} }
 
 func (m *InitSlaveRequest) GetParent() *topodata.TabletAlias {
 	if m != nil {
@@ -834,24 +909,27 @@ func (m *InitSlaveRequest) GetParent() *topodata.TabletAlias {
 type InitSlaveResponse struct {
 }
 
-func (m *InitSlaveResponse) Reset()         { *m = InitSlaveResponse{} }
-func (m *InitSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*InitSlaveResponse) ProtoMessage()    {}
+func (m *InitSlaveResponse) Reset()                    { *m = InitSlaveResponse{} }
+func (m *InitSlaveResponse) String() string            { return proto.CompactTextString(m) }
+func (*InitSlaveResponse) ProtoMessage()               {}
+func (*InitSlaveResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{67} }
 
 type DemoteMasterRequest struct {
 }
 
-func (m *DemoteMasterRequest) Reset()         { *m = DemoteMasterRequest{} }
-func (m *DemoteMasterRequest) String() string { return proto.CompactTextString(m) }
-func (*DemoteMasterRequest) ProtoMessage()    {}
+func (m *DemoteMasterRequest) Reset()                    { *m = DemoteMasterRequest{} }
+func (m *DemoteMasterRequest) String() string            { return proto.CompactTextString(m) }
+func (*DemoteMasterRequest) ProtoMessage()               {}
+func (*DemoteMasterRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{68} }
 
 type DemoteMasterResponse struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
-func (m *DemoteMasterResponse) Reset()         { *m = DemoteMasterResponse{} }
-func (m *DemoteMasterResponse) String() string { return proto.CompactTextString(m) }
-func (*DemoteMasterResponse) ProtoMessage()    {}
+func (m *DemoteMasterResponse) Reset()                    { *m = DemoteMasterResponse{} }
+func (m *DemoteMasterResponse) String() string            { return proto.CompactTextString(m) }
+func (*DemoteMasterResponse) ProtoMessage()               {}
+func (*DemoteMasterResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{69} }
 
 type PromoteSlaveWhenCaughtUpRequest struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
@@ -860,6 +938,9 @@ type PromoteSlaveWhenCaughtUpRequest struct {
 func (m *PromoteSlaveWhenCaughtUpRequest) Reset()         { *m = PromoteSlaveWhenCaughtUpRequest{} }
 func (m *PromoteSlaveWhenCaughtUpRequest) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveWhenCaughtUpRequest) ProtoMessage()    {}
+func (*PromoteSlaveWhenCaughtUpRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{70}
+}
 
 type PromoteSlaveWhenCaughtUpResponse struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
@@ -868,20 +949,25 @@ type PromoteSlaveWhenCaughtUpResponse struct {
 func (m *PromoteSlaveWhenCaughtUpResponse) Reset()         { *m = PromoteSlaveWhenCaughtUpResponse{} }
 func (m *PromoteSlaveWhenCaughtUpResponse) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveWhenCaughtUpResponse) ProtoMessage()    {}
+func (*PromoteSlaveWhenCaughtUpResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{71}
+}
 
 type SlaveWasPromotedRequest struct {
 }
 
-func (m *SlaveWasPromotedRequest) Reset()         { *m = SlaveWasPromotedRequest{} }
-func (m *SlaveWasPromotedRequest) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasPromotedRequest) ProtoMessage()    {}
+func (m *SlaveWasPromotedRequest) Reset()                    { *m = SlaveWasPromotedRequest{} }
+func (m *SlaveWasPromotedRequest) String() string            { return proto.CompactTextString(m) }
+func (*SlaveWasPromotedRequest) ProtoMessage()               {}
+func (*SlaveWasPromotedRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{72} }
 
 type SlaveWasPromotedResponse struct {
 }
 
-func (m *SlaveWasPromotedResponse) Reset()         { *m = SlaveWasPromotedResponse{} }
-func (m *SlaveWasPromotedResponse) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasPromotedResponse) ProtoMessage()    {}
+func (m *SlaveWasPromotedResponse) Reset()                    { *m = SlaveWasPromotedResponse{} }
+func (m *SlaveWasPromotedResponse) String() string            { return proto.CompactTextString(m) }
+func (*SlaveWasPromotedResponse) ProtoMessage()               {}
+func (*SlaveWasPromotedResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{73} }
 
 type SetMasterRequest struct {
 	Parent          *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
@@ -889,9 +975,10 @@ type SetMasterRequest struct {
 	ForceStartSlave bool                  `protobuf:"varint,3,opt,name=force_start_slave" json:"force_start_slave,omitempty"`
 }
 
-func (m *SetMasterRequest) Reset()         { *m = SetMasterRequest{} }
-func (m *SetMasterRequest) String() string { return proto.CompactTextString(m) }
-func (*SetMasterRequest) ProtoMessage()    {}
+func (m *SetMasterRequest) Reset()                    { *m = SetMasterRequest{} }
+func (m *SetMasterRequest) String() string            { return proto.CompactTextString(m) }
+func (*SetMasterRequest) ProtoMessage()               {}
+func (*SetMasterRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{74} }
 
 func (m *SetMasterRequest) GetParent() *topodata.TabletAlias {
 	if m != nil {
@@ -903,18 +990,20 @@ func (m *SetMasterRequest) GetParent() *topodata.TabletAlias {
 type SetMasterResponse struct {
 }
 
-func (m *SetMasterResponse) Reset()         { *m = SetMasterResponse{} }
-func (m *SetMasterResponse) String() string { return proto.CompactTextString(m) }
-func (*SetMasterResponse) ProtoMessage()    {}
+func (m *SetMasterResponse) Reset()                    { *m = SetMasterResponse{} }
+func (m *SetMasterResponse) String() string            { return proto.CompactTextString(m) }
+func (*SetMasterResponse) ProtoMessage()               {}
+func (*SetMasterResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{75} }
 
 type SlaveWasRestartedRequest struct {
 	// the parent alias the tablet should have
 	Parent *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
 }
 
-func (m *SlaveWasRestartedRequest) Reset()         { *m = SlaveWasRestartedRequest{} }
-func (m *SlaveWasRestartedRequest) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasRestartedRequest) ProtoMessage()    {}
+func (m *SlaveWasRestartedRequest) Reset()                    { *m = SlaveWasRestartedRequest{} }
+func (m *SlaveWasRestartedRequest) String() string            { return proto.CompactTextString(m) }
+func (*SlaveWasRestartedRequest) ProtoMessage()               {}
+func (*SlaveWasRestartedRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{76} }
 
 func (m *SlaveWasRestartedRequest) GetParent() *topodata.TabletAlias {
 	if m != nil {
@@ -926,9 +1015,10 @@ func (m *SlaveWasRestartedRequest) GetParent() *topodata.TabletAlias {
 type SlaveWasRestartedResponse struct {
 }
 
-func (m *SlaveWasRestartedResponse) Reset()         { *m = SlaveWasRestartedResponse{} }
-func (m *SlaveWasRestartedResponse) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasRestartedResponse) ProtoMessage()    {}
+func (m *SlaveWasRestartedResponse) Reset()                    { *m = SlaveWasRestartedResponse{} }
+func (m *SlaveWasRestartedResponse) String() string            { return proto.CompactTextString(m) }
+func (*SlaveWasRestartedResponse) ProtoMessage()               {}
+func (*SlaveWasRestartedResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{77} }
 
 type StopReplicationAndGetStatusRequest struct {
 }
@@ -936,6 +1026,9 @@ type StopReplicationAndGetStatusRequest struct {
 func (m *StopReplicationAndGetStatusRequest) Reset()         { *m = StopReplicationAndGetStatusRequest{} }
 func (m *StopReplicationAndGetStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*StopReplicationAndGetStatusRequest) ProtoMessage()    {}
+func (*StopReplicationAndGetStatusRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{78}
+}
 
 type StopReplicationAndGetStatusResponse struct {
 	Status *replicationdata.Status `protobuf:"bytes,1,opt,name=status" json:"status,omitempty"`
@@ -944,6 +1037,9 @@ type StopReplicationAndGetStatusResponse struct {
 func (m *StopReplicationAndGetStatusResponse) Reset()         { *m = StopReplicationAndGetStatusResponse{} }
 func (m *StopReplicationAndGetStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*StopReplicationAndGetStatusResponse) ProtoMessage()    {}
+func (*StopReplicationAndGetStatusResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{79}
+}
 
 func (m *StopReplicationAndGetStatusResponse) GetStatus() *replicationdata.Status {
 	if m != nil {
@@ -955,33 +1051,37 @@ func (m *StopReplicationAndGetStatusResponse) GetStatus() *replicationdata.Statu
 type PromoteSlaveRequest struct {
 }
 
-func (m *PromoteSlaveRequest) Reset()         { *m = PromoteSlaveRequest{} }
-func (m *PromoteSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*PromoteSlaveRequest) ProtoMessage()    {}
+func (m *PromoteSlaveRequest) Reset()                    { *m = PromoteSlaveRequest{} }
+func (m *PromoteSlaveRequest) String() string            { return proto.CompactTextString(m) }
+func (*PromoteSlaveRequest) ProtoMessage()               {}
+func (*PromoteSlaveRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{80} }
 
 type PromoteSlaveResponse struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
-func (m *PromoteSlaveResponse) Reset()         { *m = PromoteSlaveResponse{} }
-func (m *PromoteSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*PromoteSlaveResponse) ProtoMessage()    {}
+func (m *PromoteSlaveResponse) Reset()                    { *m = PromoteSlaveResponse{} }
+func (m *PromoteSlaveResponse) String() string            { return proto.CompactTextString(m) }
+func (*PromoteSlaveResponse) ProtoMessage()               {}
+func (*PromoteSlaveResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{81} }
 
 type BackupRequest struct {
 	Concurrency int64 `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`
 }
 
-func (m *BackupRequest) Reset()         { *m = BackupRequest{} }
-func (m *BackupRequest) String() string { return proto.CompactTextString(m) }
-func (*BackupRequest) ProtoMessage()    {}
+func (m *BackupRequest) Reset()                    { *m = BackupRequest{} }
+func (m *BackupRequest) String() string            { return proto.CompactTextString(m) }
+func (*BackupRequest) ProtoMessage()               {}
+func (*BackupRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{82} }
 
 type BackupResponse struct {
 	Event *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
 }
 
-func (m *BackupResponse) Reset()         { *m = BackupResponse{} }
-func (m *BackupResponse) String() string { return proto.CompactTextString(m) }
-func (*BackupResponse) ProtoMessage()    {}
+func (m *BackupResponse) Reset()                    { *m = BackupResponse{} }
+func (m *BackupResponse) String() string            { return proto.CompactTextString(m) }
+func (*BackupResponse) ProtoMessage()               {}
+func (*BackupResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{83} }
 
 func (m *BackupResponse) GetEvent() *logutil.Event {
 	if m != nil {
@@ -1075,4 +1175,113 @@ func init() {
 	proto.RegisterType((*PromoteSlaveResponse)(nil), "tabletmanagerdata.PromoteSlaveResponse")
 	proto.RegisterType((*BackupRequest)(nil), "tabletmanagerdata.BackupRequest")
 	proto.RegisterType((*BackupResponse)(nil), "tabletmanagerdata.BackupResponse")
+}
+
+var fileDescriptor0 = []byte{
+	// 1680 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xc4, 0x58, 0xdd, 0x4f, 0x1b, 0x47,
+	0x10, 0x97, 0x31, 0x10, 0x18, 0x7f, 0x00, 0xc7, 0x97, 0x21, 0x2d, 0x21, 0x97, 0xb4, 0xa1, 0x1f,
+	0x22, 0x0a, 0xa4, 0x6a, 0x9a, 0xaa, 0xa9, 0x08, 0x90, 0xa6, 0x91, 0xd2, 0x12, 0x48, 0x94, 0xc7,
+	0xd3, 0xfa, 0x6e, 0xb1, 0x4f, 0x9c, 0xef, 0x2e, 0xb7, 0x7b, 0x06, 0xab, 0x8f, 0x7d, 0xed, 0x43,
+	0xab, 0x3e, 0xf5, 0x9f, 0x68, 0xff, 0x86, 0xf6, 0x2f, 0xeb, 0xec, 0xc7, 0xd9, 0x7b, 0xf6, 0x39,
+	0x90, 0xa8, 0x52, 0x5f, 0xa2, 0xdc, 0xec, 0xcc, 0xec, 0x6f, 0x66, 0x67, 0x7e, 0x33, 0x06, 0x56,
+	0x39, 0x69, 0x06, 0x94, 0x77, 0x48, 0x48, 0x5a, 0x34, 0xf1, 0x08, 0x27, 0xdb, 0x71, 0x12, 0xf1,
+	0xc8, 0x5a, 0x18, 0x39, 0x58, 0xaf, 0xbc, 0x49, 0x69, 0xd2, 0x53, 0xe7, 0xeb, 0x75, 0x1e, 0xc5,
+	0xd1, 0x40, 0x7f, 0x7d, 0x39, 0xa1, 0x71, 0xe0, 0xbb, 0x84, 0xfb, 0x51, 0x68, 0x88, 0x6b, 0x41,
+	0xd4, 0x4a, 0xb9, 0x1f, 0xa8, 0x4f, 0xfb, 0xf7, 0x12, 0xcc, 0xbd, 0x14, 0x8e, 0x0f, 0xe8, 0xa9,
+	0x1f, 0xfa, 0x42, 0xd9, 0xaa, 0xc2, 0x64, 0x48, 0x3a, 0xb4, 0x51, 0xda, 0x2c, 0x6d, 0xcd, 0x5a,
+	0x75, 0x98, 0x66, 0x6e, 0x9b, 0x76, 0x48, 0x63, 0x42, 0x7e, 0xcf, 0xc1, 0x35, 0x37, 0x0a, 0xd2,
+	0x4e, 0xc8, 0x1a, 0xe5, 0xcd, 0x32, 0x0a, 0xae, 0xc3, 0x62, 0x9c, 0xf8, 0x1d, 0x92, 0xf4, 0x9c,
+	0x33, 0xda, 0x73, 0xb2, 0xc3, 0x49, 0x79, 0x88, 0xbe, 0x78, 0x2f, 0xa6, 0x8d, 0x29, 0x69, 0xbb,
+	0x08, 0x15, 0x01, 0xc5, 0x09, 0x68, 0xd8, 0xe2, 0xed, 0xc6, 0x34, 0x0a, 0x27, 0xad, 0x05, 0x98,
+	0x4d, 0xa2, 0x73, 0xb4, 0x4b, 0x43, 0xde, 0xb8, 0x26, 0x44, 0xf6, 0x4f, 0x30, 0x7f, 0x22, 0xef,
+	0x34, 0x50, 0xad, 0xc2, 0x9c, 0xb0, 0x6d, 0x12, 0x46, 0x1d, 0x0d, 0x48, 0x01, 0xfc, 0x06, 0x54,
+	0x6a, 0x1c, 0xaf, 0xaf, 0xcc, 0x10, 0x6b, 0x79, 0xab, 0xb2, 0x63, 0x6f, 0x8f, 0x66, 0x73, 0x38,
+	0x5a, 0x8c, 0xa7, 0x4b, 0x13, 0x86, 0xff, 0xc5, 0x78, 0xd0, 0x9f, 0xfd, 0x77, 0x09, 0xea, 0xaf,
+	0x18, 0x4d, 0x8e, 0x68, 0xd2, 0xf1, 0x19, 0xd3, 0x19, 0x69, 0x47, 0x8c, 0xeb, 0x0b, 0xf1, 0x2b,
+	0xc5, 0x73, 0x9d, 0x8f, 0x35, 0x58, 0x88, 0x09, 0x63, 0xe7, 0x51, 0xe2, 0x39, 0x08, 0xcb, 0x3d,
+	0x63, 0x69, 0x47, 0x7a, 0x9a, 0xb4, 0x0e, 0x01, 0x30, 0x33, 0x5d, 0x3f, 0xa0, 0x2d, 0xaa, 0x12,
+	0x52, 0xd9, 0xb9, 0x57, 0x00, 0x29, 0x7f, 0xdb, 0xf6, 0x51, 0xdf, 0xe6, 0x30, 0xe4, 0x49, 0x6f,
+	0xfd, 0x1e, 0xcc, 0x0d, 0x89, 0xac, 0x0a, 0x94, 0x31, 0xd7, 0x1a, 0x4f, 0x0d, 0xa6, 0xba, 0x24,
+	0x48, 0xa9, 0x02, 0xf4, 0x70, 0xe2, 0x41, 0xc9, 0xfe, 0xb3, 0x04, 0xd5, 0x83, 0xe6, 0xd8, 0x08,
+	0x00, 0x26, 0xbc, 0xa6, 0xc6, 0x9f, 0x45, 0x23, 0x83, 0xb7, 0xf6, 0x0b, 0x20, 0xdf, 0x2d, 0x80,
+	0x6c, 0x3a, 0xff, 0x2f, 0x00, 0xff, 0x5c, 0x82, 0xca, 0xc0, 0x23, 0xb3, 0xbe, 0x86, 0x79, 0x81,
+	0xca, 0x89, 0x07, 0x32, 0x34, 0x16, 0x68, 0x6e, 0x5e, 0x9a, 0x40, 0xeb, 0x4b, 0xa8, 0x7b, 0xcd,
+	0x9c, 0xa9, 0x2a, 0x87, 0x1b, 0x97, 0x04, 0x62, 0x7f, 0x0e, 0x95, 0xc7, 0x41, 0x7c, 0x14, 0x31,
+	0x55, 0x1a, 0x08, 0x3a, 0xf5, 0x3d, 0x09, 0xba, 0x66, 0xcd, 0xc3, 0x4c, 0xac, 0x0f, 0x14, 0x6e,
+	0x7b, 0x03, 0x21, 0xfb, 0x61, 0xeb, 0x98, 0x62, 0x1b, 0x32, 0x2e, 0x0a, 0x29, 0x26, 0xbd, 0x20,
+	0x22, 0xca, 0x62, 0xd6, 0xbe, 0x01, 0x55, 0x75, 0xce, 0x62, 0xc4, 0x40, 0x47, 0x15, 0x36, 0xa1,
+	0x7a, 0x12, 0x50, 0x1a, 0x67, 0x1e, 0xf0, 0x0a, 0x2f, 0x4d, 0x64, 0xc7, 0x4a, 0x8d, 0xb2, 0x3d,
+	0x07, 0x35, 0xad, 0xa1, 0x7c, 0xd8, 0x7f, 0x95, 0xc0, 0x3a, 0xbc, 0xa0, 0x6e, 0xca, 0xe9, 0xd3,
+	0x28, 0x3a, 0xcb, 0x2c, 0xf3, 0x2d, 0x8b, 0xef, 0x1b, 0x93, 0x04, 0xbf, 0x39, 0x16, 0xb6, 0x8c,
+	0x7d, 0xd6, 0x7a, 0x02, 0xb3, 0xf4, 0x82, 0x27, 0xc4, 0xa1, 0x61, 0x57, 0x36, 0x6e, 0x65, 0x67,
+	0xb7, 0x20, 0x1d, 0xa3, 0xbe, 0x51, 0x84, 0x66, 0x87, 0x61, 0x57, 0xbd, 0xed, 0x5d, 0xa8, 0xe5,
+	0x04, 0x97, 0xbe, 0xec, 0x33, 0x58, 0xcc, 0x39, 0xd5, 0xc9, 0x40, 0x2a, 0xa0, 0x17, 0x3e, 0x77,
+	0x18, 0x27, 0x3c, 0x65, 0x2a, 0x5c, 0xc9, 0x35, 0xdc, 0x8b, 0x52, 0xae, 0x6b, 0x53, 0x7d, 0xd3,
+	0x44, 0x57, 0xa7, 0xfd, 0x02, 0xe6, 0xbf, 0xa3, 0x5c, 0x51, 0x43, 0x16, 0x3a, 0xea, 0xc8, 0x30,
+	0x54, 0x7d, 0xcc, 0x5a, 0xcb, 0x50, 0xf3, 0x43, 0x37, 0x48, 0x3d, 0xea, 0x74, 0x7d, 0x7a, 0xce,
+	0xa4, 0xab, 0x19, 0x6b, 0x05, 0xea, 0xf4, 0x42, 0x89, 0xb5, 0xba, 0x64, 0x2f, 0xfb, 0x04, 0x16,
+	0x0c, 0x97, 0x1a, 0xdc, 0x23, 0x58, 0x50, 0x14, 0x63, 0x70, 0x8a, 0x84, 0x58, 0xd9, 0xb9, 0x55,
+	0x90, 0xb4, 0x61, 0xae, 0xb2, 0x57, 0x61, 0x19, 0x9d, 0x1a, 0xf5, 0xac, 0xc1, 0xda, 0xcf, 0x61,
+	0x65, 0xf8, 0x40, 0x5f, 0xb9, 0x0b, 0x95, 0x7c, 0xad, 0x8b, 0xcb, 0x36, 0x0a, 0x2e, 0x33, 0x8c,
+	0xed, 0x25, 0xb0, 0x4e, 0x28, 0x3f, 0xa6, 0xc4, 0xfb, 0x31, 0x0c, 0x7a, 0xd9, 0x25, 0xcb, 0xb0,
+	0x98, 0x93, 0xea, 0xd2, 0x19, 0x88, 0x5f, 0x27, 0x3e, 0xa7, 0x99, 0xf6, 0x0a, 0x2c, 0xe5, 0xc5,
+	0x5a, 0x1d, 0x73, 0xb0, 0xdf, 0x26, 0x61, 0x8b, 0xbe, 0x44, 0xfe, 0xce, 0x92, 0xfd, 0x09, 0x54,
+	0x14, 0x22, 0x47, 0xb2, 0xba, 0x40, 0x59, 0xdf, 0x59, 0xda, 0xee, 0x8f, 0x1e, 0x49, 0xae, 0x5c,
+	0x58, 0x08, 0x6c, 0xa6, 0xfd, 0x00, 0xc4, 0x31, 0x3d, 0x4d, 0x28, 0x6b, 0x9f, 0xe0, 0xc3, 0x9b,
+	0x20, 0xf2, 0x62, 0xad, 0xfe, 0x18, 0x96, 0x8f, 0xd3, 0xf0, 0x29, 0x25, 0x01, 0x6f, 0xef, 0x0b,
+	0x72, 0x7d, 0x0f, 0x20, 0x0d, 0x58, 0x19, 0xf6, 0x61, 0x82, 0x11, 0xfd, 0x98, 0xab, 0x28, 0x05,
+	0xc6, 0x14, 0x6b, 0xf5, 0x2d, 0x58, 0x39, 0x4a, 0xe8, 0x69, 0xe0, 0xb7, 0xda, 0xa3, 0x35, 0xe8,
+	0xca, 0x58, 0x75, 0x63, 0xff, 0x5a, 0x82, 0xd5, 0x11, 0x55, 0xfd, 0xd0, 0x0f, 0xa1, 0xd6, 0xa4,
+	0xa7, 0x51, 0x92, 0x9b, 0x62, 0x57, 0xab, 0x2b, 0xeb, 0x2b, 0xa8, 0x92, 0x53, 0x6c, 0x6a, 0xc7,
+	0x98, 0xc8, 0x57, 0x2c, 0xc9, 0x7f, 0x90, 0x38, 0xf6, 0xe2, 0x38, 0xe8, 0xe5, 0x91, 0x63, 0xf7,
+	0xb2, 0x37, 0xc1, 0xa0, 0x7b, 0x11, 0x98, 0x4b, 0x75, 0xcb, 0xe0, 0x64, 0x23, 0x41, 0x80, 0xa3,
+	0xd9, 0xd8, 0x24, 0x64, 0x23, 0xce, 0x8c, 0x06, 0x31, 0xf9, 0xfe, 0x41, 0x4c, 0x5d, 0x3d, 0x88,
+	0x5f, 0x4a, 0xb0, 0x98, 0x0b, 0xe2, 0xff, 0xcd, 0xe9, 0x6f, 0x25, 0x68, 0x68, 0x6e, 0x7b, 0x42,
+	0xb9, 0xdb, 0xde, 0x63, 0x07, 0xcd, 0x7e, 0x66, 0x31, 0x99, 0x72, 0x3d, 0xd3, 0xb9, 0x45, 0xf2,
+	0xc7, 0x99, 0x24, 0x49, 0x5a, 0x71, 0x1b, 0x92, 0x7d, 0x87, 0x5c, 0x38, 0xb8, 0xfa, 0x30, 0xbd,
+	0x2e, 0x20, 0x25, 0x9e, 0x93, 0x90, 0x3b, 0xa7, 0x3e, 0x0d, 0x3c, 0x26, 0x53, 0x3a, 0x23, 0xd7,
+	0x1e, 0x9f, 0xc9, 0xfd, 0xa6, 0xe9, 0x87, 0xb8, 0xbc, 0x31, 0x99, 0xb0, 0x19, 0xc1, 0x73, 0x89,
+	0xac, 0xd2, 0x0c, 0xb8, 0xd8, 0xa6, 0x66, 0xec, 0x6f, 0x61, 0xad, 0x00, 0x92, 0xce, 0x93, 0x0d,
+	0xd3, 0xd8, 0x63, 0x69, 0xc0, 0x75, 0x82, 0xac, 0x6d, 0xb5, 0x41, 0xbe, 0x10, 0xff, 0x1e, 0xcb,
+	0x13, 0xfb, 0x68, 0x38, 0x26, 0x4c, 0xf8, 0x98, 0x98, 0xcc, 0x10, 0x26, 0x8a, 0x42, 0x28, 0x17,
+	0x43, 0x92, 0x1e, 0xdf, 0x01, 0x92, 0xa0, 0xb9, 0x80, 0x74, 0xe9, 0x89, 0x9c, 0x15, 0x59, 0x9b,
+	0x3e, 0x42, 0x3e, 0x33, 0xa5, 0xda, 0xe1, 0x1d, 0x31, 0x33, 0xfa, 0x33, 0xa5, 0xb2, 0xb3, 0xba,
+	0x3d, 0xbc, 0x08, 0x2b, 0x03, 0x41, 0xd2, 0xcf, 0x09, 0xc3, 0x97, 0xcf, 0xe6, 0x7d, 0xe6, 0xf8,
+	0x53, 0x58, 0x19, 0x3e, 0xd0, 0xbe, 0xcd, 0x1d, 0x40, 0x75, 0xba, 0x85, 0x9b, 0x2a, 0x92, 0x8e,
+	0x04, 0x92, 0xd9, 0x2f, 0xc2, 0x82, 0x21, 0xd3, 0xe4, 0xb1, 0x07, 0xab, 0x7d, 0xe1, 0x73, 0x2c,
+	0xa0, 0x4e, 0xda, 0x31, 0xc6, 0x7e, 0xde, 0xab, 0xb5, 0x04, 0xd5, 0x73, 0x82, 0xc3, 0x91, 0xfb,
+	0x1d, 0x9a, 0x4d, 0xc3, 0x32, 0x6e, 0x27, 0x8d, 0x51, 0x17, 0x63, 0x91, 0x49, 0x14, 0x24, 0xe1,
+	0x39, 0x68, 0x22, 0x93, 0x86, 0x50, 0x63, 0x7b, 0x00, 0x37, 0x15, 0x5f, 0xe2, 0x64, 0xa7, 0x49,
+	0x88, 0x4d, 0x8f, 0x99, 0xc7, 0x0d, 0x82, 0x86, 0x9c, 0x7a, 0x19, 0x4a, 0x39, 0xb0, 0xd5, 0xb1,
+	0xe3, 0x67, 0x1b, 0xcc, 0x6d, 0xb0, 0xdf, 0x66, 0xa9, 0xfd, 0x6f, 0xc2, 0xc6, 0xb0, 0xd6, 0x61,
+	0x40, 0xdd, 0x81, 0x73, 0xfb, 0x26, 0xdc, 0x18, 0xab, 0xa1, 0x9d, 0x58, 0x6a, 0xf6, 0x0b, 0xe0,
+	0xfd, 0x12, 0xb0, 0xd5, 0xf0, 0xd6, 0x32, 0x9d, 0x0a, 0x2c, 0x52, 0xe2, 0x79, 0x89, 0xde, 0x07,
+	0x6c, 0x0f, 0x56, 0x5e, 0x63, 0x2e, 0x8d, 0xbd, 0x2e, 0x8b, 0xe8, 0x3e, 0x54, 0x9b, 0x41, 0xec,
+	0xe4, 0xf2, 0x56, 0x3c, 0x73, 0xcd, 0xa5, 0xb0, 0xf8, 0x6d, 0xd6, 0x60, 0x75, 0xe4, 0x16, 0x0d,
+	0x7c, 0x1e, 0xea, 0xe2, 0xd9, 0xf0, 0x28, 0x83, 0xfd, 0x14, 0xe6, 0xfa, 0x12, 0x0d, 0xfa, 0x0b,
+	0x64, 0x30, 0x03, 0x4b, 0xb6, 0xec, 0x5e, 0x02, 0xc6, 0x5e, 0x10, 0x9e, 0xf0, 0x3d, 0x0d, 0xe7,
+	0xb2, 0x22, 0x33, 0x91, 0x86, 0x40, 0xc0, 0xc2, 0x11, 0x88, 0x92, 0x57, 0x21, 0xfe, 0xf4, 0xcb,
+	0xe2, 0x7f, 0xbf, 0x3b, 0xc7, 0x24, 0xe0, 0x0e, 0xce, 0x52, 0xf3, 0x8a, 0xb1, 0x75, 0x89, 0x99,
+	0xc2, 0x53, 0xb1, 0x71, 0xf4, 0xbb, 0x32, 0x83, 0xbe, 0x0e, 0x8d, 0xd1, 0x23, 0x1d, 0x02, 0x96,
+	0xf3, 0xf7, 0x48, 0xbb, 0xaa, 0x31, 0x33, 0x83, 0x8f, 0xc1, 0x32, 0x85, 0x63, 0xef, 0xfc, 0xa3,
+	0x04, 0x1b, 0x47, 0x51, 0x9c, 0x06, 0x72, 0xb7, 0x50, 0xf5, 0xf9, 0x2c, 0x4a, 0x45, 0xa1, 0x65,
+	0xc9, 0x40, 0x9e, 0x15, 0x01, 0x39, 0x6e, 0x42, 0x51, 0xc9, 0x73, 0xc2, 0x6c, 0x27, 0xc5, 0xba,
+	0x27, 0xae, 0xf0, 0x65, 0x92, 0xf7, 0x67, 0x50, 0xed, 0xc8, 0x4b, 0x1d, 0x12, 0xf8, 0x44, 0x11,
+	0x5d, 0x65, 0x67, 0x79, 0x78, 0xff, 0xd8, 0x13, 0x87, 0xd6, 0x07, 0xb0, 0x64, 0x50, 0xd0, 0xa0,
+	0xde, 0x26, 0x25, 0x36, 0x2c, 0xfd, 0xb1, 0xd0, 0x74, 0xec, 0x31, 0xcc, 0x8b, 0x30, 0xcd, 0x4e,
+	0xb6, 0x3e, 0x82, 0x69, 0xa5, 0xac, 0xcb, 0xf6, 0x1d, 0xef, 0x56, 0x61, 0x14, 0x04, 0x5d, 0x96,
+	0xaf, 0xa9, 0xb3, 0x9d, 0xa7, 0x09, 0x5c, 0x97, 0x0e, 0x68, 0x27, 0xe2, 0x34, 0xff, 0x08, 0x5b,
+	0xb0, 0x94, 0x17, 0x8f, 0x7d, 0x86, 0x5d, 0x0c, 0x35, 0x89, 0x84, 0xaa, 0x74, 0xfc, 0xba, 0x4d,
+	0xc3, 0x7d, 0x92, 0xe2, 0x8a, 0xf4, 0x2a, 0x1e, 0xcb, 0x85, 0xf6, 0x7d, 0xd8, 0x1c, 0x6f, 0xf4,
+	0xb6, 0x2a, 0x53, 0xea, 0x84, 0x69, 0x6b, 0xcf, 0xa8, 0xb2, 0xd1, 0x23, 0x1d, 0x62, 0x07, 0x9b,
+	0x87, 0xe6, 0x8b, 0xec, 0xaa, 0x99, 0x2e, 0xc8, 0xa5, 0xec, 0x0c, 0xb1, 0x46, 0xc9, 0xad, 0x4a,
+	0xfc, 0xd4, 0x49, 0xf0, 0x07, 0x8f, 0xb8, 0x5b, 0x4f, 0x46, 0xc1, 0xd1, 0x74, 0xa8, 0x7c, 0x71,
+	0x52, 0xf4, 0xf1, 0xa1, 0x4c, 0xd8, 0x0c, 0x48, 0xf8, 0x6a, 0x58, 0xec, 0xeb, 0xb0, 0x56, 0xe0,
+	0x42, 0xfb, 0x47, 0xce, 0x16, 0xec, 0x63, 0x34, 0xd9, 0x5e, 0xe8, 0x09, 0x1a, 0xcd, 0x4d, 0xd7,
+	0x1f, 0xe0, 0xd6, 0x5b, 0xb5, 0xde, 0x75, 0xda, 0x62, 0xf1, 0x98, 0xcf, 0x68, 0x14, 0x4f, 0x5e,
+	0x3c, 0xf6, 0x45, 0x6f, 0x43, 0xed, 0x31, 0x71, 0xcf, 0xd2, 0xd8, 0x18, 0x48, 0x6e, 0x14, 0xba,
+	0x69, 0x82, 0xf9, 0x70, 0x7b, 0xfa, 0x07, 0xf3, 0x5d, 0xa8, 0x67, 0x5a, 0xda, 0xd3, 0x87, 0x30,
+	0x45, 0xbb, 0x83, 0x8c, 0xd5, 0xb7, 0xb3, 0x3f, 0x80, 0x1d, 0x0a, 0x69, 0x73, 0x5a, 0xfe, 0x1d,
+	0x6c, 0xf7, 0xdf, 0x00, 0x00, 0x00, 0xff, 0xff, 0x04, 0xc8, 0x93, 0x04, 0x78, 0x13, 0x00, 0x00,
 }

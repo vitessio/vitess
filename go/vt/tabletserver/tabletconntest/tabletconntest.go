@@ -23,7 +23,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // FakeQueryService has the server side of this fake
@@ -47,7 +47,7 @@ func (f *FakeQueryService) HandlePanic(err *error) {
 }
 
 const expectedErrMatch string = "error: generic error"
-const expectedCode vtrpc.ErrorCode = vtrpc.ErrorCode_BAD_INPUT
+const expectedCode vtrpcpb.ErrorCode = vtrpcpb.ErrorCode_BAD_INPUT
 
 var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, expectedCode, "generic error")
 
@@ -89,7 +89,7 @@ var testTarget = &querypb.Target{
 	TabletType: topodatapb.TabletType_REPLICA,
 }
 
-var testCallerID = &vtrpc.CallerID{
+var testCallerID = &vtrpcpb.CallerID{
 	Principal:    "test_principal",
 	Component:    "test_component",
 	Subcomponent: "test_subcomponent",
@@ -393,12 +393,12 @@ var executeQueryResult = sqltypes.Result{
 	InsertID:     72,
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row1 value1")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
 			sqltypes.NULL,
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row2 value1")),
-			sqltypes.MakeString([]byte("row2 value2")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
 		},
 	},
 }
@@ -516,12 +516,12 @@ var streamExecuteQueryResult1 = sqltypes.Result{
 var streamExecuteQueryResult2 = sqltypes.Result{
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row1 value1")),
-			sqltypes.MakeString([]byte("row1 value2")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Char, []byte("row1 value2")),
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row2 value1")),
-			sqltypes.MakeString([]byte("row2 value2")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
 		},
 	},
 }
@@ -804,10 +804,10 @@ var executeBatchQueryResultList = proto.QueryResultList{
 			InsertID:     712,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
-					sqltypes.MakeString([]byte("row1 value1")),
+					sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
 				},
 				[]sqltypes.Value{
-					sqltypes.MakeString([]byte("row2 value1")),
+					sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
 				},
 			},
 		},
@@ -815,7 +815,7 @@ var executeBatchQueryResultList = proto.QueryResultList{
 			Fields: []*querypb.Field{
 				&querypb.Field{
 					Name: "field1",
-					Type: sqltypes.Int8,
+					Type: sqltypes.VarBinary,
 				},
 			},
 			RowsAffected: 12333,
@@ -823,6 +823,8 @@ var executeBatchQueryResultList = proto.QueryResultList{
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("row1 value1")),
+				},
+				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("row1 value2")),
 				},
 			},
@@ -836,8 +838,8 @@ func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
-	if !reflect.DeepEqual(*qrl, executeBatchQueryResultList) {
-		t.Errorf("Unexpected result from Execute: got %v wanted %v", qrl, executeBatchQueryResultList)
+	if !reflect.DeepEqual(qrl, executeBatchQueryResultList.List) {
+		t.Errorf("Unexpected result from Execute: got %v wanted %v", qrl, executeBatchQueryResultList.List)
 	}
 }
 
@@ -861,8 +863,8 @@ func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
-	if !reflect.DeepEqual(*qrl, executeBatchQueryResultList) {
-		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, executeBatchQueryResultList)
+	if !reflect.DeepEqual(qrl, executeBatchQueryResultList.List) {
+		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, executeBatchQueryResultList.List)
 	}
 }
 

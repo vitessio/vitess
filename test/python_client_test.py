@@ -199,18 +199,12 @@ class TestPythonClientErrors(TestPythonClientBase):
 
   def test_streaming_integrity_error(self):
     """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
-    # TODO(aaijazi): this test doesn't work for all clients yet.
-    if protocols_flavor().vtgate_python_protocol() != 'gorpc':
-      return
     self._verify_exception_for_stream_execute(
         'error://integrity error',
         dbexceptions.IntegrityError)
 
   def test_transient_error(self):
     """Test we raise dbexceptions.TransientError for Execute calls."""
-    # TODO(aaijazi): this test doesn't work for all clients yet.
-    if protocols_flavor().vtgate_python_protocol() != 'gorpc':
-      return
     # Special query that makes vtgateclienttest return a TransientError.
     self._verify_exception_for_execute(
         'error://transient error',
@@ -218,9 +212,6 @@ class TestPythonClientErrors(TestPythonClientBase):
 
   def test_streaming_transient_error(self):
     """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
-    # TODO(aaijazi): this test doesn't work for all clients yet.
-    if protocols_flavor().vtgate_python_protocol() != 'gorpc':
-      return
     self._verify_exception_for_stream_execute(
         'error://transient error',
         dbexceptions.TransientError)

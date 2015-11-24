@@ -1,16 +1,9 @@
 #!/usr/bin/env python
 
-import warnings
-# Dropping a table inexplicably produces a warning despite
-# the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter('ignore')
-
 import logging
 import traceback
 import threading
 import unittest
-
-from vtproto import topodata_pb2
 
 import environment
 import tablet
@@ -18,6 +11,7 @@ import utils
 from vtdb import dbexceptions
 from vtdb import update_stream
 from mysql_flavor import mysql_flavor
+from protocols_flavor import protocols_flavor
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
@@ -109,7 +103,7 @@ def setUpModule():
         master_tablet.execute('select count(1) from vt_insert_test')
         replica_tablet.execute('select count(1) from vt_insert_test')
         break
-      except:
+      except protocols_flavor().client_error_exception_type():
         logging.exception('query failed')
         timeout = utils.wait_step('slave tablet having correct schema', timeout)
         # also re-run ReloadSchema on slave, it case the first one
@@ -166,14 +160,13 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(self._populate_vt_insert_test)
     self._exec_vt_txn(['delete from vt_insert_test'])
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-    utils.wait_for_tablet_type(
-        replica_tablet.tablet_alias, topodata_pb2.SPARE)
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare')
     logging.debug('dialing replica update stream service')
     replica_conn = self._get_replica_stream_conn()
     try:
       for _ in replica_conn.stream_update(start_position):
         break
-    except Exception as e:
+    except dbexceptions.DatabaseError as e:
       self.assertIn('update stream service is not enabled', str(e))
     replica_conn.close()
 
@@ -193,8 +186,7 @@ class TestUpdateStream(unittest.TestCase):
     utils.run_vtctl(
         ['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
     logging.debug('sleeping a bit for the replica action to complete')
-    utils.wait_for_tablet_type(replica_tablet.tablet_alias,
-                               topodata_pb2.REPLICA, 30)
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica', 30)
     thd = threading.Thread(target=self.perform_writes, name='write_thd',
                            args=(100,))
     thd.daemon = True
@@ -206,7 +198,7 @@ class TestUpdateStream(unittest.TestCase):
         if stream_event.category == update_stream.StreamEvent.DML:
           logging.debug('Test Service Enabled: Pass')
           break
-    except Exception as e:
+    except dbexceptions.DatabaseError as e:
       self.fail('Exception in getting stream from replica: %s\n Traceback %s' %
                 (str(e), traceback.format_exc()))
     thd.join(timeout=30)
@@ -229,8 +221,7 @@ class TestUpdateStream(unittest.TestCase):
         if first:
           utils.run_vtctl(
               ['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-          utils.wait_for_tablet_type(replica_tablet.tablet_alias,
-                                     topodata_pb2.SPARE, 30)
+          utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare', 30)
           first = False
         else:
           if stream_event.category == update_stream.StreamEvent.POS:
@@ -259,10 +250,11 @@ class TestUpdateStream(unittest.TestCase):
     return
 
   def test_stream_parity(self):
-    """test_stream_parity checks the parity of streams received
-    from master and replica for the same writes. Also tests
-    transactions are retrieved properly.
+    """Tests parity of streams between master and replica for the same writes.
+
+    Also tests transactions are retrieved properly.
     """
+
     global master_start_position
 
     timeout = 30
@@ -357,8 +349,7 @@ class TestUpdateStream(unittest.TestCase):
     # The above tests leaves the service in disabled state, hence enabling it.
     utils.run_vtctl(
         ['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
-    utils.wait_for_tablet_type(replica_tablet.tablet_alias,
-                               topodata_pb2.REPLICA, 30)
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica', 30)
 
   def test_log_rotation(self):
     start_position = _get_master_current_position()

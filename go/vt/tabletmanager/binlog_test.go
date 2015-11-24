@@ -149,7 +149,7 @@ func (ftc *fakeTabletConn) Execute(ctx context.Context, query string, bindVars m
 }
 
 // Execute is part of the TabletConn interface
-func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
@@ -179,7 +179,7 @@ func (ftc *fakeTabletConn) Execute2(ctx context.Context, query string, bindVars 
 }
 
 // ExecuteBatch2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (ftc *fakeTabletConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 

@@ -17,9 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/worker"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
-	pb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
-	pbs "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
+	vtworkerdatapb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
+	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
 
 // VtworkerServer is our RPC server
@@ -32,8 +31,8 @@ func NewVtworkerServer(wi *worker.Instance) *VtworkerServer {
 	return &VtworkerServer{wi}
 }
 
-// ExecuteVtworkerCommand is part of the pb.VtworkerServer interface
-func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandRequest, stream pbs.Vtworker_ExecuteVtworkerCommandServer) (err error) {
+// ExecuteVtworkerCommand is part of the vtworkerdatapb.VtworkerServer interface
+func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtworkerCommandRequest, stream vtworkerservicepb.Vtworker_ExecuteVtworkerCommandServer) (err error) {
 	// Please note that this panic handler catches only panics occuring in the code below.
 	// The actual execution of the vtworker command takes place in a new go routine
 	// (started in Instance.setAndStartWorker()) which has its own panic handler.
@@ -52,17 +51,8 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandR
 			// we still need to flush and finish the
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
-			stream.Send(&pb.ExecuteVtworkerCommandResponse{
-				Event: &logutilpb.Event{
-					Time: &logutilpb.Time{
-						Seconds:     e.Time.Unix(),
-						Nanoseconds: int32(e.Time.Nanosecond()),
-					},
-					Level: logutilpb.Level(e.Level),
-					File:  e.File,
-					Line:  int64(e.Line),
-					Value: e.Value,
-				},
+			stream.Send(&vtworkerdatapb.ExecuteVtworkerCommandResponse{
+				Event: e,
 			})
 		}
 		wg.Done()
@@ -86,5 +76,5 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandR
 
 // StartServer registers the VtworkerServer for RPCs
 func StartServer(s *grpc.Server, wi *worker.Instance) {
-	pbs.RegisterVtworkerServer(s, NewVtworkerServer(wi))
+	vtworkerservicepb.RegisterVtworkerServer(s, NewVtworkerServer(wi))
 }

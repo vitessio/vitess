@@ -234,6 +234,9 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 		} else {
 			log.Infof("Updating tablet mysql port to %v", mysqlPort)
 			if err := agent.TopoServer.UpdateTabletFields(agent.batchCtx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
+				if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
+					return err
+				}
 				tablet.PortMap["mysql"] = mysqlPort
 				return nil
 			}); err != nil {
@@ -299,7 +302,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 
 	// Change the Type, update the health. Note we pass in a map
 	// that's not nil, meaning if it's empty, we will clear it.
-	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, newTabletType, health); err != nil {
+	if err := topotools.ChangeOwnType(agent.batchCtx, agent.TopoServer, agent.initialTablet, newTabletType, health); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
@@ -336,7 +339,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topodatapb.Tabl
 
 	// Change the Type to spare, update the health. Note we pass in a map
 	// that's not nil, meaning we will clear it.
-	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_SPARE, make(map[string]string)); err != nil {
+	if err := topotools.ChangeOwnType(agent.batchCtx, agent.TopoServer, agent.initialTablet, topodatapb.TabletType_SPARE, make(map[string]string)); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}

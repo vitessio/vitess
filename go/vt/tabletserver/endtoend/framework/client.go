@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
-	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // QueryClient provides a convenient wrapper for TabletServer's query service.
@@ -32,7 +32,7 @@ func NewClient() *QueryClient {
 	return &QueryClient{
 		ctx: callerid.NewContext(
 			context.Background(),
-			&vtpb.CallerID{},
+			&vtrpcpb.CallerID{},
 			&querypb.VTGateCallerID{Username: "dev"},
 		),
 		target: Target,

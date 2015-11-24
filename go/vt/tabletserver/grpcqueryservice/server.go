@@ -91,7 +91,7 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 		return nil, tabletserver.ToGRPCError(err)
 	}
 	return &querypb.ExecuteBatchResponse{
-		Results: proto.QueryResultListToProto3(reply.List),
+		Results: sqltypes.ResultsToProto3(reply.List),
 	}, nil
 }
 

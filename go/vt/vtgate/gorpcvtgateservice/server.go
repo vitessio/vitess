@@ -11,15 +11,17 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"github.com/youtube/vitess/go/vt/vtgate/gorpcvtgatecommon"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 var (
@@ -31,20 +33,20 @@ type VTGate struct {
 	server vtgateservice.VTGateService
 }
 
-func sessionToRPC(session *pbg.Session) *pbg.Session {
+func sessionToRPC(session *vtgatepb.Session) *vtgatepb.Session {
 	if session == nil {
 		return nil
 	}
 	if session.ShardSessions == nil {
-		return &pbg.Session{
+		return &vtgatepb.Session{
 			InTransaction: session.InTransaction,
-			ShardSessions: []*pbg.Session_ShardSession{},
+			ShardSessions: []*vtgatepb.Session_ShardSession{},
 		}
 	}
 	return session
 }
 
-func sessionFromRPC(session *pbg.Session) {
+func sessionFromRPC(session *vtgatepb.Session) {
 	if session == nil {
 		return
 	}
@@ -54,7 +56,7 @@ func sessionFromRPC(session *pbg.Session) {
 }
 
 // Execute is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) Execute(ctx context.Context, request *proto.Query, reply *proto.QueryResult) (err error) {
+func (vtg *VTGate) Execute(ctx context.Context, request *gorpcvtgatecommon.Query, reply *gorpcvtgatecommon.QueryResult) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -62,20 +64,20 @@ func (vtg *VTGate) Execute(ctx context.Context, request *proto.Query, reply *pro
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.Execute(ctx,
+	var vtgErr error
+	reply.Result, vtgErr = vtg.server.Execute(ctx,
 		request.Sql,
 		request.BindVariables,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.NotInTransaction)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // ExecuteShard is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) ExecuteShard(ctx context.Context, request *proto.QueryShard, reply *proto.QueryResult) (err error) {
+func (vtg *VTGate) ExecuteShard(ctx context.Context, request *gorpcvtgatecommon.QueryShard, reply *gorpcvtgatecommon.QueryResult) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -83,22 +85,22 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, request *proto.QueryShard, 
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.ExecuteShards(ctx,
+	var vtgErr error
+	reply.Result, vtgErr = vtg.server.ExecuteShards(ctx,
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.NotInTransaction)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // ExecuteKeyspaceIds is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *proto.KeyspaceIdQuery, reply *proto.QueryResult) (err error) {
+func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *gorpcvtgatecommon.KeyspaceIdQuery, reply *gorpcvtgatecommon.QueryResult) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -106,22 +108,22 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *proto.Keyspa
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.ExecuteKeyspaceIds(ctx,
+	var vtgErr error
+	reply.Result, vtgErr = vtg.server.ExecuteKeyspaceIds(ctx,
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.NotInTransaction)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // ExecuteKeyRanges is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *proto.KeyRangeQuery, reply *proto.QueryResult) (err error) {
+func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *gorpcvtgatecommon.KeyRangeQuery, reply *gorpcvtgatecommon.QueryResult) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -129,22 +131,22 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *proto.KeyRange
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.ExecuteKeyRanges(ctx,
+	var vtgErr error
+	reply.Result, vtgErr = vtg.server.ExecuteKeyRanges(ctx,
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.NotInTransaction)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // ExecuteEntityIds is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *proto.EntityIdsQuery, reply *proto.QueryResult) (err error) {
+func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *gorpcvtgatecommon.EntityIdsQuery, reply *gorpcvtgatecommon.QueryResult) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -152,23 +154,23 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *proto.EntityId
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.ExecuteEntityIds(ctx,
+	var vtgErr error
+	reply.Result, vtgErr = vtg.server.ExecuteEntityIds(ctx,
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
 		request.EntityColumnName,
-		proto.EntityIdsToProto(request.EntityKeyspaceIDs),
+		gorpcvtgatecommon.EntityIdsToProto(request.EntityKeyspaceIDs),
 		request.TabletType,
 		request.Session,
-		request.NotInTransaction,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.NotInTransaction)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // ExecuteBatchShard is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, request *proto.BatchQueryShard, reply *proto.QueryResultList) (err error) {
+func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, request *gorpcvtgatecommon.BatchQueryShard, reply *gorpcvtgatecommon.QueryResultList) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -176,20 +178,24 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, request *proto.BatchQu
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.ExecuteBatchShards(ctx,
-		request.Queries,
+	qs, err := gorpcvtgatecommon.BoundShardQueriesToProto(request.Queries)
+	if err != nil {
+		return err
+	}
+	var vtgErr error
+	reply.List, vtgErr = vtg.server.ExecuteBatchShards(ctx,
+		qs,
 		request.TabletType,
 		request.AsTransaction,
-		request.Session,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.Session)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // ExecuteBatchKeyspaceIds is the RPC version of
 // vtgateservice.VTGateService method
-func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) (err error) {
+func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *gorpcvtgatecommon.KeyspaceIdBatchQuery, reply *gorpcvtgatecommon.QueryResultList) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -197,19 +203,23 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *proto.K
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
-	vtgErr := vtg.server.ExecuteBatchKeyspaceIds(ctx,
-		request.Queries,
+	qs, err := gorpcvtgatecommon.BoundKeyspaceIdQueriesToProto(request.Queries)
+	if err != nil {
+		return err
+	}
+	var vtgErr error
+	reply.List, vtgErr = vtg.server.ExecuteBatchKeyspaceIds(ctx,
+		qs,
 		request.TabletType,
 		request.AsTransaction,
-		request.Session,
-		reply)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+		request.Session)
+	reply.Session = sessionToRPC(request.Session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecute(ctx context.Context, request *proto.Query, sendReply func(interface{}) error) (err error) {
+func (vtg *VTGate) StreamExecute(ctx context.Context, request *gorpcvtgatecommon.Query, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
@@ -218,13 +228,15 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, request *proto.Query, send
 		request.Sql,
 		request.BindVariables,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&gorpcvtgatecommon.QueryResult{
+				Result: value,
+			})
 		})
 }
 
 // StreamExecute2 is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecute2(ctx context.Context, request *proto.Query, sendReply func(interface{}) error) (err error) {
+func (vtg *VTGate) StreamExecute2(ctx context.Context, request *gorpcvtgatecommon.Query, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
@@ -233,20 +245,23 @@ func (vtg *VTGate) StreamExecute2(ctx context.Context, request *proto.Query, sen
 		request.Sql,
 		request.BindVariables,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&gorpcvtgatecommon.QueryResult{
+				Result: value,
+			})
 		})
 	if vtgErr == nil {
 		return nil
 	}
+
 	// If there was an app error, send a QueryResult back with it.
-	qr := new(proto.QueryResult)
-	vtgate.AddVtGateError(vtgErr, &qr.Err)
-	return sendReply(qr)
+	return sendReply(&gorpcvtgatecommon.QueryResult{
+		Err: vterrors.RPCErrFromVtError(vtgErr),
+	})
 }
 
 // StreamExecuteShard is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecuteShard(ctx context.Context, request *proto.QueryShard, sendReply func(interface{}) error) (err error) {
+func (vtg *VTGate) StreamExecuteShard(ctx context.Context, request *gorpcvtgatecommon.QueryShard, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
@@ -257,13 +272,15 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, request *proto.QueryS
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&gorpcvtgatecommon.QueryResult{
+				Result: value,
+			})
 		})
 }
 
 // StreamExecuteShard2 is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *proto.QueryShard, sendReply func(interface{}) error) (err error) {
+func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *gorpcvtgatecommon.QueryShard, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
@@ -274,21 +291,24 @@ func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *proto.Query
 		request.Keyspace,
 		request.Shards,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&gorpcvtgatecommon.QueryResult{
+				Result: value,
+			})
 		})
 	if vtgErr == nil {
 		return nil
 	}
+
 	// If there was an app error, send a QueryResult back with it.
-	qr := new(proto.QueryResult)
-	vtgate.AddVtGateError(vtgErr, &qr.Err)
-	return sendReply(qr)
+	return sendReply(&gorpcvtgatecommon.QueryResult{
+		Err: vterrors.RPCErrFromVtError(vtgErr),
+	})
 }
 
 // StreamExecuteKeyspaceIds is the RPC version of
 // vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *proto.KeyspaceIdQuery, sendReply func(interface{}) error) (err error) {
+func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *gorpcvtgatecommon.KeyspaceIdQuery, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
@@ -299,14 +319,16 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *proto.
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&gorpcvtgatecommon.QueryResult{
+				Result: value,
+			})
 		})
 }
 
 // StreamExecuteKeyspaceIds2 is the RPC version of
 // vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *proto.KeyspaceIdQuery, sendReply func(interface{}) error) (err error) {
+func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *gorpcvtgatecommon.KeyspaceIdQuery, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
@@ -317,21 +339,24 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *proto
 		request.Keyspace,
 		request.KeyspaceIds,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&gorpcvtgatecommon.QueryResult{
+				Result: value,
+			})
 		})
 	if vtgErr == nil {
 		return nil
 	}
+
 	// If there was an app error, send a QueryResult back with it.
-	qr := new(proto.QueryResult)
-	vtgate.AddVtGateError(vtgErr, &qr.Err)
-	return sendReply(qr)
+	return sendReply(&gorpcvtgatecommon.QueryResult{
+		Err: vterrors.RPCErrFromVtError(vtgErr),
+	})
 }
 
 // StreamExecuteKeyRanges is the RPC version of
 // vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *proto.KeyRangeQuery, sendReply func(interface{}) error) (err error) {
+func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *gorpcvtgatecommon.KeyRangeQuery, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
@@ -342,14 +367,16 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *proto.Ke
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&gorpcvtgatecommon.QueryResult{
+				Result: value,
+			})
 		})
 }
 
 // StreamExecuteKeyRanges2 is the RPC version of
 // vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *proto.KeyRangeQuery, sendReply func(interface{}) error) (err error) {
+func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *gorpcvtgatecommon.KeyRangeQuery, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
@@ -360,30 +387,36 @@ func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *proto.K
 		request.Keyspace,
 		request.KeyRanges,
 		request.TabletType,
-		func(value *proto.QueryResult) error {
-			return sendReply(value)
+		func(value *sqltypes.Result) error {
+			return sendReply(&gorpcvtgatecommon.QueryResult{
+				Result: value,
+			})
 		})
 	if vtgErr == nil {
 		return nil
 	}
+
 	// If there was an app error, send a QueryResult back with it.
-	qr := new(proto.QueryResult)
-	vtgate.AddVtGateError(vtgErr, &qr.Err)
-	return sendReply(qr)
+	return sendReply(&gorpcvtgatecommon.QueryResult{
+		Err: vterrors.RPCErrFromVtError(vtgErr),
+	})
 }
 
 // Begin is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) Begin(ctx context.Context, noInput *rpc.Unused, outSession *pbg.Session) (err error) {
+func (vtg *VTGate) Begin(ctx context.Context, noInput *rpc.Unused, outSession *vtgatepb.Session) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	err = vtg.server.Begin(ctx, outSession)
-	outSession = sessionToRPC(outSession)
-	return err
+	session, err := vtg.server.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	*outSession = *sessionToRPC(session)
+	return nil
 }
 
 // Commit is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) Commit(ctx context.Context, inSession *pbg.Session, noOutput *rpc.Unused) (err error) {
+func (vtg *VTGate) Commit(ctx context.Context, inSession *vtgatepb.Session, noOutput *rpc.Unused) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -391,7 +424,7 @@ func (vtg *VTGate) Commit(ctx context.Context, inSession *pbg.Session, noOutput 
 }
 
 // Rollback is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) Rollback(ctx context.Context, inSession *pbg.Session, noOutput *rpc.Unused) (err error) {
+func (vtg *VTGate) Rollback(ctx context.Context, inSession *vtgatepb.Session, noOutput *rpc.Unused) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -399,7 +432,7 @@ func (vtg *VTGate) Rollback(ctx context.Context, inSession *pbg.Session, noOutpu
 }
 
 // Begin2 is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) Begin2(ctx context.Context, request *proto.BeginRequest, reply *proto.BeginResponse) (err error) {
+func (vtg *VTGate) Begin2(ctx context.Context, request *gorpcvtgatecommon.BeginRequest, reply *gorpcvtgatecommon.BeginResponse) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -407,15 +440,14 @@ func (vtg *VTGate) Begin2(ctx context.Context, request *proto.BeginRequest, repl
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	// Don't pass in a nil pointer
-	reply.Session = &pbg.Session{}
-	vtgErr := vtg.server.Begin(ctx, reply.Session)
-	reply.Session = sessionToRPC(reply.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+	session, vtgErr := vtg.server.Begin(ctx)
+	reply.Session = sessionToRPC(session)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // Commit2 is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) Commit2(ctx context.Context, request *proto.CommitRequest, reply *proto.CommitResponse) (err error) {
+func (vtg *VTGate) Commit2(ctx context.Context, request *gorpcvtgatecommon.CommitRequest, reply *gorpcvtgatecommon.CommitResponse) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -424,12 +456,12 @@ func (vtg *VTGate) Commit2(ctx context.Context, request *proto.CommitRequest, re
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	vtgErr := vtg.server.Commit(ctx, request.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // Rollback2 is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) Rollback2(ctx context.Context, request *proto.RollbackRequest, reply *proto.RollbackResponse) (err error) {
+func (vtg *VTGate) Rollback2(ctx context.Context, request *gorpcvtgatecommon.RollbackRequest, reply *gorpcvtgatecommon.RollbackResponse) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
@@ -438,31 +470,31 @@ func (vtg *VTGate) Rollback2(ctx context.Context, request *proto.RollbackRequest
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	vtgErr := vtg.server.Rollback(ctx, request.Session)
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // SplitQuery is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) SplitQuery(ctx context.Context, request *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
+func (vtg *VTGate) SplitQuery(ctx context.Context, request *gorpcvtgatecommon.SplitQueryRequest, reply *gorpcvtgatecommon.SplitQueryResult) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	splits, vtgErr := vtg.server.SplitQuery(ctx,
+	var vtgErr error
+	reply.Splits, vtgErr = vtg.server.SplitQuery(ctx,
 		request.Keyspace,
 		request.Query.Sql,
 		request.Query.BindVariables,
 		request.SplitColumn,
 		request.SplitCount)
-	reply.Splits = splits
-	vtgate.AddVtGateError(vtgErr, &reply.Err)
+	reply.Err = vterrors.RPCErrFromVtError(vtgErr)
 	return nil
 }
 
 // GetSrvKeyspace is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *proto.GetSrvKeyspaceRequest, reply *topodatapb.SrvKeyspace) (err error) {
+func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *gorpcvtgatecommon.GetSrvKeyspaceRequest, reply *topodatapb.SrvKeyspace) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()

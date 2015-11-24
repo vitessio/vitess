@@ -34,25 +34,3 @@ func TimeToProto(t time.Time) *logutilpb.Time {
 		Nanoseconds: int32(nanos),
 	}
 }
-
-// LoggerEventToProto converts a LoggerEvent to proto
-func LoggerEventToProto(e *LoggerEvent) *logutilpb.Event {
-	return &logutilpb.Event{
-		Time:  TimeToProto(e.Time),
-		Level: logutilpb.Level(e.Level),
-		File:  e.File,
-		Line:  int64(e.Line),
-		Value: e.Value,
-	}
-}
-
-// ProtoToLoggerEvent converts a proto into a LoggerEvent
-func ProtoToLoggerEvent(e *logutilpb.Event) *LoggerEvent {
-	return &LoggerEvent{
-		Time:  ProtoToTime(e.Time),
-		Level: int(e.Level),
-		File:  e.File,
-		Line:  int(e.Line),
-		Value: e.Value,
-	}
-}

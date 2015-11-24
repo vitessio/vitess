@@ -126,8 +126,8 @@ func TestDeleteEqual(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeNumeric([]byte("1")),
-			sqltypes.MakeString([]byte("myname")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("myname")),
 		}},
 	}})
 	_, err := routerExec(router, "delete from user where id = 1", nil)
@@ -243,49 +243,6 @@ func TestDeleteEqualFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 	s.ShardSpec = DefaultShardSpec
-}
-
-func TestDeleteVindexFail(t *testing.T) {
-	router, sbc, _, sbclookup := createRouterEnv()
-
-	sbc.mustFailServer = 1
-	_, err := routerExec(router, "delete from user where id = 1", nil)
-	want := "execDeleteEqual: shard, host: TestRouter.-20.master"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("routerExec: %v, want prefix %v", err, want)
-	}
-
-	sbc.setResults([]*sqltypes.Result{&sqltypes.Result{
-		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"name", sqltypes.VarChar},
-		},
-		RowsAffected: 1,
-		InsertID:     0,
-		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("foo")),
-			sqltypes.MakeString([]byte("myname")),
-		}},
-	}})
-	_, err = routerExec(router, "delete from user where id = 1", nil)
-	want = `execDeleteEqual: strconv.ParseInt: parsing "foo": invalid syntax`
-	if err == nil || err.Error() != want {
-		t.Errorf("routerExec: %v, want %v", err, want)
-	}
-
-	sbclookup.mustFailServer = 1
-	_, err = routerExec(router, "delete from user where id = 1", nil)
-	want = "execDeleteEqual: hash.Delete: shard, host: TestUnsharded.0.master"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("routerExec: %v, want prefix %v", err, want)
-	}
-
-	sbclookup.mustFailServer = 1
-	_, err = routerExec(router, "delete from music where user_id = 1", nil)
-	want = "execDeleteEqual: lookup.Delete: shard, host: TestUnsharded.0.master"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("routerExec: %v, want prefix %v", err, want)
-	}
 }
 
 func TestInsertSharded(t *testing.T) {

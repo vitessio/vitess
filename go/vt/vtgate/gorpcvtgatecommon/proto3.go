@@ -2,22 +2,26 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+package gorpcvtgatecommon
 
 import (
+	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
+// This file contains methods to convert the bson rpc structures to and from
+// proto3.
+
 // EntityIdsToProto converts an array of EntityId to proto3
-func EntityIdsToProto(l []EntityId) []*pb.ExecuteEntityIdsRequest_EntityId {
+func EntityIdsToProto(l []EntityId) []*vtgatepb.ExecuteEntityIdsRequest_EntityId {
 	if len(l) == 0 {
 		return nil
 	}
-	result := make([]*pb.ExecuteEntityIdsRequest_EntityId, len(l))
+	result := make([]*vtgatepb.ExecuteEntityIdsRequest_EntityId, len(l))
 	for i, e := range l {
-		result[i] = &pb.ExecuteEntityIdsRequest_EntityId{
+		result[i] = &vtgatepb.ExecuteEntityIdsRequest_EntityId{
 			KeyspaceId: []byte(e.KeyspaceID),
 		}
 		v, err := tproto.BindVariableToValue(e.ExternalID)
@@ -31,34 +35,34 @@ func EntityIdsToProto(l []EntityId) []*pb.ExecuteEntityIdsRequest_EntityId {
 }
 
 // ProtoToEntityIds converts an array of EntityId from proto3
-func ProtoToEntityIds(l []*pb.ExecuteEntityIdsRequest_EntityId) []EntityId {
+func ProtoToEntityIds(l []*vtgatepb.ExecuteEntityIdsRequest_EntityId) []EntityId {
 	if len(l) == 0 {
 		return nil
 	}
 	result := make([]EntityId, len(l))
 	for i, e := range l {
-		result[i].KeyspaceID = e.KeyspaceId
-		v, err := tproto.SQLToNative(e.XidType, e.XidValue)
+		v, err := sqltypes.ValueFromBytes(e.XidType, e.XidValue)
 		if err != nil {
 			panic(err)
 		}
-		result[i].ExternalID = v
+		result[i].KeyspaceID = e.KeyspaceId
+		result[i].ExternalID = v.ToNative()
 	}
 	return result
 }
 
 // BoundShardQueriesToProto transforms a list of BoundShardQuery to proto3
-func BoundShardQueriesToProto(bsq []BoundShardQuery) ([]*pb.BoundShardQuery, error) {
+func BoundShardQueriesToProto(bsq []BoundShardQuery) ([]*vtgatepb.BoundShardQuery, error) {
 	if len(bsq) == 0 {
 		return nil, nil
 	}
-	result := make([]*pb.BoundShardQuery, len(bsq))
+	result := make([]*vtgatepb.BoundShardQuery, len(bsq))
 	for i, q := range bsq {
 		qq, err := tproto.BoundQueryToProto3(q.Sql, q.BindVariables)
 		if err != nil {
 			return nil, err
 		}
-		result[i] = &pb.BoundShardQuery{
+		result[i] = &vtgatepb.BoundShardQuery{
 			Query:    qq,
 			Keyspace: q.Keyspace,
 			Shards:   q.Shards,
@@ -68,7 +72,7 @@ func BoundShardQueriesToProto(bsq []BoundShardQuery) ([]*pb.BoundShardQuery, err
 }
 
 // ProtoToBoundShardQueries transforms a list of BoundShardQuery from proto3
-func ProtoToBoundShardQueries(bsq []*pb.BoundShardQuery) ([]BoundShardQuery, error) {
+func ProtoToBoundShardQueries(bsq []*vtgatepb.BoundShardQuery) ([]BoundShardQuery, error) {
 	if len(bsq) == 0 {
 		return nil, nil
 	}
@@ -87,17 +91,17 @@ func ProtoToBoundShardQueries(bsq []*pb.BoundShardQuery) ([]BoundShardQuery, err
 }
 
 // BoundKeyspaceIdQueriesToProto transforms a list of BoundKeyspaceIdQuery to proto3
-func BoundKeyspaceIdQueriesToProto(bsq []BoundKeyspaceIdQuery) ([]*pb.BoundKeyspaceIdQuery, error) {
+func BoundKeyspaceIdQueriesToProto(bsq []BoundKeyspaceIdQuery) ([]*vtgatepb.BoundKeyspaceIdQuery, error) {
 	if len(bsq) == 0 {
 		return nil, nil
 	}
-	result := make([]*pb.BoundKeyspaceIdQuery, len(bsq))
+	result := make([]*vtgatepb.BoundKeyspaceIdQuery, len(bsq))
 	for i, q := range bsq {
 		qq, err := tproto.BoundQueryToProto3(q.Sql, q.BindVariables)
 		if err != nil {
 			return nil, err
 		}
-		result[i] = &pb.BoundKeyspaceIdQuery{
+		result[i] = &vtgatepb.BoundKeyspaceIdQuery{
 			Query:       qq,
 			Keyspace:    q.Keyspace,
 			KeyspaceIds: q.KeyspaceIds,
@@ -107,7 +111,7 @@ func BoundKeyspaceIdQueriesToProto(bsq []BoundKeyspaceIdQuery) ([]*pb.BoundKeysp
 }
 
 // ProtoToBoundKeyspaceIdQueries transforms a list of BoundKeyspaceIdQuery from proto3
-func ProtoToBoundKeyspaceIdQueries(bsq []*pb.BoundKeyspaceIdQuery) ([]BoundKeyspaceIdQuery, error) {
+func ProtoToBoundKeyspaceIdQueries(bsq []*vtgatepb.BoundKeyspaceIdQuery) ([]BoundKeyspaceIdQuery, error) {
 	if len(bsq) == 0 {
 		return nil, nil
 	}
