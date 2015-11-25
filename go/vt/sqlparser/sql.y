@@ -119,9 +119,9 @@ func forceEOF(yylex interface{}) {
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <expr> expression
-%type <tableExprs> table_expression_list
-%type <tableExpr> table_expression
-%type <str> join_type
+%type <tableExprs> table_references
+%type <tableExpr> table_reference table_factor join_table
+%type <str> inner_join outer_join natural_join
 %type <smTableExpr> simple_table_expression
 %type <tableName> dml_table_expression
 %type <indexHints> index_hint_list
@@ -185,7 +185,7 @@ command:
 | other_statement
 
 select_statement:
-  SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
+  SELECT comment_opt distinct_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
   {
     $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere(WhereStr, $7), GroupBy: GroupBy($8), Having: NewWhere(HavingStr, $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
@@ -396,32 +396,53 @@ as_lower_opt:
     $$ = $2
   }
 
-table_expression_list:
-  table_expression
+table_references:
+  table_reference
   {
     $$ = TableExprs{$1}
   }
-| table_expression_list ',' table_expression
+| table_references ',' table_reference
   {
     $$ = append($$, $3)
   }
 
-table_expression:
+table_reference:
+  table_factor
+| join_table
+
+table_factor:
   simple_table_expression as_opt index_hint_list
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
-| openb table_expression closeb
+| openb table_references closeb
   {
-    $$ = &ParenTableExpr{Expr: $2}
+    $$ = &ParenTableExpr{Exprs: $2}
   }
-| table_expression join_type table_expression %prec JOIN
+
+// There is a grammar conflict here:
+// 1: INSERT INTO a SELECT * FROM b JOIN c ON b.i = c.i
+// 2: INSERT INTO a SELECT * FROM b JOIN c ON DUPLICATE KEY UPDATE a.i = 1
+// When yacc encounters the ON clause, it cannot determine which way to
+// resolve. The %prec override below makes the parser choose the
+// first construct, which automatically makes the second construct a
+// syntax error. This is the same behavior as MySQL.
+join_table:
+  table_reference inner_join table_factor %prec JOIN
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
-| table_expression join_type table_expression ON boolean_expression %prec JOIN
+| table_reference inner_join table_factor ON boolean_expression
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, On: $5}
+  }
+| table_reference outer_join table_reference ON boolean_expression
+  {
+    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, On: $5}
+  }
+| table_reference natural_join table_factor
+  {
+    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
 
 as_opt:
@@ -437,8 +458,16 @@ as_opt:
     $$ = $2
   }
 
-join_type:
+inner_join:
   JOIN
+  {
+    $$ = JoinStr
+  }
+| INNER JOIN
+  {
+    $$ = JoinStr
+  }
+| CROSS JOIN
   {
     $$ = JoinStr
   }
@@ -446,7 +475,9 @@ join_type:
   {
     $$ = StraightJoinStr
   }
-| LEFT JOIN
+
+outer_join:
+  LEFT JOIN
   {
     $$ = LeftJoinStr
   }
@@ -462,17 +493,19 @@ join_type:
   {
     $$ = RightJoinStr
   }
-| INNER JOIN
-  {
-    $$ = JoinStr
-  }
-| CROSS JOIN
-  {
-    $$ = CrossJoinStr
-  }
-| NATURAL JOIN
+
+natural_join:
+ NATURAL JOIN
   {
     $$ = NaturalJoinStr
+  }
+| NATURAL outer_join
+  {
+    if $2 == LeftJoinStr {
+      $$ = NaturalLeftJoinStr
+    } else {
+      $$ = NaturalRightJoinStr
+    }
   }
 
 simple_table_expression:
