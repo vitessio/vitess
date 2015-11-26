@@ -83,7 +83,7 @@ func (bh *GCSBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 	return storage.NewReader(bh.authCtx, *bucket, objName(bh.dir, bh.name, filename))
 }
 
-// GCSBackupStorage implements BackupStorage for local file system.
+// GCSBackupStorage implements BackupStorage for Google Cloud Storage.
 type GCSBackupStorage struct {
 	authCtx context.Context
 }
