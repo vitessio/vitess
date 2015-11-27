@@ -2,7 +2,7 @@
 
 ## Overview
 Historically, Vitess was built from underneath YouTube. This required us to take an iterative approach, which resulted in many versions:
-* V0: This version had no VTGate. The application was expected to talk directly to the tablet servers. So, it had to know the sharding scheme, topology, etc.
+* V0: This version had no VTGate. The application was expected to fetch the sharding info and tablet locations from a 'toposerver' and use it to talk directly to the tablet servers.
 * V1: This was the first version of VTGate. In this version, the app only needed to know the number of shards, and how to map the sharding key to the correct shard. The rest was done by VTGate. In this version, the app was still exposed to resharding events.
 * V2: In this version, the keyspace id was required instead of the shard. This allowed the app to be agnostic of the number of shards.
 
@@ -20,22 +20,51 @@ As your database grows, you will not only be sharding it, you will also be split
 The vitess workflow also ensures that such migrations are done transparently with virtually no downtime.
 
 ### Sharding schemes
-At its core, vitess uses range-based sharding, where the sharding column is typically a number or a varbinary. However, allowing data to be accessed only by the sharding key severely limits the flexibility of an application. V3 comes with a set of new indexing schemes that are built on top of range-based sharding.
+At its core, vitess uses range-based sharding, where the sharding column is typically a number or a varbinary. However, allowing data to be accessed only by the sharding key limits the flexibility of an application. V3 comes with a set of new indexing schemes that are built on top of range-based sharding.
 
-#### The basic sharding key
+#### Basic sharding key
 If the application already has a well-distributed sharding key, you just have to tell VTGate what those keys are for each table. VTgate will correctly route your queries based on input values or the WHERE clause.
 
 #### Hashed sharding key
 If the application's sharding key is a monotonically increasing number, then you may not get well-balanced shards. In such cases, you can ask V3 to route queries based on the hash of the main sharding key.
 
-Vitess's filtered replication currently requires that the hash value be physically present as a column in each table. To satisfy this need, you still need to create a column to store this hash value. However, V3 will take care of populating this on your behalf. We will soon be removing this restriction once we change filtered replication to also perform the same hashing.
+Vitess's filtered replication currently requires that the hash value be physically present as a column in each table. To satisfy this need, you still need to create a column to store this hash value. However, V3 will take care of populating this on your behalf. *We will soon be removing this restriction once we change filtered replication to also perform the same hashing.*
 
 #### Auto-increment columns
-When a table gets sharded, you are no longer able to use MySQL's auto increment functionality. V3 allows you to designate a table in an unsharded database as the source of auto-increment ids. Once you've specified this, V3 will transparently use generated to values from this table to keep the auto-increment going. Additionally, this column can be a hashed sharding key. This means that the insert will also get routed to the correct shard based on the hashed routing value.
+When a table gets sharded, you are no longer able to use MySQL's auto increment functionality. V3 allows you to designate a table in an unsharded database as the source of auto-increment ids. Once you've specified this, V3 will transparently use generated values from this table to keep the auto-increment going. Additionally, this column can be a hashed sharding key. This means that the insert will also get routed to the correct shard based on the hashed routing value.
 
 #### Cross-shard indexes
 As your application evolves, you'll invariably find yourself wanting to fetch rows based on columns other than the main sharding key. For example, if you've sharded your database by user id, you may still want to be able find users by their username. If you only had the sharding key, such queries can only be answered by sending it to all shards. This could become very expensive as the number of shards grow.
 
-The typical strategy to address this problem is to build a separate lookup table and keep it up-to-date. In the above case, you may build a separate username->user_id relationship table. Once you've informed V3 of this table, it will immediately know what to do with a query like 'select * from user where username=:value'. You can also configure V3 to keep this table up-to-date as you insert or delete data. In other words, the application can be completely agnostic of this table's existence.
+The typical strategy to address this problem is to build a separate lookup table and keep it up-to-date. In the above case, you may build a separate username->user_id relationship table. Once you've informed V3 of this table, it will know what to do with a query like 'select * from user where username=:value'. You can also configure V3 to keep this table up-to-date as you insert or delete data. In other words, the application can be completely agnostic of this table's existence.
 
-We will soon develop the workflow to build such indexes on-the-fly.
+*We will soon develop the workflow to build such indexes on-the-fly.*
+
+#### Non-unique indexes
+Cross-shard indexes need not be unique. It is possible that rows may exist in multiple shards for a given where clause. V3 allows you to specify indexes as unique or non-unique, and accordingly enforces such constraints during changes.
+
+### Consistency
+Once you add multiple indexes to tables, it's possible that the application could make inconstent requests. V3 makes sure that none of the specified constraints are broken. For example, if a table had both a basic sharding key and a hashed sharding key, it will enforce the rule that the hash of the basic sharding key matches that of the hashed sharding key.
+
+Some of the changes require updates to be performed across multiple databases. For example, inserting a row into a table that has a cross-shard key requires an additional row to be inserted into the lookup table. This results in distributed transactions. Currently, this is a best effort update. It is possible that partial commits happen if databases fail in the middle of a distributed commit. *We will soon develop support for 2PC to overcome this limitation.*
+
+### Query diversity
+V3 does not support the full SQL feature set. The current implementation supports simple queries:
+* Single table DML statements: This is a vitess-wide restriction where you can affect only one table and one sharding key per statement. *This restriction may be limited in the future.*
+* Single table SELECT statements:
+  * All constructs allowed if the statement targets only a single sharding key
+  * Aggregation and sorting not allowed if the statement targets more than one sharding key. Selects are allowed to target multiple sharding keys as long as the results from individual shards can be simply combined together to form the final result.
+
+In the immediate future, we plan to add support for the following constructs:
+* Joins that can be served by sending the query to a single shard.
+* Joins that can be served by sending the query to multiple shards, and trivially combined to form the final result.
+* Cross-shard joins that can be served through a simple nested lookup.
+* Sorting that can be trivially merged from the results of multiple shards (merge-sort).
+* Aggregations (and grouping) that can be trivially combined from multiple shards.
+* A combination of the above constructs as long as the results remain trivially combinable.
+
+SQL is a very powerful language. You can build queries that can result in large amount of work and memory consumption involving big intermediate results. Such constructs where the scope of work is open-ended will not be immediately supported. In such cases, it's recommended that you use map-reduce techniques for which there is a separate API. *We'll consider building such on-the-fly map-reducers in the future.*
+
+## The vschema editor
+The above features require metadata like sharding key, cross-shard indexes, etc. to be configured and stored in some place. This is known as the vschema. *We'll be building a vschema editor and wizard that will allow you to easily view and modify this metadata.*
+Under the covers, the vschema is a JSON file. There are low level vtctl commands to upload it also. This will allow you to build workflows for tracking and managing changes.
