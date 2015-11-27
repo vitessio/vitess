@@ -21,3 +21,21 @@ The vitess workflow also ensures that such migrations are done transparently wit
 
 ### Sharding schemes
 At its core, vitess uses range-based sharding, where the sharding column is typically a number or a varbinary. However, allowing data to be accessed only by the sharding key severely limits the flexibility of an application. V3 comes with a set of new indexing schemes that are built on top of range-based sharding.
+
+#### The basic sharding key
+If the application already has a well-distributed sharding key, you just have to tell VTGate what those keys are for each table. VTgate will correctly route your queries based on input values or the WHERE clause.
+
+#### Hashed sharding key
+If the application's sharding key is a monotonically increasing number, then you may not get well-balanced shards. In such cases, you can ask V3 to route queries based on the hash of the main sharding key.
+
+Vitess's filtered replication currently requires that the hash value be physically present as a column in each table. To satisfy this need, you still need to create a column to store this hash value. However, V3 will take care of populating this on your behalf. We will soon be removing this restriction once we change filtered replication to also perform the same hashing.
+
+#### Auto-increment columns
+When a table gets sharded, you are no longer able to use MySQL's auto increment functionality. V3 allows you to designate a table in an unsharded database as the source of auto-increment ids. Once you've specified this, V3 will transparently use generated to values from this table to keep the auto-increment going. Additionally, this column can be a hashed sharding key. This means that the insert will also get routed to the correct shard based on the hashed routing value.
+
+#### Cross-shard indexes
+As your application evolves, you'll invariably find yourself wanting to fetch rows based on columns other than the main sharding key. For example, if you've sharded your database by user id, you may still want to be able find users by their username. If you only had the sharding key, such queries can only be answered by sending it to all shards. This could become very expensive as the number of shards grow.
+
+The typical strategy to address this problem is to build a separate lookup table and keep it up-to-date. In the above case, you may build a separate username->user_id relationship table. Once you've informed V3 of this table, it will immediately know what to do with a query like 'select * from user where username=:value'. You can also configure V3 to keep this table up-to-date as you insert or delete data. In other words, the application can be completely agnostic of this table's existence.
+
+We will soon develop the workflow to build such indexes on-the-fly.
