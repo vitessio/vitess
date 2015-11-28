@@ -43,6 +43,13 @@ The typical strategy to address this problem is to build a separate lookup table
 #### Non-unique indexes
 Cross-shard indexes need not be unique. It is possible that rows may exist in multiple shards for a given where clause. V3 allows you to specify indexes as unique or non-unique, and accordingly enforces such constraints during changes.
 
+#### Shared indexes
+There are situations where multiple tables share the same foreign key. A typical use case is a situation where there is a customer table, an order table and an order_detail table. The order table would have a customer_id column. In order to efficiently access all orders of a customer, it would be beneficial to shard this table by customer_id. This will co-locate order rows with their corresponding customer row.
+
+The order table would also need an order_id column. As mentioned above, you can create an order_id->customer_id cross-shard index for this table. This will allow you to efficiently access orders by their order_id.
+
+In the case of an order_detail table, it may only need an order_id foreign key. Since this foreign key means the same thing as the order_id in order, creating a cross-shard index for it will result in a duplication of the order_id->customer_id index. In such situations, V3 allows you to just reuse the existing index for the order_detail table also. This saves disk space and also reduces the overall write load.
+
 ### Consistency
 Once you add multiple indexes to tables, it's possible that the application could make inconstent requests. V3 makes sure that none of the specified constraints are broken. For example, if a table had both a basic sharding key and a hashed sharding key, it will enforce the rule that the hash of the basic sharding key matches that of the hashed sharding key.
 
