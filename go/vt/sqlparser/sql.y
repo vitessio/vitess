@@ -157,7 +157,8 @@ func forceEOF(yylex interface{}) {
 %type <str> ignore_opt
 %type <empty> exists_opt not_exists_opt non_rename_operation to_opt constraint_opt using_opt
 %type <sqlID> sql_id as_lower_opt
-%type <sqlID> table_id as_opt
+%type <sqlID> table_id as_opt_id
+%type <empty> as_opt
 %type <empty> force_eof
 
 %%
@@ -411,9 +412,13 @@ table_reference:
 | join_table
 
 table_factor:
-  simple_table_expression as_opt index_hint_list
+  simple_table_expression as_opt_id index_hint_list
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
+  }
+| subquery as_opt table_id
+  {
+    $$ = &AliasedTableExpr{Expr:$1, As: $3}
   }
 | openb table_references closeb
   {
@@ -446,6 +451,11 @@ join_table:
   }
 
 as_opt:
+  { $$ = struct{}{} }
+| AS
+  { $$ = struct{}{} }
+
+as_opt_id:
   {
     $$ = ""
   }
@@ -516,10 +526,6 @@ simple_table_expression:
 | table_id '.' table_id
   {
     $$ = &TableName{Qualifier: $1, Name: $3}
-  }
-| subquery
-  {
-    $$ = $1
   }
 
 dml_table_expression:

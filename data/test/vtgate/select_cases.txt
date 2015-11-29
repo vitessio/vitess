@@ -34,10 +34,10 @@
 }
 
 # select with complex table expression
-"select * from (select 2 from dual)"
+"select * from (select 2 from dual) as a"
 {
   "Reason": "complex table expression",
-  "Original": "select * from (select 2 from dual)"
+  "Original": "select * from (select 2 from dual) as a"
 }
 
 # select on non-existent table

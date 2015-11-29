@@ -170,7 +170,10 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
 	}, {
-		input: "select /* select in from */ 1 from (select 1 from t)",
+		input: "select /* select in from */ 1 from (select 1 from t) as a",
+	}, {
+		input:  "select /* select in from with no as */ 1 from (select 1 from t) a",
+		output: "select /* select in from with no as */ 1 from (select 1 from t) as a",
 	}, {
 		input: "select /* where */ 1 from t where a = b",
 	}, {
