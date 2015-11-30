@@ -89,7 +89,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> OR
 %left <empty> AND
 %right <empty> NOT
-%right <empty> BETWEEN CASE WHEN THEN ELSE
+%left <empty> BETWEEN CASE WHEN THEN ELSE
 %left <empty> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE IN
 %left <empty> '|'
 %left <empty> '&'
@@ -105,8 +105,6 @@ func forceEOF(yylex interface{}) {
 %token <empty> CREATE ALTER DROP RENAME ANALYZE
 %token <empty> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
 %token <empty> SHOW DESCRIBE EXPLAIN
-
-%start any_command
 
 %type <statement> command
 %type <selStmt> select_statement
@@ -160,6 +158,8 @@ func forceEOF(yylex interface{}) {
 %type <sqlID> table_id as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof
+
+%start any_command
 
 %%
 
