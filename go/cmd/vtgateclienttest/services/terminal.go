@@ -87,7 +87,7 @@ func (c *terminalClient) Rollback(ctx context.Context, session *vtgatepb.Session
 	return errTerminal
 }
 
-func (c *terminalClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+func (c *terminalClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	return nil, errTerminal
 }
 

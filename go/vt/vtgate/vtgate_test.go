@@ -686,7 +686,7 @@ func TestVTGateSplitQuery(t *testing.T) {
 		sql,
 		nil,
 		"",
-		splitCount)
+		int64(splitCount))
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}

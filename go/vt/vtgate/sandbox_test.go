@@ -537,9 +537,9 @@ var sandboxSQRowCount = int64(10)
 
 // Fake SplitQuery creates splits from the original query by appending the
 // split index as a comment to the SQL. RowCount is always sandboxSQRowCount
-func (sbc *sandboxConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
+func (sbc *sandboxConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error) {
 	splits := []tproto.QuerySplit{}
-	for i := 0; i < splitCount; i++ {
+	for i := 0; i < int(splitCount); i++ {
 		split := tproto.QuerySplit{
 			Sql:           fmt.Sprintf("%s /*split %v */", query.Sql, i),
 			BindVariables: query.BindVariables,

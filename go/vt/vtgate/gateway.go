@@ -51,7 +51,7 @@ type Gateway interface {
 	Rollback(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64) error
 
 	// SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
-	SplitQuery(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]tproto.QuerySplit, error)
+	SplitQuery(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error)
 
 	// Close shuts down underlying connections.
 	Close(ctx context.Context) error

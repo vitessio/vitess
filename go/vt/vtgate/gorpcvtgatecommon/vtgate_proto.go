@@ -141,7 +141,7 @@ type SplitQueryRequest struct {
 	Keyspace    string
 	Query       tproto.BoundQuery
 	SplitColumn string
-	SplitCount  int
+	SplitCount  int64
 }
 
 // BeginRequest is the BSON implementation of the proto3 query.BeginRequest

@@ -349,12 +349,12 @@ func (itc *internalTabletConn) EndPoint() *topodatapb.EndPoint {
 }
 
 // SplitQuery is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
+func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error) {
 	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, query.Sql, query.BindVariables, splitColumn, int64(splitCount), 0)
+	}, query.Sql, query.BindVariables, splitColumn, splitCount, 0)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}

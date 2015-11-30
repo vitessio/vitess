@@ -338,7 +338,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryR
 		string(request.Query.Sql),
 		bv,
 		request.SplitColumn,
-		int(request.SplitCount))
+		request.SplitCount)
 	if vtgErr != nil {
 		return nil, vterrors.ToGRPCError(vtgErr)
 	}

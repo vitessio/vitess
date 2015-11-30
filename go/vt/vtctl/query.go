@@ -242,7 +242,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	r, err := vtgateConn.SplitQuery(ctx, *keyspace, subFlags.Arg(0), *bindVariables, *splitColumn, *splitCount)
+	r, err := vtgateConn.SplitQuery(ctx, *keyspace, subFlags.Arg(0), *bindVariables, *splitColumn, int64(*splitCount))
 	if err != nil {
 		return fmt.Errorf("SplitQuery failed: %v", err)
 	}
