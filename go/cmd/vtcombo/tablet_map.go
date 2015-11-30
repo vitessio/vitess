@@ -350,19 +350,15 @@ func (itc *internalTabletConn) EndPoint() *topodatapb.EndPoint {
 
 // SplitQuery is part of tabletconn.TabletConn
 func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
-	reply := &tproto.SplitQueryResult{}
-	if err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
+	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.SplitQueryRequest{
-		Query:       query,
-		SplitColumn: splitColumn,
-		SplitCount:  splitCount,
-	}, reply); err != nil {
+	}, query.Sql, query.BindVariables, splitColumn, int64(splitCount), 0)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return reply.Queries, nil
+	return splits, nil
 }
 
 // StreamHealth is part of tabletconn.TabletConn

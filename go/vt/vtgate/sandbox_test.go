@@ -541,11 +541,9 @@ func (sbc *sandboxConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 	splits := []tproto.QuerySplit{}
 	for i := 0; i < splitCount; i++ {
 		split := tproto.QuerySplit{
-			Query: tproto.BoundQuery{
-				Sql:           fmt.Sprintf("%s /*split %v */", query.Sql, i),
-				BindVariables: query.BindVariables,
-			},
-			RowCount: sandboxSQRowCount,
+			Sql:           fmt.Sprintf("%s /*split %v */", query.Sql, i),
+			BindVariables: query.BindVariables,
+			RowCount:      sandboxSQRowCount,
 		}
 		splits = append(splits, split)
 	}

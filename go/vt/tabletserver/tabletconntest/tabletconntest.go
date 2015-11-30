@@ -873,9 +873,9 @@ func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
-func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]proto.QuerySplit, error) {
 	if f.hasError {
-		return testTabletError
+		return nil, testTabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -883,17 +883,19 @@ func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Targe
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "SplitQuery", target)
 	}
-	if !reflect.DeepEqual(req.Query, splitQueryBoundQuery) {
-		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", req.Query, splitQueryBoundQuery)
+	if !reflect.DeepEqual(proto.BoundQuery{
+		Sql:           sql,
+		BindVariables: bindVariables,
+	}, splitQueryBoundQuery) {
+		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", proto.QueryAsString(sql, bindVariables), splitQueryBoundQuery)
 	}
-	if req.SplitColumn != splitQuerySplitColumn {
-		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.SplitColumn: got %v expected %v", req.SplitColumn, splitQuerySplitColumn)
+	if splitColumn != splitQuerySplitColumn {
+		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v", splitColumn, splitQuerySplitColumn)
 	}
-	if req.SplitCount != splitQuerySplitCount {
-		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.SplitCount: got %v expected %v", req.SplitCount, splitQuerySplitCount)
+	if splitCount != splitQuerySplitCount {
+		f.t.Errorf("invalid SplitQuery.SplitCount: got %v expected %v", splitCount, splitQuerySplitCount)
 	}
-	reply.Queries = splitQueryQuerySplitList
-	return nil
+	return splitQueryQuerySplitList, nil
 }
 
 var splitQueryBoundQuery = proto.BoundQuery{
@@ -908,12 +910,10 @@ const splitQuerySplitCount = 372
 
 var splitQueryQuerySplitList = []proto.QuerySplit{
 	proto.QuerySplit{
-		Query: proto.BoundQuery{
-			Sql: "splitQuery",
-			BindVariables: map[string]interface{}{
-				"bind1":       int64(43),
-				"keyspace_id": int64(3333),
-			},
+		Sql: "splitQuery",
+		BindVariables: map[string]interface{}{
+			"bind1":       int64(43),
+			"keyspace_id": int64(3333),
 		},
 		RowCount: 4456,
 	},

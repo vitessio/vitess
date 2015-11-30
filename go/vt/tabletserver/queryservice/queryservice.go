@@ -35,12 +35,13 @@ type QueryService interface {
 	Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error
 
 	// Query execution
+
 	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error)
 	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error
 	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []proto.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
 
-	// Map reduce helper
-	SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
+	// SplitQuery is a map reduce helper function
+	SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]proto.QuerySplit, error)
 
 	// StreamHealthRegister registers a listener for StreamHealth
 	StreamHealthRegister(chan<- *querypb.StreamHealthResponse) (int, error)
@@ -95,8 +96,8 @@ func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Ta
 }
 
 // SplitQuery is part of QueryService interface
-func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
-	return fmt.Errorf("ErrorQueryService does not implement any method")
+func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]proto.QuerySplit, error) {
+	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // StreamHealthRegister is part of QueryService interface

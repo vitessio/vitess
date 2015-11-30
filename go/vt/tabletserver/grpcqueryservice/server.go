@@ -154,20 +154,15 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	reply := &proto.SplitQueryResult{}
 	bq, err := proto.Proto3ToBoundQuery(request.Query)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	if err := q.server.SplitQuery(ctx, request.Target, &proto.SplitQueryRequest{
-		Query:       *bq,
-		SplitColumn: request.SplitColumn,
-		SplitCount:  int(request.SplitCount),
-		SessionID:   request.SessionId,
-	}, reply); err != nil {
+	splits, err := q.server.SplitQuery(ctx, request.Target, bq.Sql, bq.BindVariables, request.SplitColumn, request.SplitCount, request.SessionId)
+	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	qs, err := proto.QuerySplitsToProto3(reply.Queries)
+	qs, err := proto.QuerySplitsToProto3(splits)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}

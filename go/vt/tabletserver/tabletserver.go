@@ -788,12 +788,13 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	return results, nil
 }
 
-// SplitQuery splits a BoundQuery into smaller queries that return a subset of rows from the original query.
-func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
+// SplitQuery splits a query + bind variables into smaller queries that return a
+// subset of rows from the original query.
+func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) (splits []proto.QuerySplit, err error) {
 	logStats := newLogStats("SplitQuery", ctx)
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
-	if err = tsv.startRequest(target, req.SessionID, false, false); err != nil {
-		return err
+	if err = tsv.startRequest(target, sessionID, false, false); err != nil {
+		return nil, err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
@@ -801,10 +802,10 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target,
 		tsv.endRequest(false)
 	}()
 
-	splitter := NewQuerySplitter(&(req.Query), req.SplitColumn, req.SplitCount, tsv.qe.schemaInfo)
+	splitter := NewQuerySplitter(sql, bindVariables, splitColumn, splitCount, tsv.qe.schemaInfo)
 	err = splitter.validateQuery()
 	if err != nil {
-		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %#v", err, req)
+		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %v", err, proto.QueryAsString(sql, bindVariables))
 	}
 
 	defer func(start time.Time) {
@@ -818,20 +819,20 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target,
 	}
 	columnType, err := getColumnType(qre, splitter.splitColumn, splitter.tableName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var pkMinMax *sqltypes.Result
 	if sqltypes.IsIntegral(columnType) {
 		pkMinMax, err = getColumnMinMax(qre, splitter.splitColumn, splitter.tableName)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	reply.Queries, err = splitter.split(columnType, pkMinMax)
+	splits, err = splitter.split(columnType, pkMinMax)
 	if err != nil {
-		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %#v", err, req)
+		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %v", err, proto.QueryAsString(sql, bindVariables))
 	}
-	return nil
+	return splits, nil
 }
 
 // StreamHealthRegister is part of queryservice.QueryService interface

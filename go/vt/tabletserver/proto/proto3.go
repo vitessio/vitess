@@ -288,13 +288,14 @@ func Proto3ToQuerySplits(queries []*querypb.QuerySplit) ([]QuerySplit, error) {
 	}
 	result := make([]QuerySplit, len(queries))
 	for i, qs := range queries {
-		res, err := Proto3ToBoundQuery(qs.Query)
+		bv, err := Proto3ToBindVariables(qs.Query.BindVariables)
 		if err != nil {
 			return nil, err
 		}
 		result[i] = QuerySplit{
-			Query:    *res,
-			RowCount: qs.RowCount,
+			Sql:           qs.Query.Sql,
+			BindVariables: bv,
+			RowCount:      qs.RowCount,
 		}
 	}
 	return result, nil
@@ -307,7 +308,7 @@ func QuerySplitsToProto3(queries []QuerySplit) ([]*querypb.QuerySplit, error) {
 	}
 	result := make([]*querypb.QuerySplit, len(queries))
 	for i, qs := range queries {
-		q, err := BoundQueryToProto3(qs.Query.Sql, qs.Query.BindVariables)
+		q, err := BoundQueryToProto3(qs.Sql, qs.BindVariables)
 		if err != nil {
 			return nil, err
 		}

@@ -44,82 +44,77 @@ func getSchemaInfo() *SchemaInfo {
 
 func TestValidateQuery(t *testing.T) {
 	schemaInfo := getSchemaInfo()
-	query := &proto.BoundQuery{}
-	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
 
-	query.Sql = "delete from test_table"
+	splitter := NewQuerySplitter("delete from test_table", nil, "", 3, schemaInfo)
 	got := splitter.validateQuery()
 	want := fmt.Errorf("not a select statement")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("non-select validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from test_table order by id"
+	splitter = NewQuerySplitter("select * from test_table order by id", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("order by query validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from test_table group by id"
+	splitter = NewQuerySplitter("select * from test_table group by id", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("group by query validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select A.* from test_table A JOIN test_table B"
+	splitter = NewQuerySplitter("select A.* from test_table A JOIN test_table B", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("join query validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from test_table_no_pk"
+	splitter = NewQuerySplitter("select * from test_table_no_pk", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("no primary keys")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("no PK table validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from unknown_table"
+	splitter = NewQuerySplitter("select * from unknown_table", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("can't find table in schema")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("unknown table validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from test_table"
+	splitter = NewQuerySplitter("select * from test_table", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from test_table where count > :count"
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter(query, "id2", 0, schemaInfo)
-	query.Sql = "select * from test_table where count > :count"
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "id2", 0, schemaInfo)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter(query, "id2", 0, schemaInfo)
-	query.Sql = "invalid select * from test_table where count > :count"
+	splitter = NewQuerySplitter("invalid select * from test_table where count > :count", nil, "id2", 0, schemaInfo)
 	if err := splitter.validateQuery(); err == nil {
 		t.Fatalf("validateQuery() = %v, want: nil", err)
 	}
 
 	// column id2 is indexed
-	splitter = NewQuerySplitter(query, "id2", 3, schemaInfo)
-	query.Sql = "select * from test_table where count > :count"
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "id2", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
@@ -127,7 +122,7 @@ func TestValidateQuery(t *testing.T) {
 	}
 
 	// column does not exist
-	splitter = NewQuerySplitter(query, "unknown_column", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "unknown_column", 3, schemaInfo)
 	got = splitter.validateQuery()
 	wantStr := "split column is not indexed or does not exist in table schema"
 	if !strings.Contains(got.Error(), wantStr) {
@@ -135,7 +130,7 @@ func TestValidateQuery(t *testing.T) {
 	}
 
 	// column is not indexed
-	splitter = NewQuerySplitter(query, "count", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "count", 3, schemaInfo)
 	got = splitter.validateQuery()
 	wantStr = "split column is not indexed or does not exist in table schema"
 	if !strings.Contains(got.Error(), wantStr) {
@@ -261,7 +256,7 @@ func TestSplitBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(boundaries) != splitter.splitCount-1 {
+	if len(boundaries) != int(splitter.splitCount-1) {
 		t.Errorf("wrong number of boundaries got: %v, want: %v", len(boundaries), splitter.splitCount-1)
 	}
 	got, err := splitter.splitBoundaries(sqltypes.Int64, pkMinMax)
@@ -315,10 +310,7 @@ func buildVal(val interface{}) sqltypes.Value {
 
 func TestSplitQuery(t *testing.T) {
 	schemaInfo := getSchemaInfo()
-	query := &proto.BoundQuery{
-		Sql: "select * from test_table where count > :count",
-	}
-	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
+	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(0)
 	max, _ := sqltypes.BuildValue(300)
@@ -351,7 +343,10 @@ func TestSplitQuery(t *testing.T) {
 		if split.RowCount != 100 {
 			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 100)
 		}
-		got = append(got, split.Query)
+		got = append(got, proto.BoundQuery{
+			Sql:           split.Sql,
+			BindVariables: split.BindVariables,
+		})
 	}
 	want := []proto.BoundQuery{
 		{
@@ -377,10 +372,7 @@ func TestSplitQuery(t *testing.T) {
 
 func TestSplitQueryFractionalColumn(t *testing.T) {
 	schemaInfo := getSchemaInfo()
-	query := &proto.BoundQuery{
-		Sql: "select * from test_table where count > :count",
-	}
-	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
+	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(10.5)
 	max, _ := sqltypes.BuildValue(490.5)
@@ -407,7 +399,10 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 		if split.RowCount != 160 {
 			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 160)
 		}
-		got = append(got, split.Query)
+		got = append(got, proto.BoundQuery{
+			Sql:           split.Sql,
+			BindVariables: split.BindVariables,
+		})
 	}
 	want := []proto.BoundQuery{
 		{
@@ -433,10 +428,7 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 
 func TestSplitQueryStringColumn(t *testing.T) {
 	schemaInfo := getSchemaInfo()
-	query := &proto.BoundQuery{
-		Sql: "select * from test_table where count > :count",
-	}
-	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
+	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
 	splitter.validateQuery()
 	splits, err := splitter.split(sqltypes.VarChar, nil)
 	if err != nil {
@@ -444,7 +436,10 @@ func TestSplitQueryStringColumn(t *testing.T) {
 	}
 	got := []proto.BoundQuery{}
 	for _, split := range splits {
-		got = append(got, split.Query)
+		got = append(got, proto.BoundQuery{
+			Sql:           split.Sql,
+			BindVariables: split.BindVariables,
+		})
 	}
 	want := []proto.BoundQuery{
 		{

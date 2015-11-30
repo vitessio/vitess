@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/bytes2"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 )
 
 // QueryAsString prints a readable version of query+bind variables,
@@ -46,29 +45,12 @@ type BoundQuery struct {
 
 //go:generate bsongen -file $GOFILE -type BoundQuery -o bound_query_bson.go
 
-// SplitQueryRequest represents a request to split a Query into queries that
-// each return a subset of the original query.
-// SplitColumn: preferred column to split. Server will pick a random PK column
-//              if this field is empty or returns an error if this field is not
-//              empty but not found in schema info or not be indexed.
-type SplitQueryRequest struct {
-	Query       BoundQuery
-	SplitColumn string
-	SplitCount  int
-	SessionID   int64
-}
-
 // QuerySplit represents a split of SplitQueryRequest.Query. RowCount is only
 // approximate.
 type QuerySplit struct {
-	Query    BoundQuery
-	RowCount int64
-}
-
-// SplitQueryResult represents the result of a SplitQueryRequest
-type SplitQueryResult struct {
-	Queries []QuerySplit
-	Err     *mproto.RPCError
+	Sql           string
+	BindVariables map[string]interface{}
+	RowCount      int64
 }
 
 // CallerID is the BSON implementation of the proto3 vtrpc.CallerID

@@ -485,28 +485,7 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 	}, 0, false, 0); err == nil {
 		t.Fatalf("call TabletServer.ExecuteBatch should fail because of an invalid session id: 0")
 	}
-
-	splitQuery := proto.SplitQueryRequest{
-		Query: proto.BoundQuery{
-			Sql:           "select * from test_table where count > :count",
-			BindVariables: nil,
-		},
-		SplitCount: 10,
-		SessionID:  0,
-	}
-
-	splitQueryReply := proto.SplitQueryResult{
-		Queries: []proto.QuerySplit{
-			proto.QuerySplit{
-				Query: proto.BoundQuery{
-					Sql:           "",
-					BindVariables: nil,
-				},
-				RowCount: 10,
-			},
-		},
-	}
-	if err = tsv.SplitQuery(ctx, nil, &splitQuery, &splitQueryReply); err == nil {
+	if _, err = tsv.SplitQuery(ctx, nil, "select * from test_table where count > :count", nil, "", 10, 0); err == nil {
 		t.Fatalf("call TabletServer.SplitQuery should fail because of an invalid session id: 0")
 	}
 }
@@ -949,29 +928,9 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.SplitQueryRequest{
-		Query: proto.BoundQuery{
-			Sql:           "select * from test_table where count > :count",
-			BindVariables: nil,
-		},
-		SplitCount: 10,
-		SessionID:  tsv.sessionID,
-	}
-
-	reply := proto.SplitQueryResult{
-		Queries: []proto.QuerySplit{
-			proto.QuerySplit{
-				Query: proto.BoundQuery{
-					Sql:           "",
-					BindVariables: nil,
-				},
-				RowCount: 10,
-			},
-		},
-	}
-	if err := tsv.SplitQuery(ctx, nil, &query, &reply); err != nil {
-		t.Fatalf("TabletServer.SplitQuery should success: %v, but get error: %v",
-			query, err)
+	sql := "select * from test_table where count > :count"
+	if _, err := tsv.SplitQuery(ctx, nil, sql, nil, "", 10, tsv.sessionID); err != nil {
+		t.Fatalf("TabletServer.SplitQuery should success: %v, but get error: %v", sql, err)
 	}
 }
 
@@ -1011,28 +970,8 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.SplitQueryRequest{
-		Query: proto.BoundQuery{
-			// add limit clause to make SplitQuery fail
-			Sql:           "select * from test_table where count > :count limit 1000",
-			BindVariables: nil,
-		},
-		SplitCount: 10,
-		SessionID:  tsv.sessionID,
-	}
-
-	reply := proto.SplitQueryResult{
-		Queries: []proto.QuerySplit{
-			proto.QuerySplit{
-				Query: proto.BoundQuery{
-					Sql:           "",
-					BindVariables: nil,
-				},
-				RowCount: 10,
-			},
-		},
-	}
-	if err := tsv.SplitQuery(ctx, nil, &query, &reply); err == nil {
+	// add limit clause to make SplitQuery fail
+	if _, err := tsv.SplitQuery(ctx, nil, "select * from test_table where count > :count limit 1000", nil, "", 10, tsv.sessionID); err == nil {
 		t.Fatalf("TabletServer.SplitQuery should fail")
 	}
 }
@@ -1077,27 +1016,7 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.SplitQueryRequest{
-		Query: proto.BoundQuery{
-			Sql:           "select * from test_table where count > :count",
-			BindVariables: nil,
-		},
-		SplitCount: 10,
-		SessionID:  tsv.sessionID,
-	}
-
-	reply := proto.SplitQueryResult{
-		Queries: []proto.QuerySplit{
-			proto.QuerySplit{
-				Query: proto.BoundQuery{
-					Sql:           "",
-					BindVariables: nil,
-				},
-				RowCount: 10,
-			},
-		},
-	}
-	if err := tsv.SplitQuery(ctx, nil, &query, &reply); err == nil {
+	if _, err := tsv.SplitQuery(ctx, nil, "select * from test_table where count > :count", nil, "", 10, tsv.sessionID); err == nil {
 		t.Fatalf("TabletServer.SplitQuery should fail")
 	}
 }

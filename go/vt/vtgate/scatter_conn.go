@@ -445,13 +445,13 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 		keyranges := []*topodatapb.KeyRange{keyRangeByShard[shard]}
 		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
 		for i, query := range queries {
-			q, err := tproto.BindVariablesToProto3(query.Query.BindVariables)
+			q, err := tproto.BindVariablesToProto3(query.BindVariables)
 			if err != nil {
 				return err
 			}
 			splits[i] = &vtgatepb.SplitQueryResponse_Part{
 				Query: &querypb.BoundQuery{
-					Sql:           query.Query.Sql,
+					Sql:           query.Sql,
 					BindVariables: q,
 				},
 				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
@@ -499,13 +499,13 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 		shards := []string{shard}
 		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
 		for i, query := range queries {
-			q, err := tproto.BindVariablesToProto3(query.Query.BindVariables)
+			q, err := tproto.BindVariablesToProto3(query.BindVariables)
 			if err != nil {
 				return err
 			}
 			splits[i] = &vtgatepb.SplitQueryResponse_Part{
 				Query: &querypb.BoundQuery{
-					Sql:           query.Query.Sql,
+					Sql:           query.Sql,
 					BindVariables: q,
 				},
 				ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
