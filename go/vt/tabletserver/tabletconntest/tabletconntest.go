@@ -126,21 +126,20 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 }
 
 // GetSessionId is part of the queryservice.QueryService interface
-func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	if sessionParams.Keyspace != testTarget.Keyspace {
-		f.t.Errorf("invalid keyspace: got %v expected %v", sessionParams.Keyspace, testTarget.Keyspace)
+func (f *FakeQueryService) GetSessionId(keyspace, shard string) (int64, error) {
+	if keyspace != testTarget.Keyspace {
+		f.t.Errorf("invalid keyspace: got %v expected %v", keyspace, testTarget.Keyspace)
 	}
-	if sessionParams.Shard != testTarget.Shard {
-		f.t.Errorf("invalid shard: got %v expected %v", sessionParams.Shard, testTarget.Shard)
+	if shard != testTarget.Shard {
+		f.t.Errorf("invalid shard: got %v expected %v", shard, testTarget.Shard)
 	}
-	sessionInfo.SessionId = testSessionID
-	return nil
+	return testSessionID, nil
 }
 
 // Begin is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
+func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, sessionID int64) (int64, error) {
 	if f.hasError {
-		return testTabletError
+		return 0, testTabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -148,15 +147,11 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, se
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "Begin", target)
 	} else {
-		if session.SessionId != testSessionID {
-			f.t.Errorf("Begin: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("Begin: invalid sessionID: got %v expected %v", sessionID, testSessionID)
 		}
 	}
-	if session.TransactionId != 0 {
-		f.t.Errorf("Begin: invalid TransactionId: got %v expected 0", session.TransactionId)
-	}
-	txInfo.TransactionId = beginTransactionID
-	return nil
+	return beginTransactionID, nil
 }
 
 const beginTransactionID int64 = 9990
@@ -211,7 +206,7 @@ func testBegin2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Commit is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, session *proto.Session) error {
+func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -221,12 +216,12 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, s
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "Commit", target)
 	} else {
-		if session.SessionId != testSessionID {
-			f.t.Errorf("Commit: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("Commit: invalid SessionId: got %v expected %v", sessionID, testSessionID)
 		}
 	}
-	if session.TransactionId != commitTransactionID {
-		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", session.TransactionId, commitTransactionID)
+	if transactionID != commitTransactionID {
+		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", transactionID, commitTransactionID)
 	}
 	return nil
 }
@@ -277,7 +272,7 @@ func testCommit2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Rollback is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, session *proto.Session) error {
+func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -287,12 +282,12 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target,
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "Rollback", target)
 	} else {
-		if session.SessionId != testSessionID {
-			f.t.Errorf("Rollback: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("Rollback: invalid SessionId: got %v expected %v", sessionID, testSessionID)
 		}
 	}
-	if session.TransactionId != rollbackTransactionID {
-		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", session.TransactionId, rollbackTransactionID)
+	if transactionID != rollbackTransactionID {
+		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", transactionID, rollbackTransactionID)
 	}
 	return nil
 }

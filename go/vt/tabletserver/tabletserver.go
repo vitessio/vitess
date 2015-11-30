@@ -532,30 +532,29 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 }
 
 // GetSessionId returns a sessionInfo response if the state is StateServing.
-func (tsv *TabletServer) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
+func (tsv *TabletServer) GetSessionId(keyspace, shard string) (int64, error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateServing {
-		return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
+		return 0, NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
 	}
-	if sessionParams.Keyspace != tsv.dbconfigs.App.Keyspace {
-		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", tsv.dbconfigs.App.Keyspace, sessionParams.Keyspace)
+	if keyspace != tsv.dbconfigs.App.Keyspace {
+		return 0, NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", tsv.dbconfigs.App.Keyspace, keyspace)
 	}
-	if strings.ToLower(sessionParams.Shard) != strings.ToLower(tsv.dbconfigs.App.Shard) {
-		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", tsv.dbconfigs.App.Shard, sessionParams.Shard)
+	if strings.ToLower(shard) != strings.ToLower(tsv.dbconfigs.App.Shard) {
+		return 0, NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", tsv.dbconfigs.App.Shard, shard)
 	}
-	sessionInfo.SessionId = tsv.sessionID
-	return nil
+	return tsv.sessionID, nil
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
-func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
+func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, sessionID int64) (transactionID int64, err error) {
 	logStats := newLogStats("Begin", ctx)
 	logStats.OriginalSQL = "begin"
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 
-	if err = tsv.startRequest(target, session.SessionId, true, false); err != nil {
-		return err
+	if err = tsv.startRequest(target, sessionID, true, false); err != nil {
+		return 0, err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.BeginTimeout.Get())
 	defer func() {
@@ -564,19 +563,19 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, sess
 		tsv.endRequest(true)
 	}()
 
-	txInfo.TransactionId = tsv.qe.txPool.Begin(ctx)
-	logStats.TransactionID = txInfo.TransactionId
-	return nil
+	transactionID = tsv.qe.txPool.Begin(ctx)
+	logStats.TransactionID = transactionID
+	return transactionID, nil
 }
 
 // Commit commits the specified transaction.
-func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, session *proto.Session) (err error) {
+func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) (err error) {
 	logStats := newLogStats("Commit", ctx)
 	logStats.OriginalSQL = "commit"
-	logStats.TransactionID = session.TransactionId
+	logStats.TransactionID = transactionID
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 
-	if err = tsv.startRequest(target, session.SessionId, false, true); err != nil {
+	if err = tsv.startRequest(target, sessionID, false, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
@@ -586,18 +585,18 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, ses
 		tsv.endRequest(false)
 	}()
 
-	tsv.qe.Commit(ctx, logStats, session.TransactionId)
+	tsv.qe.Commit(ctx, logStats, transactionID)
 	return nil
 }
 
 // Rollback rollsback the specified transaction.
-func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, session *proto.Session) (err error) {
+func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) (err error) {
 	logStats := newLogStats("Rollback", ctx)
 	logStats.OriginalSQL = "rollback"
-	logStats.TransactionID = session.TransactionId
+	logStats.TransactionID = transactionID
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 
-	if err = tsv.startRequest(target, session.SessionId, false, true); err != nil {
+	if err = tsv.startRequest(target, sessionID, false, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
@@ -607,7 +606,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, s
 		tsv.endRequest(false)
 	}()
 
-	tsv.qe.txPool.Rollback(ctx, session.TransactionId)
+	tsv.qe.txPool.Rollback(ctx, transactionID)
 	return nil
 }
 
@@ -770,16 +769,15 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		SessionId:     queryList.SessionId,
 	}
 	if queryList.AsTransaction {
-		var txInfo proto.TransactionInfo
-		if err = tsv.Begin(ctx, target, &session, &txInfo); err != nil {
+		session.TransactionId, err = tsv.Begin(ctx, target, queryList.SessionId)
+		if err != nil {
 			return err
 		}
-		session.TransactionId = txInfo.TransactionId
 		// If transaction was not committed by the end, it means
 		// that there was an error, roll it back.
 		defer func() {
 			if session.TransactionId != 0 {
-				tsv.Rollback(ctx, target, &session)
+				tsv.Rollback(ctx, target, session.SessionId, session.TransactionId)
 			}
 		}()
 	}
@@ -798,7 +796,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		reply.List = append(reply.List, localReply)
 	}
 	if queryList.AsTransaction {
-		if err = tsv.Commit(ctx, target, &session); err != nil {
+		if err = tsv.Commit(ctx, target, session.SessionId, session.TransactionId); err != nil {
 			session.TransactionId = 0
 			return err
 		}

@@ -12,22 +12,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
-// SessionParams is passed to GetSessionId. The server will
-// double-check the keyspace and shard are what the tablet is serving.
-type SessionParams struct {
-	Keyspace string
-	Shard    string
-}
-
-// SessionInfo is returned by GetSessionId. Use the provided
-// session_id in the Session object for any subsequent call.
-type SessionInfo struct {
-	SessionId int64
-	Err       *mproto.RPCError
-}
-
-//go:generate bsongen -file $GOFILE -type SessionInfo -o session_info_bson.go
-
 // Query is the payload to Execute.
 type Query struct {
 	Sql           string

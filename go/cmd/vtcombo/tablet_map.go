@@ -284,16 +284,16 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 }
 
 // Begin is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, err error) {
-	result := &tproto.TransactionInfo{}
-	if err := itc.tablet.qsc.QueryService().Begin(ctx, &querypb.Target{
+func (itc *internalTabletConn) Begin(ctx context.Context) (int64, error) {
+	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{}, result); err != nil {
+	}, 0)
+	if err != nil {
 		return 0, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return result.TransactionId, nil
+	return transactionID, nil
 }
 
 // Commit is part of tabletconn.TabletConn
@@ -302,9 +302,7 @@ func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) 
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{
-		TransactionId: transactionID,
-	})
+	}, 0, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
@@ -314,9 +312,7 @@ func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{
-		TransactionId: transactionID,
-	})
+	}, 0, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 

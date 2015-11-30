@@ -45,25 +45,24 @@ func (client *QueryClient) Begin() error {
 	if client.transactionID != 0 {
 		return errors.New("already in transaction")
 	}
-	var txinfo proto.TransactionInfo
-	err := client.server.Begin(client.ctx, &client.target, &proto.Session{}, &txinfo)
+	transactionID, err := client.server.Begin(client.ctx, &client.target, 0)
 	if err != nil {
 		return err
 	}
-	client.transactionID = txinfo.TransactionId
+	client.transactionID = transactionID
 	return nil
 }
 
 // Commit commits the current transaction.
 func (client *QueryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Commit(client.ctx, &client.target, &proto.Session{TransactionId: client.transactionID})
+	return client.server.Commit(client.ctx, &client.target, 0, client.transactionID)
 }
 
 // Rollback rolls back the current transaction.
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Rollback(client.ctx, &client.target, &proto.Session{TransactionId: client.transactionID})
+	return client.server.Rollback(client.ctx, &client.target, 0, client.transactionID)
 }
 
 // Execute executes a query.
