@@ -90,7 +90,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> AND
 %right <empty> NOT
 %left <empty> BETWEEN CASE WHEN THEN ELSE
-%left <empty> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE IN
+%left <empty> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
 %left <empty> '|'
 %left <empty> '&'
 %left <empty> SHIFT_LEFT SHIFT_RIGHT
@@ -625,6 +625,14 @@ condition:
 | value_expression NOT LIKE value_expression
   {
     $$ = &ComparisonExpr{Left: $1, Operator: NotLikeStr, Right: $4}
+  }
+| value_expression REGEXP value_expression
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: RegexpStr, Right: $3}
+  }
+| value_expression NOT REGEXP value_expression
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpStr, Right: $4}
   }
 | value_expression BETWEEN value_expression AND value_expression
   {

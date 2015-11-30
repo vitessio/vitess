@@ -207,6 +207,16 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* not like */ 1 from t where a not like b",
 	}, {
+		input: "select /* regexp */ 1 from t where a regexp b",
+	}, {
+		input: "select /* not regexp */ 1 from t where a not regexp b",
+	}, {
+		input:  "select /* rlike */ 1 from t where a rlike b",
+		output: "select /* rlike */ 1 from t where a regexp b",
+	}, {
+		input:  "select /* not rlike */ 1 from t where a not rlike b",
+		output: "select /* not rlike */ 1 from t where a not regexp b",
+	}, {
 		input: "select /* between */ 1 from t where a between b and c",
 	}, {
 		input: "select /* not between */ 1 from t where a not between b and c",
