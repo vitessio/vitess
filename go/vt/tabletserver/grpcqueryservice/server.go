@@ -49,21 +49,16 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	reply := new(sqltypes.Result)
 	bv, err := proto.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	if err := q.server.Execute(ctx, request.Target, &proto.Query{
-		Sql:           request.Query.Sql,
-		BindVariables: bv,
-		SessionId:     request.SessionId,
-		TransactionId: request.TransactionId,
-	}, reply); err != nil {
+	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, request.SessionId, request.TransactionId)
+	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
 	return &querypb.ExecuteResponse{
-		Result: sqltypes.ResultToProto3(reply),
+		Result: sqltypes.ResultToProto3(result),
 	}, nil
 }
 
@@ -103,11 +98,7 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 	if err != nil {
 		return tabletserver.ToGRPCError(err)
 	}
-	if err := q.server.StreamExecute(ctx, request.Target, &proto.Query{
-		Sql:           request.Query.Sql,
-		BindVariables: bv,
-		SessionId:     request.SessionId,
-	}, func(reply *sqltypes.Result) error {
+	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, bv, request.SessionId, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})

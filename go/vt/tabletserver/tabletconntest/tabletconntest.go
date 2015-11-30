@@ -338,31 +338,30 @@ func testRollback2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) error {
+func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error) {
 	if f.hasError {
-		return testTabletError
+		return nil, testTabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if query.Sql != executeQuery {
-		f.t.Errorf("invalid Execute.Query.Sql: got %v expected %v", query.Sql, executeQuery)
+	if sql != executeQuery {
+		f.t.Errorf("invalid Execute.Query.Sql: got %v expected %v", sql, executeQuery)
 	}
-	if !reflect.DeepEqual(query.BindVariables, executeBindVars) {
-		f.t.Errorf("invalid Execute.Query.BindVariables: got %v expected %v", query.BindVariables, executeBindVars)
+	if !reflect.DeepEqual(bindVariables, executeBindVars) {
+		f.t.Errorf("invalid Execute.BindVariables: got %v expected %v", bindVariables, executeBindVars)
 	}
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "Execute", target)
 	} else {
-		if query.SessionId != testSessionID {
-			f.t.Errorf("invalid Execute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("invalid Execute.SessionId: got %v expected %v", sessionID, testSessionID)
 		}
 	}
-	if query.TransactionId != executeTransactionID {
-		f.t.Errorf("invalid Execute.Query.TransactionId: got %v expected %v", query.TransactionId, executeTransactionID)
+	if transactionID != executeTransactionID {
+		f.t.Errorf("invalid Execute.TransactionId: got %v expected %v", transactionID, executeTransactionID)
 	}
-	*reply = executeQueryResult
-	return nil
+	return &executeQueryResult, nil
 }
 
 const executeQuery = "executeQuery"
@@ -448,21 +447,21 @@ func testExecute2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error {
 	if f.panics && f.streamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
-	if query.Sql != streamExecuteQuery {
-		f.t.Errorf("invalid StreamExecute.Query.Sql: got %v expected %v", query.Sql, streamExecuteQuery)
+	if sql != streamExecuteQuery {
+		f.t.Errorf("invalid StreamExecute.Sql: got %v expected %v", sql, streamExecuteQuery)
 	}
-	if !reflect.DeepEqual(query.BindVariables, streamExecuteBindVars) {
-		f.t.Errorf("invalid StreamExecute.Query.BindVariables: got %v expected %v", query.BindVariables, streamExecuteBindVars)
+	if !reflect.DeepEqual(bindVariables, streamExecuteBindVars) {
+		f.t.Errorf("invalid StreamExecute.BindVariables: got %v expected %v", bindVariables, streamExecuteBindVars)
 	}
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "StreamExecute", target)
 	} else {
-		if query.SessionId != testSessionID {
-			f.t.Errorf("invalid StreamExecute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("invalid StreamExecute.Query.SessionId: got %v expected %v", sessionID, testSessionID)
 		}
 	}
 	if err := sendReply(&streamExecuteQueryResult1); err != nil {

@@ -197,16 +197,12 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 	if err != nil {
 		return nil, err
 	}
-	reply := &sqltypes.Result{}
-	if err := itc.tablet.qsc.QueryService().Execute(ctx, &querypb.Target{
+	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Query{
-		Sql:           query,
-		BindVariables: bindVars,
-		TransactionId: transactionID,
-	}, reply); err != nil {
+	}, query, bindVars, 0, transactionID)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
 	return reply, nil
@@ -262,11 +258,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 			Keyspace:   itc.tablet.keyspace,
 			Shard:      itc.tablet.shard,
 			TabletType: itc.tablet.tabletType,
-		}, &tproto.Query{
-			Sql:           query,
-			BindVariables: bindVars,
-			TransactionId: transactionID,
-		}, func(reply *sqltypes.Result) error {
+		}, query, bindVars, 0, func(reply *sqltypes.Result) error {
 			// We need to deep-copy the reply before returning,
 			// because the underlying buffers are reused.
 			result <- reply.Copy()

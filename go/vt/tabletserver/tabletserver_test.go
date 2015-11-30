@@ -380,16 +380,14 @@ func TestTabletServerReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
 	}
-	request := &proto.Query{Sql: query, SessionId: tsv.sessionID}
-	reply := &sqltypes.Result{}
-	err = tsv.Execute(context.Background(), nil, request, reply)
+	_, err = tsv.Execute(context.Background(), nil, query, nil, tsv.sessionID, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// make mysql conn fail
 	db.EnableConnFail()
-	err = tsv.Execute(context.Background(), nil, request, reply)
+	_, err = tsv.Execute(context.Background(), nil, query, nil, tsv.sessionID, 0)
 	if err == nil {
 		t.Error("Execute: want error, got nil")
 	}
@@ -404,8 +402,7 @@ func TestTabletServerReconnect(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	request.SessionId = tsv.sessionID
-	err = tsv.Execute(context.Background(), nil, request, reply)
+	_, err = tsv.Execute(context.Background(), nil, query, nil, tsv.sessionID, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -476,19 +473,12 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 		t.Fatalf("call TabletServer.Rollback should fail because of an invalid session id: 0")
 	}
 
-	query := proto.Query{
-		Sql:           "select * from test_table limit 1000",
-		BindVariables: nil,
-		SessionId:     session.SessionId,
-		TransactionId: session.TransactionId,
-	}
-	reply := sqltypes.Result{}
-	if err := tsv.Execute(ctx, nil, &query, &reply); err == nil {
+	if _, err := tsv.Execute(ctx, nil, "select * from test_table limit 1000", nil, session.SessionId, session.TransactionId); err == nil {
 		t.Fatalf("call TabletServer.Execute should fail because of an invalid session id: 0")
 	}
 
 	streamSendReply := func(*sqltypes.Result) error { return nil }
-	if err = tsv.StreamExecute(ctx, nil, &query, streamSendReply); err == nil {
+	if err = tsv.StreamExecute(ctx, nil, "select * from test_table limit 1000", nil, session.SessionId, streamSendReply); err == nil {
 		t.Fatalf("call TabletServer.StreamExecute should fail because of an invalid session id: 0")
 	}
 
@@ -553,26 +543,21 @@ func TestTabletServerTarget(t *testing.T) {
 	ctx := context.Background()
 
 	db.AddQuery("select * from test_table limit 1000", &sqltypes.Result{})
-	query := proto.Query{
-		Sql:           "select * from test_table limit 1000",
-		BindVariables: nil,
-	}
-	reply := sqltypes.Result{}
-	err = tsv.Execute(ctx, &target1, &query, &reply)
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tsv.Execute(ctx, &target2, &query, &reply)
+	_, err = tsv.Execute(ctx, &target2, "select * from test_table limit 1000", nil, 0, 0)
 	want := "Invalid tablet type"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
-	err = tsv.Execute(ctx, &target1, &query, &reply)
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tsv.Execute(ctx, &target2, &query, &reply)
+	_, err = tsv.Execute(ctx, &target2, "select * from test_table limit 1000", nil, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,8 +599,7 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 		SessionId:     session.SessionId,
 		TransactionId: session.TransactionId,
 	}
-	reply := sqltypes.Result{}
-	if err := tsv.Execute(ctx, nil, &query, &reply); err != nil {
+	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, session.SessionId, session.TransactionId); err != nil {
 		t.Fatalf("failed to execute query: %s", query.Sql)
 	}
 	if err := tsv.Commit(ctx, nil, session.SessionId, session.TransactionId); err != nil {
@@ -659,8 +643,7 @@ func TestTabletServerRollback(t *testing.T) {
 		SessionId:     session.SessionId,
 		TransactionId: session.TransactionId,
 	}
-	reply := sqltypes.Result{}
-	if err := tsv.Execute(ctx, nil, &query, &reply); err != nil {
+	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, session.SessionId, session.TransactionId); err != nil {
 		t.Fatalf("failed to execute query: %s", query.Sql)
 	}
 	if err := tsv.Rollback(ctx, nil, session.SessionId, session.TransactionId); err != nil {
@@ -691,31 +674,10 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	session := proto.Session{
-		SessionId:     tsv.sessionID,
-		TransactionId: 0,
-	}
-	session.TransactionId, err = tsv.Begin(ctx, nil, tsv.sessionID)
-	if err != nil {
-		t.Fatalf("call TabletServer.Begin failed")
-	}
-	query := proto.Query{
-		Sql:           executeSQL,
-		BindVariables: nil,
-		SessionId:     session.SessionId,
-		TransactionId: session.TransactionId,
-	}
 	sendReply := func(*sqltypes.Result) error { return nil }
-	if err := tsv.StreamExecute(ctx, nil, &query, sendReply); err == nil {
-		t.Fatalf("TabletServer.StreamExecute should fail: %s", query.Sql)
-	}
-	if err := tsv.Rollback(ctx, nil, session.SessionId, session.TransactionId); err != nil {
-		t.Fatalf("call TabletServer.Rollback failed")
-	}
-	query.TransactionId = 0
-	if err := tsv.StreamExecute(ctx, nil, &query, sendReply); err != nil {
+	if err := tsv.StreamExecute(ctx, nil, executeSQL, nil, tsv.sessionID, sendReply); err != nil {
 		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
-			query.Sql, err)
+			executeSQL, err)
 	}
 }
 
@@ -1279,25 +1241,17 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 func TestHandleExecUnknownError(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
-	query := proto.Query{
-		Sql:           "select * from test_table",
-		BindVariables: nil,
-	}
 	var err error
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleExecError(&query, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", nil, 0, 0, &err, logStats)
 	panic("unknown exec error")
 }
 
 func TestHandleExecTabletError(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
-	query := proto.Query{
-		Sql:           "select * from test_table",
-		BindVariables: nil,
-	}
 	var err error
 	defer func() {
 		want := "fatal: tablet error"
@@ -1308,17 +1262,13 @@ func TestHandleExecTabletError(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleExecError(&query, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", nil, 0, 0, &err, logStats)
 	panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
 func TestTerseErrors1(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
-	query := proto.Query{
-		Sql:           "select * from test_table",
-		BindVariables: nil,
-	}
 	var err error
 	defer func() {
 		want := "fatal: tablet error"
@@ -1330,17 +1280,13 @@ func TestTerseErrors1(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError(&query, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", nil, 0, 0, &err, logStats)
 	panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
 func TestTerseErrors2(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
-	query := proto.Query{
-		Sql:           "select * from test_table",
-		BindVariables: map[string]interface{}{"a": 1},
-	}
 	var err error
 	defer func() {
 		want := "error: (errno 10) during query: select * from test_table"
@@ -1352,7 +1298,7 @@ func TestTerseErrors2(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError(&query, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", map[string]interface{}{"a": 1}, 0, 0, &err, logStats)
 	panic(&TabletError{
 		ErrorType: ErrFail,
 		Message:   "msg",
@@ -1363,10 +1309,6 @@ func TestTerseErrors2(t *testing.T) {
 func TestTerseErrors3(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
-	query := proto.Query{
-		Sql:           "select * from test_table",
-		BindVariables: nil,
-	}
 	var err error
 	defer func() {
 		want := "error: msg"
@@ -1378,7 +1320,7 @@ func TestTerseErrors3(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError(&query, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", nil, 0, 0, &err, logStats)
 	panic(&TabletError{
 		ErrorType: ErrFail,
 		Message:   "msg",

@@ -456,15 +456,15 @@ func (tsv *TabletServer) setTimeBomb() chan struct{} {
 // connect to the database and serving traffic) or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	return tsv.Execute(
+	_, err := tsv.Execute(
 		context.Background(),
 		nil,
-		&proto.Query{
-			Sql:       "select 1 from dual",
-			SessionId: tsv.sessionID,
-		},
-		new(sqltypes.Result),
+		"select 1 from dual",
+		nil,
+		tsv.sessionID,
+		0,
 	)
+	return err
 }
 
 // CheckMySQL initiates a check to see if MySQL is reachable.
@@ -612,16 +612,16 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, s
 
 // handleExecError handles panics during query execution and sets
 // the supplied error return value.
-func (tsv *TabletServer) handleExecError(query *proto.Query, err *error, logStats *LogStats) {
+func (tsv *TabletServer) handleExecError(sql string, bindVariables map[string]interface{}, sessionID, transactionID int64, err *error, logStats *LogStats) {
 	if x := recover(); x != nil {
-		*err = tsv.handleExecErrorNoPanic(query, x, logStats)
+		*err = tsv.handleExecErrorNoPanic(sql, bindVariables, sessionID, transactionID, x, logStats)
 	}
 	if logStats != nil {
 		logStats.Send()
 	}
 }
 
-func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interface{}, logStats *LogStats) error {
+func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[string]interface{}, sessionID, transactionID int64, err interface{}, logStats *LogStats) error {
 	var terr *TabletError
 	defer func() {
 		if logStats != nil {
@@ -630,18 +630,18 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 	}()
 	terr, ok := err.(*TabletError)
 	if !ok {
-		log.Errorf("Uncaught panic for %v:\n%v\n%s", query, err, tb.Stack(4))
+		log.Errorf("Uncaught panic for sql:%v bindVariables:%v sessionID:%v transactionID:%v:\n%v\n%s", sql, bindVariables, sessionID, transactionID, err, tb.Stack(4))
 		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-		terr = NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, query)
+		terr = NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for sql:%v bindVariables:%v sessionID:%v transactionID:%v", err, sql, bindVariables, sessionID, transactionID)
 		return terr
 	}
 	var myError error
-	if tsv.config.TerseErrors && terr.SQLError != 0 && len(query.BindVariables) != 0 {
+	if tsv.config.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {
 		myError = &TabletError{
 			ErrorType: terr.ErrorType,
 			SQLError:  terr.SQLError,
 			ErrorCode: terr.ErrorCode,
-			Message:   fmt.Sprintf("(errno %d) during query: %s", terr.SQLError, query.Sql),
+			Message:   fmt.Sprintf("(errno %d) during query: %s", terr.SQLError, sql),
 		}
 	} else {
 		myError = terr
@@ -668,18 +668,18 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 			logMethod = log.Infof
 		}
 	}
-	logMethod("%v: %v", terr, query)
+	logMethod("%v: sql:%v bindVariables:%v sessionID:%v transactionID:%v", terr, sql, bindVariables, sessionID, transactionID)
 	return myError
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) (err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (result *sqltypes.Result, err error) {
 	logStats := newLogStats("Execute", ctx)
-	defer tsv.handleExecError(query, &err, logStats)
+	defer tsv.handleExecError(sql, bindVariables, sessionID, transactionID, &err, logStats)
 
-	allowShutdown := (query.TransactionId != 0)
-	if err = tsv.startRequest(target, query.SessionId, false, allowShutdown); err != nil {
-		return err
+	allowShutdown := (transactionID != 0)
+	if err = tsv.startRequest(target, sessionID, false, allowShutdown); err != nil {
+		return nil, err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
@@ -687,60 +687,53 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, qu
 		tsv.endRequest(false)
 	}()
 
-	if query.BindVariables == nil {
-		query.BindVariables = make(map[string]interface{})
+	if bindVariables == nil {
+		bindVariables = make(map[string]interface{})
 	}
-	stripTrailing(query)
+	sql = stripTrailing(sql, bindVariables)
 	qre := &QueryExecutor{
-		query:         query.Sql,
-		bindVars:      query.BindVariables,
-		transactionID: query.TransactionId,
-		plan:          tsv.qe.schemaInfo.GetPlan(ctx, logStats, query.Sql),
+		query:         sql,
+		bindVars:      bindVariables,
+		transactionID: transactionID,
+		plan:          tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql),
 		ctx:           ctx,
 		logStats:      logStats,
 		qe:            tsv.qe,
 	}
-	result, err := qre.Execute()
+	result, err = qre.Execute()
 	if err != nil {
-		return tsv.handleExecErrorNoPanic(query, err, logStats)
+		return nil, tsv.handleExecErrorNoPanic(sql, bindVariables, sessionID, transactionID, err, logStats)
 	}
-	*reply = *result
-	return nil
+	return result, nil
 }
 
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) (err error) {
-	// check cases we don't handle yet
-	if query.TransactionId != 0 {
-		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Transactions not supported with streaming")
-	}
-
+func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) (err error) {
 	logStats := newLogStats("StreamExecute", ctx)
-	defer tsv.handleExecError(query, &err, logStats)
+	defer tsv.handleExecError(sql, bindVariables, sessionID, 0, &err, logStats)
 
-	if err = tsv.startRequest(target, query.SessionId, false, false); err != nil {
+	if err = tsv.startRequest(target, sessionID, false, false); err != nil {
 		return err
 	}
 	defer tsv.endRequest(false)
 
-	if query.BindVariables == nil {
-		query.BindVariables = make(map[string]interface{})
+	if bindVariables == nil {
+		bindVariables = make(map[string]interface{})
 	}
-	stripTrailing(query)
+	sql = stripTrailing(sql, bindVariables)
 	qre := &QueryExecutor{
-		query:         query.Sql,
-		bindVars:      query.BindVariables,
-		transactionID: query.TransactionId,
-		plan:          tsv.qe.schemaInfo.GetStreamPlan(query.Sql),
-		ctx:           ctx,
-		logStats:      logStats,
-		qe:            tsv.qe,
+		query:    sql,
+		bindVars: bindVariables,
+		plan:     tsv.qe.schemaInfo.GetStreamPlan(sql),
+		ctx:      ctx,
+		logStats: logStats,
+		qe:       tsv.qe,
 	}
 	err = qre.Stream(sendReply)
 	if err != nil {
-		return tsv.handleExecErrorNoPanic(query, err, logStats)
+		return tsv.handleExecErrorNoPanic(sql, bindVariables, sessionID, 0, err, logStats)
 	}
 	return nil
 }
@@ -783,17 +776,11 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	}
 	reply.List = make([]sqltypes.Result, 0, len(queryList.Queries))
 	for _, bound := range queryList.Queries {
-		query := proto.Query{
-			Sql:           bound.Sql,
-			BindVariables: bound.BindVariables,
-			TransactionId: session.TransactionId,
-			SessionId:     session.SessionId,
-		}
-		var localReply sqltypes.Result
-		if err = tsv.Execute(ctx, target, &query, &localReply); err != nil {
+		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, session.SessionId, session.TransactionId)
+		if err != nil {
 			return err
 		}
-		reply.List = append(reply.List, localReply)
+		reply.List = append(reply.List, *localReply)
 	}
 	if queryList.AsTransaction {
 		if err = tsv.Commit(ctx, target, session.SessionId, session.TransactionId); err != nil {

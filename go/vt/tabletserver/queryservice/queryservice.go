@@ -35,8 +35,8 @@ type QueryService interface {
 	Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error
 
 	// Query execution
-	Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) error
-	StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error
+	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error)
+	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error
 	ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error
 
 	// Map reduce helper
@@ -80,12 +80,12 @@ func (e *ErrorQueryService) Rollback(ctx context.Context, target *querypb.Target
 }
 
 // Execute is part of QueryService interface
-func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) error {
-	return fmt.Errorf("ErrorQueryService does not implement any method")
+func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error) {
+	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // StreamExecute is part of QueryService interface
-func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error {
+func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 

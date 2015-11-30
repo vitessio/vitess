@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
@@ -36,12 +35,12 @@ type verticalTabletServer struct {
 	t *testing.T
 }
 
-func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
 	var err error
-	parts := strings.Split(query.Sql, " ")
+	parts := strings.Split(sql, " ")
 	for _, part := range parts {
 		if strings.HasPrefix(part, "id>=") {
 			min, err = strconv.Atoi(part[4:])
@@ -52,7 +51,7 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *query
 			max, err = strconv.Atoi(part[3:])
 		}
 	}
-	sq.t.Logf("verticalTabletServer: got query: %v with min %v max %v", *query, min, max)
+	sq.t.Logf("verticalTabletServer: got query: %v with min %v max %v", sql, min, max)
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{

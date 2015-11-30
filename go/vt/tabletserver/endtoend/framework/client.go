@@ -67,18 +67,14 @@ func (client *QueryClient) Rollback() error {
 
 // Execute executes a query.
 func (client *QueryClient) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
-	var qr = &sqltypes.Result{}
-	err := client.server.Execute(
+	return client.server.Execute(
 		client.ctx,
 		&client.target,
-		&proto.Query{
-			Sql:           query,
-			BindVariables: bindvars,
-			TransactionId: client.transactionID,
-		},
-		qr,
+		query,
+		bindvars,
+		0,
+		client.transactionID,
 	)
-	return qr, err
 }
 
 // StreamExecute executes a query & streams the results.
@@ -87,11 +83,9 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]inter
 	err := client.server.StreamExecute(
 		client.ctx,
 		&client.target,
-		&proto.Query{
-			Sql:           query,
-			BindVariables: bindvars,
-			TransactionId: client.transactionID,
-		},
+		query,
+		bindvars,
+		0,
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
@@ -112,11 +106,9 @@ func (client *QueryClient) Stream(query string, bindvars map[string]interface{},
 	return client.server.StreamExecute(
 		client.ctx,
 		&client.target,
-		&proto.Query{
-			Sql:           query,
-			BindVariables: bindvars,
-			TransactionId: client.transactionID,
-		},
+		query,
+		bindvars,
+		0,
 		sendFunc,
 	)
 }
