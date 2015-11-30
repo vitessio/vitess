@@ -54,3 +54,7 @@ class GoRpcVtctlClient(vtctl_client.VtctlClient):
       t = datetime.datetime.utcfromtimestamp(e.reply['Time']['Seconds'])
       yield vtctl_client.Event(t, e.reply['Level'], e.reply['File'],
                                e.reply['Line'], e.reply['Value'])
+
+
+# Register the gorpc vtctl client.
+vtctl_client.register_conn_class('gorpc', GoRpcVtctlClient)
