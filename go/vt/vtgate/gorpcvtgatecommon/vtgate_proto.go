@@ -9,6 +9,7 @@ package gorpcvtgatecommon
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid/gorpccallerid"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -17,7 +18,7 @@ import (
 
 // Query represents a keyspace agnostic query request.
 type Query struct {
-	CallerID         *tproto.CallerID // only used by BSON
+	CallerID         *gorpccallerid.CallerID
 	Sql              string
 	BindVariables    map[string]interface{}
 	TabletType       topodatapb.TabletType
@@ -28,7 +29,7 @@ type Query struct {
 // QueryShard represents a query request for the
 // specified list of shards.
 type QueryShard struct {
-	CallerID         *tproto.CallerID // only used by BSON
+	CallerID         *gorpccallerid.CallerID
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
@@ -41,7 +42,7 @@ type QueryShard struct {
 // KeyspaceIdQuery represents a query request for the
 // specified list of keyspace IDs.
 type KeyspaceIdQuery struct {
-	CallerID         *tproto.CallerID // only used by BSON
+	CallerID         *gorpccallerid.CallerID
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
@@ -54,7 +55,7 @@ type KeyspaceIdQuery struct {
 // KeyRangeQuery represents a query request for the
 // specified list of keyranges.
 type KeyRangeQuery struct {
-	CallerID         *tproto.CallerID // only used by BSON
+	CallerID         *gorpccallerid.CallerID
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
@@ -72,7 +73,7 @@ type EntityId struct {
 
 // EntityIdsQuery represents a query request for the specified KeyspaceId map.
 type EntityIdsQuery struct {
-	CallerID          *tproto.CallerID // only used by BSON
+	CallerID          *gorpccallerid.CallerID
 	Sql               string
 	BindVariables     map[string]interface{}
 	Keyspace          string
@@ -102,7 +103,7 @@ type BoundShardQuery struct {
 // BatchQueryShard represents a batch query request
 // for the specified shards.
 type BatchQueryShard struct {
-	CallerID      *tproto.CallerID // only used by BSON
+	CallerID      *gorpccallerid.CallerID
 	Queries       []BoundShardQuery
 	TabletType    topodatapb.TabletType
 	AsTransaction bool
@@ -121,7 +122,7 @@ type BoundKeyspaceIdQuery struct {
 // KeyspaceIdBatchQuery represents a batch query request
 // for the specified keyspace IDs.
 type KeyspaceIdBatchQuery struct {
-	CallerID      *tproto.CallerID // only used by BSON
+	CallerID      *gorpccallerid.CallerID
 	Queries       []BoundKeyspaceIdQuery
 	TabletType    topodatapb.TabletType
 	AsTransaction bool
@@ -137,7 +138,7 @@ type QueryResultList struct {
 
 // SplitQueryRequest is a request to split a query into multiple parts
 type SplitQueryRequest struct {
-	CallerID    *tproto.CallerID // only used by BSON
+	CallerID    *gorpccallerid.CallerID
 	Keyspace    string
 	Query       tproto.BoundQuery
 	SplitColumn string
@@ -146,7 +147,7 @@ type SplitQueryRequest struct {
 
 // BeginRequest is the BSON implementation of the proto3 query.BeginRequest
 type BeginRequest struct {
-	CallerID *tproto.CallerID // only used by BSON
+	CallerID *gorpccallerid.CallerID
 }
 
 // BeginResponse is the BSON implementation of the proto3 vtgate.BeginResponse
@@ -159,7 +160,7 @@ type BeginResponse struct {
 
 // CommitRequest is the BSON implementation of the proto3 vtgate.CommitRequest
 type CommitRequest struct {
-	CallerID *tproto.CallerID // only used by BSON
+	CallerID *gorpccallerid.CallerID
 	Session  *vtgatepb.Session
 }
 
@@ -172,7 +173,7 @@ type CommitResponse struct {
 
 // RollbackRequest is the BSON implementation of the proto3 vtgate.RollbackRequest
 type RollbackRequest struct {
-	CallerID *tproto.CallerID // only used by BSON
+	CallerID *gorpccallerid.CallerID
 	Session  *vtgatepb.Session
 }
 

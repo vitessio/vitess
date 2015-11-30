@@ -52,17 +52,3 @@ type QuerySplit struct {
 	BindVariables map[string]interface{}
 	RowCount      int64
 }
-
-// CallerID is the BSON implementation of the proto3 vtrpc.CallerID
-type CallerID struct {
-	Principal    string
-	Component    string
-	Subcomponent string
-}
-
-//go:generate bsongen -file $GOFILE -type CallerID -o callerid_bson.go
-
-// VTGateCallerID is the BSON implementation of the proto3 query.VTGateCallerID
-type VTGateCallerID struct {
-	Username string
-}

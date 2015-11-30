@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/callerid/gorpccallerid"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -45,9 +46,9 @@ func dial(ctx context.Context, address string, timeout time.Duration) (vtgatecon
 	return &vtgateConn{rpcConn: rpcConn}, nil
 }
 
-func getEffectiveCallerID(ctx context.Context) *tproto.CallerID {
+func getEffectiveCallerID(ctx context.Context) *gorpccallerid.CallerID {
 	if ef := callerid.EffectiveCallerIDFromContext(ctx); ef != nil {
-		return &tproto.CallerID{
+		return &gorpccallerid.CallerID{
 			Principal:    ef.Principal,
 			Component:    ef.Component,
 			Subcomponent: ef.Subcomponent,
