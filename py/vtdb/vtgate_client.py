@@ -44,9 +44,9 @@ def connect(protocol, vtgate_addrs, timeout, *pargs, **kargs):
     ValueError: If the protocol is unknown, or vtgate_addrs are malformed.
   """
   if protocol not in vtgate_client_conn_classes:
-    raise ValueError('Unknown vtclient protocol', protocol)
-  conn = vtgate_client_conn_classes[protocol](vtgate_addrs, timeout,
-                                              *pargs, **kargs)
+    raise ValueError('Unknown vtgate_client protocol', protocol)
+  conn = vtgate_client_conn_classes[protocol](
+      vtgate_addrs, timeout, *pargs, **kargs)
   conn.dial()
   return conn
 

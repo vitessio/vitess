@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+"""Common import for all tests."""
+
 import base64
 import json
 import logging
@@ -19,9 +21,10 @@ import MySQLdb
 
 from vtproto import topodata_pb2
 
+from vtdb import vtgatev2  # pylint: disable=unused-import, registers 'gorpc' vtgate_client
 from vtdb import keyrange_constants
 
-from vtctl import gorpc_vtctl_client  # pylint: disable=unused-import, to register 'gorpc' vtctl_client.
+from vtctl import gorpc_vtctl_client  # pylint: disable=unused-import, registers 'gorpc' vtctl_client.
 from vtctl import vtctl_client
 
 import environment
