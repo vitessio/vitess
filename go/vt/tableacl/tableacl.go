@@ -279,7 +279,7 @@ func GetCurrentAclFactory() (acl.Factory, error) {
 func newACL(entries []string) (acl.ACL, error) {
 	f, err := GetCurrentAclFactory()
 	if err == nil {
-		return f.New(entries), nil
+		return f.New(entries)
 	}
 	return nil, err
 }
