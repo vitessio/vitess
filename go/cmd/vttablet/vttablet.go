@@ -83,7 +83,7 @@ func main() {
 	qsc.Register()
 
 	if *tableAclConfig != "" {
-		// Note: If multiple ACL plugins are registered, a default ACL factory has to be set with tableacl.SetDefault().
+		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if *enforceTableACLConfig {
 		log.Error("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
@@ -97,9 +97,9 @@ func main() {
 		},
 	)
 	if err != nil {
-		log.Errorf("Fail to initialize the TableACL module: %v", err)
+		log.Errorf("Fail to initialize Table ACL: %v", err)
 		if *enforceTableACLConfig {
-			log.Error("Exiting: the TableACL module was not successfully initialized but enforce-tableacl-config is set.")
+			log.Error("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
 			exit.Return(1)
 		}
 	}

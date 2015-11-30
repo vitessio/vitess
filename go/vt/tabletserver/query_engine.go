@@ -186,10 +186,10 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 	if config.TableAclExemptACL != "" {
 		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
 			if exemptACL, err := f.New([]string{config.TableAclExemptACL}); err == nil {
-				log.Infof("tableacl checks will be exempted for all members of the group %v", config.TableAclExemptACL)
+				log.Infof("Setting Table ACL exempt rule for %v", config.TableAclExemptACL)
 				qe.exemptACL = exemptACL
 			} else {
-				log.Infof("Cannot build exempt ACL for tableacl module: %v", err)
+				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
 			}
 		} else {
 			log.Infof("Cannot get current ACL Factory: %v", err)

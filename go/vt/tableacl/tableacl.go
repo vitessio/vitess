@@ -69,27 +69,26 @@ var aclCallback func()
 // Init initiates table ACLs.
 func Init(configFile string, aclCB func()) error {
 	aclCallback = aclCB
-	if configFile == "" {
-		return nil
-	}
-	log.Infof("Loading Table ACL from local file: %v", configFile)
-	data, err := ioutil.ReadFile(configFile)
-	if err != nil {
-		log.Infof("unable to read tableACL config file: %v", err)
-		return err
-	}
-	config := &tableaclpb.Config{}
-	// try to parse tableacl as proto file
-	if protoErr := proto.Unmarshal(data, config); protoErr != nil {
-		// try to parse tableacl as json file
-		if jsonErr := json.Unmarshal(data, config); jsonErr != nil {
-			log.Infof("unable to parse tableACL config file as either proto file(%v) or json file(%v)", protoErr, jsonErr)
-			return fmt.Errorf("Unable to unmarshal Table ACL data: %v", data)
+	if configFile != "" {
+		log.Infof("Loading Table ACL from local file: %v", configFile)
+		data, err := ioutil.ReadFile(configFile)
+		if err != nil {
+			log.Infof("unable to read tableACL config file: %v", err)
+			return err
 		}
-	}
-	if err = load(config); err != nil {
-		log.Infof("tableACL initialization error: %v", err)
-		return err
+		config := &tableaclpb.Config{}
+		if err := proto.Unmarshal(data, config); err != nil {
+			log.Infof("unable to parse tableACL config file as a protobuf file: %v", err)
+			// try to parse tableacl as json file
+			if jsonErr := json.Unmarshal(data, config); jsonErr != nil {
+				log.Infof("unable to parse tableACL config file as a json file: %v", jsonErr)
+				return fmt.Errorf("Unable to unmarshal Table ACL data: %v", data)
+			}
+		}
+		if err = load(config); err != nil {
+			log.Infof("tableACL initialization error: %v", err)
+			return err
+		}
 	}
 	return nil
 }
@@ -259,27 +258,23 @@ func SetDefaultACL(name string) {
 func GetCurrentAclFactory() (acl.Factory, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	if len(acls) == 0 {
-		return nil, errors.New("no AclFactory registered")
-	}
 	if defaultACL == "" {
 		if len(acls) == 1 {
 			for _, aclFactory := range acls {
 				return aclFactory, nil
 			}
 		}
-		return nil, errors.New("there is more than one AclFactory registered but no default has been given")
+		return nil, errors.New("there are more than one AclFactory registered but no default has been given")
 	}
 	if aclFactory, ok := acls[defaultACL]; ok {
 		return aclFactory, nil
 	}
-	return nil, fmt.Errorf("AclFactory for given default: %s is not found", defaultACL)
+	return nil, fmt.Errorf("aclFactory for given default: %s is not found", defaultACL)
 }
 
-func newACL(entries []string) (acl.ACL, error) {
-	f, err := GetCurrentAclFactory()
-	if err == nil {
-		return f.New(entries), nil
+func newACL(entries []string) (_ acl.ACL, err error) {
+	if f, err := GetCurrentAclFactory(); err == nil {
+		return f.New(entries)
 	}
 	return nil, err
 }
