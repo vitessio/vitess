@@ -97,9 +97,9 @@ func main() {
 		},
 	)
 	if err != nil {
-		log.Errorf("Fail to initialize the tableacl module: %v", err)
+		log.Errorf("Fail to initialize the TableACL module: %v", err)
 		if *enforceTableACLConfig {
-			log.Error("Exiting: the tableacl module was not successfully initialized but enforce-tableacl-config is set.")
+			log.Error("Exiting: the TableACL module was not successfully initialized but enforce-tableacl-config is set.")
 			exit.Return(1)
 		}
 	}
