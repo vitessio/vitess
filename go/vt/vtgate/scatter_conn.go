@@ -449,7 +449,6 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 		if keyRangeByShard[shard] != nil {
 			keyranges = []*topodatapb.KeyRange{keyRangeByShard[shard]}
 		}
-		keyranges := []*topodatapb.KeyRange{keyRangeByShard[shard]}
 		splits := make([]*pbg.SplitQueryResponse_Part, len(queries))
 		for i, query := range queries {
 			q, err := tproto.BindVariablesToProto3(query.Query.BindVariables)

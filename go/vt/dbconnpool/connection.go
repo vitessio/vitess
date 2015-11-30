@@ -92,6 +92,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	}
 
 	if len(qr.Rows) > 0 {
+		qr.RowsAffected = uint64(len(qr.Rows))
 		err = callback(qr)
 		if err != nil {
 			return err
