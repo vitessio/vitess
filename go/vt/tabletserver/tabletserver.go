@@ -757,37 +757,33 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	defer tsv.endRequest(false)
 	defer handleError(&err, nil, tsv.qe.queryServiceStats)
 
-	session := proto.Session{
-		TransactionId: transactionID,
-		SessionId:     sessionID,
-	}
 	if asTransaction {
-		session.TransactionId, err = tsv.Begin(ctx, target, sessionID)
+		transactionID, err = tsv.Begin(ctx, target, sessionID)
 		if err != nil {
 			return nil, err
 		}
 		// If transaction was not committed by the end, it means
 		// that there was an error, roll it back.
 		defer func() {
-			if session.TransactionId != 0 {
-				tsv.Rollback(ctx, target, session.SessionId, session.TransactionId)
+			if transactionID != 0 {
+				tsv.Rollback(ctx, target, sessionID, transactionID)
 			}
 		}()
 	}
 	results = make([]sqltypes.Result, 0, len(queries))
 	for _, bound := range queries {
-		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, session.SessionId, session.TransactionId)
+		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, sessionID, transactionID)
 		if err != nil {
 			return nil, err
 		}
 		results = append(results, *localReply)
 	}
 	if asTransaction {
-		if err = tsv.Commit(ctx, target, session.SessionId, session.TransactionId); err != nil {
-			session.TransactionId = 0
+		if err = tsv.Commit(ctx, target, sessionID, transactionID); err != nil {
+			transactionID = 0
 			return nil, err
 		}
-		session.TransactionId = 0
+		transactionID = 0
 	}
 	return results, nil
 }

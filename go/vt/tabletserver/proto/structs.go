@@ -11,16 +11,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 )
 
-// Query is the payload to Execute.
-type Query struct {
-	Sql           string
-	BindVariables map[string]interface{}
-	SessionId     int64
-	TransactionId int64
-}
-
-//go:generate bsongen -file $GOFILE -type Query -o query_bson.go
-
 // QueryAsString prints a readable version of query+bind variables,
 // and also truncates data if it's too long
 func QueryAsString(sql string, bindVariables map[string]interface{}) string {
@@ -55,14 +45,6 @@ type BoundQuery struct {
 }
 
 //go:generate bsongen -file $GOFILE -type BoundQuery -o bound_query_bson.go
-
-// Session is passed to all calls.
-type Session struct {
-	SessionId     int64
-	TransactionId int64
-}
-
-//go:generate bsongen -file $GOFILE -type Session -o session_bson.go
 
 // SplitQueryRequest represents a request to split a Query into queries that
 // each return a subset of the original query.

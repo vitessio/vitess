@@ -457,10 +457,6 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	session := proto.Session{
-		SessionId:     0,
-		TransactionId: 0,
-	}
 	if _, err = tsv.Begin(ctx, nil, 0); err == nil {
 		t.Fatalf("call TabletServer.Begin should fail because of an invalid session id: 0")
 	}
@@ -473,12 +469,12 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 		t.Fatalf("call TabletServer.Rollback should fail because of an invalid session id: 0")
 	}
 
-	if _, err := tsv.Execute(ctx, nil, "select * from test_table limit 1000", nil, session.SessionId, session.TransactionId); err == nil {
+	if _, err := tsv.Execute(ctx, nil, "select * from test_table limit 1000", nil, 0, 0); err == nil {
 		t.Fatalf("call TabletServer.Execute should fail because of an invalid session id: 0")
 	}
 
 	streamSendReply := func(*sqltypes.Result) error { return nil }
-	if err = tsv.StreamExecute(ctx, nil, "select * from test_table limit 1000", nil, session.SessionId, streamSendReply); err == nil {
+	if err = tsv.StreamExecute(ctx, nil, "select * from test_table limit 1000", nil, 0, streamSendReply); err == nil {
 		t.Fatalf("call TabletServer.StreamExecute should fail because of an invalid session id: 0")
 	}
 	if _, err = tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
@@ -486,7 +482,7 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 			Sql:           "noquery",
 			BindVariables: nil,
 		},
-	}, session.SessionId, false, 0); err == nil {
+	}, 0, false, 0); err == nil {
 		t.Fatalf("call TabletServer.ExecuteBatch should fail because of an invalid session id: 0")
 	}
 
@@ -496,7 +492,7 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 			BindVariables: nil,
 		},
 		SplitCount: 10,
-		SessionID:  session.SessionId,
+		SessionID:  0,
 	}
 
 	splitQueryReply := proto.SplitQueryResult{
@@ -573,18 +569,14 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	session := proto.Session{
-		SessionId:     tsv.sessionID,
-		TransactionId: 0,
-	}
-	session.TransactionId, err = tsv.Begin(ctx, nil, tsv.sessionID)
+	transactionID, err := tsv.Begin(ctx, nil, tsv.sessionID)
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed")
 	}
-	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, session.SessionId, session.TransactionId); err != nil {
+	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, tsv.sessionID, transactionID); err != nil {
 		t.Fatalf("failed to execute query: %s", executeSQL)
 	}
-	if err := tsv.Commit(ctx, nil, session.SessionId, session.TransactionId); err != nil {
+	if err := tsv.Commit(ctx, nil, tsv.sessionID, transactionID); err != nil {
 		t.Fatalf("call TabletServer.Commit failed")
 	}
 }
@@ -611,18 +603,14 @@ func TestTabletServerRollback(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	session := proto.Session{
-		SessionId:     tsv.sessionID,
-		TransactionId: 0,
-	}
-	session.TransactionId, err = tsv.Begin(ctx, nil, tsv.sessionID)
+	transactionID, err := tsv.Begin(ctx, nil, tsv.sessionID)
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed")
 	}
-	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, session.SessionId, session.TransactionId); err != nil {
+	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, tsv.sessionID, transactionID); err != nil {
 		t.Fatalf("failed to execute query: %s", executeSQL)
 	}
-	if err := tsv.Rollback(ctx, nil, session.SessionId, session.TransactionId); err != nil {
+	if err := tsv.Rollback(ctx, nil, tsv.sessionID, transactionID); err != nil {
 		t.Fatalf("call TabletServer.Rollback failed")
 	}
 }
