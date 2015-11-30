@@ -69,21 +69,16 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	reply := new(proto.QueryResultList)
 	bql, err := proto.Proto3ToBoundQueryList(request.Queries)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	if err := q.server.ExecuteBatch(ctx, request.Target, &proto.QueryList{
-		Queries:       bql,
-		SessionId:     request.SessionId,
-		AsTransaction: request.AsTransaction,
-		TransactionId: request.TransactionId,
-	}, reply); err != nil {
+	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.SessionId, request.AsTransaction, request.TransactionId)
+	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
 	return &querypb.ExecuteBatchResponse{
-		Results: sqltypes.ResultsToProto3(reply.List),
+		Results: sqltypes.ResultsToProto3(results),
 	}, nil
 }
 

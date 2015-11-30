@@ -37,7 +37,7 @@ type QueryService interface {
 	// Query execution
 	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error)
 	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error
-	ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error
+	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []proto.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
 
 	// Map reduce helper
 	SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
@@ -90,8 +90,8 @@ func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.T
 }
 
 // ExecuteBatch is part of QueryService interface
-func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
-	return fmt.Errorf("ErrorQueryService does not implement any method")
+func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []proto.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // SplitQuery is part of QueryService interface

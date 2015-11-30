@@ -742,29 +742,29 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // ExecuteBatch can be called for an existing transaction, or it can be called with
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
-func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
-	if len(queryList.Queries) == 0 {
-		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Empty query list")
+func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []proto.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) (results []sqltypes.Result, err error) {
+	if len(queries) == 0 {
+		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Empty query list")
 	}
-	if queryList.AsTransaction && queryList.TransactionId != 0 {
-		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
+	if asTransaction && transactionID != 0 {
+		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
 	}
 
-	allowShutdown := (queryList.TransactionId != 0)
-	if err = tsv.startRequest(target, queryList.SessionId, false, allowShutdown); err != nil {
-		return err
+	allowShutdown := (transactionID != 0)
+	if err = tsv.startRequest(target, sessionID, false, allowShutdown); err != nil {
+		return nil, err
 	}
 	defer tsv.endRequest(false)
 	defer handleError(&err, nil, tsv.qe.queryServiceStats)
 
 	session := proto.Session{
-		TransactionId: queryList.TransactionId,
-		SessionId:     queryList.SessionId,
+		TransactionId: transactionID,
+		SessionId:     sessionID,
 	}
-	if queryList.AsTransaction {
-		session.TransactionId, err = tsv.Begin(ctx, target, queryList.SessionId)
+	if asTransaction {
+		session.TransactionId, err = tsv.Begin(ctx, target, sessionID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// If transaction was not committed by the end, it means
 		// that there was an error, roll it back.
@@ -774,22 +774,22 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 			}
 		}()
 	}
-	reply.List = make([]sqltypes.Result, 0, len(queryList.Queries))
-	for _, bound := range queryList.Queries {
+	results = make([]sqltypes.Result, 0, len(queries))
+	for _, bound := range queries {
 		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, session.SessionId, session.TransactionId)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		reply.List = append(reply.List, *localReply)
+		results = append(results, *localReply)
 	}
-	if queryList.AsTransaction {
+	if asTransaction {
 		if err = tsv.Commit(ctx, target, session.SessionId, session.TransactionId); err != nil {
 			session.TransactionId = 0
-			return err
+			return nil, err
 		}
 		session.TransactionId = 0
 	}
-	return nil
+	return results, nil
 }
 
 // SplitQuery splits a BoundQuery into smaller queries that return a subset of rows from the original query.

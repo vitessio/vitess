@@ -224,19 +224,15 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tprot
 		q[i].Sql = query.Sql
 		q[i].BindVariables = bindVars
 	}
-	reply := &tproto.QueryResultList{}
-	if err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &querypb.Target{
+	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.QueryList{
-		Queries:       q,
-		AsTransaction: asTransaction,
-		TransactionId: transactionID,
-	}, reply); err != nil {
+	}, q, 0, asTransaction, transactionID)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return reply.List, nil
+	return results, nil
 }
 
 // StreamExecute is part of tabletconn.TabletConn

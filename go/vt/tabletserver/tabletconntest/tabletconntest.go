@@ -741,31 +741,30 @@ func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *Fa
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []proto.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	if f.hasError {
-		return testTabletError
+		return nil, testTabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if !reflect.DeepEqual(queryList.Queries, executeBatchQueries) {
-		f.t.Errorf("invalid ExecuteBatch.QueryList.Queries: got %v expected %v", queryList.Queries, executeBatchQueries)
+	if !reflect.DeepEqual(queries, executeBatchQueries) {
+		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, executeBatchQueries)
 	}
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "ExecuteBatch", target)
 	} else {
-		if queryList.SessionId != testSessionID {
-			f.t.Errorf("invalid ExecuteBatch.QueryList.SessionId: got %v expected %v", queryList.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("invalid ExecuteBatch.SessionID: got %v expected %v", sessionID, testSessionID)
 		}
 	}
-	if queryList.AsTransaction != testAsTransaction {
-		f.t.Errorf("invalid ExecuteBatch.QueryList.AsTransaction: got %v expected %v", queryList.AsTransaction, testAsTransaction)
+	if asTransaction != testAsTransaction {
+		f.t.Errorf("invalid ExecuteBatch.AsTransaction: got %v expected %v", asTransaction, testAsTransaction)
 	}
-	if queryList.TransactionId != executeBatchTransactionID {
-		f.t.Errorf("invalid ExecuteBatch.QueryList.TransactionId: got %v expected %v", queryList.TransactionId, executeBatchTransactionID)
+	if transactionID != executeBatchTransactionID {
+		f.t.Errorf("invalid ExecuteBatch.TransactionId: got %v expected %v", transactionID, executeBatchTransactionID)
 	}
-	*reply = executeBatchQueryResultList
-	return nil
+	return executeBatchQueryResultList, nil
 }
 
 var executeBatchQueries = []proto.BoundQuery{
@@ -785,42 +784,40 @@ var executeBatchQueries = []proto.BoundQuery{
 
 const executeBatchTransactionID int64 = 678
 
-var executeBatchQueryResultList = proto.QueryResultList{
-	List: []sqltypes.Result{
-		sqltypes.Result{
-			Fields: []*querypb.Field{
-				&querypb.Field{
-					Name: "field1",
-					Type: sqltypes.Int8,
-				},
-			},
-			RowsAffected: 1232,
-			InsertID:     712,
-			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
-					sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
-				},
-				[]sqltypes.Value{
-					sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
-				},
+var executeBatchQueryResultList = []sqltypes.Result{
+	sqltypes.Result{
+		Fields: []*querypb.Field{
+			&querypb.Field{
+				Name: "field1",
+				Type: sqltypes.Int8,
 			},
 		},
-		sqltypes.Result{
-			Fields: []*querypb.Field{
-				&querypb.Field{
-					Name: "field1",
-					Type: sqltypes.VarBinary,
-				},
+		RowsAffected: 1232,
+		InsertID:     712,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
 			},
-			RowsAffected: 12333,
-			InsertID:     74442,
-			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
-					sqltypes.MakeString([]byte("row1 value1")),
-				},
-				[]sqltypes.Value{
-					sqltypes.MakeString([]byte("row1 value2")),
-				},
+			[]sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
+			},
+		},
+	},
+	sqltypes.Result{
+		Fields: []*querypb.Field{
+			&querypb.Field{
+				Name: "field1",
+				Type: sqltypes.VarBinary,
+			},
+		},
+		RowsAffected: 12333,
+		InsertID:     74442,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeString([]byte("row1 value1")),
+			},
+			[]sqltypes.Value{
+				sqltypes.MakeString([]byte("row1 value2")),
 			},
 		},
 	},
@@ -832,8 +829,8 @@ func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
-	if !reflect.DeepEqual(qrl, executeBatchQueryResultList.List) {
-		t.Errorf("Unexpected result from Execute: got %v wanted %v", qrl, executeBatchQueryResultList.List)
+	if !reflect.DeepEqual(qrl, executeBatchQueryResultList) {
+		t.Errorf("Unexpected result from Execute: got %v wanted %v", qrl, executeBatchQueryResultList)
 	}
 }
 
@@ -857,8 +854,8 @@ func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
-	if !reflect.DeepEqual(qrl, executeBatchQueryResultList.List) {
-		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, executeBatchQueryResultList.List)
+	if !reflect.DeepEqual(qrl, executeBatchQueryResultList) {
+		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, executeBatchQueryResultList)
 	}
 }
 

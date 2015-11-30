@@ -114,17 +114,13 @@ func (client *QueryClient) Stream(query string, bindvars map[string]interface{},
 }
 
 // ExecuteBatch executes a batch of queries.
-func (client *QueryClient) ExecuteBatch(queries []proto.BoundQuery, asTransaction bool) (*proto.QueryResultList, error) {
-	var qr = &proto.QueryResultList{}
-	err := client.server.ExecuteBatch(
+func (client *QueryClient) ExecuteBatch(queries []proto.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
+	return client.server.ExecuteBatch(
 		client.ctx,
 		&client.target,
-		&proto.QueryList{
-			Queries:       queries,
-			AsTransaction: asTransaction,
-			TransactionId: client.transactionID,
-		},
-		qr,
+		queries,
+		0,
+		asTransaction,
+		client.transactionID,
 	)
-	return qr, err
 }
