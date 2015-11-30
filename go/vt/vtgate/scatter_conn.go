@@ -433,7 +433,7 @@ func (stc *ScatterConn) Rollback(ctx context.Context, session *SafeSession) (err
 // splits received from a shard, it construct a KeyRange queries by
 // appending that shard's keyrange to the splits. Aggregates all splits across
 // all shards in no specific order and returns.
-func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, keyRangeByShard map[string]*topodatapb.KeyRange, keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, keyRangeByShard map[string]*topodatapb.KeyRange, keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	tabletType := topodatapb.TabletType_RDONLY
 	actionFunc := func(shard string, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
@@ -445,13 +445,13 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 		keyranges := []*topodatapb.KeyRange{keyRangeByShard[shard]}
 		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
 		for i, query := range queries {
-			q, err := tproto.BindVariablesToProto3(query.Query.BindVariables)
+			q, err := tproto.BindVariablesToProto3(query.BindVariables)
 			if err != nil {
 				return err
 			}
 			splits[i] = &vtgatepb.SplitQueryResponse_Part{
 				Query: &querypb.BoundQuery{
-					Sql:           query.Query.Sql,
+					Sql:           query.Sql,
 					BindVariables: q,
 				},
 				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
@@ -487,7 +487,7 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 // KeyRange queries by appending that shard's name to the
 // splits. Aggregates all splits across all shards in no specific
 // order and returns.
-func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, shards []string, keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, shards []string, keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	tabletType := topodatapb.TabletType_RDONLY
 	actionFunc := func(shard string, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
@@ -499,13 +499,13 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 		shards := []string{shard}
 		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
 		for i, query := range queries {
-			q, err := tproto.BindVariablesToProto3(query.Query.BindVariables)
+			q, err := tproto.BindVariablesToProto3(query.BindVariables)
 			if err != nil {
 				return err
 			}
 			splits[i] = &vtgatepb.SplitQueryResponse_Part{
 				Query: &querypb.BoundQuery{
-					Sql:           query.Query.Sql,
+					Sql:           query.Sql,
 					BindVariables: q,
 				},
 				ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{

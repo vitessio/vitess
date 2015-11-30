@@ -263,7 +263,7 @@ func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
 }
 
-func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		bv, err := tproto.BindVariablesToProto3(bindVariables)
 		if err != nil {

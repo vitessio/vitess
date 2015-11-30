@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -37,16 +36,16 @@ type destinationTabletServer struct {
 	excludedTable string
 }
 
-func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
-	if strings.Contains(query.Sql, sq.excludedTable) {
-		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
+func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
+	if strings.Contains(sql, sq.excludedTable) {
+		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
 
-	if hasKeyspace := strings.Contains(query.Sql, "WHERE keyspace_id"); hasKeyspace == true {
-		sq.t.Errorf("Sql query on destination should not contain a keyspace_id WHERE clause; query received: %v", query.Sql)
+	if hasKeyspace := strings.Contains(sql, "WHERE keyspace_id"); hasKeyspace == true {
+		sq.t.Errorf("Sql query on destination should not contain a keyspace_id WHERE clause; query received: %v", sql)
 	}
 
-	sq.t.Logf("destinationTabletServer: got query: %v", *query)
+	sq.t.Logf("destinationTabletServer: got query: %v", sql)
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
@@ -93,19 +92,19 @@ type sourceTabletServer struct {
 	excludedTable string
 }
 
-func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
-	if strings.Contains(query.Sql, sq.excludedTable) {
-		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
+func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
+	if strings.Contains(sql, sq.excludedTable) {
+		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
 
 	// we test for a keyspace_id where clause, except for on views.
-	if !strings.Contains(query.Sql, "view") {
-		if hasKeyspace := strings.Contains(query.Sql, "WHERE keyspace_id < 0x4000000000000000"); hasKeyspace != true {
-			sq.t.Errorf("Sql query on source should contain a keyspace_id WHERE clause; query received: %v", query.Sql)
+	if !strings.Contains(sql, "view") {
+		if hasKeyspace := strings.Contains(sql, "WHERE keyspace_id < 0x4000000000000000"); hasKeyspace != true {
+			sq.t.Errorf("Sql query on source should contain a keyspace_id WHERE clause; query received: %v", sql)
 		}
 	}
 
-	sq.t.Logf("sourceTabletServer: got query: %v", *query)
+	sq.t.Logf("sourceTabletServer: got query: %v", sql)
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{

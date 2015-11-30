@@ -269,13 +269,6 @@ func Proto3ToBindVariables(bv map[string]*querypb.BindVariable) (map[string]inte
 	return result, nil
 }
 
-// Proto3ToQueryResultList converts a proto3 QueryResult to an internal data structure.
-func Proto3ToQueryResultList(results []*querypb.QueryResult) *QueryResultList {
-	return &QueryResultList{
-		List: sqltypes.Proto3ToResults(results),
-	}
-}
-
 // QueryResultListToProto3 temporarily resurrected.
 func QueryResultListToProto3(results []sqltypes.Result) []*querypb.QueryResult {
 	if len(results) == 0 {
@@ -295,13 +288,14 @@ func Proto3ToQuerySplits(queries []*querypb.QuerySplit) ([]QuerySplit, error) {
 	}
 	result := make([]QuerySplit, len(queries))
 	for i, qs := range queries {
-		res, err := Proto3ToBoundQuery(qs.Query)
+		bv, err := Proto3ToBindVariables(qs.Query.BindVariables)
 		if err != nil {
 			return nil, err
 		}
 		result[i] = QuerySplit{
-			Query:    *res,
-			RowCount: qs.RowCount,
+			Sql:           qs.Query.Sql,
+			BindVariables: bv,
+			RowCount:      qs.RowCount,
 		}
 	}
 	return result, nil
@@ -314,7 +308,7 @@ func QuerySplitsToProto3(queries []QuerySplit) ([]*querypb.QuerySplit, error) {
 	}
 	result := make([]*querypb.QuerySplit, len(queries))
 	for i, qs := range queries {
-		q, err := BoundQueryToProto3(qs.Query.Sql, qs.Query.BindVariables)
+		q, err := BoundQueryToProto3(qs.Sql, qs.BindVariables)
 		if err != nil {
 			return nil, err
 		}

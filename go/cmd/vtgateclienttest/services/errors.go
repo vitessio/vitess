@@ -249,7 +249,7 @@ func (c *errorClient) Rollback(ctx context.Context, session *vtgatepb.Session) e
 	return c.fallbackClient.Rollback(ctx, session)
 }
 
-func (c *errorClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+func (c *errorClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	if err := requestToError(sql); err != nil {
 		return nil, err
 	}

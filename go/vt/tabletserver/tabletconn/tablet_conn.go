@@ -116,7 +116,7 @@ type TabletConn interface {
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error)
+	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error)
 
 	// StreamHealth streams StreamHealthResponse to the client
 	StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, ErrFunc, error)

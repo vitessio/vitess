@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 
@@ -1011,16 +1010,11 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 }
 
 func newTransaction(tsv *TabletServer) int64 {
-	session := proto.Session{
-		SessionId:     tsv.sessionID,
-		TransactionId: 0,
-	}
-	txInfo := proto.TransactionInfo{TransactionId: 0}
-	err := tsv.Begin(context.Background(), &tsv.target, &session, &txInfo)
+	transactionID, err := tsv.Begin(context.Background(), &tsv.target, tsv.sessionID)
 	if err != nil {
 		panic(fmt.Errorf("failed to start a transaction: %v", err))
 	}
-	return txInfo.TransactionId
+	return transactionID
 }
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
@@ -1037,11 +1031,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 }
 
 func testCommitHelper(t *testing.T, tsv *TabletServer, queryExecutor *QueryExecutor) {
-	session := proto.Session{
-		SessionId:     tsv.sessionID,
-		TransactionId: queryExecutor.transactionID,
-	}
-	if err := tsv.Commit(queryExecutor.ctx, &tsv.target, &session); err != nil {
+	if err := tsv.Commit(queryExecutor.ctx, &tsv.target, tsv.sessionID, queryExecutor.transactionID); err != nil {
 		t.Fatalf("failed to commit transaction: %d, err: %v", queryExecutor.transactionID, err)
 	}
 }

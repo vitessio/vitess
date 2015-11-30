@@ -282,7 +282,7 @@ func (conn *gRPCQueryClient) Rollback2(ctx context.Context, transactionID int64)
 }
 
 // SplitQuery is the stub for TabletServer.SplitQuery RPC
-func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
+func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) (queries []tproto.QuerySplit, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -300,7 +300,7 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Query:             q,
 		SplitColumn:       splitColumn,
-		SplitCount:        int64(splitCount),
+		SplitCount:        splitCount,
 		SessionId:         conn.sessionID,
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)

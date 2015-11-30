@@ -443,7 +443,7 @@ func (conn *vtgateConn) Rollback2(ctx context.Context, session interface{}) erro
 	return conn.Rollback(ctx, session)
 }
 
-func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	q, err := tproto.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, err
@@ -454,7 +454,7 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query s
 		Keyspace:    keyspace,
 		Query:       q,
 		SplitColumn: splitColumn,
-		SplitCount:  int64(splitCount),
+		SplitCount:  splitCount,
 	}
 	response, err := conn.c.SplitQuery(ctx, request)
 	if err != nil {

@@ -218,7 +218,7 @@ func (ftc *fakeTabletConn) EndPoint() *topodatapb.EndPoint {
 }
 
 // SplitQuery is part of the TabletConn interface
-func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
+func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 

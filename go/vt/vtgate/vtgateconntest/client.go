@@ -604,11 +604,11 @@ type querySplitQuery struct {
 	SQL           string
 	BindVariables map[string]interface{}
 	SplitColumn   string
-	SplitCount    int
+	SplitCount    int64
 }
 
 // SplitQuery is part of the VTGateService interface
-func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	if f.hasError {
 		return nil, errTestVtGateError
 	}

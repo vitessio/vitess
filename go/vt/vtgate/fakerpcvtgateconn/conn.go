@@ -58,7 +58,7 @@ type querySplitQuery struct {
 	SQL           string
 	BindVariables map[string]interface{}
 	SplitColumn   string
-	SplitCount    int
+	SplitCount    int64
 }
 
 type splitQueryResponse struct {
@@ -138,7 +138,7 @@ func (conn *FakeVTGateConn) AddSplitQuery(
 	sql string,
 	bindVariables map[string]interface{},
 	splitColumn string,
-	splitCount int,
+	splitCount int64,
 	expectedResult []*vtgatepb.SplitQueryResponse_Part) {
 	reply := make([]*vtgatepb.SplitQueryResponse_Part, splitCount)
 	copy(reply, expectedResult)
@@ -349,7 +349,7 @@ func (conn *FakeVTGateConn) Rollback2(ctx context.Context, session interface{}) 
 }
 
 // SplitQuery please see vtgateconn.Impl.SplitQuery
-func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	response, ok := conn.splitQueryMap[getSplitQueryKey(keyspace, query, splitColumn, splitCount)]
 	if !ok {
 		return nil, fmt.Errorf(
@@ -375,7 +375,7 @@ func getShardQueryKey(sql string, shards []string) string {
 	return fmt.Sprintf("%s-%s", sql, strings.Join(shards, ":"))
 }
 
-func getSplitQueryKey(keyspace string, query string, splitColumn string, splitCount int) string {
+func getSplitQueryKey(keyspace string, query string, splitColumn string, splitCount int64) string {
 	return fmt.Sprintf("%s:%v:%v:%d", keyspace, query, splitColumn, splitCount)
 }
 

@@ -599,12 +599,12 @@ func (vtg *VTGate) Rollback(ctx context.Context, session *vtgatepb.Session) erro
 // original query. Number of sub queries will be a multiple of N that is
 // greater than or equal to SplitQueryRequest.SplitCount, where N is the
 // number of shards.
-func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	keyspace, srvKeyspace, shards, err := getKeyspaceShards(ctx, vtg.resolver.toposerv, vtg.resolver.cell, keyspace, topodatapb.TabletType_RDONLY)
 	if err != nil {
 		return nil, err
 	}
-	perShardSplitCount := int(math.Ceil(float64(splitCount) / float64(len(shards))))
+	perShardSplitCount := int64(math.Ceil(float64(splitCount) / float64(len(shards))))
 	if srvKeyspace.ShardingColumnName != "" {
 		// we are using range-based sharding, so the result
 		// will be a list of Splits with KeyRange clauses

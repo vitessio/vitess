@@ -13,6 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/callerid/gorpccallerid"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -61,7 +62,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *gorpcvtgatecommon.Query
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	var vtgErr error
@@ -82,7 +83,7 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, request *gorpcvtgatecommon.
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	var vtgErr error
@@ -105,7 +106,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *gorpcvtgatec
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	var vtgErr error
@@ -128,7 +129,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *gorpcvtgatecom
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	var vtgErr error
@@ -151,7 +152,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *gorpcvtgatecom
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	var vtgErr error
@@ -175,7 +176,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, request *gorpcvtgateco
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	qs, err := gorpcvtgatecommon.BoundShardQueriesToProto(request.Queries)
@@ -200,7 +201,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *gorpcvt
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	qs, err := gorpcvtgatecommon.BoundKeyspaceIdQueriesToProto(request.Queries)
@@ -222,7 +223,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *gorpcvt
 func (vtg *VTGate) StreamExecute(ctx context.Context, request *gorpcvtgatecommon.Query, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	return vtg.server.StreamExecute(ctx,
 		request.Sql,
@@ -239,7 +240,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, request *gorpcvtgatecommon
 func (vtg *VTGate) StreamExecute2(ctx context.Context, request *gorpcvtgatecommon.Query, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	vtgErr := vtg.server.StreamExecute(ctx,
 		request.Sql,
@@ -264,7 +265,7 @@ func (vtg *VTGate) StreamExecute2(ctx context.Context, request *gorpcvtgatecommo
 func (vtg *VTGate) StreamExecuteShard(ctx context.Context, request *gorpcvtgatecommon.QueryShard, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	return vtg.server.StreamExecuteShards(ctx,
 		request.Sql,
@@ -283,7 +284,7 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, request *gorpcvtgatec
 func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *gorpcvtgatecommon.QueryShard, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	vtgErr := vtg.server.StreamExecuteShards(ctx,
 		request.Sql,
@@ -311,7 +312,7 @@ func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *gorpcvtgate
 func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *gorpcvtgatecommon.KeyspaceIdQuery, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	return vtg.server.StreamExecuteKeyspaceIds(ctx,
 		request.Sql,
@@ -331,7 +332,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *gorpcv
 func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *gorpcvtgatecommon.KeyspaceIdQuery, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	vtgErr := vtg.server.StreamExecuteKeyspaceIds(ctx,
 		request.Sql,
@@ -359,7 +360,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *gorpc
 func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *gorpcvtgatecommon.KeyRangeQuery, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	return vtg.server.StreamExecuteKeyRanges(ctx,
 		request.Sql,
@@ -379,7 +380,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *gorpcvtg
 func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *gorpcvtgatecommon.KeyRangeQuery, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	vtgErr := vtg.server.StreamExecuteKeyRanges(ctx,
 		request.Sql,
@@ -437,7 +438,7 @@ func (vtg *VTGate) Begin2(ctx context.Context, request *gorpcvtgatecommon.BeginR
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	// Don't pass in a nil pointer
 	session, vtgErr := vtg.server.Begin(ctx)
@@ -452,7 +453,7 @@ func (vtg *VTGate) Commit2(ctx context.Context, request *gorpcvtgatecommon.Commi
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	vtgErr := vtg.server.Commit(ctx, request.Session)
@@ -466,7 +467,7 @@ func (vtg *VTGate) Rollback2(ctx context.Context, request *gorpcvtgatecommon.Rol
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	sessionFromRPC(request.Session)
 	vtgErr := vtg.server.Rollback(ctx, request.Session)
@@ -480,7 +481,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *gorpcvtgatecommon.Sp
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
 	ctx = callerid.NewContext(ctx,
-		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		gorpccallerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
 	var vtgErr error
 	reply.Splits, vtgErr = vtg.server.SplitQuery(ctx,

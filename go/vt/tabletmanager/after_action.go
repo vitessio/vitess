@@ -90,7 +90,7 @@ func (agent *ActionAgent) broadcastHealth() {
 	if !terTime.IsZero() {
 		ts = terTime.Unix()
 	}
-	defer func() {
+	go func() {
 		agent.QueryServiceControl.BroadcastHealth(ts, stats)
 	}()
 }
