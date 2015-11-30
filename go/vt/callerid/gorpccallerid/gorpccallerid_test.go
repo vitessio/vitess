@@ -1,19 +1,19 @@
-package callerid
+package gorpccallerid
 
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/callerid"
 )
 
 func TestGoRPCCallerID(t *testing.T) {
-	im := proto.VTGateCallerID{
-		Username: FakeUsername,
+	im := VTGateCallerID{
+		Username: callerid.FakeUsername,
 	}
-	ef := proto.CallerID{
-		Principal:    FakePrincipal,
-		Component:    FakeComponent,
-		Subcomponent: FakeSubcomponent,
+	ef := CallerID{
+		Principal:    callerid.FakePrincipal,
+		Component:    callerid.FakeComponent,
+		Subcomponent: callerid.FakeSubcomponent,
 	}
 	// Test nil cases
 	if n := GoRPCImmediateCallerID(nil); n != nil {
@@ -22,5 +22,5 @@ func TestGoRPCCallerID(t *testing.T) {
 	if n := GoRPCEffectiveCallerID(nil); n != nil {
 		t.Errorf("Expect nil from GoRPCEffectiveCallerID(nil), but got %v", n)
 	}
-	Tests(t, GoRPCImmediateCallerID(&im), GoRPCEffectiveCallerID(&ef))
+	callerid.Tests(t, GoRPCImmediateCallerID(&im), GoRPCEffectiveCallerID(&ef))
 }

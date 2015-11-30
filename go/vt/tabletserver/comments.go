@@ -4,10 +4,6 @@
 
 package tabletserver
 
-import (
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
-)
-
 const trailingComment = "_trailingComment"
 
 type matchtracker struct {
@@ -18,16 +14,17 @@ type matchtracker struct {
 
 // stripTrailing strips out trailing comments if any and puts them in a bind variable.
 // This code is a hack. Will need cleaning if it evolves beyond this.
-func stripTrailing(query *proto.Query) {
+func stripTrailing(sql string, bindVariables map[string]interface{}) string {
 	tracker := matchtracker{
-		query: query.Sql,
-		index: len(query.Sql),
+		query: sql,
+		index: len(sql),
 	}
 	pos := tracker.matchComments()
 	if pos >= 0 {
-		query.Sql = tracker.query[:pos]
-		query.BindVariables[trailingComment] = tracker.query[pos:]
+		bindVariables[trailingComment] = tracker.query[pos:]
+		return tracker.query[:pos]
 	}
+	return sql
 }
 
 // restoreTrailing undoes work done by stripTrailing

@@ -264,7 +264,7 @@ func (fc *fakeConn) Rollback2(ctx context.Context, transactionID int64) error {
 	return fc.Rollback(ctx, transactionID)
 }
 
-func (fc *fakeConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
+func (fc *fakeConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 

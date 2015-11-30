@@ -197,16 +197,12 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 	if err != nil {
 		return nil, err
 	}
-	reply := &sqltypes.Result{}
-	if err := itc.tablet.qsc.QueryService().Execute(ctx, &querypb.Target{
+	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Query{
-		Sql:           query,
-		BindVariables: bindVars,
-		TransactionId: transactionID,
-	}, reply); err != nil {
+	}, query, bindVars, 0, transactionID)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
 	return reply, nil
@@ -228,19 +224,15 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tprot
 		q[i].Sql = query.Sql
 		q[i].BindVariables = bindVars
 	}
-	reply := &tproto.QueryResultList{}
-	if err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &querypb.Target{
+	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.QueryList{
-		Queries:       q,
-		AsTransaction: asTransaction,
-		TransactionId: transactionID,
-	}, reply); err != nil {
+	}, q, 0, asTransaction, transactionID)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return reply.List, nil
+	return results, nil
 }
 
 // StreamExecute is part of tabletconn.TabletConn
@@ -262,11 +254,7 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 			Keyspace:   itc.tablet.keyspace,
 			Shard:      itc.tablet.shard,
 			TabletType: itc.tablet.tabletType,
-		}, &tproto.Query{
-			Sql:           query,
-			BindVariables: bindVars,
-			TransactionId: transactionID,
-		}, func(reply *sqltypes.Result) error {
+		}, query, bindVars, 0, func(reply *sqltypes.Result) error {
 			// We need to deep-copy the reply before returning,
 			// because the underlying buffers are reused.
 			result <- reply.Copy()
@@ -284,16 +272,16 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 }
 
 // Begin is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, err error) {
-	result := &tproto.TransactionInfo{}
-	if err := itc.tablet.qsc.QueryService().Begin(ctx, &querypb.Target{
+func (itc *internalTabletConn) Begin(ctx context.Context) (int64, error) {
+	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{}, result); err != nil {
+	}, 0)
+	if err != nil {
 		return 0, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return result.TransactionId, nil
+	return transactionID, nil
 }
 
 // Commit is part of tabletconn.TabletConn
@@ -302,9 +290,7 @@ func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) 
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{
-		TransactionId: transactionID,
-	})
+	}, 0, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
@@ -314,9 +300,7 @@ func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{
-		TransactionId: transactionID,
-	})
+	}, 0, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
@@ -365,20 +349,16 @@ func (itc *internalTabletConn) EndPoint() *topodatapb.EndPoint {
 }
 
 // SplitQuery is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
-	reply := &tproto.SplitQueryResult{}
-	if err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
+func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error) {
+	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.SplitQueryRequest{
-		Query:       query,
-		SplitColumn: splitColumn,
-		SplitCount:  splitCount,
-	}, reply); err != nil {
+	}, query.Sql, query.BindVariables, splitColumn, splitCount, 0)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return reply.Queries, nil
+	return splits, nil
 }
 
 // StreamHealth is part of tabletconn.TabletConn

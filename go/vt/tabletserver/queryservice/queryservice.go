@@ -18,21 +18,30 @@ import (
 
 // QueryService is the interface implemented by the tablet's query service.
 type QueryService interface {
-	// establish a session to survive restart
-	GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error
+	// GetSessionId establishes a session to guarantee the current
+	// query service state doesn't change.
+	// This is begin deprecated, replaced by the Target structure.
+	GetSessionId(keyspace, shard string) (int64, error)
 
 	// Transaction management
-	Begin(ctx context.Context, target *querypb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error
-	Commit(ctx context.Context, target *querypb.Target, session *proto.Session) error
-	Rollback(ctx context.Context, target *querypb.Target, session *proto.Session) error
+
+	// Begin returns the transaction id to use for further operations
+	Begin(ctx context.Context, target *querypb.Target, sessionID int64) (int64, error)
+
+	// Commit commits the current transaction
+	Commit(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error
+
+	// Rollback aborts the current transaction
+	Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error
 
 	// Query execution
-	Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) error
-	StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error
-	ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error
 
-	// Map reduce helper
-	SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
+	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error)
+	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error
+	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []proto.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error)
+
+	// SplitQuery is a map reduce helper function
+	SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]proto.QuerySplit, error)
 
 	// StreamHealthRegister registers a listener for StreamHealth
 	StreamHealthRegister(chan<- *querypb.StreamHealthResponse) (int, error)
@@ -52,43 +61,43 @@ type ErrorQueryService struct {
 }
 
 // GetSessionId is part of QueryService interface
-func (e *ErrorQueryService) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	return e.GetSessionIdError
+func (e *ErrorQueryService) GetSessionId(keyspace, shard string) (int64, error) {
+	return 0, e.GetSessionIdError
 }
 
 // Begin is part of QueryService interface
-func (e *ErrorQueryService) Begin(ctx context.Context, target *querypb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
-	return fmt.Errorf("ErrorQueryService does not implement any method")
+func (e *ErrorQueryService) Begin(ctx context.Context, target *querypb.Target, sessionID int64) (int64, error) {
+	return 0, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Commit is part of QueryService interface
-func (e *ErrorQueryService) Commit(ctx context.Context, target *querypb.Target, session *proto.Session) error {
+func (e *ErrorQueryService) Commit(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Rollback is part of QueryService interface
-func (e *ErrorQueryService) Rollback(ctx context.Context, target *querypb.Target, session *proto.Session) error {
+func (e *ErrorQueryService) Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Execute is part of QueryService interface
-func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) error {
-	return fmt.Errorf("ErrorQueryService does not implement any method")
+func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error) {
+	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // StreamExecute is part of QueryService interface
-func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error {
+func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // ExecuteBatch is part of QueryService interface
-func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
-	return fmt.Errorf("ErrorQueryService does not implement any method")
+func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []proto.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // SplitQuery is part of QueryService interface
-func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
-	return fmt.Errorf("ErrorQueryService does not implement any method")
+func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]proto.QuerySplit, error) {
+	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // StreamHealthRegister is part of QueryService interface

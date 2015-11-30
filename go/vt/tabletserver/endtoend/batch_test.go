@@ -63,9 +63,7 @@ func TestBatchRead(t *testing.T) {
 			},
 		},
 	}
-	want := &proto.QueryResultList{
-		List: []sqltypes.Result{qr1, qr2},
-	}
+	want := []sqltypes.Result{qr1, qr2}
 
 	qrl, err := client.ExecuteBatch(queries, false)
 	if err != nil {
@@ -102,8 +100,8 @@ func TestBatchTransaction(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
-		t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+	if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
+		t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 	}
 
 	// Not in transaction, AsTransaction true
@@ -112,8 +110,8 @@ func TestBatchTransaction(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
-		t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+	if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
+		t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 	}
 
 	// In transaction, AsTransaction false
@@ -129,8 +127,8 @@ func TestBatchTransaction(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
-			t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+		if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
+			t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 		}
 	}()
 
