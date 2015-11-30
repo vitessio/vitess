@@ -581,14 +581,8 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed")
 	}
-	query := proto.Query{
-		Sql:           executeSQL,
-		BindVariables: nil,
-		SessionId:     session.SessionId,
-		TransactionId: session.TransactionId,
-	}
 	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, session.SessionId, session.TransactionId); err != nil {
-		t.Fatalf("failed to execute query: %s", query.Sql)
+		t.Fatalf("failed to execute query: %s", executeSQL)
 	}
 	if err := tsv.Commit(ctx, nil, session.SessionId, session.TransactionId); err != nil {
 		t.Fatalf("call TabletServer.Commit failed")
@@ -625,14 +619,8 @@ func TestTabletServerRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed")
 	}
-	query := proto.Query{
-		Sql:           executeSQL,
-		BindVariables: nil,
-		SessionId:     session.SessionId,
-		TransactionId: session.TransactionId,
-	}
 	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, session.SessionId, session.TransactionId); err != nil {
-		t.Fatalf("failed to execute query: %s", query.Sql)
+		t.Fatalf("failed to execute query: %s", executeSQL)
 	}
 	if err := tsv.Rollback(ctx, nil, session.SessionId, session.TransactionId); err != nil {
 		t.Fatalf("call TabletServer.Rollback failed")
@@ -1133,7 +1121,7 @@ func TestHandleExecUnknownError(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleExecError("select * from test_table", nil, 0, 0, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
 	panic("unknown exec error")
 }
 
@@ -1150,7 +1138,7 @@ func TestHandleExecTabletError(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleExecError("select * from test_table", nil, 0, 0, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
 	panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
@@ -1168,7 +1156,7 @@ func TestTerseErrors1(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError("select * from test_table", nil, 0, 0, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
 	panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
@@ -1186,7 +1174,7 @@ func TestTerseErrors2(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError("select * from test_table", map[string]interface{}{"a": 1}, 0, 0, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", map[string]interface{}{"a": 1}, &err, logStats)
 	panic(&TabletError{
 		ErrorType: ErrFail,
 		Message:   "msg",
@@ -1208,7 +1196,7 @@ func TestTerseErrors3(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError("select * from test_table", nil, 0, 0, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
 	panic(&TabletError{
 		ErrorType: ErrFail,
 		Message:   "msg",

@@ -612,16 +612,16 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, s
 
 // handleExecError handles panics during query execution and sets
 // the supplied error return value.
-func (tsv *TabletServer) handleExecError(sql string, bindVariables map[string]interface{}, sessionID, transactionID int64, err *error, logStats *LogStats) {
+func (tsv *TabletServer) handleExecError(sql string, bindVariables map[string]interface{}, err *error, logStats *LogStats) {
 	if x := recover(); x != nil {
-		*err = tsv.handleExecErrorNoPanic(sql, bindVariables, sessionID, transactionID, x, logStats)
+		*err = tsv.handleExecErrorNoPanic(sql, bindVariables, x, logStats)
 	}
 	if logStats != nil {
 		logStats.Send()
 	}
 }
 
-func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[string]interface{}, sessionID, transactionID int64, err interface{}, logStats *LogStats) error {
+func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[string]interface{}, err interface{}, logStats *LogStats) error {
 	var terr *TabletError
 	defer func() {
 		if logStats != nil {
@@ -630,9 +630,9 @@ func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[st
 	}()
 	terr, ok := err.(*TabletError)
 	if !ok {
-		log.Errorf("Uncaught panic for sql:%v bindVariables:%v sessionID:%v transactionID:%v:\n%v\n%s", sql, bindVariables, sessionID, transactionID, err, tb.Stack(4))
+		log.Errorf("Uncaught panic for %v:\n%v\n%s", proto.QueryAsString(sql, bindVariables), err, tb.Stack(4))
 		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-		terr = NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for sql:%v bindVariables:%v sessionID:%v transactionID:%v", err, sql, bindVariables, sessionID, transactionID)
+		terr = NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, proto.QueryAsString(sql, bindVariables))
 		return terr
 	}
 	var myError error
@@ -668,14 +668,14 @@ func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[st
 			logMethod = log.Infof
 		}
 	}
-	logMethod("%v: sql:%v bindVariables:%v sessionID:%v transactionID:%v", terr, sql, bindVariables, sessionID, transactionID)
+	logMethod("%v: %v", terr, proto.QueryAsString(sql, bindVariables))
 	return myError
 }
 
 // Execute executes the query and returns the result as response.
 func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (result *sqltypes.Result, err error) {
 	logStats := newLogStats("Execute", ctx)
-	defer tsv.handleExecError(sql, bindVariables, sessionID, transactionID, &err, logStats)
+	defer tsv.handleExecError(sql, bindVariables, &err, logStats)
 
 	allowShutdown := (transactionID != 0)
 	if err = tsv.startRequest(target, sessionID, false, allowShutdown); err != nil {
@@ -702,7 +702,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 	}
 	result, err = qre.Execute()
 	if err != nil {
-		return nil, tsv.handleExecErrorNoPanic(sql, bindVariables, sessionID, transactionID, err, logStats)
+		return nil, tsv.handleExecErrorNoPanic(sql, bindVariables, err, logStats)
 	}
 	return result, nil
 }
@@ -712,7 +712,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 // The subsequent QueryResult will have Rows set (and Fields nil).
 func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) (err error) {
 	logStats := newLogStats("StreamExecute", ctx)
-	defer tsv.handleExecError(sql, bindVariables, sessionID, 0, &err, logStats)
+	defer tsv.handleExecError(sql, bindVariables, &err, logStats)
 
 	if err = tsv.startRequest(target, sessionID, false, false); err != nil {
 		return err
@@ -733,7 +733,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 	}
 	err = qre.Stream(sendReply)
 	if err != nil {
-		return tsv.handleExecErrorNoPanic(sql, bindVariables, sessionID, 0, err, logStats)
+		return tsv.handleExecErrorNoPanic(sql, bindVariables, err, logStats)
 	}
 	return nil
 }

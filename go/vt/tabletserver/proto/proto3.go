@@ -269,13 +269,6 @@ func Proto3ToBindVariables(bv map[string]*querypb.BindVariable) (map[string]inte
 	return result, nil
 }
 
-// Proto3ToQueryResultList converts a proto3 QueryResult to an internal data structure.
-func Proto3ToQueryResultList(results []*querypb.QueryResult) *QueryResultList {
-	return &QueryResultList{
-		List: sqltypes.Proto3ToResults(results),
-	}
-}
-
 // QueryResultListToProto3 temporarily resurrected.
 func QueryResultListToProto3(results []sqltypes.Result) []*querypb.QueryResult {
 	if len(results) == 0 {
