@@ -15,6 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
 // The default values used by these flags cannot be taken from wrangler and
@@ -33,16 +35,16 @@ func main() {
 	err := vtctlclient.RunCommandAndWait(
 		context.Background(), *server, flag.Args(),
 		*dialTimeout, *actionTimeout,
-		func(e *logutil.LoggerEvent) {
+		func(e *logutilpb.Event) {
 			switch e.Level {
-			case logutil.LOGGER_INFO:
-				log.Info(e.String())
-			case logutil.LOGGER_WARNING:
-				log.Warning(e.String())
-			case logutil.LOGGER_ERROR:
-				log.Error(e.String())
-			case logutil.LOGGER_CONSOLE:
-				fmt.Print(e.String())
+			case logutilpb.Level_INFO:
+				log.Info(logutil.EventString(e))
+			case logutilpb.Level_WARNING:
+				log.Warning(logutil.EventString(e))
+			case logutilpb.Level_ERROR:
+				log.Error(logutil.EventString(e))
+			case logutilpb.Level_CONSOLE:
+				fmt.Print(logutil.EventString(e))
 			}
 		})
 	if err != nil {

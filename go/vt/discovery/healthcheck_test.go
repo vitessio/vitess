@@ -224,11 +224,11 @@ func (fc *fakeConn) Execute2(ctx context.Context, query string, bindVars map[str
 	return fc.Execute(ctx, query, bindVars, transactionID)
 }
 
-func (fc *fakeConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (fc *fakeConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (fc *fakeConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (fc *fakeConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return fc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
@@ -264,7 +264,7 @@ func (fc *fakeConn) Rollback2(ctx context.Context, transactionID int64) error {
 	return fc.Rollback(ctx, transactionID)
 }
 
-func (fc *fakeConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
+func (fc *fakeConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 

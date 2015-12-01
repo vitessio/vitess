@@ -456,6 +456,55 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_keyspace/0', 'replica'],
                     expect_fail=True)
 
+  def test_health_check_uid_collision(self):
+    # If two tablets are running with the same UID, we should prevent the
+    # healthcheck on the older one from modifying the tablet record after the
+    # record has been claimed by a newer instance.
+    tablet_62344.init_tablet('master', 'test_keyspace', '0')
+    for t in tablet_62344, tablet_62044:
+      t.create_db('vt_test_keyspace')
+
+    # Before starting tablets, simulate another tablet
+    # owning the replica's record.
+    utils.run_vtctl(['InitTablet', '-allow_update', '-hostname', 'localhost',
+                     '-keyspace', 'test_keyspace', '-shard', '0', '-port', '0',
+                     '-parent', tablet_62044.tablet_alias, 'replica'])
+
+    # Set up tablets.
+    tablet_62344.start_vttablet(wait_for_state=None,
+                                target_tablet_type='replica')
+    tablet_62044.start_vttablet(wait_for_state=None,
+                                target_tablet_type='replica',
+                                init_keyspace='test_keyspace',
+                                init_shard='0')
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    tablet_62044.wait_for_vttablet_state('NOT_SERVING')
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+                     tablet_62344.tablet_alias])
+    tablet_62044.wait_for_vttablet_state('SERVING')
+
+    # Check that the tablet owns the record.
+    tablet_record = utils.run_vtctl_json(['GetTablet',
+                                          tablet_62044.tablet_alias])
+    self.assertEquals(tablet_record['port_map']['vt'], tablet_62044.port,
+                      "tablet didn't take over the record")
+
+    # Take away ownership again.
+    utils.run_vtctl(['InitTablet', '-allow_update', '-hostname', 'localhost',
+                     '-keyspace', 'test_keyspace', '-shard', '0', '-port', '0',
+                     '-parent', tablet_62044.tablet_alias, 'replica'])
+
+    # Tell the tablets to shutdown gracefully,
+    # which normally includes going SPARE.
+    tablet.kill_tablets([tablet_62344, tablet_62044])
+
+    # Make sure the tablet record hasn't been touched.
+    tablet_record = utils.run_vtctl_json(['GetTablet',
+                                          tablet_62044.tablet_alias])
+    self.assertEquals(tablet_record['type'],
+                      tablet_62044.tablet_type_value['REPLICA'],
+                      'tablet changed record without owning it')
+
   def test_health_check_worker_state_does_not_shutdown_query_service(self):
     # This test is similar to test_health_check, but has the following
     # differences:

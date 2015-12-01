@@ -23,7 +23,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // FakeQueryService has the server side of this fake
@@ -47,7 +47,7 @@ func (f *FakeQueryService) HandlePanic(err *error) {
 }
 
 const expectedErrMatch string = "error: generic error"
-const expectedCode vtrpc.ErrorCode = vtrpc.ErrorCode_BAD_INPUT
+const expectedCode vtrpcpb.ErrorCode = vtrpcpb.ErrorCode_BAD_INPUT
 
 var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, expectedCode, "generic error")
 
@@ -89,7 +89,7 @@ var testTarget = &querypb.Target{
 	TabletType: topodatapb.TabletType_REPLICA,
 }
 
-var testCallerID = &vtrpc.CallerID{
+var testCallerID = &vtrpcpb.CallerID{
 	Principal:    "test_principal",
 	Component:    "test_component",
 	Subcomponent: "test_subcomponent",
@@ -126,21 +126,20 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 }
 
 // GetSessionId is part of the queryservice.QueryService interface
-func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	if sessionParams.Keyspace != testTarget.Keyspace {
-		f.t.Errorf("invalid keyspace: got %v expected %v", sessionParams.Keyspace, testTarget.Keyspace)
+func (f *FakeQueryService) GetSessionId(keyspace, shard string) (int64, error) {
+	if keyspace != testTarget.Keyspace {
+		f.t.Errorf("invalid keyspace: got %v expected %v", keyspace, testTarget.Keyspace)
 	}
-	if sessionParams.Shard != testTarget.Shard {
-		f.t.Errorf("invalid shard: got %v expected %v", sessionParams.Shard, testTarget.Shard)
+	if shard != testTarget.Shard {
+		f.t.Errorf("invalid shard: got %v expected %v", shard, testTarget.Shard)
 	}
-	sessionInfo.SessionId = testSessionID
-	return nil
+	return testSessionID, nil
 }
 
 // Begin is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
+func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, sessionID int64) (int64, error) {
 	if f.hasError {
-		return testTabletError
+		return 0, testTabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -148,15 +147,11 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, se
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "Begin", target)
 	} else {
-		if session.SessionId != testSessionID {
-			f.t.Errorf("Begin: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("Begin: invalid sessionID: got %v expected %v", sessionID, testSessionID)
 		}
 	}
-	if session.TransactionId != 0 {
-		f.t.Errorf("Begin: invalid TransactionId: got %v expected 0", session.TransactionId)
-	}
-	txInfo.TransactionId = beginTransactionID
-	return nil
+	return beginTransactionID, nil
 }
 
 const beginTransactionID int64 = 9990
@@ -211,7 +206,7 @@ func testBegin2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Commit is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, session *proto.Session) error {
+func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -221,12 +216,12 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, s
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "Commit", target)
 	} else {
-		if session.SessionId != testSessionID {
-			f.t.Errorf("Commit: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("Commit: invalid SessionId: got %v expected %v", sessionID, testSessionID)
 		}
 	}
-	if session.TransactionId != commitTransactionID {
-		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", session.TransactionId, commitTransactionID)
+	if transactionID != commitTransactionID {
+		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", transactionID, commitTransactionID)
 	}
 	return nil
 }
@@ -277,7 +272,7 @@ func testCommit2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Rollback is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, session *proto.Session) error {
+func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -287,12 +282,12 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target,
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "Rollback", target)
 	} else {
-		if session.SessionId != testSessionID {
-			f.t.Errorf("Rollback: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("Rollback: invalid SessionId: got %v expected %v", sessionID, testSessionID)
 		}
 	}
-	if session.TransactionId != rollbackTransactionID {
-		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", session.TransactionId, rollbackTransactionID)
+	if transactionID != rollbackTransactionID {
+		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", transactionID, rollbackTransactionID)
 	}
 	return nil
 }
@@ -343,31 +338,30 @@ func testRollback2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) error {
+func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (*sqltypes.Result, error) {
 	if f.hasError {
-		return testTabletError
+		return nil, testTabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if query.Sql != executeQuery {
-		f.t.Errorf("invalid Execute.Query.Sql: got %v expected %v", query.Sql, executeQuery)
+	if sql != executeQuery {
+		f.t.Errorf("invalid Execute.Query.Sql: got %v expected %v", sql, executeQuery)
 	}
-	if !reflect.DeepEqual(query.BindVariables, executeBindVars) {
-		f.t.Errorf("invalid Execute.Query.BindVariables: got %v expected %v", query.BindVariables, executeBindVars)
+	if !reflect.DeepEqual(bindVariables, executeBindVars) {
+		f.t.Errorf("invalid Execute.BindVariables: got %v expected %v", bindVariables, executeBindVars)
 	}
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "Execute", target)
 	} else {
-		if query.SessionId != testSessionID {
-			f.t.Errorf("invalid Execute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("invalid Execute.SessionId: got %v expected %v", sessionID, testSessionID)
 		}
 	}
-	if query.TransactionId != executeTransactionID {
-		f.t.Errorf("invalid Execute.Query.TransactionId: got %v expected %v", query.TransactionId, executeTransactionID)
+	if transactionID != executeTransactionID {
+		f.t.Errorf("invalid Execute.TransactionId: got %v expected %v", transactionID, executeTransactionID)
 	}
-	*reply = executeQueryResult
-	return nil
+	return &executeQueryResult, nil
 }
 
 const executeQuery = "executeQuery"
@@ -393,12 +387,12 @@ var executeQueryResult = sqltypes.Result{
 	InsertID:     72,
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row1 value1")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
 			sqltypes.NULL,
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row2 value1")),
-			sqltypes.MakeString([]byte("row2 value2")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
 		},
 	},
 }
@@ -453,21 +447,21 @@ func testExecute2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) error {
 	if f.panics && f.streamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
-	if query.Sql != streamExecuteQuery {
-		f.t.Errorf("invalid StreamExecute.Query.Sql: got %v expected %v", query.Sql, streamExecuteQuery)
+	if sql != streamExecuteQuery {
+		f.t.Errorf("invalid StreamExecute.Sql: got %v expected %v", sql, streamExecuteQuery)
 	}
-	if !reflect.DeepEqual(query.BindVariables, streamExecuteBindVars) {
-		f.t.Errorf("invalid StreamExecute.Query.BindVariables: got %v expected %v", query.BindVariables, streamExecuteBindVars)
+	if !reflect.DeepEqual(bindVariables, streamExecuteBindVars) {
+		f.t.Errorf("invalid StreamExecute.BindVariables: got %v expected %v", bindVariables, streamExecuteBindVars)
 	}
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "StreamExecute", target)
 	} else {
-		if query.SessionId != testSessionID {
-			f.t.Errorf("invalid StreamExecute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("invalid StreamExecute.Query.SessionId: got %v expected %v", sessionID, testSessionID)
 		}
 	}
 	if err := sendReply(&streamExecuteQueryResult1); err != nil {
@@ -516,12 +510,12 @@ var streamExecuteQueryResult1 = sqltypes.Result{
 var streamExecuteQueryResult2 = sqltypes.Result{
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row1 value1")),
-			sqltypes.MakeString([]byte("row1 value2")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Char, []byte("row1 value2")),
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("row2 value1")),
-			sqltypes.MakeString([]byte("row2 value2")),
+			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
 		},
 	},
 }
@@ -747,31 +741,30 @@ func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *Fa
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []proto.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	if f.hasError {
-		return testTabletError
+		return nil, testTabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if !reflect.DeepEqual(queryList.Queries, executeBatchQueries) {
-		f.t.Errorf("invalid ExecuteBatch.QueryList.Queries: got %v expected %v", queryList.Queries, executeBatchQueries)
+	if !reflect.DeepEqual(queries, executeBatchQueries) {
+		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, executeBatchQueries)
 	}
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "ExecuteBatch", target)
 	} else {
-		if queryList.SessionId != testSessionID {
-			f.t.Errorf("invalid ExecuteBatch.QueryList.SessionId: got %v expected %v", queryList.SessionId, testSessionID)
+		if sessionID != testSessionID {
+			f.t.Errorf("invalid ExecuteBatch.SessionID: got %v expected %v", sessionID, testSessionID)
 		}
 	}
-	if queryList.AsTransaction != testAsTransaction {
-		f.t.Errorf("invalid ExecuteBatch.QueryList.AsTransaction: got %v expected %v", queryList.AsTransaction, testAsTransaction)
+	if asTransaction != testAsTransaction {
+		f.t.Errorf("invalid ExecuteBatch.AsTransaction: got %v expected %v", asTransaction, testAsTransaction)
 	}
-	if queryList.TransactionId != executeBatchTransactionID {
-		f.t.Errorf("invalid ExecuteBatch.QueryList.TransactionId: got %v expected %v", queryList.TransactionId, executeBatchTransactionID)
+	if transactionID != executeBatchTransactionID {
+		f.t.Errorf("invalid ExecuteBatch.TransactionId: got %v expected %v", transactionID, executeBatchTransactionID)
 	}
-	*reply = executeBatchQueryResultList
-	return nil
+	return executeBatchQueryResultList, nil
 }
 
 var executeBatchQueries = []proto.BoundQuery{
@@ -791,40 +784,40 @@ var executeBatchQueries = []proto.BoundQuery{
 
 const executeBatchTransactionID int64 = 678
 
-var executeBatchQueryResultList = proto.QueryResultList{
-	List: []sqltypes.Result{
-		sqltypes.Result{
-			Fields: []*querypb.Field{
-				&querypb.Field{
-					Name: "field1",
-					Type: sqltypes.Int8,
-				},
-			},
-			RowsAffected: 1232,
-			InsertID:     712,
-			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
-					sqltypes.MakeString([]byte("row1 value1")),
-				},
-				[]sqltypes.Value{
-					sqltypes.MakeString([]byte("row2 value1")),
-				},
+var executeBatchQueryResultList = []sqltypes.Result{
+	sqltypes.Result{
+		Fields: []*querypb.Field{
+			&querypb.Field{
+				Name: "field1",
+				Type: sqltypes.Int8,
 			},
 		},
-		sqltypes.Result{
-			Fields: []*querypb.Field{
-				&querypb.Field{
-					Name: "field1",
-					Type: sqltypes.Int8,
-				},
+		RowsAffected: 1232,
+		InsertID:     712,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
 			},
-			RowsAffected: 12333,
-			InsertID:     74442,
-			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
-					sqltypes.MakeString([]byte("row1 value1")),
-					sqltypes.MakeString([]byte("row1 value2")),
-				},
+			[]sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
+			},
+		},
+	},
+	sqltypes.Result{
+		Fields: []*querypb.Field{
+			&querypb.Field{
+				Name: "field1",
+				Type: sqltypes.VarBinary,
+			},
+		},
+		RowsAffected: 12333,
+		InsertID:     74442,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeString([]byte("row1 value1")),
+			},
+			[]sqltypes.Value{
+				sqltypes.MakeString([]byte("row1 value2")),
 			},
 		},
 	},
@@ -836,7 +829,7 @@ func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
-	if !reflect.DeepEqual(*qrl, executeBatchQueryResultList) {
+	if !reflect.DeepEqual(qrl, executeBatchQueryResultList) {
 		t.Errorf("Unexpected result from Execute: got %v wanted %v", qrl, executeBatchQueryResultList)
 	}
 }
@@ -861,7 +854,7 @@ func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
-	if !reflect.DeepEqual(*qrl, executeBatchQueryResultList) {
+	if !reflect.DeepEqual(qrl, executeBatchQueryResultList) {
 		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, executeBatchQueryResultList)
 	}
 }
@@ -880,9 +873,9 @@ func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
-func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]proto.QuerySplit, error) {
 	if f.hasError {
-		return testTabletError
+		return nil, testTabletError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -890,17 +883,19 @@ func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Targe
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "SplitQuery", target)
 	}
-	if !reflect.DeepEqual(req.Query, splitQueryBoundQuery) {
-		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", req.Query, splitQueryBoundQuery)
+	if !reflect.DeepEqual(proto.BoundQuery{
+		Sql:           sql,
+		BindVariables: bindVariables,
+	}, splitQueryBoundQuery) {
+		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", proto.QueryAsString(sql, bindVariables), splitQueryBoundQuery)
 	}
-	if req.SplitColumn != splitQuerySplitColumn {
-		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.SplitColumn: got %v expected %v", req.SplitColumn, splitQuerySplitColumn)
+	if splitColumn != splitQuerySplitColumn {
+		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v", splitColumn, splitQuerySplitColumn)
 	}
-	if req.SplitCount != splitQuerySplitCount {
-		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.SplitCount: got %v expected %v", req.SplitCount, splitQuerySplitCount)
+	if splitCount != splitQuerySplitCount {
+		f.t.Errorf("invalid SplitQuery.SplitCount: got %v expected %v", splitCount, splitQuerySplitCount)
 	}
-	reply.Queries = splitQueryQuerySplitList
-	return nil
+	return splitQueryQuerySplitList, nil
 }
 
 var splitQueryBoundQuery = proto.BoundQuery{
@@ -915,12 +910,10 @@ const splitQuerySplitCount = 372
 
 var splitQueryQuerySplitList = []proto.QuerySplit{
 	proto.QuerySplit{
-		Query: proto.BoundQuery{
-			Sql: "splitQuery",
-			BindVariables: map[string]interface{}{
-				"bind1":       int64(43),
-				"keyspace_id": int64(3333),
-			},
+		Sql: "splitQuery",
+		BindVariables: map[string]interface{}{
+			"bind1":       int64(43),
+			"keyspace_id": int64(3333),
 		},
 		RowCount: 4456,
 	},

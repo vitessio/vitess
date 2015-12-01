@@ -149,7 +149,7 @@ func (ftc *fakeTabletConn) Execute(ctx context.Context, query string, bindVars m
 }
 
 // Execute is part of the TabletConn interface
-func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
@@ -179,7 +179,7 @@ func (ftc *fakeTabletConn) Execute2(ctx context.Context, query string, bindVars 
 }
 
 // ExecuteBatch2 is part of the TabletConn interface
-func (ftc *fakeTabletConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (ftc *fakeTabletConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
@@ -218,7 +218,7 @@ func (ftc *fakeTabletConn) EndPoint() *topodatapb.EndPoint {
 }
 
 // SplitQuery is part of the TabletConn interface
-func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
+func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented in this test")
 }
 

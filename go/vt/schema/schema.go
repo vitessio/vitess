@@ -65,11 +65,8 @@ func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes
 	if defval.IsNull() {
 		return
 	}
-	if sqltypes.IsIntegral(ta.Columns[index].Type) {
-		ta.Columns[index].Default = sqltypes.MakeNumeric(defval.Raw())
-	} else {
-		ta.Columns[index].Default = sqltypes.MakeString(defval.Raw())
-	}
+	// Schema values are trusted.
+	ta.Columns[index].Default = sqltypes.MakeTrusted(ta.Columns[index].Type, defval.Raw())
 }
 
 // FindColumn finds a column in the table. It returns the index if found.

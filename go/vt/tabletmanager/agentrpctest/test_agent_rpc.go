@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -22,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -35,6 +38,14 @@ type fakeRPCAgent struct {
 	panics bool
 	// slow if true will let Ping() sleep and effectively not respond to an RPC.
 	slow bool
+	// mu guards accesses of "slow".
+	mu sync.Mutex
+}
+
+func (fra *fakeRPCAgent) setSlow(slow bool) {
+	fra.mu.Lock()
+	fra.slow = slow
+	fra.mu.Unlock()
 }
 
 // NewFakeRPCAgent returns a fake tabletmanager.RPCAgent that's just a mirror.
@@ -79,7 +90,7 @@ func logStuff(logger logutil.Logger, count int) {
 	}
 }
 
-func compareLoggedStuff(t *testing.T, name string, logChannel <-chan *logutil.LoggerEvent, count int) {
+func compareLoggedStuff(t *testing.T, name string, logChannel <-chan *logutilpb.Event, count int) {
 	for i := 0; i < count; i++ {
 		le, ok := <-logChannel
 		if !ok {
@@ -125,7 +136,10 @@ func (fra *fakeRPCAgent) Ping(ctx context.Context, args string) string {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if fra.slow {
+	fra.mu.Lock()
+	slow := fra.slow
+	fra.mu.Unlock()
+	if slow {
 		time.Sleep(time.Minute)
 	}
 	return args
@@ -143,18 +157,39 @@ func agentRPCTestPingPanic(ctx context.Context, t *testing.T, client tmclient.Ta
 	expectRPCWrapPanic(t, err)
 }
 
-// agentRPCTestIsTimeoutErrorDial verifies that client.IsTimeoutError() returns
-// true for RPCs failed due to an expired context before .Dial().
-func agentRPCTestIsTimeoutErrorDial(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+// agentRPCTestIsTimeoutErrorDialExpiredContext verifies that
+// client.IsTimeoutError() returns true for RPCs failed due to an expired
+// context before .Dial().
+func agentRPCTestIsTimeoutErrorDialExpiredContext(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	// Using a timeout of 0 here such that .Dial() will fail immediately.
 	expiredCtx, cancel := context.WithTimeout(ctx, 0)
 	defer cancel()
 	err := client.Ping(expiredCtx, ti)
 	if err == nil {
-		t.Fatal("agentRPCTestIsTimeoutError_Dial: RPC with expired context did not fail")
+		t.Fatal("agentRPCTestIsTimeoutErrorDialExpiredContext: RPC with expired context did not fail")
 	}
 	if !client.IsTimeoutError(err) {
-		t.Errorf("agentRPCTestIsTimeoutError_Dial: want: IsTimeoutError() = true. error: %v", err)
+		t.Errorf("agentRPCTestIsTimeoutErrorDialExpiredContext: want: IsTimeoutError() = true. error: %v", err)
+	}
+}
+
+// agentRPCTestIsTimeoutErrorDialTimeout verifies that client.IsTimeoutError()
+// returns true for RPCs failed due to a connect timeout during .Dial().
+func agentRPCTestIsTimeoutErrorDialTimeout(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	// Connect to a non-existing tablet.
+	// For example, this provokes gRPC to return error grpc.ErrClientConnTimeout.
+	invalidTi := topo.NewTabletInfo(ti.Tablet, ti.Version())
+	invalidTi.Tablet = proto.Clone(invalidTi.Tablet).(*topodatapb.Tablet)
+	invalidTi.Tablet.Hostname = "Non-Existent.Server"
+
+	shortCtx, cancel := context.WithTimeout(ctx, time.Millisecond)
+	defer cancel()
+	err := client.Ping(shortCtx, invalidTi)
+	if err == nil {
+		t.Fatal("agentRPCTestIsTimeoutErrorDialTimeout: connect to non-existant tablet did not fail")
+	}
+	if !client.IsTimeoutError(err) {
+		t.Errorf("agentRPCTestIsTimeoutErrorDialTimeout: want: IsTimeoutError() = true. error: %v", err)
 	}
 }
 
@@ -168,14 +203,14 @@ func agentRPCTestIsTimeoutErrorRPC(ctx context.Context, t *testing.T, client tmc
 	//       will be reduced but the test will not flake.
 	shortCtx, cancel := context.WithTimeout(ctx, time.Millisecond)
 	defer cancel()
-	fakeAgent.slow = true
-	defer func() { fakeAgent.slow = false }()
+	fakeAgent.setSlow(true)
+	defer func() { fakeAgent.setSlow(false) }()
 	err := client.Ping(shortCtx, ti)
 	if err == nil {
-		t.Fatal("agentRPCTestIsTimeoutError_RPC: RPC with expired context did not fail")
+		t.Fatal("agentRPCTestIsTimeoutErrorRPC: RPC with expired context did not fail")
 	}
 	if !client.IsTimeoutError(err) {
-		t.Errorf("agentRPCTestIsTimeoutError_RPC: want: IsTimeoutError() = true. error: %v", err)
+		t.Errorf("agentRPCTestIsTimeoutErrorRPC: want: IsTimeoutError() = true. error: %v", err)
 	}
 }
 
@@ -1129,7 +1164,8 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	ctx := context.Background()
 
 	// Test RPC specific methods of the interface.
-	agentRPCTestIsTimeoutErrorDial(ctx, t, client, ti)
+	agentRPCTestIsTimeoutErrorDialExpiredContext(ctx, t, client, ti)
+	agentRPCTestIsTimeoutErrorDialTimeout(ctx, t, client, ti)
 	agentRPCTestIsTimeoutErrorRPC(ctx, t, client, ti, fakeAgent.(*fakeRPCAgent))
 
 	// Various read-only methods

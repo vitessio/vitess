@@ -9,15 +9,17 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/logutil"
 	"golang.org/x/net/context"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
 // RunCommandAndWait executes a single command on a given vtworker and blocks until the command did return or timed out.
-// Output from vtworker is streamed as logutil.LoggerEvent messages which have to be consumed by the caller who has to specify a "recv" function.
-func RunCommandAndWait(ctx context.Context, server string, args []string, recv func(*logutil.LoggerEvent)) error {
+// Output from vtworker is streamed as logutil.Event messages which
+// have to be consumed by the caller who has to specify a "recv" function.
+func RunCommandAndWait(ctx context.Context, server string, args []string, recv func(*logutilpb.Event)) error {
 	if recv == nil {
-		return errors.New("No function closure for LoggerEvent stream specified")
+		return errors.New("No function closure for Event stream specified")
 	}
 	// create the client
 	// TODO(mberlin): vtctlclient exposes dialTimeout as flag. If there are no use cases, remove it there as well to be consistent?

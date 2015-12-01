@@ -714,12 +714,12 @@ func createTestTableBaseShowTable(tableName string) []sqltypes.Value {
 	return []sqltypes.Value{
 		sqltypes.MakeString([]byte(tableName)),
 		sqltypes.MakeString([]byte("USER TABLE")),
-		sqltypes.MakeNumeric([]byte("1427325875")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 		sqltypes.MakeString([]byte("")),
-		sqltypes.MakeNumeric([]byte("1")),
-		sqltypes.MakeNumeric([]byte("2")),
-		sqltypes.MakeNumeric([]byte("3")),
-		sqltypes.MakeNumeric([]byte("4")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 	}
 }
 
@@ -727,12 +727,12 @@ func createTestTableUpdatedStats(tableName string) []sqltypes.Value {
 	return []sqltypes.Value{
 		sqltypes.MakeString([]byte(tableName)),
 		sqltypes.MakeString([]byte("USER TABLE")),
-		sqltypes.MakeNumeric([]byte("0")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("0")),
 		sqltypes.MakeString([]byte("")),
-		sqltypes.MakeNumeric([]byte("4")),
-		sqltypes.MakeNumeric([]byte("5")),
-		sqltypes.MakeNumeric([]byte("6")),
-		sqltypes.MakeNumeric([]byte("7")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("6")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("7")),
 	}
 }
 
@@ -765,7 +765,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 		"select unix_timestamp()": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeNumeric([]byte("1427325875"))},
+				[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
 			},
 		},
 		"select @@global.sql_mode": &sqltypes.Result{
@@ -780,32 +780,32 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_01")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeNumeric([]byte("1427325875")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeNumeric([]byte("1")),
-					sqltypes.MakeNumeric([]byte("2")),
-					sqltypes.MakeNumeric([]byte("3")),
-					sqltypes.MakeNumeric([]byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 				},
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_02")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeNumeric([]byte("1427325875")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeNumeric([]byte("1")),
-					sqltypes.MakeNumeric([]byte("2")),
-					sqltypes.MakeNumeric([]byte("3")),
-					sqltypes.MakeNumeric([]byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 				},
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_03")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeNumeric([]byte("1427325875")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeNumeric([]byte("1")),
-					sqltypes.MakeNumeric([]byte("2")),
-					sqltypes.MakeNumeric([]byte("3")),
-					sqltypes.MakeNumeric([]byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 				},
 			},
 		},

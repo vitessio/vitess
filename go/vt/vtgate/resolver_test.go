@@ -16,11 +16,11 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // This file uses the sandbox_test framework.
@@ -61,13 +61,13 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 			nil,
 			"TestResolverExecuteEntityIds",
 			"col",
-			[]*pbg.ExecuteEntityIdsRequest_EntityId{
-				&pbg.ExecuteEntityIdsRequest_EntityId{
+			[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+				&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 					XidType:    sqltypes.Int64,
 					XidValue:   []byte("0"),
 					KeyspaceId: []byte{0x10},
 				},
-				&pbg.ExecuteEntityIdsRequest_EntityId{
+				&vtgatepb.ExecuteEntityIdsRequest_EntityId{
 					XidType:    sqltypes.VarBinary,
 					XidValue:   []byte("1"),
 					KeyspaceId: []byte{0x25},
@@ -83,10 +83,12 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func() (*sqltypes.Result, error) {
 		res := NewResolver(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
 		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(),
-			[]proto.BoundKeyspaceIdQuery{{
-				Sql:           "query",
-				BindVariables: nil,
-				Keyspace:      "TestResolverExecuteBatchKeyspaceIds",
+			[]*vtgatepb.BoundKeyspaceIdQuery{{
+				Query: &querypb.BoundQuery{
+					Sql:           "query",
+					BindVariables: nil,
+				},
+				Keyspace: "TestResolverExecuteBatchKeyspaceIds",
 				KeyspaceIds: [][]byte{
 					[]byte{0x10},
 					[]byte{0x25},
@@ -98,7 +100,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		return &qrs.List[0], err
+		return &qrs[0], err
 	})
 }
 
@@ -477,13 +479,15 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
 		callcount++
-		queries := []proto.BoundShardQuery{{
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      "TestResolverExecBatchReresolve",
-			Shards:        []string{"0"},
+		queries := []*vtgatepb.BoundShardQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestResolverExecBatchReresolve",
+			Shards:   []string{"0"},
 		}}
-		return boundShardQueriesToScatterBatchRequest(queries), nil
+		return boundShardQueriesToScatterBatchRequest(queries)
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, buildBatchRequest)
@@ -510,13 +514,15 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
 		callcount++
-		queries := []proto.BoundShardQuery{{
-			Sql:           "query",
-			BindVariables: nil,
-			Keyspace:      "TestResolverExecBatchAsTransaction",
-			Shards:        []string{"0"},
+		queries := []*vtgatepb.BoundShardQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestResolverExecBatchAsTransaction",
+			Shards:   []string{"0"},
 		}}
-		return boundShardQueriesToScatterBatchRequest(queries), nil
+		return boundShardQueriesToScatterBatchRequest(queries)
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, buildBatchRequest)

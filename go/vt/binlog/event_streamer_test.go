@@ -85,21 +85,19 @@ func TestSetErrors(t *testing.T) {
 
 func TestDMLEvent(t *testing.T) {
 	trans := &binlogdatapb.BinlogTransaction{
-		Statements: []*binlogdatapb.BinlogTransaction_Statement{
-			{
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "SET TIMESTAMP=2",
-			}, {
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      "SET INSERT_ID=10",
-			}, {
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "query /* _stream _table_ (eid id name)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */",
-			}, {
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      "query",
-			},
-		},
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{{
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+			Sql:      "SET TIMESTAMP=2",
+		}, {
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+			Sql:      "SET INSERT_ID=10",
+		}, {
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+			Sql:      "query /* _stream _table_ (eid id name)  (null 1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */",
+		}, {
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+			Sql:      "query",
+		}},
 		Timestamp:     1,
 		TransactionId: "MariaDB/0-41983-20",
 	}
@@ -107,7 +105,7 @@ func TestDMLEvent(t *testing.T) {
 		sendEvent: func(event *binlogdatapb.StreamEvent) error {
 			switch event.Category {
 			case binlogdatapb.StreamEvent_SE_DML:
-				want := `category:SE_DML table_name:"_table_" primary_key_fields:<name:"eid" type:INT64 > primary_key_fields:<name:"id" type:INT64 > primary_key_fields:<name:"name" type:VARBINARY > primary_key_values:<lengths:2 lengths:2 lengths:4 values:"10-1name" > primary_key_values:<lengths:2 lengths:20 lengths:4 values:"1118446744073709551615name" > timestamp:1 `
+				want := `category:SE_DML table_name:"_table_" primary_key_fields:<name:"eid" type:INT64 > primary_key_fields:<name:"id" type:UINT64 > primary_key_fields:<name:"name" type:VARBINARY > primary_key_values:<lengths:2 lengths:1 lengths:4 values:"101name" > primary_key_values:<lengths:2 lengths:20 lengths:4 values:"1118446744073709551615name" > timestamp:1 `
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got \n%s, want \n%s", got, want)

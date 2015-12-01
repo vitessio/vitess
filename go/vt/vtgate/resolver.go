@@ -16,16 +16,14 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -84,10 +82,10 @@ func isConnError(err error) (int, bool) {
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 // This throws an error if a dml spans multiple keyspace_ids. Resharding depends
 // on being able to uniquely route a write.
-func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if isDml(sql) && len(keyspaceIds) > 1 {
 		return nil, vterrors.FromError(
-			vtrpc.ErrorCode_BAD_INPUT,
+			vtrpcpb.ErrorCode_BAD_INPUT,
 			fmt.Errorf("DML should not span multiple keyspace_ids"),
 		)
 	}
@@ -105,7 +103,7 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
@@ -126,7 +124,7 @@ func (res *Resolver) Execute(
 	bindVars map[string]interface{},
 	keyspace string,
 	tabletType topodatapb.TabletType,
-	session *pbg.Session,
+	session *vtgatepb.Session,
 	mapToShards func(string) (string, []string, error),
 	notInTransaction bool,
 ) (*sqltypes.Result, error) {
@@ -180,9 +178,9 @@ func (res *Resolver) ExecuteEntityIds(
 	bindVariables map[string]interface{},
 	keyspace string,
 	entityColumnName string,
-	entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId,
+	entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId,
 	tabletType topodatapb.TabletType,
-	session *pbg.Session,
+	session *vtgatepb.Session,
 	notInTransaction bool,
 ) (*sqltypes.Result, error) {
 	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
@@ -246,13 +244,13 @@ func (res *Resolver) ExecuteEntityIds(
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *pbg.Session) (*tproto.QueryResultList, error) {
+func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session) ([]sqltypes.Result, error) {
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
 		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(ctx, res.toposerv, res.cell, tabletType, queries)
 		if err != nil {
 			return nil, err
 		}
-		return boundShardQueriesToScatterBatchRequest(shardQueries), nil
+		return boundShardQueriesToScatterBatchRequest(shardQueries)
 	}
 	return res.ExecuteBatch(ctx, tabletType, asTransaction, session, buildBatchRequest)
 }
@@ -263,9 +261,9 @@ func (res *Resolver) ExecuteBatch(
 	ctx context.Context,
 	tabletType topodatapb.TabletType,
 	asTransaction bool,
-	session *pbg.Session,
+	session *vtgatepb.Session,
 	buildBatchRequest func() (*scatterBatchRequest, error),
-) (*tproto.QueryResultList, error) {
+) ([]sqltypes.Result, error) {
 	batchRequest, err := buildBatchRequest()
 	if err != nil {
 		return nil, err
@@ -366,12 +364,12 @@ func (res *Resolver) StreamExecute(
 }
 
 // Commit commits a transaction.
-func (res *Resolver) Commit(ctx context.Context, inSession *pbg.Session) error {
+func (res *Resolver) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
 	return res.scatterConn.Commit(ctx, NewSafeSession(inSession))
 }
 
 // Rollback rolls back a transaction.
-func (res *Resolver) Rollback(ctx context.Context, inSession *pbg.Session) error {
+func (res *Resolver) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
 	return res.scatterConn.Rollback(ctx, NewSafeSession(inSession))
 }
 

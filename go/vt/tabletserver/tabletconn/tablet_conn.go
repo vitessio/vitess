@@ -15,7 +15,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -44,13 +44,13 @@ type ServerError struct {
 	Code int
 	Err  string
 	// ServerCode is the error code that we got from the server.
-	ServerCode vtrpc.ErrorCode
+	ServerCode vtrpcpb.ErrorCode
 }
 
 func (e *ServerError) Error() string { return e.Err }
 
 // VtErrorCode returns the underlying Vitess error code
-func (e *ServerError) VtErrorCode() vtrpc.ErrorCode { return e.ServerCode }
+func (e *ServerError) VtErrorCode() vtrpcpb.ErrorCode { return e.ServerCode }
 
 // OperationalError represents an error due to a failure to
 // communicate with vttablet.
@@ -81,7 +81,7 @@ type TabletConn interface {
 	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*sqltypes.Result, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) (*tproto.QueryResultList, error)
+	ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) ([]sqltypes.Result, error)
 
 	// StreamExecute executes a streaming query on vttablet. It returns a channel, ErrFunc and error.
 	// If error is non-nil, it means that the StreamExecute failed to send the request. Otherwise,
@@ -97,7 +97,7 @@ type TabletConn interface {
 	// These should not be used for anything except tests for now; they will eventually
 	// replace the existing methods.
 	Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*sqltypes.Result, error)
-	ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) (*tproto.QueryResultList, error)
+	ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) ([]sqltypes.Result, error)
 	Begin2(ctx context.Context) (transactionId int64, err error)
 	Commit2(ctx context.Context, transactionId int64) error
 	Rollback2(ctx context.Context, transactionId int64) error
@@ -116,7 +116,7 @@ type TabletConn interface {
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error)
+	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error)
 
 	// StreamHealth streams StreamHealthResponse to the client
 	StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, ErrFunc, error)

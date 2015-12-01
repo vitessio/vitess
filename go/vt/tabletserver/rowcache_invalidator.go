@@ -10,13 +10,14 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -88,14 +89,14 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld mysqlctl.MysqlDaemon)
 	}
 	rp, err := mysqld.MasterPosition()
 	if err != nil {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
 	}
 	if mysqld.Cnf().BinLogPath == "" {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: binlog path not specified"))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: binlog path not specified"))
 	}
 	err = rci.qe.ClearRowcache(context.Background())
 	if err != nil {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcahe is not reachable"))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcahe is not reachable"))
 	}
 
 	rci.dbname = dbname
@@ -186,18 +187,16 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *binlogdatapb.StreamEvent) 
 	invalidations := int64(0)
 	tableInfo := rci.qe.schemaInfo.GetTable(event.TableName)
 	if tableInfo == nil {
-		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Table %s not found", event.TableName))
+		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Table %s not found", event.TableName))
 	}
 	if tableInfo.CacheType == schema.CacheNone {
 		return
 	}
 
 	for _, pkTuple := range event.PrimaryKeyValues {
-		newKey := validateKey(tableInfo, buildKeyFromRow(event.PrimaryKeyFields, pkTuple), rci.qe.queryServiceStats)
-		if newKey == "" {
-			continue
-		}
-		tableInfo.Cache.Delete(context.Background(), newKey)
+		// We can trust values coming from EventStreamer.
+		row := sqltypes.MakeRowTrusted(event.PrimaryKeyFields, pkTuple)
+		tableInfo.Cache.Delete(context.Background(), buildKey(row))
 		invalidations++
 	}
 	tableInfo.invalidations.Add(invalidations)
@@ -206,7 +205,7 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *binlogdatapb.StreamEvent) 
 func (rci *RowcacheInvalidator) handleDDLEvent(ddl string) {
 	ddlPlan := planbuilder.DDLParse(ddl)
 	if ddlPlan.Action == "" {
-		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "DDL is not understood"))
+		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "DDL is not understood"))
 	}
 	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.

@@ -86,7 +86,9 @@
 		"keyrange": {
 			"File": "keyrange_test.py",
 			"Args": [],
-			"Command": [],
+			"Command": [
+				"test/keyrange_test.py"
+			],
 			"Manual": false,
 			"Shard": 3,
 			"RetryMax": 0,
@@ -218,7 +220,9 @@
 		"sql_builder": {
 			"File": "sql_builder_test.py",
 			"Args": [],
-			"Command": [],
+			"Command": [
+				"test/sql_builder_test.py"
+			],
 			"Manual": false,
 			"Shard": 2,
 			"RetryMax": 0,

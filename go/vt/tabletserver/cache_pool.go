@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
 )
 
@@ -101,10 +101,10 @@ func (cp *CachePool) Open() {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	if cp.pool != nil {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "rowcache is already open"))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "rowcache is already open"))
 	}
 	if cp.rowCacheConfig.Binary == "" {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "rowcache binary not specified"))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "rowcache binary not specified"))
 	}
 	cp.socket = generateFilename(cp.rowCacheConfig.Socket)
 	cp.startCacheService()
@@ -128,16 +128,16 @@ func generateFilename(hint string) string {
 	dir, base := path.Split(hint)
 	f, err := ioutil.TempFile(dir, base)
 	if err != nil {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "error creating socket file: %v", err))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "error creating socket file: %v", err))
 	}
 	name := f.Name()
 	err = f.Close()
 	if err != nil {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "error closing socket file: %v", err))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "error closing socket file: %v", err))
 	}
 	err = os.Remove(name)
 	if err != nil {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "error removing socket file: %v", err))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "error removing socket file: %v", err))
 	}
 	log.Infof("sock filename: %v", name)
 	return name
@@ -147,7 +147,7 @@ func (cp *CachePool) startCacheService() {
 	commandLine := cp.rowCacheConfig.GetSubprocessFlags(cp.socket)
 	cp.cmd = exec.Command(commandLine[0], commandLine[1:]...)
 	if err := cp.cmd.Start(); err != nil {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "can't start memcache: %v", err))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "can't start memcache: %v", err))
 	}
 	attempts := 0
 	for {
@@ -169,7 +169,7 @@ func (cp *CachePool) startCacheService() {
 			continue
 		}
 		if _, err = c.Set("health", 0, 0, []byte("ok")); err != nil {
-			panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "can't communicate with cache service: %v", err))
+			panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "can't communicate with cache service: %v", err))
 		}
 		c.Close()
 		break
@@ -225,11 +225,11 @@ func (cp *CachePool) getPool() *pools.ResourcePool {
 func (cp *CachePool) Get(ctx context.Context) cacheservice.CacheService {
 	pool := cp.getPool()
 	if pool == nil {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "cache pool is not open"))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "cache pool is not open"))
 	}
 	r, err := pool.Get(ctx)
 	if err != nil {
-		panic(NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
+		panic(NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
 	}
 	return r.(cacheservice.CacheService)
 }

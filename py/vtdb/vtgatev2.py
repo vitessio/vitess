@@ -74,7 +74,6 @@ def _create_v3_request(
   Returns:
     A (str: value) dict.
   """
-  # sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
   new_binds = field_types.convert_bind_vars(new_binds)
   req = {
       'Sql': sql,

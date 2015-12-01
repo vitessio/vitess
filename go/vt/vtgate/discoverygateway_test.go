@@ -8,7 +8,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 
@@ -107,7 +107,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc.Reset()
 	want := "shard, host: ks.0.replica, <nil>, no valid endpoint"
 	err := f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpc.ErrorCode_INTERNAL_ERROR)
+	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
@@ -117,7 +117,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"), nil)
 	want = "shard, host: ks.0.replica, <nil>, no valid endpoint"
 	err = f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpc.ErrorCode_INTERNAL_ERROR)
+	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
@@ -127,7 +127,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 := hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil, nil)
 	want = fmt.Sprintf(`shard, host: ks.0.replica, <nil>, no valid endpoint`)
 	err = f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpc.ErrorCode_INTERNAL_ERROR)
+	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
@@ -174,7 +174,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailServer: 1})
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: err`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpc.ErrorCode_BAD_INPUT)
+	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
@@ -184,7 +184,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailConn: 1})
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpc.ErrorCode_UNKNOWN_ERROR)
+	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}
@@ -229,7 +229,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	ep1 = hc.addTestEndPoint("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil, &sandboxConn{mustFailConn: 1})
 	want := fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
 	err = f(dg, keyspace, shard, tabletType)
-	verifyShardConnError(t, err, want, vtrpc.ErrorCode_UNKNOWN_ERROR)
+	verifyShardConnError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
 	if hc.GetStatsFromTargetCounter != 1 {
 		t.Errorf("hc.GetStatsFromTargetCounter = %v; want 1", hc.GetStatsFromTargetCounter)
 	}

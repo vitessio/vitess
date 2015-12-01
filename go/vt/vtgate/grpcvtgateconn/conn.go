@@ -15,13 +15,13 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	pbs "github.com/youtube/vitess/go/vt/proto/vtgateservice"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgateservicepb "github.com/youtube/vitess/go/vt/proto/vtgateservice"
 )
 
 func init() {
@@ -30,7 +30,7 @@ func init() {
 
 type vtgateConn struct {
 	cc *grpc.ClientConn
-	c  pbs.VitessClient
+	c  vtgateservicepb.VitessClient
 }
 
 func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.Impl, error) {
@@ -38,7 +38,7 @@ func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.I
 	if err != nil {
 		return nil, err
 	}
-	c := pbs.NewVitessClient(cc)
+	c := vtgateservicepb.NewVitessClient(cc)
 	return &vtgateConn{
 		cc: cc,
 		c:  c,
@@ -46,15 +46,15 @@ func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.I
 }
 
 func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
-	var s *pb.Session
+	var s *vtgatepb.Session
 	if session != nil {
-		s = session.(*pb.Session)
+		s = session.(*vtgatepb.Session)
 	}
 	q, err := tproto.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, session, err
 	}
-	request := &pb.ExecuteRequest{
+	request := &vtgatepb.ExecuteRequest{
 		CallerId:         callerid.EffectiveCallerIDFromContext(ctx),
 		Session:          s,
 		Query:            q,
@@ -72,15 +72,15 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 }
 
 func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
-	var s *pb.Session
+	var s *vtgatepb.Session
 	if session != nil {
-		s = session.(*pb.Session)
+		s = session.(*vtgatepb.Session)
 	}
 	q, err := tproto.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, session, err
 	}
-	request := &pb.ExecuteShardsRequest{
+	request := &vtgatepb.ExecuteShardsRequest{
 		CallerId:         callerid.EffectiveCallerIDFromContext(ctx),
 		Session:          s,
 		Query:            q,
@@ -100,15 +100,15 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 }
 
 func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
-	var s *pb.Session
+	var s *vtgatepb.Session
 	if session != nil {
-		s = session.(*pb.Session)
+		s = session.(*vtgatepb.Session)
 	}
 	q, err := tproto.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, session, err
 	}
-	request := &pb.ExecuteKeyspaceIdsRequest{
+	request := &vtgatepb.ExecuteKeyspaceIdsRequest{
 		CallerId:         callerid.EffectiveCallerIDFromContext(ctx),
 		Session:          s,
 		Query:            q,
@@ -128,15 +128,15 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 }
 
 func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
-	var s *pb.Session
+	var s *vtgatepb.Session
 	if session != nil {
-		s = session.(*pb.Session)
+		s = session.(*vtgatepb.Session)
 	}
 	q, err := tproto.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, session, err
 	}
-	request := &pb.ExecuteKeyRangesRequest{
+	request := &vtgatepb.ExecuteKeyRangesRequest{
 		CallerId:         callerid.EffectiveCallerIDFromContext(ctx),
 		Session:          s,
 		Query:            q,
@@ -155,16 +155,16 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*pb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
-	var s *pb.Session
+func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+	var s *vtgatepb.Session
 	if session != nil {
-		s = session.(*pb.Session)
+		s = session.(*vtgatepb.Session)
 	}
 	q, err := tproto.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, session, err
 	}
-	request := &pb.ExecuteEntityIdsRequest{
+	request := &vtgatepb.ExecuteEntityIdsRequest{
 		CallerId:          callerid.EffectiveCallerIDFromContext(ctx),
 		Session:           s,
 		Query:             q,
@@ -184,19 +184,15 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
-	var s *pb.Session
+func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
+	var s *vtgatepb.Session
 	if session != nil {
-		s = session.(*pb.Session)
+		s = session.(*vtgatepb.Session)
 	}
-	qs, err := proto.BoundShardQueriesToProto(queries)
-	if err != nil {
-		return nil, session, err
-	}
-	request := &pb.ExecuteBatchShardsRequest{
+	request := &vtgatepb.ExecuteBatchShardsRequest{
 		CallerId:      callerid.EffectiveCallerIDFromContext(ctx),
 		Session:       s,
-		Queries:       qs,
+		Queries:       queries,
 		TabletType:    tabletType,
 		AsTransaction: asTransaction,
 	}
@@ -210,19 +206,15 @@ func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []proto.
 	return sqltypes.Proto3ToResults(response.Results), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
-	var s *pb.Session
+func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}) ([]sqltypes.Result, interface{}, error) {
+	var s *vtgatepb.Session
 	if session != nil {
-		s = session.(*pb.Session)
+		s = session.(*vtgatepb.Session)
 	}
-	qs, err := proto.BoundKeyspaceIdQueriesToProto(queries)
-	if err != nil {
-		return nil, session, err
-	}
-	request := &pb.ExecuteBatchKeyspaceIdsRequest{
+	request := &vtgatepb.ExecuteBatchKeyspaceIdsRequest{
 		CallerId:      callerid.EffectiveCallerIDFromContext(ctx),
 		Session:       s,
-		Queries:       qs,
+		Queries:       queries,
 		TabletType:    tabletType,
 		AsTransaction: asTransaction,
 	}
@@ -241,7 +233,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	if err != nil {
 		return nil, nil, err
 	}
-	req := &pb.StreamExecuteRequest{
+	req := &vtgatepb.StreamExecuteRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		Query:      q,
 		TabletType: tabletType,
@@ -253,6 +245,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
+		var fields []*querypb.Field
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
@@ -262,7 +255,10 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 				close(sr)
 				return
 			}
-			sr <- sqltypes.Proto3ToResult(ser.Result)
+			if fields == nil {
+				fields = ser.Result.Fields
+			}
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -279,7 +275,7 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 	if err != nil {
 		return nil, nil, err
 	}
-	req := &pb.StreamExecuteShardsRequest{
+	req := &vtgatepb.StreamExecuteShardsRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		Query:      q,
 		Keyspace:   keyspace,
@@ -293,6 +289,7 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
+		var fields []*querypb.Field
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
@@ -302,7 +299,10 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 				close(sr)
 				return
 			}
-			sr <- sqltypes.Proto3ToResult(ser.Result)
+			if fields == nil {
+				fields = ser.Result.Fields
+			}
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -319,7 +319,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 	if err != nil {
 		return nil, nil, err
 	}
-	req := &pb.StreamExecuteKeyRangesRequest{
+	req := &vtgatepb.StreamExecuteKeyRangesRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		Query:      q,
 		Keyspace:   keyspace,
@@ -333,6 +333,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
+		var fields []*querypb.Field
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
@@ -342,7 +343,10 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 				close(sr)
 				return
 			}
-			sr <- sqltypes.Proto3ToResult(ser.Result)
+			if fields == nil {
+				fields = ser.Result.Fields
+			}
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -359,7 +363,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	if err != nil {
 		return nil, nil, err
 	}
-	req := &pb.StreamExecuteKeyspaceIdsRequest{
+	req := &vtgatepb.StreamExecuteKeyspaceIdsRequest{
 		CallerId:    callerid.EffectiveCallerIDFromContext(ctx),
 		Query:       q,
 		Keyspace:    keyspace,
@@ -373,6 +377,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
+		var fields []*querypb.Field
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
@@ -382,7 +387,10 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 				close(sr)
 				return
 			}
-			sr <- sqltypes.Proto3ToResult(ser.Result)
+			if fields == nil {
+				fields = ser.Result.Fields
+			}
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
@@ -395,7 +403,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query str
 }
 
 func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
-	request := &pb.BeginRequest{
+	request := &vtgatepb.BeginRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 	}
 	response, err := conn.c.Begin(ctx, request)
@@ -406,18 +414,18 @@ func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
 }
 
 func (conn *vtgateConn) Commit(ctx context.Context, session interface{}) error {
-	request := &pb.CommitRequest{
+	request := &vtgatepb.CommitRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		Session:  session.(*pb.Session),
+		Session:  session.(*vtgatepb.Session),
 	}
 	_, err := conn.c.Commit(ctx, request)
 	return vterrors.FromGRPCError(err)
 }
 
 func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error {
-	request := &pb.RollbackRequest{
+	request := &vtgatepb.RollbackRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		Session:  session.(*pb.Session),
+		Session:  session.(*vtgatepb.Session),
 	}
 	_, err := conn.c.Rollback(ctx, request)
 	return vterrors.FromGRPCError(err)
@@ -435,18 +443,18 @@ func (conn *vtgateConn) Rollback2(ctx context.Context, session interface{}) erro
 	return conn.Rollback(ctx, session)
 }
 
-func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]*pb.SplitQueryResponse_Part, error) {
+func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	q, err := tproto.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	request := &pb.SplitQueryRequest{
+	request := &vtgatepb.SplitQueryRequest{
 		CallerId:    callerid.EffectiveCallerIDFromContext(ctx),
 		Keyspace:    keyspace,
 		Query:       q,
 		SplitColumn: splitColumn,
-		SplitCount:  int64(splitCount),
+		SplitCount:  splitCount,
 	}
 	response, err := conn.c.SplitQuery(ctx, request)
 	if err != nil {
@@ -456,7 +464,7 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query s
 }
 
 func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	request := &pb.GetSrvKeyspaceRequest{
+	request := &vtgatepb.GetSrvKeyspaceRequest{
 		Keyspace: keyspace,
 	}
 	response, err := conn.c.GetSrvKeyspace(ctx, request)

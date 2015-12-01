@@ -23,8 +23,8 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // ScatterConn is used for executing queries across
@@ -226,11 +226,10 @@ func (stc *ScatterConn) ExecuteBatch(
 	batchRequest *scatterBatchRequest,
 	tabletType topodatapb.TabletType,
 	asTransaction bool,
-	session *SafeSession) (qrs *tproto.QueryResultList, err error) {
+	session *SafeSession) (qrs []sqltypes.Result, err error) {
 	allErrors := new(concurrency.AllErrorRecorder)
 
-	qrs = &tproto.QueryResultList{}
-	qrs.List = make([]sqltypes.Result, batchRequest.Length)
+	results := make([]sqltypes.Result, batchRequest.Length)
 	var resMutex sync.Mutex
 
 	var wg sync.WaitGroup
@@ -264,8 +263,8 @@ func (stc *ScatterConn) ExecuteBatch(
 			func() {
 				resMutex.Lock()
 				defer resMutex.Unlock()
-				for i, result := range innerqrs.List {
-					appendResult(&qrs.List[req.ResultIndexes[i]], &result)
+				for i, result := range innerqrs {
+					appendResult(&results[req.ResultIndexes[i]], &result)
 				}
 			}()
 		}(req)
@@ -284,7 +283,7 @@ func (stc *ScatterConn) ExecuteBatch(
 		}
 		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
-	return qrs, nil
+	return results, nil
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
@@ -394,13 +393,13 @@ func (stc *ScatterConn) StreamExecuteMulti(
 func (stc *ScatterConn) Commit(ctx context.Context, session *SafeSession) (err error) {
 	if session == nil {
 		return vterrors.FromError(
-			vtrpc.ErrorCode_BAD_INPUT,
+			vtrpcpb.ErrorCode_BAD_INPUT,
 			fmt.Errorf("cannot commit: empty session"),
 		)
 	}
 	if !session.InTransaction() {
 		return vterrors.FromError(
-			vtrpc.ErrorCode_NOT_IN_TX,
+			vtrpcpb.ErrorCode_NOT_IN_TX,
 			fmt.Errorf("cannot commit: not in transaction"),
 		)
 	}
@@ -434,7 +433,7 @@ func (stc *ScatterConn) Rollback(ctx context.Context, session *SafeSession) (err
 // splits received from a shard, it construct a KeyRange queries by
 // appending that shard's keyrange to the splits. Aggregates all splits across
 // all shards in no specific order and returns.
-func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, keyRangeByShard map[string]*topodatapb.KeyRange, keyspace string) ([]*pbg.SplitQueryResponse_Part, error) {
+func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, keyRangeByShard map[string]*topodatapb.KeyRange, keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	tabletType := topodatapb.TabletType_RDONLY
 	actionFunc := func(shard string, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
@@ -444,18 +443,18 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 		}
 		// Append the keyrange for this shard to all the splits received
 		keyranges := []*topodatapb.KeyRange{keyRangeByShard[shard]}
-		splits := make([]*pbg.SplitQueryResponse_Part, len(queries))
+		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
 		for i, query := range queries {
-			q, err := tproto.BindVariablesToProto3(query.Query.BindVariables)
+			q, err := tproto.BindVariablesToProto3(query.BindVariables)
 			if err != nil {
 				return err
 			}
-			splits[i] = &pbg.SplitQueryResponse_Part{
+			splits[i] = &vtgatepb.SplitQueryResponse_Part{
 				Query: &querypb.BoundQuery{
-					Sql:           query.Query.Sql,
+					Sql:           query.Sql,
 					BindVariables: q,
 				},
-				KeyRangePart: &pbg.SplitQueryResponse_KeyRangePart{
+				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
 					Keyspace:  keyspace,
 					KeyRanges: keyranges,
 				},
@@ -471,10 +470,10 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 	for shard := range keyRangeByShard {
 		shards = append(shards, shard)
 	}
-	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&pbg.Session{}), false, actionFunc)
-	splits := []*pbg.SplitQueryResponse_Part{}
+	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&vtgatepb.Session{}), false, actionFunc)
+	splits := []*vtgatepb.SplitQueryResponse_Part{}
 	for s := range allSplits {
-		splits = append(splits, s.([]*pbg.SplitQueryResponse_Part)...)
+		splits = append(splits, s.([]*vtgatepb.SplitQueryResponse_Part)...)
 	}
 	if allErrors.HasErrors() {
 		err := allErrors.AggrError(stc.aggregateErrors)
@@ -488,7 +487,7 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 // KeyRange queries by appending that shard's name to the
 // splits. Aggregates all splits across all shards in no specific
 // order and returns.
-func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, shards []string, keyspace string) ([]*pbg.SplitQueryResponse_Part, error) {
+func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, shards []string, keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	tabletType := topodatapb.TabletType_RDONLY
 	actionFunc := func(shard string, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
@@ -498,18 +497,18 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 		}
 		// Use the shards list for all the splits received
 		shards := []string{shard}
-		splits := make([]*pbg.SplitQueryResponse_Part, len(queries))
+		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
 		for i, query := range queries {
-			q, err := tproto.BindVariablesToProto3(query.Query.BindVariables)
+			q, err := tproto.BindVariablesToProto3(query.BindVariables)
 			if err != nil {
 				return err
 			}
-			splits[i] = &pbg.SplitQueryResponse_Part{
+			splits[i] = &vtgatepb.SplitQueryResponse_Part{
 				Query: &querypb.BoundQuery{
-					Sql:           query.Query.Sql,
+					Sql:           query.Sql,
 					BindVariables: q,
 				},
-				ShardPart: &pbg.SplitQueryResponse_ShardPart{
+				ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
 					Keyspace: keyspace,
 					Shards:   shards,
 				},
@@ -521,10 +520,10 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 		return nil
 	}
 
-	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&pbg.Session{}), false, actionFunc)
-	splits := []*pbg.SplitQueryResponse_Part{}
+	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&vtgatepb.Session{}), false, actionFunc)
+	splits := []*vtgatepb.SplitQueryResponse_Part{}
 	for s := range allSplits {
-		splits = append(splits, s.([]*pbg.SplitQueryResponse_Part)...)
+		splits = append(splits, s.([]*vtgatepb.SplitQueryResponse_Part)...)
 	}
 	if allErrors.HasErrors() {
 		err := allErrors.AggrError(stc.aggregateErrors)
@@ -544,7 +543,7 @@ type ScatterConnError struct {
 	// Preserve the original errors, so that we don't need to parse the error string.
 	Errs []error
 	// serverCode is the error code to use for all the server errors in aggregate
-	serverCode vtrpc.ErrorCode
+	serverCode vtrpcpb.ErrorCode
 }
 
 func (e *ScatterConnError) Error() string {
@@ -552,7 +551,7 @@ func (e *ScatterConnError) Error() string {
 }
 
 // VtErrorCode returns the underlying Vitess error code
-func (e *ScatterConnError) VtErrorCode() vtrpc.ErrorCode { return e.serverCode }
+func (e *ScatterConnError) VtErrorCode() vtrpcpb.ErrorCode { return e.serverCode }
 
 func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	if len(errors) == 0 {
@@ -678,7 +677,7 @@ func (stc *ScatterConn) updateSession(
 	if err != nil {
 		return 0, err
 	}
-	session.Append(&pbg.Session_ShardSession{
+	session.Append(&vtgatepb.Session_ShardSession{
 		Target: &querypb.Target{
 			Keyspace:   keyspace,
 			Shard:      shard,

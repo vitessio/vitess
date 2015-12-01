@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -380,16 +380,14 @@ func TestTabletServerReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
 	}
-	request := &proto.Query{Sql: query, SessionId: tsv.sessionID}
-	reply := &sqltypes.Result{}
-	err = tsv.Execute(context.Background(), nil, request, reply)
+	_, err = tsv.Execute(context.Background(), nil, query, nil, tsv.sessionID, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// make mysql conn fail
 	db.EnableConnFail()
-	err = tsv.Execute(context.Background(), nil, request, reply)
+	_, err = tsv.Execute(context.Background(), nil, query, nil, tsv.sessionID, 0)
 	if err == nil {
 		t.Error("Execute: want error, got nil")
 	}
@@ -404,8 +402,7 @@ func TestTabletServerReconnect(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	request.SessionId = tsv.sessionID
-	err = tsv.Execute(context.Background(), nil, request, reply)
+	_, err = tsv.Execute(context.Background(), nil, query, nil, tsv.sessionID, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -416,8 +413,8 @@ func TestTabletServerGetSessionId(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	if err := tsv.GetSessionId(nil, nil); err == nil {
-		t.Fatalf("call GetSessionId should get an error")
+	if _, err := tsv.GetSessionId("", ""); err == nil {
+		t.Fatalf("call GetSessionId while not serving should get an error")
 	}
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -428,30 +425,20 @@ func TestTabletServerGetSessionId(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	sessionInfo := proto.SessionInfo{}
-	err = tsv.GetSessionId(
-		&proto.SessionParams{Keyspace: keyspace, Shard: shard},
-		&sessionInfo,
-	)
+	sessionID, err := tsv.GetSessionId(keyspace, shard)
 	if err != nil {
 		t.Fatalf("got GetSessionId error: %v", err)
 	}
-	if sessionInfo.SessionId != tsv.sessionID {
+	if sessionID != tsv.sessionID {
 		t.Fatalf("call GetSessionId returns an unexpected session id, "+
 			"expect seesion id: %d but got %d", tsv.sessionID,
-			sessionInfo.SessionId)
+			sessionID)
 	}
-	err = tsv.GetSessionId(
-		&proto.SessionParams{Keyspace: keyspace},
-		&sessionInfo,
-	)
+	_, err = tsv.GetSessionId(keyspace, "")
 	if err == nil {
 		t.Fatalf("call GetSessionId should fail because of missing shard in request")
 	}
-	err = tsv.GetSessionId(
-		&proto.SessionParams{Shard: shard},
-		&sessionInfo,
-	)
+	_, err = tsv.GetSessionId("", shard)
 	if err == nil {
 		t.Fatalf("call GetSessionId should fail because of missing keyspace in request")
 	}
@@ -470,80 +457,35 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	session := proto.Session{
-		SessionId:     0,
-		TransactionId: 0,
-	}
-	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = tsv.Begin(ctx, nil, &session, &txInfo); err == nil {
+	if _, err = tsv.Begin(ctx, nil, 0); err == nil {
 		t.Fatalf("call TabletServer.Begin should fail because of an invalid session id: 0")
 	}
 
-	if err = tsv.Commit(ctx, nil, &session); err == nil {
+	if err = tsv.Commit(ctx, nil, 0, 0); err == nil {
 		t.Fatalf("call TabletServer.Commit should fail because of an invalid session id: 0")
 	}
 
-	if err = tsv.Rollback(ctx, nil, &session); err == nil {
+	if err = tsv.Rollback(ctx, nil, 0, 0); err == nil {
 		t.Fatalf("call TabletServer.Rollback should fail because of an invalid session id: 0")
 	}
 
-	query := proto.Query{
-		Sql:           "select * from test_table limit 1000",
-		BindVariables: nil,
-		SessionId:     session.SessionId,
-		TransactionId: session.TransactionId,
-	}
-	reply := sqltypes.Result{}
-	if err := tsv.Execute(ctx, nil, &query, &reply); err == nil {
+	if _, err := tsv.Execute(ctx, nil, "select * from test_table limit 1000", nil, 0, 0); err == nil {
 		t.Fatalf("call TabletServer.Execute should fail because of an invalid session id: 0")
 	}
 
 	streamSendReply := func(*sqltypes.Result) error { return nil }
-	if err = tsv.StreamExecute(ctx, nil, &query, streamSendReply); err == nil {
+	if err = tsv.StreamExecute(ctx, nil, "select * from test_table limit 1000", nil, 0, streamSendReply); err == nil {
 		t.Fatalf("call TabletServer.StreamExecute should fail because of an invalid session id: 0")
 	}
-
-	batchQuery := proto.QueryList{
-		Queries: []proto.BoundQuery{
-			proto.BoundQuery{
-				Sql:           "noquery",
-				BindVariables: nil,
-			},
-		},
-		SessionId: session.SessionId,
-	}
-
-	batchReply := proto.QueryResultList{
-		List: []sqltypes.Result{
-			sqltypes.Result{},
-			sqltypes.Result{},
-		},
-	}
-	if err = tsv.ExecuteBatch(ctx, nil, &batchQuery, &batchReply); err == nil {
-		t.Fatalf("call TabletServer.ExecuteBatch should fail because of an invalid session id: 0")
-	}
-
-	splitQuery := proto.SplitQueryRequest{
-		Query: proto.BoundQuery{
-			Sql:           "select * from test_table where count > :count",
+	if _, err = tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
+		proto.BoundQuery{
+			Sql:           "noquery",
 			BindVariables: nil,
 		},
-		SplitCount: 10,
-		SessionID:  session.SessionId,
+	}, 0, false, 0); err == nil {
+		t.Fatalf("call TabletServer.ExecuteBatch should fail because of an invalid session id: 0")
 	}
-
-	splitQueryReply := proto.SplitQueryResult{
-		Queries: []proto.QuerySplit{
-			proto.QuerySplit{
-				Query: proto.BoundQuery{
-					Sql:           "",
-					BindVariables: nil,
-				},
-				RowCount: 10,
-			},
-		},
-	}
-	if err = tsv.SplitQuery(ctx, nil, &splitQuery, &splitQueryReply); err == nil {
+	if _, err = tsv.SplitQuery(ctx, nil, "select * from test_table where count > :count", nil, "", 10, 0); err == nil {
 		t.Fatalf("call TabletServer.SplitQuery should fail because of an invalid session id: 0")
 	}
 }
@@ -564,26 +506,21 @@ func TestTabletServerTarget(t *testing.T) {
 	ctx := context.Background()
 
 	db.AddQuery("select * from test_table limit 1000", &sqltypes.Result{})
-	query := proto.Query{
-		Sql:           "select * from test_table limit 1000",
-		BindVariables: nil,
-	}
-	reply := sqltypes.Result{}
-	err = tsv.Execute(ctx, &target1, &query, &reply)
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tsv.Execute(ctx, &target2, &query, &reply)
+	_, err = tsv.Execute(ctx, &target2, "select * from test_table limit 1000", nil, 0, 0)
 	want := "Invalid tablet type"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
-	err = tsv.Execute(ctx, &target1, &query, &reply)
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tsv.Execute(ctx, &target2, &query, &reply)
+	_, err = tsv.Execute(ctx, &target2, "select * from test_table limit 1000", nil, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -611,26 +548,14 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	session := proto.Session{
-		SessionId:     tsv.sessionID,
-		TransactionId: 0,
-	}
-	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = tsv.Begin(ctx, nil, &session, &txInfo); err != nil {
+	transactionID, err := tsv.Begin(ctx, nil, tsv.sessionID)
+	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed")
 	}
-	session.TransactionId = txInfo.TransactionId
-	query := proto.Query{
-		Sql:           executeSQL,
-		BindVariables: nil,
-		SessionId:     session.SessionId,
-		TransactionId: session.TransactionId,
+	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, tsv.sessionID, transactionID); err != nil {
+		t.Fatalf("failed to execute query: %s", executeSQL)
 	}
-	reply := sqltypes.Result{}
-	if err := tsv.Execute(ctx, nil, &query, &reply); err != nil {
-		t.Fatalf("failed to execute query: %s", query.Sql)
-	}
-	if err := tsv.Commit(ctx, nil, &session); err != nil {
+	if err := tsv.Commit(ctx, nil, tsv.sessionID, transactionID); err != nil {
 		t.Fatalf("call TabletServer.Commit failed")
 	}
 }
@@ -657,26 +582,14 @@ func TestTabletServerRollback(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	session := proto.Session{
-		SessionId:     tsv.sessionID,
-		TransactionId: 0,
-	}
-	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = tsv.Begin(ctx, nil, &session, &txInfo); err != nil {
+	transactionID, err := tsv.Begin(ctx, nil, tsv.sessionID)
+	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed")
 	}
-	session.TransactionId = txInfo.TransactionId
-	query := proto.Query{
-		Sql:           executeSQL,
-		BindVariables: nil,
-		SessionId:     session.SessionId,
-		TransactionId: session.TransactionId,
+	if _, err := tsv.Execute(ctx, nil, executeSQL, nil, tsv.sessionID, transactionID); err != nil {
+		t.Fatalf("failed to execute query: %s", executeSQL)
 	}
-	reply := sqltypes.Result{}
-	if err := tsv.Execute(ctx, nil, &query, &reply); err != nil {
-		t.Fatalf("failed to execute query: %s", query.Sql)
-	}
-	if err := tsv.Rollback(ctx, nil, &session); err != nil {
+	if err := tsv.Rollback(ctx, nil, tsv.sessionID, transactionID); err != nil {
 		t.Fatalf("call TabletServer.Rollback failed")
 	}
 }
@@ -704,32 +617,10 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	session := proto.Session{
-		SessionId:     tsv.sessionID,
-		TransactionId: 0,
-	}
-	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = tsv.Begin(ctx, nil, &session, &txInfo); err != nil {
-		t.Fatalf("call TabletServer.Begin failed")
-	}
-	session.TransactionId = txInfo.TransactionId
-	query := proto.Query{
-		Sql:           executeSQL,
-		BindVariables: nil,
-		SessionId:     session.SessionId,
-		TransactionId: session.TransactionId,
-	}
 	sendReply := func(*sqltypes.Result) error { return nil }
-	if err := tsv.StreamExecute(ctx, nil, &query, sendReply); err == nil {
-		t.Fatalf("TabletServer.StreamExecute should fail: %s", query.Sql)
-	}
-	if err := tsv.Rollback(ctx, nil, &session); err != nil {
-		t.Fatalf("call TabletServer.Rollback failed")
-	}
-	query.TransactionId = 0
-	if err := tsv.StreamExecute(ctx, nil, &query, sendReply); err != nil {
+	if err := tsv.StreamExecute(ctx, nil, executeSQL, nil, tsv.sessionID, sendReply); err != nil {
 		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
-			query.Sql, err)
+			executeSQL, err)
 	}
 }
 
@@ -752,27 +643,14 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.QueryList{
-		Queries: []proto.BoundQuery{
-			proto.BoundQuery{
-				Sql:           sql,
-				BindVariables: nil,
-			},
+	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
+		proto.BoundQuery{
+			Sql:           sql,
+			BindVariables: nil,
 		},
-		AsTransaction: true,
-		SessionId:     tsv.sessionID,
-	}
-
-	reply := proto.QueryResultList{
-		List: []sqltypes.Result{
-			sqltypes.Result{},
-			*sqlResult,
-			sqltypes.Result{},
-		},
-	}
-	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err != nil {
+	}, tsv.sessionID, true, 0); err != nil {
 		t.Fatalf("TabletServer.ExecuteBatch should success: %v, but get error: %v",
-			query, err)
+			sql, err)
 	}
 }
 
@@ -789,15 +667,7 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.QueryList{
-		Queries:   []proto.BoundQuery{},
-		SessionId: tsv.sessionID,
-	}
-
-	reply := proto.QueryResultList{
-		List: []sqltypes.Result{},
-	}
-	err = tsv.ExecuteBatch(ctx, nil, &query, &reply)
+	_, err = tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{}, tsv.sessionID, false, 0)
 	verifyTabletError(t, err, ErrFail)
 }
 
@@ -814,22 +684,12 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.QueryList{
-		Queries: []proto.BoundQuery{
-			proto.BoundQuery{
-				Sql:           "begin",
-				BindVariables: nil,
-			},
+	_, err = tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
+		proto.BoundQuery{
+			Sql:           "begin",
+			BindVariables: nil,
 		},
-		SessionId:     tsv.sessionID,
-		AsTransaction: true,
-		TransactionId: 1,
-	}
-
-	reply := proto.QueryResultList{
-		List: []sqltypes.Result{},
-	}
-	err = tsv.ExecuteBatch(ctx, nil, &query, &reply)
+	}, tsv.sessionID, true, 1)
 	verifyTabletError(t, err, ErrFail)
 }
 
@@ -848,22 +708,12 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.QueryList{
-		Queries: []proto.BoundQuery{
-			proto.BoundQuery{
-				Sql:           "begin",
-				BindVariables: nil,
-			},
+	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
+		proto.BoundQuery{
+			Sql:           "begin",
+			BindVariables: nil,
 		},
-		SessionId: tsv.sessionID,
-	}
-
-	reply := proto.QueryResultList{
-		List: []sqltypes.Result{
-			sqltypes.Result{},
-		},
-	}
-	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
+	}, tsv.sessionID, false, 0); err == nil {
 		t.Fatalf("TabletServer.ExecuteBatch should fail")
 	}
 }
@@ -883,27 +733,16 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.QueryList{
-		Queries: []proto.BoundQuery{
-			proto.BoundQuery{
-				Sql:           "begin",
-				BindVariables: nil,
-			},
-			proto.BoundQuery{
-				Sql:           "commit",
-				BindVariables: nil,
-			},
+	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
+		proto.BoundQuery{
+			Sql:           "begin",
+			BindVariables: nil,
 		},
-		SessionId: tsv.sessionID,
-	}
-
-	reply := proto.QueryResultList{
-		List: []sqltypes.Result{
-			sqltypes.Result{},
-			sqltypes.Result{},
+		proto.BoundQuery{
+			Sql:           "commit",
+			BindVariables: nil,
 		},
-	}
-	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
+	}, tsv.sessionID, false, 0); err == nil {
 		t.Fatalf("TabletServer.ExecuteBatch should fail")
 	}
 }
@@ -932,30 +771,16 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.QueryList{
-		Queries: []proto.BoundQuery{
-			proto.BoundQuery{
-				Sql:           sql,
-				BindVariables: nil,
-			},
-		},
-		AsTransaction: true,
-		SessionId:     tsv.sessionID,
-	}
-
-	reply := proto.QueryResultList{
-		List: []sqltypes.Result{
-			sqltypes.Result{},
-			*sqlResult,
-			sqltypes.Result{},
-		},
-	}
-
 	if db.GetQueryCalledNum("rollback") != 0 {
 		t.Fatalf("rollback should not be executed.")
 	}
 
-	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
+	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
+		proto.BoundQuery{
+			Sql:           sql,
+			BindVariables: nil,
+		},
+	}, tsv.sessionID, true, 0); err == nil {
 		t.Fatalf("TabletServer.ExecuteBatch should fail")
 	}
 
@@ -988,22 +813,12 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.QueryList{
-		Queries: []proto.BoundQuery{
-			proto.BoundQuery{
-				Sql:           sql,
-				BindVariables: nil,
-			},
+	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
+		proto.BoundQuery{
+			Sql:           sql,
+			BindVariables: nil,
 		},
-		SessionId: tsv.sessionID,
-	}
-
-	reply := proto.QueryResultList{
-		List: []sqltypes.Result{
-			*sqlResult,
-		},
-	}
-	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err != nil {
+	}, tsv.sessionID, false, 0); err != nil {
 		t.Fatalf("TabletServer.ExecuteBatch should succeed")
 	}
 }
@@ -1021,22 +836,12 @@ func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.QueryList{
-		Queries: []proto.BoundQuery{
-			proto.BoundQuery{
-				Sql:           "commit",
-				BindVariables: nil,
-			},
+	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
+		proto.BoundQuery{
+			Sql:           "commit",
+			BindVariables: nil,
 		},
-		SessionId: tsv.sessionID,
-	}
-
-	reply := proto.QueryResultList{
-		List: []sqltypes.Result{
-			sqltypes.Result{},
-		},
-	}
-	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
+	}, tsv.sessionID, false, 0); err == nil {
 		t.Fatalf("TabletServer.ExecuteBatch should fail")
 	}
 }
@@ -1060,42 +865,28 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.QueryList{
-		Queries: []proto.BoundQuery{
-			proto.BoundQuery{
-				Sql:           "begin",
-				BindVariables: nil,
-			},
-			proto.BoundQuery{
-				Sql:           "begin",
-				BindVariables: nil,
-			},
-			proto.BoundQuery{
-				Sql:           sql,
-				BindVariables: nil,
-			},
-			proto.BoundQuery{
-				Sql:           "commit",
-				BindVariables: nil,
-			},
-			proto.BoundQuery{
-				Sql:           "commit",
-				BindVariables: nil,
-			},
+	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
+		proto.BoundQuery{
+			Sql:           "begin",
+			BindVariables: nil,
 		},
-		SessionId: tsv.sessionID,
-	}
-
-	reply := proto.QueryResultList{
-		List: []sqltypes.Result{
-			sqltypes.Result{},
-			sqltypes.Result{},
-			*sqlResult,
-			sqltypes.Result{},
-			sqltypes.Result{},
+		proto.BoundQuery{
+			Sql:           "begin",
+			BindVariables: nil,
 		},
-	}
-	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
+		proto.BoundQuery{
+			Sql:           sql,
+			BindVariables: nil,
+		},
+		proto.BoundQuery{
+			Sql:           "commit",
+			BindVariables: nil,
+		},
+		proto.BoundQuery{
+			Sql:           "commit",
+			BindVariables: nil,
+		},
+	}, tsv.sessionID, false, 0); err == nil {
 		t.Fatalf("TabletServer.Execute should fail because of nested transaction")
 	}
 	tsv.qe.txPool.SetTimeout(10)
@@ -1110,8 +901,8 @@ func TestTabletServerSplitQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeNumeric([]byte("100")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
 			},
 		},
 	})
@@ -1122,7 +913,7 @@ func TestTabletServerSplitQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			},
 		},
 	})
@@ -1137,29 +928,9 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.SplitQueryRequest{
-		Query: proto.BoundQuery{
-			Sql:           "select * from test_table where count > :count",
-			BindVariables: nil,
-		},
-		SplitCount: 10,
-		SessionID:  tsv.sessionID,
-	}
-
-	reply := proto.SplitQueryResult{
-		Queries: []proto.QuerySplit{
-			proto.QuerySplit{
-				Query: proto.BoundQuery{
-					Sql:           "",
-					BindVariables: nil,
-				},
-				RowCount: 10,
-			},
-		},
-	}
-	if err := tsv.SplitQuery(ctx, nil, &query, &reply); err != nil {
-		t.Fatalf("TabletServer.SplitQuery should success: %v, but get error: %v",
-			query, err)
+	sql := "select * from test_table where count > :count"
+	if _, err := tsv.SplitQuery(ctx, nil, sql, nil, "", 10, tsv.sessionID); err != nil {
+		t.Fatalf("TabletServer.SplitQuery should success: %v, but get error: %v", sql, err)
 	}
 }
 
@@ -1172,8 +943,8 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeNumeric([]byte("100")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
 			},
 		},
 	})
@@ -1184,7 +955,7 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			},
 		},
 	})
@@ -1199,28 +970,8 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.SplitQueryRequest{
-		Query: proto.BoundQuery{
-			// add limit clause to make SplitQuery fail
-			Sql:           "select * from test_table where count > :count limit 1000",
-			BindVariables: nil,
-		},
-		SplitCount: 10,
-		SessionID:  tsv.sessionID,
-	}
-
-	reply := proto.SplitQueryResult{
-		Queries: []proto.QuerySplit{
-			proto.QuerySplit{
-				Query: proto.BoundQuery{
-					Sql:           "",
-					BindVariables: nil,
-				},
-				RowCount: 10,
-			},
-		},
-	}
-	if err := tsv.SplitQuery(ctx, nil, &query, &reply); err == nil {
+	// add limit clause to make SplitQuery fail
+	if _, err := tsv.SplitQuery(ctx, nil, "select * from test_table where count > :count limit 1000", nil, "", 10, tsv.sessionID); err == nil {
 		t.Fatalf("TabletServer.SplitQuery should fail")
 	}
 }
@@ -1249,7 +1000,7 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			},
 		},
 	})
@@ -1265,27 +1016,7 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	query := proto.SplitQueryRequest{
-		Query: proto.BoundQuery{
-			Sql:           "select * from test_table where count > :count",
-			BindVariables: nil,
-		},
-		SplitCount: 10,
-		SessionID:  tsv.sessionID,
-	}
-
-	reply := proto.SplitQueryResult{
-		Queries: []proto.QuerySplit{
-			proto.QuerySplit{
-				Query: proto.BoundQuery{
-					Sql:           "",
-					BindVariables: nil,
-				},
-				RowCount: 10,
-			},
-		},
-	}
-	if err := tsv.SplitQuery(ctx, nil, &query, &reply); err == nil {
+	if _, err := tsv.SplitQuery(ctx, nil, "select * from test_table where count > :count", nil, "", 10, tsv.sessionID); err == nil {
 		t.Fatalf("TabletServer.SplitQuery should fail")
 	}
 }
@@ -1293,25 +1024,17 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 func TestHandleExecUnknownError(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
-	query := proto.Query{
-		Sql:           "select * from test_table",
-		BindVariables: nil,
-	}
 	var err error
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleExecError(&query, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
 	panic("unknown exec error")
 }
 
 func TestHandleExecTabletError(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
-	query := proto.Query{
-		Sql:           "select * from test_table",
-		BindVariables: nil,
-	}
 	var err error
 	defer func() {
 		want := "fatal: tablet error"
@@ -1322,17 +1045,13 @@ func TestHandleExecTabletError(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleExecError(&query, &err, logStats)
-	panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_UNKNOWN_ERROR, "tablet error"))
+	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
+	panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
 func TestTerseErrors1(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
-	query := proto.Query{
-		Sql:           "select * from test_table",
-		BindVariables: nil,
-	}
 	var err error
 	defer func() {
 		want := "fatal: tablet error"
@@ -1344,17 +1063,13 @@ func TestTerseErrors1(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError(&query, &err, logStats)
-	panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_UNKNOWN_ERROR, "tablet error"))
+	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
+	panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
 func TestTerseErrors2(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
-	query := proto.Query{
-		Sql:           "select * from test_table",
-		BindVariables: map[string]interface{}{"a": 1},
-	}
 	var err error
 	defer func() {
 		want := "error: (errno 10) during query: select * from test_table"
@@ -1366,7 +1081,7 @@ func TestTerseErrors2(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError(&query, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", map[string]interface{}{"a": 1}, &err, logStats)
 	panic(&TabletError{
 		ErrorType: ErrFail,
 		Message:   "msg",
@@ -1377,10 +1092,6 @@ func TestTerseErrors2(t *testing.T) {
 func TestTerseErrors3(t *testing.T) {
 	ctx := context.Background()
 	logStats := newLogStats("TestHandleExecError", ctx)
-	query := proto.Query{
-		Sql:           "select * from test_table",
-		BindVariables: nil,
-	}
 	var err error
 	defer func() {
 		want := "error: msg"
@@ -1392,7 +1103,7 @@ func TestTerseErrors3(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleExecError(&query, &err, logStats)
+	defer tsv.handleExecError("select * from test_table", nil, &err, logStats)
 	panic(&TabletError{
 		ErrorType: ErrFail,
 		Message:   "msg",

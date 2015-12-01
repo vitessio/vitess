@@ -43,6 +43,10 @@ var (
 	// ErrPartialResult is returned by a function that could only
 	// get a subset of its results
 	ErrPartialResult = errors.New("partial result")
+
+	// ErrNoUpdateNeeded can be returned by an 'UpdateFields' method
+	// to skip any update.
+	ErrNoUpdateNeeded = errors.New("no update needed")
 )
 
 // Impl is the interface used to talk to a persistent

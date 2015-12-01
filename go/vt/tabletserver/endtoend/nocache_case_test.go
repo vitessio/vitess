@@ -183,8 +183,8 @@ func TestNocacheCases(t *testing.T) {
 				{"1", "2", "1", "2"},
 			},
 			Rewritten: []string{
-				"select a.eid, a.id, b.eid, b.id from vitess_a as a cross join vitess_b as b where 1 != 1",
-				"select /* cross join */ a.eid, a.id, b.eid, b.id from vitess_a as a cross join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
+				"select a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b where 1 != 1",
+				"select /* cross join */ a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
 			RowsAffected: 2,
 		},

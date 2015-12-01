@@ -18,13 +18,14 @@ import (
 // one primary key and the leading primary key must be numeric, see
 // QuerySplitter.splitBoundaries()
 type QuerySplitter struct {
-	query       *proto.BoundQuery
-	splitCount  int
-	schemaInfo  *SchemaInfo
-	sel         *sqlparser.Select
-	tableName   string
-	splitColumn string
-	rowCount    int64
+	sql           string
+	bindVariables map[string]interface{}
+	splitCount    int64
+	schemaInfo    *SchemaInfo
+	sel           *sqlparser.Select
+	tableName     string
+	splitColumn   string
+	rowCount      int64
 }
 
 const (
@@ -36,18 +37,20 @@ const (
 // to split and splitCount is the desired number of splits. splitCount must
 // be a positive int, if not it will be set to 1.
 func NewQuerySplitter(
-	query *proto.BoundQuery,
+	sql string,
+	bindVariables map[string]interface{},
 	splitColumn string,
-	splitCount int,
+	splitCount int64,
 	schemaInfo *SchemaInfo) *QuerySplitter {
 	if splitCount < 1 {
 		splitCount = 1
 	}
 	return &QuerySplitter{
-		query:       query,
-		splitCount:  splitCount,
-		schemaInfo:  schemaInfo,
-		splitColumn: splitColumn,
+		sql:           sql,
+		bindVariables: bindVariables,
+		splitCount:    splitCount,
+		schemaInfo:    schemaInfo,
+		splitColumn:   splitColumn,
 	}
 }
 
@@ -55,7 +58,7 @@ func NewQuerySplitter(
 // GroupBy, OrderBy, Limit or Distinct operations. Also ensure that the
 // source table is present in the schema and has at least one primary key.
 func (qs *QuerySplitter) validateQuery() error {
-	statement, err := sqlparser.Parse(qs.query.Sql)
+	statement, err := sqlparser.Parse(qs.sql)
 	if err != nil {
 		return err
 	}
@@ -109,28 +112,25 @@ func (qs *QuerySplitter) split(columnType querypb.Type, pkMinMax *sqltypes.Resul
 	splits := []proto.QuerySplit{}
 	// No splits, return the original query as a single split
 	if len(boundaries) == 0 {
-		split := &proto.QuerySplit{
-			Query: *qs.query,
-		}
-		splits = append(splits, *split)
+		splits = append(splits, proto.QuerySplit{
+			Sql:           qs.sql,
+			BindVariables: qs.bindVariables,
+		})
 	} else {
 		boundaries = append(boundaries, sqltypes.Value{})
 		whereClause := qs.sel.Where
 		// Loop through the boundaries and generated modified where clauses
 		start := sqltypes.Value{}
 		for _, end := range boundaries {
-			bindVars := make(map[string]interface{}, len(qs.query.BindVariables))
-			for k, v := range qs.query.BindVariables {
+			bindVars := make(map[string]interface{}, len(qs.bindVariables))
+			for k, v := range qs.bindVariables {
 				bindVars[k] = v
 			}
 			qs.sel.Where = qs.getWhereClause(whereClause, bindVars, start, end)
-			q := &proto.BoundQuery{
+			split := &proto.QuerySplit{
 				Sql:           sqlparser.String(qs.sel),
 				BindVariables: bindVars,
-			}
-			split := &proto.QuerySplit{
-				Query:    *q,
-				RowCount: qs.rowCount,
+				RowCount:      qs.rowCount,
 			}
 			splits = append(splits, *split)
 			start = end
@@ -159,15 +159,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 			Left:     pk,
 			Right:    sqlparser.ValArg([]byte(":" + startBindVarName)),
 		}
-		if start.IsNumeric() {
-			v, _ := start.ParseInt64()
-			bindVars[startBindVarName] = v
-		} else if start.IsString() {
-			bindVars[startBindVarName] = start.Raw()
-		} else if start.IsFractional() {
-			v, _ := start.ParseFloat64()
-			bindVars[startBindVarName] = v
-		}
+		bindVars[startBindVarName] = start.ToNative()
 	}
 	// splitColumn < end
 	if !end.IsNull() {
@@ -176,15 +168,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 			Left:     pk,
 			Right:    sqlparser.ValArg([]byte(":" + endBindVarName)),
 		}
-		if end.IsNumeric() {
-			v, _ := end.ParseInt64()
-			bindVars[endBindVarName] = v
-		} else if end.IsString() {
-			bindVars[endBindVarName] = end.Raw()
-		} else if end.IsFractional() {
-			v, _ := end.ParseFloat64()
-			bindVars[endBindVarName] = v
-		}
+		bindVars[endBindVarName] = end.ToNative()
 	}
 	if startClause == nil {
 		clauses = endClause
@@ -230,8 +214,8 @@ func (qs *QuerySplitter) splitBoundariesIntColumn(pkMinMax *sqltypes.Result) ([]
 	if pkMinMax == nil || len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
 		return boundaries, nil
 	}
-	minNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][0].Raw())
-	maxNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][1].Raw())
+	minNumeric := pkMinMax.Rows[0][0]
+	maxNumeric := pkMinMax.Rows[0][1]
 	min, err := minNumeric.ParseInt64()
 	if err != nil {
 		return nil, err
@@ -240,12 +224,12 @@ func (qs *QuerySplitter) splitBoundariesIntColumn(pkMinMax *sqltypes.Result) ([]
 	if err != nil {
 		return nil, err
 	}
-	interval := (max - min) / int64(qs.splitCount)
+	interval := (max - min) / qs.splitCount
 	if interval == 0 {
 		return nil, err
 	}
 	qs.rowCount = interval
-	for i := int64(1); i < int64(qs.splitCount); i++ {
+	for i := int64(1); i < qs.splitCount; i++ {
 		v, err := sqltypes.BuildValue(min + interval*i)
 		if err != nil {
 			return nil, err
@@ -260,8 +244,8 @@ func (qs *QuerySplitter) splitBoundariesUintColumn(pkMinMax *sqltypes.Result) ([
 	if pkMinMax == nil || len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
 		return boundaries, nil
 	}
-	minNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][0].Raw())
-	maxNumeric := sqltypes.MakeNumeric(pkMinMax.Rows[0][1].Raw())
+	minNumeric := pkMinMax.Rows[0][0]
+	maxNumeric := pkMinMax.Rows[0][1]
 	min, err := minNumeric.ParseUint64()
 	if err != nil {
 		return nil, err
@@ -303,7 +287,7 @@ func (qs *QuerySplitter) splitBoundariesFloatColumn(pkMinMax *sqltypes.Result) (
 		return nil, err
 	}
 	qs.rowCount = int64(interval)
-	for i := 1; i < qs.splitCount; i++ {
+	for i := 1; i < int(qs.splitCount); i++ {
 		boundary := min + interval*float64(i)
 		v, err := sqltypes.BuildValue(boundary)
 		if err != nil {
@@ -321,7 +305,7 @@ func (qs *QuerySplitter) splitBoundariesStringColumn() ([]sqltypes.Value, error)
 	//TODO(shengzhe): have a better estimated row count based on table size.
 	qs.rowCount = int64(splitSize)
 	var boundaries []sqltypes.Value
-	for i := 1; i < qs.splitCount; i++ {
+	for i := 1; i < int(qs.splitCount); i++ {
 		buf := make([]byte, 4)
 		binary.BigEndian.PutUint32(buf, uint32(splitSize)*uint32(i))
 		val, err := sqltypes.BuildValue(buf)

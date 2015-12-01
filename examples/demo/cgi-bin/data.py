@@ -59,7 +59,7 @@ def main():
   print "Content-Type: application/json\n"
   try:
     conn = vtgatev2.connect(["localhost:12345"], 10.0)
-    cursor = conn.cursor("master")
+    cursor = conn.cursor(None, "master", writable=True)
 
     args = cgi.FieldStorage()
     query = args.getvalue("query")

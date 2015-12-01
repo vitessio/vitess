@@ -29,7 +29,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -233,7 +233,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "InitDBConfig failed, current state: %d", tsv.state)
+		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "InitDBConfig failed, current state: %d", tsv.state)
 	}
 	tsv.target = target
 	tsv.dbconfigs = dbconfigs
@@ -335,7 +335,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 		tsv.setState(StateTransitioning)
 		return actionServeNewType, nil
 	case StateTransitioning, StateShuttingDown:
-		return actionNone, NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "cannot SetServingType, current state: %s", tsv.state)
+		return actionNone, NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "cannot SetServingType, current state: %s", tsv.state)
 	default:
 		panic("uncreachable")
 	}
@@ -456,15 +456,15 @@ func (tsv *TabletServer) setTimeBomb() chan struct{} {
 // connect to the database and serving traffic) or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	return tsv.Execute(
+	_, err := tsv.Execute(
 		context.Background(),
 		nil,
-		&proto.Query{
-			Sql:       "select 1 from dual",
-			SessionId: tsv.sessionID,
-		},
-		new(sqltypes.Result),
+		"select 1 from dual",
+		nil,
+		tsv.sessionID,
+		0,
 	)
+	return err
 }
 
 // CheckMySQL initiates a check to see if MySQL is reachable.
@@ -532,30 +532,29 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 }
 
 // GetSessionId returns a sessionInfo response if the state is StateServing.
-func (tsv *TabletServer) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
+func (tsv *TabletServer) GetSessionId(keyspace, shard string) (int64, error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateServing {
-		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
+		return 0, NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
 	}
-	if sessionParams.Keyspace != tsv.dbconfigs.App.Keyspace {
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", tsv.dbconfigs.App.Keyspace, sessionParams.Keyspace)
+	if keyspace != tsv.dbconfigs.App.Keyspace {
+		return 0, NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", tsv.dbconfigs.App.Keyspace, keyspace)
 	}
-	if strings.ToLower(sessionParams.Shard) != strings.ToLower(tsv.dbconfigs.App.Shard) {
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", tsv.dbconfigs.App.Shard, sessionParams.Shard)
+	if strings.ToLower(shard) != strings.ToLower(tsv.dbconfigs.App.Shard) {
+		return 0, NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", tsv.dbconfigs.App.Shard, shard)
 	}
-	sessionInfo.SessionId = tsv.sessionID
-	return nil
+	return tsv.sessionID, nil
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
-func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
+func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, sessionID int64) (transactionID int64, err error) {
 	logStats := newLogStats("Begin", ctx)
 	logStats.OriginalSQL = "begin"
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 
-	if err = tsv.startRequest(target, session.SessionId, true, false); err != nil {
-		return err
+	if err = tsv.startRequest(target, sessionID, true, false); err != nil {
+		return 0, err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.BeginTimeout.Get())
 	defer func() {
@@ -564,19 +563,19 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, sess
 		tsv.endRequest(true)
 	}()
 
-	txInfo.TransactionId = tsv.qe.txPool.Begin(ctx)
-	logStats.TransactionID = txInfo.TransactionId
-	return nil
+	transactionID = tsv.qe.txPool.Begin(ctx)
+	logStats.TransactionID = transactionID
+	return transactionID, nil
 }
 
 // Commit commits the specified transaction.
-func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, session *proto.Session) (err error) {
+func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) (err error) {
 	logStats := newLogStats("Commit", ctx)
 	logStats.OriginalSQL = "commit"
-	logStats.TransactionID = session.TransactionId
+	logStats.TransactionID = transactionID
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 
-	if err = tsv.startRequest(target, session.SessionId, false, true); err != nil {
+	if err = tsv.startRequest(target, sessionID, false, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
@@ -586,18 +585,18 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, ses
 		tsv.endRequest(false)
 	}()
 
-	tsv.qe.Commit(ctx, logStats, session.TransactionId)
+	tsv.qe.Commit(ctx, logStats, transactionID)
 	return nil
 }
 
 // Rollback rollsback the specified transaction.
-func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, session *proto.Session) (err error) {
+func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, sessionID, transactionID int64) (err error) {
 	logStats := newLogStats("Rollback", ctx)
 	logStats.OriginalSQL = "rollback"
-	logStats.TransactionID = session.TransactionId
+	logStats.TransactionID = transactionID
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 
-	if err = tsv.startRequest(target, session.SessionId, false, true); err != nil {
+	if err = tsv.startRequest(target, sessionID, false, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
@@ -607,22 +606,22 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, s
 		tsv.endRequest(false)
 	}()
 
-	tsv.qe.txPool.Rollback(ctx, session.TransactionId)
+	tsv.qe.txPool.Rollback(ctx, transactionID)
 	return nil
 }
 
 // handleExecError handles panics during query execution and sets
 // the supplied error return value.
-func (tsv *TabletServer) handleExecError(query *proto.Query, err *error, logStats *LogStats) {
+func (tsv *TabletServer) handleExecError(sql string, bindVariables map[string]interface{}, err *error, logStats *LogStats) {
 	if x := recover(); x != nil {
-		*err = tsv.handleExecErrorNoPanic(query, x, logStats)
+		*err = tsv.handleExecErrorNoPanic(sql, bindVariables, x, logStats)
 	}
 	if logStats != nil {
 		logStats.Send()
 	}
 }
 
-func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interface{}, logStats *LogStats) error {
+func (tsv *TabletServer) handleExecErrorNoPanic(sql string, bindVariables map[string]interface{}, err interface{}, logStats *LogStats) error {
 	var terr *TabletError
 	defer func() {
 		if logStats != nil {
@@ -631,18 +630,18 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 	}()
 	terr, ok := err.(*TabletError)
 	if !ok {
-		log.Errorf("Uncaught panic for %v:\n%v\n%s", query, err, tb.Stack(4))
+		log.Errorf("Uncaught panic for %v:\n%v\n%s", proto.QueryAsString(sql, bindVariables), err, tb.Stack(4))
 		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-		terr = NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, query)
+		terr = NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, proto.QueryAsString(sql, bindVariables))
 		return terr
 	}
 	var myError error
-	if tsv.config.TerseErrors && terr.SQLError != 0 && len(query.BindVariables) != 0 {
+	if tsv.config.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {
 		myError = &TabletError{
 			ErrorType: terr.ErrorType,
 			SQLError:  terr.SQLError,
 			ErrorCode: terr.ErrorCode,
-			Message:   fmt.Sprintf("(errno %d) during query: %s", terr.SQLError, query.Sql),
+			Message:   fmt.Sprintf("(errno %d) during query: %s", terr.SQLError, sql),
 		}
 	} else {
 		myError = terr
@@ -669,18 +668,18 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 			logMethod = log.Infof
 		}
 	}
-	logMethod("%v: %v", terr, query)
+	logMethod("%v: %v", terr, proto.QueryAsString(sql, bindVariables))
 	return myError
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, query *proto.Query, reply *sqltypes.Result) (err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID, transactionID int64) (result *sqltypes.Result, err error) {
 	logStats := newLogStats("Execute", ctx)
-	defer tsv.handleExecError(query, &err, logStats)
+	defer tsv.handleExecError(sql, bindVariables, &err, logStats)
 
-	allowShutdown := (query.TransactionId != 0)
-	if err = tsv.startRequest(target, query.SessionId, false, allowShutdown); err != nil {
-		return err
+	allowShutdown := (transactionID != 0)
+	if err = tsv.startRequest(target, sessionID, false, allowShutdown); err != nil {
+		return nil, err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
@@ -688,60 +687,53 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, qu
 		tsv.endRequest(false)
 	}()
 
-	if query.BindVariables == nil {
-		query.BindVariables = make(map[string]interface{})
+	if bindVariables == nil {
+		bindVariables = make(map[string]interface{})
 	}
-	stripTrailing(query)
+	sql = stripTrailing(sql, bindVariables)
 	qre := &QueryExecutor{
-		query:         query.Sql,
-		bindVars:      query.BindVariables,
-		transactionID: query.TransactionId,
-		plan:          tsv.qe.schemaInfo.GetPlan(ctx, logStats, query.Sql),
+		query:         sql,
+		bindVars:      bindVariables,
+		transactionID: transactionID,
+		plan:          tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql),
 		ctx:           ctx,
 		logStats:      logStats,
 		qe:            tsv.qe,
 	}
-	result, err := qre.Execute()
+	result, err = qre.Execute()
 	if err != nil {
-		return tsv.handleExecErrorNoPanic(query, err, logStats)
+		return nil, tsv.handleExecErrorNoPanic(sql, bindVariables, err, logStats)
 	}
-	*reply = *result
-	return nil
+	return result, nil
 }
 
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(*sqltypes.Result) error) (err error) {
-	// check cases we don't handle yet
-	if query.TransactionId != 0 {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Transactions not supported with streaming")
-	}
-
+func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(*sqltypes.Result) error) (err error) {
 	logStats := newLogStats("StreamExecute", ctx)
-	defer tsv.handleExecError(query, &err, logStats)
+	defer tsv.handleExecError(sql, bindVariables, &err, logStats)
 
-	if err = tsv.startRequest(target, query.SessionId, false, false); err != nil {
+	if err = tsv.startRequest(target, sessionID, false, false); err != nil {
 		return err
 	}
 	defer tsv.endRequest(false)
 
-	if query.BindVariables == nil {
-		query.BindVariables = make(map[string]interface{})
+	if bindVariables == nil {
+		bindVariables = make(map[string]interface{})
 	}
-	stripTrailing(query)
+	sql = stripTrailing(sql, bindVariables)
 	qre := &QueryExecutor{
-		query:         query.Sql,
-		bindVars:      query.BindVariables,
-		transactionID: query.TransactionId,
-		plan:          tsv.qe.schemaInfo.GetStreamPlan(query.Sql),
-		ctx:           ctx,
-		logStats:      logStats,
-		qe:            tsv.qe,
+		query:    sql,
+		bindVars: bindVariables,
+		plan:     tsv.qe.schemaInfo.GetStreamPlan(sql),
+		ctx:      ctx,
+		logStats: logStats,
+		qe:       tsv.qe,
 	}
 	err = qre.Stream(sendReply)
 	if err != nil {
-		return tsv.handleExecErrorNoPanic(query, err, logStats)
+		return tsv.handleExecErrorNoPanic(sql, bindVariables, err, logStats)
 	}
 	return nil
 }
@@ -750,69 +742,59 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // ExecuteBatch can be called for an existing transaction, or it can be called with
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
-func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
-	if len(queryList.Queries) == 0 {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Empty query list")
+func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []proto.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) (results []sqltypes.Result, err error) {
+	if len(queries) == 0 {
+		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Empty query list")
 	}
-	if queryList.AsTransaction && queryList.TransactionId != 0 {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
+	if asTransaction && transactionID != 0 {
+		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
 	}
 
-	allowShutdown := (queryList.TransactionId != 0)
-	if err = tsv.startRequest(target, queryList.SessionId, false, allowShutdown); err != nil {
-		return err
+	allowShutdown := (transactionID != 0)
+	if err = tsv.startRequest(target, sessionID, false, allowShutdown); err != nil {
+		return nil, err
 	}
 	defer tsv.endRequest(false)
 	defer handleError(&err, nil, tsv.qe.queryServiceStats)
 
-	session := proto.Session{
-		TransactionId: queryList.TransactionId,
-		SessionId:     queryList.SessionId,
-	}
-	if queryList.AsTransaction {
-		var txInfo proto.TransactionInfo
-		if err = tsv.Begin(ctx, target, &session, &txInfo); err != nil {
-			return err
+	if asTransaction {
+		transactionID, err = tsv.Begin(ctx, target, sessionID)
+		if err != nil {
+			return nil, err
 		}
-		session.TransactionId = txInfo.TransactionId
 		// If transaction was not committed by the end, it means
 		// that there was an error, roll it back.
 		defer func() {
-			if session.TransactionId != 0 {
-				tsv.Rollback(ctx, target, &session)
+			if transactionID != 0 {
+				tsv.Rollback(ctx, target, sessionID, transactionID)
 			}
 		}()
 	}
-	reply.List = make([]sqltypes.Result, 0, len(queryList.Queries))
-	for _, bound := range queryList.Queries {
-		query := proto.Query{
-			Sql:           bound.Sql,
-			BindVariables: bound.BindVariables,
-			TransactionId: session.TransactionId,
-			SessionId:     session.SessionId,
+	results = make([]sqltypes.Result, 0, len(queries))
+	for _, bound := range queries {
+		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, sessionID, transactionID)
+		if err != nil {
+			return nil, err
 		}
-		var localReply sqltypes.Result
-		if err = tsv.Execute(ctx, target, &query, &localReply); err != nil {
-			return err
-		}
-		reply.List = append(reply.List, localReply)
+		results = append(results, *localReply)
 	}
-	if queryList.AsTransaction {
-		if err = tsv.Commit(ctx, target, &session); err != nil {
-			session.TransactionId = 0
-			return err
+	if asTransaction {
+		if err = tsv.Commit(ctx, target, sessionID, transactionID); err != nil {
+			transactionID = 0
+			return nil, err
 		}
-		session.TransactionId = 0
+		transactionID = 0
 	}
-	return nil
+	return results, nil
 }
 
-// SplitQuery splits a BoundQuery into smaller queries that return a subset of rows from the original query.
-func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
+// SplitQuery splits a query + bind variables into smaller queries that return a
+// subset of rows from the original query.
+func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) (splits []proto.QuerySplit, err error) {
 	logStats := newLogStats("SplitQuery", ctx)
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
-	if err = tsv.startRequest(target, req.SessionID, false, false); err != nil {
-		return err
+	if err = tsv.startRequest(target, sessionID, false, false); err != nil {
+		return nil, err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
 	defer func() {
@@ -820,10 +802,10 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target,
 		tsv.endRequest(false)
 	}()
 
-	splitter := NewQuerySplitter(&(req.Query), req.SplitColumn, req.SplitCount, tsv.qe.schemaInfo)
+	splitter := NewQuerySplitter(sql, bindVariables, splitColumn, splitCount, tsv.qe.schemaInfo)
 	err = splitter.validateQuery()
 	if err != nil {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %#v", err, req)
+		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %v", err, proto.QueryAsString(sql, bindVariables))
 	}
 
 	defer func(start time.Time) {
@@ -837,20 +819,20 @@ func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target,
 	}
 	columnType, err := getColumnType(qre, splitter.splitColumn, splitter.tableName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var pkMinMax *sqltypes.Result
 	if sqltypes.IsIntegral(columnType) {
 		pkMinMax, err = getColumnMinMax(qre, splitter.splitColumn, splitter.tableName)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	reply.Queries, err = splitter.split(columnType, pkMinMax)
+	splits, err = splitter.split(columnType, pkMinMax)
 	if err != nil {
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %#v", err, req)
+		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %v", err, proto.QueryAsString(sql, bindVariables))
 	}
-	return nil
+	return splits, nil
 }
 
 // StreamHealthRegister is part of queryservice.QueryService interface
@@ -921,16 +903,16 @@ func (tsv *TabletServer) startRequest(target *querypb.Target, sessionID int64, i
 	if (isBegin || allowShutdown) && tsv.state == StateShuttingDown {
 		goto verifySession
 	}
-	return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
+	return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
 
 verifySession:
 	if target != nil {
 		// a valid target can be used instead of a valid session
 		if target.Keyspace != tsv.target.Keyspace {
-			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid keyspace %v", target.Keyspace)
+			return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid keyspace %v", target.Keyspace)
 		}
 		if target.Shard != tsv.target.Shard {
-			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid shard %v", target.Shard)
+			return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid shard %v", target.Shard)
 		}
 		if target.TabletType != tsv.target.TabletType {
 			for _, otherType := range tsv.alsoAllow {
@@ -938,12 +920,12 @@ verifySession:
 					goto ok
 				}
 			}
-			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+			return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
 		}
 		goto ok
 	}
 	if sessionID != tsv.sessionID {
-		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid session Id %v", sessionID)
+		return NewTabletError(ErrRetry, vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid session Id %v", sessionID)
 	}
 
 ok:
@@ -1130,7 +1112,7 @@ func getColumnType(qre *QueryExecutor, columnName, tableName string) (querypb.Ty
 		return sqltypes.Null, err
 	}
 	if result == nil || len(result.Fields) != 1 {
-		return sqltypes.Null, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "failed to get column type for column: %v, invalid result: %v", columnName, result)
+		return sqltypes.Null, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "failed to get column type for column: %v, invalid result: %v", columnName, result)
 	}
 	return result.Fields[0].Type, nil
 }

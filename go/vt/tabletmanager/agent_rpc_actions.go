@@ -494,11 +494,12 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	// Now stop the query service, to make sure nobody is writing to the
-	// database. This will in effect close the connection pools to the
+	// Now disallow queries, to make sure nobody is writing to the
 	// database.
 	tablet := agent.Tablet()
-	agent.disallowQueries(tablet.Tablet.Type, "DemoteMaster marks server rdonly")
+	if err := agent.disallowQueries(tablet.Tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
+		return "", fmt.Errorf("disallowQueries failed: %v", err)
+	}
 
 	pos, err := agent.MysqlDaemon.DemoteMaster()
 	if err != nil {

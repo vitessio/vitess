@@ -7,8 +7,6 @@ import unittest
 from vtdb import sql_builder
 from vtdb import vtrouting
 
-import utils
-
 
 class BaseTestCase(unittest.TestCase):
   pass
@@ -685,4 +683,4 @@ class TestUpdateColumnsQuery(BaseTestCase):
         update_column_value_pairs=[('col_c', 3)])
 
 if __name__ == '__main__':
-  utils.main()
+  unittest.main()

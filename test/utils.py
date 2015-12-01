@@ -21,6 +21,7 @@ from vtproto import topodata_pb2
 
 from vtdb import keyrange_constants
 
+from vtctl import gorpc_vtctl_client  # pylint: disable=unused-import, to register 'gorpc' vtctl_client.
 from vtctl import vtctl_client
 
 import environment

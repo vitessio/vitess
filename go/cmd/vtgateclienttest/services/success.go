@@ -10,7 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // successClient implements vtgateservice.VTGateService
@@ -26,23 +26,24 @@ func newSuccessClient(fallback vtgateservice.VTGateService) *successClient {
 	}
 }
 
-func (c *successClient) Begin(ctx context.Context, outSession *pbg.Session) error {
-	outSession.InTransaction = true
-	return nil
+func (c *successClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+	return &vtgatepb.Session{
+		InTransaction: true,
+	}, nil
 }
 
-func (c *successClient) Commit(ctx context.Context, inSession *pbg.Session) error {
-	if inSession != nil && inSession.InTransaction {
+func (c *successClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
+	if session != nil && session.InTransaction {
 		return nil
 	}
-	return c.fallback.Commit(ctx, inSession)
+	return c.fallback.Commit(ctx, session)
 }
 
-func (c *successClient) Rollback(ctx context.Context, inSession *pbg.Session) error {
-	if inSession != nil && inSession.InTransaction {
+func (c *successClient) Rollback(ctx context.Context, session *vtgatepb.Session) error {
+	if session != nil && session.InTransaction {
 		return nil
 	}
-	return c.fallback.Rollback(ctx, inSession)
+	return c.fallback.Rollback(ctx, session)
 }
 
 func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {

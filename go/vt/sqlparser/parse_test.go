@@ -102,6 +102,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* parenthesis */ 1 from (t)",
 	}, {
+		input: "select /* parenthesis multi-table */ 1 from (t1, t2)",
+	}, {
 		input: "select /* table list */ 1 from t1, t2",
 	}, {
 		input: "select /* parenthessis in table list 1 */ 1 from (t1), t2",
@@ -128,24 +130,39 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* join */ 1 from t1 join t2",
 	}, {
-		input: "select /* straight_join */ 1 from t1 straight_join t2",
-	}, {
-		input: "select /* left join */ 1 from t1 left join t2",
-	}, {
-		input:  "select /* left outer join */ 1 from t1 left outer join t2",
-		output: "select /* left outer join */ 1 from t1 left join t2",
-	}, {
-		input: "select /* right join */ 1 from t1 right join t2",
-	}, {
-		input:  "select /* right outer join */ 1 from t1 right outer join t2",
-		output: "select /* right outer join */ 1 from t1 right join t2",
+		input: "select /* join on */ 1 from t1 join t2 on a = b",
 	}, {
 		input:  "select /* inner join */ 1 from t1 inner join t2",
 		output: "select /* inner join */ 1 from t1 join t2",
 	}, {
-		input: "select /* cross join */ 1 from t1 cross join t2",
+		input:  "select /* cross join */ 1 from t1 cross join t2",
+		output: "select /* cross join */ 1 from t1 join t2",
+	}, {
+		input: "select /* straight_join */ 1 from t1 straight_join t2",
+	}, {
+		input: "select /* straight_join on */ 1 from t1 straight_join t2 on a = b",
+	}, {
+		input: "select /* left join */ 1 from t1 left join t2 on a = b",
+	}, {
+		input:  "select /* left outer join */ 1 from t1 left outer join t2 on a = b",
+		output: "select /* left outer join */ 1 from t1 left join t2 on a = b",
+	}, {
+		input: "select /* right join */ 1 from t1 right join t2 on a = b",
+	}, {
+		input:  "select /* right outer join */ 1 from t1 right outer join t2 on a = b",
+		output: "select /* right outer join */ 1 from t1 right join t2 on a = b",
 	}, {
 		input: "select /* natural join */ 1 from t1 natural join t2",
+	}, {
+		input: "select /* natural left join */ 1 from t1 natural left join t2",
+	}, {
+		input:  "select /* natural left outer join */ 1 from t1 natural left join t2",
+		output: "select /* natural left outer join */ 1 from t1 natural left join t2",
+	}, {
+		input: "select /* natural right join */ 1 from t1 natural right join t2",
+	}, {
+		input:  "select /* natural right outer join */ 1 from t1 natural right join t2",
+		output: "select /* natural right outer join */ 1 from t1 natural right join t2",
 	}, {
 		input: "select /* join on */ 1 from t1 join t2 on a = b",
 	}, {
@@ -680,6 +697,16 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select /* aa",
 		output: "syntax error at position 13 near '/* aa'",
+	}, {
+		// This construct is considered invalid due to a grammar conflict.
+		input:  "insert into a select * from b join c on duplicate key update d=e",
+		output: "syntax error at position 50 near 'duplicate'",
+	}, {
+		input:  "select * from a left join b",
+		output: "syntax error at position 29",
+	}, {
+		input:  "select * from a natural join b on c = d",
+		output: "syntax error at position 34 near 'on'",
 	}}
 	for _, tcase := range validSQL {
 		if tcase.output == "" {

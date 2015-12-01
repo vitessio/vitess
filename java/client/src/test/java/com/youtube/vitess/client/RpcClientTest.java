@@ -103,6 +103,7 @@ public abstract class RpcClientTest {
           .put("bytes", new byte[] {1, 2, 3})
           .build();
   private static final String BIND_VARS_ECHO = "map[bytes:[1 2 3] float:2.5 int:123]";
+  private static final String BIND_VARS_ECHO_P3 = "map[bytes:type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.5\"  int:type:INT64 value:\"123\" ]";
 
   private static final String SESSION_ECHO = "in_transaction:true ";
 
@@ -196,7 +197,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(BIND_VARS_ECHO_P3, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals("true", echo.get("asTransaction"));
 
@@ -208,7 +209,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(BIND_VARS_ECHO_P3, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals("true", echo.get("asTransaction"));
   }
@@ -320,7 +321,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(BIND_VARS_ECHO_P3, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
     Assert.assertEquals("true", echo.get("asTransaction"));
@@ -333,7 +334,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
-    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(BIND_VARS_ECHO_P3, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
     Assert.assertEquals("true", echo.get("asTransaction"));

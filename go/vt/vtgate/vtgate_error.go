@@ -5,12 +5,11 @@
 package vtgate
 
 import (
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
-// A list of all vtrpc.ErrorCodes, ordered by priority. These priorities are
+// A list of all vtrpcpb.ErrorCodes, ordered by priority. These priorities are
 // used when aggregating multiple errors in VtGate.
 // Higher priority error codes are more urgent for users to see. They are
 // prioritized based on the following question: assuming a scatter query produced multiple
@@ -32,26 +31,26 @@ const (
 	PriorityBadInput
 )
 
-var errorPriorities = map[vtrpc.ErrorCode]int{
-	vtrpc.ErrorCode_SUCCESS:            PrioritySuccess,
-	vtrpc.ErrorCode_CANCELLED:          PriorityCancelled,
-	vtrpc.ErrorCode_UNKNOWN_ERROR:      PriorityUnknownError,
-	vtrpc.ErrorCode_BAD_INPUT:          PriorityBadInput,
-	vtrpc.ErrorCode_DEADLINE_EXCEEDED:  PriorityDeadlineExceeded,
-	vtrpc.ErrorCode_INTEGRITY_ERROR:    PriorityIntegrityError,
-	vtrpc.ErrorCode_PERMISSION_DENIED:  PriorityPermissionDenied,
-	vtrpc.ErrorCode_RESOURCE_EXHAUSTED: PriorityResourceExhausted,
-	vtrpc.ErrorCode_QUERY_NOT_SERVED:   PriorityQueryNotServed,
-	vtrpc.ErrorCode_NOT_IN_TX:          PriorityNotInTx,
-	vtrpc.ErrorCode_INTERNAL_ERROR:     PriorityInternalError,
-	vtrpc.ErrorCode_TRANSIENT_ERROR:    PriorityTransientError,
-	vtrpc.ErrorCode_UNAUTHENTICATED:    PriorityUnauthenticated,
+var errorPriorities = map[vtrpcpb.ErrorCode]int{
+	vtrpcpb.ErrorCode_SUCCESS:            PrioritySuccess,
+	vtrpcpb.ErrorCode_CANCELLED:          PriorityCancelled,
+	vtrpcpb.ErrorCode_UNKNOWN_ERROR:      PriorityUnknownError,
+	vtrpcpb.ErrorCode_BAD_INPUT:          PriorityBadInput,
+	vtrpcpb.ErrorCode_DEADLINE_EXCEEDED:  PriorityDeadlineExceeded,
+	vtrpcpb.ErrorCode_INTEGRITY_ERROR:    PriorityIntegrityError,
+	vtrpcpb.ErrorCode_PERMISSION_DENIED:  PriorityPermissionDenied,
+	vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED: PriorityResourceExhausted,
+	vtrpcpb.ErrorCode_QUERY_NOT_SERVED:   PriorityQueryNotServed,
+	vtrpcpb.ErrorCode_NOT_IN_TX:          PriorityNotInTx,
+	vtrpcpb.ErrorCode_INTERNAL_ERROR:     PriorityInternalError,
+	vtrpcpb.ErrorCode_TRANSIENT_ERROR:    PriorityTransientError,
+	vtrpcpb.ErrorCode_UNAUTHENTICATED:    PriorityUnauthenticated,
 }
 
 // aggregateVtGateErrorCodes aggregates a list of errors into a single error code.
 // It does so by finding the highest priority error code in the list.
-func aggregateVtGateErrorCodes(errors []error) vtrpc.ErrorCode {
-	highCode := vtrpc.ErrorCode_SUCCESS
+func aggregateVtGateErrorCodes(errors []error) vtrpcpb.ErrorCode {
+	highCode := vtrpcpb.ErrorCode_SUCCESS
 	for _, e := range errors {
 		code := vterrors.RecoverVtErrorCode(e)
 		if errorPriorities[code] > errorPriorities[highCode] {
@@ -70,23 +69,4 @@ func AggregateVtGateErrors(errors []error) error {
 		aggregateVtGateErrorCodes(errors),
 		vterrors.ConcatenateErrors(errors),
 	)
-}
-
-// AddVtGateError will update a mproto.RPCError with details from a VTGate error.
-func AddVtGateError(err error, replyErr **mproto.RPCError) {
-	if err == nil {
-		return
-	}
-	*replyErr = vterrors.RPCErrFromVtError(err)
-}
-
-// RPCErrorToVtRPCError converts a VTGate error into a vtrpc error.
-func RPCErrorToVtRPCError(rpcErr *mproto.RPCError) *vtrpc.RPCError {
-	if rpcErr == nil {
-		return nil
-	}
-	return &vtrpc.RPCError{
-		Code:    vtrpc.ErrorCode(rpcErr.Code),
-		Message: rpcErr.Message,
-	}
 }
