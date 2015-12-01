@@ -192,6 +192,7 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 	if err != nil {
 		return err
 	}
+	defer bs.Close()
 	bh, err := bs.StartBackup(dir, name)
 	if err != nil {
 		return fmt.Errorf("StartBackup failed: %v", err)
@@ -572,6 +573,7 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurr
 	if err != nil {
 		return replication.Position{}, err
 	}
+	defer bs.Close()
 	bhs, err := bs.ListBackups(dir)
 	if err != nil {
 		return replication.Position{}, fmt.Errorf("ListBackups failed: %v", err)
