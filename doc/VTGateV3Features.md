@@ -6,8 +6,8 @@ Historically, Vitess was built from underneath YouTube. This required us to take
 * V1: This was the first version of VTGate. In this version, the app only needed to know the number of shards, and how to map the sharding key to the correct shard. The rest was done by VTGate. In this version, the app was still exposed to resharding events.
 * V2: In this version, the keyspace id was required instead of the shard. This allowed the app to be agnostic of the number of shards.
 
-With V3, the app does not need to specify any routing info. It just sends the query to VTGate as if it's a single database. Apart from simplifying the API, we gain some additional benefits from this approach:
-* We can build database compliant drivers for each client language, which will allow us to integrate with third party tools that work with such drivers.
+With V3, the app does not need to specify any routing info. It just sends the query to VTGate as if it's a single database. Apart from simplifying the API, there are some additional benefits:
+* Database compliant drivers can be built for each client language. This will also allow for integration with third party tools that work with such drivers.
 * V3 can aspire to satisfy the full SQL syntax. This means that it will be able to perform cross-shard joins, aggregations and sorting.
 * Easier migration: an application that was written to use a single database can be trivially changed to use Vitess, and then the database can be scaled from underneath without changing much of the app.
 
@@ -30,7 +30,7 @@ If the application's sharding key is a monotonically increasing number, then you
 
 Vitess's filtered replication currently requires that the hash value be physically present as a column in each table. To satisfy this need, you still need to create a column to store this hash value. However, V3 will take care of populating this on your behalf.
 
-*We will soon be removing this restriction once we change filtered replication to also perform the same hashing.*
+*This restriction will soon be removed once filtered replication is changed to also perform the same hashing.*
 
 #### Auto-increment columns
 When a table gets sharded, you are no longer able to use MySQL's auto increment functionality. V3 allows you to designate a table in an unsharded database as the source of auto-increment ids. Once you've specified this, V3 will transparently use generated values from this table to keep the auto-increment going. The auto-increment can column can in turn be a basic or hashed sharding key. If it's a hashed sharding key, the newly generated value will be hashed before the query is routed.
@@ -40,7 +40,7 @@ As your application evolves, you'll invariably find yourself wanting to fetch ro
 
 The typical strategy to address this problem is to build a separate lookup table and keep it up-to-date. In the above case, you may build a separate username->user_id relationship table. Once you've informed V3 of this table, it will know what to do with a query like 'select * from user where username=:value'. You can also configure V3 to keep this table up-to-date as you insert or delete data. In other words, the application can be completely agnostic of this table's existence.
 
-*We will soon develop the workflow to build such indexes on-the-fly.*
+*Workflows can be developed to build these indexes on-the-fly.*
 
 #### Non-unique indexes
 Cross-shard indexes need not be unique. It is possible that rows may exist in multiple shards for a given where clause. V3 allows you to specify indexes as unique or non-unique, and accordingly enforces such constraints during changes.
@@ -57,7 +57,7 @@ Once you add multiple indexes to tables, it's possible that the application coul
 
 Some of the changes require updates to be performed across multiple databases. For example, inserting a row into a table that has a cross-shard key requires an additional row to be inserted into the lookup table. This results in distributed transactions. Currently, this is a best effort update. It is possible that partial commits happen if databases fail in the middle of a distributed commit.
 
-*We'll soon develop support for 2PC to overcome this limitation.*
+*There is a plan to support 2PC transactions to overcome this limitation.*
 
 ### Query diversity
 V3 does not support the full SQL feature set. The current implementation supports simple queries:
@@ -66,7 +66,7 @@ V3 does not support the full SQL feature set. The current implementation support
   * All constructs allowed if the statement targets only a single sharding key
   * Aggregation and sorting not allowed if the statement targets more than one sharding key. Selects are allowed to target multiple sharding keys as long as the results from individual shards can be simply combined together to form the final result.
 
-In the immediate future, we plan to add support for the following constructs:
+Work is underway to support the following additional constructs:
 * Joins that can be served by sending the query to a single shard.
 * Joins that can be served by sending the query to multiple shards, and trivially combined to form the final result.
 * Cross-shard joins that can be served through a simple nested lookup.
@@ -76,11 +76,11 @@ In the immediate future, we plan to add support for the following constructs:
 
 SQL is a very powerful language. You can build queries that can result in large amount of work and memory consumption involving big intermediate results. Such constructs where the scope of work is open-ended will not be immediately supported. In such cases, it's recommended that you use map-reduce techniques for which there is a separate API.
 
-*We'll consider building such on-the-fly map-reducers in the future.*
+*On-the-fly map-reducers can be built to address the more complex needs in the future.*
 
 ## The vschema editor
 The above features require metadata like configuration of sharding key and cross-shard indexes to be configured and stored in some place. This is known as the vschema.
 
-*We'll be building a vschema editor and wizard that will allow you to easily view and modify this metadata.*
+*A VSchema editor and wizard will be built to support creation and maintenance of this information.*
 
 Under the covers, the vschema is a JSON file. There are low level vtctl commands to upload it also. This will allow you to build workflows for tracking and managing changes.
