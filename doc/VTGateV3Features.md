@@ -31,7 +31,7 @@ If the application's sharding key is a monotonically increasing number, then you
 Vitess's filtered replication currently requires that the hash value be physically present as a column in each table. To satisfy this need, you still need to create a column to store this hash value. However, V3 will take care of populating this on your behalf. *We will soon be removing this restriction once we change filtered replication to also perform the same hashing.*
 
 #### Auto-increment columns
-When a table gets sharded, you are no longer able to use MySQL's auto increment functionality. V3 allows you to designate a table in an unsharded database as the source of auto-increment ids. Once you've specified this, V3 will transparently use generated values from this table to keep the auto-increment going. Additionally, this column can be a hashed sharding key. This means that the insert will also get routed to the correct shard based on the hashed routing value.
+When a table gets sharded, you are no longer able to use MySQL's auto increment functionality. V3 allows you to designate a table in an unsharded database as the source of auto-increment ids. Once you've specified this, V3 will transparently use generated values from this table to keep the auto-increment going. The auto-increment can column can in turn be a basic or hashed sharding key. If it's a hashed sharding key, the newly generated value will be hashed before the query is routed.
 
 #### Cross-shard indexes
 As your application evolves, you'll invariably find yourself wanting to fetch rows based on columns other than the main sharding key. For example, if you've sharded your database by user id, you may still want to be able find users by their username. If you only had the sharding key, such queries can only be answered by sending it to all shards. This could become very expensive as the number of shards grow.
@@ -51,13 +51,13 @@ The order table would also need an order_id column. As mentioned above, you can 
 In the case of an order_detail table, it may only need an order_id foreign key. Since this foreign key means the same thing as the order_id in order, creating a cross-shard index for it will result in a duplication of the order_id->customer_id index. In such situations, V3 allows you to just reuse the existing index for the order_detail table also. This saves disk space and also reduces the overall write load.
 
 ### Consistency
-Once you add multiple indexes to tables, it's possible that the application could make inconstent requests. V3 makes sure that none of the specified constraints are broken. For example, if a table had both a basic sharding key and a hashed sharding key, it will enforce the rule that the hash of the basic sharding key matches that of the hashed sharding key.
+Once you add multiple indexes to tables, it's possible that the application could make inconsistent requests. V3 makes sure that none of the specified constraints are broken. For example, if a table had both a basic sharding key and a hashed sharding key, it will enforce the rule that the hash of the basic sharding key matches that of the hashed sharding key.
 
 Some of the changes require updates to be performed across multiple databases. For example, inserting a row into a table that has a cross-shard key requires an additional row to be inserted into the lookup table. This results in distributed transactions. Currently, this is a best effort update. It is possible that partial commits happen if databases fail in the middle of a distributed commit. *We will soon develop support for 2PC to overcome this limitation.*
 
 ### Query diversity
 V3 does not support the full SQL feature set. The current implementation supports simple queries:
-* Single table DML statements: This is a vitess-wide restriction where you can affect only one table and one sharding key per statement. *This restriction may be limited in the future.*
+* Single table DML statements: This is a vitess-wide restriction where you can affect only one table and one sharding key per statement. *This restriction may be removed in the future.*
 * Single table SELECT statements:
   * All constructs allowed if the statement targets only a single sharding key
   * Aggregation and sorting not allowed if the statement targets more than one sharding key. Selects are allowed to target multiple sharding keys as long as the results from individual shards can be simply combined together to form the final result.
@@ -73,5 +73,5 @@ In the immediate future, we plan to add support for the following constructs:
 SQL is a very powerful language. You can build queries that can result in large amount of work and memory consumption involving big intermediate results. Such constructs where the scope of work is open-ended will not be immediately supported. In such cases, it's recommended that you use map-reduce techniques for which there is a separate API. *We'll consider building such on-the-fly map-reducers in the future.*
 
 ## The vschema editor
-The above features require metadata like sharding key, cross-shard indexes, etc. to be configured and stored in some place. This is known as the vschema. *We'll be building a vschema editor and wizard that will allow you to easily view and modify this metadata.*
+The above features require metadata like configuration of sharding key and cross-shard indexes to be configured and stored in some place. This is known as the vschema. *We'll be building a vschema editor and wizard that will allow you to easily view and modify this metadata.*
 Under the covers, the vschema is a JSON file. There are low level vtctl commands to upload it also. This will allow you to build workflows for tracking and managing changes.
