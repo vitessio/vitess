@@ -75,7 +75,7 @@ func TestDiscoveryGatewayGetEndPoints(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := newFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "local", time.Millisecond, 2, time.Second, time.Second, time.Second, nil).(*discoveryGateway)
+	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "local", time.Millisecond, 2, time.Second, time.Second, time.Second, nil, nil).(*discoveryGateway)
 
 	// replica should only use local ones
 	hc.Reset()
@@ -101,7 +101,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
 	hc := newFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", time.Millisecond, 2, time.Second, time.Second, time.Second, nil)
+	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", time.Millisecond, 2, time.Second, time.Second, time.Second, nil, nil)
 
 	// no endpoint
 	hc.Reset()
@@ -206,7 +206,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
 	hc := newFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", time.Millisecond, 2, time.Second, time.Second, time.Second, nil)
+	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", time.Millisecond, 2, time.Second, time.Second, time.Second, nil, nil)
 
 	// retry error - no retry
 	hc.Reset()

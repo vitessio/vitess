@@ -22,14 +22,14 @@ import (
 
 func TestExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, false, func(shards []string) (*sqltypes.Result, error) {
-		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
+		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, nil, "")
 		return stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, topodatapb.TabletType_RDONLY, nil, false)
 	})
 }
 
 func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, false, func(shards []string) (*sqltypes.Result, error) {
-		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
+		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, nil, "")
 		queries := []proto.BoundShardQuery{{
 			Sql:           "query",
 			BindVariables: nil,
@@ -47,7 +47,7 @@ func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 
 func TestStreamExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, true, func(shards []string) (*sqltypes.Result, error) {
-		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
+		stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, nil, "")
 		qr := new(sqltypes.Result)
 		err := stc.StreamExecute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, topodatapb.TabletType_RDONLY, func(r *sqltypes.Result) error {
 			appendResult(qr, r)
@@ -62,7 +62,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	sbc := &sandboxConn{mustFailRetry: 3}
 	s.MapTestConn("0", sbc)
 
-	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
+	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, nil, "")
 	session := NewSafeSession(&pbg.Session{
 		InTransaction: true,
 		ShardSessions: []*pbg.Session_ShardSession{{

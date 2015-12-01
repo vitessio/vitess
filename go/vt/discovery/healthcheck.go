@@ -169,6 +169,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, cell, name string, en
 					hcc.mu.Lock()
 					hcc.conn.Close()
 					hcc.conn = nil
+					hcc.target = &querypb.Target{}
 					hcc.mu.Unlock()
 					time.Sleep(hc.retryDelay)
 					break
@@ -227,6 +228,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topod
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.lastError = healthErr
+			hcc.conn.SetTarget(hcc.target.Keyspace, hcc.target.Shard, hcc.target.TabletType)
 			hcc.mu.Unlock()
 			hc.mu.Lock()
 			hc.addEndPointToTargetProtected(hcc.target, endPoint)
@@ -242,6 +244,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topod
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.lastError = healthErr
+			hcc.conn.SetTarget(hcc.target.Keyspace, hcc.target.Shard, hcc.target.TabletType)
 			hcc.mu.Unlock()
 			hc.addEndPointToTargetProtected(shr.Target, endPoint)
 			hc.mu.Unlock()

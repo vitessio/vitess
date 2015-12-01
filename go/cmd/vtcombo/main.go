@@ -10,6 +10,7 @@ package main
 
 import (
 	"flag"
+	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -20,10 +21,13 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk/fakezk"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -36,6 +40,7 @@ var (
 	shardingColumnName = flag.String("sharding_column_name", "keyspace_id", "Specifies the column to use for sharding operations")
 	shardingColumnType = flag.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
 	vschema            = flag.String("vschema", "", "vschema file")
+	tabletTypesToWait  = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
 )
 
 func init() {
@@ -93,7 +98,18 @@ func main() {
 	// vtgate configuration and init
 	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 	healthCheck := discovery.NewHealthCheck(30*time.Second /*connTimeoutTotal*/, 1*time.Millisecond /*retryDelay*/)
-	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, 0 /*maxInFlight*/, "" /*testGateway*/)
+	tabletTypes := make([]topodatapb.TabletType, 0, 1)
+	if len(*tabletTypesToWait) != 0 {
+		for _, ttStr := range strings.Split(*tabletTypesToWait, ",") {
+			tt, err := topoproto.ParseTabletType(ttStr)
+			if err != nil {
+				log.Errorf("unknown tablet type: %v", ttStr)
+				continue
+			}
+			tabletTypes = append(tabletTypes, tt)
+		}
+	}
+	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypes, 0 /*maxInFlight*/, "" /*testGateway*/)
 
 	servenv.OnTerm(func() {
 		// FIXME(alainjobart) stop vtgate, all tablets

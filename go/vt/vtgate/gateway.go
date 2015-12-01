@@ -58,7 +58,7 @@ type Gateway interface {
 }
 
 // GatewayCreator is the func which can create the actual gateway object.
-type GatewayCreator func(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway
+type GatewayCreator func(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings, tabletTypesToWait []topodatapb.TabletType) Gateway
 
 var gatewayCreators = make(map[string]GatewayCreator)
 

@@ -1,22 +1,30 @@
 #!/usr/bin/env python
+"""Initialize the test environment."""
 
-import json
 import logging
 import os
-import socket
 import subprocess
 import sys
 
 # Import the topo implementations that you want registered as options for the
 # --topo-server-flavor flag.
+# pylint: disable=unused-import
 import topo_flavor.zookeeper
 import topo_flavor.etcd
 
+# This imports topo_server into this module, so clients can write
+# environment.topo_server().
+# pylint: disable=unused-import
 from topo_flavor.server import topo_server
 
 # import the protocol flavors we want to use
 import gorpc_protocols_flavor
 import grpc_protocols_flavor
+import discovery_protocols_flavor
+
+# These modules are implicitly used to register their protocols_flavors.
+protocol_flavors = [
+    gorpc_protocols_flavor, grpc_protocols_flavor, discovery_protocols_flavor]
 
 # sanity check the environment
 if os.environ['USER'] == 'root':
@@ -77,7 +85,6 @@ flush_logs_url = '/debug/flushlogs'
 
 
 def setup():
-  global tmproot
   try:
     os.makedirs(tmproot)
   except OSError:
@@ -93,8 +100,20 @@ def reserve_ports(count):
   return result
 
 
-# simple run command, cannot use utils.run to avoid circular dependencies
 def run(args, raise_on_error=True, **kargs):
+  """simple run command, cannot use utils.run to avoid circular dependencies.
+
+  Args:
+    args: Variable length argument list.
+    raise_on_error: if exception should be raised when seeing error.
+    **kargs: Arbitrary keyword arguments.
+
+  Returns:
+    None
+
+  Raises:
+    Exception: when it cannot start subprocess.
+  """
   try:
     logging.debug(
         'run: %s %s', str(args),
@@ -139,6 +158,7 @@ def binary_path(name):
 # returns flags specific to a given binary
 # use this to globally inject flags any time a given command runs
 # e.g. - if name == 'vtctl': return ['-extra_arg', 'value']
+# pylint: disable=unused-argument
 def binary_flags(name):
   return []
 
@@ -161,5 +181,6 @@ def mysql_binary_path(name):
 
 
 # add environment-specific command-line options
+# pylint: disable=unused-argument
 def add_options(parser):
   pass

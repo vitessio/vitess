@@ -6,7 +6,7 @@ from net import gorpc
 import protocols_flavor
 
 
-class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
+class DiscoveryProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   """Overrides to use go rpc everywhere."""
 
   def binlog_player_protocol(self):
@@ -43,7 +43,7 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
     return 'gorpc'
 
   def vtgate_gateway(self):
-    return 'shardgateway'
+    return 'discoverygateway'
 
   def client_error_exception_type(self):
     return gorpc.AppError
@@ -65,4 +65,4 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
     return 'gorpc'
 
 
-protocols_flavor.register_flavor('gorpc', GoRpcProtocolsFlavor)
+protocols_flavor.register_flavor('discovery', DiscoveryProtocolsFlavor)

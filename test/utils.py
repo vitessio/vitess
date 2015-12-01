@@ -506,7 +506,7 @@ class VtGate(object):
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            timeout_total='4s', timeout_per_conn='2s',
+            timeout_total='2s', timeout_per_conn='1s',
             extra_args=None):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
 
@@ -521,7 +521,11 @@ class VtGate(object):
         '-conn-timeout-per-conn', timeout_per_conn,
         '-bsonrpc_timeout', '5s',
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+        '-gateway_implementation', protocols_flavor().vtgate_gateway(),
+        '-tablet_types_to_wait', 'MASTER,REPLICA',
     ]
+    if protocols_flavor().vtgate_gateway() == 'discoverygateway':
+      args.extend(['-cells_to_watch', cell])
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():
