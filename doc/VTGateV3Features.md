@@ -23,7 +23,7 @@ The vitess workflow also ensures that such migrations are done transparently wit
 At its core, vitess uses range-based sharding, where the sharding column is typically a number or a varbinary. However, allowing data to be accessed only by the sharding key limits the flexibility of an application. V3 comes with a set of new indexing schemes that are built on top of range-based sharding.
 
 #### Basic sharding key
-If the application already has a well-distributed sharding key, you just have to tell VTGate what those keys are for each table. VTgate will correctly route your queries based on input values or the WHERE clause.
+If the application already has a well-distributed sharding key, you just have to tell VTGate what those keys are for each table. VTGate will correctly route your queries based on input values or the WHERE clause.
 
 #### Hashed sharding key
 If the application's sharding key is a monotonically increasing number, then you may not get well-balanced shards. In such cases, you can ask V3 to route queries based on the hash of the main sharding key.
