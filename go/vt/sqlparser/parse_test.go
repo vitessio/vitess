@@ -170,7 +170,10 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
 	}, {
-		input: "select /* select in from */ 1 from (select 1 from t)",
+		input: "select /* select in from */ 1 from (select 1 from t) as a",
+	}, {
+		input:  "select /* select in from with no as */ 1 from (select 1 from t) a",
+		output: "select /* select in from with no as */ 1 from (select 1 from t) as a",
 	}, {
 		input: "select /* where */ 1 from t where a = b",
 	}, {
@@ -203,6 +206,16 @@ func TestValid(t *testing.T) {
 		input: "select /* like */ 1 from t where a like b",
 	}, {
 		input: "select /* not like */ 1 from t where a not like b",
+	}, {
+		input: "select /* regexp */ 1 from t where a regexp b",
+	}, {
+		input: "select /* not regexp */ 1 from t where a not regexp b",
+	}, {
+		input:  "select /* rlike */ 1 from t where a rlike b",
+		output: "select /* rlike */ 1 from t where a regexp b",
+	}, {
+		input:  "select /* not rlike */ 1 from t where a not rlike b",
+		output: "select /* not rlike */ 1 from t where a not regexp b",
 	}, {
 		input: "select /* between */ 1 from t where a between b and c",
 	}, {

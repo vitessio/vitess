@@ -605,6 +605,8 @@ const (
 	NotInStr         = "not in"
 	LikeStr          = "like"
 	NotLikeStr       = "not like"
+	RegexpStr        = "regexp"
+	NotRegexpStr     = "not regexp"
 )
 
 // Format formats the node.
