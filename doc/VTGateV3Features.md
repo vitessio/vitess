@@ -55,7 +55,9 @@ In the case of an order_detail table, it may only need an order_id foreign key. 
 ### Consistency
 Once you add multiple indexes to tables, it's possible that the application could make inconsistent requests. V3 makes sure that none of the specified constraints are broken. For example, if a table had both a basic sharding key and a hashed sharding key, it will enforce the rule that the hash of the basic sharding key matches that of the hashed sharding key.
 
-Some of the changes require updates to be performed across multiple databases. For example, inserting a row into a table that has a cross-shard key requires an additional row to be inserted into the lookup table. This results in distributed transactions. Currently, this is a best effort update. It is possible that partial commits happen if databases fail in the middle of a distributed commit. *We will soon develop support for 2PC to overcome this limitation.*
+Some of the changes require updates to be performed across multiple databases. For example, inserting a row into a table that has a cross-shard key requires an additional row to be inserted into the lookup table. This results in distributed transactions. Currently, this is a best effort update. It is possible that partial commits happen if databases fail in the middle of a distributed commit.
+
+*We'll soon develop support for 2PC to overcome this limitation.*
 
 ### Query diversity
 V3 does not support the full SQL feature set. The current implementation supports simple queries:
@@ -72,8 +74,13 @@ In the immediate future, we plan to add support for the following constructs:
 * Aggregations (and grouping) that can be trivially combined from multiple shards.
 * A combination of the above constructs as long as the results remain trivially combinable.
 
-SQL is a very powerful language. You can build queries that can result in large amount of work and memory consumption involving big intermediate results. Such constructs where the scope of work is open-ended will not be immediately supported. In such cases, it's recommended that you use map-reduce techniques for which there is a separate API. *We'll consider building such on-the-fly map-reducers in the future.*
+SQL is a very powerful language. You can build queries that can result in large amount of work and memory consumption involving big intermediate results. Such constructs where the scope of work is open-ended will not be immediately supported. In such cases, it's recommended that you use map-reduce techniques for which there is a separate API.
+
+*We'll consider building such on-the-fly map-reducers in the future.*
 
 ## The vschema editor
-The above features require metadata like configuration of sharding key and cross-shard indexes to be configured and stored in some place. This is known as the vschema. *We'll be building a vschema editor and wizard that will allow you to easily view and modify this metadata.*
+The above features require metadata like configuration of sharding key and cross-shard indexes to be configured and stored in some place. This is known as the vschema.
+
+*We'll be building a vschema editor and wizard that will allow you to easily view and modify this metadata.*
+
 Under the covers, the vschema is a JSON file. There are low level vtctl commands to upload it also. This will allow you to build workflows for tracking and managing changes.
