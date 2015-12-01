@@ -17,14 +17,21 @@ import topo_flavor.etcd
 # pylint: disable=unused-import
 from topo_flavor.server import topo_server
 
+# Import the VTGate gateway flavors that you want registered as options for the
+# --gateway_implementation flag.
+# pylint: disable=unused-import
+import vtgate_gateway_flavor.shardgateway
+import vtgate_gateway_flavor.discoverygateway
+
 # import the protocol flavors we want to use
 import gorpc_protocols_flavor
 import grpc_protocols_flavor
-import discovery_protocols_flavor
 
 # These modules are implicitly used to register their protocols_flavors.
 protocol_flavors = [
-    gorpc_protocols_flavor, grpc_protocols_flavor, discovery_protocols_flavor]
+    gorpc_protocols_flavor, grpc_protocols_flavor
+]
+
 
 # sanity check the environment
 if os.environ['USER'] == 'root':

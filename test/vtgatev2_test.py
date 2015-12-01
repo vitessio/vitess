@@ -14,6 +14,7 @@ import environment
 import tablet
 import utils
 from protocols_flavor import protocols_flavor
+from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
 
 from vtdb import dbexceptions
 from vtdb import keyrange
@@ -1208,8 +1209,8 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     # hard kill tablet2
     self.replica_tablet2.hard_kill_vttablet()
-    if protocols_flavor().vtgate_gateway() == 'shardgateway':
-      # "shard" implementation fails the first query
+    if vtgate_gateway_flavor().flavor() == 'shardgateway':
+      # "shardgateway" implementation fails the first query
       # send query after tablet2 is killed, should not retry on the cached conn
       try:
         vtgate_conn._execute(

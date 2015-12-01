@@ -115,26 +115,21 @@ func (dg *discoveryGateway) waitForEndPoints() error {
 			}
 			// check connections
 			for shardName := range allShards {
-				wg.Add(1)
-				go func(shard string) {
-					defer wg.Done()
-					for _, tt := range dg.tabletTypesToWait {
-						wg.Add(1)
-						go func(tabletType topodatapb.TabletType) {
-							defer wg.Done()
-							expiry := time.Now().Add(waitAvailableEndPointPeriod)
-							for expiry.After(time.Now()) {
-								epl := dg.hc.GetEndPointStatsFromTarget(keyspace, shard, tabletType)
-								if len(epl) > 0 {
-									return
-								}
-								time.Sleep(time.Second)
+				for _, tt := range dg.tabletTypesToWait {
+					wg.Add(1)
+					go func(shard string, tabletType topodatapb.TabletType) {
+						defer wg.Done()
+						expiry := time.Now().Add(waitAvailableEndPointPeriod)
+						for expiry.After(time.Now()) {
+							epl := dg.hc.GetEndPointStatsFromTarget(keyspace, shard, tabletType)
+							if len(epl) > 0 {
+								return
 							}
-							log.Warningf("wait timeout for %v.%v.%v", keyspace, shard, tabletType)
-						}(tt)
-					}
-
-				}(shardName)
+							time.Sleep(time.Second)
+						}
+						log.Warningf("waitForEndPoints timeout for %v.%v.%v", keyspace, shard, tabletType)
+					}(shardName, tt)
+				}
 			}
 		}(ksName)
 	}

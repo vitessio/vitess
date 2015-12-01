@@ -42,9 +42,6 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   def vtgate_python_protocol(self):
     return 'gorpc'
 
-  def vtgate_gateway(self):
-    return 'shardgateway'
-
   def client_error_exception_type(self):
     return gorpc.AppError
 

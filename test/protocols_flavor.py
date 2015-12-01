@@ -56,10 +56,6 @@ class ProtocolsFlavor(object):
     """The protocol to use to talk to vtgate with python clients."""
     raise NotImplementedError('Not implemented in the base class')
 
-  def vtgate_gateway(self):
-    """The gateway to use in vtgate."""
-    raise NotImplementedError('Not implemented in the base class')
-
   def client_error_exception_type(self):
     """The exception type the RPC client implementation returns for errors."""
     raise NotImplementedError('Not implemented in the base class')
