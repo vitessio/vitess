@@ -28,7 +28,9 @@ If the application already has a well-distributed sharding key, you just have to
 #### Hashed sharding key
 If the application's sharding key is a monotonically increasing number, then you may not get well-balanced shards. In such cases, you can ask V3 to route queries based on the hash of the main sharding key.
 
-Vitess's filtered replication currently requires that the hash value be physically present as a column in each table. To satisfy this need, you still need to create a column to store this hash value. However, V3 will take care of populating this on your behalf. *We will soon be removing this restriction once we change filtered replication to also perform the same hashing.*
+Vitess's filtered replication currently requires that the hash value be physically present as a column in each table. To satisfy this need, you still need to create a column to store this hash value. However, V3 will take care of populating this on your behalf.
+
+*We will soon be removing this restriction once we change filtered replication to also perform the same hashing.*
 
 #### Auto-increment columns
 When a table gets sharded, you are no longer able to use MySQL's auto increment functionality. V3 allows you to designate a table in an unsharded database as the source of auto-increment ids. Once you've specified this, V3 will transparently use generated values from this table to keep the auto-increment going. The auto-increment can column can in turn be a basic or hashed sharding key. If it's a hashed sharding key, the newly generated value will be hashed before the query is routed.
