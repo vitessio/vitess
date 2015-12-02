@@ -9,12 +9,15 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -31,38 +34,115 @@ var (
 	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
 )
 
-const gatewayImplementationDiscovery = "discoverygateway"
+const (
+	gatewayImplementationDiscovery = "discoverygateway"
+
+	// the period to wait for endpoint availability during initialization
+	waitAvailableEndPointPeriod = 30 * time.Second
+)
 
 func init() {
 	RegisterGatewayCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway {
-	return &discoveryGateway{
-		hc:              hc,
-		topoServer:      topoServer,
-		localCell:       cell,
-		retryCount:      retryCount,
-		tabletsWatchers: make([]*discovery.TopologyWatcher, 0, 1),
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, _ time.Duration, retryCount int, _, _, _ time.Duration, _ *stats.MultiTimings, tabletTypesToWait []topodatapb.TabletType) Gateway {
+	dg := &discoveryGateway{
+		hc:                hc,
+		topoServer:        topoServer,
+		srvTopoServer:     serv,
+		localCell:         cell,
+		retryCount:        retryCount,
+		tabletTypesToWait: tabletTypesToWait,
+		tabletsWatchers:   make([]*discovery.TopologyWatcher, 0, 1),
 	}
+	dg.hc.SetListener(dg)
+	for _, c := range strings.Split(*cellsToWatch, ",") {
+		if c == "" {
+			continue
+		}
+		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, dg.hc, c, *refreshInterval, *topoReadConcurrency)
+		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
+	}
+	err := dg.waitForEndPoints()
+	if err != nil {
+		log.Errorf("createDiscoveryGateway: %v", err)
+	}
+	return dg
 }
 
 type discoveryGateway struct {
-	hc         discovery.HealthCheck
-	topoServer topo.Server
-	localCell  string
-	retryCount int
+	hc                discovery.HealthCheck
+	topoServer        topo.Server
+	srvTopoServer     SrvTopoServer
+	localCell         string
+	retryCount        int
+	tabletTypesToWait []topodatapb.TabletType
 
 	tabletsWatchers []*discovery.TopologyWatcher
 }
 
+func (dg *discoveryGateway) waitForEndPoints() error {
+	ctx := context.Background()
+
+	// Skip waiting for endpoints if we are not told to do so.
+	if len(dg.tabletTypesToWait) == 0 {
+		return nil
+	}
+
+	// Go through all serving shards and create connections,
+	// and wait for at least one available endpoint for specified tablet type.
+	ksNames, err := dg.srvTopoServer.GetSrvKeyspaceNames(ctx, dg.localCell)
+	if err != nil {
+		return err
+	}
+	var wg sync.WaitGroup
+	var errRecorder concurrency.AllErrorRecorder
+	for _, ksName := range ksNames {
+		wg.Add(1)
+		go func(keyspace string) {
+			defer wg.Done()
+			// get SrvKeyspace for cell/keyspace
+			ks, err := dg.srvTopoServer.GetSrvKeyspace(ctx, dg.localCell, keyspace)
+			if err != nil {
+				errRecorder.RecordError(err)
+				return
+			}
+			// get all shard names
+			allShards := make(map[string]bool)
+			for _, ksPartition := range ks.Partitions {
+				for _, shard := range ksPartition.ShardReferences {
+					allShards[shard.Name] = true
+				}
+			}
+			// check connections
+			for shardName := range allShards {
+				for _, tt := range dg.tabletTypesToWait {
+					wg.Add(1)
+					go func(shard string, tabletType topodatapb.TabletType) {
+						defer wg.Done()
+						expiry := time.Now().Add(waitAvailableEndPointPeriod)
+						for expiry.After(time.Now()) {
+							epl := dg.hc.GetEndPointStatsFromTarget(keyspace, shard, tabletType)
+							if len(epl) > 0 {
+								return
+							}
+							time.Sleep(time.Second)
+						}
+						log.Warningf("waitForEndPoints timeout for %v.%v.%v", keyspace, shard, tabletType)
+					}(shardName, tt)
+				}
+			}
+		}(ksName)
+	}
+	wg.Wait()
+	if errRecorder.HasErrors() {
+		return errRecorder.AggrError(AggregateVtGateErrors)
+	}
+	return nil
+}
+
 // InitializeConnections creates connections to VTTablets.
 func (dg *discoveryGateway) InitializeConnections(ctx context.Context) error {
-	dg.hc.SetListener(dg)
-	for _, cell := range strings.Split(*cellsToWatch, ",") {
-		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, dg.hc, cell, *refreshInterval, *topoReadConcurrency)
-		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
-	}
 	return nil
 }
 

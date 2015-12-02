@@ -24,6 +24,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk/fakezk"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -93,7 +95,12 @@ func main() {
 	// vtgate configuration and init
 	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 	healthCheck := discovery.NewHealthCheck(30*time.Second /*connTimeoutTotal*/, 1*time.Millisecond /*retryDelay*/)
-	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, 0 /*maxInFlight*/, "" /*testGateway*/)
+	tabletTypesToWait := []topodatapb.TabletType{
+		topodatapb.TabletType_MASTER,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_RDONLY,
+	}
+	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
 
 	servenv.OnTerm(func() {
 		// FIXME(alainjobart) stop vtgate, all tablets

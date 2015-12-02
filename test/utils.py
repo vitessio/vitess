@@ -33,6 +33,8 @@ from mysql_flavor import set_mysql_flavor
 from protocols_flavor import protocols_flavor
 from protocols_flavor import set_protocols_flavor
 from topo_flavor.server import set_topo_server_flavor
+from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
+from vtgate_gateway_flavor.gateway import set_vtgate_gateway_flavor
 
 
 options = None
@@ -93,6 +95,7 @@ def add_options(parser):
   parser.add_option('--mysql-flavor')
   parser.add_option('--protocols-flavor')
   parser.add_option('--topo-server-flavor', default='zookeeper')
+  parser.add_option('--vtgate-gateway-flavor', default='shardgateway')
 
 
 def set_options(opts):
@@ -102,6 +105,7 @@ def set_options(opts):
   set_mysql_flavor(options.mysql_flavor)
   set_protocols_flavor(options.protocols_flavor)
   set_topo_server_flavor(options.topo_server_flavor)
+  set_vtgate_gateway_flavor(options.vtgate_gateway_flavor)
   environment.skip_build = options.skip_build
 
 
@@ -510,7 +514,7 @@ class VtGate(object):
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            timeout_total='4s', timeout_per_conn='2s',
+            timeout_total='2s', timeout_per_conn='1s',
             extra_args=None):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
 
@@ -525,7 +529,10 @@ class VtGate(object):
         '-conn-timeout-per-conn', timeout_per_conn,
         '-bsonrpc_timeout', '5s',
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+        '-gateway_implementation', vtgate_gateway_flavor().flavor(),
+        '-tablet_types_to_wait', 'MASTER,REPLICA',
     ]
+    args.extend(vtgate_gateway_flavor().flags(cell=cell))
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():

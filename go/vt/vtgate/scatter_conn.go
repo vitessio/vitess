@@ -45,7 +45,7 @@ type shardActionFunc func(shard string, transactionID int64, sResults chan<- int
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate connections.
-func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, testGateway string) *ScatterConn {
+func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, testGateway string) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	tabletConnectStatsName := ""
 	if statsName != "" {
@@ -53,7 +53,7 @@ func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTo
 		tabletConnectStatsName = statsName + "TabletConnect"
 	}
 	connTimings := stats.NewMultiTimings(tabletConnectStatsName, []string{"Keyspace", "ShardName", "DbType"})
-	gateway := GetGatewayCreator()(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
+	gateway := GetGatewayCreator()(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings, tabletTypesToWait)
 
 	sc := &ScatterConn{
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
@@ -64,7 +64,7 @@ func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTo
 	// this is to test health checking module when using existing gateway
 	if testGateway != "" {
 		if gc := GetGatewayCreatorByName(testGateway); gc != nil {
-			sc.testGateway = gc(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
+			sc.testGateway = gc(hc, topoServer, serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings, nil)
 		}
 	}
 

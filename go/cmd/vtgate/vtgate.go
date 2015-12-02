@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"math/rand"
+	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -16,8 +17,11 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -29,7 +33,8 @@ var (
 	connTimeoutPerConn    = flag.Duration("conn-timeout-per-conn", 1500*time.Millisecond, "vttablet connection timeout (per connection)")
 	connLife              = flag.Duration("conn-life", 365*24*time.Hour, "average life of vttablet connections")
 	maxInFlight           = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
-	healthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 5*time.Second, "health check retry delay")
+	healthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
+	tabletTypesToWait     = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
 	testGateway           = flag.String("test_gateway", "", "additional gateway to test health check module")
 )
 
@@ -83,6 +88,17 @@ startServer:
 
 	healthCheck = discovery.NewHealthCheck(*connTimeoutTotal, *healthCheckRetryDelay)
 
-	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, *maxInFlight, *testGateway)
+	tabletTypes := make([]topodatapb.TabletType, 0, 1)
+	if len(*tabletTypesToWait) != 0 {
+		for _, ttStr := range strings.Split(*tabletTypesToWait, ",") {
+			tt, err := topoproto.ParseTabletType(ttStr)
+			if err != nil {
+				log.Errorf("unknown tablet type: %v", ttStr)
+				continue
+			}
+			tabletTypes = append(tabletTypes, tt)
+		}
+	}
+	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, tabletTypes, *maxInFlight, *testGateway)
 	servenv.RunDefault()
 }

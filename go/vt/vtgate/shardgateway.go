@@ -31,7 +31,7 @@ func init() {
 	RegisterGatewayCreator(gatewayImplementationShard, createShardGateway)
 }
 
-func createShardGateway(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway {
+func createShardGateway(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings, _ []topodatapb.TabletType) Gateway {
 	return &shardGateway{
 		toposerv:           serv,
 		cell:               cell,
