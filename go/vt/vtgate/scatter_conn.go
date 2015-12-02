@@ -442,8 +442,8 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 			return err
 		}
 		// Append the keyrange for this shard to all the splits received,
-		// if keyrange is nil for the shard (e.g. for single-sharded keyspaces),
-		// append empty keyrange to represent the entire keyspace
+		// if keyrange is nil for the shard (e.g. for single-sharded keyspaces during resharding),
+		// append empty keyrange to represent the entire keyspace.
 		keyranges := []*topodatapb.KeyRange{}
 		if keyRangeByShard[shard] != nil {
 			keyranges = []*topodatapb.KeyRange{keyRangeByShard[shard]}
