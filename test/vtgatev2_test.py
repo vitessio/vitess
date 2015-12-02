@@ -159,6 +159,12 @@ def setup_tablets():
       t.mquery(shard_0_master.dbname, create_table)
     t.start_vttablet(wait_for_state=None, target_tablet_type='replica')
 
+  for t in [shard_0_master, shard_1_master]:
+    t.wait_for_vttablet_state('SERVING')
+  for t in [shard_0_replica1, shard_0_replica2,
+            shard_1_replica1, shard_1_replica2]:
+    t.wait_for_vttablet_state('NOT_SERVING')
+
   utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/-80',
                    shard_0_master.tablet_alias], auto_log=True)
   utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/80-',
