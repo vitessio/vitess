@@ -11,7 +11,7 @@ VTCTLD_PORT=${VTCTLD_PORT:-30001}
 
 # Get the ExternalIP of any node.
 get_node_ip() {
-  $KUBECTL get -o template -t '{{range (index .items 0).status.addresses}}{{if eq .type "ExternalIP" "LegacyHostIP"}}{{.address}}{{end}}{{end}}' nodes
+  $KUBECTL get -o template --template '{{range (index .items 0).status.addresses}}{{if eq .type "ExternalIP" "LegacyHostIP"}}{{.address}}{{end}}{{end}}' nodes
 }
 
 # Try to find vtctld address if not provided.
@@ -26,7 +26,7 @@ get_vtctld_addr() {
 
 # Find the name of a vtctld pod.
 get_vtctld_pod() {
-  $KUBECTL get -o template -t "{{if ge (len .items) 1 }}{{(index .items 0).metadata.name}}{{end}}" -l 'app=vitess,component=vtctld' pods
+  $KUBECTL get -o template --template "{{if ge (len .items) 1 }}{{(index .items 0).metadata.name}}{{end}}" -l 'app=vitess,component=vtctld' pods
 }
 
 start_vtctld_forward() {
