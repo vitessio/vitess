@@ -170,7 +170,7 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 	isRetry := false
 	for {
 		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0, false)
+		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0)
 		cancel()
 		if err == nil {
 			// success!
@@ -284,7 +284,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, ti, query, 1, true)
+	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, ti, query, 1)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("ExecuteFetchAsApp: %v", err)

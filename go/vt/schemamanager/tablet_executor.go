@@ -208,7 +208,7 @@ func (exec *TabletExecutor) executeOneTablet(
 	errChan chan ShardWithError,
 	successChan chan ShardResult) {
 	defer wg.Done()
-	result, err := exec.tmClient.ExecuteFetchAsDba(ctx, tabletInfo, sql, 10, false, false, true)
+	result, err := exec.tmClient.ExecuteFetchAsDba(ctx, tabletInfo, sql, 10, false, true)
 	if err != nil {
 		errChan <- ShardWithError{Shard: tabletInfo.Shard, Err: err.Error()}
 	} else {

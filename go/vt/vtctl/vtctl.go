@@ -177,7 +177,7 @@ var commands = []commandGroup{
 				"Runs the specified hook on the given tablet. A hook is a script that resides in the $VTROOT/vthook directory. You can put any script into that directory and use this command to run that script.\n" +
 					"For this command, the param=value arguments are parameters that the command passes to the specified hook."},
 			command{"ExecuteFetchAsDba", commandExecuteFetchAsDba,
-				"[--max_rows=10000] [--want_fields] [--disable_binlogs] <tablet alias> <sql command>",
+				"[--max_rows=10000] [--disable_binlogs] <tablet alias> <sql command>",
 				"Runs the given SQL command as a DBA on the remote tablet."},
 		},
 	},
@@ -933,7 +933,6 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 
 func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	maxRows := subFlags.Int("max_rows", 10000, "Specifies the maximum number of rows to allow in reset")
-	wantFields := subFlags.Bool("want_fields", false, "Indicates whether the request should also get field names")
 	disableBinlogs := subFlags.Bool("disable_binlogs", false, "Disables writing to binlogs during the query")
 	reloadSchema := subFlags.Bool("reload_schema", false, "Indicates whether the tablet schema will be reloaded after executing the SQL command. The default value is <code>false</code>, which indicates that the tablet schema will not be reloaded.")
 
@@ -949,7 +948,7 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	query := subFlags.Arg(1)
-	qr, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *wantFields, *disableBinlogs, *reloadSchema)
+	qr, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *disableBinlogs, *reloadSchema)
 	if err != nil {
 		return err
 	}

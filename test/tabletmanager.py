@@ -102,7 +102,7 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure direct dba queries work
     query_result = utils.run_vtctl_json(
-        ['ExecuteFetchAsDba', '-want_fields', tablet_62344.tablet_alias,
+        ['ExecuteFetchAsDba', tablet_62344.tablet_alias,
          'select * from vt_test_keyspace.vt_select_test'])
     self.assertEqual(
         len(query_result['rows']), 4,
