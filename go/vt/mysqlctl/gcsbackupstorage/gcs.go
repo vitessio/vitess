@@ -15,6 +15,8 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/cloud"
 	"google.golang.org/cloud/storage"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
@@ -22,7 +24,6 @@ import (
 
 var (
 	// project is the Google Developers Console project ID.
-	// TODO(mberlin): Find out where to fill this in in the new API.
 	project = flag.String("gcs_backup_storage_project", "", "Google Developers Console project ID to use for backups")
 
 	// bucket is where the backups will go.
@@ -89,14 +90,14 @@ func (bh *GCSBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 type GCSBackupStorage struct {
 	// client is the instance of the Google Cloud Storage Go client.
 	// Once this field is set, it must not be written again/unset to nil.
-	client *storage.Client
+	_client *storage.Client
 	// mu guards all fields.
 	mu sync.Mutex
 }
 
 // ListBackups implements BackupStorage.
 func (bs *GCSBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandle, error) {
-	c, err := bs.getClientOrCreate()
+	c, err := bs.client()
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +146,7 @@ func (bs *GCSBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandl
 
 // StartBackup implements BackupStorage.
 func (bs *GCSBackupStorage) StartBackup(dir, name string) (backupstorage.BackupHandle, error) {
-	c, err := bs.getClientOrCreate()
+	c, err := bs.client()
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +162,7 @@ func (bs *GCSBackupStorage) StartBackup(dir, name string) (backupstorage.BackupH
 
 // RemoveBackup implements BackupStorage.
 func (bs *GCSBackupStorage) RemoveBackup(dir, name string) error {
-	c, err := bs.getClientOrCreate()
+	c, err := bs.client()
 	if err != nil {
 		return err
 	}
@@ -191,20 +192,42 @@ func (bs *GCSBackupStorage) RemoveBackup(dir, name string) error {
 	return nil
 }
 
-// getClientOrCreate returns the GCS Storage client instance.
-// If there isn't one yet, it tries to create one.
-func (bs *GCSBackupStorage) getClientOrCreate() (*storage.Client, error) {
+// Close implements BackupStorage.
+func (bs *GCSBackupStorage) Close() error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	if bs.client == nil {
-		client, err := storage.NewClient(context.TODO())
+	if bs._client != nil {
+		// If client.Close() fails, we still clear bs._client, so we know to create
+		// a new client the next time one is needed.
+		client := bs._client
+		bs._client = nil
+		if err := client.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// client returns the GCS Storage client instance.
+// If there isn't one yet, it tries to create one.
+func (bs *GCSBackupStorage) client() (*storage.Client, error) {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+
+	if bs._client == nil {
+		authClient, err := google.DefaultClient(context.TODO())
 		if err != nil {
 			return nil, err
 		}
-		bs.client = client
+		authCtx := cloud.NewContext(*project, authClient)
+		client, err := storage.NewClient(authCtx)
+		if err != nil {
+			return nil, err
+		}
+		bs._client = client
 	}
-	return bs.client, nil
+	return bs._client, nil
 }
 
 // objName joins path parts into an object name.
