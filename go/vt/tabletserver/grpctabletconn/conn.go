@@ -108,11 +108,6 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	return sqltypes.Proto3ToResult(er.Result), nil
 }
 
-// Execute2 is the same with Execute in gRPC, since Execute is already CallerID enabled
-func (conn *gRPCQueryClient) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	return conn.Execute(ctx, query, bindVars, transactionID)
-}
-
 // ExecuteBatch sends a batch query to VTTablet.
 func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	conn.mu.RLock()
@@ -142,11 +137,6 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []queryty
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
 	return sqltypes.Proto3ToResults(ebr.Results), nil
-}
-
-// ExecuteBatch2 is the same with ExecuteBatch in gRPC, which is already CallerID enabled
-func (conn *gRPCQueryClient) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
-	return conn.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
 // StreamExecute starts a streaming query to VTTablet.
@@ -196,11 +186,6 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	}, nil
 }
 
-// StreamExecute2 is the same as StreamExecute for gRPC
-func (conn *gRPCQueryClient) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return conn.StreamExecute(ctx, query, bindVars, transactionID)
-}
-
 // Begin starts a transaction.
 func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, err error) {
 	conn.mu.RLock()
@@ -220,11 +205,6 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 		return 0, tabletconn.TabletErrorFromGRPC(err)
 	}
 	return br.TransactionId, nil
-}
-
-// Begin2 is the same as Begin for gRPC
-func (conn *gRPCQueryClient) Begin2(ctx context.Context) (transactionID int64, err error) {
-	return conn.Begin(ctx)
 }
 
 // Commit commits the ongoing transaction.
@@ -249,11 +229,6 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 	return nil
 }
 
-// Commit2 is the same as Commit for gRPC
-func (conn *gRPCQueryClient) Commit2(ctx context.Context, transactionID int64) error {
-	return conn.Commit(ctx, transactionID)
-}
-
 // Rollback rolls back the ongoing transaction.
 func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) error {
 	conn.mu.RLock()
@@ -274,11 +249,6 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 		return tabletconn.TabletErrorFromGRPC(err)
 	}
 	return nil
-}
-
-// Rollback2 is the same as Rollback for gRPC
-func (conn *gRPCQueryClient) Rollback2(ctx context.Context, transactionID int64) error {
-	return conn.Rollback(ctx, transactionID)
 }
 
 // SplitQuery is the stub for TabletServer.SplitQuery RPC

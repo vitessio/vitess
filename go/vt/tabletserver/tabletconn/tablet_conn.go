@@ -94,15 +94,6 @@ type TabletConn interface {
 	Commit(ctx context.Context, transactionId int64) error
 	Rollback(ctx context.Context, transactionId int64) error
 
-	// These should not be used for anything except tests for now; they will eventually
-	// replace the existing methods.
-	Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*sqltypes.Result, error)
-	ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionId int64) ([]sqltypes.Result, error)
-	Begin2(ctx context.Context) (transactionId int64, err error)
-	Commit2(ctx context.Context, transactionId int64) error
-	Rollback2(ctx context.Context, transactionId int64) error
-	StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *sqltypes.Result, ErrFunc, error)
-
 	// Close must be called for releasing resources.
 	Close()
 
