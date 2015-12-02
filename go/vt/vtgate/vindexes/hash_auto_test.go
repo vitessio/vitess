@@ -12,9 +12,10 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var hashAuto planbuilder.Vindex
@@ -134,10 +135,10 @@ type vcursor struct {
 	mustFail bool
 	numRows  int
 	result   *sqltypes.Result
-	query    *tproto.BoundQuery
+	query    *querytypes.BoundQuery
 }
 
-func (vc *vcursor) Execute(query *tproto.BoundQuery) (*sqltypes.Result, error) {
+func (vc *vcursor) Execute(query *querytypes.BoundQuery) (*sqltypes.Result, error) {
 	vc.query = query
 	if vc.mustFail {
 		return nil, errors.New("execute failed")
@@ -173,7 +174,7 @@ func TestHashAutoCreate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "insert into t(c) values(:c)",
 		BindVariables: map[string]interface{}{
 			"c": 1,
@@ -202,7 +203,7 @@ func TestHashAutoGenerate(t *testing.T) {
 	if got != 1 {
 		t.Errorf("Generate(): %+v, want 1", got)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "insert into t(c) values(:c)",
 		BindVariables: map[string]interface{}{
 			"c": nil,
@@ -228,7 +229,7 @@ func TestHashAutoDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "delete from t where c in ::c",
 		BindVariables: map[string]interface{}{
 			"c": []interface{}{1},

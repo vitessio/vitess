@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callerid/gorpccallerid"
 	"github.com/youtube/vitess/go/vt/rpc"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gorpcvtgatecommon"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -478,7 +478,7 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query s
 	request := &gorpcvtgatecommon.SplitQueryRequest{
 		CallerID: getEffectiveCallerID(ctx),
 		Keyspace: keyspace,
-		Query: tproto.BoundQuery{
+		Query: querytypes.BoundQuery{
 			Sql:           query,
 			BindVariables: bindVars,
 		},

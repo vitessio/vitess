@@ -15,7 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -265,7 +265,7 @@ func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 
 func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		bv, err := tproto.BindVariablesToProto3(bindVariables)
+		bv, err := querytypes.BindVariablesToProto3(bindVariables)
 		if err != nil {
 			return nil, err
 		}

@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
@@ -741,7 +741,7 @@ func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *Fa
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []proto.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, sessionID int64, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	if f.hasError {
 		return nil, testTabletError
 	}
@@ -767,14 +767,14 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 	return executeBatchQueryResultList, nil
 }
 
-var executeBatchQueries = []proto.BoundQuery{
-	proto.BoundQuery{
+var executeBatchQueries = []querytypes.BoundQuery{
+	querytypes.BoundQuery{
 		Sql: "executeBatchQueries1",
 		BindVariables: map[string]interface{}{
 			"bind1": int64(43),
 		},
 	},
-	proto.BoundQuery{
+	querytypes.BoundQuery{
 		Sql: "executeBatchQueries2",
 		BindVariables: map[string]interface{}{
 			"bind2": int64(72),
@@ -873,7 +873,7 @@ func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
-func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]proto.QuerySplit, error) {
+func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) ([]querytypes.QuerySplit, error) {
 	if f.hasError {
 		return nil, testTabletError
 	}
@@ -883,11 +883,11 @@ func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Targe
 	if f.checkExtraFields {
 		f.checkTargetCallerID(ctx, "SplitQuery", target)
 	}
-	if !reflect.DeepEqual(proto.BoundQuery{
+	if !reflect.DeepEqual(querytypes.BoundQuery{
 		Sql:           sql,
 		BindVariables: bindVariables,
 	}, splitQueryBoundQuery) {
-		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", proto.QueryAsString(sql, bindVariables), splitQueryBoundQuery)
+		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", querytypes.QueryAsString(sql, bindVariables), splitQueryBoundQuery)
 	}
 	if splitColumn != splitQuerySplitColumn {
 		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v", splitColumn, splitQuerySplitColumn)
@@ -898,7 +898,7 @@ func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Targe
 	return splitQueryQuerySplitList, nil
 }
 
-var splitQueryBoundQuery = proto.BoundQuery{
+var splitQueryBoundQuery = querytypes.BoundQuery{
 	Sql: "splitQuery",
 	BindVariables: map[string]interface{}{
 		"bind1": int64(43),
@@ -908,8 +908,8 @@ var splitQueryBoundQuery = proto.BoundQuery{
 const splitQuerySplitColumn = "nice_column_to_split"
 const splitQuerySplitCount = 372
 
-var splitQueryQuerySplitList = []proto.QuerySplit{
-	proto.QuerySplit{
+var splitQueryQuerySplitList = []querytypes.QuerySplit{
+	querytypes.QuerySplit{
 		Sql: "splitQuery",
 		BindVariables: map[string]interface{}{
 			"bind1":       int64(43),

@@ -11,12 +11,12 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 func TestBatchRead(t *testing.T) {
 	client := framework.NewClient()
-	queries := []proto.BoundQuery{{
+	queries := []querytypes.BoundQuery{{
 		Sql:           "select * from vitess_a where id = :a",
 		BindVariables: map[string]interface{}{"a": 2},
 	}, {
@@ -77,7 +77,7 @@ func TestBatchRead(t *testing.T) {
 
 func TestBatchTransaction(t *testing.T) {
 	client := framework.NewClient()
-	queries := []proto.BoundQuery{{
+	queries := []querytypes.BoundQuery{{
 		Sql: "insert into vitess_test values(4, null, null, null)",
 	}, {
 		Sql: "select * from vitess_test where intval = 4",

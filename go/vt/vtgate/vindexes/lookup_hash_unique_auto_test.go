@@ -10,9 +10,10 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var lhua planbuilder.Vindex
@@ -148,7 +149,7 @@ func TestLookupHashUniqueAutoCreate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
 		BindVariables: map[string]interface{}{
 			"fromc": 1,
@@ -185,7 +186,7 @@ func TestLookupHashUniqueAutoGenerate(t *testing.T) {
 	if got != 1 {
 		t.Errorf("Generate(): %+v, want 1", got)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
 		BindVariables: map[string]interface{}{
 			"fromc": nil,
@@ -226,7 +227,7 @@ func TestLookupHashUniqueAutoDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "delete from t where fromc in ::fromc and toc = :toc",
 		BindVariables: map[string]interface{}{
 			"fromc": []interface{}{1},

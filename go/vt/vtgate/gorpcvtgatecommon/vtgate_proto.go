@@ -10,7 +10,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid/gorpccallerid"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
@@ -140,7 +140,7 @@ type QueryResultList struct {
 type SplitQueryRequest struct {
 	CallerID    *gorpccallerid.CallerID
 	Keyspace    string
-	Query       tproto.BoundQuery
+	Query       querytypes.BoundQuery
 	SplitColumn string
 	SplitCount  int64
 }

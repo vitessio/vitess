@@ -8,7 +8,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 // QuerySplitter splits a BoundQuery into equally sized smaller queries.
@@ -104,15 +104,15 @@ func (qs *QuerySplitter) validateQuery() error {
 
 // split splits the query into multiple queries. validateQuery() must return
 // nil error before split() is called.
-func (qs *QuerySplitter) split(columnType querypb.Type, pkMinMax *sqltypes.Result) ([]proto.QuerySplit, error) {
+func (qs *QuerySplitter) split(columnType querypb.Type, pkMinMax *sqltypes.Result) ([]querytypes.QuerySplit, error) {
 	boundaries, err := qs.splitBoundaries(columnType, pkMinMax)
 	if err != nil {
 		return nil, err
 	}
-	splits := []proto.QuerySplit{}
+	splits := []querytypes.QuerySplit{}
 	// No splits, return the original query as a single split
 	if len(boundaries) == 0 {
-		splits = append(splits, proto.QuerySplit{
+		splits = append(splits, querytypes.QuerySplit{
 			Sql:           qs.sql,
 			BindVariables: qs.bindVariables,
 		})
@@ -127,7 +127,7 @@ func (qs *QuerySplitter) split(columnType querypb.Type, pkMinMax *sqltypes.Resul
 				bindVars[k] = v
 			}
 			qs.sel.Where = qs.getWhereClause(whereClause, bindVars, start, end)
-			split := &proto.QuerySplit{
+			split := &querytypes.QuerySplit{
 				Sql:           sqlparser.String(qs.sel),
 				BindVariables: bindVars,
 				RowCount:      qs.rowCount,

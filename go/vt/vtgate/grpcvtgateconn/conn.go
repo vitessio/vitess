@@ -13,7 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
@@ -50,7 +50,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	if session != nil {
 		s = session.(*vtgatepb.Session)
 	}
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, session, err
 	}
@@ -76,7 +76,7 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 	if session != nil {
 		s = session.(*vtgatepb.Session)
 	}
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, session, err
 	}
@@ -104,7 +104,7 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	if session != nil {
 		s = session.(*vtgatepb.Session)
 	}
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, session, err
 	}
@@ -132,7 +132,7 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	if session != nil {
 		s = session.(*vtgatepb.Session)
 	}
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, session, err
 	}
@@ -160,7 +160,7 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	if session != nil {
 		s = session.(*vtgatepb.Session)
 	}
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, session, err
 	}
@@ -229,7 +229,7 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*
 }
 
 func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -271,7 +271,7 @@ func (conn *vtgateConn) StreamExecute2(ctx context.Context, query string, bindVa
 }
 
 func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -315,7 +315,7 @@ func (conn *vtgateConn) StreamExecuteShards2(ctx context.Context, query string, 
 }
 
 func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -359,7 +359,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges2(ctx context.Context, query strin
 }
 
 func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType) (<-chan *sqltypes.Result, vtgateconn.ErrFunc, error) {
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -444,7 +444,7 @@ func (conn *vtgateConn) Rollback2(ctx context.Context, session interface{}) erro
 }
 
 func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, err
 	}

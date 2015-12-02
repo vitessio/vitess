@@ -6,9 +6,9 @@ package gorpcvtgatecommon
 
 import (
 	"github.com/youtube/vitess/go/sqltypes"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 // This file contains methods to convert the bson rpc structures to and from
@@ -24,7 +24,7 @@ func EntityIdsToProto(l []EntityId) []*vtgatepb.ExecuteEntityIdsRequest_EntityId
 		result[i] = &vtgatepb.ExecuteEntityIdsRequest_EntityId{
 			KeyspaceId: []byte(e.KeyspaceID),
 		}
-		v, err := tproto.BindVariableToValue(e.ExternalID)
+		v, err := querytypes.BindVariableToValue(e.ExternalID)
 		if err != nil {
 			panic(err)
 		}
@@ -58,7 +58,7 @@ func BoundShardQueriesToProto(bsq []BoundShardQuery) ([]*vtgatepb.BoundShardQuer
 	}
 	result := make([]*vtgatepb.BoundShardQuery, len(bsq))
 	for i, q := range bsq {
-		qq, err := tproto.BoundQueryToProto3(q.Sql, q.BindVariables)
+		qq, err := querytypes.BoundQueryToProto3(q.Sql, q.BindVariables)
 		if err != nil {
 			return nil, err
 		}
@@ -79,7 +79,7 @@ func ProtoToBoundShardQueries(bsq []*vtgatepb.BoundShardQuery) ([]BoundShardQuer
 	result := make([]BoundShardQuery, len(bsq))
 	for i, q := range bsq {
 		result[i].Sql = string(q.Query.Sql)
-		bv, err := tproto.Proto3ToBindVariables(q.Query.BindVariables)
+		bv, err := querytypes.Proto3ToBindVariables(q.Query.BindVariables)
 		if err != nil {
 			return nil, err
 		}
@@ -97,7 +97,7 @@ func BoundKeyspaceIdQueriesToProto(bsq []BoundKeyspaceIdQuery) ([]*vtgatepb.Boun
 	}
 	result := make([]*vtgatepb.BoundKeyspaceIdQuery, len(bsq))
 	for i, q := range bsq {
-		qq, err := tproto.BoundQueryToProto3(q.Sql, q.BindVariables)
+		qq, err := querytypes.BoundQueryToProto3(q.Sql, q.BindVariables)
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +117,7 @@ func ProtoToBoundKeyspaceIdQueries(bsq []*vtgatepb.BoundKeyspaceIdQuery) ([]Boun
 	}
 	result := make([]BoundKeyspaceIdQuery, len(bsq))
 	for i, q := range bsq {
-		bv, err := tproto.Proto3ToBindVariables(q.Query.BindVariables)
+		bv, err := querytypes.Proto3ToBindVariables(q.Query.BindVariables)
 		if err != nil {
 			return nil, err
 		}

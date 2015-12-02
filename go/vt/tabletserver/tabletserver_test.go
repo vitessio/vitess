@@ -16,7 +16,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 )
@@ -477,8 +477,8 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 	if err = tsv.StreamExecute(ctx, nil, "select * from test_table limit 1000", nil, 0, streamSendReply); err == nil {
 		t.Fatalf("call TabletServer.StreamExecute should fail because of an invalid session id: 0")
 	}
-	if _, err = tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
-		proto.BoundQuery{
+	if _, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           "noquery",
 			BindVariables: nil,
 		},
@@ -643,8 +643,8 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
-		proto.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           sql,
 			BindVariables: nil,
 		},
@@ -667,7 +667,7 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	_, err = tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{}, tsv.sessionID, false, 0)
+	_, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{}, tsv.sessionID, false, 0)
 	verifyTabletError(t, err, ErrFail)
 }
 
@@ -684,8 +684,8 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	_, err = tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
-		proto.BoundQuery{
+	_, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           "begin",
 			BindVariables: nil,
 		},
@@ -708,8 +708,8 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
-		proto.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           "begin",
 			BindVariables: nil,
 		},
@@ -733,12 +733,12 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
-		proto.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           "begin",
 			BindVariables: nil,
 		},
-		proto.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           "commit",
 			BindVariables: nil,
 		},
@@ -775,8 +775,8 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 		t.Fatalf("rollback should not be executed.")
 	}
 
-	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
-		proto.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           sql,
 			BindVariables: nil,
 		},
@@ -813,8 +813,8 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
-		proto.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           sql,
 			BindVariables: nil,
 		},
@@ -836,8 +836,8 @@ func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
-		proto.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           "commit",
 			BindVariables: nil,
 		},
@@ -865,24 +865,24 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, nil, []proto.BoundQuery{
-		proto.BoundQuery{
+	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           "begin",
 			BindVariables: nil,
 		},
-		proto.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           "begin",
 			BindVariables: nil,
 		},
-		proto.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           sql,
 			BindVariables: nil,
 		},
-		proto.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           "commit",
 			BindVariables: nil,
 		},
-		proto.BoundQuery{
+		querytypes.BoundQuery{
 			Sql:           "commit",
 			BindVariables: nil,
 		},

@@ -11,9 +11,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
-
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -365,7 +364,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
-	q, err := tproto.BoundQueryToProto3(echoPrefix+query+":split_column:123", bindVars)
+	q, err := querytypes.BoundQueryToProto3(echoPrefix+query+":split_column:123", bindVars)
 	if err != nil {
 		t.Fatalf("BoundQueryToProto3 error: %v", err)
 	}
