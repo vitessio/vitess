@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
 
@@ -350,11 +350,11 @@ type sandboxConn struct {
 	AsTransactionCount sync2.AtomicInt64
 
 	// Queries stores the non-batch requests received.
-	Queries []tproto.BoundQuery
+	Queries []querytypes.BoundQuery
 
 	// BatchQueries stores the batch requests received
 	// Each batch request is inlined as a slice of Queries.
-	BatchQueries [][]tproto.BoundQuery
+	BatchQueries [][]querytypes.BoundQuery
 
 	// results specifies the results to be returned.
 	// They're consumed as results are returned. If there are
@@ -426,7 +426,7 @@ func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.Queries = append(sbc.Queries, tproto.BoundQuery{
+	sbc.Queries = append(sbc.Queries, querytypes.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
 	})
@@ -443,7 +443,7 @@ func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map
 	return sbc.Execute(ctx, query, bindVars, transactionID)
 }
 
-func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	if asTransaction {
 		sbc.AsTransactionCount.Add(1)
@@ -462,7 +462,7 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 	return result, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
@@ -472,7 +472,7 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.Queries = append(sbc.Queries, tproto.BoundQuery{
+	sbc.Queries = append(sbc.Queries, querytypes.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
 	})
@@ -537,10 +537,10 @@ var sandboxSQRowCount = int64(10)
 
 // Fake SplitQuery creates splits from the original query by appending the
 // split index as a comment to the SQL. RowCount is always sandboxSQRowCount
-func (sbc *sandboxConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error) {
-	splits := []tproto.QuerySplit{}
+func (sbc *sandboxConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+	splits := []querytypes.QuerySplit{}
 	for i := 0; i < int(splitCount); i++ {
-		split := tproto.QuerySplit{
+		split := querytypes.QuerySplit{
 			Sql:           fmt.Sprintf("%s /*split %v */", query.Sql, i),
 			BindVariables: query.BindVariables,
 			RowCount:      sandboxSQRowCount,

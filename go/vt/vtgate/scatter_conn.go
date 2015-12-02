@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -215,7 +215,7 @@ type scatterBatchRequest struct {
 }
 
 type shardBatchRequest struct {
-	Queries         []tproto.BoundQuery
+	Queries         []querytypes.BoundQuery
 	Keyspace, Shard string
 	ResultIndexes   []int
 }
@@ -445,7 +445,7 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 		keyranges := []*topodatapb.KeyRange{keyRangeByShard[shard]}
 		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
 		for i, query := range queries {
-			q, err := tproto.BindVariablesToProto3(query.BindVariables)
+			q, err := querytypes.BindVariablesToProto3(query.BindVariables)
 			if err != nil {
 				return err
 			}
@@ -499,7 +499,7 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 		shards := []string{shard}
 		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
 		for i, query := range queries {
-			q, err := tproto.BindVariablesToProto3(query.BindVariables)
+			q, err := querytypes.BindVariablesToProto3(query.BindVariables)
 			if err != nil {
 				return err
 			}

@@ -7,7 +7,7 @@ package vindexes
 import (
 	"fmt"
 
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -223,7 +223,7 @@ func (lkp *lookup) Init(m map[string]interface{}) {
 // Map1 is for a unique vindex.
 func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.sel,
 	}
 	for _, id := range ids {
@@ -253,7 +253,7 @@ func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byt
 // Map2 is for a non-unique vindex.
 func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][][]byte, error) {
 	out := make([][][]byte, 0, len(ids))
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.sel,
 	}
 	for _, id := range ids {
@@ -283,7 +283,7 @@ func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []by
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
 	}
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.ver,
 		BindVariables: map[string]interface{}{
 			lkp.From: id,
@@ -306,7 +306,7 @@ func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid []by
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.ins,
 		BindVariables: map[string]interface{}{
 			lkp.From: id,
@@ -325,7 +325,7 @@ func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid []byte) (id int64,
 	if err != nil {
 		return 0, fmt.Errorf("lookup.Generate: %v", err)
 	}
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.ins,
 		BindVariables: map[string]interface{}{
 			lkp.From: nil,
@@ -345,7 +345,7 @@ func (lkp *lookup) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid [
 	if err != nil {
 		return fmt.Errorf("lookup.Delete: %v", err)
 	}
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.del,
 		BindVariables: map[string]interface{}{
 			lkp.From: ids,

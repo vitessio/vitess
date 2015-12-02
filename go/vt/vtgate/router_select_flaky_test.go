@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/topo"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
@@ -23,7 +23,7 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql:           "select * from music_user_map where id = 1",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -35,7 +35,7 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select * from music_user_map where id = 1",
 		BindVariables: map[string]interface{}{},
 	}, {
@@ -51,7 +51,7 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "delete from music_user_map",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -64,7 +64,7 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "insert into music_user_map values(1)",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -130,7 +130,7 @@ func TestSelectEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql:           "select * from user where id = 1",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -146,7 +146,7 @@ func TestSelectEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select * from user where id = 3",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -165,14 +165,14 @@ func TestSelectEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select * from user where name = 'foo'",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]interface{}{
 			"name": "foo",
@@ -282,7 +282,7 @@ func TestSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "select * from user where id in ::_vals",
 		BindVariables: map[string]interface{}{
 			"_vals": []interface{}{int64(1)},
@@ -300,7 +300,7 @@ func TestSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select * from user where id in ::_vals",
 		BindVariables: map[string]interface{}{
 			"_vals": []interface{}{int64(1)},
@@ -309,7 +309,7 @@ func TestSelectIN(t *testing.T) {
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select * from user where id in ::_vals",
 		BindVariables: map[string]interface{}{
 			"_vals": []interface{}{int64(3)},
@@ -325,14 +325,14 @@ func TestSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select * from user where name = 'foo'",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]interface{}{
 			"name": "foo",
@@ -383,7 +383,7 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]interface{}{
 			"name": "foo",
@@ -418,7 +418,7 @@ func TestSelectKeyrange(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql:           "select * from user",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -434,7 +434,7 @@ func TestSelectKeyrange(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select * from user",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -522,7 +522,7 @@ func TestSelectScatter(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql:           "select * from user",
 		BindVariables: map[string]interface{}{},
 	}}

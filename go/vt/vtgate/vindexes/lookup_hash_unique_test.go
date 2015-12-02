@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -60,7 +60,7 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
 		BindVariables: map[string]interface{}{
 			"fromc": 1,
@@ -92,7 +92,7 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "delete from t where fromc in ::fromc and toc = :toc",
 		BindVariables: map[string]interface{}{
 			"fromc": []interface{}{1},

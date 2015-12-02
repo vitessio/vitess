@@ -10,9 +10,10 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestUpdateEqual(t *testing.T) {
@@ -22,7 +23,7 @@ func TestUpdateEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "update user set a = 2 where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
@@ -40,7 +41,7 @@ func TestUpdateEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "update user set a = 2 where id = 3 /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
@@ -60,7 +61,7 @@ func TestUpdateEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select user_id from music_user_map where music_id = :music_id",
 		BindVariables: map[string]interface{}{
 			"music_id": int64(2),
@@ -134,7 +135,7 @@ func TestDeleteEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql:           "select id, name from user where id = 1 for update",
 		BindVariables: map[string]interface{}{},
 	}, {
@@ -147,7 +148,7 @@ func TestDeleteEqual(t *testing.T) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "delete from user_idx where id in ::id",
 		BindVariables: map[string]interface{}{
 			"id": []interface{}{int64(1)},
@@ -170,7 +171,7 @@ func TestDeleteEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select id, name from user where id = 1 for update",
 		BindVariables: map[string]interface{}{},
 	}, {
@@ -193,7 +194,7 @@ func TestDeleteEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select user_id from music_user_map where music_id = :music_id",
 		BindVariables: map[string]interface{}{
 			"music_id": int64(1),
@@ -252,7 +253,7 @@ func TestInsertSharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "insert into user(id, v, name) values (:_id, 2, :_name) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
@@ -266,7 +267,7 @@ func TestInsertSharded(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "insert into user_idx(id) values(:id)",
 		BindVariables: map[string]interface{}{
 			"id": int64(1),
@@ -288,7 +289,7 @@ func TestInsertSharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "insert into user(id, v, name) values (:_id, 2, :_name) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
@@ -302,7 +303,7 @@ func TestInsertSharded(t *testing.T) {
 	if sbc1.Queries != nil {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "insert into user_idx(id) values(:id)",
 		BindVariables: map[string]interface{}{
 			"id": int64(3),
@@ -327,7 +328,7 @@ func TestInsertGenerator(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "insert into user(v, name, id) values (2, :_name, :_id) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
@@ -338,7 +339,7 @@ func TestInsertGenerator(t *testing.T) {
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "insert into user_idx(id) values(:id)",
 		BindVariables: map[string]interface{}{
 			"id": nil,
@@ -367,7 +368,7 @@ func TestInsertLookupOwned(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
@@ -378,7 +379,7 @@ func TestInsertLookupOwned(t *testing.T) {
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "insert into music_user_map(music_id, user_id) values(:music_id, :user_id)",
 		BindVariables: map[string]interface{}{
 			"music_id": int64(3),
@@ -398,7 +399,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
@@ -409,7 +410,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "insert into music_user_map(music_id, user_id) values(:music_id, :user_id)",
 		BindVariables: map[string]interface{}{
 			"music_id": nil,
@@ -433,7 +434,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "insert into music_extra(user_id, music_id) values (:_user_id, :_music_id) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
@@ -444,7 +445,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select music_id from music_user_map where music_id = :music_id and user_id = :user_id",
 		BindVariables: map[string]interface{}{
 			"music_id": int64(3),
@@ -463,7 +464,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id, :_user_id) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
@@ -474,7 +475,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select user_id from music_user_map where music_id = :music_id",
 		BindVariables: map[string]interface{}{
 			"music_id": int64(3),

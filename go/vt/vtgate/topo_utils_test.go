@@ -12,7 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -158,7 +158,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 				Length: 3,
 				Requests: map[string]*shardBatchRequest{
 					"ks1:0": &shardBatchRequest{
-						Queries: []tproto.BoundQuery{
+						Queries: []querytypes.BoundQuery{
 							{
 								Sql:           "q1",
 								BindVariables: map[string]interface{}{"q1var": int64(1)},
@@ -169,7 +169,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 						ResultIndexes: []int{0},
 					},
 					"ks1:1": &shardBatchRequest{
-						Queries: []tproto.BoundQuery{
+						Queries: []querytypes.BoundQuery{
 							{
 								Sql:           "q1",
 								BindVariables: map[string]interface{}{"q1var": int64(1)},
@@ -183,7 +183,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 						ResultIndexes: []int{0, 1},
 					},
 					"ks2:1": &shardBatchRequest{
-						Queries: []tproto.BoundQuery{
+						Queries: []querytypes.BoundQuery{
 							{
 								Sql:           "q3",
 								BindVariables: map[string]interface{}{"q3var": int64(3)},
@@ -216,7 +216,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 				Length: 1,
 				Requests: map[string]*shardBatchRequest{
 					"ks1:0": &shardBatchRequest{
-						Queries: []tproto.BoundQuery{
+						Queries: []querytypes.BoundQuery{
 							{
 								Sql:           "q1",
 								BindVariables: map[string]interface{}{"q1var": int64(1)},

@@ -11,7 +11,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 func getSchemaInfo() *SchemaInfo {
@@ -338,17 +338,17 @@ func TestSplitQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	got := []proto.BoundQuery{}
+	got := []querytypes.BoundQuery{}
 	for _, split := range splits {
 		if split.RowCount != 100 {
 			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 100)
 		}
-		got = append(got, proto.BoundQuery{
+		got = append(got, querytypes.BoundQuery{
 			Sql:           split.Sql,
 			BindVariables: split.BindVariables,
 		})
 	}
-	want := []proto.BoundQuery{
+	want := []querytypes.BoundQuery{
 		{
 			Sql:           "select * from test_table where (count > :count) and (id < :" + endBindVarName + ")",
 			BindVariables: map[string]interface{}{endBindVarName: int64(100)},
@@ -394,17 +394,17 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	got := []proto.BoundQuery{}
+	got := []querytypes.BoundQuery{}
 	for _, split := range splits {
 		if split.RowCount != 160 {
 			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 160)
 		}
-		got = append(got, proto.BoundQuery{
+		got = append(got, querytypes.BoundQuery{
 			Sql:           split.Sql,
 			BindVariables: split.BindVariables,
 		})
 	}
-	want := []proto.BoundQuery{
+	want := []querytypes.BoundQuery{
 		{
 			Sql:           "select * from test_table where (count > :count) and (id < :" + endBindVarName + ")",
 			BindVariables: map[string]interface{}{endBindVarName: 170.5},
@@ -434,14 +434,14 @@ func TestSplitQueryStringColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	got := []proto.BoundQuery{}
+	got := []querytypes.BoundQuery{}
 	for _, split := range splits {
-		got = append(got, proto.BoundQuery{
+		got = append(got, querytypes.BoundQuery{
 			Sql:           split.Sql,
 			BindVariables: split.BindVariables,
 		})
 	}
-	want := []proto.BoundQuery{
+	want := []querytypes.BoundQuery{
 		{
 			Sql:           "select * from test_table where (count > :count) and (id < :" + endBindVarName + ")",
 			BindVariables: map[string]interface{}{endBindVarName: hexToByteUInt32(0x55555555)},

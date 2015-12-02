@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -189,11 +189,11 @@ type internalTabletConn struct {
 // Execute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	bv, err := tproto.BindVariablesToProto3(bindVars)
+	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, err
 	}
-	bindVars, err = tproto.Proto3ToBindVariables(bv)
+	bindVars, err = querytypes.Proto3ToBindVariables(bv)
 	if err != nil {
 		return nil, err
 	}
@@ -210,14 +210,14 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 
 // ExecuteBatch is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
-	q := make([]tproto.BoundQuery, len(queries))
+func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+	q := make([]querytypes.BoundQuery, len(queries))
 	for i, query := range queries {
-		bv, err := tproto.BindVariablesToProto3(query.BindVariables)
+		bv, err := querytypes.BindVariablesToProto3(query.BindVariables)
 		if err != nil {
 			return nil, err
 		}
-		bindVars, err := tproto.Proto3ToBindVariables(bv)
+		bindVars, err := querytypes.Proto3ToBindVariables(bv)
 		if err != nil {
 			return nil, err
 		}
@@ -238,11 +238,11 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tprot
 // StreamExecute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	bv, err := tproto.BindVariablesToProto3(bindVars)
+	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
-	bindVars, err = tproto.Proto3ToBindVariables(bv)
+	bindVars, err = querytypes.Proto3ToBindVariables(bv)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -310,7 +310,7 @@ func (itc *internalTabletConn) Execute2(ctx context.Context, query string, bindV
 }
 
 // ExecuteBatch2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+func (itc *internalTabletConn) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return itc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
@@ -349,7 +349,7 @@ func (itc *internalTabletConn) EndPoint() *topodatapb.EndPoint {
 }
 
 // SplitQuery is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int64) ([]tproto.QuerySplit, error) {
+func (itc *internalTabletConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,

@@ -1,14 +1,35 @@
-// Copyright 2012, Google Inc. All rights reserved.
+// Copyright 2015, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+// Package querytypes defines internal types used in the APIs to deal
+// with queries.
+package querytypes
 
 import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/bytes2"
 )
+
+// This file defines the BoundQuery type.
+//
+// In our internal code, the following rules are true:
+// - a SQL query is always represented as a string.
+// - bind variables for a SQL query are always represented as
+//   map[string]interface{}.
+// - the RPC layer converts from proto3 (or any other encoding) to these types.
+
+// BoundQuery is one query in a QueryList.
+// We only use it in arrays. For a single query, we just use Sql and
+// BindVariables directly.
+type BoundQuery struct {
+	// Sql is the query
+	Sql string
+
+	// BindVariables is the map of bind variables for the query
+	BindVariables map[string]interface{}
+}
 
 // QueryAsString prints a readable version of query+bind variables,
 // and also truncates data if it's too long
@@ -35,20 +56,4 @@ func slimit(s string) string {
 		l = 256
 	}
 	return s[:l]
-}
-
-// BoundQuery is one query in a QueryList.
-type BoundQuery struct {
-	Sql           string
-	BindVariables map[string]interface{}
-}
-
-//go:generate bsongen -file $GOFILE -type BoundQuery -o bound_query_bson.go
-
-// QuerySplit represents a split of SplitQueryRequest.Query. RowCount is only
-// approximate.
-type QuerySplit struct {
-	Sql           string
-	BindVariables map[string]interface{}
-	RowCount      int64
 }

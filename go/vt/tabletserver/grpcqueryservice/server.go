@@ -14,8 +14,8 @@ import (
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -49,7 +49,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bv, err := proto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
@@ -69,7 +69,7 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bql, err := proto.Proto3ToBoundQueryList(request.Queries)
+	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
@@ -89,7 +89,7 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bv, err := proto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return tabletserver.ToGRPCError(err)
 	}
@@ -154,7 +154,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	bq, err := proto.Proto3ToBoundQuery(request.Query)
+	bq, err := querytypes.Proto3ToBoundQuery(request.Query)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
@@ -162,7 +162,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}
-	qs, err := proto.QuerySplitsToProto3(splits)
+	qs, err := querytypes.QuerySplitsToProto3(splits)
 	if err != nil {
 		return nil, tabletserver.ToGRPCError(err)
 	}

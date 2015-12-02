@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/servenv"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -33,7 +33,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
@@ -51,7 +51,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *vtgatepb.ExecuteS
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
@@ -76,7 +76,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *vtgatepb.Exe
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
@@ -101,7 +101,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *vtgatepb.Execu
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
@@ -126,7 +126,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *vtgatepb.Execu
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
@@ -189,7 +189,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return vterrors.ToGRPCError(err)
 	}
@@ -211,7 +211,7 @@ func (vtg *VTGate) StreamExecuteShards(request *vtgatepb.StreamExecuteShardsRequ
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return vterrors.ToGRPCError(err)
 	}
@@ -236,7 +236,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *vtgatepb.StreamExecuteKeysp
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return vterrors.ToGRPCError(err)
 	}
@@ -261,7 +261,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *vtgatepb.StreamExecuteKeyRang
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return vterrors.ToGRPCError(err)
 	}
@@ -329,7 +329,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryR
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	bv, err := tproto.Proto3ToBindVariables(request.Query.BindVariables)
+	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}

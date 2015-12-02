@@ -11,7 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -114,7 +114,7 @@ func (client *QueryClient) Stream(query string, bindvars map[string]interface{},
 }
 
 // ExecuteBatch executes a batch of queries.
-func (client *QueryClient) ExecuteBatch(queries []proto.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
+func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
 	return client.server.ExecuteBatch(
 		client.ctx,
 		&client.target,

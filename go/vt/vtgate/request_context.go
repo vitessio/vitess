@@ -6,11 +6,11 @@ package vtgate
 
 import (
 	"github.com/youtube/vitess/go/sqltypes"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 type requestContext struct {
@@ -35,6 +35,6 @@ func newRequestContext(ctx context.Context, sql string, bindVariables map[string
 	}
 }
 
-func (vc *requestContext) Execute(boundQuery *tproto.BoundQuery) (*sqltypes.Result, error) {
+func (vc *requestContext) Execute(boundQuery *querytypes.BoundQuery) (*sqltypes.Result, error) {
 	return vc.router.Execute(vc.ctx, boundQuery.Sql, boundQuery.BindVariables, vc.tabletType, vc.session, false)
 }
