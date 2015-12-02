@@ -29,6 +29,7 @@ func ExecuteVtctl(ctx context.Context, server string, args []string) (string, er
 		30*time.Second, // dialTimeout
 		time.Hour,      // actionTimeout
 		CreateLoggerEventToBufferFunction(&output))
+	log.Infof("Executed remote vtctl command: %v server: %v err: %v output (starting on next line):\n%v", args, server, err, output.String())
 
 	return output.String(), err
 }

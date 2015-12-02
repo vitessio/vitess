@@ -18,7 +18,7 @@ import (
 // The fake can be used to return a specific result for a given command.
 // If the command is not registered, an error will be thrown.
 type FakeVtctlClient struct {
-	FakeLoggerEventStreamingClient
+	*FakeLoggerEventStreamingClient
 }
 
 // NewFakeVtctlClient creates a FakeVtctlClient struct.
