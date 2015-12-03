@@ -292,6 +292,13 @@ class TestUpdateStream(unittest.TestCase):
     for master_val, replica_val in zip(master_events, replica_events):
       master_data = master_val.__dict__
       replica_data = replica_val.__dict__
+      # the timestamp is from when the event was written to the binlogs.
+      # the master uses the timestamp of when it wrote it originally,
+      # the slave of when it applied the logs. These can differ and make this
+      # test flaky. So we just blank them out, easier. We really want to
+      # compare the replication positions.
+      master_data['timestamp'] = 'XXX'
+      replica_data['timestamp'] = 'XXX'
       self.assertEqual(
           master_data, replica_data,
           "Test failed, data mismatch - master '%s' and replica position '%s'" %
