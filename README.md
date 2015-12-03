@@ -39,7 +39,7 @@ and a more [detailed presentation from @Scale '14](http://youtu.be/5yDO-tmIoXY).
 
  * [General Concepts](http://vitess.io/overview/concepts.html)
  * [Topology Service](http://vitess.io/doc/TopologyService)
- * [V3 design](http://vitess.io/doc/VTGateV3)
+ * [VTGate V3](http://vitess.io/doc/VTGateV3Features/)
 
 ## Contact
 
