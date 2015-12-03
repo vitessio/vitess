@@ -274,7 +274,7 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, 
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface
-func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -284,7 +284,6 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.Tablet
 		Query:          query,
 		DbName:         tablet.DbName(),
 		MaxRows:        uint64(maxRows),
-		WantFields:     wantFields,
 		DisableBinlogs: disableBinlogs,
 		ReloadSchema:   reloadSchema,
 	})
@@ -295,16 +294,15 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.Tablet
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface
-func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields bool) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int) (*querypb.QueryResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer cc.Close()
 	response, err := c.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
-		Query:      query,
-		MaxRows:    uint64(maxRows),
-		WantFields: wantFields,
+		Query:   query,
+		MaxRows: uint64(maxRows),
 	})
 	if err != nil {
 		return nil, err

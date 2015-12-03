@@ -3580,9 +3580,6 @@ namespace tabletmanagerdata {
     public $max_rows = null;
     
     /**  @var boolean */
-    public $want_fields = null;
-    
-    /**  @var boolean */
     public $disable_binlogs = null;
     
     /**  @var boolean */
@@ -3620,25 +3617,17 @@ namespace tabletmanagerdata {
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
-      // OPTIONAL BOOL want_fields = 4
+      // OPTIONAL BOOL disable_binlogs = 4
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 4;
-      $f->name      = "want_fields";
-      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $descriptor->addField($f);
-
-      // OPTIONAL BOOL disable_binlogs = 5
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 5;
       $f->name      = "disable_binlogs";
       $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
-      // OPTIONAL BOOL reload_schema = 6
+      // OPTIONAL BOOL reload_schema = 5
       $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 6;
+      $f->number    = 5;
       $f->name      = "reload_schema";
       $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
@@ -3763,49 +3752,12 @@ namespace tabletmanagerdata {
     }
     
     /**
-     * Check if <want_fields> has a value
-     *
-     * @return boolean
-     */
-    public function hasWantFields(){
-      return $this->_has(4);
-    }
-    
-    /**
-     * Clear <want_fields> value
-     *
-     * @return \tabletmanagerdata\ExecuteFetchAsDbaRequest
-     */
-    public function clearWantFields(){
-      return $this->_clear(4);
-    }
-    
-    /**
-     * Get <want_fields> value
-     *
-     * @return boolean
-     */
-    public function getWantFields(){
-      return $this->_get(4);
-    }
-    
-    /**
-     * Set <want_fields> value
-     *
-     * @param boolean $value
-     * @return \tabletmanagerdata\ExecuteFetchAsDbaRequest
-     */
-    public function setWantFields( $value){
-      return $this->_set(4, $value);
-    }
-    
-    /**
      * Check if <disable_binlogs> has a value
      *
      * @return boolean
      */
     public function hasDisableBinlogs(){
-      return $this->_has(5);
+      return $this->_has(4);
     }
     
     /**
@@ -3814,7 +3766,7 @@ namespace tabletmanagerdata {
      * @return \tabletmanagerdata\ExecuteFetchAsDbaRequest
      */
     public function clearDisableBinlogs(){
-      return $this->_clear(5);
+      return $this->_clear(4);
     }
     
     /**
@@ -3823,7 +3775,7 @@ namespace tabletmanagerdata {
      * @return boolean
      */
     public function getDisableBinlogs(){
-      return $this->_get(5);
+      return $this->_get(4);
     }
     
     /**
@@ -3833,7 +3785,7 @@ namespace tabletmanagerdata {
      * @return \tabletmanagerdata\ExecuteFetchAsDbaRequest
      */
     public function setDisableBinlogs( $value){
-      return $this->_set(5, $value);
+      return $this->_set(4, $value);
     }
     
     /**
@@ -3842,7 +3794,7 @@ namespace tabletmanagerdata {
      * @return boolean
      */
     public function hasReloadSchema(){
-      return $this->_has(6);
+      return $this->_has(5);
     }
     
     /**
@@ -3851,7 +3803,7 @@ namespace tabletmanagerdata {
      * @return \tabletmanagerdata\ExecuteFetchAsDbaRequest
      */
     public function clearReloadSchema(){
-      return $this->_clear(6);
+      return $this->_clear(5);
     }
     
     /**
@@ -3860,7 +3812,7 @@ namespace tabletmanagerdata {
      * @return boolean
      */
     public function getReloadSchema(){
-      return $this->_get(6);
+      return $this->_get(5);
     }
     
     /**
@@ -3870,7 +3822,7 @@ namespace tabletmanagerdata {
      * @return \tabletmanagerdata\ExecuteFetchAsDbaRequest
      */
     public function setReloadSchema( $value){
-      return $this->_set(6, $value);
+      return $this->_set(5, $value);
     }
   }
 }
@@ -3955,9 +3907,6 @@ namespace tabletmanagerdata {
     /**  @var int */
     public $max_rows = null;
     
-    /**  @var boolean */
-    public $want_fields = null;
-    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -3979,14 +3928,6 @@ namespace tabletmanagerdata {
       $f->number    = 2;
       $f->name      = "max_rows";
       $f->type      = \DrSlump\Protobuf::TYPE_UINT64;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $descriptor->addField($f);
-
-      // OPTIONAL BOOL want_fields = 3
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 3;
-      $f->name      = "want_fields";
-      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
@@ -4069,43 +4010,6 @@ namespace tabletmanagerdata {
      */
     public function setMaxRows( $value){
       return $this->_set(2, $value);
-    }
-    
-    /**
-     * Check if <want_fields> has a value
-     *
-     * @return boolean
-     */
-    public function hasWantFields(){
-      return $this->_has(3);
-    }
-    
-    /**
-     * Clear <want_fields> value
-     *
-     * @return \tabletmanagerdata\ExecuteFetchAsAppRequest
-     */
-    public function clearWantFields(){
-      return $this->_clear(3);
-    }
-    
-    /**
-     * Get <want_fields> value
-     *
-     * @return boolean
-     */
-    public function getWantFields(){
-      return $this->_get(3);
-    }
-    
-    /**
-     * Set <want_fields> value
-     *
-     * @param boolean $value
-     * @return \tabletmanagerdata\ExecuteFetchAsAppRequest
-     */
-    public function setWantFields( $value){
-      return $this->_set(3, $value);
     }
   }
 }

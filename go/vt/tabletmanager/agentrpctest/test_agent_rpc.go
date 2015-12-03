@@ -565,41 +565,39 @@ var testExecuteFetchResult = &querypb.QueryResult{
 	},
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "ExecuteFetchAsDba query", query, testExecuteFetchQuery)
 	compare(fra.t, "ExecuteFetchAsDba maxrows", maxrows, testExecuteFetchMaxRows)
-	compareBool(fra.t, "ExecuteFetchAsDba wantFields", wantFields)
 	compareBool(fra.t, "ExecuteFetchAsDba disableBinlogs", disableBinlogs)
 	compareBool(fra.t, "ExecuteFetchAsDba reloadSchema", reloadSchema)
 
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*querypb.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "ExecuteFetchAsApp query", query, testExecuteFetchQuery)
 	compare(fra.t, "ExecuteFetchAsApp maxrows", maxrows, testExecuteFetchMaxRows)
-	compareBool(fra.t, "ExecuteFetchAsApp wantFields", wantFields)
 	return testExecuteFetchResult, nil
 }
 
 func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	qr, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, true)
+	qr, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
-	qr, err = client.ExecuteFetchAsApp(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true)
+	qr, err = client.ExecuteFetchAsApp(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
 }
 
 func agentRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	_, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, false)
+	_, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
 	expectRPCWrapPanic(t, err)
 
-	_, err = client.ExecuteFetchAsApp(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true)
+	_, err = client.ExecuteFetchAsApp(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	expectRPCWrapPanic(t, err)
 }
 

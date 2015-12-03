@@ -204,10 +204,10 @@ func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias *topodat
 }
 
 // ExecuteFetchAsDba executes a query remotely using the DBA pool
-func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetchAsDba(ctx, ti, query, maxRows, wantFields, disableBinlogs, reloadSchema)
+	return wr.tmc.ExecuteFetchAsDba(ctx, ti, query, maxRows, disableBinlogs, reloadSchema)
 }

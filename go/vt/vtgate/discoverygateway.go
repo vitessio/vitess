@@ -150,7 +150,7 @@ func (dg *discoveryGateway) InitializeConnections(ctx context.Context) error {
 func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (qr *sqltypes.Result, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qr, innerErr = conn.Execute2(ctx, query, bindVars, transactionID)
+		qr, innerErr = conn.Execute(ctx, query, bindVars, transactionID)
 		return innerErr
 	}, transactionID, false)
 	return qr, err
@@ -160,7 +160,7 @@ func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string,
 func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) (qrs []sqltypes.Result, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qrs, innerErr = conn.ExecuteBatch2(ctx, queries, asTransaction, transactionID)
+		qrs, innerErr = conn.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 		return innerErr
 	}, transactionID, false)
 	return qrs, err
@@ -173,7 +173,7 @@ func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard s
 	var results <-chan *sqltypes.Result
 	err := dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var err error
-		results, erFunc, err = conn.StreamExecute2(ctx, query, bindVars, transactionID)
+		results, erFunc, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
 		usedConn = conn
 		return err
 	}, transactionID, true)
@@ -191,7 +191,7 @@ func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard s
 func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType) (transactionID int64, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		transactionID, innerErr = conn.Begin2(ctx)
+		transactionID, innerErr = conn.Begin(ctx)
 		return innerErr
 	}, 0, false)
 	return transactionID, err
@@ -200,14 +200,14 @@ func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard st
 // Commit commits the current transaction for the specified keyspace, shard, and tablet type.
 func (dg *discoveryGateway) Commit(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
 	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
-		return conn.Commit2(ctx, transactionID)
+		return conn.Commit(ctx, transactionID)
 	}, transactionID, false)
 }
 
 // Rollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
 func (dg *discoveryGateway) Rollback(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
 	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
-		return conn.Rollback2(ctx, transactionID)
+		return conn.Rollback(ctx, transactionID)
 	}, transactionID, false)
 }
 
