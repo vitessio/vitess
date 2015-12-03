@@ -60,11 +60,7 @@ def tearDownModule():
 
 
 class TestCustomSharding(unittest.TestCase):
-  """Test a custom-shared keyspace.
-
-  Warning: this test only works with BSON RPC, only area where the
-  SplitQuery client is implemented.
-  """
+  """Test a custom-shared keyspace."""
 
   def _insert_data(self, shard, start, count, table='data'):
     sql = 'insert into %s(id, name) values (:id, :name)' % table
