@@ -59,6 +59,9 @@ def setUpModule():
         shard_1_replica.init_mysql(),
         shard_1_rdonly1.init_mysql(),
         ]
+    # we only use vtgate for testing SplitQuery works correctly.
+    # we want cache_ttl at zero so we re-read the topology for every test query.
+    utils.VtGate().start(cache_ttl='0')
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
@@ -282,8 +285,6 @@ index by_msg (msg)
     # create the keyspace with just one shard
     utils.run_vtctl(['CreateKeyspace',
                      'test_keyspace'])
-    utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', 'test_keyspace',
-                     'keyspace_id', keyspace_id_type])
 
     shard_master.init_tablet('master', 'test_keyspace', '0')
     shard_replica.init_tablet('replica', 'test_keyspace', '0')
@@ -307,13 +308,42 @@ index by_msg (msg)
     self._create_schema()
     self._insert_startup_values()
 
+    # reload schema on all tablets so we can query them
+    for t in [shard_master, shard_replica, shard_rdonly1]:
+      utils.run_vtctl(['ReloadSchema', t.tablet_alias], auto_log=True)
+
+    # check the Map Reduce API works correctly, should use ExecuteShards,
+    # as we're not sharded yet.
+    # we have 3 values in the database, asking for 4 splits will get us
+    # a single query.
+    sql = 'select id, msg from resharding1'
+    s = utils.vtgate.split_query(sql, 'test_keyspace', 4)
+    self.assertEqual(len(s), 1)
+    self.assertEqual(s[0]['shard_part']['shards'][0], '0')
+
     # change the schema, backfill keyspace_id, and change schema again
     self._add_sharding_key_to_schema()
     self._backfill_keyspace_id(shard_master)
     self._mark_sharding_key_not_null()
 
+    # now we can be a sharded keyspace (and propagate to SrvKeyspace)
+    utils.run_vtctl(['SetKeyspaceShardingInfo', 'test_keyspace',
+                     'keyspace_id', keyspace_id_type])
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
+                    auto_log=True)
+
     # run a health check on source replica so it responds to discovery
     utils.run_vtctl(['RunHealthCheck', shard_replica.tablet_alias, 'replica'])
+
+    # check the Map Reduce API works correctly, should use ExecuteKeyRanges now,
+    # as we are sharded (with just one shard).
+    # again, we have 3 values in the database, asking for 4 splits will get us
+    # a single query.
+    sql = 'select id, msg from resharding1'
+    s = utils.vtgate.split_query(sql, 'test_keyspace', 4)
+    self.assertEqual(len(s), 1)
+    self.assertEqual(s[0]['key_range_part']['keyspace'], 'test_keyspace')
+    self.assertNotIn('key_ranges', s[0]['key_range_part'])
 
     # create the split shards
     shard_0_master.init_tablet('master', 'test_keyspace', '-80')
@@ -420,6 +450,17 @@ index by_msg (msg)
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -\n',
                              keyspace_id_type=keyspace_id_type)
+
+    # check the Map Reduce API works correctly, should use ExecuteKeyRanges
+    # on both destination shards now.
+    # we ask for 2 splits to only have one per shard
+    sql = 'select id, msg from resharding1'
+    s = utils.vtgate.split_query(sql, 'test_keyspace', 2)
+    self.assertEqual(len(s), 2)
+    self.assertEqual(s[0]['key_range_part']['keyspace'], 'test_keyspace')
+    self.assertEqual(s[1]['key_range_part']['keyspace'], 'test_keyspace')
+    self.assertEqual(len(s[0]['key_range_part']['key_ranges']), 1)
+    self.assertEqual(len(s[1]['key_range_part']['key_ranges']), 1)
 
     # then serve replica from the split shards
     source_tablet = shard_replica
