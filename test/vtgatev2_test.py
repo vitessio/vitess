@@ -1175,16 +1175,11 @@ class TestFailures(BaseTestCase):
     # start tablet2
     self.tablet_start(self.replica_tablet2, 'replica')
     self.replica_tablet2.wait_for_vttablet_state('SERVING')
-    # it should succeed on tablet1
-    tablet1_vars = utils.get_vars(self.replica_tablet.port)
-    t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
+    # query should succeed
     vtgate_conn._execute(
         'select 1 from vt_insert_test', {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
-    tablet1_vars = utils.get_vars(self.replica_tablet.port)
-    t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
 
   # Test the case that there are queries sent during one vttablet is killed,
   # and all queries succeed because there is another vttablet.
@@ -1215,6 +1210,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     # hard kill tablet2
     self.replica_tablet2.hard_kill_vttablet()
+    time.sleep(1)  # wait so VTGate can detect tablet2 is gone
     if vtgate_gateway_flavor().flavor() == 'shardgateway':
       # "shardgateway" implementation fails the first query
       # send query after tablet2 is killed, should not retry on the cached conn
@@ -1246,16 +1242,11 @@ class TestFailures(BaseTestCase):
       utils.run_vtctl(['StartSlave', t.tablet_alias])
       utils.wait_for_tablet_type(t.tablet_alias, 'replica')
       t.wait_for_vttablet_state('SERVING')
-    # it should succeed on tablet1
-    tablet1_vars = utils.get_vars(self.replica_tablet.port)
-    t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
+    # query should succeed
     vtgate_conn._execute(
         'select 1 from vt_insert_test', {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
-    tablet1_vars = utils.get_vars(self.replica_tablet.port)
-    t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
 
   def test_bind_vars_in_exception_message(self):
     vtgate_conn = get_connection()
