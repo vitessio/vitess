@@ -441,8 +441,13 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 		if err != nil {
 			return err
 		}
-		// Append the keyrange for this shard to all the splits received
-		keyranges := []*topodatapb.KeyRange{keyRangeByShard[shard]}
+		// Append the keyrange for this shard to all the splits received,
+		// if keyrange is nil for the shard (e.g. for single-sharded keyspaces during resharding),
+		// append empty keyrange to represent the entire keyspace.
+		keyranges := []*topodatapb.KeyRange{}
+		if keyRangeByShard[shard] != nil {
+			keyranges = []*topodatapb.KeyRange{keyRangeByShard[shard]}
+		}
 		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
 		for i, query := range queries {
 			q, err := querytypes.BindVariablesToProto3(query.BindVariables)
