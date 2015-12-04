@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
@@ -53,7 +54,7 @@ type ShardConn struct {
 // NewShardConn creates a new ShardConn. It creates a Balancer using
 // serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
 // number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topodatapb.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
+func NewShardConn(ctx context.Context, serv topo.SrvTopoServer, cell, keyspace, shard string, tabletType topodatapb.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
 	getAddresses := func() (*topodatapb.EndPoints, error) {
 		endpoints, _, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {

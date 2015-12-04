@@ -96,7 +96,7 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, maxInFlight int, testGateway string) {
+func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, maxInFlight int, testGateway string) {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}

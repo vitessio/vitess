@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"golang.org/x/net/context"
 
@@ -26,7 +27,7 @@ const (
 // Router is the layer to route queries to the correct shards
 // based on the values in the query.
 type Router struct {
-	serv        SrvTopoServer
+	serv        topo.SrvTopoServer
 	cell        string
 	planner     *Planner
 	scatterConn *ScatterConn
@@ -50,7 +51,7 @@ func newScatterParams(query, ks string, bv map[string]interface{}, shards []stri
 }
 
 // NewRouter creates a new Router.
-func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, statsName string, scatterConn *ScatterConn) *Router {
+func NewRouter(serv topo.SrvTopoServer, cell string, schema *planbuilder.Schema, statsName string, scatterConn *ScatterConn) *Router {
 	return &Router{
 		serv:        serv,
 		cell:        cell,

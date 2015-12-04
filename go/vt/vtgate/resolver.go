@@ -44,13 +44,13 @@ var (
 // resharding happened.
 type Resolver struct {
 	scatterConn *ScatterConn
-	toposerv    SrvTopoServer
+	toposerv    topo.SrvTopoServer
 	cell        string
 }
 
 // NewResolver creates a new Resolver. All input parameters are passed through
 // for creating ScatterConn.
-func NewResolver(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, testGateway string) *Resolver {
+func NewResolver(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, testGateway string) *Resolver {
 	return &Resolver{
 		scatterConn: NewScatterConn(hc, topoServer, serv, statsName, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, tabletTypesToWait, testGateway),
 		toposerv:    serv,
