@@ -11,24 +11,25 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
 // streamingRows creates a database/sql/driver compliant Row iterator
 // for a streaming query.
 type streamingRows struct {
-	qrc     <-chan *mproto.QueryResult
+	qrc     <-chan *sqltypes.Result
 	errFunc vtgateconn.ErrFunc
 	failed  error
-	fields  []mproto.Field
-	qr      *mproto.QueryResult
+	fields  []*querypb.Field
+	qr      *sqltypes.Result
 	index   int
 	cancel  context.CancelFunc
 }
 
 // newStreamingRows creates a new streamingRows from qrc and errFunc.
-func newStreamingRows(qrc <-chan *mproto.QueryResult, errFunc vtgateconn.ErrFunc, cancel context.CancelFunc) driver.Rows {
+func newStreamingRows(qrc <-chan *sqltypes.Result, errFunc vtgateconn.ErrFunc, cancel context.CancelFunc) driver.Rows {
 	return &streamingRows{
 		qrc:     qrc,
 		errFunc: errFunc,
@@ -64,9 +65,9 @@ func (ri *streamingRows) Next(dest []driver.Value) error {
 		}
 		ri.index = 0
 	}
-	err := populateRow(dest, ri.fields, ri.qr.Rows[ri.index])
+	populateRow(dest, ri.qr.Rows[ri.index])
 	ri.index++
-	return err
+	return nil
 }
 
 // checkFields fetches the first packet from the channel, which

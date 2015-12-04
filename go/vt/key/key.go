@@ -9,46 +9,10 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"sort"
 	"strings"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-//
-// KeyspaceId definitions
-//
-
-// MinKey is smaller than all KeyspaceId (the value really is).
-var MinKey = KeyspaceId("")
-
-// MaxKey is bigger than all KeyspaceId (by convention).
-var MaxKey = KeyspaceId("")
-
-// KeyspaceId is the type we base sharding on.
-type KeyspaceId string
-
-//go:generate bsongen -file $GOFILE -type KeyspaceId -o keyspace_id_bson.go
-
-// Hex prints a KeyspaceId in lower case hex.
-func (kid KeyspaceId) Hex() HexKeyspaceId {
-	return HexKeyspaceId(hex.EncodeToString([]byte(kid)))
-}
-
-func (kid KeyspaceId) String() string {
-	return string(kid.Hex())
-}
-
-// MarshalJSON turns a KeyspaceId into json (using hex encoding).
-func (kid KeyspaceId) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + string(kid.Hex()) + "\""), nil
-}
-
-// UnmarshalJSON reads a KeyspaceId from json (hex decoding).
-func (kid *KeyspaceId) UnmarshalJSON(data []byte) (err error) {
-	*kid, err = HexKeyspaceId(data[1 : len(data)-1]).Unhex()
-	return err
-}
 
 //
 // Uint64Key definitions
@@ -58,119 +22,47 @@ func (kid *KeyspaceId) UnmarshalJSON(data []byte) (err error) {
 type Uint64Key uint64
 
 func (i Uint64Key) String() string {
-	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.BigEndian, uint64(i))
-	return buf.String()
-}
-
-// KeyspaceId returns the KeyspaceId associated with a Uint64Key.
-func (i Uint64Key) KeyspaceId() KeyspaceId {
-	return KeyspaceId(i.String())
+	return string(i.Bytes())
 }
 
 // Bytes returns the keyspace id (as bytes) associated with a Uint64Key.
 func (i Uint64Key) Bytes() []byte {
-	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.BigEndian, uint64(i))
-	return buf.Bytes()
-}
-
-// HexKeyspaceId is the hex represention of a KeyspaceId.
-type HexKeyspaceId string
-
-// Unhex converts a HexKeyspaceId into a KeyspaceId (hex decoding).
-func (hkid HexKeyspaceId) Unhex() (KeyspaceId, error) {
-	b, err := hex.DecodeString(string(hkid))
-	if err != nil {
-		return KeyspaceId(""), err
-	}
-	return KeyspaceId(string(b)), nil
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(i))
+	return buf
 }
 
 //
-// KeyspaceIdType definitions
+// KeyspaceIdType helper methods
 //
-
-// KeyspaceIdType represents the type of the KeyspaceId.
-// Usually we don't care, but some parts of the code will need that info.
-type KeyspaceIdType string
-
-//go:generate bsongen -file $GOFILE -type KeyspaceIdType -o keyspace_id_type_bson.go
-
-const (
-	// unset - no type for this KeyspaceId
-	KIT_UNSET = KeyspaceIdType("")
-
-	// uint64 - a uint64 value is used
-	// this is represented as 'unsigned bigint' in mysql
-	KIT_UINT64 = KeyspaceIdType("uint64")
-
-	// bytes - a string of bytes is used
-	// this is represented as 'varbinary' in mysql
-	KIT_BYTES = KeyspaceIdType("bytes")
-)
-
-var AllKeyspaceIdTypes = []KeyspaceIdType{
-	KIT_UNSET,
-	KIT_UINT64,
-	KIT_BYTES,
-}
-
-// IsKeyspaceIdTypeInList returns true if the given type is in the list.
-// Use it with AllKeyspaceIdTypes for instance.
-func IsKeyspaceIdTypeInList(typ KeyspaceIdType, types []KeyspaceIdType) bool {
-	for _, t := range types {
-		if typ == t {
-			return true
-		}
-	}
-	return false
-}
 
 // ParseKeyspaceIDType parses the keyspace id type into the enum
-func ParseKeyspaceIDType(param string) (pb.KeyspaceIdType, error) {
+func ParseKeyspaceIDType(param string) (topodatapb.KeyspaceIdType, error) {
 	if param == "" {
-		return pb.KeyspaceIdType_UNSET, nil
+		return topodatapb.KeyspaceIdType_UNSET, nil
 	}
-	value, ok := pb.KeyspaceIdType_value[strings.ToUpper(param)]
+	value, ok := topodatapb.KeyspaceIdType_value[strings.ToUpper(param)]
 	if !ok {
-		return pb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
+		return topodatapb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
 	}
-	return pb.KeyspaceIdType(value), nil
+	return topodatapb.KeyspaceIdType(value), nil
 }
 
 //
-// KeyRange definitions
+// KeyRange helper methods
 //
-
-// KeyRange is an interval of KeyspaceId values. It contains Start,
-// but excludes End. In other words, it is: [Start, End)
-type KeyRange struct {
-	Start KeyspaceId
-	End   KeyspaceId
-}
-
-//go:generate bsongen -file $GOFILE -type KeyRange -o key_range_bson.go
-
-func (kr KeyRange) Contains(i KeyspaceId) bool {
-	return kr.Start <= i && (kr.End == MaxKey || i < kr.End)
-}
 
 // KeyRangeContains returns true if the provided id is in the keyrange.
-func KeyRangeContains(kr *pb.KeyRange, id []byte) bool {
+func KeyRangeContains(kr *topodatapb.KeyRange, id []byte) bool {
 	if kr == nil {
 		return true
 	}
-	return string(kr.Start) <= string(id) &&
-		(len(kr.End) == 0 || string(id) < string(kr.End))
-}
-
-func (kr KeyRange) String() string {
-	return fmt.Sprintf("{Start: %v, End: %v}", string(kr.Start.Hex()), string(kr.End.Hex()))
+	return bytes.Compare(kr.Start, id) <= 0 &&
+		(len(kr.End) == 0 || bytes.Compare(id, kr.End) < 0)
 }
 
 // ParseKeyRangeParts parses a start and end hex values and build a proto KeyRange
-func ParseKeyRangeParts(start, end string) (*pb.KeyRange, error) {
+func ParseKeyRangeParts(start, end string) (*topodatapb.KeyRange, error) {
 	s, err := hex.DecodeString(start)
 	if err != nil {
 		return nil, err
@@ -179,11 +71,11 @@ func ParseKeyRangeParts(start, end string) (*pb.KeyRange, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pb.KeyRange{Start: s, End: e}, nil
+	return &topodatapb.KeyRange{Start: s, End: e}, nil
 }
 
-// KeyRangeString prints a pb.KeyRange
-func KeyRangeString(k *pb.KeyRange) string {
+// KeyRangeString prints a topodatapb.KeyRange
+func KeyRangeString(k *topodatapb.KeyRange) string {
 	if k == nil {
 		return "<nil>"
 	}
@@ -191,7 +83,7 @@ func KeyRangeString(k *pb.KeyRange) string {
 }
 
 // KeyRangeIsPartial returns true if the KeyRange does not cover the entire space.
-func KeyRangeIsPartial(kr *pb.KeyRange) bool {
+func KeyRangeIsPartial(kr *topodatapb.KeyRange) bool {
 	if kr == nil {
 		return false
 	}
@@ -199,37 +91,37 @@ func KeyRangeIsPartial(kr *pb.KeyRange) bool {
 }
 
 // KeyRangeEqual returns true if both key ranges cover the same area
-func KeyRangeEqual(left, right *pb.KeyRange) bool {
+func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
 	}
 	if right == nil {
 		return len(left.Start) == 0 && len(left.End) == 0
 	}
-	return string(left.Start) == string(right.Start) &&
-		string(left.End) == string(right.End)
+	return bytes.Compare(left.Start, right.Start) == 0 &&
+		bytes.Compare(left.End, right.End) == 0
 }
 
 // KeyRangeStartEqual returns true if both key ranges have the same start
-func KeyRangeStartEqual(left, right *pb.KeyRange) bool {
+func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || len(right.Start) == 0
 	}
 	if right == nil {
 		return len(left.Start) == 0
 	}
-	return string(left.Start) == string(right.Start)
+	return bytes.Compare(left.Start, right.Start) == 0
 }
 
 // KeyRangeEndEqual returns true if both key ranges have the same end
-func KeyRangeEndEqual(left, right *pb.KeyRange) bool {
+func KeyRangeEndEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || len(right.End) == 0
 	}
 	if right == nil {
 		return len(left.End) == 0
 	}
-	return string(left.End) == string(right.End)
+	return bytes.Compare(left.End, right.End) == 0
 }
 
 // For more info on the following functions, see:
@@ -239,17 +131,17 @@ func KeyRangeEndEqual(left, right *pb.KeyRange) bool {
 // overlap = min(b, d) - max(c, a)
 
 // KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
-func KeyRangesIntersect(first, second *pb.KeyRange) bool {
+func KeyRangesIntersect(first, second *topodatapb.KeyRange) bool {
 	if first == nil || second == nil {
 		return true
 	}
-	return (len(first.End) == 0 || string(second.Start) < string(first.End)) &&
-		(len(second.End) == 0 || string(first.Start) < string(second.End))
+	return (len(first.End) == 0 || bytes.Compare(second.Start, first.End) < 0) &&
+		(len(second.End) == 0 || bytes.Compare(first.Start, second.End) < 0)
 }
 
 // KeyRangesOverlap returns the overlap between two KeyRanges.
 // They need to overlap, otherwise an error is returned.
-func KeyRangesOverlap(first, second *pb.KeyRange) (*pb.KeyRange, error) {
+func KeyRangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, error) {
 	if !KeyRangesIntersect(first, second) {
 		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", first, second)
 	}
@@ -261,72 +153,32 @@ func KeyRangesOverlap(first, second *pb.KeyRange) (*pb.KeyRange, error) {
 	}
 	// compute max(c,a) and min(b,d)
 	// start with (a,b)
-	result := &(*first)
+	result := *first
 	// if c > a, then use c
-	if string(second.Start) > string(first.Start) {
+	if bytes.Compare(second.Start, first.Start) > 0 {
 		result.Start = second.Start
 	}
 	// if b is maxed out, or
 	// (d is not maxed out and d < b)
 	//                           ^ valid test as neither b nor d are max
 	// then use d
-	if len(first.End) == 0 || (len(second.End) != 0 && string(second.End) < string(first.End)) {
+	if len(first.End) == 0 || (len(second.End) != 0 && bytes.Compare(second.End, first.End) < 0) {
 		result.End = second.End
 	}
-	return result, nil
+	return &result, nil
 }
-
-//
-// KeyspaceIdArray definitions
-//
-
-// KeyspaceIdArray is an array of KeyspaceId that can be sorted
-// We use it only if we need to sort []KeyspaceId
-type KeyspaceIdArray []KeyspaceId
-
-func (p KeyspaceIdArray) Len() int { return len(p) }
-
-func (p KeyspaceIdArray) Less(i, j int) bool {
-	return p[i] < p[j]
-}
-
-func (p KeyspaceIdArray) Swap(i, j int) {
-	p[i], p[j] = p[j], p[i]
-}
-
-func (p KeyspaceIdArray) Sort() { sort.Sort(p) }
-
-//
-// KeyRangeArray definitions
-//
-
-// KeyRangeArray is an array of KeyRange that can be sorted
-// We use it only if we need to sort []KeyRange
-type KeyRangeArray []KeyRange
-
-func (p KeyRangeArray) Len() int { return len(p) }
-
-func (p KeyRangeArray) Less(i, j int) bool {
-	return p[i].Start < p[j].Start
-}
-
-func (p KeyRangeArray) Swap(i, j int) {
-	p[i], p[j] = p[j], p[i]
-}
-
-func (p KeyRangeArray) Sort() { sort.Sort(p) }
 
 // ParseShardingSpec parses a string that describes a sharding
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
 // string may serve both as the start and end of the keyspace: -a-b-
 // will be parsed as start-a, a-b, b-end.
-func ParseShardingSpec(spec string) ([]*pb.KeyRange, error) {
+func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 	parts := strings.Split(spec, "-")
 	if len(parts) == 1 {
 		return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)
 	}
 	old := parts[0]
-	ranges := make([]*pb.KeyRange, len(parts)-1)
+	ranges := make([]*topodatapb.KeyRange, len(parts)-1)
 
 	for i, p := range parts[1:] {
 		if p == "" && i != (len(parts)-2) {
@@ -349,7 +201,7 @@ func ParseShardingSpec(spec string) ([]*pb.KeyRange, error) {
 		if len(e) == 0 {
 			e = nil
 		}
-		ranges[i] = &pb.KeyRange{Start: s, End: e}
+		ranges[i] = &topodatapb.KeyRange{Start: s, End: e}
 		old = p
 	}
 	return ranges, nil

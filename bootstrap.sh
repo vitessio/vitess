@@ -9,21 +9,16 @@ if [ "$1" = "--skip_root_installs" ]; then
   SKIP_ROOT_INSTALLS=True
 fi
 
-if [ ! -f bootstrap.sh ]; then
-  echo "bootstrap.sh must be run from its current directory" 1>&2
+function fail() {
+  echo "ERROR: $1"
   exit 1
-fi
+}
 
-if [ "$USER" == "root" ]; then
-  echo "Vitess cannot run as root. Please bootstrap with a non-root user."
-  exit 1
-fi
+[ -f bootstrap.sh ] || fail "bootstrap.sh must be run from its current directory"
 
-go version 2>&1 >/dev/null
-if [ $? != 0 ]; then
-    echo "Go is not installed or is not on \$PATH"
-    exit 1
-fi
+[ "$USER" != "root" ] || fail "Vitess cannot run as root. Please bootstrap with a non-root user."
+
+go version 2>&1 >/dev/null || fail "Go is not installed or is not on \$PATH"
 
 . ./dev.env
 
@@ -33,22 +28,21 @@ mkdir -p $VTROOT/lib
 mkdir -p $VTROOT/vthook
 
 # install zookeeper
-zk_dist=$VTROOT/dist/vt-zookeeper-3.3.5
+zk_ver=3.4.6
+zk_dist=$VTROOT/dist/vt-zookeeper-$zk_ver
 if [ -f $zk_dist/.build_finished ]; then
   echo "skipping zookeeper build. remove $zk_dist to force rebuild."
 else
   rm -rf $zk_dist
-  (cd $VTTOP/third_party/zookeeper && \
-    tar -xjf zookeeper-3.3.5.tbz && \
+  (cd $VTROOT/dist && \
+    wget http://apache.cs.utah.edu/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
+    tar -xzf zookeeper-$zk_ver.tar.gz && \
     mkdir -p $zk_dist/lib && \
-    cp zookeeper-3.3.5/contrib/fatjar/zookeeper-3.3.5-fatjar.jar $zk_dist/lib && \
-    (cd zookeeper-3.3.5/src/c && \
+    cp zookeeper-$zk_ver/contrib/fatjar/zookeeper-$zk_ver-fatjar.jar $zk_dist/lib && \
+    (cd zookeeper-$zk_ver/src/c && \
     ./configure --prefix=$zk_dist && \
-    make -j3 install) && rm -rf zookeeper-3.3.5)
-  if [ $? -ne 0 ]; then
-    echo "zookeeper build failed"
-    exit 1
-  fi
+    make install) && rm -rf zookeeper-$zk_ver zookeeper-$zk_ver.tar.gz)
+  [ $? -eq 0 ] || fail "zookeeper build failed"
   touch $zk_dist/.build_finished
 fi
 
@@ -65,11 +59,7 @@ else
   # picked up by dev.env yet, but the install needs it to exist first,
   # and be in PYTHONPATH.
   export PYTHONPATH=$(prepend_path $PYTHONPATH $protobuf_dist/lib/python2.7/site-packages)
-  ./travis/install_protobuf.sh $protobuf_dist
-  if [ $? -ne 0 ]; then
-    echo "protobuf build failed"
-    exit 1
-  fi
+  ./travis/install_protobuf.sh $protobuf_dist || fail "protobuf build failed"
   touch $protobuf_dist/.build_finished
 fi
 
@@ -82,11 +72,7 @@ elif [ -f $grpc_dist/.build_finished ]; then
 else
   rm -rf $grpc_dist
   mkdir -p $grpc_dist
-  ./travis/install_grpc.sh $grpc_dist
-  if [ $? -ne 0 ]; then
-    echo "gRPC build failed"
-    exit 1
-  fi
+  ./travis/install_grpc.sh $grpc_dist || fail "gRPC build failed"
   touch $grpc_dist/.build_finished
 fi
 
@@ -119,7 +105,7 @@ else
   repos+=" code.google.com/p/go.tools/cmd/cover"
 fi
 
-go get -u $repos
+go get -u $repos || fail "Failed to download some Go dependencies with 'go get'. Please re-run bootstrap.sh in case of transient errors."
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
@@ -134,25 +120,18 @@ fi
 case "$MYSQL_FLAVOR" in
   "MySQL56")
     myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep 'Distrib 5\.6'`
-    if [ "$myversion" == "" ]; then
-      echo "Couldn't find MySQL 5.6 in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      exit 1
-    fi
+    [ "$myversion" != "" ] || fail "Couldn't find MySQL 5.6 in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
     echo "Found MySQL 5.6 installation in $VT_MYSQL_ROOT."
     ;;
 
   "MariaDB")
     myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep MariaDB`
-    if [ "$myversion" == "" ]; then
-      echo "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      exit 1
-    fi
+    [ "$myversion" != "" ] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
     echo "Found MariaDB installation in $VT_MYSQL_ROOT."
     ;;
 
   *)
-    echo "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
-    exit 1
+    fail "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
     ;;
 
 esac
@@ -162,10 +141,7 @@ esac
 echo "$MYSQL_FLAVOR" > $VTROOT/dist/MYSQL_FLAVOR
 
 # generate pkg-config, so go can use mysql C client
-if [ ! -x $VT_MYSQL_ROOT/bin/mysql_config ]; then
-  echo "Cannot execute $VT_MYSQL_ROOT/bin/mysql_config. Did you install a client dev package?" 1>&2
-  exit 1
-fi
+[ -x $VT_MYSQL_ROOT/bin/mysql_config ] || fail "Cannot execute $VT_MYSQL_ROOT/bin/mysql_config. Did you install a client dev package?"
 
 cp $VTTOP/config/gomysql.pc.tmpl $VTROOT/lib/gomysql.pc
 echo "Version:" "$($VT_MYSQL_ROOT/bin/mysql_config --version)" >> $VTROOT/lib/gomysql.pc
@@ -214,4 +190,3 @@ ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 
 echo
 echo "bootstrap finished - run 'source dev.env' in your shell before building."
-

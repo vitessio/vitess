@@ -72,10 +72,9 @@ func (vp *VtctlPipe) Close() {
 // test logs, and returns the command error.
 func (vp *VtctlPipe) Run(args []string) error {
 	actionTimeout := 30 * time.Second
-	lockTimeout := 10 * time.Second
 	ctx := context.Background()
 
-	c, errFunc, err := vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockTimeout)
+	c, errFunc, err := vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout)
 	if err != nil {
 		return fmt.Errorf("VtctlPipe.Run() failed: %v", err)
 	}

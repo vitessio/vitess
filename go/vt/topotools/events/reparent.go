@@ -10,7 +10,7 @@ import (
 	base "github.com/youtube/vitess/go/vt/events"
 	"github.com/youtube/vitess/go/vt/topo"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Reparent is an event that describes a single step in the reparent process.
@@ -18,6 +18,6 @@ type Reparent struct {
 	base.StatusUpdater
 
 	ShardInfo            topo.ShardInfo
-	OldMaster, NewMaster pb.Tablet
+	OldMaster, NewMaster topodatapb.Tablet
 	ExternalID           string
 }

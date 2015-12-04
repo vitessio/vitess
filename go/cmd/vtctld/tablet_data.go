@@ -11,8 +11,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file maintains a tablet health cache. It establishes streaming
@@ -27,7 +27,7 @@ type tabletHealth struct {
 	mu sync.Mutex
 
 	// result stores the most recent response.
-	result *pb.StreamHealthResponse
+	result *querypb.StreamHealthResponse
 	// accessed stores the time of the most recent access.
 	accessed time.Time
 
@@ -47,7 +47,7 @@ func newTabletHealth() *tabletHealth {
 	}
 }
 
-func (th *tabletHealth) lastResult(ctx context.Context) (*pb.StreamHealthResponse, error) {
+func (th *tabletHealth) lastResult(ctx context.Context) (*querypb.StreamHealthResponse, error) {
 	// Wait until at least the first result comes in, or the stream ends.
 	select {
 	case <-ctx.Done():
@@ -70,7 +70,7 @@ func (th *tabletHealth) lastAccessed() time.Time {
 	return th.accessed
 }
 
-func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias *pbt.TabletAlias) (err error) {
+func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias) (err error) {
 	defer func() {
 		th.mu.Lock()
 		th.err = err
@@ -89,7 +89,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 
 	// Pass in a tablet type that is not UNKNOWN, so we don't ask
 	// for sessionId.
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", pbt.TabletType_MASTER, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_MASTER, 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -129,17 +129,17 @@ type tabletHealthCache struct {
 	ts topo.Server
 
 	mu        sync.Mutex
-	tabletMap map[pbt.TabletAlias]*tabletHealth
+	tabletMap map[topodatapb.TabletAlias]*tabletHealth
 }
 
 func newTabletHealthCache(ts topo.Server) *tabletHealthCache {
 	return &tabletHealthCache{
 		ts:        ts,
-		tabletMap: make(map[pbt.TabletAlias]*tabletHealth),
+		tabletMap: make(map[topodatapb.TabletAlias]*tabletHealth),
 	}
 }
 
-func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *pbt.TabletAlias) (*pb.StreamHealthResponse, error) {
+func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*querypb.StreamHealthResponse, error) {
 	thc.mu.Lock()
 
 	th, ok := thc.tabletMap[*tabletAlias]
@@ -161,7 +161,7 @@ func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *pbt.TabletAl
 	return th.lastResult(ctx)
 }
 
-func (thc *tabletHealthCache) delete(tabletAlias *pbt.TabletAlias) {
+func (thc *tabletHealthCache) delete(tabletAlias *topodatapb.TabletAlias) {
 	thc.mu.Lock()
 	delete(thc.tabletMap, *tabletAlias)
 	thc.mu.Unlock()

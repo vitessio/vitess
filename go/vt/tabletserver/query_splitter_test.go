@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 func getSchemaInfo() *SchemaInfo {
@@ -19,9 +19,9 @@ func getSchemaInfo() *SchemaInfo {
 		Name: "test_table",
 	}
 	zero, _ := sqltypes.BuildValue(0)
-	table.AddColumn("id", "int", zero, "")
-	table.AddColumn("id2", "int", zero, "")
-	table.AddColumn("count", "int", zero, "")
+	table.AddColumn("id", sqltypes.Int64, zero, "")
+	table.AddColumn("id2", sqltypes.Int64, zero, "")
+	table.AddColumn("count", sqltypes.Int64, zero, "")
 	table.PKColumns = []int{0}
 	primaryIndex := table.AddIndex("PRIMARY")
 	primaryIndex.AddColumn("id", 12345)
@@ -35,7 +35,7 @@ func getSchemaInfo() *SchemaInfo {
 	tableNoPK := &schema.Table{
 		Name: "test_table_no_pk",
 	}
-	tableNoPK.AddColumn("id", "int", zero, "")
+	tableNoPK.AddColumn("id", sqltypes.Int64, zero, "")
 	tableNoPK.PKColumns = []int{}
 	tables["test_table_no_pk"] = &TableInfo{Table: tableNoPK}
 
@@ -44,82 +44,77 @@ func getSchemaInfo() *SchemaInfo {
 
 func TestValidateQuery(t *testing.T) {
 	schemaInfo := getSchemaInfo()
-	query := &proto.BoundQuery{}
-	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
 
-	query.Sql = "delete from test_table"
+	splitter := NewQuerySplitter("delete from test_table", nil, "", 3, schemaInfo)
 	got := splitter.validateQuery()
 	want := fmt.Errorf("not a select statement")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("non-select validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from test_table order by id"
+	splitter = NewQuerySplitter("select * from test_table order by id", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("order by query validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from test_table group by id"
+	splitter = NewQuerySplitter("select * from test_table group by id", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("group by query validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select A.* from test_table A JOIN test_table B"
+	splitter = NewQuerySplitter("select A.* from test_table A JOIN test_table B", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("join query validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from test_table_no_pk"
+	splitter = NewQuerySplitter("select * from test_table_no_pk", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("no primary keys")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("no PK table validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from unknown_table"
+	splitter = NewQuerySplitter("select * from unknown_table", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("can't find table in schema")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("unknown table validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from test_table"
+	splitter = NewQuerySplitter("select * from test_table", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
 
-	query.Sql = "select * from test_table where count > :count"
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter(query, "id2", 0, schemaInfo)
-	query.Sql = "select * from test_table where count > :count"
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "id2", 0, schemaInfo)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter(query, "id2", 0, schemaInfo)
-	query.Sql = "invalid select * from test_table where count > :count"
+	splitter = NewQuerySplitter("invalid select * from test_table where count > :count", nil, "id2", 0, schemaInfo)
 	if err := splitter.validateQuery(); err == nil {
 		t.Fatalf("validateQuery() = %v, want: nil", err)
 	}
 
 	// column id2 is indexed
-	splitter = NewQuerySplitter(query, "id2", 3, schemaInfo)
-	query.Sql = "select * from test_table where count > :count"
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "id2", 3, schemaInfo)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
@@ -127,7 +122,7 @@ func TestValidateQuery(t *testing.T) {
 	}
 
 	// column does not exist
-	splitter = NewQuerySplitter(query, "unknown_column", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "unknown_column", 3, schemaInfo)
 	got = splitter.validateQuery()
 	wantStr := "split column is not indexed or does not exist in table schema"
 	if !strings.Contains(got.Error(), wantStr) {
@@ -135,7 +130,7 @@ func TestValidateQuery(t *testing.T) {
 	}
 
 	// column is not indexed
-	splitter = NewQuerySplitter(query, "count", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "count", 3, schemaInfo)
 	got = splitter.validateQuery()
 	wantStr = "split column is not indexed or does not exist in table schema"
 	if !strings.Contains(got.Error(), wantStr) {
@@ -246,25 +241,25 @@ func TestSplitBoundaries(t *testing.T) {
 	row := []sqltypes.Value{min, max}
 	rows := [][]sqltypes.Value{row}
 
-	minField := mproto.Field{Name: "min", Type: mproto.VT_LONGLONG}
-	maxField := mproto.Field{Name: "max", Type: mproto.VT_LONGLONG}
-	fields := []mproto.Field{minField, maxField}
+	minField := &querypb.Field{Name: "min", Type: sqltypes.Int64}
+	maxField := &querypb.Field{Name: "max", Type: sqltypes.Int64}
+	fields := []*querypb.Field{minField, maxField}
 
-	pkMinMax := &mproto.QueryResult{
+	pkMinMax := &sqltypes.Result{
 		Fields: fields,
 		Rows:   rows,
 	}
 
 	splitter := &QuerySplitter{}
 	splitter.splitCount = 5
-	boundaries, err := splitter.splitBoundaries(mproto.VT_LONGLONG, pkMinMax)
+	boundaries, err := splitter.splitBoundaries(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(boundaries) != splitter.splitCount-1 {
+	if len(boundaries) != int(splitter.splitCount-1) {
 		t.Errorf("wrong number of boundaries got: %v, want: %v", len(boundaries), splitter.splitCount-1)
 	}
-	got, err := splitter.splitBoundaries(mproto.VT_LONGLONG, pkMinMax)
+	got, err := splitter.splitBoundaries(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -279,7 +274,7 @@ func TestSplitBoundaries(t *testing.T) {
 	row = []sqltypes.Value{min, max}
 	rows = [][]sqltypes.Value{row}
 	pkMinMax.Rows = rows
-	got, err = splitter.splitBoundaries(mproto.VT_LONGLONG, pkMinMax)
+	got, err = splitter.splitBoundaries(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -293,12 +288,12 @@ func TestSplitBoundaries(t *testing.T) {
 	max, _ = sqltypes.BuildValue(60.5)
 	row = []sqltypes.Value{min, max}
 	rows = [][]sqltypes.Value{row}
-	minField = mproto.Field{Name: "min", Type: mproto.VT_DOUBLE}
-	maxField = mproto.Field{Name: "max", Type: mproto.VT_DOUBLE}
-	fields = []mproto.Field{minField, maxField}
+	minField = &querypb.Field{Name: "min", Type: sqltypes.Float64}
+	maxField = &querypb.Field{Name: "max", Type: sqltypes.Float64}
+	fields = []*querypb.Field{minField, maxField}
 	pkMinMax.Rows = rows
 	pkMinMax.Fields = fields
-	got, err = splitter.splitBoundaries(mproto.VT_DOUBLE, pkMinMax)
+	got, err = splitter.splitBoundaries(sqltypes.Float64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -315,45 +310,45 @@ func buildVal(val interface{}) sqltypes.Value {
 
 func TestSplitQuery(t *testing.T) {
 	schemaInfo := getSchemaInfo()
-	query := &proto.BoundQuery{
-		Sql: "select * from test_table where count > :count",
-	}
-	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
+	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(0)
 	max, _ := sqltypes.BuildValue(300)
-	minField := mproto.Field{
+	minField := &querypb.Field{
 		Name: "min",
-		Type: mproto.VT_LONGLONG,
+		Type: sqltypes.Int64,
 	}
-	maxField := mproto.Field{
+	maxField := &querypb.Field{
 		Name: "max",
-		Type: mproto.VT_LONGLONG,
+		Type: sqltypes.Int64,
 	}
-	fields := []mproto.Field{minField, maxField}
-	pkMinMax := &mproto.QueryResult{
+	fields := []*querypb.Field{minField, maxField}
+	pkMinMax := &sqltypes.Result{
 		Fields: fields,
 	}
 
 	// Ensure that empty min max does not cause panic or return any error
-	splits, err := splitter.split(mproto.VT_LONGLONG, pkMinMax)
+	splits, err := splitter.split(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Errorf("unexpected error while splitting on empty pkMinMax, %s", err)
 	}
 
 	pkMinMax.Rows = [][]sqltypes.Value{[]sqltypes.Value{min, max}}
-	splits, err = splitter.split(mproto.VT_LONGLONG, pkMinMax)
+	splits, err = splitter.split(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	got := []proto.BoundQuery{}
+	got := []querytypes.BoundQuery{}
 	for _, split := range splits {
 		if split.RowCount != 100 {
 			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 100)
 		}
-		got = append(got, split.Query)
+		got = append(got, querytypes.BoundQuery{
+			Sql:           split.Sql,
+			BindVariables: split.BindVariables,
+		})
 	}
-	want := []proto.BoundQuery{
+	want := []querytypes.BoundQuery{
 		{
 			Sql:           "select * from test_table where (count > :count) and (id < :" + endBindVarName + ")",
 			BindVariables: map[string]interface{}{endBindVarName: int64(100)},
@@ -377,39 +372,39 @@ func TestSplitQuery(t *testing.T) {
 
 func TestSplitQueryFractionalColumn(t *testing.T) {
 	schemaInfo := getSchemaInfo()
-	query := &proto.BoundQuery{
-		Sql: "select * from test_table where count > :count",
-	}
-	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
+	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(10.5)
 	max, _ := sqltypes.BuildValue(490.5)
-	minField := mproto.Field{
+	minField := &querypb.Field{
 		Name: "min",
-		Type: mproto.VT_FLOAT,
+		Type: sqltypes.Float32,
 	}
-	maxField := mproto.Field{
+	maxField := &querypb.Field{
 		Name: "max",
-		Type: mproto.VT_FLOAT,
+		Type: sqltypes.Float32,
 	}
-	fields := []mproto.Field{minField, maxField}
-	pkMinMax := &mproto.QueryResult{
+	fields := []*querypb.Field{minField, maxField}
+	pkMinMax := &sqltypes.Result{
 		Fields: fields,
 		Rows:   [][]sqltypes.Value{[]sqltypes.Value{min, max}},
 	}
 
-	splits, err := splitter.split(mproto.VT_FLOAT, pkMinMax)
+	splits, err := splitter.split(sqltypes.Float32, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	got := []proto.BoundQuery{}
+	got := []querytypes.BoundQuery{}
 	for _, split := range splits {
 		if split.RowCount != 160 {
 			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 160)
 		}
-		got = append(got, split.Query)
+		got = append(got, querytypes.BoundQuery{
+			Sql:           split.Sql,
+			BindVariables: split.BindVariables,
+		})
 	}
-	want := []proto.BoundQuery{
+	want := []querytypes.BoundQuery{
 		{
 			Sql:           "select * from test_table where (count > :count) and (id < :" + endBindVarName + ")",
 			BindVariables: map[string]interface{}{endBindVarName: 170.5},
@@ -433,20 +428,20 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 
 func TestSplitQueryStringColumn(t *testing.T) {
 	schemaInfo := getSchemaInfo()
-	query := &proto.BoundQuery{
-		Sql: "select * from test_table where count > :count",
-	}
-	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
+	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
 	splitter.validateQuery()
-	splits, err := splitter.split(mproto.VT_VAR_STRING, nil)
+	splits, err := splitter.split(sqltypes.VarChar, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	got := []proto.BoundQuery{}
+	got := []querytypes.BoundQuery{}
 	for _, split := range splits {
-		got = append(got, split.Query)
+		got = append(got, querytypes.BoundQuery{
+			Sql:           split.Sql,
+			BindVariables: split.BindVariables,
+		})
 	}
-	want := []proto.BoundQuery{
+	want := []querytypes.BoundQuery{
 		{
 			Sql:           "select * from test_table where (count > :count) and (id < :" + endBindVarName + ")",
 			BindVariables: map[string]interface{}{endBindVarName: hexToByteUInt32(0x55555555)},

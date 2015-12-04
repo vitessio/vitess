@@ -12,13 +12,13 @@
 import logging
 import unittest
 
+from vtdb import keyrange_constants
+from vtdb import update_stream
+
 import environment
 import tablet
 import utils
 from mysql_flavor import mysql_flavor
-
-from vtdb import keyrange_constants
-from vtdb import update_stream
 
 src_master = tablet.Tablet()
 src_replica = tablet.Tablet()
@@ -57,8 +57,6 @@ def setUpModule():
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-
     for t in [src_master, src_replica, src_rdonly1, src_rdonly2]:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
@@ -83,6 +81,9 @@ def setUpModule():
                      '-sql=' + create_table,
                      'test_keyspace'], auto_log=True)
 
+    # run a health check on source replica so it responds to discovery
+    utils.run_vtctl(['RunHealthCheck', src_replica.tablet_alias, 'replica'])
+
     # Create destination shard.
     dst_master.init_tablet('master', 'test_keyspace', '-')
     dst_replica.init_tablet('replica', 'test_keyspace', '-')
@@ -91,7 +92,6 @@ def setUpModule():
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-',
                      dst_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # copy the schema
     utils.run_vtctl(['CopySchemaShard', src_replica.tablet_alias,

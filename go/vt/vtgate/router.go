@@ -10,14 +10,13 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 const (
@@ -61,7 +60,7 @@ func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, stat
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool) (*mproto.QueryResult, error) {
+func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if bindVariables == nil {
 		bindVariables = make(map[string]interface{})
 	}
@@ -109,7 +108,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[st
 }
 
 // StreamExecute executes a streaming query.
-func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*mproto.QueryResult) error) error {
+func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if bindVariables == nil {
 		bindVariables = make(map[string]interface{})
 	}
@@ -203,19 +202,19 @@ func (rtr *Router) paramsSelectKeyrange(vcursor *requestContext, plan *planbuild
 	return newScatterParams(plan.Rewritten, ks, vcursor.bindVariables, shards), nil
 }
 
-func getKeyRange(keys []interface{}) (*pb.KeyRange, error) {
-	var ksids []key.KeyspaceId
+func getKeyRange(keys []interface{}) (*topodatapb.KeyRange, error) {
+	var ksids [][]byte
 	for _, k := range keys {
 		switch k := k.(type) {
 		case string:
-			ksids = append(ksids, key.KeyspaceId(k))
+			ksids = append(ksids, []byte(k))
 		default:
 			return nil, fmt.Errorf("expecting strings for keyrange: %+v", keys)
 		}
 	}
-	return &pb.KeyRange{
-		Start: []byte(ksids[0]),
-		End:   []byte(ksids[1]),
+	return &topodatapb.KeyRange{
+		Start: ksids[0],
+		End:   ksids[1],
 	}, nil
 }
 
@@ -231,7 +230,7 @@ func (rtr *Router) paramsSelectScatter(vcursor *requestContext, plan *planbuilde
 	return newScatterParams(plan.Rewritten, ks, vcursor.bindVariables, shards), nil
 }
 
-func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Plan) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.bindVariables)
 	if err != nil {
 		return nil, fmt.Errorf("execUpdateEqual: %v", err)
@@ -241,7 +240,7 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Pl
 		return nil, fmt.Errorf("execUpdateEqual: %v", err)
 	}
 	if len(ksid) == 0 {
-		return &mproto.QueryResult{}, nil
+		return &sqltypes.Result{}, nil
 	}
 	vcursor.bindVariables[ksidName] = string(ksid)
 	rewritten := sqlannotation.AddKeyspaceID(plan.Rewritten, ksid)
@@ -256,7 +255,7 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Pl
 		vcursor.notInTransaction)
 }
 
-func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Plan) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.bindVariables)
 	if err != nil {
 		return nil, fmt.Errorf("execDeleteEqual: %v", err)
@@ -266,7 +265,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Pl
 		return nil, fmt.Errorf("execDeleteEqual: %v", err)
 	}
 	if len(ksid) == 0 {
-		return &mproto.QueryResult{}, nil
+		return &sqltypes.Result{}, nil
 	}
 	if plan.Subquery != "" {
 		err = rtr.deleteVindexEntries(vcursor, plan, ks, shard, ksid)
@@ -287,7 +286,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Pl
 		vcursor.notInTransaction)
 }
 
-func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.Plan) (*sqltypes.Result, error) {
 	input := plan.Values.([]interface{})
 	keys, err := rtr.resolveKeys(input, vcursor.bindVariables)
 	if err != nil {
@@ -328,10 +327,10 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 	if generated != 0 {
-		if result.InsertId != 0 {
+		if result.InsertID != 0 {
 			return nil, fmt.Errorf("vindex and db generated a value each for insert")
 		}
-		result.InsertId = uint64(generated)
+		result.InsertID = uint64(generated)
 	}
 	return result, nil
 }
@@ -437,11 +436,7 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilde
 	for i, colVindex := range plan.Table.Owned {
 		keys := make(map[interface{}]bool)
 		for _, row := range result.Rows {
-			k, err := mproto.Convert(result.Fields[i], row[i])
-			if err != nil {
-				return err
-			}
-			switch k := k.(type) {
+			switch k := row[i].ToNative().(type) {
 			case []byte:
 				keys[string(k)] = true
 			default:
@@ -551,7 +546,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 	return generated, nil
 }
 
-func (rtr *Router) getRouting(ctx context.Context, keyspace string, tabletType pb.TabletType, ksid []byte) (newKeyspace, shard string, err error) {
+func (rtr *Router) getRouting(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ksid []byte) (newKeyspace, shard string, err error) {
 	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, rtr.serv, rtr.cell, keyspace, tabletType)
 	if err != nil {
 		return "", "", err

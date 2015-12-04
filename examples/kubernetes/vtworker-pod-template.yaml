@@ -25,7 +25,7 @@ spec:
           -alsologtostderr
           -port {{port}}
           -topo_implementation etcd
-          -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
+          -etcd_global_addrs http://etcd-global:4001
           -min_healthy_rdonly_endpoints 1
           -cell {{cell}}
           -tablet_protocol grpc

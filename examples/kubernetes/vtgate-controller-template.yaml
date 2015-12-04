@@ -13,6 +13,12 @@ spec:
       containers:
         - name: vtgate
           image: vitess/lite
+          livenessProbe:
+            httpGet:
+              path: /debug/vars
+              port: 15001
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
           volumeMounts:
             - name: syslog
               mountPath: /dev/log
@@ -30,7 +36,7 @@ spec:
               chown -R vitess /vt &&
               su -p -c "/vt/bin/vtgate
               -topo_implementation etcd
-              -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
+              -etcd_global_addrs http://etcd-global:4001
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
               -port 15001

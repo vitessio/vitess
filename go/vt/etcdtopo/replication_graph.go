@@ -11,11 +11,11 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // UpdateShardReplicationFields implements topo.Server.
-func (s *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, updateFunc func(*pb.ShardReplication) error) error {
+func (s *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, updateFunc func(*topodatapb.ShardReplication) error) error {
 	var sri *topo.ShardReplicationInfo
 	var version int64
 	var err error
@@ -24,7 +24,7 @@ func (s *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspac
 		if sri, version, err = s.getShardReplication(cell, keyspace, shard); err != nil {
 			if err == topo.ErrNoNode {
 				// Pass an empty struct to the update func, as specified in topo.Server.
-				sri = topo.NewShardReplicationInfo(&pb.ShardReplication{}, cell, keyspace, shard)
+				sri = topo.NewShardReplicationInfo(&topodatapb.ShardReplication{}, cell, keyspace, shard)
 				version = -1
 			} else {
 				return err
@@ -110,7 +110,7 @@ func (s *Server) getShardReplication(cellName, keyspace, shard string) (*topo.Sh
 		return nil, -1, ErrBadResponse
 	}
 
-	value := &pb.ShardReplication{}
+	value := &topodatapb.ShardReplication{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, -1, fmt.Errorf("bad shard replication data (%v): %q", err, resp.Node.Value)
 	}

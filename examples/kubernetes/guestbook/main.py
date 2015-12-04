@@ -98,8 +98,8 @@ def env():
 if __name__ == "__main__":
   timeout = 10 # connect timeout in seconds
 
-  # Get vtgate service address from Kubernetes environment.
-  addr = '%s:%s' % (os.environ['VTGATE_SERVICE_HOST'], os.environ['VTGATE_SERVICE_PORT'])
+  # Get vtgate service address from Kubernetes DNS.
+  addr = 'vtgate:15001'
 
   # Connect to vtgate.
   conn = vtgatev2.connect({'vt': [addr]}, timeout)

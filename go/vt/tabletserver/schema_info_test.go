@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -47,7 +47,7 @@ func TestSchemaInfoStrictMode(t *testing.T) {
 func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
 	fakecacheservice.Register()
 	db := fakesqldb.Register()
-	db.AddQuery("select unix_timestamp()", &mproto.QueryResult{
+	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
 		// make this query fail
 		RowsAffected: math.MaxUint64,
 		Rows: [][]sqltypes.Value{
@@ -70,7 +70,7 @@ func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
 func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 	fakecacheservice.Register()
 	db := fakesqldb.Register()
-	db.AddQuery("select unix_timestamp()", &mproto.QueryResult{
+	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			// make this query fail
@@ -93,7 +93,7 @@ func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 	fakecacheservice.Register()
 	db := fakesqldb.Register()
-	db.AddQuery("select unix_timestamp()", &mproto.QueryResult{
+	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			// make safety check fail, invalid time format
@@ -119,7 +119,7 @@ func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
 	for query, result := range getSchemaInfoBaseTestQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery(baseShowTables, &mproto.QueryResult{
+	db.AddQuery(baseShowTables, &sqltypes.Result{
 		// this will cause connection failed to execute baseShowTables query
 		RowsAffected: math.MaxUint64,
 	})
@@ -142,13 +142,13 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 	for query, result := range getSchemaInfoBaseTestQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery(baseShowTables, &mproto.QueryResult{
+	db.AddQuery(baseShowTables, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			createTestTableBaseShowTable("test_table"),
 		},
 	})
-	db.AddQuery("describe `test_table`", &mproto.QueryResult{
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
 		// this will cause NewTableInfo error
 		RowsAffected: math.MaxUint64,
 	})
@@ -180,14 +180,14 @@ func TestSchemaInfoOpenWithSchemaOverride(t *testing.T) {
 	// test cache type RW
 	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	testTableInfo := schemaInfo.GetTable("test_table_01")
-	if testTableInfo.Table.CacheType != schema.CACHE_RW {
+	if testTableInfo.Table.CacheType != schema.CacheRW {
 		t.Fatalf("test_table_01's cache type should be RW")
 	}
 	schemaInfo.Close()
 	// test cache type W
 	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	testTableInfo = schemaInfo.GetTable("test_table_02")
-	if testTableInfo.Table.CacheType != schema.CACHE_W {
+	if testTableInfo.Table.CacheType != schema.CacheW {
 		t.Fatalf("test_table_02's cache type should be W")
 	}
 	schemaInfo.Close()
@@ -219,7 +219,7 @@ func TestSchemaInfoReload(t *testing.T) {
 	if tableInfo != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
-	db.AddQuery(baseShowTables, &mproto.QueryResult{
+	db.AddQuery(baseShowTables, &sqltypes.Result{
 		// make this query fail during reload
 		RowsAffected: math.MaxUint64,
 		Rows: [][]sqltypes.Value{
@@ -228,19 +228,24 @@ func TestSchemaInfoReload(t *testing.T) {
 	})
 
 	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, newTable)
-	db.AddQuery(createOrDropTableQuery, &mproto.QueryResult{
+	db.AddQuery(createOrDropTableQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			createTestTableBaseShowTable(newTable),
 		},
 	})
 
-	db.AddQuery("describe `test_table_04`", &mproto.QueryResult{
+	db.AddQuery("select * from `test_table_04` where 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
+	db.AddQuery("describe `test_table_04`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
 	})
-
-	db.AddQuery("show index from `test_table_04`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table_04`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
 	})
@@ -252,7 +257,7 @@ func TestSchemaInfoReload(t *testing.T) {
 	}
 
 	// test reload with new table: test_table_04
-	db.AddQuery(baseShowTables, &mproto.QueryResult{
+	db.AddQuery(baseShowTables, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			createTestTableBaseShowTable(newTable),
@@ -276,7 +281,7 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, "test_table")
-	db.AddQuery(createOrDropTableQuery, &mproto.QueryResult{
+	db.AddQuery(createOrDropTableQuery, &sqltypes.Result{
 		// make this query fail
 		RowsAffected: math.MaxUint64,
 		Rows: [][]sqltypes.Value{
@@ -306,7 +311,7 @@ func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
 	}
 	existingTable := "test_table_01"
 	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, existingTable)
-	db.AddQuery(createOrDropTableQuery, &mproto.QueryResult{
+	db.AddQuery(createOrDropTableQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			createTestTableBaseShowTable(existingTable),
@@ -330,7 +335,7 @@ func TestSchemaInfoDropTable(t *testing.T) {
 	}
 	existingTable := "test_table_01"
 	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, existingTable)
-	db.AddQuery(createOrDropTableQuery, &mproto.QueryResult{
+	db.AddQuery(createOrDropTableQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			createTestTableBaseShowTable(existingTable),
@@ -412,8 +417,8 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 
 	firstQuery := "select * from test_table_01"
 	secondQuery := "select * from test_table_02"
-	db.AddQuery("select * from test_table_01 where 1 != 1", &mproto.QueryResult{})
-	db.AddQuery("select * from test_table_02 where 1 != 1", &mproto.QueryResult{})
+	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
+	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, true)
 	appParams := sqldb.ConnParams{Engine: db.Name}
@@ -476,7 +481,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	defer schemaInfo.Close()
 	// Add new table
 	tableName := "mysql_stats_test_table"
-	db.AddQuery(baseShowTables, &mproto.QueryResult{
+	db.AddQuery(baseShowTables, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			createTestTableBaseShowTable(tableName),
@@ -484,19 +489,26 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	})
 	// Add queries necessary for CreateOrUpdateTable() and NewTableInfo()
 	q := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName)
-	db.AddQuery(q, &mproto.QueryResult{
+	db.AddQuery(q, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			createTestTableBaseShowTable(tableName),
 		},
 	})
+	q = fmt.Sprintf("select * from `%s` where 1 != 1", tableName)
+	db.AddQuery(q, &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
 	q = fmt.Sprintf("describe `%s`", tableName)
-	db.AddQuery(q, &mproto.QueryResult{
+	db.AddQuery(q, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
 	})
 	q = fmt.Sprintf("show index from `%s`", tableName)
-	db.AddQuery(q, &mproto.QueryResult{
+	db.AddQuery(q, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
 	})
@@ -511,7 +523,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	il1 := tableInfo.IndexLength
 	df1 := tableInfo.DataFree
 	// Update existing table with new stats.
-	db.AddQuery(baseShowTables, &mproto.QueryResult{
+	db.AddQuery(baseShowTables, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			createTestTableUpdatedStats(tableName),
@@ -535,7 +547,7 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	query := "select * from test_table_01"
-	db.AddQuery("select * from test_table_01 where 1 != 1", &mproto.QueryResult{})
+	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
@@ -587,10 +599,10 @@ func newTestSchemaInfoCachePool(enablePublishStats bool, queryServiceStats *Quer
 	)
 }
 
-func getSchemaInfoBaseTestQueries() map[string]*mproto.QueryResult {
-	return map[string]*mproto.QueryResult{
+func getSchemaInfoBaseTestQueries() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
 		// queries for schema info
-		"select unix_timestamp()": &mproto.QueryResult{
+		"select unix_timestamp()": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{sqltypes.MakeString([]byte("1427325875"))},
@@ -702,12 +714,12 @@ func createTestTableBaseShowTable(tableName string) []sqltypes.Value {
 	return []sqltypes.Value{
 		sqltypes.MakeString([]byte(tableName)),
 		sqltypes.MakeString([]byte("USER TABLE")),
-		sqltypes.MakeNumeric([]byte("1427325875")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 		sqltypes.MakeString([]byte("")),
-		sqltypes.MakeNumeric([]byte("1")),
-		sqltypes.MakeNumeric([]byte("2")),
-		sqltypes.MakeNumeric([]byte("3")),
-		sqltypes.MakeNumeric([]byte("4")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 	}
 }
 
@@ -715,12 +727,12 @@ func createTestTableUpdatedStats(tableName string) []sqltypes.Value {
 	return []sqltypes.Value{
 		sqltypes.MakeString([]byte(tableName)),
 		sqltypes.MakeString([]byte("USER TABLE")),
-		sqltypes.MakeNumeric([]byte("0")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("0")),
 		sqltypes.MakeString([]byte("")),
-		sqltypes.MakeNumeric([]byte("4")),
-		sqltypes.MakeNumeric([]byte("5")),
-		sqltypes.MakeNumeric([]byte("6")),
-		sqltypes.MakeNumeric([]byte("7")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("6")),
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("7")),
 	}
 }
 
@@ -747,57 +759,63 @@ func createTestTableShowIndex(pkColumnName string) []sqltypes.Value {
 	}
 }
 
-func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
-	return map[string]*mproto.QueryResult{
+func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
 		// queries for schema info
-		"select unix_timestamp()": &mproto.QueryResult{
+		"select unix_timestamp()": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeNumeric([]byte("1427325875"))},
+				[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
 			},
 		},
-		"select @@global.sql_mode": &mproto.QueryResult{
+		"select @@global.sql_mode": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
-		baseShowTables: &mproto.QueryResult{
+		baseShowTables: &sqltypes.Result{
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_01")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeNumeric([]byte("1427325875")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeNumeric([]byte("1")),
-					sqltypes.MakeNumeric([]byte("2")),
-					sqltypes.MakeNumeric([]byte("3")),
-					sqltypes.MakeNumeric([]byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 				},
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_02")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeNumeric([]byte("1427325875")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeNumeric([]byte("1")),
-					sqltypes.MakeNumeric([]byte("2")),
-					sqltypes.MakeNumeric([]byte("3")),
-					sqltypes.MakeNumeric([]byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 				},
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_03")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeNumeric([]byte("1427325875")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeNumeric([]byte("1")),
-					sqltypes.MakeNumeric([]byte("2")),
-					sqltypes.MakeNumeric([]byte("3")),
-					sqltypes.MakeNumeric([]byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 				},
 			},
 		},
-		"describe `test_table_01`": &mproto.QueryResult{
+		"select * from `test_table_01` where 1 != 1": &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}},
+		},
+		"describe `test_table_01`": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -810,7 +828,13 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"describe `test_table_02`": &mproto.QueryResult{
+		"select * from `test_table_02` where 1 != 1": &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}},
+		},
+		"describe `test_table_02`": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -823,7 +847,13 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"describe `test_table_03`": &mproto.QueryResult{
+		"select * from `test_table_03` where 1 != 1": &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}},
+		},
+		"describe `test_table_03`": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -837,7 +867,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 			},
 		},
 		// for SplitQuery because it needs a primary key column
-		"show index from `test_table_01`": &mproto.QueryResult{
+		"show index from `test_table_01`": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -851,7 +881,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"show index from `test_table_02`": &mproto.QueryResult{
+		"show index from `test_table_02`": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -865,7 +895,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"show index from `test_table_03`": &mproto.QueryResult{
+		"show index from `test_table_03`": &sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -879,8 +909,8 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"begin":  &mproto.QueryResult{},
-		"commit": &mproto.QueryResult{},
+		"begin":  &sqltypes.Result{},
+		"commit": &sqltypes.Result{},
 	}
 }
 

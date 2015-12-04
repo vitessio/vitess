@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // NewConnFunc is a factory method that creates a Conn instance
@@ -28,7 +30,7 @@ var (
 // Conn defines the behavior for the low level db connection
 type Conn interface {
 	// ExecuteFetch executes the query on the connection
-	ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error)
+	ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 	// ExecuteFetchMap returns a map from column names to cell data for a query
 	// that should return exactly 1 row.
 	ExecuteFetchMap(query string) (map[string]string, error)
@@ -45,7 +47,7 @@ type Conn interface {
 	// a connection to stop ongoing communication.
 	Shutdown()
 	// Fields returns the current fields description for the query
-	Fields() []proto.Field
+	Fields() []*querypb.Field
 	// ID returns the connection id.
 	ID() int64
 	// FetchNext returns the next row for a query
@@ -56,9 +58,9 @@ type Conn interface {
 	SendCommand(command uint32, data []byte) error
 	// GetCharset returns the current numerical values of the per-session character
 	// set variables.
-	GetCharset() (cs proto.Charset, err error)
+	GetCharset() (cs *binlogdatapb.Charset, err error)
 	// SetCharset changes the per-session character set variables.
-	SetCharset(cs proto.Charset) error
+	SetCharset(cs *binlogdatapb.Charset) error
 }
 
 // RegisterDefault registers the default connection function.

@@ -9,6 +9,7 @@ package binlogplayer
 
 import (
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"io"
 	"sync"
@@ -17,18 +18,21 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
+	// BinlogPlayerConnTimeout is the flag for binlog player connection
+	// timeout. It is public so the discovery module can also use it.
+	BinlogPlayerConnTimeout = flag.Duration("binlog_player_conn_timeout", 5*time.Second, "binlog player connection timeout")
+
 	// SlowQueryThreshold will cause we logging anything that's higher than it.
 	SlowQueryThreshold = time.Duration(100 * time.Millisecond)
 
@@ -46,37 +50,37 @@ var (
 	BlpFlagDontStart = "DontStart"
 )
 
-// BinlogPlayerStats is the internal stats of a player. It is a different
+// Stats is the internal stats of a player. It is a different
 // structure that is passed in so stats can be collected over the life
 // of multiple individual players.
-type BinlogPlayerStats struct {
+type Stats struct {
 	// Stats about the player, keys used are BlplQuery and BlplTransaction
 	Timings *stats.Timings
 	Rates   *stats.Rates
 
 	// Last saved status
-	lastPosition        myproto.ReplicationPosition
+	lastPosition        replication.Position
 	lastPositionMutex   sync.RWMutex
 	SecondsBehindMaster sync2.AtomicInt64
 }
 
 // SetLastPosition sets the last replication position.
-func (bps *BinlogPlayerStats) SetLastPosition(pos myproto.ReplicationPosition) {
+func (bps *Stats) SetLastPosition(pos replication.Position) {
 	bps.lastPositionMutex.Lock()
 	defer bps.lastPositionMutex.Unlock()
 	bps.lastPosition = pos
 }
 
 // GetLastPosition gets the last replication position.
-func (bps *BinlogPlayerStats) GetLastPosition() myproto.ReplicationPosition {
+func (bps *Stats) GetLastPosition() replication.Position {
 	bps.lastPositionMutex.RLock()
 	defer bps.lastPositionMutex.RUnlock()
 	return bps.lastPosition
 }
 
-// NewBinlogPlayerStats creates a new BinlogPlayerStats structure
-func NewBinlogPlayerStats() *BinlogPlayerStats {
-	bps := &BinlogPlayerStats{}
+// NewStats creates a new Stats structure
+func NewStats() *Stats {
+	bps := &Stats{}
 	bps.Timings = stats.NewTimings("")
 	bps.Rates = stats.NewRates("", bps.Timings, 15, 60e9)
 	return bps
@@ -84,53 +88,77 @@ func NewBinlogPlayerStats() *BinlogPlayerStats {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	endPoint *pb.EndPoint
+	endPoint *topodatapb.EndPoint
 	dbClient VtClient
 
 	// for key range base requests
-	keyspaceIdType pb.KeyspaceIdType
-	keyRange       *pb.KeyRange
+	keyspaceIDType topodatapb.KeyspaceIdType
+	keyRange       *topodatapb.KeyRange
 
 	// for table base requests
 	tables []string
 
 	// common to all
-	blpPos         proto.BlpPosition
-	stopPosition   myproto.ReplicationPosition
-	blplStats      *BinlogPlayerStats
-	defaultCharset mproto.Charset
-	currentCharset mproto.Charset
+	uid            uint32
+	position       replication.Position
+	stopPosition   replication.Position
+	blplStats      *Stats
+	defaultCharset *binlogdatapb.Charset
+	currentCharset *binlogdatapb.Charset
 }
 
 // NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pb.EndPoint, keyspaceIdType pb.KeyspaceIdType, keyRange *pb.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
-	return &BinlogPlayer{
+func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *topodatapb.EndPoint, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
+	result := &BinlogPlayer{
 		endPoint:       endPoint,
 		dbClient:       dbClient,
-		keyspaceIdType: keyspaceIdType,
+		keyspaceIDType: keyspaceIDType,
 		keyRange:       keyRange,
-		blpPos:         *startPosition,
-		stopPosition:   stopPosition,
+		uid:            uid,
 		blplStats:      blplStats,
 	}
+	var err error
+	result.position, err = replication.DecodePosition(startPosition)
+	if err != nil {
+		return nil, err
+	}
+	if stopPosition != "" {
+		result.stopPosition, err = replication.DecodePosition(stopPosition)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 // NewBinlogPlayerTables returns a new BinlogPlayer pointing at the server
 // replicating the provided tables, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient VtClient, endPoint *pb.EndPoint, tables []string, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
-	return &BinlogPlayer{
-		endPoint:     endPoint,
-		dbClient:     dbClient,
-		tables:       tables,
-		blpPos:       *startPosition,
-		stopPosition: stopPosition,
-		blplStats:    blplStats,
+func NewBinlogPlayerTables(dbClient VtClient, endPoint *topodatapb.EndPoint, tables []string, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
+	result := &BinlogPlayer{
+		endPoint:  endPoint,
+		dbClient:  dbClient,
+		tables:    tables,
+		uid:       uid,
+		blplStats: blplStats,
 	}
+	var err error
+	result.position, err = replication.DecodePosition(startPosition)
+	if err != nil {
+		return nil, err
+	}
+	if stopPosition != "" {
+		var err error
+		result.stopPosition, err = replication.DecodePosition(stopPosition)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 // writeRecoveryPosition will write the current GTID as the recovery position
@@ -142,16 +170,16 @@ func NewBinlogPlayerTables(dbClient VtClient, endPoint *pb.EndPoint, tables []st
 // - otherwise (the statements are probably filtered out), we leave
 //   transaction_timestamp alone (keeping the old value), and we don't
 //   change SecondsBehindMaster
-func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) error {
-	gtid, err := myproto.DecodeGTID(tx.TransactionID)
+func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
+	gtid, err := replication.DecodeGTID(tx.TransactionId)
 	if err != nil {
 		return err
 	}
 
 	now := time.Now().Unix()
 
-	blp.blpPos.Position = myproto.AppendGTID(blp.blpPos.Position, gtid)
-	updateRecovery := UpdateBlpCheckpoint(blp.blpPos.Uid, blp.blpPos.Position, now, tx.Timestamp)
+	blp.position = replication.AppendGTID(blp.position, gtid)
+	updateRecovery := updateBlpCheckpoint(blp.uid, blp.position, now, tx.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -160,7 +188,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) erro
 	if qr.RowsAffected != 1 {
 		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
-	blp.blplStats.SetLastPosition(blp.blpPos.Position)
+	blp.blplStats.SetLastPosition(blp.position)
 	if tx.Timestamp != 0 {
 		blp.blplStats.SecondsBehindMaster.Set(now - tx.Timestamp)
 	}
@@ -169,26 +197,19 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) erro
 
 // ReadStartPosition will return the current start position and the flags for
 // the provided binlog player.
-func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, string, error) {
+func ReadStartPosition(dbClient VtClient, uid uint32) (string, string, error) {
 	selectRecovery := QueryBlpCheckpoint(uid)
 	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
 	if err != nil {
-		return nil, "", fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
+		return "", "", fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
 	}
 	if qr.RowsAffected != 1 {
-		return nil, "", fmt.Errorf("checkpoint information not available in db for %v", uid)
+		return "", "", fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
-	pos, err := myproto.DecodeReplicationPosition(qr.Rows[0][0].String())
-	if err != nil {
-		return nil, "", err
-	}
-	return &proto.BlpPosition{
-		Uid:      uid,
-		Position: pos,
-	}, string(qr.Rows[0][1].Raw()), nil
+	return qr.Rows[0][0].String(), qr.Rows[0][1].String(), nil
 }
 
-func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok bool, err error) {
+func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) (ok bool, err error) {
 	txnStartTime := time.Now()
 	if err = blp.dbClient.Begin(); err != nil {
 		return false, fmt.Errorf("failed query BEGIN, err: %s", err)
@@ -199,15 +220,15 @@ func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok boo
 	for i, stmt := range tx.Statements {
 		// Make sure the statement is replayed in the proper charset.
 		if dbClient, ok := blp.dbClient.(*DBClient); ok {
-			var stmtCharset mproto.Charset
+			var stmtCharset *binlogdatapb.Charset
 			if stmt.Charset != nil {
-				stmtCharset = *stmt.Charset
+				stmtCharset = stmt.Charset
 			} else {
-				// BinlogStreamer sends a nil Charset for statements that use the
+				// Streamer sends a nil Charset for statements that use the
 				// charset we specified in the request.
 				stmtCharset = blp.defaultCharset
 			}
-			if blp.currentCharset != stmtCharset {
+			if *blp.currentCharset != *stmtCharset {
 				// In regular MySQL replication, the charset is silently adjusted as
 				// needed during event playback. Here we also adjust so that playback
 				// proceeds, but in Vitess-land this usually means a misconfigured
@@ -240,7 +261,7 @@ func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok boo
 	return true, nil
 }
 
-func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
+func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	queryStartTime := time.Now()
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0, false)
 	blp.blplStats.Timings.Record(BlplQuery, queryStartTime)
@@ -258,28 +279,28 @@ func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if len(blp.tables) > 0 {
 		log.Infof("BinlogPlayer client %v for tables %v starting @ '%v', server: %v",
-			blp.blpPos.Uid,
+			blp.uid,
 			blp.tables,
-			blp.blpPos.Position,
+			blp.position,
 			blp.endPoint,
 		)
 	} else {
 		log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
-			blp.blpPos.Uid,
+			blp.uid,
 			hex.EncodeToString(blp.keyRange.Start),
 			hex.EncodeToString(blp.keyRange.End),
-			blp.blpPos.Position,
+			blp.position,
 			blp.endPoint,
 		)
 	}
 	if !blp.stopPosition.IsZero() {
 		// We need to stop at some point. Sanity check the point.
 		switch {
-		case blp.blpPos.Position.Equal(blp.stopPosition):
+		case blp.position.Equal(blp.stopPosition):
 			log.Infof("Not starting BinlogPlayer, we're already at the desired position %v", blp.stopPosition)
 			return nil
-		case blp.blpPos.Position.AtLeast(blp.stopPosition):
-			return fmt.Errorf("starting point %v greater than stopping point %v", blp.blpPos.Position, blp.stopPosition)
+		case blp.position.AtLeast(blp.stopPosition):
+			return fmt.Errorf("starting point %v greater than stopping point %v", blp.position, blp.stopPosition)
 		default:
 			log.Infof("Will stop player when reaching %v", blp.stopPosition)
 		}
@@ -290,7 +311,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
 	}
 	blplClient := clientFactory()
-	err := blplClient.Dial(blp.endPoint, *binlogPlayerConnTimeout)
+	err := blplClient.Dial(blp.endPoint, *BinlogPlayerConnTimeout)
 	if err != nil {
 		log.Errorf("Error dialing binlog server: %v", err)
 		return fmt.Errorf("error dialing binlog server: %v", err)
@@ -316,12 +337,12 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		}()
 	}
 
-	var responseChan chan *proto.BinlogTransaction
+	var responseChan chan *binlogdatapb.BinlogTransaction
 	var errFunc ErrFunc
 	if len(blp.tables) > 0 {
-		responseChan, errFunc, err = blplClient.StreamTables(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), blp.tables, &blp.defaultCharset)
+		responseChan, errFunc, err = blplClient.StreamTables(ctx, replication.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
 	} else {
-		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), key.ProtoToKeyspaceIdType(blp.keyspaceIdType), blp.keyRange, &blp.defaultCharset)
+		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyspaceIDType, blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
 		log.Errorf("Error sending streaming query to binlog server: %v", err)
@@ -336,7 +357,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 			}
 			if ok {
 				if !blp.stopPosition.IsZero() {
-					if blp.blpPos.Position.AtLeast(blp.stopPosition) {
+					if blp.position.AtLeast(blp.stopPosition) {
 						log.Infof("Reached stopping position, done playing logs")
 						return nil
 					}
@@ -383,29 +404,29 @@ func CreateBlpCheckpoint() []string {
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
 // the _vt.blp_checkpoint table.
-func PopulateBlpCheckpoint(index uint32, pos myproto.ReplicationPosition, timeUpdated int64, flags string) string {
+func PopulateBlpCheckpoint(index uint32, position string, timeUpdated int64, flags string) string {
 	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint "+
 		"(source_shard_uid, pos, time_updated, transaction_timestamp, flags) "+
 		"VALUES (%v, '%v', %v, 0, '%v')",
-		index, myproto.EncodeReplicationPosition(pos), timeUpdated, flags)
+		index, position, timeUpdated, flags)
 }
 
-// UpdateBlpCheckpoint returns a statement to update a value in the
+// updateBlpCheckpoint returns a statement to update a value in the
 // _vt.blp_checkpoint table.
-func UpdateBlpCheckpoint(uid uint32, pos myproto.ReplicationPosition, timeUpdated int64, txTimestamp int64) string {
+func updateBlpCheckpoint(uid uint32, pos replication.Position, timeUpdated int64, txTimestamp int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
 			"UPDATE _vt.blp_checkpoint "+
 				"SET pos='%v', time_updated=%v, transaction_timestamp=%v "+
 				"WHERE source_shard_uid=%v",
-			myproto.EncodeReplicationPosition(pos), timeUpdated, txTimestamp, uid)
+			replication.EncodePosition(pos), timeUpdated, txTimestamp, uid)
 	}
 
 	return fmt.Sprintf(
 		"UPDATE _vt.blp_checkpoint "+
 			"SET pos='%v', time_updated=%v "+
 			"WHERE source_shard_uid=%v",
-		myproto.EncodeReplicationPosition(pos), timeUpdated, uid)
+		replication.EncodePosition(pos), timeUpdated, uid)
 }
 
 // QueryBlpCheckpoint returns a statement to query the gtid and flags for a

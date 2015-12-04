@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -101,8 +101,14 @@ func TestTableInfoWithoutRowCacheViaTableType(t *testing.T) {
 func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 	fakecacheservice.Register()
 	db := fakesqldb.Register()
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{})
-	db.AddQuery("describe `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{})
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
+	db.AddQuery("describe `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
@@ -131,7 +137,7 @@ func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 	fakecacheservice.Register()
 	db := fakesqldb.Register()
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
@@ -145,12 +151,18 @@ func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 			},
 		},
 	})
-	db.AddQuery("describe `test_table`", &mproto.QueryResult{
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Decimal,
+		}},
+	})
+	db.AddQuery("describe `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
 				sqltypes.MakeString([]byte("pk")),
-				sqltypes.MakeString([]byte("unknown_type")),
+				sqltypes.MakeString([]byte("decimal")),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte("1")),
@@ -202,7 +214,7 @@ func TestTableInfoSetPKColumn(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
@@ -241,7 +253,7 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
@@ -260,7 +272,7 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	defer cachePool.Close()
 	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
-		t.Fatalf("failed to create a table info")
+		t.Fatalf("failed to create a table info: %v", err)
 	}
 	if len(tableInfo.PKColumns) != 1 {
 		t.Fatalf("table should have one PK column although the cardinality is invalid")
@@ -307,9 +319,21 @@ func newTestTableInfoCachePool() *CachePool {
 	)
 }
 
-func getTestTableInfoQueries() map[string]*mproto.QueryResult {
-	return map[string]*mproto.QueryResult{
-		"describe `test_table`": &mproto.QueryResult{
+func getTestTableInfoQueries() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
+		"select * from `test_table` where 1 != 1": &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "name",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "addr",
+				Type: sqltypes.Int32,
+			}},
+		},
+		"describe `test_table`": &sqltypes.Result{
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{
@@ -338,7 +362,7 @@ func getTestTableInfoQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"show index from `test_table`": &mproto.QueryResult{
+		"show index from `test_table`": &sqltypes.Result{
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				[]sqltypes.Value{

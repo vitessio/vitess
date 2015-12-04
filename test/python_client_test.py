@@ -62,7 +62,7 @@ def tearDownModule():
 
 
 class TestPythonClientBase(unittest.TestCase):
-  """Base class for Python client tests"""
+  """Base class for Python client tests."""
   CONNECT_TIMEOUT = 10.0
 
   # A packed keyspace_id from the middle of the full keyrange.
@@ -109,15 +109,16 @@ class TestPythonClientErrors(TestPythonClientBase):
   def test_execute_integrity_errors(self):
     """Test we raise dbexceptions.IntegrityError for Execute calls."""
     # Special query that makes vtgateclienttest return an IntegrityError.
-    self._verify_exception_for_execute('error://integrity error',
-      dbexceptions.IntegrityError)
+    self._verify_exception_for_execute(
+        'error://integrity error',
+        dbexceptions.IntegrityError)
 
   def test_partial_integrity_errors(self):
-    """Test we raise dbexceptions.IntegrityError when Execute calls
-    return a partial error."""
+    """Raise an IntegrityError when Execute returns a partial error."""
     # Special query that makes vtgateclienttest return a partial error.
-    self._verify_exception_for_execute('partialerror://integrity error',
-      dbexceptions.IntegrityError)
+    self._verify_exception_for_execute(
+        'partialerror://integrity error',
+        dbexceptions.IntegrityError)
 
   def _verify_exception_for_execute(self, query, exception):
     """Verify that we raise a specific exception for all Execute calls.
@@ -198,28 +199,22 @@ class TestPythonClientErrors(TestPythonClientBase):
 
   def test_streaming_integrity_error(self):
     """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
-    # TODO(aaijazi): this test doesn't work for all clients yet.
-    if protocols_flavor().vtgate_python_protocol() != 'gorpc':
-      return
-    self._verify_exception_for_stream_execute('error://integrity error',
+    self._verify_exception_for_stream_execute(
+        'error://integrity error',
         dbexceptions.IntegrityError)
 
   def test_transient_error(self):
     """Test we raise dbexceptions.TransientError for Execute calls."""
-    # TODO(aaijazi): this test doesn't work for all clients yet.
-    if protocols_flavor().vtgate_python_protocol() != 'gorpc':
-      return
     # Special query that makes vtgateclienttest return a TransientError.
-    self._verify_exception_for_execute('error://transient error',
+    self._verify_exception_for_execute(
+        'error://transient error',
         dbexceptions.TransientError)
 
   def test_streaming_transient_error(self):
     """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
-    # TODO(aaijazi): this test doesn't work for all clients yet.
-    if protocols_flavor().vtgate_python_protocol() != 'gorpc':
-      return
-    self._verify_exception_for_stream_execute('error://transient error',
-      dbexceptions.TransientError)
+    self._verify_exception_for_stream_execute(
+        'error://transient error',
+        dbexceptions.TransientError)
 
   def test_error(self):
     """Test a regular server error raises the right exception."""
@@ -227,19 +222,19 @@ class TestPythonClientErrors(TestPythonClientBase):
     error_caller_id = vtgate_client.CallerID(principal=error_request)
 
     # Begin test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'forced error'):
       self.conn.begin(error_caller_id)
 
     # Commit test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'forced error'):
       self.conn.begin(error_caller_id)
 
     # Rollback test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'forced error'):
       self.conn.begin(error_caller_id)
 
     # GetSrvKeyspace test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, "forced error"):
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'forced error'):
       self.conn.get_srv_keyspace(error_request)
 
 

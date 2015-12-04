@@ -4,18 +4,16 @@
 # Copyright 2015, Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
-"""
-This module allows you to bring up and tear down keyspaces.
-"""
+"""This module allows you to bring up and tear down keyspaces."""
 
 import cgi
 import json
 import subprocess
-import sys
 import threading
 import time
 
-from vtdb import vtgatev3
+from vtdb import vtgatev2
+
 
 def exec_query(cursor, title, query, response):
   try:
@@ -40,10 +38,13 @@ def exec_query(cursor, title, query, response):
         "error": str(e),
         }
 
+
 def capture_log(port, queries):
-  p = subprocess.Popen(["curl", "-s", "-N", "http://localhost:%d/debug/querylog" % port], stdout=subprocess.PIPE)
+  p = subprocess.Popen(
+      ["curl", "-s", "-N", "http://localhost:%d/debug/querylog" % port],
+      stdout=subprocess.PIPE)
   def collect():
-    for line in iter(p.stdout.readline, ''):
+    for line in iter(p.stdout.readline, ""):
       query = line.split("\t")[12].strip('"')
       if not query:
         continue
@@ -53,11 +54,12 @@ def capture_log(port, queries):
   t.start()
   return p
 
+
 def main():
   print "Content-Type: application/json\n"
   try:
-    conn = vtgatev3.connect("localhost:12345", 10.0)
-    cursor = conn.cursor("master")
+    conn = vtgatev2.connect(["localhost:12345"], 10.0)
+    cursor = conn.cursor(None, "master", writable=True)
 
     args = cgi.FieldStorage()
     query = args.getvalue("query")
@@ -73,25 +75,44 @@ def main():
       time.sleep(0.25)
       response["queries"] = queries
 
-    exec_query(cursor, "user0", "select * from user where keyrange('','\x80')", response)
-    exec_query(cursor, "user1", "select * from user where keyrange('\x80', '')", response)
-    exec_query(cursor, "user_extra0", "select * from user_extra where keyrange('','\x80')", response)
-    exec_query(cursor, "user_extra1", "select * from user_extra where keyrange('\x80', '')", response)
+    exec_query(
+        cursor, "user0",
+        "select * from user where keyrange('','\x80')", response)
+    exec_query(
+        cursor, "user1",
+        "select * from user where keyrange('\x80', '')", response)
+    exec_query(
+        cursor, "user_extra0",
+        "select * from user_extra where keyrange('','\x80')", response)
+    exec_query(
+        cursor, "user_extra1",
+        "select * from user_extra where keyrange('\x80', '')", response)
 
-    exec_query(cursor, "music0", "select * from music where keyrange('','\x80')", response)
-    exec_query(cursor, "music1", "select * from music where keyrange('\x80', '')", response)
-    exec_query(cursor, "music_extra0", "select * from music_extra where keyrange('','\x80')", response)
-    exec_query(cursor, "music_extra1", "select * from music_extra where keyrange('\x80', '')", response)
+    exec_query(
+        cursor, "music0",
+        "select * from music where keyrange('','\x80')", response)
+    exec_query(
+        cursor, "music1",
+        "select * from music where keyrange('\x80', '')", response)
+    exec_query(
+        cursor, "music_extra0",
+        "select * from music_extra where keyrange('','\x80')", response)
+    exec_query(
+        cursor, "music_extra1",
+        "select * from music_extra where keyrange('\x80', '')", response)
 
-    exec_query(cursor, "user_idx", "select * from user_idx", response)
-    exec_query(cursor, "name_user_idx", "select * from name_user_idx", response)
-    exec_query(cursor, "music_user_idx", "select * from music_user_idx", response)
-
+    exec_query(
+        cursor, "user_idx", "select * from user_idx", response)
+    exec_query(
+        cursor, "name_user_idx", "select * from name_user_idx", response)
+    exec_query(
+        cursor, "music_user_idx",
+        "select * from music_user_idx", response)
 
     print json.dumps(response)
   except Exception as e:
     print json.dumps({"error": str(e)})
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   main()

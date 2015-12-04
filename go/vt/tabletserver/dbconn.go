@@ -10,11 +10,11 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
 )
 
@@ -52,7 +52,7 @@ func NewDBConn(
 
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
-func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	for attempt := 1; attempt <= 2; attempt++ {
 		r, err := dbc.execOnce(ctx, query, maxrows, wantfields)
 		switch {
@@ -60,23 +60,23 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 			return r, nil
 		case !IsConnErr(err):
 			// MySQL error that isn't due to a connection issue
-			return nil, NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
+			return nil, NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 		case attempt == 2:
 			// If the MySQL connection is bad, we assume that there is nothing wrong with
 			// the query itself, and retrying it might succeed. The MySQL connection might
 			// fix itself, or the query could succeed on a different VtTablet.
-			return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
+			return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
 		err2 := dbc.reconnect()
 		if err2 != nil {
 			dbc.pool.checker.CheckMySQL()
-			return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
+			return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
 	}
-	return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Exec: unreachable code"))
+	return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Exec: unreachable code"))
 }
 
-func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
@@ -90,12 +90,12 @@ func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, want
 }
 
 // ExecOnce executes the specified query, but does not retry on connection errors.
-func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	return dbc.execOnce(ctx, query, maxrows, wantfields)
 }
 
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
@@ -140,7 +140,7 @@ func (dbc *DBConn) Kill() error {
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool: %v", err)
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool: %v", err)
 	}
 	defer killConn.Recycle()
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
@@ -148,7 +148,7 @@ func (dbc *DBConn) Kill() error {
 	if err != nil {
 		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
 		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "Could not kill query %s: %v", dbc.Current(), err)
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not kill query %s: %v", dbc.Current(), err)
 	}
 	return nil
 }

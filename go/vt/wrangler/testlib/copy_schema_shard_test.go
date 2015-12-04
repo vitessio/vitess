@@ -7,27 +7,27 @@ package testlib
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 type ExpectedExecuteFetch struct {
 	Query       string
 	MaxRows     int
 	WantFields  bool
-	QueryResult *mproto.QueryResult
+	QueryResult *sqltypes.Result
 	Error       error
 }
 
@@ -46,13 +46,13 @@ func NewFakePoolConnectionQuery(t *testing.T, query string) *FakePoolConnection 
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
 			ExpectedExecuteFetch{
 				Query:       query,
-				QueryResult: &mproto.QueryResult{},
+				QueryResult: &sqltypes.Result{},
 			},
 		},
 	}
 }
 
-func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if fpc.ExpectedExecuteFetchIndex >= len(fpc.ExpectedExecuteFetch) {
 		fpc.t.Errorf("got unexpected out of bound fetch: %v >= %v", fpc.ExpectedExecuteFetchIndex, len(fpc.ExpectedExecuteFetch))
 		return nil, fmt.Errorf("unexpected out of bound fetch")
@@ -69,7 +69,7 @@ func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfield
 	return fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].QueryResult, nil
 }
 
-func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	return nil
 }
 
@@ -103,42 +103,42 @@ func TestCopySchemaShard_UseShardAsSource(t *testing.T) {
 func copySchema(t *testing.T, useShardAsSource bool) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &pb.Keyspace{
+	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
 		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: pb.KeyspaceIdType_UINT64,
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
 	sourceMaster := NewFakeTablet(t, wr, "cell1", 0,
-		pb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly := NewFakeTablet(t, wr, "cell1", 1,
-		pb.TabletType_RDONLY, db, TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_RDONLY, db, TabletKeyspaceShard(t, "ks", "-80"))
 
 	destinationMaster := NewFakeTablet(t, wr, "cell1", 10,
-		pb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-40"))
 
 	for _, ft := range []*FakeTablet{sourceMaster, sourceRdonly, destinationMaster} {
 		ft.StartActionLoop(t, wr)
 		defer ft.StopActionLoop(t)
 	}
 
-	schema := &myproto.SchemaDefinition{
+	schema := &tabletmanagerdatapb.SchemaDefinition{
 		DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
-		TableDefinitions: []*myproto.TableDefinition{
-			&myproto.TableDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
 				Name:   "table1",
 				Schema: "CREATE TABLE `resharding1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
-				Type:   myproto.TableBaseTable,
+				Type:   tmutils.TableBaseTable,
 			},
-			&myproto.TableDefinition{
+			{
 				Name:   "view1",
 				Schema: "CREATE TABLE `view1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
-				Type:   myproto.TableView,
+				Type:   tmutils.TableView,
 			},
 		},
 	}
@@ -160,10 +160,10 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		"  PRIMARY KEY (`id`),\n" +
 		"  KEY `by_msg` (`msg`)\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8"
-	db.AddQuery("USE vt_ks", &mproto.QueryResult{})
-	db.AddQuery(createDb, &mproto.QueryResult{})
-	db.AddQuery(createTable, &mproto.QueryResult{})
-	db.AddQuery(createTableView, &mproto.QueryResult{})
+	db.AddQuery("USE vt_ks", &sqltypes.Result{})
+	db.AddQuery(createDb, &sqltypes.Result{})
+	db.AddQuery(createTable, &sqltypes.Result{})
+	db.AddQuery(createTableView, &sqltypes.Result{})
 
 	source := topoproto.TabletAliasString(sourceRdonly.Tablet.Alias)
 	if useShardAsSource {

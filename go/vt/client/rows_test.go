@@ -6,53 +6,51 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-var rowsResult1 = mproto.QueryResult{
-	Fields: []mproto.Field{
-		mproto.Field{
+var rowsResult1 = sqltypes.Result{
+	Fields: []*querypb.Field{
+		&querypb.Field{
 			Name: "field1",
-			Type: mproto.VT_LONG,
+			Type: sqltypes.Int32,
 		},
-		mproto.Field{
+		&querypb.Field{
 			Name: "field2",
-			Type: mproto.VT_FLOAT,
+			Type: sqltypes.Float32,
 		},
-		mproto.Field{
+		&querypb.Field{
 			Name: "field3",
-			Type: mproto.VT_VAR_STRING,
+			Type: sqltypes.VarChar,
 		},
 		// Signed types which are smaller than uint64, will become an int64.
-		mproto.Field{
-			Name:  "field4",
-			Type:  mproto.VT_LONG,
-			Flags: mproto.VT_UNSIGNED_FLAG,
+		&querypb.Field{
+			Name: "field4",
+			Type: sqltypes.Uint32,
 		},
 		// Signed uint64 values must be mapped to uint64.
-		mproto.Field{
-			Name:  "field5",
-			Type:  mproto.VT_LONGLONG,
-			Flags: mproto.VT_UNSIGNED_FLAG,
+		&querypb.Field{
+			Name: "field5",
+			Type: sqltypes.Uint64,
 		},
 	},
 	RowsAffected: 2,
-	InsertId:     0,
+	InsertID:     0,
 	Rows: [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("1")),
-			sqltypes.MakeString([]byte("1.1")),
-			sqltypes.MakeString([]byte("value1")),
-			sqltypes.MakeString([]byte("2147483647")),          // 2^31-1, NOT out of range for int32 => should become int64
-			sqltypes.MakeString([]byte("9223372036854775807")), // 2^63-1, NOT out of range for int64
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Float32, []byte("1.1")),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("value1")),
+			sqltypes.MakeTrusted(sqltypes.Uint32, []byte("2147483647")),          // 2^31-1, NOT out of range for int32 => should become int64
+			sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775807")), // 2^63-1, NOT out of range for int64
 		},
 		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("2")),
-			sqltypes.MakeString([]byte("2.2")),
-			sqltypes.MakeString([]byte("value2")),
-			sqltypes.MakeString([]byte("4294967295")),           // 2^32, out of range for int32 => should become int64
-			sqltypes.MakeString([]byte("18446744073709551615")), // 2^64, out of range for int64
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.2")),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("value2")),
+			sqltypes.MakeTrusted(sqltypes.Uint32, []byte("4294967295")),           // 2^32, out of range for int32 => should become int64
+			sqltypes.MakeTrusted(sqltypes.Uint64, []byte("18446744073709551615")), // 2^64, out of range for int64
 		},
 	},
 }
@@ -87,7 +85,7 @@ func TestRows(t *testing.T) {
 		int64(1),
 		float64(1.1),
 		[]byte("value1"),
-		int64(2147483647),
+		uint64(2147483647),
 		uint64(9223372036854775807),
 	}
 	gotRow := make([]driver.Value, len(wantRow))
@@ -96,7 +94,7 @@ func TestRows(t *testing.T) {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(gotRow, wantRow) {
-		t.Errorf("row1: %v, want %v type: %T", gotRow, wantRow, wantRow[3])
+		t.Errorf("row1: %#v, want %#v type: %T", gotRow, wantRow, wantRow[3])
 		logMismatchedTypes(t, gotRow, wantRow)
 	}
 
@@ -104,7 +102,7 @@ func TestRows(t *testing.T) {
 		int64(2),
 		float64(2.2),
 		[]byte("value2"),
-		int64(4294967295),
+		uint64(4294967295),
 		uint64(18446744073709551615),
 	}
 	err = ri.Next(gotRow)
@@ -122,53 +120,4 @@ func TestRows(t *testing.T) {
 	}
 
 	_ = ri.Close()
-}
-
-var badResult1 = mproto.QueryResult{
-	Fields: []mproto.Field{
-		mproto.Field{},
-	},
-	Rows: [][]sqltypes.Value{
-		[]sqltypes.Value{},
-	},
-}
-
-var badResult2 = mproto.QueryResult{
-	Fields: []mproto.Field{
-		mproto.Field{
-			Name: "field1",
-			Type: mproto.VT_LONG,
-		},
-	},
-	Rows: [][]sqltypes.Value{
-		[]sqltypes.Value{
-			sqltypes.MakeString([]byte("value")),
-		},
-	},
-}
-
-func TestRowsFail(t *testing.T) {
-	ri := newRows(&badResult1)
-	var dest []driver.Value
-	err := ri.Next(dest)
-	want := "length mismatch: dest is 0, fields are 1"
-	if err == nil || err.Error() != want {
-		t.Errorf("Next: %v, want %s", err, want)
-	}
-
-	ri = newRows(&badResult1)
-	dest = make([]driver.Value, 1)
-	err = ri.Next(dest)
-	want = "internal error: length mismatch: dest is 1, fields are 0"
-	if err == nil || err.Error() != want {
-		t.Errorf("Next: %v, want %s", err, want)
-	}
-
-	ri = newRows(&badResult2)
-	dest = make([]driver.Value, 1)
-	err = ri.Next(dest)
-	want = `conversion error: field: {field1 3 0}, val: value: strconv.ParseInt: parsing "value": invalid syntax`
-	if err == nil || err.Error() != want {
-		t.Errorf("Next: %v, want %s", err, want)
-	}
 }

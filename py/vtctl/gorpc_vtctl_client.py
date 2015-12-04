@@ -4,6 +4,8 @@
 """This is the go rpc client implementation of the vtctl client interface.
 """
 
+import datetime
+
 from net import bsonrpc
 from vtctl import vtctl_client
 
@@ -39,17 +41,20 @@ class GoRpcVtctlClient(vtctl_client.VtctlClient):
   def is_closed(self):
     return self.client.is_closed()
 
-  def execute_vtctl_command(self, args, action_timeout=30.0, lock_timeout=5.0):
+  def execute_vtctl_command(self, args, action_timeout=30.0):
     req = {
         'Args': args,
         'ActionTimeout': long(action_timeout * 1e9),
-        'LockTimeout': long(lock_timeout * 1e9),
     }
     self.client.stream_call('VtctlServer.ExecuteVtctlCommand', req)
     while True:
       e = self.client.stream_next()
       if e is None:
         break
-      yield vtctl_client.Event(e.reply['Time'], e.reply['Level'],
-                               e.reply['File'], e.reply['Line'],
-                               e.reply['Value'])
+      t = datetime.datetime.utcfromtimestamp(e.reply['Time']['Seconds'])
+      yield vtctl_client.Event(t, e.reply['Level'], e.reply['File'],
+                               e.reply['Line'], e.reply['Value'])
+
+
+# Register the gorpc vtctl client.
+vtctl_client.register_conn_class('gorpc', GoRpcVtctlClient)

@@ -9,7 +9,6 @@ import (
 	"path"
 	"sort"
 
-	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
@@ -39,7 +38,6 @@ func NewServer(zconn zk.Conn) topo.Impl {
 
 func init() {
 	zconn := zk.NewMetaConn()
-	stats.PublishJSONFunc("ZkMetaConn", zconn.String)
 	topo.RegisterServer("zookeeper", &Server{zconn: zconn})
 }
 

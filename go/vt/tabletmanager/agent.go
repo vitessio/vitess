@@ -38,6 +38,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog"
+	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/key"
@@ -49,8 +50,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Query rules from keyrange
@@ -67,12 +68,11 @@ type ActionAgent struct {
 	UpdateStream        binlog.UpdateStreamControl
 	HealthReporter      health.Reporter
 	TopoServer          topo.Server
-	TabletAlias         *pb.TabletAlias
+	TabletAlias         *topodatapb.TabletAlias
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           dbconfigs.DBConfigs
 	SchemaOverrides     []tabletserver.SchemaOverride
 	BinlogPlayerMap     *BinlogPlayerMap
-	LockTimeout         time.Duration
 
 	// exportStats is set only for production tablet.
 	exportStats bool
@@ -103,11 +103,16 @@ type ActionAgent struct {
 	// replication.  It is protected by actionMutex.
 	initReplication bool
 
+	// initialTablet remembers the state of the tablet record at startup.
+	// It can be used to notice, for example, if another tablet has taken over
+	// the record.
+	initialTablet *topodatapb.Tablet
+
 	// mutex protects the following fields, only hold the mutex
 	// to update the fields, nothing else.
 	mutex            sync.Mutex
 	_tablet          *topo.TabletInfo
-	_tabletControl   *pb.Shard_TabletControl
+	_tabletControl   *topodatapb.Shard_TabletControl
 	_waitingForMysql bool
 
 	// if the agent is healthy, this is nil. Otherwise it contains
@@ -152,12 +157,11 @@ func NewActionAgent(
 	batchCtx context.Context,
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
-	tabletAlias *pb.TabletAlias,
+	tabletAlias *topodatapb.TabletAlias,
 	dbcfgs dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
 	overridesFile string,
-	lockTimeout time.Duration,
 ) (agent *ActionAgent, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
@@ -172,7 +176,6 @@ func NewActionAgent(
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		SchemaOverrides:     schemaOverrides,
-		LockTimeout:         lockTimeout,
 		History:             history.New(historyLength),
 		lastHealthMapCount:  stats.NewInt("LastHealthMapCount"),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -194,7 +197,9 @@ func NewActionAgent(
 	agent.statsTabletType = stats.NewString("TabletType")
 
 	// Start the binlog player services, not playing at start.
-	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.Filtered, mysqld)
+	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, mysqld, func() binlogplayer.VtClient {
+		return binlogplayer.NewDbClient(&agent.DBConfigs.Filtered)
+	})
 	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
 
 	// try to figure out the mysql port
@@ -242,7 +247,7 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
+func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -267,7 +272,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *p
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -375,7 +380,7 @@ func (agent *ActionAgent) DisableQueryService() bool {
 	return disable
 }
 
-func (agent *ActionAgent) setTabletControl(tc *pb.Shard_TabletControl) {
+func (agent *ActionAgent) setTabletControl(tc *topodatapb.Shard_TabletControl) {
 	agent.mutex.Lock()
 	agent._tabletControl = tc
 	agent.mutex.Unlock()
@@ -429,7 +434,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	ipAddr := ipAddrs[0]
 
 	// Update bind addr for mysql and query service in the tablet node.
-	f := func(tablet *pb.Tablet) error {
+	f := func(tablet *topodatapb.Tablet) error {
 		tablet.Hostname = hostname
 		tablet.Ip = ipAddr
 		if tablet.PortMap == nil {
@@ -463,6 +468,9 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		return err
 	}
 
+	// Save the original tablet record as it is now (at startup).
+	agent.initialTablet = tablet.Tablet
+
 	if err = agent.verifyTopology(ctx); err != nil {
 		return err
 	}
@@ -478,6 +486,9 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		if agent.DBConfigs.App.DbName == "" {
 			agent.DBConfigs.App.DbName = topoproto.TabletDbName(tablet.Tablet)
 		}
+		if agent.DBConfigs.Filtered.DbName == "" {
+			agent.DBConfigs.Filtered.DbName = topoproto.TabletDbName(tablet.Tablet)
+		}
 		agent.DBConfigs.App.Keyspace = tablet.Keyspace
 		agent.DBConfigs.App.Shard = tablet.Shard
 	}
@@ -492,7 +503,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	}
 
 	// initialize tablet server
-	if err := agent.QueryServiceControl.InitDBConfig(pbq.Target{
+	if err := agent.QueryServiceControl.InitDBConfig(querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
@@ -520,11 +531,16 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		return err
 	}
 
-	// and update our state
-	oldTablet := &pb.Tablet{}
+	// update our state
+	oldTablet := &topodatapb.Tablet{}
 	if err = agent.updateState(ctx, oldTablet, "Start"); err != nil {
 		log.Warningf("Initial updateState failed, will need a state change before running properly: %v", err)
 	}
+
+	// run a background task to rebuild the SrvKeyspace in our cell/keyspace
+	// if it doesn't exist yet
+	go agent.maybeRebuildKeyspace(tablet.Alias.Cell, tablet.Keyspace)
+
 	return nil
 }
 
@@ -561,7 +577,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	}
 
 	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.PortMap["mysql"], mport)
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
+	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.PortMap["mysql"] = mport
 		return nil
 	}); err != nil {
@@ -575,7 +591,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 }
 
 // initializeKeyRangeRule will create and set the key range rules
-func (agent *ActionAgent) initializeKeyRangeRule(ctx context.Context, keyspace string, keyRange *pb.KeyRange) error {
+func (agent *ActionAgent) initializeKeyRangeRule(ctx context.Context, keyspace string, keyRange *topodatapb.KeyRange) error {
 	// check we have a partial key range
 	if !key.KeyRangeIsPartial(keyRange) {
 		log.Infof("Tablet covers the full KeyRange, not adding KeyRange query rule")

@@ -1,0 +1,81 @@
+#!/bin/bash
+# Copyright 2012 The Go Authors, All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+#
+# This file is based on the Go linter precommit hook
+# "golint". Therefore, both files are very similar.
+
+# misc/git/hooks/pylint
+#
+# To use, store as .git/hooks/pre-commit inside your repository and make sure
+# it has execute permissions.
+
+function msg() {
+  echo "$(date) $@"
+}
+
+PYLINT=/usr/bin/gpylint
+pylint_script=$VTTOP/tools/pylint.sh
+
+# This script does not handle file names that contain spaces.
+pyfiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.*\.py$' | grep -v '^py/vtproto/')
+if [ -z "$pyfiles" ] ; then
+  msg "No python files changed."
+  exit 0
+fi
+
+if [ ! -x $PYLINT ] ; then
+  msg "PYLINT=$PYLINT not found."
+  msg "Please double-check your python code for lint errors."
+  exit 0
+fi
+
+errors=
+
+# Run on one file at a time because a single invocation of $PYLINT
+# with multiple files requires the files to all be in one package.
+pyfiles_with_warnings=()
+for pyfile in $pyfiles
+do
+  errcount=$($pylint_script $pyfile | egrep '^[^:]+:[^:]+:[CWE][0-9]{4}:' | wc -l)
+  if [ "$errcount" -gt "0" ]; then
+    if [ -z "$errors" ] ; then
+      msg "$PYLINT found one or more issues:"
+      errors=YES
+    fi
+    echo "  $pyfile: $errcount issues"
+    pyfiles_with_warnings+=($pyfile)
+  fi
+done
+
+[ -z "$errors" ] && exit 0
+
+# git doesn't give us access to user input, so let's steal it.
+exec < /dev/tty
+if [[ $? -eq 0 ]]; then
+  # interactive shell. Prompt the user.
+
+  for pyfile in "${pyfiles_with_warnings[@]}"
+  do
+    echo
+    msg "Press enter to show the warnings for $pyfile:"
+    read -p "  \$VTTOP/tools/pylint.sh $pyfile"
+    $pylint_script $pyfile
+  done
+  read -r -p \
+    'Type "ack" to ignore issues and commit anyway. Press enter to cancel: '
+  if [ "$REPLY" = "ack" ]; then
+    exit 0
+  else
+    msg "Please try to fix $PYLINT issues before committing."
+    exit 1
+  fi
+else
+  # non-interactive shell (e.g. called from Eclipse). Just display the errors.
+  for pyfile in "${pyfiles_with_warnings[@]}"
+  do
+    $pylint_script $pyfile
+  done
+fi
+exit 1

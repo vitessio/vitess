@@ -10,7 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -22,7 +22,7 @@ type TabletExecutor struct {
 	tmClient    tmclient.TabletManagerClient
 	topoServer  topo.Server
 	tabletInfos []*topo.TabletInfo
-	schemaDiffs []*proto.SchemaChangeResult
+	schemaDiffs []*tmutils.SchemaChangeResult
 	isClosed    bool
 }
 
@@ -107,7 +107,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	if err != nil {
 		return fmt.Errorf("unable to get database schema, error: %v", err)
 	}
-	tableWithCount := make(map[string]uint64, dbSchema.TableDefinitions.Len())
+	tableWithCount := make(map[string]uint64, len(dbSchema.TableDefinitions))
 	for _, tableSchema := range dbSchema.TableDefinitions {
 		tableWithCount[tableSchema.Name] = tableSchema.RowCount
 	}
@@ -131,7 +131,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 }
 
 func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
-	exec.schemaDiffs = make([]*proto.SchemaChangeResult, len(sqls))
+	exec.schemaDiffs = make([]*tmutils.SchemaChangeResult, len(sqls))
 	for i := range sqls {
 		schemaDiff, err := exec.tmClient.PreflightSchema(
 			ctx, exec.tabletInfos[0], sqls[i])
@@ -139,7 +139,7 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 			return err
 		}
 		exec.schemaDiffs[i] = schemaDiff
-		diffs := proto.DiffSchemaToArray(
+		diffs := tmutils.DiffSchemaToArray(
 			"BeforeSchema",
 			exec.schemaDiffs[i].BeforeSchema,
 			"AfterSchema",
@@ -169,7 +169,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 
 	for index, sql := range sqls {
-		execResult.CurSqlIndex = index
+		execResult.CurSQLIndex = index
 		exec.executeOnAllTablets(ctx, &execResult, sql)
 		if len(execResult.FailedShards) > 0 {
 			break
@@ -208,7 +208,7 @@ func (exec *TabletExecutor) executeOneTablet(
 	errChan chan ShardWithError,
 	successChan chan ShardResult) {
 	defer wg.Done()
-	result, err := exec.tmClient.ExecuteFetchAsDba(ctx, tabletInfo, sql, 10, false, false, true)
+	result, err := exec.tmClient.ExecuteFetchAsDba(ctx, tabletInfo, sql, 10, false, true)
 	if err != nil {
 		errChan <- ShardWithError{Shard: tabletInfo.Shard, Err: err.Error()}
 	} else {

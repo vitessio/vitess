@@ -98,7 +98,7 @@ func AsInterface(node ValExpr) (interface{}, error) {
 	case StrVal:
 		return sqltypes.MakeString(node), nil
 	case NumVal:
-		n, err := sqltypes.BuildNumeric(string(node))
+		n, err := sqltypes.BuildIntegral(string(node))
 		if err != nil {
 			return nil, fmt.Errorf("type mismatch: %s", err)
 		}

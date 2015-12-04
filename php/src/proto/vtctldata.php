@@ -13,9 +13,6 @@ namespace vtctldata {
     /**  @var int */
     public $action_timeout = null;
     
-    /**  @var int */
-    public $lock_timeout = null;
-    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -36,14 +33,6 @@ namespace vtctldata {
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 2;
       $f->name      = "action_timeout";
-      $f->type      = \DrSlump\Protobuf::TYPE_INT64;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $descriptor->addField($f);
-
-      // OPTIONAL INT64 lock_timeout = 3
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 3;
-      $f->name      = "lock_timeout";
       $f->type      = \DrSlump\Protobuf::TYPE_INT64;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
@@ -147,43 +136,6 @@ namespace vtctldata {
      */
     public function setActionTimeout( $value){
       return $this->_set(2, $value);
-    }
-    
-    /**
-     * Check if <lock_timeout> has a value
-     *
-     * @return boolean
-     */
-    public function hasLockTimeout(){
-      return $this->_has(3);
-    }
-    
-    /**
-     * Clear <lock_timeout> value
-     *
-     * @return \vtctldata\ExecuteVtctlCommandRequest
-     */
-    public function clearLockTimeout(){
-      return $this->_clear(3);
-    }
-    
-    /**
-     * Get <lock_timeout> value
-     *
-     * @return int
-     */
-    public function getLockTimeout(){
-      return $this->_get(3);
-    }
-    
-    /**
-     * Set <lock_timeout> value
-     *
-     * @param int $value
-     * @return \vtctldata\ExecuteVtctlCommandRequest
-     */
-    public function setLockTimeout( $value){
-      return $this->_set(3, $value);
     }
   }
 }

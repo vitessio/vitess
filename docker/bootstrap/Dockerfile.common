@@ -32,8 +32,6 @@ RUN mkdir -p /vt/bin && \
     curl -sL https://phar.phpunit.de/phpunit-4.8.9.phar > /vt/bin/phpunit && \
     chmod +x /vt/bin/phpunit && \
     curl -sS https://getcomposer.org/installer | php -- --install-dir=/vt/bin --filename=composer && \
-    pecl install mongo && \
-    echo 'extension=mongo.so' > /etc/php5/cli/conf.d/20-mongo.ini && \
     pecl install xdebug && \
     echo "zend_extension=$(pecl config-get ext_dir default)/xdebug.so" > /etc/php5/cli/conf.d/20-xdebug.ini
 
@@ -64,12 +62,17 @@ ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
-ENV CGO_CFLAGS -I$VTROOT/dist/vt-zookeeper-3.3.5/include/c-client-src
-ENV CGO_LDFLAGS -L$VTROOT/dist/vt-zookeeper-3.3.5/lib
-ENV LD_LIBRARY_PATH $VTROOT/dist/vt-zookeeper-3.3.5/lib
+ENV CGO_CFLAGS -I$VTROOT/dist/vt-zookeeper-3.4.6/include/zookeeper
+ENV CGO_LDFLAGS -L$VTROOT/dist/vt-zookeeper-3.4.6/lib
+ENV LD_LIBRARY_PATH $VTROOT/dist/vt-zookeeper-3.4.6/lib
 
 # Copy files needed for bootstrap
-COPY . /vt/src/github.com/youtube/vitess
+COPY bootstrap.sh dev.env /vt/src/github.com/youtube/vitess/
+COPY config /vt/src/github.com/youtube/vitess/config
+COPY third_party /vt/src/github.com/youtube/vitess/third_party
+COPY tools /vt/src/github.com/youtube/vitess/tools
+COPY travis /vt/src/github.com/youtube/vitess/travis
+COPY php/composer.json php/composer.lock /vt/src/github.com/youtube/vitess/php/
 
 # Install gRPC and protobuf as root
 RUN $VTTOP/travis/install_protobuf.sh
@@ -91,3 +94,4 @@ VOLUME /vt/vtdataroot
 
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
+

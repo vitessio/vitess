@@ -1,3 +1,5 @@
+"""Simple utility values, methods, and classes."""
+
 import logging
 import re
 import time
@@ -19,8 +21,6 @@ def log_exception(exc, keyspace=None, tablet_type=None):
     exc: exception raised by calling code
     keyspace: keyspace for the exception
     tablet_type: tablet_type for the exception
-
-
   """
   logger_object = vtdb_logger.get_logger()
 
@@ -55,6 +55,7 @@ def exponential_backoff_retry(
     A decorator method that returns wrapped method.
   """
   def decorator(method):
+    """Returns wrapper that calls method and retries on retry_exceptions."""
     def wrapper(self, *args, **kwargs):
       attempt = 0
       delay = initial_delay_ms
@@ -70,13 +71,14 @@ def exponential_backoff_retry(
             log_exception(e)
             raise e
           logging.error(
-              "retryable error: %s, retrying in %d ms, attempt %d of %d", e,
+              'retryable error: %s, retrying in %d ms, attempt %d of %d', e,
               delay, attempt, num_retries)
           time.sleep(delay/1000.0)
           delay *= backoff_multiplier
           delay = min(max_delay_ms, delay)
     return wrapper
   return decorator
+
 
 class VitessError(Exception):
   """VitessError is raised by an RPC with a server-side application error.
@@ -102,9 +104,9 @@ class VitessError(Exception):
     super(VitessError, self).__init__(self.message, method_name, self.code)
 
   def __str__(self):
-    """Print the error nicely, converting the proto error enum to its name"""
-    return '%s returned %s with message: %s' % (self.method_name,
-      vtrpc_pb2.ErrorCode.Name(self.code), self.message)
+    """Print the error nicely, converting the proto error enum to its name."""
+    return '%s returned %s with message: %s' % (
+        self.method_name, vtrpc_pb2.ErrorCode.Name(self.code), self.message)
 
   def convert_to_dbexception(self, args):
     """Converts from a VitessError to the appropriate dbexceptions class.
@@ -128,6 +130,7 @@ class VitessError(Exception):
 
     return dbexceptions.DatabaseError(args)
 
+
 def extract_rpc_error(method_name, response):
   """Extracts any app error that's embedded in an RPC response.
 
@@ -136,12 +139,72 @@ def extract_rpc_error(method_name, response):
     response: response from an RPC.
 
   Raises:
-    VitessError if there is an app error embedded in the reply
+    VitessError: If there is an app error embedded in the reply.
   """
   reply = response.reply
   if not reply or not isinstance(reply, dict):
-    return response
+    return
   # Handle the case of new client => old server
   err = reply.get('Err', None)
   if err:
     raise VitessError(method_name, err)
+
+
+def unique_join(str_list, delim='|'):
+  return delim.join(sorted(set(str(item) for item in str_list)))
+
+
+def keyspace_id_prefix(packed_keyspace_id):
+  """Return the first str byte of packed_keyspace_id if it exists."""
+  return '%02x' % ord(packed_keyspace_id[0])
+
+
+def keyspace_id_prefixes(packed_keyspace_ids):
+  """Return the first str byte of each packed_keyspace_id if it exists."""
+  return unique_join(keyspace_id_prefix(pkid) for pkid in packed_keyspace_ids)
+
+
+def convert_exception_kwarg(key, value):
+  if value is None:
+    return key, value
+  if key in (
+      'entity_column_name',
+      'keyspace',
+      'num_queries',
+      'sql',
+      'tablet_type'):
+    return key, value
+  elif key == 'entity_keyspace_id_map':
+    return 'entity_keyspace_ids', keyspace_id_prefixes(
+        value.values())
+  elif key in (
+      'keyspace_ids',
+      'merged_keyspace_ids'):
+    return key, keyspace_id_prefixes(value)
+  elif key in (
+      'keyranges',
+      'keyspaces',
+      'sqls'):
+    return key, unique_join(value)
+  else:
+    return key, 'unknown'
+
+
+def convert_exception_kwargs(kwargs):
+  """Convert kwargs into a readable str.
+
+  Args:
+    kwargs: A (str: value) dict.
+
+  Returns:
+    A comma-delimited string of converted, truncated key=value pairs.
+      All non-None kwargs are included in alphabetical order.
+  """
+  new_kwargs = {}
+  for key, value in kwargs.iteritems():
+    new_key, new_value = convert_exception_kwarg(key, value)
+    new_kwargs[new_key] = new_value
+  return ', '.join(
+      ('%s=%s' % (k, v))[:256]
+      for (k, v) in sorted(new_kwargs.iteritems())
+      if v is not None)

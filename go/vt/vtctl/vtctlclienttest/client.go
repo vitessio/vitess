@@ -2,22 +2,29 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package vtctlclienttest provides testing library for vtctl
-// implementations to use in their tests.
+// Package vtctlclienttest contains the testsuite against which each
+// RPC implementation of the vtctlclient interface must be tested.
 package vtctlclienttest
+
+// NOTE: This file is not test-only code because it is referenced by tests in
+//			 other packages and therefore it has to be regularly visible.
+
+// NOTE: This code is in its own package such that its dependencies (e.g.
+//       zookeeper) won't be drawn into production binaries as well.
 
 import (
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
@@ -39,8 +46,8 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	ctx := context.Background()
 
 	// Create a fake tablet
-	tablet := &pb.Tablet{
-		Alias:    &pb.TabletAlias{Cell: "cell1", Uid: 1},
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 1},
 		Hostname: "localhost",
 		Ip:       "10.11.12.13",
 		PortMap: map[string]int32{
@@ -50,21 +57,21 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
-		Type:     pb.TabletType_MASTER,
+		Type:     topodatapb.TabletType_MASTER,
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
 	}
 
 	// run a command that's gonna return something on the log channel
-	logs, errFunc, err := client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell1"}, 30*time.Second, 10*time.Second)
+	logs, errFunc, err := client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell1"}, 30*time.Second)
 	if err != nil {
 		t.Fatalf("Remote error: %v", err)
 	}
 	count := 0
 	for e := range logs {
 		expected := "cell1-0000000001 test_keyspace <null> master localhost:3333 localhost:3334 [tag: \"value\"]\n"
-		if e.String() != expected {
+		if logutil.EventString(e) != expected {
 			t.Errorf("Got unexpected log line '%v' expected '%v'", e.String(), expected)
 		}
 		count++
@@ -78,7 +85,7 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	}
 
 	// run a command that's gonna fail
-	logs, errFunc, err = client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell2"}, 30*time.Second, 10*time.Second)
+	logs, errFunc, err = client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell2"}, 30*time.Second)
 	if err != nil {
 		t.Fatalf("Remote error: %v", err)
 	}
@@ -92,7 +99,7 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	}
 
 	// run a command that's gonna panic
-	logs, errFunc, err = client.ExecuteVtctlCommand(ctx, []string{"Panic"}, 30*time.Second, 10*time.Second)
+	logs, errFunc, err = client.ExecuteVtctlCommand(ctx, []string{"Panic"}, 30*time.Second)
 	if err != nil {
 		t.Fatalf("Remote error: %v", err)
 	}

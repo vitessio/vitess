@@ -21,6 +21,7 @@ func ExecuteVtworker(ctx context.Context, server string, args []string) (string,
 	err := vtworkerclient.RunCommandAndWait(
 		ctx, server, args,
 		CreateLoggerEventToBufferFunction(&output))
+	log.Infof("Executed remote vtworker command: %v server: %v err: %v output (starting on next line):\n%v", args, server, err, output.String())
 
 	return output.String(), err
 }

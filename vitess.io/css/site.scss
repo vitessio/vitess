@@ -592,3 +592,18 @@ main .fa {
     display: none;
   }
 }
+.reset-box-sizing,
+.reset-box-sizing *,
+.reset-box-sizing *:before,
+.reset-box-sizing *:after {
+  -webkit-box-sizing: content-box;
+  -moz-box-sizing: content-box;
+  box-sizing: content-box;
+  border: none;
+  margin: 0px;
+  padding: 0px;
+}
+
+.gsc-table-result td {
+  padding-left: 8px;
+}

@@ -18,7 +18,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtctldata.proto',
   package='vtctldata',
   syntax='proto3',
-  serialized_pb=b'\n\x0fvtctldata.proto\x12\tvtctldata\x1a\rlogutil.proto\"X\n\x1a\x45xecuteVtctlCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\x12\x14\n\x0clock_timeout\x18\x03 \x01(\x03\"<\n\x1b\x45xecuteVtctlCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Eventb\x06proto3'
+  serialized_pb=b'\n\x0fvtctldata.proto\x12\tvtctldata\x1a\rlogutil.proto\"B\n\x1a\x45xecuteVtctlCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\"<\n\x1b\x45xecuteVtctlCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Eventb\x06proto3'
   ,
   dependencies=[logutil__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -47,13 +47,6 @@ _EXECUTEVTCTLCOMMANDREQUEST = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
-    _descriptor.FieldDescriptor(
-      name='lock_timeout', full_name='vtctldata.ExecuteVtctlCommandRequest.lock_timeout', index=2,
-      number=3, type=3, cpp_type=2, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
   ],
   extensions=[
   ],
@@ -67,7 +60,7 @@ _EXECUTEVTCTLCOMMANDREQUEST = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=45,
-  serialized_end=133,
+  serialized_end=111,
 )
 
 
@@ -97,8 +90,8 @@ _EXECUTEVTCTLCOMMANDRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=135,
-  serialized_end=195,
+  serialized_start=113,
+  serialized_end=173,
 )
 
 _EXECUTEVTCTLCOMMANDRESPONSE.fields_by_name['event'].message_type = logutil__pb2._EVENT

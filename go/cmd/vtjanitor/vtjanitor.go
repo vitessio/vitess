@@ -12,7 +12,6 @@ import (
 	"github.com/youtube/vitess/go/vt/janitor"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -20,7 +19,6 @@ import (
 
 var (
 	sleepTime     = flag.Duration("sleep_time", 3*time.Minute, "how long to sleep between janitor runs")
-	lockTimeout   = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
 	keyspace      = flag.String("keyspace", "", "keyspace to manage")
 	shard         = flag.String("shard", "", "shard to manage")
 	dryRunModules flagutil.StringListValue
@@ -53,7 +51,7 @@ func main() {
 
 	ts := topo.GetServer()
 
-	scheduler, err := janitor.New(*keyspace, *shard, ts, wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), *lockTimeout), *sleepTime)
+	scheduler, err := janitor.New(*keyspace, *shard, ts, wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient()), *sleepTime)
 	if err != nil {
 		log.Errorf("janitor.New: %v", err)
 		exit.Return(1)

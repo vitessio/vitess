@@ -7,21 +7,28 @@ package framework
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 )
 
-// DebugVars parses /debug/vars and returns a map. The function returns
-// an empty map on error.
-func DebugVars() map[string]interface{} {
+// FetchJSON fetches JSON content from the specified URL path and returns it
+// as a map. The function returns an empty map on error.
+func FetchJSON(urlPath string) map[string]interface{} {
 	out := map[string]interface{}{}
-	response, err := http.Get(fmt.Sprintf("%s/debug/vars", ServerAddress))
+	response, err := http.Get(fmt.Sprintf("%s%s", ServerAddress, urlPath))
 	if err != nil {
 		return out
 	}
 	defer response.Body.Close()
 	_ = json.NewDecoder(response.Body).Decode(&out)
 	return out
+}
+
+// DebugVars parses /debug/vars and returns a map. The function returns
+// an empty map on error.
+func DebugVars() map[string]interface{} {
+	return FetchJSON("/debug/vars")
 }
 
 // FetchInt fetches the specified slash-separated tag and returns the
@@ -50,4 +57,19 @@ func FetchVal(vars map[string]interface{}, tags string) interface{} {
 		}
 	}
 	return current[splitTags[len(splitTags)-1]]
+}
+
+// FetchURL fetches the content from the specified URL path and returns it
+// as a string. The function returns an empty string on error.
+func FetchURL(urlPath string) string {
+	response, err := http.Get(fmt.Sprintf("%s%s", ServerAddress, urlPath))
+	if err != nil {
+		return ""
+	}
+	defer response.Body.Close()
+	b, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

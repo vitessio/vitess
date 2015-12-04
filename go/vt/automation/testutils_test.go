@@ -6,8 +6,9 @@ package automation
 
 import (
 	"errors"
+	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 )
 
 func testingTaskCreator(taskName string) Task {
@@ -30,7 +31,7 @@ func testingTaskCreator(taskName string) Task {
 type TestingEchoTask struct {
 }
 
-func (t *TestingEchoTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
+func (t *TestingEchoTask) Run(parameters map[string]string) (newTasks []*automationpb.TaskContainer, output string, err error) {
 	for _, v := range parameters {
 		output += v
 	}
@@ -49,7 +50,7 @@ func (t *TestingEchoTask) OptionalParameters() []string {
 type TestingFailTask struct {
 }
 
-func (t *TestingFailTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
+func (t *TestingFailTask) Run(parameters map[string]string) (newTasks []*automationpb.TaskContainer, output string, err error) {
 	return nil, "something went wrong", errors.New("full error message")
 }
 
@@ -65,8 +66,8 @@ func (t *TestingFailTask) OptionalParameters() []string {
 type TestingEmitEchoTask struct {
 }
 
-func (t *TestingEmitEchoTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
-	return []*pb.TaskContainer{
+func (t *TestingEmitEchoTask) Run(parameters map[string]string) (newTasks []*automationpb.TaskContainer, output string, err error) {
+	return []*automationpb.TaskContainer{
 		NewTaskContainerWithSingleTask("TestingEchoTask", parameters),
 	}, "emitted TestingEchoTask", nil
 }
@@ -84,8 +85,8 @@ func (t *TestingEmitEchoTask) OptionalParameters() []string {
 type TestingEmitEchoFailEchoTask struct {
 }
 
-func (t *TestingEmitEchoFailEchoTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
-	newTasks = []*pb.TaskContainer{
+func (t *TestingEmitEchoFailEchoTask) Run(parameters map[string]string) (newTasks []*automationpb.TaskContainer, output string, err error) {
+	newTasks = []*automationpb.TaskContainer{
 		NewTaskContainerWithSingleTask("TestingEchoTask", parameters),
 		NewTaskContainerWithSingleTask("TestingFailTask", parameters),
 		NewTaskContainerWithSingleTask("TestingEchoTask", parameters),
@@ -99,4 +100,22 @@ func (t *TestingEmitEchoFailEchoTask) RequiredParameters() []string {
 
 func (t *TestingEmitEchoFailEchoTask) OptionalParameters() []string {
 	return nil
+}
+
+// testTask runs the given tasks and checks if it succeeds.
+// To make the task succeed you have to register the result with a fake first
+// e.g. see migrate_served_types_task_test.go for an example.
+func testTask(t *testing.T, test string, task Task, parameters map[string]string) {
+	err := validateParameters(task, parameters)
+	if err != nil {
+		t.Fatalf("%s: Not all required parameters were specified: %v", test, err)
+	}
+
+	newTasks, _ /* output */, err := task.Run(parameters)
+	if newTasks != nil {
+		t.Errorf("%s: Task should not emit new tasks: %v", test, newTasks)
+	}
+	if err != nil {
+		t.Errorf("%s: Task should not fail: %v", err, test)
+	}
 }

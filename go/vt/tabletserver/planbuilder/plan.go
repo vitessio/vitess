@@ -5,6 +5,7 @@
 package planbuilder
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -102,7 +103,7 @@ func (pt PlanType) IsSelect() bool {
 
 // MarshalJSON returns a json string for PlanType.
 func (pt PlanType) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", pt.String())), nil
+	return json.Marshal(pt.String())
 }
 
 // MinRole is the minimum Role required to execute this PlanType.

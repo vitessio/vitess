@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // ExecuteSuperQuery allows the user to execute a query as a super user.
@@ -34,7 +34,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
 }
 
 // FetchSuperQuery returns the results of executing a query as a super user.
-func (mysqld *Mysqld) FetchSuperQuery(query string) (*mproto.QueryResult, error) {
+func (mysqld *Mysqld) FetchSuperQuery(query string) (*sqltypes.Result, error) {
 	conn, connErr := mysqld.dbaPool.Get(0)
 	if connErr != nil {
 		return nil, connErr

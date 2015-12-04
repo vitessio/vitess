@@ -11,13 +11,14 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
 func TestCodexBuildValuesList(t *testing.T) {
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 
 	// simple PK clause. e.g. where pk1 = 1
@@ -54,7 +55,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	// invalid value
 	bindVars["pk1"] = struct{}{}
 	pkValues = []interface{}{":pk1"}
-	wantErr := "error: unsupported bind variable type struct {}: {}"
+	wantErr := "error: unexpected type struct {}: {}"
 
 	got, err := buildValueList(&tableInfo, pkValues, bindVars)
 
@@ -201,7 +202,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	key := "var"
 	bindVariables := make(map[string]interface{})
@@ -237,7 +238,7 @@ func TestCodexResolveListArg(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 
 	key := "var"
@@ -256,7 +257,7 @@ func TestCodexResolveListArg(t *testing.T) {
 	if err != nil {
 		t.Fatalf("should not get an error, but got error: %v", err)
 	}
-	testUtils.checkEqual(t, []sqltypes.Value{sqltypes.MakeNumeric([]byte("10"))}, result)
+	testUtils.checkEqual(t, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("10"))}, result)
 }
 
 func TestCodexBuildSecondaryList(t *testing.T) {
@@ -264,7 +265,7 @@ func TestCodexBuildSecondaryList(t *testing.T) {
 	pk2 := "pk2"
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{pk1, pk2})
 
 	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
@@ -295,7 +296,7 @@ func TestCodexBuildStreamComment(t *testing.T) {
 	pk2 := "pk2"
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{pk1, pk2})
 
 	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
@@ -318,7 +319,7 @@ func TestCodexResolveValueWithIncompatibleValueType(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	_, err := resolveValue(tableInfo.GetPKColumn(0), 0, nil)
 	testUtils.checkTabletError(t, err, ErrFail, "incompatible value type ")
@@ -328,7 +329,7 @@ func TestCodexValidateRow(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	// #columns and #rows do not match
 	err := validateRow(&tableInfo, []int{1}, []sqltypes.Value{})
@@ -398,8 +399,8 @@ func TestCodexGetLimit(t *testing.T) {
 func TestCodexBuildKey(t *testing.T) {
 	testUtils := newTestUtils()
 	newKey := buildKey([]sqltypes.Value{
-		sqltypes.MakeNumeric([]byte("1")),
-		sqltypes.MakeNumeric([]byte("2")),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 	})
 	testUtils.checkEqual(t, "1.2", newKey)
 
@@ -414,7 +415,7 @@ func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
 		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
+		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	output := applyFilterWithPKDefaults(&tableInfo, []int{-1}, []sqltypes.Value{})
 	if len(output) != 1 {
@@ -425,41 +426,6 @@ func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
 		t.Fatalf("should not get an error, but got err: %v", err)
 	}
 	testUtils.checkEqual(t, int64(0), val)
-}
-
-func TestCodexValidateKey(t *testing.T) {
-	testUtils := newTestUtils()
-	queryServiceStats := NewQueryServiceStats("", false)
-	tableInfo := createTableInfo("Table",
-		[]string{"pk1", "pk2", "col1"},
-		[]string{"int", "varbinary(128)", "int"},
-		[]string{"pk1", "pk2"})
-	// validate empty key
-	newKey := validateKey(&tableInfo, "", queryServiceStats)
-	testUtils.checkEqual(t, "", newKey)
-	// validate keys that do not match number of pk columns
-	newKey = validateKey(&tableInfo, "1", queryServiceStats)
-	testUtils.checkEqual(t, "", newKey)
-	newKey = validateKey(&tableInfo, "1.2.3", queryServiceStats)
-	testUtils.checkEqual(t, "", newKey)
-	// validate keys with null
-	newKey = validateKey(&tableInfo, "'MQ=='.null", queryServiceStats)
-	testUtils.checkEqual(t, "", newKey)
-	// validate keys with invalid base64 encoded string
-	newKey = validateKey(&tableInfo, "'MQ==<'.2", queryServiceStats)
-	testUtils.checkEqual(t, "", newKey)
-	// validate keys with invalid value
-	mismatchCounterBefore := queryServiceStats.InternalErrors.Counts()["Mismatch"]
-	newKey = validateKey(&tableInfo, "not_a_number.2", queryServiceStats)
-	mismatchCounterAfter := queryServiceStats.InternalErrors.Counts()["Mismatch"]
-	if mismatchCounterAfter-mismatchCounterBefore != 1 {
-		t.Fatalf("Mismatch counter should increase by one. Mismatch counter before: %d, after: %d, diff: %d", mismatchCounterBefore, mismatchCounterAfter, mismatchCounterAfter-mismatchCounterBefore)
-	}
-	testUtils.checkEqual(t, "", newKey)
-	// validate valid keys
-	newKey = validateKey(&tableInfo, "1.2", queryServiceStats)
-	testUtils.checkEqual(t, "1.2", newKey)
-
 }
 
 func TestCodexUnicoded(t *testing.T) {
@@ -473,14 +439,14 @@ func TestCodexUnicoded(t *testing.T) {
 }
 
 func createTableInfo(
-	name string, colNames []string, colTypes []string, pKeys []string) TableInfo {
+	name string, colNames []string, colTypes []querypb.Type, pKeys []string) TableInfo {
 	table := schema.NewTable(name)
 	for i, colName := range colNames {
 		colType := colTypes[i]
 		defaultVal := sqltypes.Value{}
-		if strings.Contains(colType, "int") {
-			defaultVal = sqltypes.MakeNumeric([]byte("0"))
-		} else if strings.HasPrefix(colType, "varbinary") {
+		if sqltypes.IsIntegral(colType) {
+			defaultVal = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
+		} else if colType == sqltypes.VarBinary {
 			defaultVal = sqltypes.MakeString([]byte(""))
 		}
 		table.AddColumn(colName, colType, defaultVal, "")

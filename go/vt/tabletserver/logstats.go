@@ -114,7 +114,7 @@ func (stats *LogStats) SizeOfResponse() int {
 	size := 0
 	for _, row := range stats.Rows {
 		for _, field := range row {
-			size += len(field.Raw())
+			size += field.Len()
 		}
 	}
 	return size

@@ -16,16 +16,15 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/worker/events"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // SplitCloneWorker will clone the data within a keyspace from a
@@ -38,7 +37,7 @@ type SplitCloneWorker struct {
 	keyspace               string
 	shard                  string
 	excludeTables          []string
-	strategy               *mysqlctl.SplitStrategy
+	strategy               *splitStrategy
 	sourceReaderCount      int
 	destinationPackCount   int
 	minTableSizeForSplit   uint64
@@ -53,7 +52,7 @@ type SplitCloneWorker struct {
 	destinationShards []*topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAliases []*pb.TabletAlias
+	sourceAliases []*topodatapb.TabletAlias
 	sourceTablets []*topo.TabletInfo
 
 	// populated during WorkerStateCopy
@@ -61,8 +60,8 @@ type SplitCloneWorker struct {
 	startTime   time.Time
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
-	reloadAliases [][]*pb.TabletAlias
-	reloadTablets []map[pb.TabletAlias]*topo.TabletInfo
+	reloadAliases [][]*topodatapb.TabletAlias
+	reloadTablets []map[topodatapb.TabletAlias]*topo.TabletInfo
 
 	ev *events.SplitClone
 
@@ -76,7 +75,7 @@ type SplitCloneWorker struct {
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
 func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
-	strategy, err := mysqlctl.NewSplitStrategy(wr.Logger(), strategyStr)
+	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
 	}
@@ -219,13 +218,17 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	var err error
 
 	// read the keyspace and validate it
-	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(ctx, scw.keyspace)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(shortCtx, scw.keyspace)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", scw.keyspace, err)
 	}
 
 	// find the OverlappingShards in the keyspace
-	osList, err := topotools.FindOverlappingShards(ctx, scw.wr.TopoServer(), scw.keyspace)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	osList, err := topotools.FindOverlappingShards(shortCtx, scw.wr.TopoServer(), scw.keyspace)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot FindOverlappingShards in %v: %v", scw.keyspace, err)
 	}
@@ -248,7 +251,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	}
 
 	// validate all serving types
-	servingTypes := []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY}
+	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 	for _, st := range servingTypes {
 		for _, si := range scw.sourceShards {
 			if si.GetServedType(st) == nil {
@@ -274,7 +277,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	var err error
 
 	// find an appropriate endpoint in the source shards
-	scw.sourceAliases = make([]*pb.TabletAlias, len(scw.sourceShards))
+	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
 		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
 		if err != nil {
@@ -286,12 +289,14 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	// get the tablet info for them, and stop their replication
 	scw.sourceTablets = make([]*topo.TabletInfo, len(scw.sourceAliases))
 	for i, alias := range scw.sourceAliases {
-		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(ctx, alias)
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(shortCtx, alias)
+		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 
-		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
@@ -303,7 +308,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(alias), err)
 		}
-		action.TabletType = pb.TabletType_SPARE
+		action.TabletType = topodatapb.TabletType_SPARE
 	}
 
 	return scw.ResolveDestinationMasters(ctx)
@@ -354,8 +359,8 @@ func (scw *SplitCloneWorker) GetDestinationMaster(shardName string) (*topo.Table
 // Find all tablets on all destination shards. This should be done immediately before reloading
 // the schema on these tablets, to minimize the chances of the topo changing in between.
 func (scw *SplitCloneWorker) findReloadTargets(ctx context.Context) error {
-	scw.reloadAliases = make([][]*pb.TabletAlias, len(scw.destinationShards))
-	scw.reloadTablets = make([]map[pb.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
+	scw.reloadAliases = make([][]*topodatapb.TabletAlias, len(scw.destinationShards))
+	scw.reloadTablets = make([]map[topodatapb.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
 		reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)
@@ -404,7 +409,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	// Find the column index for the sharding columns in all the databases, and count rows
 	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == myproto.TableBaseTable {
+		if td.Type == tmutils.TableBaseTable {
 			// find the column to split on
 			columnIndexes[tableIndex] = -1
 			for i, name := range td.Columns {
@@ -433,13 +438,13 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	mu := sync.Mutex{}
 	var firstError error
 
-	ctx, cancel = context.WithCancel(ctx)
+	ctx, cancelCopy := context.WithCancel(ctx)
 	processError := func(format string, args ...interface{}) {
 		scw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
 		if firstError == nil {
 			firstError = fmt.Errorf(format, args...)
-			cancel()
+			cancelCopy()
 		}
 		mu.Unlock()
 	}
@@ -473,11 +478,11 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	for shardIndex := range scw.sourceShards {
 		sema := sync2.NewSemaphore(scw.sourceReaderCount, 0)
 		for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-			if td.Type == myproto.TableView {
+			if td.Type == tmutils.TableView {
 				continue
 			}
 
-			rowSplitter := NewRowSplitter(scw.destinationShards, key.ProtoToKeyspaceIdType(scw.keyspaceInfo.ShardingColumnType), columnIndexes[tableIndex])
+			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
 
 			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
@@ -487,7 +492,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 			for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 				sourceWaitGroup.Add(1)
-				go func(td *myproto.TableDefinition, tableIndex, chunkIndex int) {
+				go func(td *tabletmanagerdatapb.TableDefinition, tableIndex, chunkIndex int) {
 					defer sourceWaitGroup.Done()
 
 					sema.Acquire()
@@ -524,11 +529,11 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	}
 
 	// then create and populate the blp_checkpoint table
-	if scw.strategy.PopulateBlpCheckpoint {
+	if scw.strategy.populateBlpCheckpoint {
 		queries := make([]string, 0, 4)
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		flags := ""
-		if scw.strategy.DontStartBinlogPlayer {
+		if scw.strategy.dontStartBinlogPlayer {
 			flags = binlogplayer.BlpFlagDontStart
 		}
 
@@ -564,7 +569,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	// TODO(alainjobart) this is a superset, some shards may not
 	// overlap, have to deal with this better (for N -> M splits
 	// where both N>1 and M>1)
-	if scw.strategy.SkipSetSourceShards {
+	if scw.strategy.skipSetSourceShards {
 		scw.wr.Logger().Infof("Skipping setting SourceShard on destination shards.")
 	} else {
 		for _, si := range scw.destinationShards {
@@ -606,7 +611,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (scw *SplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int, abort <-chan struct{}) error {
+func (scw *SplitCloneWorker) processData(td *tabletmanagerdatapb.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels []chan string, destinationPackCount int, abort <-chan struct{}) error {
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 	sr := rowSplitter.StartSplit()
 	packCount := 0

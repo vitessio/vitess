@@ -20,6 +20,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 	);
 	private static $BIND_VARS; // initialized in setUpBeforeClass()
 	private static $BIND_VARS_ECHO = 'map[bytes:[104 101 108 108 111] float:1.5 int:123 uint_from_int:18446744073709551493 uint_from_string:456]'; // 18446744073709551493 = uint64(-123)
+	private static $BIND_VARS_ECHO_P3 = 'map[bytes:type:VARBINARY value:"hello"  float:type:FLOAT64 value:"1.5"  int:type:INT64 value:"123"  uint_from_int:type:UINT64 value:"18446744073709551493"  uint_from_string:type:UINT64 value:"456" ]'; // 18446744073709551493 = uint64(-123)
 	private static $CALLER_ID; // initialized in setUpBeforeClass()
 	private static $CALLER_ID_ECHO = 'principal:"test_principal" component:"test_component" subcomponent:"test_subcomponent" ';
 	private static $TABLET_TYPE = \topodata\TabletType::REPLICA;
@@ -32,13 +33,12 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 	private static $SHARDS_ECHO = '[-80 80-]';
 	private static $KEYSPACE_IDS; // initialized in setUpBeforeClass()
 	private static $KEYSPACE_IDS_ECHO = '[[128 0 0 0 0 0 0 0] [255 0 0 0 0 0 0 239]]';
-	private static $KEYSPACE_IDS_ECHO_OLD = '[8000000000000000 ff000000000000ef]';
 	private static $KEY_RANGES; // initialized in setUpBeforeClass()
 	private static $KEY_RANGES_ECHO = '[end:"\200\000\000\000\000\000\000\000"  start:"\200\000\000\000\000\000\000\000" ]';
 	private static $ENTITY_COLUMN_NAME = 'test_column';
 	private static $ENTITY_KEYSPACE_IDS; // initialized in setUpBeforeClass()
 	private static $ENTITY_KEYSPACE_IDS_ECHO = '[xid_type:FLOAT64 xid_value:"1.5" keyspace_id:"\0224Vx\000\000\000\002"  xid_type:INT64 xid_value:"123" keyspace_id:"\0224Vx\000\000\000\000"  xid_type:UINT64 xid_value:"456" keyspace_id:"\0224Vx\000\000\000\001" ]';
-	private static $SESSION_ECHO = 'InTransaction: true, ShardSession: []';
+	private static $SESSION_ECHO = 'in_transaction:true ';
 
 	public static function setUpBeforeClass() {
 		$VTROOT = getenv('VTROOT');
@@ -192,7 +192,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
 		$this->assertEquals(self::$SHARDS_ECHO, $echo['shards']);
-		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
+		$this->assertEquals(self::$BIND_VARS_ECHO_P3, $echo['bindVars']);
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 		$this->assertEquals('true', $echo['asTransaction']);
 		
@@ -203,8 +203,8 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
-		$this->assertEquals(self::$KEYSPACE_IDS_ECHO_OLD, $echo['keyspaceIds']);
-		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
+		$this->assertEquals(self::$KEYSPACE_IDS_ECHO, $echo['keyspaceIds']);
+		$this->assertEquals(self::$BIND_VARS_ECHO_P3, $echo['bindVars']);
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 		$this->assertEquals('true', $echo['asTransaction']);
 	}
@@ -310,7 +310,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
 		$this->assertEquals(self::$SHARDS_ECHO, $echo['shards']);
-		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
+		$this->assertEquals(self::$BIND_VARS_ECHO_P3, $echo['bindVars']);
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 		$this->assertEquals(self::$SESSION_ECHO, $echo['session']);
 		$this->assertEquals('true', $echo['asTransaction']);
@@ -322,8 +322,8 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
-		$this->assertEquals(self::$KEYSPACE_IDS_ECHO_OLD, $echo['keyspaceIds']);
-		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
+		$this->assertEquals(self::$KEYSPACE_IDS_ECHO, $echo['keyspaceIds']);
+		$this->assertEquals(self::$BIND_VARS_ECHO_P3, $echo['bindVars']);
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 		$this->assertEquals(self::$SESSION_ECHO, $echo['session']);
 		$this->assertEquals('true', $echo['asTransaction']);
@@ -343,14 +343,23 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 				'uint_from_string' => new VTUnsignedInt('678') 
 		);
 		
-		$expected = new \vtgate\SplitQueryResponse\Part();
-		$expected->setQuery(VTProto::BoundQuery(self::$ECHO_QUERY . ':split_column:123', $input_bind_vars));
-		$krpart = new \vtgate\SplitQueryResponse\KeyRangePart();
-		$krpart->setKeyspace(self::$KEYSPACE);
-		$expected->setKeyRangePart($krpart);
+		$splits = $conn->splitQuery($ctx, self::$KEYSPACE, self::$ECHO_QUERY, $input_bind_vars, 'split_column', 123);
+		$actual = $splits[0];
+		$bound_query = $actual->getQuery();
 		
-		$actual = $conn->splitQuery($ctx, self::$KEYSPACE, self::$ECHO_QUERY, $input_bind_vars, 'split_column', 123);
-		$this->assertEquals($expected, $actual[0]);
+		$this->assertEquals(self::$KEYSPACE, $actual->getKeyRangePart()->getKeyspace());
+		$this->assertEquals(self::$ECHO_QUERY . ':split_column:123', $bound_query->getSql());
+		
+		// The map of bind vars is implemented as a repeated field, and the order of
+		// the entries is arbitrary. First load them into a map.
+		$actual_bind_vars = array();
+		foreach ($bound_query->getBindVariablesList() as $bind_var_entry) {
+			$actual_bind_vars[$bind_var_entry->getKey()] = $bind_var_entry->getValue();
+		}
+		// Then check that all the expected values exist and are correct.
+		foreach ($input_bind_vars as $name => $value) {
+			$this->assertEquals(VTProto::BindVariable($value), $actual_bind_vars[$name]);
+		}
 	}
 
 	public function testGetSrvKeyspace() {

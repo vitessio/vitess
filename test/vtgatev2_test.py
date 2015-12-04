@@ -14,6 +14,7 @@ import environment
 import tablet
 import utils
 from protocols_flavor import protocols_flavor
+from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
 
 from vtdb import dbexceptions
 from vtdb import keyrange
@@ -156,16 +157,26 @@ def setup_tablets():
     t.create_db('vt_test_keyspace')
     for create_table in create_tables:
       t.mquery(shard_0_master.dbname, create_table)
-    t.start_vttablet(wait_for_state=None)
+    t.start_vttablet(wait_for_state=None, target_tablet_type='replica')
 
-  for t in [shard_0_master, shard_0_replica1, shard_0_replica2,
-            shard_1_master, shard_1_replica1, shard_1_replica2]:
+  for t in [shard_0_master, shard_1_master]:
     t.wait_for_vttablet_state('SERVING')
+  for t in [shard_0_replica1, shard_0_replica2,
+            shard_1_replica1, shard_1_replica2]:
+    t.wait_for_vttablet_state('NOT_SERVING')
 
   utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/-80',
                    shard_0_master.tablet_alias], auto_log=True)
   utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/80-',
                    shard_1_master.tablet_alias], auto_log=True)
+
+  for t in [shard_0_replica1, shard_0_replica2,
+            shard_1_replica1, shard_1_replica2]:
+    utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+
+  for t in [shard_0_master, shard_0_replica1, shard_0_replica2,
+            shard_1_master, shard_1_replica1, shard_1_replica2]:
+    t.wait_for_vttablet_state('SERVING')
 
   utils.run_vtctl(
       ['RebuildKeyspaceGraph', KEYSPACE_NAME], auto_log=True)
@@ -208,7 +219,7 @@ def _delete_all(shard_index, table_name):
   vtgate_conn.commit()
 
 
-def do_write(count, shard_index):
+def write_rows_to_shard(count, shard_index):
   kid_list = SHARD_KID_MAP[SHARD_NAMES[shard_index]]
   _delete_all(shard_index, 'vt_insert_test')
   vtgate_conn = get_connection()
@@ -282,7 +293,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     """Test VtGate routes queries to the right tablets."""
     row_counts = [20, 30]
     for shard_index in [0, 1]:
-      do_write(row_counts[shard_index], shard_index)
+      write_rows_to_shard(row_counts[shard_index], shard_index)
     vtgate_conn = get_connection()
     for shard_index in [0, 1]:
       # Fetch all rows in each shard
@@ -332,7 +343,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
         rowcount, count,
         "Fetched rows(%d) != inserted rows(%d), rollback didn't work" %
         (rowcount, count))
-    do_write(10, self.shard_index)
+    write_rows_to_shard(10, self.shard_index)
 
   def test_execute_entity_ids(self):
     vtgate_conn = get_connection()
@@ -389,6 +400,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.commit()
     kid_list = [pack_kid(kid) for kid in kid_list]
     cursor = vtgate_conn.cursor(keyspace=None, tablet_type='master')
+    # Test ExecuteBatchKeyspaceIds
     params_list = [
         dict(sql='select msg, keyspace_id from vt_insert_test',
              bind_variables={},
@@ -479,7 +491,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def test_streaming_fetchsubset(self):
     count = 30
-    do_write(count, self.shard_index)
+    write_rows_to_shard(count, self.shard_index)
     # Fetch a subset of the total size.
     vtgate_conn = get_connection()
 
@@ -498,6 +510,8 @@ class TestCoreVTGateFunctions(BaseTestCase):
       rows = stream_cursor.fetchmany(size=10)
       self.assertEqual(rows, [('test %d' % x,) for x in xrange(10, 20)])
 
+    # Open two streaming queries at the same time, fetch some from each,
+    # and make sure they don't interfere with each other.
     stream_cursor_1 = get_stream_cursor()
     stream_cursor_2 = get_stream_cursor()
     fetch_first_10_rows(stream_cursor_1)
@@ -509,7 +523,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def test_streaming_fetchall(self):
     count = 30
-    do_write(count, self.shard_index)
+    write_rows_to_shard(count, self.shard_index)
     # Fetch all.
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
@@ -524,7 +538,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def test_streaming_fetchone(self):
     count = 30
-    do_write(count, self.shard_index)
+    write_rows_to_shard(count, self.shard_index)
     # Fetch one.
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
@@ -538,8 +552,8 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def test_streaming_multishards(self):
     count = 30
-    do_write(count, 0)
-    do_write(count, 1)
+    write_rows_to_shard(count, 0)
+    write_rows_to_shard(count, 1)
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
         KEYSPACE_NAME, 'master',
@@ -614,7 +628,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
           for result in generator:
             self.assertEqual(result, (kid_list[i],))
       thd.join()
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_field_types(self):
@@ -730,7 +744,8 @@ class TestFailures(BaseTestCase):
 
   def tablet_start(self, tablet_obj, tablet_type, lameduck_period='0.5s'):
     _ = tablet_type
-    return tablet_obj.start_vttablet(lameduck_period=lameduck_period)
+    return tablet_obj.start_vttablet(target_tablet_type=tablet_type,
+                                     lameduck_period=lameduck_period)
 
   def test_status_with_error(self):
     """Tests that the status page loads correctly after a VTGate error."""
@@ -757,12 +772,14 @@ class TestFailures(BaseTestCase):
           keyranges=[self.keyrange])
     self.tablet_start(self.replica_tablet, 'replica')
     self.tablet_start(self.replica_tablet2, 'replica')
+    # sleep over vtgate reconnection delay
+    time.sleep(1)
     try:
       _ = vtgate_conn._execute(
           'select 1 from vt_insert_test', {},
           KEYSPACE_NAME, 'replica',
           keyranges=[self.keyrange])
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       self.fail('Communication with shard %s replica failed with error %s' %
                 (SHARD_NAMES[self.shard_index], str(e)))
 
@@ -797,9 +814,11 @@ class TestFailures(BaseTestCase):
       stream_cursor.execute('select * from vt_insert_test', {})
     self.tablet_start(self.replica_tablet, 'replica')
     self.tablet_start(self.replica_tablet2, 'replica')
+    # sleep over vtgate reconnection time
+    time.sleep(1)
     try:
       stream_cursor.execute('select * from vt_insert_test', {})
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       self.fail('Communication with shard0 replica failed with error %s' %
                 str(e))
 
@@ -821,7 +840,7 @@ class TestFailures(BaseTestCase):
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     try:
       stream_cursor.execute('select * from vt_insert_test', {})
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       self.fail('Communication with shard0 replica failed with error %s' %
                 str(e))
 
@@ -832,6 +851,8 @@ class TestFailures(BaseTestCase):
     self.master_tablet.kill_vttablet()
     vtgate_conn.begin()
     _ = self.tablet_start(self.master_tablet, 'master')
+    # sleep over vtgate reconnection delay
+    time.sleep(1)
     vtgate_conn.begin()
     # this succeeds only if retry_count > 0
     vtgate_conn._execute(
@@ -864,6 +885,8 @@ class TestFailures(BaseTestCase):
           keyranges=[self.keyrange])
       vtgate_conn.commit()
     _ = self.tablet_start(self.master_tablet, 'master')
+    # sleep over vtgate reconnection delay
+    time.sleep(1)
     vtgate_conn.begin()
     vtgate_conn._execute(
         'delete from vt_insert_test', {},
@@ -963,7 +986,7 @@ class TestFailures(BaseTestCase):
      # the timeout boundary and kill any query being executed
      # at the time. Prevent flakiness in other tests by sleeping
      # until the query times out.
-     # TODO fix b/17733518
+     # TODO(b/17733518)
     time.sleep(3)
 
   # test timeout between vtgate and vttablet
@@ -973,7 +996,7 @@ class TestFailures(BaseTestCase):
     # set for vtgate-vttablet connection.
     # TODO(liguo): evaluate if we want such a timeout
     return
-    vtgate_conn = get_connection()
+    vtgate_conn = get_connection()  # pylint: disable=unreachable
     with self.assertRaises(dbexceptions.DatabaseError):
       vtgate_conn.begin()
       vtgate_conn._execute(
@@ -1000,18 +1023,18 @@ class TestFailures(BaseTestCase):
           KEYSPACE_NAME, 'replica',
           keyranges=[self.keyrange])
       self.fail('DatabaseError should have been raised')
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
       self.assertNotIsInstance(e, dbexceptions.TimeoutError)
 
     utils.wait_procs([self.replica_tablet.start_mysql(),])
-    # force health check so tablet can become serving
-    utils.run_vtctl(
-        ['RunHealthCheck', self.replica_tablet.tablet_alias, 'replica'],
-        auto_log=True)
-    self.replica_tablet.wait_for_vttablet_state('SERVING')
+    # then restart replication, and write data, make sure we go back to healthy
+    for t in [self.replica_tablet]:
+      utils.run_vtctl(['StartSlave', t.tablet_alias])
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+      t.wait_for_vttablet_state('SERVING')
     vtgate_conn._execute(
         'select 1 from vt_insert_test', {},
         KEYSPACE_NAME, 'replica',
@@ -1019,7 +1042,8 @@ class TestFailures(BaseTestCase):
     self.replica_tablet.kill_vttablet()
     self.tablet_start(self.replica_tablet, 'replica')
     self.replica_tablet.wait_for_vttablet_state('SERVING')
-    # TODO: expect to fail until we can detect vttablet shuts down gracefully
+    # TODO(liguo): expect to fail
+    # until we can detect vttablet shuts down gracefully
     # while VTGate is idle.
     # NOTE: with grpc, it will reconnect, and not trigger an error.
     if protocols_flavor().tabletconn_protocol() == 'grpc':
@@ -1031,7 +1055,7 @@ class TestFailures(BaseTestCase):
           keyranges=[self.keyrange])
       self.fail(
           'DatabaseError should have been raised, but got %s' % str(result))
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
@@ -1050,22 +1074,18 @@ class TestFailures(BaseTestCase):
           KEYSPACE_NAME, 'replica',
           keyranges=[self.keyrange])
       self.fail('DatabaseError should have been raised')
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
       self.assertNotIsInstance(e, dbexceptions.TimeoutError)
     utils.wait_procs([self.replica_tablet.start_mysql(),])
     utils.wait_procs([self.replica_tablet2.start_mysql(),])
-    # force health check so tablet can become serving
-    utils.run_vtctl(
-        ['RunHealthCheck', self.replica_tablet.tablet_alias, 'replica'],
-        auto_log=True)
-    utils.run_vtctl(
-        ['RunHealthCheck', self.replica_tablet2.tablet_alias, 'replica'],
-        auto_log=True)
-    self.replica_tablet.wait_for_vttablet_state('SERVING')
-    self.replica_tablet2.wait_for_vttablet_state('SERVING')
+    # then restart replication, and write data, make sure we go back to healthy
+    for t in [self.replica_tablet, self.replica_tablet2]:
+      utils.run_vtctl(['StartSlave', t.tablet_alias])
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+      t.wait_for_vttablet_state('SERVING')
     self.replica_tablet2.kill_vttablet()
     self.replica_tablet.kill_vttablet(wait=False)
     time.sleep(0.1)
@@ -1076,7 +1096,7 @@ class TestFailures(BaseTestCase):
           KEYSPACE_NAME, 'replica',
           keyranges=[self.keyrange])
       self.fail('DatabaseError should have been raised')
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
@@ -1088,7 +1108,7 @@ class TestFailures(BaseTestCase):
           KEYSPACE_NAME, 'replica',
           keyranges=[self.keyrange])
       self.fail('DatabaseError should have been raised')
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
@@ -1099,6 +1119,8 @@ class TestFailures(BaseTestCase):
     self.tablet_start(self.replica_tablet2, 'replica')
     self.replica_tablet.wait_for_vttablet_state('SERVING')
     self.replica_tablet2.wait_for_vttablet_state('SERVING')
+    # sleep over the reconnection delay
+    time.sleep(1)
     # as the cached vtgate-tablet conn was marked down, it should succeed
     vtgate_conn._execute(
         'select 1 from vt_insert_test', {},
@@ -1116,20 +1138,15 @@ class TestFailures(BaseTestCase):
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
     utils.wait_procs([self.replica_tablet.start_mysql(),])
-    # force health check so tablet can become serving
-    utils.run_vtctl(
-        ['RunHealthCheck', self.replica_tablet.tablet_alias, 'replica'],
-        auto_log=True)
-    self.replica_tablet.wait_for_vttablet_state('SERVING')
-    tablet2_vars = utils.get_vars(self.replica_tablet2.port)
-    t2_query_count_before = int(tablet2_vars['Queries']['TotalCount'])
+    # then restart replication, and write data, make sure we go back to healthy
+    for t in [self.replica_tablet]:
+      utils.run_vtctl(['StartSlave', t.tablet_alias])
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+      t.wait_for_vttablet_state('SERVING')
     vtgate_conn._execute(
         'select 1 from vt_insert_test', {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
-    tablet2_vars = utils.get_vars(self.replica_tablet2.port)
-    t2_query_count_after = int(tablet2_vars['Queries']['TotalCount'])
-    self.assertTrue((t2_query_count_after-t2_query_count_before) == 1)
     # kill tablet2 and leave it in lameduck mode
     self.replica_tablet2.kill_vttablet(wait=False)
     time.sleep(0.1)
@@ -1174,7 +1191,7 @@ class TestFailures(BaseTestCase):
   def test_kill_mysql_tablet_queries_multi_tablets(self):
     vtgate_conn = get_connection()
     utils.wait_procs([self.replica_tablet.shutdown_mysql(),])
-    # should retry on tablet2 and succeed
+    # should execute on tablet2 and succeed
     tablet2_vars = utils.get_vars(self.replica_tablet2.port)
     t2_query_count_before = int(tablet2_vars['Queries']['TotalCount'])
     vtgate_conn._execute(
@@ -1186,35 +1203,32 @@ class TestFailures(BaseTestCase):
     self.assertTrue((t2_query_count_after-t2_query_count_before) == 1)
     # start tablet1 mysql
     utils.wait_procs([self.replica_tablet.start_mysql(),])
-    # force health check so tablet can become serving
-    utils.run_vtctl(
-        ['RunHealthCheck', self.replica_tablet.tablet_alias, 'replica'],
-        auto_log=True)
-    self.replica_tablet.wait_for_vttablet_state('SERVING')
-    # should succeed on tablet2
-    tablet2_vars = utils.get_vars(self.replica_tablet2.port)
-    t2_query_count_before = int(tablet2_vars['Queries']['TotalCount'])
+    # then restart replication, and write data, make sure we go back to healthy
+    for t in [self.replica_tablet]:
+      utils.run_vtctl(['StartSlave', t.tablet_alias])
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+      t.wait_for_vttablet_state('SERVING')
+    # query should succeed
     vtgate_conn._execute(
         'select 1 from vt_insert_test', {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
-    tablet2_vars = utils.get_vars(self.replica_tablet2.port)
-    t2_query_count_after = int(tablet2_vars['Queries']['TotalCount'])
-    self.assertTrue((t2_query_count_after-t2_query_count_before) == 1)
     # hard kill tablet2
     self.replica_tablet2.hard_kill_vttablet()
-    # send query after tablet2 is killed, should not retry on the cached conn
-    try:
-      vtgate_conn._execute(
-          'select 1 from vt_insert_test', {},
-          KEYSPACE_NAME, 'replica',
-          keyranges=[self.keyrange])
-      self.fail('DatabaseError should have been raised')
-    except Exception, e:
-      self.assertIsInstance(e, dbexceptions.DatabaseError)
-      self.assertNotIsInstance(e, dbexceptions.IntegrityError)
-      self.assertNotIsInstance(e, dbexceptions.OperationalError)
-      self.assertNotIsInstance(e, dbexceptions.TimeoutError)
+    if vtgate_gateway_flavor().flavor() == 'shardgateway':
+      # "shardgateway" implementation fails the first query
+      # send query after tablet2 is killed, should not retry on the cached conn
+      try:
+        vtgate_conn._execute(
+            'select 1 from vt_insert_test', {},
+            KEYSPACE_NAME, 'replica',
+            keyranges=[self.keyrange])
+        self.fail('DatabaseError should have been raised')
+      except Exception, e:  # pylint: disable=broad-except
+        self.assertIsInstance(e, dbexceptions.DatabaseError)
+        self.assertNotIsInstance(e, dbexceptions.IntegrityError)
+        self.assertNotIsInstance(e, dbexceptions.OperationalError)
+        self.assertNotIsInstance(e, dbexceptions.TimeoutError)
     # send another query, should succeed on tablet1
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
@@ -1227,7 +1241,11 @@ class TestFailures(BaseTestCase):
     self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
     # start tablet2
     self.tablet_start(self.replica_tablet2, 'replica')
-    self.replica_tablet2.wait_for_vttablet_state('SERVING')
+    # then restart replication, and write data, make sure we go back to healthy
+    for t in [self.replica_tablet2]:
+      utils.run_vtctl(['StartSlave', t.tablet_alias])
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+      t.wait_for_vttablet_state('SERVING')
     # it should succeed on tablet1
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
@@ -1269,7 +1287,7 @@ class TestFailures(BaseTestCase):
             {'eid': x, 'id': x, 'keyspace_id': keyspace_id},
             KEYSPACE_NAME, 'master', keyspace_ids=[pack_kid(keyspace_id)])
       vtgate_conn.commit()
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       # check that bind var value is not present in exception message.
       if str(keyspace_id) in str(e):
         self.fail('bind_vars present in the exception message')
@@ -1277,6 +1295,7 @@ class TestFailures(BaseTestCase):
       vtgate_conn.rollback()
     # Start master tablet again
     self.tablet_start(self.master_tablet, 'master')
+    self.master_tablet.wait_for_vttablet_state('SERVING')
 
   def test_fail_fast_when_no_serving_tablets(self):
     """Verify VtGate requests fail-fast when tablets are unavailable.
@@ -1300,7 +1319,7 @@ class TestFailures(BaseTestCase):
       get_rtt(KEYSPACE_NAME, query, tablet_type, keyranges)
       self.replica_tablet.wait_for_vttablet_state('NOT_SERVING')
       self.replica_tablet2.wait_for_vttablet_state('NOT_SERVING')
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
       self.fail('unable to set tablet to NOT_SERVING state')
 
     # Fire off a few requests in parallel
@@ -1327,32 +1346,33 @@ class TestFailures(BaseTestCase):
     # Restart tablet and put it back to SERVING state
     utils.wait_procs([self.replica_tablet.start_mysql(),])
     utils.wait_procs([self.replica_tablet2.start_mysql(),])
-    # force health check so tablet can become serving
-    utils.run_vtctl(
-        ['RunHealthCheck', self.replica_tablet.tablet_alias, 'replica'],
-        auto_log=True)
-    utils.run_vtctl(
-        ['RunHealthCheck', self.replica_tablet2.tablet_alias, 'replica'],
-        auto_log=True)
-    self.replica_tablet.wait_for_vttablet_state('SERVING')
-    self.replica_tablet2.wait_for_vttablet_state('SERVING')
+    # then restart replication, and write data, make sure we go back to healthy
+    for t in [self.replica_tablet, self.replica_tablet2]:
+      utils.run_vtctl(['StartSlave', t.tablet_alias])
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+      t.wait_for_vttablet_state('SERVING')
 
   def test_lameduck_ongoing_query_single(self):
     vtgate_conn = get_connection()
     utils.wait_procs([self.replica_tablet2.shutdown_mysql(),])
-    utils.run_vtctl(
-        ['RunHealthCheck', self.replica_tablet2.tablet_alias, 'replica'],
-        auto_log=True)
     self.replica_tablet.kill_vttablet()
     self.tablet_start(self.replica_tablet, 'replica', '5s')
-    self.replica_tablet.wait_for_vttablet_state('SERVING')
+    for t in [self.replica_tablet]:
+      utils.run_vtctl(['StartSlave', t.tablet_alias])
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+      t.wait_for_vttablet_state('SERVING')
+    # sleep over VTGate reconnection period
+    time.sleep(1)
     # make sure query can go through tablet1
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
-    vtgate_conn._execute(
-        'select 1 from vt_insert_test', {},
-        KEYSPACE_NAME, 'replica',
-        keyranges=[self.keyrange])
+    try:
+      vtgate_conn._execute(
+          'select 1 from vt_insert_test', {},
+          KEYSPACE_NAME, 'replica',
+          keyranges=[self.keyrange])
+    except Exception, e:  # pylint: disable=broad-except
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
     self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
@@ -1376,7 +1396,7 @@ class TestFailures(BaseTestCase):
           KEYSPACE_NAME, 'replica',
           keyranges=[self.keyrange])
       self.fail('DatabaseError should have been raised')
-    except Exception, e:
+    except Exception, e:  # pylint: disable=broad-except
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
@@ -1392,7 +1412,12 @@ class TestFailures(BaseTestCase):
     time.sleep(5)
     # start tablet1
     self.tablet_start(self.replica_tablet, 'replica')
-    self.replica_tablet.wait_for_vttablet_state('SERVING')
+    for t in [self.replica_tablet]:
+      utils.run_vtctl(['StartSlave', t.tablet_alias])
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+      t.wait_for_vttablet_state('SERVING')
+    # sleep over VTGate reconnection period
+    time.sleep(1)
     # send another query, should succeed on tablet1
     vtgate_conn._execute(
         'select 1 from vt_insert_test', {},
@@ -1400,10 +1425,10 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     # start tablet2
     utils.wait_procs([self.replica_tablet2.start_mysql(),])
-    utils.run_vtctl(
-        ['RunHealthCheck', self.replica_tablet2.tablet_alias, 'replica'],
-        auto_log=True)
-    self.replica_tablet2.wait_for_vttablet_state('SERVING')
+    for t in [self.replica_tablet2]:
+      utils.run_vtctl(['StartSlave', t.tablet_alias])
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+      t.wait_for_vttablet_state('SERVING')
 
 
 # Return round trip time for a VtGate query, ignore any errors
@@ -1413,7 +1438,7 @@ def get_rtt(keyspace, query, tablet_type, keyranges):
   start = time.time()
   try:
     cursor.execute(query, {})
-  except Exception:
+  except Exception:  # pylint: disable=broad-except
     pass
   duration = time.time() - start
   return duration
@@ -1427,10 +1452,10 @@ def send_long_query(keyspace, tablet_type, keyranges, delay):
     query = 'select sleep(%s) from dual' % str(delay)
     try:
       cursor.execute(query, {})
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
       return False
     return True
-  except Exception:
+  except Exception:  # pylint: disable=broad-except
     return False
 
 

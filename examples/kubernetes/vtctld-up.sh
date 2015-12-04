@@ -20,8 +20,8 @@ done
 # Instantiate template and send to kubectl.
 cat vtctld-controller-template.yaml | sed -e "$sed_script" | $KUBECTL create -f -
 
-get_vtctld_addr
 echo
-echo "vtctld RPC address: $VTCTLD_ADDR"
-echo "vtctld web address: http://$VTCTLD_HOST:30000"
+echo "To access vtctld web UI, start kubectl proxy in another terminal:"
+echo "  kubectl proxy --port=8001"
+echo "Then visit http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/"
 

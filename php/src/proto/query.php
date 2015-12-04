@@ -18,7 +18,7 @@ namespace query {
 namespace query {
 
   class Type extends \DrSlump\Protobuf\Enum {
-    const NULL_ = 0;
+    const NULL_TYPE = 0;
     const INT8 = 257;
     const UINT8 = 770;
     const INT16 = 259;

@@ -8,8 +8,8 @@ import base64
 import unittest
 
 import environment
-import utils
 import tablet
+import utils
 
 # shards
 shard_0_master = tablet.Tablet()
@@ -60,10 +60,7 @@ def tearDownModule():
 
 
 class TestCustomSharding(unittest.TestCase):
-  """
-  Warning: this test only works with BSON RPC, only area where the
-  SplitQuery client is implemented.
-  """
+  """Test a custom-shared keyspace."""
 
   def _insert_data(self, shard, start, count, table='data'):
     sql = 'insert into %s(id, name) values (:id, :name)' % table
@@ -168,15 +165,15 @@ primary key (id)
     utils.run_vtctl(['ApplySchema', '-sql=' + sql, 'test_keyspace'],
                     auto_log=True)
 
+    # reload schema everywhere so the QueryService knows about the tables
+    for t in [shard_0_master, shard_0_rdonly, shard_1_master, shard_1_rdonly]:
+      utils.run_vtctl(['ReloadSchema', t.tablet_alias], auto_log=True)
+
     # insert and read data on all shards
     self._insert_data('0', 300, 10, table='data2')
     self._insert_data('1', 400, 10, table='data2')
     self._check_data('0', 300, 10, table='data2')
     self._check_data('1', 400, 10, table='data2')
-
-    # reload schema everywhere so the QueryService knows about the tables
-    for t in [shard_0_master, shard_0_rdonly, shard_1_master, shard_1_rdonly]:
-      utils.run_vtctl(['ReloadSchema', t.tablet_alias], auto_log=True)
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
@@ -210,8 +207,7 @@ primary key (id)
           'test_keyspace', ','.join(q['shard_part']['shards']),
           tablet_type='master', bindvars=bindvars)
       for r in qr['Rows']:
-        id = int(r[0])
-        rows[id] = r[1]
+        rows[int(r[0])] = r[1]
     self.assertEqual(len(rows), 20)
     expected = {}
     for i in xrange(10):

@@ -4,7 +4,7 @@ import (
 	"log/syslog"
 	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestShardChangeSyslog(t *testing.T) {
@@ -12,8 +12,8 @@ func TestShardChangeSyslog(t *testing.T) {
 	sc := &ShardChange{
 		KeyspaceName: "keyspace-123",
 		ShardName:    "shard-123",
-		Shard: &pb.Shard{
-			MasterAlias: &pb.TabletAlias{
+		Shard: &topodatapb.Shard{
+			MasterAlias: &topodatapb.TabletAlias{
 				Cell: "test",
 				Uid:  123,
 			},

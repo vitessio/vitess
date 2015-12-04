@@ -11,15 +11,16 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // GetPermissions returns the permissions set on a remote tablet
-func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias *pb.TabletAlias) (*myproto.Permissions, error) {
+func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*tabletmanagerdatapb.Permissions, error) {
 	tablet, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
@@ -29,7 +30,7 @@ func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias *pb.TabletAl
 }
 
 // diffPermissions is a helper method to asynchronously diff a permissions
-func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *myproto.Permissions, masterAlias *pb.TabletAlias, alias *pb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *tabletmanagerdatapb.Permissions, masterAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering permissions for %v", topoproto.TabletAliasString(alias))
 	slavePermissions, err := wr.GetPermissions(ctx, alias)
@@ -39,7 +40,7 @@ func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *mypr
 	}
 
 	log.Infof("Diffing permissions for %v", topoproto.TabletAliasString(alias))
-	myproto.DiffPermissions(topoproto.TabletAliasString(masterAlias), masterPermissions, topoproto.TabletAliasString(alias), slavePermissions, er)
+	tmutils.DiffPermissions(topoproto.TabletAliasString(masterAlias), masterPermissions, topoproto.TabletAliasString(alias), slavePermissions, er)
 }
 
 // ValidatePermissionsShard validates all the permissions are the same

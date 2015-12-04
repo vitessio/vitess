@@ -5,7 +5,6 @@
 """
 
 from vtdb import vtgate_cursor
-from vtdb import dbexceptions
 
 # mapping from protocol to python class.
 vtgate_client_conn_classes = dict()
@@ -42,12 +41,12 @@ def connect(protocol, vtgate_addrs, timeout, *pargs, **kargs):
     dbexceptions.OperationalError: if we are unable to establish the connection
       (for instance, no available instance).
     dbexceptions.Error: if vtgate_addrs have the wrong type.
-    ValueError if the protocol is unknown, or vtgate_addrs are malformed.
+    ValueError: If the protocol is unknown, or vtgate_addrs are malformed.
   """
   if protocol not in vtgate_client_conn_classes:
-    raise ValueError('Unknown vtclient protocol', protocol)
-  conn = vtgate_client_conn_classes[protocol](vtgate_addrs, timeout,
-                                              *pargs, **kargs)
+    raise ValueError('Unknown vtgate_client protocol', protocol)
+  conn = vtgate_client_conn_classes[protocol](
+      vtgate_addrs, timeout, *pargs, **kargs)
   conn.dial()
   return conn
 

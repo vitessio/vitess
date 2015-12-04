@@ -20,7 +20,9 @@ def tearDownModule():
 
 
 class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
-  """This test reuses worker.py because worker.py also covers the happy path
+  """End-to-end test for horizontal resharding automation.
+
+  This test reuses worker.py because worker.py also covers the happy path
   of the horizontal resharding code. Instead of running the different resharding
   steps "manually" as part of the test, they will be run by the automation
   cluster operation.
@@ -63,10 +65,11 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
                                  worker.shard_1_tablets.replica)
 
     # Verify effect of MigrateServedTypes. Dest shards are serving now.
-    utils.check_srv_keyspace('test_nj', self.KEYSPACE,
-                             'Partitions(master): -80 80-\n' +
-                             'Partitions(rdonly): -80 80-\n' +
-                             'Partitions(replica): -80 80-\n')
+    utils.check_srv_keyspace(
+        'test_nj', self.KEYSPACE,
+        'Partitions(master): -80 80-\n'
+        'Partitions(rdonly): -80 80-\n'
+        'Partitions(replica): -80 80-\n')
 
     # Check that query service is disabled (source shard) or enabled (dest).
 

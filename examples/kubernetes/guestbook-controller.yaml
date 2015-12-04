@@ -13,6 +13,12 @@ spec:
       containers:
         - name: guestbook
           image: vitess/guestbook
+          livenessProbe:
+            httpGet:
+              path: /env
+              port: 8080
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
           ports:
             - name: http-server
               containerPort: 8080

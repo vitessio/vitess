@@ -12,7 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -125,7 +125,7 @@ func (vind *HashAuto) ReverseMap(_ planbuilder.VCursor, ksid []byte) (interface{
 
 // Create reserves the id by inserting it into the vindex table.
 func (vind *HashAuto) Create(vcursor planbuilder.VCursor, id interface{}) error {
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
 			vind.Column: id,
@@ -139,7 +139,7 @@ func (vind *HashAuto) Create(vcursor planbuilder.VCursor, id interface{}) error 
 
 // Generate generates a new id by using the autoinc of the vindex table.
 func (vind *HashAuto) Generate(vcursor planbuilder.VCursor) (id int64, err error) {
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
 			vind.Column: nil,
@@ -149,12 +149,12 @@ func (vind *HashAuto) Generate(vcursor planbuilder.VCursor) (id int64, err error
 	if err != nil {
 		return 0, fmt.Errorf("hash.Generate: %v", err)
 	}
-	return int64(result.InsertId), err
+	return int64(result.InsertID), err
 }
 
 // Delete deletes the entry from the vindex table.
 func (vind *HashAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, _ []byte) error {
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: vind.del,
 		BindVariables: map[string]interface{}{
 			vind.Column: ids,

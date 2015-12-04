@@ -15,7 +15,7 @@ import (
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /*
@@ -23,7 +23,7 @@ This file contains the tablet management parts of zktopo.Server
 */
 
 // TabletPathForAlias converts a tablet alias to the zk path
-func TabletPathForAlias(alias *pb.TabletAlias) string {
+func TabletPathForAlias(alias *topodatapb.TabletAlias) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, topoproto.TabletAliasUIDStr(alias))
 }
 
@@ -32,7 +32,7 @@ func tabletDirectoryForCell(cell string) string {
 }
 
 // CreateTablet is part of the topo.Server interface
-func (zkts *Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
+func (zkts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
 	zkTabletPath := TabletPathForAlias(tablet.Alias)
 
 	data, err := json.MarshalIndent(tablet, "  ", "  ")
@@ -52,7 +52,7 @@ func (zkts *Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 }
 
 // UpdateTablet is part of the topo.Server interface
-func (zkts *Server) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVersion int64) (int64, error) {
+func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, existingVersion int64) (int64, error) {
 	zkTabletPath := TabletPathForAlias(tablet.Alias)
 	data, err := json.MarshalIndent(tablet, "  ", "  ")
 	if err != nil {
@@ -73,9 +73,9 @@ func (zkts *Server) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existin
 }
 
 // UpdateTabletFields is part of the topo.Server interface
-func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) (*pb.Tablet, error) {
+func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
 	// Store the last tablet value so we can log it if the change succeeds.
-	var lastTablet *pb.Tablet
+	var lastTablet *topodatapb.Tablet
 
 	zkTabletPath := TabletPathForAlias(tabletAlias)
 	f := func(oldValue string, oldStat zk.Stat) (string, error) {
@@ -83,7 +83,7 @@ func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.Tabl
 			return "", fmt.Errorf("no data for tablet addr update: %v", tabletAlias)
 		}
 
-		tablet := &pb.Tablet{}
+		tablet := &topodatapb.Tablet{}
 		if err := json.Unmarshal([]byte(oldValue), tablet); err != nil {
 			return "", err
 		}
@@ -108,7 +108,7 @@ func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.Tabl
 }
 
 // DeleteTablet is part of the topo.Server interface
-func (zkts *Server) DeleteTablet(ctx context.Context, alias *pb.TabletAlias) error {
+func (zkts *Server) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error {
 	zkTabletPath := TabletPathForAlias(alias)
 	if err := zk.DeleteRecursive(zkts.zconn, zkTabletPath, -1); err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
@@ -120,7 +120,7 @@ func (zkts *Server) DeleteTablet(ctx context.Context, alias *pb.TabletAlias) err
 }
 
 // GetTablet is part of the topo.Server interface
-func (zkts *Server) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*pb.Tablet, int64, error) {
+func (zkts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
 	zkTabletPath := TabletPathForAlias(alias)
 	data, stat, err := zkts.zconn.Get(zkTabletPath)
 	if err != nil {
@@ -130,7 +130,7 @@ func (zkts *Server) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*pb.T
 		return nil, 0, err
 	}
 
-	tablet := &pb.Tablet{}
+	tablet := &topodatapb.Tablet{}
 	if err := json.Unmarshal([]byte(data), tablet); err != nil {
 		return nil, 0, err
 	}
@@ -138,7 +138,7 @@ func (zkts *Server) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*pb.T
 }
 
 // GetTabletsByCell is part of the topo.Server interface
-func (zkts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*pb.TabletAlias, error) {
+func (zkts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
 	zkTabletsPath := tabletDirectoryForCell(cell)
 	children, _, err := zkts.zconn.Children(zkTabletsPath)
 	if err != nil {
@@ -149,13 +149,13 @@ func (zkts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*pb.Ta
 	}
 
 	sort.Strings(children)
-	result := make([]*pb.TabletAlias, len(children))
+	result := make([]*topodatapb.TabletAlias, len(children))
 	for i, child := range children {
 		uid, err := topoproto.ParseUID(child)
 		if err != nil {
 			return nil, err
 		}
-		result[i] = &pb.TabletAlias{
+		result[i] = &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  uid,
 		}

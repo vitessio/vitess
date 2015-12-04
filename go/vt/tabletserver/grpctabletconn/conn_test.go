@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconntest"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This test makes sure the go rpc service works
@@ -35,15 +35,7 @@ func TestGoRPCTabletConn(t *testing.T) {
 	go server.Serve(listener)
 
 	// run the test suite
-	tabletconntest.TestSuite(t, protocolName, &pb.EndPoint{
-		Host: host,
-		PortMap: map[string]int32{
-			"grpc": int32(port),
-		},
-	}, service)
-
-	// run the error test suite
-	tabletconntest.TestErrorSuite(t, protocolName, &pb.EndPoint{
+	tabletconntest.TestSuite(t, protocolName, &topodatapb.EndPoint{
 		Host: host,
 		PortMap: map[string]int32{
 			"grpc": int32(port),

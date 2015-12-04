@@ -11,18 +11,16 @@ import (
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
 	actionTimeout = flag.Duration("action_timeout", wrangler.DefaultActionTimeout, "time to wait for an action before resorting to force")
-	lockTimeout   = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
 )
 
 // ActionResult contains the result of an action. If Error, the aciton failed.
@@ -46,7 +44,7 @@ type actionKeyspaceMethod func(ctx context.Context, wr *wrangler.Wrangler, keysp
 
 type actionShardMethod func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (output string, err error)
 
-type actionTabletMethod func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (output string, err error)
+type actionTabletMethod func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (output string, err error)
 
 type actionTabletRecord struct {
 	role   string
@@ -102,7 +100,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(ctx context.Context, actionName,
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), *lockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
 	output, err := action(ctx, wr, keyspace, r)
 	cancel()
 	if err != nil {
@@ -129,7 +127,7 @@ func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, ke
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), *lockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
 	output, err := action(ctx, wr, keyspace, shard, r)
 	cancel()
 	if err != nil {
@@ -141,7 +139,7 @@ func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, ke
 }
 
 // ApplyTabletAction applies the provided action to the tablet.
-func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName string, tabletAlias *pb.TabletAlias, r *http.Request) *ActionResult {
+func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName string, tabletAlias *topodatapb.TabletAlias, r *http.Request) *ActionResult {
 	result := &ActionResult{
 		Name:       actionName,
 		Parameters: topoproto.TabletAliasString(tabletAlias),
@@ -163,7 +161,7 @@ func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName st
 
 	// run the action
 	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), *lockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
 	output, err := action.method(ctx, wr, tabletAlias, r)
 	cancel()
 	if err != nil {

@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 
-import warnings
-# Dropping a table inexplicably produces a warning despite
-# the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter('ignore')
-
 import logging
 import unittest
+
+import MySQLdb
 
 import environment
 import tablet
@@ -31,7 +28,7 @@ def setUpModule():
         tablet_master.init_mysql(),
         tablet_replica1.init_mysql(),
         tablet_replica2.init_mysql(),
-        ]
+    ]
     if use_mysqlctld:
       tablet_master.wait_for_mysqlctl_socket()
       tablet_replica1.wait_for_mysqlctl_socket()
@@ -57,7 +54,7 @@ def tearDownModule():
         tablet_master.teardown_mysql(),
         tablet_replica1.teardown_mysql(),
         tablet_replica2.teardown_mysql(),
-        ]
+    ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()
@@ -123,7 +120,7 @@ class TestBackup(unittest.TestCase):
             'vt_test_keyspace', 'select count(*) from vt_insert_test')
         if result[0][0] == 1:
           break
-      except:
+      except MySQLdb.DatabaseError:
         # ignore exceptions, we'll just timeout (the tablet creation
         # can take some time to replicate, and we get a 'table vt_insert_test
         # does not exist exception in some rare cases)
@@ -168,9 +165,9 @@ class TestBackup(unittest.TestCase):
         auto_log=True, mode=utils.VTCTL_VTCTL)
 
     # make sure the list of backups is empty now
-    backups, err = utils.run_vtctl(tablet.get_backup_storage_flags() +
-                                   ['ListBackups', 'test_keyspace/0'],
-                                   mode=utils.VTCTL_VTCTL, trap_output=True)
+    backups, _ = utils.run_vtctl(tablet.get_backup_storage_flags() +
+                                 ['ListBackups', 'test_keyspace/0'],
+                                 mode=utils.VTCTL_VTCTL, trap_output=True)
     backups = backups.splitlines()
     logging.debug('list of backups after remove: %s', backups)
     self.assertEqual(len(backups), 0)

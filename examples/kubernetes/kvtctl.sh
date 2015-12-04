@@ -8,13 +8,9 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-echo "Getting vtctld address from kubectl..."
-get_vtctld_addr
-if [[ -z "$VTCTLD_ADDR" ]]; then
-  echo "Can't find VTCTLD_ADDR."
-  exit 1
-fi
+echo "Starting port forwarding to vtctld..."
+start_vtctld_forward
+trap stop_vtctld_forward EXIT
 
-echo "Using $VTCTLD_ADDR"
-vtctlclient -server $VTCTLD_ADDR "$@"
+vtctlclient -server localhost:$vtctld_forward_port "$@"
 

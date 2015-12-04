@@ -10,10 +10,10 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -36,8 +36,8 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	// always authorized)
 	tablet := agent.Tablet()
 	originalType := tablet.Type
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *pb.Tablet) error {
-		tablet.Type = pb.TabletType_RESTORE
+	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_RESTORE
 		return nil
 	}); err != nil {
 		return fmt.Errorf("Cannot change type to RESTORE: %v", err)
@@ -63,7 +63,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	}
 
 	// Change type back to original type if we're ok to serve.
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *pb.Tablet) error {
+	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = originalType
 		return nil
 	}); err != nil {
@@ -72,7 +72,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	return nil
 }
 
-func (agent *ActionAgent) startReplication(ctx context.Context, pos myproto.ReplicationPosition) error {
+func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.Position) error {
 	// Set the position at which to resume from the master.
 	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
 	if err != nil {

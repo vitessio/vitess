@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
@@ -36,7 +35,7 @@ func (dbc *DBConnection) handleError(err error) {
 }
 
 // ExecuteFetch is part of PoolConnection interface.
-func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	defer dbc.mysqlStats.Record("Exec", time.Now())
 	mqr, err := dbc.Conn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
@@ -47,7 +46,7 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 }
 
 // ExecuteStreamFetch is part of PoolConnection interface.
-func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error {
+func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	defer dbc.mysqlStats.Record("ExecStream", time.Now())
 
 	err := dbc.Conn.ExecuteStreamFetch(query)
@@ -58,14 +57,14 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*proto.Q
 	defer dbc.CloseResult()
 
 	// first call the callback with the fields
-	err = callback(&proto.QueryResult{Fields: dbc.Fields()})
+	err = callback(&sqltypes.Result{Fields: dbc.Fields()})
 	if err != nil {
 		return fmt.Errorf("stream send error: %v", err)
 	}
 
 	// then get all the rows, sending them as we reach a decent packet size
 	// start with a pre-allocated array of 256 rows capacity
-	qr := &proto.QueryResult{Rows: make([][]sqltypes.Value, 0, 256)}
+	qr := &sqltypes.Result{Rows: make([][]sqltypes.Value, 0, 256)}
 	byteCount := 0
 	for {
 		row, err := dbc.FetchNext()
@@ -77,7 +76,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*proto.Q
 		}
 		qr.Rows = append(qr.Rows, row)
 		for _, s := range row {
-			byteCount += len(s.Raw())
+			byteCount += s.Len()
 		}
 
 		if byteCount >= streamBufferSize {
@@ -102,12 +101,12 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*proto.Q
 	return nil
 }
 
-var getModeSql = "select @@global.sql_mode"
+var getModeSQL = "select @@global.sql_mode"
 
 // VerifyStrict is a helper method to verify mysql is running with
 // sql_mode = STRICT_TRANS_TABLES.
 func (dbc *DBConnection) VerifyStrict() bool {
-	qr, err := dbc.ExecuteFetch(getModeSql, 2, false)
+	qr, err := dbc.ExecuteFetch(getModeSQL, 2, false)
 	if err != nil {
 		return false
 	}

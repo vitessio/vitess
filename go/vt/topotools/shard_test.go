@@ -16,7 +16,7 @@ import (
 
 	. "github.com/youtube/vitess/go/vt/topotools"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TestCreateShard tests a few cases for CreateShard
@@ -36,7 +36,7 @@ func TestCreateShard(t *testing.T) {
 	}
 
 	// create keyspace
-	if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
@@ -57,7 +57,7 @@ func TestCreateShardCustomSharding(t *testing.T) {
 
 	// create keyspace
 	keyspace := "test_keyspace"
-	if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 

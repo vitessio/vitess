@@ -7,8 +7,6 @@ package tabletserver
 import (
 	"reflect"
 	"testing"
-
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 var testCases = []struct {
@@ -66,24 +64,21 @@ var testCases = []struct {
 
 func TestComments(t *testing.T) {
 	for _, testCase := range testCases {
-		query := proto.Query{
-			Sql:           testCase.input,
-			BindVariables: make(map[string]interface{}),
-		}
+		bindVariables := make(map[string]interface{})
+		gotSQL := stripTrailing(testCase.input, bindVariables)
 
-		stripTrailing(&query)
-
-		want := proto.Query{
-			Sql: testCase.outSQL,
-		}
-		want.BindVariables = make(map[string]interface{})
+		wantBindVariables := make(map[string]interface{})
 		if testCase.outVar != "" {
-			want.BindVariables[trailingComment] = testCase.outVar
+			wantBindVariables[trailingComment] = testCase.outVar
 		}
-		if !reflect.DeepEqual(query, want) {
-			t.Errorf("test input: '%s', got\n%+v, want\n%+v", testCase.input, query, want)
+
+		if gotSQL != testCase.outSQL {
+			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
 		}
-		sql := string(restoreTrailing([]byte(testCase.outSQL), want.BindVariables))
+		if !reflect.DeepEqual(bindVariables, wantBindVariables) {
+			t.Errorf("test input: '%s', got bind variables\n%+v, want\n%+v", testCase.input, bindVariables, wantBindVariables)
+		}
+		sql := string(restoreTrailing([]byte(testCase.outSQL), wantBindVariables))
 		if !reflect.DeepEqual(testCase.input, sql) {
 			t.Fatalf("failed to restore to original sql, got: %s, want: %s", sql, testCase.input)
 		}

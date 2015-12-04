@@ -13,14 +13,14 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sync2"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // VerticalSplitDiffWorker executes a diff between a destination shard and its
@@ -42,12 +42,12 @@ type VerticalSplitDiffWorker struct {
 	shardInfo    *topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAlias      *pb.TabletAlias
-	destinationAlias *pb.TabletAlias
+	sourceAlias      *topodatapb.TabletAlias
+	destinationAlias *topodatapb.TabletAlias
 
 	// populated during WorkerStateDiff
-	sourceSchemaDefinition      *myproto.SchemaDefinition
-	destinationSchemaDefinition *myproto.SchemaDefinition
+	sourceSchemaDefinition      *tabletmanagerdatapb.SchemaDefinition
+	destinationSchemaDefinition *tabletmanagerdatapb.SchemaDefinition
 }
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
@@ -227,14 +227,16 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	vsdw.SetState(WorkerStateSyncReplication)
 
-	masterInfo, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.shardInfo.MasterAlias)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	masterInfo, err := vsdw.wr.TopoServer().GetTablet(shortCtx, vsdw.shardInfo.MasterAlias)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
 
 	// 1 - stop the master binlog replication, get its current position
 	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias))
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(shortCtx, masterInfo)
 	cancel()
 	if err != nil {
@@ -244,30 +246,32 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 
 	// 2 - stop the source tablet at a binlog position
 	//     higher than the destination master
-	stopPositionList := blproto.BlpPositionList{
-		Entries: make([]blproto.BlpPosition, 1),
-	}
+	stopPositionList := make([]*tabletmanagerdatapb.BlpPosition, 1)
 	ss := vsdw.shardInfo.SourceShards[0]
 	// find where we should be stopping
-	pos, err := blpPositionList.FindBlpPositionById(ss.Uid)
-	if err != nil {
+	blpPos := tmutils.FindBlpPositionByID(blpPositionList, ss.Uid)
+	if blpPos == nil {
 		return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 	}
 
 	// stop replication
-	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", topoproto.TabletAliasString(vsdw.sourceAlias), pos.Position)
-	sourceTablet, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.sourceAlias)
+	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", topoproto.TabletAliasString(vsdw.sourceAlias), blpPos.Position)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	sourceTablet, err := vsdw.wr.TopoServer().GetTablet(shortCtx, vsdw.sourceAlias)
+	cancel()
 	if err != nil {
 		return err
 	}
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, pos.Position, *remoteActionsTimeout)
+	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, blpPos.Position, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), pos.Position, err)
+		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), blpPos.Position, err)
 	}
-	stopPositionList.Entries[0].Uid = ss.Uid
-	stopPositionList.Entries[0].Position = stoppedAt
+	stopPositionList[0] = &tabletmanagerdatapb.BlpPosition{
+		Uid:      ss.Uid,
+		Position: stoppedAt,
+	}
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
@@ -276,13 +280,13 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), err)
 	}
-	action.TabletType = pb.TabletType_SPARE
+	action.TabletType = topodatapb.TabletType_SPARE
 
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), stopPositionList)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, &stopPositionList, *remoteActionsTimeout)
+	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, stopPositionList, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), stopPositionList, err)
@@ -291,7 +295,9 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	// 4 - wait until the destination tablet is equal or passed
 	//     that master binlog position, and stop its replication.
 	vsdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", topoproto.TabletAliasString(vsdw.destinationAlias), masterPos)
-	destinationTablet, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.destinationAlias)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	destinationTablet, err := vsdw.wr.TopoServer().GetTablet(shortCtx, vsdw.destinationAlias)
+	cancel()
 	if err != nil {
 		return err
 	}
@@ -306,7 +312,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(vsdw.destinationAlias), err)
 	}
-	action.TabletType = pb.TabletType_SPARE
+	action.TabletType = topodatapb.TabletType_SPARE
 
 	// 5 - restart filtered replication on destination master
 	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias))
@@ -372,7 +378,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	}
 
 	// Remove the tables we don't need from the source schema
-	newSourceTableDefinitions := make([]*myproto.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
+	newSourceTableDefinitions := make([]*tabletmanagerdatapb.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
 	for _, tableDefinition := range vsdw.sourceSchemaDefinition.TableDefinitions {
 		found := false
 		for _, tableRegexp := range tableRegexps {
@@ -392,7 +398,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	// Check the schema
 	vsdw.wr.Logger().Infof("Diffing the schema...")
 	rec = concurrency.AllErrorRecorder{}
-	myproto.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, &rec)
+	tmutils.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, &rec)
 	if rec.HasErrors() {
 		vsdw.wr.Logger().Warningf("Different schemas: %v", rec.Error())
 	} else {
@@ -404,7 +410,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range vsdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition *myproto.TableDefinition) {
+		go func(tableDefinition *tabletmanagerdatapb.TableDefinition) {
 			defer wg.Done()
 			sem.Acquire()
 			defer sem.Release()

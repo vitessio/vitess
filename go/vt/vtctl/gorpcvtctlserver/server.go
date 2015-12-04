@@ -44,13 +44,13 @@ func (s *VtctlServer) ExecuteVtctlCommand(ctx context.Context, query *gorpcproto
 			// we still need to flush and finish the
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
-			sendReply(&e)
+			sendReply(e)
 		}
 		wg.Done()
 	}()
 
 	// create the wrangler
-	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient(), query.LockTimeout)
+	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient())
 	// FIXME(alainjobart) use a single context, copy the source info from it
 	ctx, cancel := context.WithTimeout(context.TODO(), query.ActionTimeout)
 

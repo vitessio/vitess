@@ -2,7 +2,7 @@
 sudo: false
 language: go
 go:
-  - 1.4
+  - 1.5
 addons:
   apt:
     sources:
@@ -47,18 +47,24 @@ cache:
   - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
   - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
   - $HOME/gopath/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages
-  - $HOME/gopath/dist/vt-zookeeper-3.3.5/.build_finished
-  - $HOME/gopath/dist/vt-zookeeper-3.3.5/include
-  - $HOME/gopath/dist/vt-zookeeper-3.3.5/lib
+  - $HOME/gopath/dist/vt-zookeeper-3.4.6/.build_finished
+  - $HOME/gopath/dist/vt-zookeeper-3.4.6/include
+  - $HOME/gopath/dist/vt-zookeeper-3.4.6/lib
   # Maven repository for Java dependencies.
   - $HOME/.m2
   - $HOME/.phpenv
 before_cache:
   # Travis CI caching doesn't work with this symlink. Just delete it.
   - rm $HOME/gopath/bin/zksrv.sh
-  # Delete this file because it keeps changing (having the latest timestamp of an update)
-  # and triggers a lengthy update of the cache (~19 seconds).
+  # Delete these files because they keep changing (having the latest timestamp
+  # of an update) and trigger a lengthy update of the cache (~25 seconds).
   - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/resolver-status.properties
+  - rm $HOME/.m2/repository/io/grpc/protoc-gen-grpc-java/*/protoc-gen-grpc-java-*.pom.lastUpdated
+  # Don't cache unnecessary PHP files.
+  - rm $HOME/.phpenv/versions/*/sbin/*
+  - rm $HOME/.phpenv/versions/*/bin/php-cgi
+  - find $HOME/.phpenv/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf
+  - find $HOME/.phpenv/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
 env:
   global:
     - MYSQL_FLAVOR=MariaDB

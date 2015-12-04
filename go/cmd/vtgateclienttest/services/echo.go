@@ -15,14 +15,12 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // EchoPrefix is the prefix to send with queries so they go
@@ -60,21 +58,21 @@ func printSortedMap(val reflect.Value) []byte {
 	return buf.Bytes()
 }
 
-func echoQueryResult(vals map[string]interface{}) *mproto.QueryResult {
-	qr := &mproto.QueryResult{}
+func echoQueryResult(vals map[string]interface{}) *sqltypes.Result {
+	qr := &sqltypes.Result{}
 
 	var row []sqltypes.Value
 
 	// The first two returned fields are always a field with a MySQL NULL value,
 	// and another field with a zero-length string.
 	// Client tests can use this to check that they correctly distinguish the two.
-	qr.Fields = append(qr.Fields, mproto.Field{Name: "null", Type: mproto.VT_VAR_STRING})
+	qr.Fields = append(qr.Fields, &querypb.Field{Name: "null", Type: sqltypes.VarBinary})
 	row = append(row, sqltypes.NULL)
-	qr.Fields = append(qr.Fields, mproto.Field{Name: "emptyString", Type: mproto.VT_VAR_STRING})
-	row = append(row, sqltypes.MakeString(nil))
+	qr.Fields = append(qr.Fields, &querypb.Field{Name: "emptyString", Type: sqltypes.VarBinary})
+	row = append(row, sqltypes.MakeString([]byte("")))
 
 	for k, v := range vals {
-		qr.Fields = append(qr.Fields, mproto.Field{Name: k, Type: mproto.VT_VAR_STRING})
+		qr.Fields = append(qr.Fields, &querypb.Field{Name: k, Type: sqltypes.VarBinary})
 
 		val := reflect.ValueOf(v)
 		if val.Kind() == reflect.Map {
@@ -88,25 +86,23 @@ func echoQueryResult(vals map[string]interface{}) *mproto.QueryResult {
 	return qr
 }
 
-func (c *echoClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *echoClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		reply.Result = echoQueryResult(map[string]interface{}{
+		return echoQueryResult(map[string]interface{}{
 			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
 			"tabletType":       tabletType,
 			"session":          session,
 			"notInTransaction": notInTransaction,
-		})
-		reply.Session = session
-		return nil
+		}), nil
 	}
-	return c.fallbackClient.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
+	return c.fallbackClient.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction)
 }
 
-func (c *echoClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *echoClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		reply.Result = echoQueryResult(map[string]interface{}{
+		return echoQueryResult(map[string]interface{}{
 			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
@@ -115,16 +111,14 @@ func (c *echoClient) ExecuteShards(ctx context.Context, sql string, bindVariable
 			"tabletType":       tabletType,
 			"session":          session,
 			"notInTransaction": notInTransaction,
-		})
-		reply.Session = session
-		return nil
+		}), nil
 	}
-	return c.fallbackClient.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction, reply)
+	return c.fallbackClient.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction)
 }
 
-func (c *echoClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *echoClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		reply.Result = echoQueryResult(map[string]interface{}{
+		return echoQueryResult(map[string]interface{}{
 			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
@@ -133,16 +127,14 @@ func (c *echoClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 			"tabletType":       tabletType,
 			"session":          session,
 			"notInTransaction": notInTransaction,
-		})
-		reply.Session = session
-		return nil
+		}), nil
 	}
-	return c.fallbackClient.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction, reply)
+	return c.fallbackClient.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction)
 }
 
-func (c *echoClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *echoClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		reply.Result = echoQueryResult(map[string]interface{}{
+		return echoQueryResult(map[string]interface{}{
 			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
@@ -151,16 +143,14 @@ func (c *echoClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVaria
 			"tabletType":       tabletType,
 			"session":          session,
 			"notInTransaction": notInTransaction,
-		})
-		reply.Session = session
-		return nil
+		}), nil
 	}
-	return c.fallbackClient.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction, reply)
+	return c.fallbackClient.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction)
 }
 
-func (c *echoClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *echoClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		reply.Result = echoQueryResult(map[string]interface{}{
+		return echoQueryResult(map[string]interface{}{
 			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
@@ -170,20 +160,19 @@ func (c *echoClient) ExecuteEntityIds(ctx context.Context, sql string, bindVaria
 			"tabletType":       tabletType,
 			"session":          session,
 			"notInTransaction": notInTransaction,
-		})
-		reply.Session = session
-		return nil
+		}), nil
 	}
-	return c.fallbackClient.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, reply)
+	return c.fallbackClient.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction)
 }
 
-func (c *echoClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
-	if len(queries) > 0 && strings.HasPrefix(queries[0].Sql, EchoPrefix) {
+func (c *echoClient) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session) ([]sqltypes.Result, error) {
+	if len(queries) > 0 && strings.HasPrefix(queries[0].Query.Sql, EchoPrefix) {
+		var result []sqltypes.Result
 		for _, query := range queries {
-			reply.List = append(reply.List, *echoQueryResult(map[string]interface{}{
+			result = append(result, *echoQueryResult(map[string]interface{}{
 				"callerId":      callerid.EffectiveCallerIDFromContext(ctx),
-				"query":         query.Sql,
-				"bindVars":      query.BindVariables,
+				"query":         query.Query.Sql,
+				"bindVars":      query.Query.BindVariables,
 				"keyspace":      query.Keyspace,
 				"shards":        query.Shards,
 				"tabletType":    tabletType,
@@ -191,19 +180,19 @@ func (c *echoClient) ExecuteBatchShards(ctx context.Context, queries []proto.Bou
 				"asTransaction": asTransaction,
 			}))
 		}
-		reply.Session = session
-		return nil
+		return result, nil
 	}
-	return c.fallbackClient.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, session, reply)
+	return c.fallbackClient.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, session)
 }
 
-func (c *echoClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
-	if len(queries) > 0 && strings.HasPrefix(queries[0].Sql, EchoPrefix) {
+func (c *echoClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session) ([]sqltypes.Result, error) {
+	if len(queries) > 0 && strings.HasPrefix(queries[0].Query.Sql, EchoPrefix) {
+		var result []sqltypes.Result
 		for _, query := range queries {
-			reply.List = append(reply.List, *echoQueryResult(map[string]interface{}{
+			result = append(result, *echoQueryResult(map[string]interface{}{
 				"callerId":      callerid.EffectiveCallerIDFromContext(ctx),
-				"query":         query.Sql,
-				"bindVars":      query.BindVariables,
+				"query":         query.Query.Sql,
+				"bindVars":      query.Query.BindVariables,
 				"keyspace":      query.Keyspace,
 				"keyspaceIds":   query.KeyspaceIds,
 				"tabletType":    tabletType,
@@ -211,87 +200,82 @@ func (c *echoClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []prot
 				"asTransaction": asTransaction,
 			}))
 		}
-		reply.Session = session
-		return nil
+		return result, nil
 	}
-	return c.fallbackClient.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session, reply)
+	return c.fallbackClient.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session)
 }
 
-func (c *echoClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+func (c *echoClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		sendReply(&proto.QueryResult{
-			Result: echoQueryResult(map[string]interface{}{
-				"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
-				"query":      sql,
-				"bindVars":   bindVariables,
-				"tabletType": tabletType,
-			})})
+		sendReply(echoQueryResult(map[string]interface{}{
+			"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
+			"query":      sql,
+			"bindVars":   bindVariables,
+			"tabletType": tabletType,
+		}))
 		return nil
 	}
 	return c.fallbackClient.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
 }
 
-func (c *echoClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+func (c *echoClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		sendReply(&proto.QueryResult{
-			Result: echoQueryResult(map[string]interface{}{
-				"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
-				"query":      sql,
-				"bindVars":   bindVariables,
-				"keyspace":   keyspace,
-				"shards":     shards,
-				"tabletType": tabletType,
-			})})
+		sendReply(echoQueryResult(map[string]interface{}{
+			"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
+			"query":      sql,
+			"bindVars":   bindVariables,
+			"keyspace":   keyspace,
+			"shards":     shards,
+			"tabletType": tabletType,
+		}))
 		return nil
 	}
 	return c.fallbackClient.StreamExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, sendReply)
 }
 
-func (c *echoClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+func (c *echoClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		sendReply(&proto.QueryResult{
-			Result: echoQueryResult(map[string]interface{}{
-				"callerId":    callerid.EffectiveCallerIDFromContext(ctx),
-				"query":       sql,
-				"bindVars":    bindVariables,
-				"keyspace":    keyspace,
-				"keyspaceIds": keyspaceIds,
-				"tabletType":  tabletType,
-			})})
+		sendReply(echoQueryResult(map[string]interface{}{
+			"callerId":    callerid.EffectiveCallerIDFromContext(ctx),
+			"query":       sql,
+			"bindVars":    bindVariables,
+			"keyspace":    keyspace,
+			"keyspaceIds": keyspaceIds,
+			"tabletType":  tabletType,
+		}))
 		return nil
 	}
 	return c.fallbackClient.StreamExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, sendReply)
 }
 
-func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		sendReply(&proto.QueryResult{
-			Result: echoQueryResult(map[string]interface{}{
-				"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
-				"query":      sql,
-				"bindVars":   bindVariables,
-				"keyspace":   keyspace,
-				"keyRanges":  keyRanges,
-				"tabletType": tabletType,
-			})})
+		sendReply(echoQueryResult(map[string]interface{}{
+			"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
+			"query":      sql,
+			"bindVars":   bindVariables,
+			"keyspace":   keyspace,
+			"keyRanges":  keyRanges,
+			"tabletType": tabletType,
+		}))
 		return nil
 	}
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
 }
 
-func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]*pbg.SplitQueryResponse_Part, error) {
+func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		bv, err := tproto.BindVariablesToProto3(bindVariables)
+		bv, err := querytypes.BindVariablesToProto3(bindVariables)
 		if err != nil {
 			return nil, err
 		}
-		return []*pbg.SplitQueryResponse_Part{
-			&pbg.SplitQueryResponse_Part{
-				Query: &pbq.BoundQuery{
+		return []*vtgatepb.SplitQueryResponse_Part{
+			&vtgatepb.SplitQueryResponse_Part{
+				Query: &querypb.BoundQuery{
 					Sql:           fmt.Sprintf("%v:%v:%v", sql, splitColumn, splitCount),
 					BindVariables: bv,
 				},
-				KeyRangePart: &pbg.SplitQueryResponse_KeyRangePart{
+				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
 					Keyspace: keyspace,
 				},
 			},

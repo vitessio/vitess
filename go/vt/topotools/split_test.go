@@ -6,7 +6,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // helper methods for tests to be shorter
@@ -22,8 +22,8 @@ func hki(hexValue string) []byte {
 func si(start, end string) *topo.ShardInfo {
 	s := hki(start)
 	e := hki(end)
-	return topo.NewShardInfo("keyspace", start+"-"+end, &pb.Shard{
-		KeyRange: &pb.KeyRange{
+	return topo.NewShardInfo("keyspace", start+"-"+end, &topodatapb.Shard{
+		KeyRange: &topodatapb.KeyRange{
 			Start: s,
 			End:   e,
 		},

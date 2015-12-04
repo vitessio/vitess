@@ -20,9 +20,11 @@ import (
 	"unsafe"
 
 	"github.com/youtube/vitess/go/hack"
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -212,7 +214,7 @@ func (conn *Connection) IsClosed() bool {
 }
 
 // ExecuteFetch executes the query on the connection
-func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
+func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *sqltypes.Result, err error) {
 	if conn.IsClosed() {
 		return nil, sqldb.NewSQLError(2006, "Connection is closed")
 	}
@@ -222,9 +224,9 @@ func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool)
 	}
 	defer conn.CloseResult()
 
-	qr = &proto.QueryResult{}
+	qr = &sqltypes.Result{}
 	qr.RowsAffected = uint64(conn.c.affected_rows)
-	qr.InsertId = uint64(conn.c.insert_id)
+	qr.InsertID = uint64(conn.c.insert_id)
 	if conn.c.num_fields == 0 {
 		return qr, nil
 	}
@@ -277,7 +279,7 @@ func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 }
 
 // Fields returns the current fields description for the query
-func (conn *Connection) Fields() (fields []proto.Field) {
+func (conn *Connection) Fields() (fields []*querypb.Field) {
 	nfields := int(conn.c.num_fields)
 	if nfields == 0 {
 		return nil
@@ -287,13 +289,14 @@ func (conn *Connection) Fields() (fields []proto.Field) {
 	for i := 0; i < nfields; i++ {
 		totalLength += uint64(cfields[i].name_length)
 	}
-	fields = make([]proto.Field, nfields)
+	fields = make([]*querypb.Field, nfields)
+	fvals := make([]querypb.Field, nfields)
 	for i := 0; i < nfields; i++ {
 		length := cfields[i].name_length
 		fname := (*[maxSize]byte)(unsafe.Pointer(cfields[i].name))[:length]
-		fields[i].Name = string(fname)
-		fields[i].Type = int64(cfields[i]._type)
-		fields[i].Flags = int64(cfields[i].flags) & RelevantFlags
+		fvals[i].Name = string(fname)
+		fvals[i].Type = sqltypes.MySQLToType(int64(cfields[i]._type), int64(cfields[i].flags))
+		fields[i] = &fvals[i]
 	}
 	return fields
 }
@@ -340,7 +343,11 @@ func (conn *Connection) FetchNext() (row []sqltypes.Value, err error) {
 		}
 		start := len(arena)
 		arena = append(arena, colPtr[:colLength]...)
-		row[i] = BuildValue(arena[start:start+int(colLength)], cfields[i]._type)
+		// MySQL values can be trusted.
+		row[i] = sqltypes.MakeTrusted(
+			sqltypes.MySQLToType(int64(cfields[i]._type), int64(cfields[i].flags)),
+			arena[start:start+int(colLength)],
+		)
 	}
 	return row, nil
 }
@@ -412,69 +419,51 @@ func (conn *Connection) Shutdown() {
 
 // GetCharset returns the current numerical values of the per-session character
 // set variables.
-func (conn *Connection) GetCharset() (cs proto.Charset, err error) {
+func (conn *Connection) GetCharset() (*binlogdatapb.Charset, error) {
 	// character_set_client
 	row, err := conn.ExecuteFetchMap("SHOW COLLATION WHERE `charset`=@@session.character_set_client AND `default`='Yes'")
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	i, err := strconv.ParseInt(row["Id"], 10, 16)
+	client, err := strconv.ParseInt(row["Id"], 10, 16)
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	cs.Client = int(i)
 
 	// collation_connection
 	row, err = conn.ExecuteFetchMap("SHOW COLLATION WHERE `collation`=@@session.collation_connection")
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	i, err = strconv.ParseInt(row["Id"], 10, 16)
+	connection, err := strconv.ParseInt(row["Id"], 10, 16)
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	cs.Conn = int(i)
 
 	// collation_server
 	row, err = conn.ExecuteFetchMap("SHOW COLLATION WHERE `collation`=@@session.collation_server")
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	i, err = strconv.ParseInt(row["Id"], 10, 16)
+	server, err := strconv.ParseInt(row["Id"], 10, 16)
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	cs.Server = int(i)
 
-	return cs, nil
+	return &binlogdatapb.Charset{
+		Client: int32(client),
+		Conn:   int32(connection),
+		Server: int32(server),
+	}, nil
 }
 
 // SetCharset changes the per-session character set variables.
-func (conn *Connection) SetCharset(cs proto.Charset) error {
+func (conn *Connection) SetCharset(cs *binlogdatapb.Charset) error {
 	sql := fmt.Sprintf(
 		"SET @@session.character_set_client=%d, @@session.collation_connection=%d, @@session.collation_server=%d",
 		cs.Client, cs.Conn, cs.Server)
 	_, err := conn.ExecuteFetch(sql, 1, false)
 	return err
-}
-
-// BuildValue returns a sqltypes.Value from the passed in fields
-func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {
-	if bytes == nil {
-		return sqltypes.NULL
-	}
-	switch fieldType {
-	case typeDecimal, TypeFloat, TypeDouble, TypeNewDecimal:
-		return sqltypes.MakeFractional(bytes)
-	case TypeTimestamp:
-		return sqltypes.MakeString(bytes)
-	}
-	// The below condition represents the following list of values:
-	// TypeTiny, TypeShort, TypeLong, TypeLonglong, TypeInt24, TypeYear:
-	if fieldType <= TypeInt24 || fieldType == TypeYear {
-		return sqltypes.MakeNumeric(bytes)
-	}
-	return sqltypes.MakeString(bytes)
 }
 
 func cfree(str *C.char) {

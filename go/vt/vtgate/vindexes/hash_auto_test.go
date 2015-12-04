@@ -11,10 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var hashAuto planbuilder.Vindex
@@ -133,11 +134,11 @@ func TestHashAutoReverseMap(t *testing.T) {
 type vcursor struct {
 	mustFail bool
 	numRows  int
-	result   *mproto.QueryResult
-	query    *tproto.BoundQuery
+	result   *sqltypes.Result
+	query    *querytypes.BoundQuery
 }
 
-func (vc *vcursor) Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error) {
+func (vc *vcursor) Execute(query *querytypes.BoundQuery) (*sqltypes.Result, error) {
 	vc.query = query
 	if vc.mustFail {
 		return nil, errors.New("execute failed")
@@ -147,22 +148,22 @@ func (vc *vcursor) Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error
 		if vc.result != nil {
 			return vc.result, nil
 		}
-		result := &mproto.QueryResult{
-			Fields: []mproto.Field{{
-				Type: mproto.VT_LONG,
+		result := &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Int32,
 			}},
 			RowsAffected: uint64(vc.numRows),
 		}
 		for i := 0; i < vc.numRows; i++ {
 			result.Rows = append(result.Rows, []sqltypes.Value{
-				sqltypes.MakeNumeric([]byte(fmt.Sprintf("%d", i+1))),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", i+1))),
 			})
 		}
 		return result, nil
 	case strings.HasPrefix(query.Sql, "insert"):
-		return &mproto.QueryResult{InsertId: 1}, nil
+		return &sqltypes.Result{InsertID: 1}, nil
 	case strings.HasPrefix(query.Sql, "delete"):
-		return &mproto.QueryResult{}, nil
+		return &sqltypes.Result{}, nil
 	}
 	panic("unexpected")
 }
@@ -173,7 +174,7 @@ func TestHashAutoCreate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "insert into t(c) values(:c)",
 		BindVariables: map[string]interface{}{
 			"c": 1,
@@ -202,7 +203,7 @@ func TestHashAutoGenerate(t *testing.T) {
 	if got != 1 {
 		t.Errorf("Generate(): %+v, want 1", got)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "insert into t(c) values(:c)",
 		BindVariables: map[string]interface{}{
 			"c": nil,
@@ -228,7 +229,7 @@ func TestHashAutoDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "delete from t where c in ::c",
 		BindVariables: map[string]interface{}{
 			"c": []interface{}{1},

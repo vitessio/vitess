@@ -7,10 +7,9 @@ package testlib
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -18,34 +17,34 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestPlannedReparentShard(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Create a master, a couple good slaves
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, pb.TabletType_REPLICA, db)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
+	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, db)
 
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
-	newMaster.FakeMysqlDaemon.WaitMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.WaitMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   7,
 			Server:   123,
 			Sequence: 990,
 		},
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.PromoteSlaveResult = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   7,
 			Server:   456,
 			Sequence: 991,

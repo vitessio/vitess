@@ -3,17 +3,19 @@ package logutil
 import (
 	"testing"
 	"time"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
 func TestLoggerEventFormat(t *testing.T) {
 	testValues := []struct {
-		event    LoggerEvent
+		event    *logutilpb.Event
 		expected string
 	}{
 		{
-			event: LoggerEvent{
-				Time:  time.Date(2014, time.November, 10, 23, 30, 12, 123456000, time.UTC),
-				Level: LOGGER_INFO,
+			event: &logutilpb.Event{
+				Time:  TimeToProto(time.Date(2014, time.November, 10, 23, 30, 12, 123456000, time.UTC)),
+				Level: logutilpb.Level_INFO,
 				File:  "file.go",
 				Line:  123,
 				Value: "message",
@@ -21,9 +23,9 @@ func TestLoggerEventFormat(t *testing.T) {
 			expected: "I1110 23:30:12.123456 file.go:123] message",
 		},
 		{
-			event: LoggerEvent{
-				Time:  time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC),
-				Level: LOGGER_WARNING,
+			event: &logutilpb.Event{
+				Time:  TimeToProto(time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC)),
+				Level: logutilpb.Level_WARNING,
 				File:  "file2.go",
 				Line:  567,
 				Value: "message %v %v",
@@ -31,9 +33,9 @@ func TestLoggerEventFormat(t *testing.T) {
 			expected: "W0120 23:30:12.000000 file2.go:567] message %v %v",
 		},
 		{
-			event: LoggerEvent{
-				Time:  time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC),
-				Level: LOGGER_CONSOLE,
+			event: &logutilpb.Event{
+				Time:  TimeToProto(time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC)),
+				Level: logutilpb.Level_CONSOLE,
 				File:  "file2.go",
 				Line:  567,
 				Value: "message %v %v",
@@ -42,7 +44,7 @@ func TestLoggerEventFormat(t *testing.T) {
 		},
 	}
 	for _, testValue := range testValues {
-		got := testValue.event.String()
+		got := EventString(testValue.event)
 		if testValue.expected != got {
 			t.Errorf("invalid printing of %v: expected '%v' got '%v'", testValue.event, testValue.expected, got)
 		}
@@ -92,25 +94,25 @@ func TestTeeLogger(t *testing.T) {
 		if ml.Events[0].Value != "test infof 1 2" {
 			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[0].Value)
 		}
-		if ml.Events[0].Level != LOGGER_INFO {
+		if ml.Events[0].Level != logutilpb.Level_INFO {
 			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[0].Level)
 		}
 		if ml.Events[1].Value != "test warningf 2 3" {
 			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[1].Value)
 		}
-		if ml.Events[1].Level != LOGGER_WARNING {
+		if ml.Events[1].Level != logutilpb.Level_WARNING {
 			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[1].Level)
 		}
 		if ml.Events[2].Value != "test errorf 3 4" {
 			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[2].Value)
 		}
-		if ml.Events[2].Level != LOGGER_ERROR {
+		if ml.Events[2].Level != logutilpb.Level_ERROR {
 			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[2].Level)
 		}
 		if ml.Events[3].Value != "test printf 4 5" {
 			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[3].Value)
 		}
-		if ml.Events[3].Level != LOGGER_CONSOLE {
+		if ml.Events[3].Level != logutilpb.Level_CONSOLE {
 			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[3].Level)
 		}
 	}

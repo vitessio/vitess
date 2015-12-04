@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -19,27 +19,27 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestEmergencyReparentShard(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Create a master, a couple good slaves
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, pb.TabletType_REPLICA, db)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
+	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, db)
 
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
-	newMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 456,
@@ -51,8 +51,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.PromoteSlaveResult = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 456,
@@ -69,8 +69,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
 	goodSlave1.FakeMysqlDaemon.Replicating = true
-	goodSlave1.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	goodSlave1.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 455,
@@ -89,8 +89,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// good slave 2 is not replicating
 	goodSlave2.FakeMysqlDaemon.ReadOnly = true
 	goodSlave2.FakeMysqlDaemon.Replicating = false
-	goodSlave2.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	goodSlave2.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 454,
@@ -146,17 +146,17 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create a master, a couple good slaves
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER, db)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA, db)
-	moreAdvancedSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA, db)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	moreAdvancedSlave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 
 	// new master
 	newMaster.FakeMysqlDaemon.Replicating = true
-	newMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 456,
@@ -174,8 +174,8 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 
 	// more advanced slave
 	moreAdvancedSlave.FakeMysqlDaemon.Replicating = true
-	moreAdvancedSlave.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	moreAdvancedSlave.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 457,

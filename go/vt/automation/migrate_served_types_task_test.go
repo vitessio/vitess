@@ -30,24 +30,10 @@ func TestMigrateServedTypesTask(t *testing.T) {
 	}
 	testTask(t, "MigrateServedTypes", task, parameters)
 
-	fake.RegisterResult([]string{"MigrateServedTypes", "--reverse=true", "test_keyspace/0", "rdonly"},
+	fake.RegisterResult([]string{"MigrateServedTypes", "--cells=cell1", "--reverse=true", "test_keyspace/0", "rdonly"},
 		"",  // No output.
 		nil) // No error.
+	parameters["cell"] = "cell1"
 	parameters["reverse"] = "true"
 	testTask(t, "MigrateServedTypes", task, parameters)
-}
-
-func testTask(t *testing.T, test string, task Task, parameters map[string]string) {
-	err := validateParameters(task, parameters)
-	if err != nil {
-		t.Fatalf("%s: Not all required parameters were specified: %v", test, err)
-	}
-
-	newTasks, _ /* output */, err := task.Run(parameters)
-	if newTasks != nil {
-		t.Errorf("%s: Task should not emit new tasks: %v", test, newTasks)
-	}
-	if err != nil {
-		t.Errorf("%s: Task should not fail: %v", err, test)
-	}
 }

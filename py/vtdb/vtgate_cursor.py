@@ -15,8 +15,8 @@ write_sql_pattern = re.compile(r'\s*(insert|update|delete)', re.IGNORECASE)
 
 
 def ascii_lower(string):
-    """Lower-case, but only in the ASCII range."""
-    return string.encode('utf8').lower().decode('utf8')
+  """Lower-case, but only in the ASCII range."""
+  return string.encode('utf8').lower().decode('utf8')
 
 
 class VTGateCursorMixin(object):
@@ -46,6 +46,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
       keyspace_ids: Struct('!Q').packed keyspace IDs.
       keyranges: Str keyranges.
       writable: True if writable.
+      as_transaction: True if an executemany call is its own transaction.
     """
     super(VTGateCursor, self).__init__()
     self._conn = connection
@@ -66,6 +67,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
   # pass kargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
+    """Perform a query, return the number of rows affected."""
     self._clear_list_state()
     self._clear_batch_state()
     if self._handle_transaction_sql(sql):
@@ -82,7 +84,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
         raise dbexceptions.DatabaseError(
             'entity_keyspace_id_map is not allowed for write queries')
     self.results, self.rowcount, self.lastrowid, self.description = (
-        self.connection._execute(
+        self.connection._execute(  # pylint: disable=protected-access
             sql,
             bind_variables,
             self.keyspace,
@@ -99,6 +101,22 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     return func(row[0] for row in self.fetchall())
 
   def fetch_aggregate(self, order_by_columns, limit):
+    """Fetch from many shards, sort, then remove sort columns.
+
+    A scatter query may return up to limit rows. Sort all results
+    manually order them, and return the first rows.
+
+    This is a special-use function.
+
+    Args:
+      order_by_columns: The ORDER BY clause. Each element is either a
+        column, [column, 'ASC'], or [column, 'DESC'].
+      limit: Int limit.
+
+    Returns:
+      Smallest rows, with up to limit items. First len(order_by_columns)
+        columns are stripped.
+    """
     sort_columns = []
     desc_columns = []
     for order_clause in order_by_columns:
@@ -141,7 +159,6 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
       sql: The sql text, with %(format)s-style tokens. May be None.
       params_list: A list of the keyword params that are normally sent
         to execute. Either the sql arg or params['sql'] must be defined.
-
     """
     if sql:
       sql_list = [sql] * len(params_list)
@@ -153,7 +170,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     shards_list = [params.get('shards') for params in params_list]
     self._clear_batch_state()
     #  Find other _execute_batch calls in test code.
-    self.result_sets = self.connection._execute_batch(
+    self.result_sets = self.connection._execute_batch(  # pylint: disable=protected-access
         sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
         shards_list,
         self.tablet_type, self.as_transaction, self.effective_caller_id)
@@ -209,10 +226,12 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
   # pass kargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
+    """Start a streaming query."""
+    _ = kargs
     if self._writable:
       raise dbexceptions.ProgrammingError('Streaming query cannot be writable')
     self._clear_stream_state()
-    self.generator, self.description = self.connection._stream_execute(
+    self.generator, self.description = self.connection._stream_execute(  # pylint: disable=protected-access
         sql,
         bind_variables,
         self.keyspace,
@@ -224,8 +243,8 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
     return 0
 
 
-# assumes the leading columns are used for sorting
 def sort_row_list_by_columns(row_list, sort_columns=(), desc_columns=()):
+  """Sort by leading sort columns by stable-sorting in reverse-index order."""
   for column_index, column_name in reversed(
       [x for x in enumerate(sort_columns)]):
     og = operator.itemgetter(column_index)

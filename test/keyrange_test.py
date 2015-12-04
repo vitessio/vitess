@@ -2,7 +2,6 @@
 
 import struct
 import unittest
-import utils
 
 from vtdb import dbexceptions
 from vtdb import keyrange
@@ -69,10 +68,10 @@ class TestKeyRange(unittest.TestCase):
     self.assertEqual(str(kr), keyrange_constants.NON_PARTIAL_KEYRANGE)
 
     for kr_str in int_shard_kid_map:
-      Start_raw, End_raw = kr_str.split('-')
+      start_raw, end_raw = kr_str.split('-')
       kr = keyrange.KeyRange(kr_str)
-      self.assertEqual(kr.Start, Start_raw.strip().decode('hex'))
-      self.assertEqual(kr.End, End_raw.strip().decode('hex'))
+      self.assertEqual(kr.Start, start_raw.strip().decode('hex'))
+      self.assertEqual(kr.End, end_raw.strip().decode('hex'))
       self.assertEqual(str(kr), kr_str)
 
   def test_incorrect_tasks(self):
@@ -95,10 +94,10 @@ class TestKeyRange(unittest.TestCase):
       kr_parts = kr.split('-')
       where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(kr)
       if len(bind_vars.keys()) == 1:
-        if kr_parts[0] == '':
-          self.assertNotEqual(where_clause.find('<'), -1)
-        else:
+        if kr_parts[0]:
           self.assertNotEqual(where_clause.find('>='), -1)
+        else:
+          self.assertNotEqual(where_clause.find('<'), -1)
       else:
         self.assertNotEqual(where_clause.find('>='), -1)
         self.assertNotEqual(where_clause.find('>='), -1)
@@ -106,10 +105,10 @@ class TestKeyRange(unittest.TestCase):
       kid_list = int_shard_kid_map[kr]
       for keyspace_id in kid_list:
         if len(bind_vars.keys()) == 1:
-          if kr_parts[0] == '':
-            self.assertLess(keyspace_id, bind_vars['keyspace_id0'])
-          else:
+          if kr_parts[0]:
             self.assertGreaterEqual(keyspace_id, bind_vars['keyspace_id0'])
+          else:
+            self.assertLess(keyspace_id, bind_vars['keyspace_id0'])
         else:
           self.assertGreaterEqual(keyspace_id, bind_vars['keyspace_id0'])
           self.assertLess(keyspace_id, bind_vars['keyspace_id1'])
@@ -126,10 +125,10 @@ class TestKeyRange(unittest.TestCase):
       where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(
           kr, keyspace_col_type=keyrange_constants.KIT_BYTES)
       if len(bind_vars.keys()) == 1:
-        if kr_parts[0] == '':
-          self.assertNotEqual(where_clause.find('<'), -1)
-        else:
+        if kr_parts[0]:
           self.assertNotEqual(where_clause.find('>='), -1)
+        else:
+          self.assertNotEqual(where_clause.find('<'), -1)
       else:
         self.assertNotEqual(where_clause.find('>='), -1)
         self.assertNotEqual(where_clause.find('>='), -1)
@@ -137,11 +136,11 @@ class TestKeyRange(unittest.TestCase):
       kid_list = str_shard_kid_map[kr]
       for keyspace_id in kid_list:
         if len(bind_vars.keys()) == 1:
-          if kr_parts[0] == '':
-            self.assertLess(
+          if kr_parts[0]:
+            self.assertGreaterEqual(
                 keyspace_id.encode('hex'), bind_vars['keyspace_id0'])
           else:
-            self.assertGreaterEqual(
+            self.assertLess(
                 keyspace_id.encode('hex'), bind_vars['keyspace_id0'])
         else:
           self.assertGreaterEqual(
@@ -157,4 +156,4 @@ class TestKeyRange(unittest.TestCase):
     self.assertEqual(bind_vars, {})
 
 if __name__ == '__main__':
-  utils.main()
+  unittest.main()

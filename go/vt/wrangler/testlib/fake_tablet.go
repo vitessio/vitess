@@ -27,7 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
@@ -46,7 +46,7 @@ import (
 // - a 'done' channel (used to terminate the fake event loop)
 type FakeTablet struct {
 	// Tablet and FakeMysqlDaemon are populated at NewFakeTablet time.
-	Tablet          *pb.Tablet
+	Tablet          *topodatapb.Tablet
 	FakeMysqlDaemon *mysqlctl.FakeMysqlDaemon
 
 	// The following fields are created when we start the event loop for
@@ -66,11 +66,11 @@ type FakeTablet struct {
 // TabletOption is an interface for changing tablet parameters.
 // It's a way to pass multiple parameters to NewFakeTablet without
 // making it too cumbersome.
-type TabletOption func(tablet *pb.Tablet)
+type TabletOption func(tablet *topodatapb.Tablet)
 
 // TabletKeyspaceShard is the option to set the tablet keyspace and shard
 func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
-	return func(tablet *pb.Tablet) {
+	return func(tablet *topodatapb.Tablet) {
 		tablet.Keyspace = keyspace
 		shard, kr, err := topo.ValidateShardName(shard)
 		if err != nil {
@@ -83,7 +83,7 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 
 // ForceInitTablet is the tablet option to set the 'force' flag during InitTablet
 func ForceInitTablet() TabletOption {
-	return func(tablet *pb.Tablet) {
+	return func(tablet *topodatapb.Tablet) {
 		// set the force_init field into the portmap as a hack
 		tablet.PortMap["force_init"] = 1
 	}
@@ -92,7 +92,7 @@ func ForceInitTablet() TabletOption {
 // StartHTTPServer is the tablet option to start the HTTP server when
 // starting a tablet.
 func StartHTTPServer() TabletOption {
-	return func(tablet *pb.Tablet) {
+	return func(tablet *topodatapb.Tablet) {
 		// set the start_http_server field into the portmap as a hack
 		tablet.PortMap["start_http_server"] = 1
 	}
@@ -102,12 +102,12 @@ func StartHTTPServer() TabletOption {
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
 // Use TabletOption implementations if you need to change values at creation.
-func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType pb.TabletType, db *fakesqldb.DB, options ...TabletOption) *FakeTablet {
+func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType topodatapb.TabletType, db *fakesqldb.DB, options ...TabletOption) *FakeTablet {
 	if uid < 0 || uid > 99 {
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
-	tablet := &pb.Tablet{
-		Alias:    &pb.TabletAlias{Cell: cell, Uid: uid},
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: uid},
 		Hostname: fmt.Sprintf("%vhost", cell),
 		PortMap: map[string]int32{
 			"vt":    int32(8100 + uid),

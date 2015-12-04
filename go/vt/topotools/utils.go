@@ -15,17 +15,17 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // FindTabletByIPAddrAndPort searches within a tablet map for tablets
-func FindTabletByIPAddrAndPort(tabletMap map[pb.TabletAlias]*topo.TabletInfo, addr, portName string, port int32) (pb.TabletAlias, error) {
+func FindTabletByIPAddrAndPort(tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, addr, portName string, port int32) (topodatapb.TabletAlias, error) {
 	for alias, ti := range tabletMap {
 		if ti.Ip == addr && ti.PortMap[portName] == port {
 			return alias, nil
 		}
 	}
-	return pb.TabletAlias{}, topo.ErrNoNode
+	return topodatapb.TabletAlias{}, topo.ErrNoNode
 }
 
 // GetAllTablets returns a sorted list of tablets.
@@ -94,11 +94,11 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts topo.Server) ([]*topo.Tabl
 // - The masterMap contains all the tablets without parents
 //   (scrapped or not). This can be used to special case
 //   the old master, and any tablet in a weird state, left over, ...
-func SortedTabletMap(tabletMap map[pb.TabletAlias]*topo.TabletInfo) (map[pb.TabletAlias]*topo.TabletInfo, map[pb.TabletAlias]*topo.TabletInfo) {
-	slaveMap := make(map[pb.TabletAlias]*topo.TabletInfo)
-	masterMap := make(map[pb.TabletAlias]*topo.TabletInfo)
+func SortedTabletMap(tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo) (map[topodatapb.TabletAlias]*topo.TabletInfo, map[topodatapb.TabletAlias]*topo.TabletInfo) {
+	slaveMap := make(map[topodatapb.TabletAlias]*topo.TabletInfo)
+	masterMap := make(map[topodatapb.TabletAlias]*topo.TabletInfo)
 	for alias, ti := range tabletMap {
-		if ti.Type == pb.TabletType_MASTER {
+		if ti.Type == topodatapb.TabletType_MASTER {
 			masterMap[alias] = ti
 		} else {
 			slaveMap[alias] = ti

@@ -12,16 +12,16 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/callerid"
-	qrpb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
 )
 
@@ -148,13 +148,13 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 			panic(err)
 		case pools.ErrTimeout:
 			axp.LogActive()
-			panic(NewTabletError(ErrTxPoolFull, vtrpc.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"))
+			panic(NewTabletError(ErrTxPoolFull, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"))
 		}
-		panic(NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
+		panic(NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
 	}
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
-		panic(NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err))
+		panic(NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
 	}
 	transactionID := axp.lastID.Add(1)
 	axp.activePool.Register(
@@ -183,7 +183,7 @@ func (axp *TxPool) SafeCommit(ctx context.Context, transactionID int64) (invalid
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, fetchErr := conn.Exec(ctx, "commit", 1, false); fetchErr != nil {
 		conn.Close()
-		err = NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, fetchErr)
+		err = NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, fetchErr)
 	}
 	return
 }
@@ -195,7 +195,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) {
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
-		panic(NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err))
+		panic(NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
 	}
 }
 
@@ -204,7 +204,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) {
 func (axp *TxPool) Get(transactionID int64) (conn *TxConnection) {
 	v, err := axp.activePool.Get(transactionID, "for query")
 	if err != nil {
-		panic(NewTabletError(ErrNotInTx, vtrpc.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err))
+		panic(NewTabletError(ErrNotInTx, vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err))
 	}
 	return v.(*TxConnection)
 }
@@ -250,11 +250,11 @@ type TxConnection struct {
 	Queries           []string
 	Conclusion        string
 	LogToFile         sync2.AtomicInt32
-	ImmediateCallerID *qrpb.VTGateCallerID
-	EffectiveCallerID *vtrpc.CallerID
+	ImmediateCallerID *querypb.VTGateCallerID
+	EffectiveCallerID *vtrpcpb.CallerID
 }
 
-func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate *qrpb.VTGateCallerID, effective *vtrpc.CallerID) *TxConnection {
+func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) *TxConnection {
 	return &TxConnection{
 		DBConn:            conn,
 		TransactionID:     transactionID,
@@ -279,14 +279,14 @@ func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
 }
 
 // Exec executes the statement for the current transaction.
-func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	r, err := txc.DBConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
 		if IsConnErr(err) {
 			txc.pool.checker.CheckMySQL()
-			return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
+			return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
-		return nil, NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
+		return nil, NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return r, nil
 }

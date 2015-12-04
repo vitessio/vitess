@@ -9,21 +9,21 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pbq "github.com/youtube/vitess/go/vt/proto/query"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // tablet contains all the data for an individual tablet.
@@ -31,7 +31,7 @@ type tablet struct {
 	// configuration parameters
 	keyspace   string
 	shard      string
-	tabletType pb.TabletType
+	tabletType topodatapb.TabletType
 	dbname     string
 
 	// objects built at construction time
@@ -71,7 +71,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		if _, ok := keyspaceMap[keyspace]; !ok {
 			// only set for sharding key info for sharded keyspaces
 			scn := ""
-			sct := pb.KeyspaceIdType_UNSET
+			sct := topodatapb.KeyspaceIdType_UNSET
 			if shard != "0" {
 				var err error
 				sct, err = key.ParseKeyspaceIDType(*shardingColumnType)
@@ -81,7 +81,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 				scn = *shardingColumnName
 			}
 
-			if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{
+			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
 				ShardingColumnName: scn,
 				ShardingColumnType: sct,
 			}); err != nil {
@@ -91,7 +91,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		}
 
 		// create the master
-		alias := &pb.TabletAlias{
+		alias := &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  uid,
 		}
@@ -105,7 +105,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		tabletMap[uid] = &tablet{
 			keyspace:   keyspace,
 			shard:      shard,
-			tabletType: pb.TabletType_MASTER,
+			tabletType: topodatapb.TabletType_MASTER,
 			dbname:     dbname,
 
 			qsc:   masterController,
@@ -114,7 +114,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		uid++
 
 		// create a replica slave
-		alias = &pb.TabletAlias{
+		alias = &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  uid,
 		}
@@ -124,7 +124,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		tabletMap[uid] = &tablet{
 			keyspace:   keyspace,
 			shard:      shard,
-			tabletType: pb.TabletType_REPLICA,
+			tabletType: topodatapb.TabletType_REPLICA,
 			dbname:     dbname,
 
 			qsc:   replicaController,
@@ -133,7 +133,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		uid++
 
 		// create a rdonly slave
-		alias = &pb.TabletAlias{
+		alias = &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  uid,
 		}
@@ -143,7 +143,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		tabletMap[uid] = &tablet{
 			keyspace:   keyspace,
 			shard:      shard,
-			tabletType: pb.TabletType_RDONLY,
+			tabletType: topodatapb.TabletType_RDONLY,
 			dbname:     dbname,
 
 			qsc:   rdonlyController,
@@ -154,7 +154,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 
 	// Rebuild the SrvKeyspace objects, we we can support range-based
 	// sharding queries.
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil, 30*time.Second /*lockTimeout*/)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
 	for keyspace := range keyspaceMap {
 		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, true); err != nil {
 			log.Fatalf("cannot rebuild %v: %v", keyspace, err)
@@ -167,7 +167,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 }
 
 // dialer is our tabletconn.Dialer
-func dialer(ctx context.Context, endPoint *pb.EndPoint, keyspace, shard string, tabletType pb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func dialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	tablet, ok := tabletMap[endPoint.Uid]
 	if !ok {
 		return nil, tabletconn.OperationalError("connection refused")
@@ -183,30 +183,26 @@ func dialer(ctx context.Context, endPoint *pb.EndPoint, keyspace, shard string, 
 // to the tablet
 type internalTabletConn struct {
 	tablet   *tablet
-	endPoint *pb.EndPoint
+	endPoint *topodatapb.EndPoint
 }
 
 // Execute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
-	bv, err := tproto.BindVariablesToProto3(bindVars)
+func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
+	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, err
 	}
-	bindVars, err = tproto.Proto3ToBindVariables(bv)
+	bindVars, err = querytypes.Proto3ToBindVariables(bv)
 	if err != nil {
 		return nil, err
 	}
-	reply := &mproto.QueryResult{}
-	if err := itc.tablet.qsc.QueryService().Execute(ctx, &pbq.Target{
+	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Query{
-		Sql:           query,
-		BindVariables: bindVars,
-		TransactionId: transactionID,
-	}, reply); err != nil {
+	}, query, bindVars, 0, transactionID)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
 	return reply, nil
@@ -214,60 +210,54 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 
 // ExecuteBatch is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
-	q := make([]tproto.BoundQuery, len(queries))
+func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+	q := make([]querytypes.BoundQuery, len(queries))
 	for i, query := range queries {
-		bv, err := tproto.BindVariablesToProto3(query.BindVariables)
+		bv, err := querytypes.BindVariablesToProto3(query.BindVariables)
 		if err != nil {
 			return nil, err
 		}
-		bindVars, err := tproto.Proto3ToBindVariables(bv)
+		bindVars, err := querytypes.Proto3ToBindVariables(bv)
 		if err != nil {
 			return nil, err
 		}
 		q[i].Sql = query.Sql
 		q[i].BindVariables = bindVars
 	}
-	reply := &tproto.QueryResultList{}
-	if err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &pbq.Target{
+	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.QueryList{
-		Queries:       q,
-		AsTransaction: asTransaction,
-		TransactionId: transactionID,
-	}, reply); err != nil {
+	}, q, 0, asTransaction, transactionID)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return reply, nil
+	return results, nil
 }
 
 // StreamExecute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
-	bv, err := tproto.BindVariablesToProto3(bindVars)
+func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
+	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
-	bindVars, err = tproto.Proto3ToBindVariables(bv)
+	bindVars, err = querytypes.Proto3ToBindVariables(bv)
 	if err != nil {
 		return nil, nil, err
 	}
-	result := make(chan *mproto.QueryResult, 10)
+	result := make(chan *sqltypes.Result, 10)
 	var finalErr error
 
 	go func() {
-		finalErr = itc.tablet.qsc.QueryService().StreamExecute(ctx, &pbq.Target{
+		finalErr = itc.tablet.qsc.QueryService().StreamExecute(ctx, &querypb.Target{
 			Keyspace:   itc.tablet.keyspace,
 			Shard:      itc.tablet.shard,
 			TabletType: itc.tablet.tabletType,
-		}, &tproto.Query{
-			Sql:           query,
-			BindVariables: bindVars,
-			TransactionId: transactionID,
-		}, func(reply *mproto.QueryResult) error {
-			result <- reply
+		}, query, bindVars, 0, func(reply *sqltypes.Result) error {
+			// We need to deep-copy the reply before returning,
+			// because the underlying buffers are reused.
+			result <- reply.Copy()
 			return nil
 		})
 
@@ -282,49 +272,45 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 }
 
 // Begin is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, err error) {
-	result := &tproto.TransactionInfo{}
-	if err := itc.tablet.qsc.QueryService().Begin(ctx, &pbq.Target{
+func (itc *internalTabletConn) Begin(ctx context.Context) (int64, error) {
+	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{}, result); err != nil {
+	}, 0)
+	if err != nil {
 		return 0, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return result.TransactionId, nil
+	return transactionID, nil
 }
 
 // Commit is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) error {
-	err := itc.tablet.qsc.QueryService().Commit(ctx, &pbq.Target{
+	err := itc.tablet.qsc.QueryService().Commit(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{
-		TransactionId: transactionID,
-	})
+	}, 0, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
 // Rollback is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64) error {
-	err := itc.tablet.qsc.QueryService().Rollback(ctx, &pbq.Target{
+	err := itc.tablet.qsc.QueryService().Rollback(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{
-		TransactionId: transactionID,
-	})
+	}, 0, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
 // Execute2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (itc *internalTabletConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return itc.Execute(ctx, query, bindVars, transactionID)
 }
 
 // ExecuteBatch2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (itc *internalTabletConn) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return itc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
@@ -344,7 +330,7 @@ func (itc *internalTabletConn) Rollback2(ctx context.Context, transactionID int6
 }
 
 // StreamExecute2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (itc *internalTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return itc.StreamExecute(ctx, query, bindVars, transactionID)
 }
 
@@ -353,35 +339,31 @@ func (itc *internalTabletConn) Close() {
 }
 
 // SetTarget is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SetTarget(keyspace, shard string, tabletType pb.TabletType) error {
+func (itc *internalTabletConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
 	return nil
 }
 
 // EndPoint is part of tabletconn.TabletConn
-func (itc *internalTabletConn) EndPoint() *pb.EndPoint {
+func (itc *internalTabletConn) EndPoint() *topodatapb.EndPoint {
 	return itc.endPoint
 }
 
 // SplitQuery is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
-	reply := &tproto.SplitQueryResult{}
-	if err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &pbq.Target{
+func (itc *internalTabletConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.SplitQueryRequest{
-		Query:       query,
-		SplitColumn: splitColumn,
-		SplitCount:  splitCount,
-	}, reply); err != nil {
+	}, query.Sql, query.BindVariables, splitColumn, splitCount, 0)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return reply.Queries, nil
+	return splits, nil
 }
 
 // StreamHealth is part of tabletconn.TabletConn
-func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
-	result := make(chan *pbq.StreamHealthResponse, 10)
+func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	result := make(chan *querypb.StreamHealthResponse, 10)
 
 	id, err := itc.tablet.qsc.QueryService().StreamHealthRegister(result)
 	if err != nil {

@@ -14,15 +14,16 @@
 # - we remove the source tablets
 # - we remove the original shard
 
-import logging
 import struct
+
+import logging
 import unittest
 
 from vtdb import keyrange_constants
 
 import environment
-import utils
 import tablet
+import utils
 
 keyspace_id_type = keyrange_constants.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
@@ -58,6 +59,9 @@ def setUpModule():
         shard_1_replica.init_mysql(),
         shard_1_rdonly1.init_mysql(),
         ]
+    # we only use vtgate for testing SplitQuery works correctly.
+    # we want cache_ttl at zero so we re-read the topology for every test query.
+    utils.VtGate().start(cache_ttl='0')
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
@@ -136,10 +140,10 @@ index by_msg (msg)
 
   # _insert_startup_value inserts a value in the MySQL database before it
   # is sharded
-  def _insert_startup_value(self, tablet, table, id, msg):
-    tablet.mquery('vt_test_keyspace', [
+  def _insert_startup_value(self, tablet_obj, table, mid, msg):
+    tablet_obj.mquery('vt_test_keyspace', [
         'begin',
-        'insert into %s(id, msg) values(%d, "%s")' % (table, id, msg),
+        'insert into %s(id, msg) values(%d, "%s")' % (table, mid, msg),
         'commit'
         ], write=True)
 
@@ -148,8 +152,8 @@ index by_msg (msg)
     self._insert_startup_value(shard_master, 'resharding1', 2, 'msg2')
     self._insert_startup_value(shard_master, 'resharding1', 3, 'msg3')
 
-  def _backfill_keyspace_id(self, tablet):
-    tablet.mquery('vt_test_keyspace', [
+  def _backfill_keyspace_id(self, tablet_obj):
+    tablet_obj.mquery('vt_test_keyspace', [
         'begin',
         'update resharding1 set keyspace_id=0x1000000000000000 where id=1',
         'update resharding1 set keyspace_id=0x9000000000000000 where id=2',
@@ -159,58 +163,60 @@ index by_msg (msg)
 
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
-  def _insert_value(self, tablet, table, id, msg, keyspace_id):
+  def _insert_value(self, tablet_obj, table, mid, msg, keyspace_id):
     k = utils.uint64_to_hex(keyspace_id)
-    tablet.mquery(
+    tablet_obj.mquery(
         'vt_test_keyspace',
         ['begin',
          'insert into %s(id, msg, keyspace_id) '
          'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
          '/* user_id:%d */' %
-         (table, id, msg, keyspace_id, k, id),
+         (table, mid, msg, keyspace_id, k, mid),
          'commit'],
         write=True)
 
-  def _get_value(self, tablet, table, id):
-    return tablet.mquery(
+  def _get_value(self, tablet_obj, table, mid):
+    return tablet_obj.mquery(
         'vt_test_keyspace',
-        'select id, msg, keyspace_id from %s where id=%d' % (table, id))
+        'select id, msg, keyspace_id from %s where id=%d' % (table, mid))
 
-  def _check_value(self, tablet, table, id, msg, keyspace_id,
+  def _check_value(self, tablet_obj, table, mid, msg, keyspace_id,
                    should_be_here=True):
-    result = self._get_value(tablet, table, id)
+    result = self._get_value(tablet_obj, table, mid)
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = '%s'
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
       fmt = '%x'
     if should_be_here:
-      self.assertEqual(result, ((id, msg, keyspace_id),),
+      self.assertEqual(result, ((mid, msg, keyspace_id),),
                        ('Bad row in tablet %s for id=%d, keyspace_id=' +
-                        fmt + ', row=%s') % (tablet.tablet_alias, id,
+                        fmt + ', row=%s') % (tablet_obj.tablet_alias, mid,
                                              keyspace_id, str(result)))
     else:
-      self.assertEqual(len(result), 0,
-                       ('Extra row in tablet %s for id=%d, keyspace_id=' +
-                        fmt + ': %s') % (tablet.tablet_alias, id, keyspace_id,
-                                         str(result)))
+      self.assertEqual(
+          len(result), 0,
+          ('Extra row in tablet %s for id=%d, keyspace_id=' +
+           fmt + ': %s') % (tablet_obj.tablet_alias, mid, keyspace_id,
+                            str(result)))
 
   # _is_value_present_and_correct tries to read a value.
   # if it is there, it will check it is correct and return True if it is.
   # if not correct, it will self.fail.
   # if not there, it will return False.
-  def _is_value_present_and_correct(self, tablet, table, id, msg, keyspace_id):
-    result = self._get_value(tablet, table, id)
-    if len(result) == 0:
+  def _is_value_present_and_correct(
+      self, tablet_obj, table, mid, msg, keyspace_id):
+    result = self._get_value(tablet_obj, table, mid)
+    if not result:
       return False
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = '%s'
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
       fmt = '%x'
-    self.assertEqual(result, ((id, msg, keyspace_id),),
+    self.assertEqual(result, ((mid, msg, keyspace_id),),
                      ('Bad row in tablet %s for id=%d, keyspace_id=' + fmt) % (
-                         tablet.tablet_alias, id, keyspace_id))
+                         tablet_obj.tablet_alias, mid, keyspace_id))
     return True
 
   def _check_startup_values(self):
@@ -262,7 +268,7 @@ index by_msg (msg)
     while True:
       value = self._check_lots(count, base=base)
       if value >= threshold:
-        return
+        return value
       timeout = utils.wait_step('enough data went through', timeout)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
@@ -279,14 +285,10 @@ index by_msg (msg)
     # create the keyspace with just one shard
     utils.run_vtctl(['CreateKeyspace',
                      'test_keyspace'])
-    utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', 'test_keyspace',
-                     'keyspace_id', keyspace_id_type])
 
     shard_master.init_tablet('master', 'test_keyspace', '0')
     shard_replica.init_tablet('replica', 'test_keyspace', '0')
     shard_rdonly1.init_tablet('rdonly', 'test_keyspace', '0')
-
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # create databases so vttablet can start behaving normally
     for t in [shard_master, shard_replica, shard_rdonly1]:
@@ -306,10 +308,42 @@ index by_msg (msg)
     self._create_schema()
     self._insert_startup_values()
 
+    # reload schema on all tablets so we can query them
+    for t in [shard_master, shard_replica, shard_rdonly1]:
+      utils.run_vtctl(['ReloadSchema', t.tablet_alias], auto_log=True)
+
+    # check the Map Reduce API works correctly, should use ExecuteShards,
+    # as we're not sharded yet.
+    # we have 3 values in the database, asking for 4 splits will get us
+    # a single query.
+    sql = 'select id, msg from resharding1'
+    s = utils.vtgate.split_query(sql, 'test_keyspace', 4)
+    self.assertEqual(len(s), 1)
+    self.assertEqual(s[0]['shard_part']['shards'][0], '0')
+
     # change the schema, backfill keyspace_id, and change schema again
     self._add_sharding_key_to_schema()
     self._backfill_keyspace_id(shard_master)
     self._mark_sharding_key_not_null()
+
+    # now we can be a sharded keyspace (and propagate to SrvKeyspace)
+    utils.run_vtctl(['SetKeyspaceShardingInfo', 'test_keyspace',
+                     'keyspace_id', keyspace_id_type])
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
+                    auto_log=True)
+
+    # run a health check on source replica so it responds to discovery
+    utils.run_vtctl(['RunHealthCheck', shard_replica.tablet_alias, 'replica'])
+
+    # check the Map Reduce API works correctly, should use ExecuteKeyRanges now,
+    # as we are sharded (with just one shard).
+    # again, we have 3 values in the database, asking for 4 splits will get us
+    # a single query.
+    sql = 'select id, msg from resharding1'
+    s = utils.vtgate.split_query(sql, 'test_keyspace', 4)
+    self.assertEqual(len(s), 1)
+    self.assertEqual(s[0]['key_range_part']['keyspace'], 'test_keyspace')
+    self.assertNotIn('key_ranges', s[0]['key_range_part'])
 
     # create the split shards
     shard_0_master.init_tablet('master', 'test_keyspace', '-80')
@@ -378,9 +412,10 @@ index by_msg (msg)
     logging.debug('Inserting lots of data on source shard')
     self._insert_lots(1000)
     logging.debug('Checking 80 percent of data is sent quickly')
-    self._check_lots_timeout(1000, 80, 5)
-    logging.debug('Checking all data goes through eventually')
-    self._check_lots_timeout(1000, 100, 20)
+    v = self._check_lots_timeout(1000, 80, 5)
+    if v != 100:
+      logging.debug('Checking all data goes through eventually')
+      self._check_lots_timeout(1000, 100, 20)
     logging.debug('Checking no data was sent the wrong way')
     self._check_lots_not_present(1000)
 
@@ -415,6 +450,17 @@ index by_msg (msg)
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -\n',
                              keyspace_id_type=keyspace_id_type)
+
+    # check the Map Reduce API works correctly, should use ExecuteKeyRanges
+    # on both destination shards now.
+    # we ask for 2 splits to only have one per shard
+    sql = 'select id, msg from resharding1'
+    s = utils.vtgate.split_query(sql, 'test_keyspace', 2)
+    self.assertEqual(len(s), 2)
+    self.assertEqual(s[0]['key_range_part']['keyspace'], 'test_keyspace')
+    self.assertEqual(s[1]['key_range_part']['keyspace'], 'test_keyspace')
+    self.assertEqual(len(s[0]['key_range_part']['key_ranges']), 1)
+    self.assertEqual(len(s[1]['key_range_part']['key_ranges']), 1)
 
     # then serve replica from the split shards
     source_tablet = shard_replica
@@ -476,7 +522,7 @@ index by_msg (msg)
       utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
     utils.run_vtctl(['DeleteTablet', '-allow_master',
                      shard_master.tablet_alias], auto_log=True)
-      
+
     # rebuild the serving graph, all mentions of the old shards shoud be gone
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 

@@ -10,18 +10,20 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // RowcacheInvalidator runs the service to invalidate
@@ -35,27 +37,27 @@ type RowcacheInvalidator struct {
 	svm sync2.ServiceManager
 
 	posMutex   sync.Mutex
-	pos        myproto.ReplicationPosition
+	pos        replication.Position
 	lagSeconds sync2.AtomicInt64
 }
 
 // AppendGTID updates the current replication position by appending a GTID to
 // the set of transactions that have been processed.
-func (rci *RowcacheInvalidator) AppendGTID(gtid myproto.GTID) {
+func (rci *RowcacheInvalidator) AppendGTID(gtid replication.GTID) {
 	rci.posMutex.Lock()
 	defer rci.posMutex.Unlock()
-	rci.pos = myproto.AppendGTID(rci.pos, gtid)
+	rci.pos = replication.AppendGTID(rci.pos, gtid)
 }
 
 // SetPosition sets the current ReplicationPosition.
-func (rci *RowcacheInvalidator) SetPosition(rp myproto.ReplicationPosition) {
+func (rci *RowcacheInvalidator) SetPosition(rp replication.Position) {
 	rci.posMutex.Lock()
 	defer rci.posMutex.Unlock()
 	rci.pos = rp
 }
 
 // Position returns the current ReplicationPosition.
-func (rci *RowcacheInvalidator) Position() myproto.ReplicationPosition {
+func (rci *RowcacheInvalidator) Position() replication.Position {
 	rci.posMutex.Lock()
 	defer rci.posMutex.Unlock()
 	return rci.pos
@@ -87,14 +89,14 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld mysqlctl.MysqlDaemon)
 	}
 	rp, err := mysqld.MasterPosition()
 	if err != nil {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
 	}
 	if mysqld.Cnf().BinLogPath == "" {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: binlog path not specified"))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: binlog path not specified"))
 	}
 	err = rci.qe.ClearRowcache(context.Background())
 	if err != nil {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcahe is not reachable"))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcahe is not reachable"))
 	}
 
 	rci.dbname = dbname
@@ -143,7 +145,7 @@ func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 	return nil
 }
 
-func (rci *RowcacheInvalidator) handleInvalidationError(event *blproto.StreamEvent) {
+func (rci *RowcacheInvalidator) handleInvalidationError(event *binlogdatapb.StreamEvent) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
@@ -156,18 +158,18 @@ func (rci *RowcacheInvalidator) handleInvalidationError(event *blproto.StreamEve
 	}
 }
 
-func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
+func (rci *RowcacheInvalidator) processEvent(event *binlogdatapb.StreamEvent) error {
 	defer rci.handleInvalidationError(event)
 	switch event.Category {
-	case "DDL":
+	case binlogdatapb.StreamEvent_SE_DDL:
 		log.Infof("DDL invalidation: %s", event.Sql)
 		rci.handleDDLEvent(event.Sql)
-	case "DML":
+	case binlogdatapb.StreamEvent_SE_DML:
 		rci.handleDMLEvent(event)
-	case "ERR":
+	case binlogdatapb.StreamEvent_SE_ERR:
 		rci.handleUnrecognizedEvent(event.Sql)
-	case "POS":
-		gtid, err := myproto.DecodeGTID(event.TransactionID)
+	case binlogdatapb.StreamEvent_SE_POS:
+		gtid, err := replication.DecodeGTID(event.TransactionId)
 		if err != nil {
 			return err
 		}
@@ -181,22 +183,20 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 	return nil
 }
 
-func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
+func (rci *RowcacheInvalidator) handleDMLEvent(event *binlogdatapb.StreamEvent) {
 	invalidations := int64(0)
 	tableInfo := rci.qe.schemaInfo.GetTable(event.TableName)
 	if tableInfo == nil {
-		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Table %s not found", event.TableName))
+		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "Table %s not found", event.TableName))
 	}
-	if tableInfo.CacheType == schema.CACHE_NONE {
+	if tableInfo.CacheType == schema.CacheNone {
 		return
 	}
 
 	for _, pkTuple := range event.PrimaryKeyValues {
-		newKey := validateKey(tableInfo, buildKey(pkTuple), rci.qe.queryServiceStats)
-		if newKey == "" {
-			continue
-		}
-		tableInfo.Cache.Delete(context.Background(), newKey)
+		// We can trust values coming from EventStreamer.
+		row := sqltypes.MakeRowTrusted(event.PrimaryKeyFields, pkTuple)
+		tableInfo.Cache.Delete(context.Background(), buildKey(row))
 		invalidations++
 	}
 	tableInfo.invalidations.Add(invalidations)
@@ -205,7 +205,7 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
 func (rci *RowcacheInvalidator) handleDDLEvent(ddl string) {
 	ddlPlan := planbuilder.DDLParse(ddl)
 	if ddlPlan.Action == "" {
-		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "DDL is not understood"))
+		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "DDL is not understood"))
 	}
 	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
@@ -251,7 +251,7 @@ func (rci *RowcacheInvalidator) handleUnrecognizedEvent(sql string) {
 		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
 		return
 	}
-	if tableInfo.CacheType == schema.CACHE_NONE {
+	if tableInfo.CacheType == schema.CacheNone {
 		return
 	}
 

@@ -1787,7 +1787,7 @@ Runs the given SQL command as a DBA on the remote tablet.
 
 #### Example
 
-<pre class="command-example">ExecuteFetchAsDba [--max_rows=10000] [--want_fields] [--disable_binlogs] &lt;tablet alias&gt; &lt;sql command&gt;</pre>
+<pre class="command-example">ExecuteFetchAsDba [--max_rows=10000] [--disable_binlogs] &lt;tablet alias&gt; &lt;sql command&gt;</pre>
 
 #### Flags
 
@@ -1796,7 +1796,6 @@ Runs the given SQL command as a DBA on the remote tablet.
 | disable_binlogs | Boolean | Disables writing to binlogs during the query |
 | max_rows | Int | Specifies the maximum number of rows to allow in reset |
 | reload_schema | Boolean | Indicates whether the tablet schema will be reloaded after executing the SQL command. The default value is <code>false</code>, which indicates that the tablet schema will not be reloaded. |
-| want_fields | Boolean | Indicates whether the request should also get field names |
 
 
 #### Arguments

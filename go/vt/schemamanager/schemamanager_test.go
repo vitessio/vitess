@@ -9,15 +9,16 @@ import (
 	"fmt"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
@@ -105,21 +106,21 @@ func TestSchemaManagerRun(t *testing.T) {
 	controller := newFakeController(
 		[]string{sql}, false, false, false)
 	fakeTmc := newFakeTabletManagerClient()
-	fakeTmc.AddSchemaChange(sql, &proto.SchemaChangeResult{
-		BeforeSchema: &proto.SchemaDefinition{},
-		AfterSchema: &proto.SchemaDefinition{
+	fakeTmc.AddSchemaChange(sql, &tmutils.SchemaChangeResult{
+		BeforeSchema: &tabletmanagerdatapb.SchemaDefinition{},
+		AfterSchema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
-			TableDefinitions: []*proto.TableDefinition{
-				&proto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:   "test_table",
 					Schema: sql,
-					Type:   proto.TableBaseTable,
+					Type:   tmutils.TableBaseTable,
 				},
 			},
 		},
 	})
 
-	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &proto.SchemaDefinition{})
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 
 	executor := NewTabletExecutor(
 		fakeTmc,
@@ -152,21 +153,21 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	sql := "create table test_table (pk int)"
 	controller := newFakeController([]string{sql}, false, false, false)
 	fakeTmc := newFakeTabletManagerClient()
-	fakeTmc.AddSchemaChange(sql, &proto.SchemaChangeResult{
-		BeforeSchema: &proto.SchemaDefinition{},
-		AfterSchema: &proto.SchemaDefinition{
+	fakeTmc.AddSchemaChange(sql, &tmutils.SchemaChangeResult{
+		BeforeSchema: &tabletmanagerdatapb.SchemaDefinition{},
+		AfterSchema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
-			TableDefinitions: []*proto.TableDefinition{
-				&proto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:   "test_table",
 					Schema: sql,
-					Type:   proto.TableBaseTable,
+					Type:   tmutils.TableBaseTable,
 				},
 			},
 		},
 	})
 
-	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &proto.SchemaDefinition{})
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 	fakeTmc.EnableExecuteFetchAsDbaError = true
 	executor := NewTabletExecutor(fakeTmc, newFakeTopo())
 
@@ -220,38 +221,38 @@ func newFakeExecutor() *TabletExecutor {
 func newFakeTabletManagerClient() *fakeTabletManagerClient {
 	return &fakeTabletManagerClient{
 		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
-		preflightSchemas:    make(map[string]*proto.SchemaChangeResult),
-		schemaDefinitions:   make(map[string]*proto.SchemaDefinition),
+		preflightSchemas:    make(map[string]*tmutils.SchemaChangeResult),
+		schemaDefinitions:   make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 	}
 }
 
 type fakeTabletManagerClient struct {
 	tmclient.TabletManagerClient
 	EnableExecuteFetchAsDbaError bool
-	preflightSchemas             map[string]*proto.SchemaChangeResult
-	schemaDefinitions            map[string]*proto.SchemaDefinition
+	preflightSchemas             map[string]*tmutils.SchemaChangeResult
+	schemaDefinitions            map[string]*tabletmanagerdatapb.SchemaDefinition
 }
 
 func (client *fakeTabletManagerClient) AddSchemaChange(
-	sql string, schemaResult *proto.SchemaChangeResult) {
+	sql string, schemaResult *tmutils.SchemaChangeResult) {
 	client.preflightSchemas[sql] = schemaResult
 }
 
 func (client *fakeTabletManagerClient) AddSchemaDefinition(
-	dbName string, schemaDefinition *proto.SchemaDefinition) {
+	dbName string, schemaDefinition *tabletmanagerdatapb.SchemaDefinition) {
 	client.schemaDefinitions[dbName] = schemaDefinition
 }
 
-func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*proto.SchemaChangeResult, error) {
+func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*tmutils.SchemaChangeResult, error) {
 	result, ok := client.preflightSchemas[change]
 	if !ok {
-		var scr proto.SchemaChangeResult
+		var scr tmutils.SchemaChangeResult
 		return &scr, nil
 	}
 	return result, nil
 }
 
-func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
+func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	result, ok := client.schemaDefinitions[tablet.DbName()]
 	if !ok {
 		return nil, fmt.Errorf("unknown database: %s", tablet.DbName())
@@ -259,12 +260,11 @@ func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *to
 	return result, nil
 }
 
-func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*mproto.QueryResult, error) {
+func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	if client.EnableExecuteFetchAsDbaError {
-		var result mproto.QueryResult
-		return &result, fmt.Errorf("ExecuteFetchAsDba occur an unknown error")
+		return nil, fmt.Errorf("ExecuteFetchAsDba occur an unknown error")
 	}
-	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, query, maxRows, wantFields, disableBinlogs, reloadSchema)
+	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, query, maxRows, disableBinlogs, reloadSchema)
 }
 
 type fakeTopo struct {
@@ -286,22 +286,22 @@ func (topoServer *fakeTopo) GetShardNames(ctx context.Context, keyspace string) 
 	return []string{"0", "1", "2"}, nil
 }
 
-func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*pb.Shard, int64, error) {
-	var masterAlias *pb.TabletAlias
+func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topodatapb.Shard, int64, error) {
+	var masterAlias *topodatapb.TabletAlias
 	if !topoServer.WithEmptyMasterAlias {
-		masterAlias = &pb.TabletAlias{
+		masterAlias = &topodatapb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  0,
 		}
 	}
-	value := &pb.Shard{
+	value := &topodatapb.Shard{
 		MasterAlias: masterAlias,
 	}
 	return value, 0, nil
 }
 
-func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*pb.Tablet, int64, error) {
-	return &pb.Tablet{
+func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
+	return &topodatapb.Tablet{
 		Alias:    tabletAlias,
 		Keyspace: "test_keyspace",
 	}, 0, nil

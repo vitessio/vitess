@@ -17,7 +17,9 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tableacl/acl"
 )
 
 // spotCheckMultiplier determines the precision of the
@@ -70,7 +72,7 @@ type QueryEngine struct {
 	tableaclPseudoDenied *stats.MultiCounters
 	strictTableAcl       bool
 	enableTableAclDryRun bool
-	exemptACL            string
+	exemptACL            acl.ACL
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
@@ -104,7 +106,7 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 	// If there's a problem with getting a connection out of the pool, that is
 	// probably not due to the query itself. The query might succeed on a different
 	// tablet.
-	panic(NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
+	panic(NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
 }
 
 // NewQueryEngine creates a new QueryEngine.
@@ -134,6 +136,7 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
 			debugTableStatsKey: config.DebugURLPrefix + "/table_stats",
 			debugSchemaKey:     config.DebugURLPrefix + "/schema",
+			debugQueryRulesKey: config.DebugURLPrefix + "/query_rules",
 		},
 		config.EnablePublishStats,
 		qe.queryServiceStats,
@@ -179,7 +182,20 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 	}
 	qe.strictTableAcl = config.StrictTableAcl
 	qe.enableTableAclDryRun = config.EnableTableAclDryRun
-	qe.exemptACL = config.TableAclExemptACL
+
+	if config.TableAclExemptACL != "" {
+		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
+			if exemptACL, err := f.New([]string{config.TableAclExemptACL}); err == nil {
+				log.Infof("Setting Table ACL exempt rule for %v", config.TableAclExemptACL)
+				qe.exemptACL = exemptACL
+			} else {
+				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
+			}
+		} else {
+			log.Infof("Cannot get current ACL Factory: %v", err)
+		}
+	}
+
 	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.MaxResultSize))
 	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
@@ -226,7 +242,7 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs, schemaOverrides []Sch
 		strictMode = true
 	}
 	if !strictMode && qe.config.RowCache.Enabled {
-		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
 	}
 	if qe.config.RowCache.Enabled {
 		qe.cachePool.Open()
@@ -325,7 +341,7 @@ func (qe *QueryEngine) Commit(ctx context.Context, logStats *LogStats, transacti
 // ClearRowcache invalidates all items in the rowcache.
 func (qe *QueryEngine) ClearRowcache(ctx context.Context) error {
 	if qe.cachePool.IsClosed() {
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "rowcache is not up")
+		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "rowcache is not up")
 	}
 	conn := qe.cachePool.Get(ctx)
 	defer func() { qe.cachePool.Put(conn) }()
@@ -333,7 +349,7 @@ func (qe *QueryEngine) ClearRowcache(ctx context.Context) error {
 	if err := conn.FlushAll(); err != nil {
 		conn.Close()
 		conn = nil
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "%s", err)
+		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "%s", err)
 	}
 	return nil
 }

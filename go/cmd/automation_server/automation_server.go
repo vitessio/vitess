@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/automation"
-	pbs "github.com/youtube/vitess/go/vt/proto/automationservice"
+	automationservicepb "github.com/youtube/vitess/go/vt/proto/automationservice"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
@@ -42,6 +42,6 @@ func main() {
 		os.Exit(3)
 	}
 	scheduler.Run()
-	pbs.RegisterAutomationServer(grpcServer, scheduler)
+	automationservicepb.RegisterAutomationServer(grpcServer, scheduler)
 	grpcServer.Serve(listener)
 }

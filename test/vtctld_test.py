@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 import logging
-import socket
 import unittest
-import urllib2
 import re
 
-from vtproto import topodata_pb2
+from vtctl import vtctl_client
 
 import environment
 import tablet
@@ -106,22 +104,18 @@ class TestVtctld(unittest.TestCase):
     # run checks now before we start the tablets
     utils.validate_topology()
 
-  def setUp(self):
-    self.data = utils.vtctld.dbtopo()
-    self.serving_data = utils.vtctld.serving_graph()
-
   def _check_all_tablets(self, result):
     lines = result.splitlines()
-    self.assertEqual(len(lines), len(tablets))
+    self.assertEqual(len(lines), len(tablets), 'got lines:\n%s' % lines)
     line_map = {}
     for line in lines:
       parts = line.split()
       alias = parts[0]
       line_map[alias] = parts
-    for tablet in tablets:
-      if tablet.tablet_alias not in line_map:
+    for t in tablets:
+      if t.tablet_alias not in line_map:
         self.assertFalse('tablet %s is not in the result: %s' % (
-            tablet.tablet_alias, str(line_map)))
+            t.tablet_alias, str(line_map)))
 
   def test_vtctl(self):
     # standalone RPC client to vtctld
@@ -130,94 +124,15 @@ class TestVtctld(unittest.TestCase):
     self._check_all_tablets(out)
 
     # vtctl querying the topology directly
-    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
-                               mode=utils.VTCTL_VTCTL,
-                               trap_output=True, auto_log=True)
+    out, _ = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                             mode=utils.VTCTL_VTCTL,
+                             trap_output=True, auto_log=True)
     self._check_all_tablets(out)
 
     # python RPC client to vtctld
     out, _ = utils.run_vtctl(['ListAllTablets', 'test_nj'],
                              mode=utils.VTCTL_RPC)
     self._check_all_tablets(out)
-
-  def test_assigned(self):
-    logging.debug('test_assigned: %s', str(self.data))
-    self.assertItemsEqual(self.data['Assigned'].keys(), ['test_keyspace'])
-    s0 = self.data['Assigned']['test_keyspace']['ShardNodes'][0]
-    self.assertItemsEqual(s0['Name'], '-80')
-    s1 = self.data['Assigned']['test_keyspace']['ShardNodes'][1]
-    self.assertItemsEqual(s1['Name'], '80-')
-
-  def test_partial(self):
-    utils.pause(
-        'You can now run a browser and connect to http://%s:%d to '
-        'manually check topology' % (socket.getfqdn(), utils.vtctld.port))
-    self.assertEqual(self.data['Partial'], True)
-
-  def test_explorer_redirects(self):
-    if environment.topo_server().flavor() != 'zookeeper':
-      logging.info('Skipping zookeeper tests in topology %s',
-                   environment.topo_server().flavor())
-      return
-
-    base = 'http://localhost:%d' % utils.vtctld.port
-    self.assertEqual(
-        urllib2.urlopen(
-            base + '/explorers/redirect?'
-            'type=keyspace&explorer=zk&keyspace=test_keyspace').geturl(),
-        base + '/zk/global/vt/keyspaces/test_keyspace')
-    self.assertEqual(
-        urllib2.urlopen(
-            base + '/explorers/redirect?type=shard&explorer=zk&'
-            'keyspace=test_keyspace&shard=-80').geturl(),
-        base + '/zk/global/vt/keyspaces/test_keyspace/shards/-80')
-    self.assertEqual(
-        urllib2.urlopen(
-            base + '/explorers/redirect?type=tablet&explorer=zk&alias=%s' %
-            shard_0_replica.tablet_alias).geturl(),
-        base + shard_0_replica.zk_tablet_path)
-
-    self.assertEqual(
-        urllib2.urlopen(
-            base + '/explorers/redirect?type=srv_keyspace&explorer=zk&'
-            'keyspace=test_keyspace&cell=test_nj').geturl(),
-        base + '/zk/test_nj/vt/ns/test_keyspace')
-    self.assertEqual(
-        urllib2.urlopen(
-            base + '/explorers/redirect?type=srv_shard&explorer=zk&'
-            'keyspace=test_keyspace&shard=-80&cell=test_nj').geturl(),
-        base + '/zk/test_nj/vt/ns/test_keyspace/-80')
-    self.assertEqual(
-        urllib2.urlopen(
-            base + '/explorers/redirect?type=srv_type&explorer=zk&'
-            'keyspace=test_keyspace&shard=-80&tablet_type=replica&'
-            'cell=test_nj').geturl(),
-        base + '/zk/test_nj/vt/ns/test_keyspace/-80/replica')
-
-    self.assertEqual(
-        urllib2.urlopen(
-            base + '/explorers/redirect?type=replication&explorer=zk&'
-            'keyspace=test_keyspace&shard=-80&cell=test_nj').geturl(),
-        base + '/zk/test_nj/vt/replication/test_keyspace/-80')
-
-  def test_serving_graph(self):
-    self.assertItemsEqual(sorted(self.serving_data.keys()),
-                          ['redirected_keyspace', 'test_keyspace'])
-    s0 = self.serving_data['test_keyspace']['ShardNodes'][0]
-    self.assertItemsEqual(s0['Name'], '-80')
-    s1 = self.serving_data['test_keyspace']['ShardNodes'][1]
-    self.assertItemsEqual(s1['Name'], '80-')
-    types = []
-    for tn in s0['TabletNodes']:
-      tt = tn['TabletType']
-      types.append(tt)
-      if tt == topodata_pb2.MASTER:
-        self.assertEqual(len(tn['Nodes']), 1)
-    self.assertItemsEqual(sorted(types),
-                          sorted([topodata_pb2.MASTER, topodata_pb2.REPLICA]))
-    self.assertEqual(
-        self.serving_data['redirected_keyspace']['ServedFrom']['master'],
-        'test_keyspace')
 
   def test_tablet_status(self):
     # the vttablet that has a health check has a bit more, so using it
@@ -228,6 +143,16 @@ class TestVtctld(unittest.TestCase):
     self.assertIn('Alias: <a href="http://localhost:', shard_0_replica_status)
     self.assertIn('</html>', shard_0_replica_status)
 
+  def test_interrupt_vtctl_command(self):
+    """An interrupted streaming vtctl command should work."""
+    protocol, endpoint = utils.vtctld.rpc_endpoint(python=True)
+    vtctld_connection = vtctl_client.connect(protocol, endpoint, 30)
+    for i, event in enumerate(
+        vtctld_connection.execute_vtctl_command(['ListAllTablets', 'test_nj'])):
+      logging.debug('got event %d %s', i, event.value)
+      if i == 1:
+        break
+    vtctld_connection.close()
 
 if __name__ == '__main__':
   utils.main()

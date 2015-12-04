@@ -8,71 +8,62 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 func TestBatchRead(t *testing.T) {
 	client := framework.NewClient()
-	queries := []proto.BoundQuery{{
+	queries := []querytypes.BoundQuery{{
 		Sql:           "select * from vitess_a where id = :a",
 		BindVariables: map[string]interface{}{"a": 2},
 	}, {
 		Sql:           "select * from vitess_b where id = :b",
 		BindVariables: map[string]interface{}{"b": 2},
 	}}
-	qr1 := mproto.QueryResult{
-		Fields: []mproto.Field{{
-			Name:  "eid",
-			Type:  mysql.TypeLonglong,
-			Flags: 0,
+	qr1 := sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "eid",
+			Type: sqltypes.Int64,
 		}, {
-			Name:  "id",
-			Type:  mysql.TypeLong,
-			Flags: 0,
+			Name: "id",
+			Type: sqltypes.Int32,
 		}, {
-			Name:  "name",
-			Type:  mysql.TypeVarString,
-			Flags: 0,
+			Name: "name",
+			Type: sqltypes.VarChar,
 		}, {
-			Name:  "foo",
-			Type:  mysql.TypeVarString,
-			Flags: mysql.FlagBinary,
+			Name: "foo",
+			Type: sqltypes.VarBinary,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("1")},
-				sqltypes.Value{Inner: sqltypes.Numeric("2")},
-				sqltypes.Value{Inner: sqltypes.String("bcde")},
-				sqltypes.Value{Inner: sqltypes.String("fghi")},
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("bcde")),
+				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("fghi")),
 			},
 		},
 	}
-	qr2 := mproto.QueryResult{
-		Fields: []mproto.Field{{
-			Name:  "eid",
-			Type:  mysql.TypeLonglong,
-			Flags: 0,
+	qr2 := sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "eid",
+			Type: sqltypes.Int64,
 		}, {
-			Name:  "id",
-			Type:  mysql.TypeLong,
-			Flags: 0,
+			Name: "id",
+			Type: sqltypes.Int32,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{
-				sqltypes.Value{Inner: sqltypes.Numeric("1")},
-				sqltypes.Value{Inner: sqltypes.Numeric("2")},
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
 			},
 		},
 	}
-	want := &proto.QueryResultList{
-		List: []mproto.QueryResult{qr1, qr2},
-	}
+	want := []sqltypes.Result{qr1, qr2}
 
 	qrl, err := client.ExecuteBatch(queries, false)
 	if err != nil {
@@ -86,7 +77,7 @@ func TestBatchRead(t *testing.T) {
 
 func TestBatchTransaction(t *testing.T) {
 	client := framework.NewClient()
-	queries := []proto.BoundQuery{{
+	queries := []querytypes.BoundQuery{{
 		Sql: "insert into vitess_test values(4, null, null, null)",
 	}, {
 		Sql: "select * from vitess_test where intval = 4",
@@ -96,7 +87,7 @@ func TestBatchTransaction(t *testing.T) {
 
 	wantRows := [][]sqltypes.Value{
 		[]sqltypes.Value{
-			sqltypes.Value{Inner: sqltypes.Numeric("4")},
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 			sqltypes.Value{},
 			sqltypes.Value{},
 			sqltypes.Value{},
@@ -109,8 +100,8 @@ func TestBatchTransaction(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
-		t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+	if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
+		t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 	}
 
 	// Not in transaction, AsTransaction true
@@ -119,8 +110,8 @@ func TestBatchTransaction(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
-		t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+	if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
+		t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 	}
 
 	// In transaction, AsTransaction false
@@ -136,8 +127,8 @@ func TestBatchTransaction(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
-			t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+		if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
+			t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 		}
 	}()
 

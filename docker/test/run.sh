@@ -46,7 +46,7 @@ fi
 
 # Run tests
 echo "Running tests in vitess/bootstrap:$flavor image..."
-bashcmd="rm -rf * && cp -R /tmp/src/* . && rm -rf Godeps/_workspace/pkg && $cmd"
+bashcmd="mv php/vendor /vt/dist/php-vendor && rm -rf * && cp -R /tmp/src/* . && ln -sf /vt/dist/php-vendor php/vendor && rm -rf Godeps/_workspace/pkg && $cmd"
 
 if tty -s; then
   # interactive shell

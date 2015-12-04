@@ -9,15 +9,17 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/logutil"
 	"golang.org/x/net/context"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
 // RunCommandAndWait executes a single command on a given vtctld and blocks until the command did return or timed out.
-// Output from vtctld is streamed as logutil.LoggerEvent messages which have to be consumed by the caller who has to specify a "recv" function.
-func RunCommandAndWait(ctx context.Context, server string, args []string, dialTimeout, actionTimeout, lockWaitTimeout time.Duration, recv func(*logutil.LoggerEvent)) error {
+// Output from vtctld is streamed as logutilpb.Event messages which
+// have to be consumed by the caller who has to specify a "recv" function.
+func RunCommandAndWait(ctx context.Context, server string, args []string, dialTimeout, actionTimeout time.Duration, recv func(*logutilpb.Event)) error {
 	if recv == nil {
-		return errors.New("No function closure for LoggerEvent stream specified")
+		return errors.New("No function closure for Event stream specified")
 	}
 	// create the client
 	client, err := New(server, dialTimeout)
@@ -29,7 +31,7 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, dialTi
 	// run the command
 	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
 	defer cancel()
-	c, errFunc, err := client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockWaitTimeout)
+	c, errFunc, err := client.ExecuteVtctlCommand(ctx, args, actionTimeout)
 	if err != nil {
 		return fmt.Errorf("Cannot execute remote command: %v", err)
 	}

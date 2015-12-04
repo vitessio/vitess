@@ -9,13 +9,13 @@ import (
 	"os"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var routerSchema = createTestSchema(`
@@ -228,23 +228,23 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 	createSandbox("TestBadSharding")
 
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, "")
+	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour, nil, "")
 	router = NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	return router, sbc1, sbc2, sbclookup
 }
 
-func routerExec(router *Router, sql string, bv map[string]interface{}) (*mproto.QueryResult, error) {
+func routerExec(router *Router, sql string, bv map[string]interface{}) (*sqltypes.Result, error) {
 	return router.Execute(context.Background(),
 		sql,
 		bv,
-		pb.TabletType_MASTER,
+		topodatapb.TabletType_MASTER,
 		nil,
 		false)
 }
 
-func routerStream(router *Router, sql string) (qr *mproto.QueryResult, err error) {
-	results := make(chan *mproto.QueryResult, 10)
-	err = router.StreamExecute(context.Background(), sql, nil, pb.TabletType_MASTER, func(qr *mproto.QueryResult) error {
+func routerStream(router *Router, sql string) (qr *sqltypes.Result, err error) {
+	results := make(chan *sqltypes.Result, 10)
+	err = router.StreamExecute(context.Background(), sql, nil, topodatapb.TabletType_MASTER, func(qr *sqltypes.Result) error {
 		results <- qr
 		return nil
 	})
@@ -255,7 +255,7 @@ func routerStream(router *Router, sql string) (qr *mproto.QueryResult, err error
 	first := true
 	for r := range results {
 		if first {
-			qr = &mproto.QueryResult{Fields: r.Fields}
+			qr = &sqltypes.Result{Fields: r.Fields}
 			first = false
 		}
 		qr.Rows = append(qr.Rows, r.Rows...)

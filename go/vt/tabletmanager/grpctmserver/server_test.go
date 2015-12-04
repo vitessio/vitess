@@ -13,13 +13,13 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"google.golang.org/grpc"
 
-	pbs "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerservicepb "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// the test here creates a fake server implementation, a fake client
+// TestGRPCTMServer creates a fake server implementation, a fake client
 // implementation, and runs the test suite against the setup.
-func TestGoRPCTMServer(t *testing.T) {
+func TestGRPCTMServer(t *testing.T) {
 	// Listen on a random port
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -28,16 +28,16 @@ func TestGoRPCTMServer(t *testing.T) {
 	host := listener.Addr().(*net.TCPAddr).IP.String()
 	port := int32(listener.Addr().(*net.TCPAddr).Port)
 
-	// Create a gRPC server and listen on the port
+	// Create a gRPC server and listen on the port.
 	s := grpc.NewServer()
 	fakeAgent := agentrpctest.NewFakeRPCAgent(t)
-	pbs.RegisterTabletManagerServer(s, &server{agent: fakeAgent})
+	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{agent: fakeAgent})
 	go s.Serve(listener)
 
-	// Create a gRPG client to talk to the fake tablet
+	// Create a gRPC client to talk to the fake tablet.
 	client := &grpctmclient.Client{}
-	ti := topo.NewTabletInfo(&pb.Tablet{
-		Alias: &pb.TabletAlias{
+	ti := topo.NewTabletInfo(&topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
 			Cell: "test",
 			Uid:  123,
 		},

@@ -91,7 +91,9 @@ var keywords = map[string]int{
 	"order":          ORDER,
 	"outer":          OUTER,
 	"rename":         RENAME,
+	"regexp":         REGEXP,
 	"right":          RIGHT,
+	"rlike":          REGEXP,
 	"select":         SELECT,
 	"set":            SET,
 	"show":           SHOW,
@@ -131,7 +133,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
-	buf := bytes.NewBuffer(make([]byte, 0, 32))
+	buf := &bytes.Buffer{}
 	if tkn.lastToken != nil {
 		fmt.Fprintf(buf, "%s at position %v near '%s'", err, tkn.Position, tkn.lastToken)
 	} else {
@@ -248,7 +250,7 @@ func (tkn *Tokenizer) skipBlank() {
 }
 
 func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.next() {
 		buffer.WriteByte(byte(tkn.lastChar))
@@ -266,7 +268,7 @@ func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	if !isLetter(tkn.lastChar) {
 		return LEX_ERROR, buffer.Bytes()
@@ -282,7 +284,7 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanBindVar() (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	token := VALUE_ARG
 	tkn.next()
@@ -308,7 +310,7 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 }
 
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	if seenDecimalPoint {
 		buffer.WriteByte('.')
 		tkn.scanMantissa(10, buffer)
@@ -365,7 +367,7 @@ exit:
 }
 
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	for {
 		ch := tkn.lastChar
 		tkn.next()
@@ -395,7 +397,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	buffer.WriteString(prefix)
 	for tkn.lastChar != eofChar {
 		if tkn.lastChar == '\n' {
@@ -408,7 +410,7 @@ func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	buffer.WriteString("/*")
 	for {
 		if tkn.lastChar == '*' {

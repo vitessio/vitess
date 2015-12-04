@@ -8,17 +8,19 @@ package fakevtworkerclient
 import (
 	"time"
 
-	"github.com/youtube/vitess/go/vt/logutil"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/vtctl/fakevtctlclient"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
-	"golang.org/x/net/context"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
 // FakeVtworkerClient is a fake which implements the vtworkerclient interface.
 // The fake can be used to return a specific result for a given command.
 // If the command is not registered, an error will be thrown.
 type FakeVtworkerClient struct {
-	fakevtctlclient.FakeLoggerEventStreamingClient
+	*fakevtctlclient.FakeLoggerEventStreamingClient
 }
 
 // NewFakeVtworkerClient creates a FakeVtworkerClient struct.
@@ -27,12 +29,12 @@ func NewFakeVtworkerClient() *FakeVtworkerClient {
 }
 
 // FakeVtworkerClientFactory always returns the current instance.
-func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.VtworkerClient, error) {
+func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.Client, error) {
 	return f, nil
 }
 
 // ExecuteVtworkerCommand is part of the vtworkerclient interface.
-func (f *FakeVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtworkerclient.ErrFunc, error) {
+func (f *FakeVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutilpb.Event, vtworkerclient.ErrFunc, error) {
 	return f.FakeLoggerEventStreamingClient.StreamResult(args)
 }
 

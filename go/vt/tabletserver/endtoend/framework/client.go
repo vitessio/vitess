@@ -7,15 +7,14 @@ package framework
 import (
 	"errors"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
-	qrpb "github.com/youtube/vitess/go/vt/proto/query"
-	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // QueryClient provides a convenient wrapper for TabletServer's query service.
@@ -23,7 +22,7 @@ import (
 // same server.
 type QueryClient struct {
 	ctx           context.Context
-	target        query.Target
+	target        querypb.Target
 	server        *tabletserver.TabletServer
 	transactionID int64
 }
@@ -33,8 +32,8 @@ func NewClient() *QueryClient {
 	return &QueryClient{
 		ctx: callerid.NewContext(
 			context.Background(),
-			&vtpb.CallerID{},
-			&qrpb.VTGateCallerID{Username: "dev"},
+			&vtrpcpb.CallerID{},
+			&querypb.VTGateCallerID{Username: "dev"},
 		),
 		target: Target,
 		server: Server,
@@ -46,55 +45,48 @@ func (client *QueryClient) Begin() error {
 	if client.transactionID != 0 {
 		return errors.New("already in transaction")
 	}
-	var txinfo proto.TransactionInfo
-	err := client.server.Begin(client.ctx, &client.target, &proto.Session{}, &txinfo)
+	transactionID, err := client.server.Begin(client.ctx, &client.target, 0)
 	if err != nil {
 		return err
 	}
-	client.transactionID = txinfo.TransactionId
+	client.transactionID = transactionID
 	return nil
 }
 
 // Commit commits the current transaction.
 func (client *QueryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Commit(client.ctx, &client.target, &proto.Session{TransactionId: client.transactionID})
+	return client.server.Commit(client.ctx, &client.target, 0, client.transactionID)
 }
 
 // Rollback rolls back the current transaction.
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Rollback(client.ctx, &client.target, &proto.Session{TransactionId: client.transactionID})
+	return client.server.Rollback(client.ctx, &client.target, 0, client.transactionID)
 }
 
 // Execute executes a query.
-func (client *QueryClient) Execute(query string, bindvars map[string]interface{}) (*mproto.QueryResult, error) {
-	var qr = &mproto.QueryResult{}
-	err := client.server.Execute(
+func (client *QueryClient) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+	return client.server.Execute(
 		client.ctx,
 		&client.target,
-		&proto.Query{
-			Sql:           query,
-			BindVariables: bindvars,
-			TransactionId: client.transactionID,
-		},
-		qr,
+		query,
+		bindvars,
+		0,
+		client.transactionID,
 	)
-	return qr, err
 }
 
 // StreamExecute executes a query & streams the results.
-func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}) (*mproto.QueryResult, error) {
-	result := &mproto.QueryResult{}
+func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+	result := &sqltypes.Result{}
 	err := client.server.StreamExecute(
 		client.ctx,
 		&client.target,
-		&proto.Query{
-			Sql:           query,
-			BindVariables: bindvars,
-			TransactionId: client.transactionID,
-		},
-		func(res *mproto.QueryResult) error {
+		query,
+		bindvars,
+		0,
+		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
 			}
@@ -110,31 +102,25 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]inter
 }
 
 // Stream streams the resutls of a query.
-func (client *QueryClient) Stream(query string, bindvars map[string]interface{}, sendFunc func(*mproto.QueryResult) error) error {
+func (client *QueryClient) Stream(query string, bindvars map[string]interface{}, sendFunc func(*sqltypes.Result) error) error {
 	return client.server.StreamExecute(
 		client.ctx,
 		&client.target,
-		&proto.Query{
-			Sql:           query,
-			BindVariables: bindvars,
-			TransactionId: client.transactionID,
-		},
+		query,
+		bindvars,
+		0,
 		sendFunc,
 	)
 }
 
 // ExecuteBatch executes a batch of queries.
-func (client *QueryClient) ExecuteBatch(queries []proto.BoundQuery, asTransaction bool) (*proto.QueryResultList, error) {
-	var qr = &proto.QueryResultList{}
-	err := client.server.ExecuteBatch(
+func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
+	return client.server.ExecuteBatch(
 		client.ctx,
 		&client.target,
-		&proto.QueryList{
-			Queries:       queries,
-			AsTransaction: asTransaction,
-			TransactionId: client.transactionID,
-		},
-		qr,
+		queries,
+		0,
+		asTransaction,
+		client.transactionID,
 	)
-	return qr, err
 }

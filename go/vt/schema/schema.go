@@ -8,32 +8,24 @@ package schema
 // It contains a data structure that's shared between sqlparser & tabletserver
 
 import (
-	"strings"
-
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
-)
-
-// Column categories
-const (
-	CAT_OTHER = iota
-	CAT_NUMBER
-	CAT_VARBINARY
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Cache types
 const (
-	CACHE_NONE = 0
-	CACHE_RW   = 1
-	CACHE_W    = 2
+	CacheNone = 0
+	CacheRW   = 1
+	CacheW    = 2
 )
 
 // TableColumn contains info about a table's column.
 type TableColumn struct {
-	Name     string
-	Category int
-	IsAuto   bool
-	Default  sqltypes.Value
+	Name    string
+	Type    querypb.Type
+	IsAuto  bool
+	Default sqltypes.Value
 }
 
 // Table contains info about a table.
@@ -61,16 +53,10 @@ func NewTable(name string) *Table {
 }
 
 // AddColumn adds a column to the Table.
-func (ta *Table) AddColumn(name string, columnType string, defval sqltypes.Value, extra string) {
+func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes.Value, extra string) {
 	index := len(ta.Columns)
 	ta.Columns = append(ta.Columns, TableColumn{Name: name})
-	if strings.Contains(columnType, "int") {
-		ta.Columns[index].Category = CAT_NUMBER
-	} else if strings.HasPrefix(columnType, "varbinary") {
-		ta.Columns[index].Category = CAT_VARBINARY
-	} else {
-		ta.Columns[index].Category = CAT_OTHER
-	}
+	ta.Columns[index].Type = columnType
 	if extra == "auto_increment" {
 		ta.Columns[index].IsAuto = true
 		// Ignore default value, if any
@@ -79,11 +65,8 @@ func (ta *Table) AddColumn(name string, columnType string, defval sqltypes.Value
 	if defval.IsNull() {
 		return
 	}
-	if ta.Columns[index].Category == CAT_NUMBER {
-		ta.Columns[index].Default = sqltypes.MakeNumeric(defval.Raw())
-	} else {
-		ta.Columns[index].Default = sqltypes.MakeString(defval.Raw())
-	}
+	// Schema values are trusted.
+	ta.Columns[index].Default = sqltypes.MakeTrusted(ta.Columns[index].Type, defval.Raw())
 }
 
 // FindColumn finds a column in the table. It returns the index if found.

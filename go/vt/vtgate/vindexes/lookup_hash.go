@@ -7,8 +7,7 @@ package vindexes
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -224,7 +223,7 @@ func (lkp *lookup) Init(m map[string]interface{}) {
 // Map1 is for a unique vindex.
 func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.sel,
 	}
 	for _, id := range ids {
@@ -242,11 +241,7 @@ func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byt
 		if len(result.Rows) != 1 {
 			return nil, fmt.Errorf("lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, id)
 		}
-		inum, err := mproto.Convert(result.Fields[0], result.Rows[0][0])
-		if err != nil {
-			return nil, fmt.Errorf("lookup.Map: %v", err)
-		}
-		num, err := getNumber(inum)
+		num, err := getNumber(result.Rows[0][0].ToNative())
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -258,7 +253,7 @@ func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byt
 // Map2 is for a non-unique vindex.
 func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][][]byte, error) {
 	out := make([][][]byte, 0, len(ids))
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.sel,
 	}
 	for _, id := range ids {
@@ -271,11 +266,7 @@ func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][][]b
 		}
 		var ksids [][]byte
 		for _, row := range result.Rows {
-			inum, err := mproto.Convert(result.Fields[0], row[0])
-			if err != nil {
-				return nil, fmt.Errorf("lookup.Map: %v", err)
-			}
-			num, err := getNumber(inum)
+			num, err := getNumber(row[0].ToNative())
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}
@@ -292,7 +283,7 @@ func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []by
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
 	}
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.ver,
 		BindVariables: map[string]interface{}{
 			lkp.From: id,
@@ -315,7 +306,7 @@ func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid []by
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.ins,
 		BindVariables: map[string]interface{}{
 			lkp.From: id,
@@ -334,7 +325,7 @@ func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid []byte) (id int64,
 	if err != nil {
 		return 0, fmt.Errorf("lookup.Generate: %v", err)
 	}
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.ins,
 		BindVariables: map[string]interface{}{
 			lkp.From: nil,
@@ -345,7 +336,7 @@ func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid []byte) (id int64,
 	if err != nil {
 		return 0, fmt.Errorf("lookup.Generate: %v", err)
 	}
-	return int64(result.InsertId), err
+	return int64(result.InsertID), err
 }
 
 // Delete deletes the association between ids and ksid.
@@ -354,7 +345,7 @@ func (lkp *lookup) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid [
 	if err != nil {
 		return fmt.Errorf("lookup.Delete: %v", err)
 	}
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: lkp.del,
 		BindVariables: map[string]interface{}{
 			lkp.From: ids,

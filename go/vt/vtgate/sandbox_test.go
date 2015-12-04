@@ -10,17 +10,16 @@ import (
 	"sync"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
@@ -123,7 +122,7 @@ func (s *sandbox) Reset() {
 // with variables other than sandboxConn.
 type sandboxableConn interface {
 	tabletconn.TabletConn
-	setEndPoint(*pbt.EndPoint)
+	setEndPoint(*topodatapb.EndPoint)
 }
 
 func (s *sandbox) MapTestConn(shard string, conn sandboxableConn) {
@@ -134,7 +133,7 @@ func (s *sandbox) MapTestConn(shard string, conn sandboxableConn) {
 		conns = make(map[uint32]tabletconn.TabletConn)
 	}
 	uid := uint32(len(conns))
-	conn.setEndPoint(&pbt.EndPoint{
+	conn.setEndPoint(&topodatapb.EndPoint{
 		Uid:     uid,
 		Host:    shard,
 		PortMap: map[string]int32{"vt": 1},
@@ -156,7 +155,7 @@ func (s *sandbox) DeleteTestConn(shard string, conn tabletconn.TabletConn) {
 
 var DefaultShardSpec = "-20-40-60-80-a0-c0-e0-"
 
-func getAllShards(shardSpec string) ([]*pbt.KeyRange, error) {
+func getAllShards(shardSpec string) ([]*topodatapb.KeyRange, error) {
 	shardedKrArray, err := key.ParseShardingSpec(shardSpec)
 	if err != nil {
 		return nil, err
@@ -164,44 +163,45 @@ func getAllShards(shardSpec string) ([]*pbt.KeyRange, error) {
 	return shardedKrArray, nil
 }
 
-func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*pbt.SrvKeyspace, error) {
+func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb.SrvKeyspace, error) {
 	shardKrArray, err := getAllShards(shardSpec)
 	if err != nil {
 		return nil, err
 	}
-	shards := make([]*pbt.ShardReference, 0, len(shardKrArray))
+	shards := make([]*topodatapb.ShardReference, 0, len(shardKrArray))
 	for i := 0; i < len(shardKrArray); i++ {
-		shard := &pbt.ShardReference{
+		shard := &topodatapb.ShardReference{
 			Name:     key.KeyRangeString(shardKrArray[i]),
 			KeyRange: shardKrArray[i],
 		}
 		shards = append(shards, shard)
 	}
-	shardedSrvKeyspace := &pbt.SrvKeyspace{
+	shardedSrvKeyspace := &topodatapb.SrvKeyspace{
 		ShardingColumnName: "user_id", // exact value is ignored
-		Partitions: []*pbt.SrvKeyspace_KeyspacePartition{
-			&pbt.SrvKeyspace_KeyspacePartition{
-				ServedType:      pbt.TabletType_MASTER,
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType:      topodatapb.TabletType_MASTER,
 				ShardReferences: shards,
 			},
-			&pbt.SrvKeyspace_KeyspacePartition{
-				ServedType:      pbt.TabletType_REPLICA,
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType:      topodatapb.TabletType_REPLICA,
 				ShardReferences: shards,
 			},
-			&pbt.SrvKeyspace_KeyspacePartition{
-				ServedType:      pbt.TabletType_RDONLY,
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType:      topodatapb.TabletType_RDONLY,
 				ShardReferences: shards,
 			},
 		},
 	}
 	if servedFromKeyspace != "" {
-		shardedSrvKeyspace.ServedFrom = []*pbt.SrvKeyspace_ServedFrom{
-			&pbt.SrvKeyspace_ServedFrom{
-				TabletType: pbt.TabletType_RDONLY,
+		shardedSrvKeyspace.ServedFrom = []*topodatapb.SrvKeyspace_ServedFrom{
+			&topodatapb.SrvKeyspace_ServedFrom{
+				TabletType: topodatapb.TabletType_RDONLY,
 				Keyspace:   servedFromKeyspace,
 			},
-			&pbt.SrvKeyspace_ServedFrom{
-				TabletType: pbt.TabletType_MASTER,
+			&topodatapb.SrvKeyspace_ServedFrom{
+				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   servedFromKeyspace,
 			},
 		}
@@ -209,24 +209,24 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*pbt.SrvKey
 	return shardedSrvKeyspace, nil
 }
 
-func createUnshardedKeyspace() (*pbt.SrvKeyspace, error) {
-	shard := &pbt.ShardReference{
+func createUnshardedKeyspace() (*topodatapb.SrvKeyspace, error) {
+	shard := &topodatapb.ShardReference{
 		Name: "0",
 	}
 
-	unshardedSrvKeyspace := &pbt.SrvKeyspace{
-		Partitions: []*pbt.SrvKeyspace_KeyspacePartition{
-			&pbt.SrvKeyspace_KeyspacePartition{
-				ServedType:      pbt.TabletType_MASTER,
-				ShardReferences: []*pbt.ShardReference{shard},
+	unshardedSrvKeyspace := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType:      topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{shard},
 			},
-			&pbt.SrvKeyspace_KeyspacePartition{
-				ServedType:      pbt.TabletType_REPLICA,
-				ShardReferences: []*pbt.ShardReference{shard},
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType:      topodatapb.TabletType_REPLICA,
+				ShardReferences: []*topodatapb.ShardReference{shard},
 			},
-			&pbt.SrvKeyspace_KeyspacePartition{
-				ServedType:      pbt.TabletType_RDONLY,
-				ShardReferences: []*pbt.ShardReference{shard},
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType:      topodatapb.TabletType_RDONLY,
+				ShardReferences: []*topodatapb.ShardReference{shard},
 			},
 		},
 	}
@@ -248,7 +248,7 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([
 	return keyspaces, nil
 }
 
-func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pbt.SrvKeyspace, error) {
+func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	sand := getSandbox(keyspace)
 	if sand.SrvKeyspaceCallback != nil {
 		sand.SrvKeyspaceCallback()
@@ -264,13 +264,13 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 		if err != nil {
 			return nil, err
 		}
-		servedFromKeyspace.ServedFrom = []*pbt.SrvKeyspace_ServedFrom{
-			&pbt.SrvKeyspace_ServedFrom{
-				TabletType: pbt.TabletType_RDONLY,
+		servedFromKeyspace.ServedFrom = []*topodatapb.SrvKeyspace_ServedFrom{
+			&topodatapb.SrvKeyspace_ServedFrom{
+				TabletType: topodatapb.TabletType_RDONLY,
 				Keyspace:   KsTestUnsharded,
 			},
-			&pbt.SrvKeyspace_ServedFrom{
-				TabletType: pbt.TabletType_MASTER,
+			&topodatapb.SrvKeyspace_ServedFrom{
+				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   KsTestUnsharded,
 			},
 		}
@@ -282,11 +282,11 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
-func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pbt.SrvShard, error) {
+func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
 	return nil, fmt.Errorf("Unsupported")
 }
 
-func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pbt.TabletType) (*pbt.EndPoints, int64, error) {
+func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error) {
 	sand := getSandbox(keyspace)
 	sand.EndPointCounter.Add(1)
 	if sct.callbackGetEndPoints != nil {
@@ -298,14 +298,14 @@ func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard 
 	}
 
 	conns := sand.TestConns[shard]
-	ep := &pbt.EndPoints{}
+	ep := &topodatapb.EndPoints{}
 	for _, conn := range conns {
 		ep.Entries = append(ep.Entries, conn.EndPoint())
 	}
 	return ep, -1, nil
 }
 
-func sandboxDialer(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
+func sandboxDialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	sand := getSandbox(keyspace)
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()
@@ -329,7 +329,7 @@ func sandboxDialer(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard 
 
 // sandboxConn satisfies the TabletConn interface
 type sandboxConn struct {
-	endPoint       *pbt.EndPoint
+	endPoint       *topodatapb.EndPoint
 	mustFailRetry  int
 	mustFailFatal  int
 	mustFailServer int
@@ -351,16 +351,16 @@ type sandboxConn struct {
 	AsTransactionCount sync2.AtomicInt64
 
 	// Queries stores the non-batch requests received.
-	Queries []tproto.BoundQuery
+	Queries []querytypes.BoundQuery
 
 	// BatchQueries stores the batch requests received
 	// Each batch request is inlined as a slice of Queries.
-	BatchQueries [][]tproto.BoundQuery
+	BatchQueries [][]querytypes.BoundQuery
 
 	// results specifies the results to be returned.
 	// They're consumed as results are returned. If there are
 	// no results left, singleRowResult is returned.
-	results []*mproto.QueryResult
+	results []*sqltypes.Result
 
 	// transaction id generator
 	TransactionID sync2.AtomicInt64
@@ -375,7 +375,7 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_RETRY,
 			Err:        "retry: err",
-			ServerCode: vtrpc.ErrorCode_QUERY_NOT_SERVED,
+			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
 		}
 	}
 	if sbc.mustFailFatal > 0 {
@@ -383,7 +383,7 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_FATAL,
 			Err:        "fatal: err",
-			ServerCode: vtrpc.ErrorCode_INTERNAL_ERROR,
+			ServerCode: vtrpcpb.ErrorCode_INTERNAL_ERROR,
 		}
 	}
 	if sbc.mustFailServer > 0 {
@@ -391,7 +391,7 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_NORMAL,
 			Err:        "error: err",
-			ServerCode: vtrpc.ErrorCode_BAD_INPUT,
+			ServerCode: vtrpcpb.ErrorCode_BAD_INPUT,
 		}
 	}
 	if sbc.mustFailConn > 0 {
@@ -403,7 +403,7 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_TX_POOL_FULL,
 			Err:        "tx_pool_full: err",
-			ServerCode: vtrpc.ErrorCode_RESOURCE_EXHAUSTED,
+			ServerCode: vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED,
 		}
 	}
 	if sbc.mustFailNotTx > 0 {
@@ -411,23 +411,23 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_NOT_IN_TX,
 			Err:        "not_in_tx: err",
-			ServerCode: vtrpc.ErrorCode_NOT_IN_TX,
+			ServerCode: vtrpcpb.ErrorCode_NOT_IN_TX,
 		}
 	}
 	return nil
 }
 
-func (sbc *sandboxConn) setResults(r []*mproto.QueryResult) {
+func (sbc *sandboxConn) setResults(r []*sqltypes.Result) {
 	sbc.results = r
 }
 
-func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.Queries = append(sbc.Queries, tproto.BoundQuery{
+	sbc.Queries = append(sbc.Queries, querytypes.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
 	})
@@ -440,11 +440,11 @@ func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[
 	return sbc.getNextResult(), nil
 }
 
-func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
 	return sbc.Execute(ctx, query, bindVars, transactionID)
 }
 
-func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	if asTransaction {
 		sbc.AsTransactionCount.Add(1)
@@ -456,39 +456,38 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 		return nil, err
 	}
 	sbc.BatchQueries = append(sbc.BatchQueries, queries)
-	qrl := &tproto.QueryResultList{}
-	qrl.List = make([]mproto.QueryResult, 0, len(queries))
+	result := make([]sqltypes.Result, 0, len(queries))
 	for _ = range queries {
-		qrl.List = append(qrl.List, *(sbc.getNextResult()))
+		result = append(result, *(sbc.getNextResult()))
 	}
-	return qrl, nil
+	return result, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
-func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.Queries = append(sbc.Queries, tproto.BoundQuery{
+	sbc.Queries = append(sbc.Queries, querytypes.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
 	})
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
-	ch := make(chan *mproto.QueryResult, 1)
+	ch := make(chan *sqltypes.Result, 1)
 	ch <- sbc.getNextResult()
 	close(ch)
 	err := sbc.getError()
 	return ch, func() error { return err }, err
 }
 
-func (sbc *sandboxConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (sbc *sandboxConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
 	return sbc.StreamExecute(ctx, query, bindVars, transactionID)
 }
 
@@ -539,15 +538,13 @@ var sandboxSQRowCount = int64(10)
 
 // Fake SplitQuery creates splits from the original query by appending the
 // split index as a comment to the SQL. RowCount is always sandboxSQRowCount
-func (sbc *sandboxConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
-	splits := []tproto.QuerySplit{}
-	for i := 0; i < splitCount; i++ {
-		split := tproto.QuerySplit{
-			Query: tproto.BoundQuery{
-				Sql:           fmt.Sprintf("%s /*split %v */", query.Sql, i),
-				BindVariables: query.BindVariables,
-			},
-			RowCount: sandboxSQRowCount,
+func (sbc *sandboxConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+	splits := []querytypes.QuerySplit{}
+	for i := 0; i < int(splitCount); i++ {
+		split := querytypes.QuerySplit{
+			Sql:           fmt.Sprintf("%s /*split %v */", query.Sql, i),
+			BindVariables: query.BindVariables,
+			RowCount:      sandboxSQRowCount,
 		}
 		splits = append(splits, split)
 	}
@@ -555,7 +552,7 @@ func (sbc *sandboxConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 }
 
 // StreamHealth does nothing
-func (sbc *sandboxConn) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+func (sbc *sandboxConn) StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, tabletconn.ErrFunc, error) {
 	return nil, nil, fmt.Errorf("Not implemented in test")
 }
 
@@ -564,19 +561,19 @@ func (sbc *sandboxConn) Close() {
 	sbc.CloseCount.Add(1)
 }
 
-func (sbc *sandboxConn) SetTarget(keyspace, shard string, tabletType pbt.TabletType) error {
+func (sbc *sandboxConn) SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error {
 	return fmt.Errorf("not implemented, vtgate doesn't use target yet")
 }
 
-func (sbc *sandboxConn) EndPoint() *pbt.EndPoint {
+func (sbc *sandboxConn) EndPoint() *topodatapb.EndPoint {
 	return sbc.endPoint
 }
 
-func (sbc *sandboxConn) setEndPoint(ep *pbt.EndPoint) {
+func (sbc *sandboxConn) setEndPoint(ep *topodatapb.EndPoint) {
 	sbc.endPoint = ep
 }
 
-func (sbc *sandboxConn) getNextResult() *mproto.QueryResult {
+func (sbc *sandboxConn) getNextResult() *sqltypes.Result {
 	if len(sbc.results) != 0 {
 		r := sbc.results[0]
 		sbc.results = sbc.results[1:]
@@ -585,14 +582,15 @@ func (sbc *sandboxConn) getNextResult() *mproto.QueryResult {
 	return singleRowResult
 }
 
-var singleRowResult = &mproto.QueryResult{
-	Fields: []mproto.Field{
-		{"id", 3, mproto.VT_ZEROVALUE_FLAG},
-		{"value", 253, mproto.VT_ZEROVALUE_FLAG}},
+var singleRowResult = &sqltypes.Result{
+	Fields: []*querypb.Field{
+		{"id", sqltypes.Int32},
+		{"value", sqltypes.VarChar},
+	},
 	RowsAffected: 1,
-	InsertId:     0,
+	InsertID:     0,
 	Rows: [][]sqltypes.Value{{
-		{sqltypes.Numeric("1")},
-		{sqltypes.String("foo")},
+		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("foo")),
 	}},
 }

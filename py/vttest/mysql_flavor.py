@@ -11,14 +11,15 @@ import subprocess
 
 # For now, vttop is only used in this module. If other people
 # need this, we should move it to environment.
-if 'VTTOP' not in os.environ:
+if "VTTOP" not in os.environ:
   sys.stderr.write(
-      'ERROR: Vitess environment not set up. '
+      "ERROR: Vitess environment not set up. "
       'Please run "source dev.env" first.\n')
   sys.exit(1)
 
 # vttop is the toplevel of the vitess source tree
-vttop = os.environ['VTTOP']
+vttop = os.environ["VTTOP"]
+
 
 class MysqlFlavor(object):
   """Base class with default SQL statements."""
@@ -27,13 +28,6 @@ class MysqlFlavor(object):
     """Returns the path to an extra my_cnf file, or None."""
     return None
 
-  def bootstrap_archive(self):
-    """Returns the name of the bootstrap archive for mysqlctl.
-
-    Name is relative to vitess/data/bootstrap/.
-    """
-    return "mysql-db-dir.tbz"
-
 
 class MariaDB(MysqlFlavor):
   """Overrides specific to MariaDB."""
@@ -41,12 +35,9 @@ class MariaDB(MysqlFlavor):
   def my_cnf(self):
     files = [
         os.path.join(vttop, "config/mycnf/default-fast.cnf"),
-        os.path.join(vttop,  "config/mycnf/master_mariadb.cnf"),
-        ]
+        os.path.join(vttop, "config/mycnf/master_mariadb.cnf"),
+    ]
     return ":".join(files)
-
-  def bootstrap_archive(self):
-    return "mysql-db-dir_10.0.13-MariaDB.tbz"
 
 
 class MySQL56(MysqlFlavor):
@@ -56,11 +47,8 @@ class MySQL56(MysqlFlavor):
     files = [
         os.path.join(vttop, "config/mycnf/default-fast.cnf"),
         os.path.join(vttop, "config/mycnf/master_mysql56.cnf"),
-        ]
+    ]
     return ":".join(files)
-
-  def bootstrap_archive(self):
-    return "mysql-db-dir_5.6.24.tbz"
 
 
 __mysql_flavor = None

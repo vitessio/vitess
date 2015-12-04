@@ -15,7 +15,7 @@ import (
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /*
@@ -27,7 +27,7 @@ const (
 )
 
 // CreateKeyspace is part of the topo.Server interface
-func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
+func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	pathList := []string{
 		keyspacePath,
@@ -63,7 +63,7 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 }
 
 // UpdateKeyspace is part of the topo.Server interface
-func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (int64, error) {
+func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (int64, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
@@ -94,7 +94,7 @@ func (zkts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 }
 
 // GetKeyspace is part of the topo.Server interface
-func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error) {
+func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodatapb.Keyspace, int64, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	data, stat, err := zkts.zconn.Get(keyspacePath)
 	if err != nil {
@@ -104,7 +104,7 @@ func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keysp
 		return nil, 0, err
 	}
 
-	k := &pb.Keyspace{}
+	k := &topodatapb.Keyspace{}
 	if err = json.Unmarshal([]byte(data), k); err != nil {
 		return nil, 0, fmt.Errorf("bad keyspace data %v", err)
 	}

@@ -8,8 +8,8 @@ warnings.simplefilter('ignore')
 import unittest
 
 import environment
-import utils
 import tablet
+import utils
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
@@ -30,8 +30,6 @@ def setUpModule():
 
     master_tablet.init_tablet('master', 'test_keyspace', '0')
     replica_tablet.init_tablet('replica', 'test_keyspace', '0')
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     master_tablet.create_db('vt_test_keyspace')
     replica_tablet.create_db('vt_test_keyspace')

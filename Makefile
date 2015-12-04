@@ -61,7 +61,7 @@ unit_test_cover: build
 	godep go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
 unit_test_race: build
-	godep go test $(VT_GO_PARALLEL) -race ./go/...
+	tools/unit_test_race.sh
 
 # Run coverage and upload to coveralls.io.
 # Requires the secret COVERALLS_TOKEN env variable to be set.
@@ -74,10 +74,10 @@ SHELL = /bin/bash
 # Run the following tests after making worker changes.
 worker_test:
 	godep go test ./go/vt/worker/
-	go run test.go -docker=false binlog resharding resharding_bytes vertical_split initial_sharding initial_sharding_bytes worker
+	go run test.go -docker=false -tag=worker_test
 
 site_integration_test:
-	go run test.go -docker=false keyrange keyspace mysqlctl tabletmanager vtdb vtgatev2
+	go run test.go -docker=false -tag=site_test
 
 java_test:
 	godep go install ./go/cmd/vtgateclienttest
@@ -96,9 +96,9 @@ bson:
 # 3. (go) run protoc for each proto and put in go/vt/proto/${proto_file_name}/
 # 4. (python) run protoc for each proto and put in py/vtproto/
 proto:
-	find proto -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --go_out=plugins=grpc:go/vt/proto/{}
+	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --go_out=plugins=grpc:go/vt/proto/{}
 	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
-	find proto -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --python_out=py/vtproto --grpc_out=py/vtproto --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
+	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --python_out=py/vtproto --grpc_out=py/vtproto --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 
 # This rule builds the bootstrap images for all flavors.
 docker_bootstrap:

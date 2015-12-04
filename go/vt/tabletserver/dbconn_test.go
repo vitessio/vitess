@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -20,7 +19,7 @@ func TestDBConnExec(t *testing.T) {
 	db := fakesqldb.Register()
 	testUtils := newTestUtils()
 	sql := "select * from test_table limit 1000"
-	expectedResult := &mproto.QueryResult{
+	expectedResult := &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeString([]byte("123"))},
@@ -65,7 +64,7 @@ func TestDBConnKill(t *testing.T) {
 	dbConn, err := NewDBConn(connPool, appParams, dbaParams, queryServiceStats)
 	defer dbConn.Close()
 	query := fmt.Sprintf("kill %d", dbConn.ID())
-	db.AddQuery(query, &mproto.QueryResult{})
+	db.AddQuery(query, &sqltypes.Result{})
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
 	err = dbConn.Kill()
@@ -94,7 +93,7 @@ func TestDBConnStream(t *testing.T) {
 	db := fakesqldb.Register()
 	testUtils := newTestUtils()
 	sql := "select * from test_table limit 1000"
-	expectedResult := &mproto.QueryResult{
+	expectedResult := &sqltypes.Result{
 		RowsAffected: 0,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeString([]byte("123"))},
@@ -111,9 +110,9 @@ func TestDBConnStream(t *testing.T) {
 	queryServiceStats := NewQueryServiceStats("", false)
 	dbConn, err := NewDBConn(connPool, appParams, dbaParams, queryServiceStats)
 	defer dbConn.Close()
-	var result mproto.QueryResult
+	var result sqltypes.Result
 	err = dbConn.Stream(
-		ctx, sql, func(r *mproto.QueryResult) error {
+		ctx, sql, func(r *sqltypes.Result) error {
 			result = *r
 			return nil
 		}, 10)

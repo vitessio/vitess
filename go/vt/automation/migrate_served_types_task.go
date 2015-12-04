@@ -7,7 +7,7 @@ package automation
 import (
 	"fmt"
 
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
 )
 
@@ -17,11 +17,15 @@ type MigrateServedTypesTask struct {
 }
 
 // Run is part of the Task interface.
-func (t *MigrateServedTypesTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
+func (t *MigrateServedTypesTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
 	keyspaceAndShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
+
 	args := []string{"MigrateServedTypes"}
-	if parameters["reverse"] != "" {
-		args = append(args, "--reverse="+parameters["reverse"])
+	if cell := parameters["cell"]; cell != "" {
+		args = append(args, "--cells="+cell)
+	}
+	if reverse := parameters["reverse"]; reverse != "" {
+		args = append(args, "--reverse="+reverse)
 	}
 	args = append(args, keyspaceAndShard, parameters["type"])
 	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"], args)
@@ -35,5 +39,5 @@ func (t *MigrateServedTypesTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *MigrateServedTypesTask) OptionalParameters() []string {
-	return []string{"reverse"}
+	return []string{"cell", "reverse"}
 }

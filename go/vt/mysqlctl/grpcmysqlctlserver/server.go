@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/mysqlctl"
+	mysqlctlpb "github.com/youtube/vitess/go/vt/proto/mysqlctl"
 )
 
 // server is our gRPC server.
@@ -23,21 +23,21 @@ type server struct {
 }
 
 // Start implements the server side of the MysqlctlClient interface.
-func (s *server) Start(ctx context.Context, request *pb.StartRequest) (*pb.StartResponse, error) {
-	return &pb.StartResponse{}, s.mysqld.Start(ctx)
+func (s *server) Start(ctx context.Context, request *mysqlctlpb.StartRequest) (*mysqlctlpb.StartResponse, error) {
+	return &mysqlctlpb.StartResponse{}, s.mysqld.Start(ctx)
 }
 
 // Shutdown implements the server side of the MysqlctlClient interface.
-func (s *server) Shutdown(ctx context.Context, request *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
-	return &pb.ShutdownResponse{}, s.mysqld.Shutdown(ctx, request.WaitForMysqld)
+func (s *server) Shutdown(ctx context.Context, request *mysqlctlpb.ShutdownRequest) (*mysqlctlpb.ShutdownResponse, error) {
+	return &mysqlctlpb.ShutdownResponse{}, s.mysqld.Shutdown(ctx, request.WaitForMysqld)
 }
 
 // RunMysqlUpgrade implements the server side of the MysqlctlClient interface.
-func (s *server) RunMysqlUpgrade(ctx context.Context, request *pb.RunMysqlUpgradeRequest) (*pb.RunMysqlUpgradeResponse, error) {
-	return &pb.RunMysqlUpgradeResponse{}, s.mysqld.RunMysqlUpgrade()
+func (s *server) RunMysqlUpgrade(ctx context.Context, request *mysqlctlpb.RunMysqlUpgradeRequest) (*mysqlctlpb.RunMysqlUpgradeResponse, error) {
+	return &mysqlctlpb.RunMysqlUpgradeResponse{}, s.mysqld.RunMysqlUpgrade()
 }
 
 // StartServer registers the Server for RPCs.
 func StartServer(s *grpc.Server, mysqld *mysqlctl.Mysqld) {
-	pb.RegisterMysqlCtlServer(s, &server{mysqld})
+	mysqlctlpb.RegisterMysqlCtlServer(s, &server{mysqld})
 }
