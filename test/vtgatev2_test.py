@@ -731,7 +731,10 @@ class TestFailures(BaseTestCase):
     self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
     self.master_tablet.kill_vttablet()
-    self.tablet_start(self.master_tablet, 'master')
+    self.tablet_start(self.master_tablet, 'replica')
+    utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/-80',
+                     shard_0_master.tablet_alias], auto_log=True)
+    self.master_tablet.wait_for_vttablet_state('SERVING')
     self.replica_tablet = shard_1_replica1
     self.replica_tablet.kill_vttablet()
     self.tablet_start(self.replica_tablet, 'replica')
@@ -850,7 +853,10 @@ class TestFailures(BaseTestCase):
     vtgate_conn = get_connection()
     self.master_tablet.kill_vttablet()
     vtgate_conn.begin()
-    _ = self.tablet_start(self.master_tablet, 'master')
+    self.tablet_start(self.master_tablet, 'replica')
+    utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/-80',
+                     shard_0_master.tablet_alias], auto_log=True)
+    self.master_tablet.wait_for_vttablet_state('SERVING')
     # sleep over vtgate reconnection delay
     time.sleep(1)
     vtgate_conn.begin()
@@ -884,7 +890,10 @@ class TestFailures(BaseTestCase):
           KEYSPACE_NAME, 'master',
           keyranges=[self.keyrange])
       vtgate_conn.commit()
-    _ = self.tablet_start(self.master_tablet, 'master')
+    self.tablet_start(self.master_tablet, 'replica')
+    utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/-80',
+                     shard_0_master.tablet_alias], auto_log=True)
+    self.master_tablet.wait_for_vttablet_state('SERVING')
     # sleep over vtgate reconnection delay
     time.sleep(1)
     vtgate_conn.begin()
@@ -1175,16 +1184,21 @@ class TestFailures(BaseTestCase):
     # start tablet2
     self.tablet_start(self.replica_tablet2, 'replica')
     self.replica_tablet2.wait_for_vttablet_state('SERVING')
-    # it should succeed on tablet1
+    # query should succeed on either tablet
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
+    tablet2_vars = utils.get_vars(self.replica_tablet2.port)
+    t2_query_count_before = int(tablet2_vars['Queries']['TotalCount'])
     vtgate_conn._execute(
         'select 1 from vt_insert_test', {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
+    tablet2_vars = utils.get_vars(self.replica_tablet2.port)
+    t2_query_count_after = int(tablet2_vars['Queries']['TotalCount'])
+    self.assertTrue((t1_query_count_after-t1_query_count_before
+                     +t2_query_count_after-t2_query_count_before) == 1)
 
   # Test the case that there are queries sent during one vttablet is killed,
   # and all queries succeed because there is another vttablet.
@@ -1215,6 +1229,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     # hard kill tablet2
     self.replica_tablet2.hard_kill_vttablet()
+    time.sleep(1)  # wait so VTGate can detect tablet2 is gone
     if vtgate_gateway_flavor().flavor() == 'shardgateway':
       # "shardgateway" implementation fails the first query
       # send query after tablet2 is killed, should not retry on the cached conn
@@ -1246,16 +1261,21 @@ class TestFailures(BaseTestCase):
       utils.run_vtctl(['StartSlave', t.tablet_alias])
       utils.wait_for_tablet_type(t.tablet_alias, 'replica')
       t.wait_for_vttablet_state('SERVING')
-    # it should succeed on tablet1
+    # query should succeed on either tablet
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
+    tablet2_vars = utils.get_vars(self.replica_tablet2.port)
+    t2_query_count_before = int(tablet2_vars['Queries']['TotalCount'])
     vtgate_conn._execute(
         'select 1 from vt_insert_test', {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
+    tablet2_vars = utils.get_vars(self.replica_tablet2.port)
+    t2_query_count_after = int(tablet2_vars['Queries']['TotalCount'])
+    self.assertTrue((t1_query_count_after-t1_query_count_before
+                     +t2_query_count_after-t2_query_count_before) == 1)
 
   def test_bind_vars_in_exception_message(self):
     vtgate_conn = get_connection()
@@ -1294,7 +1314,9 @@ class TestFailures(BaseTestCase):
     finally:
       vtgate_conn.rollback()
     # Start master tablet again
-    self.tablet_start(self.master_tablet, 'master')
+    self.tablet_start(self.master_tablet, 'replica')
+    utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/-80',
+                     shard_0_master.tablet_alias], auto_log=True)
     self.master_tablet.wait_for_vttablet_state('SERVING')
 
   def test_fail_fast_when_no_serving_tablets(self):
