@@ -65,12 +65,11 @@ func (client *client) ServeUpdateStream(ctx context.Context, position string) (c
 	}, nil
 }
 
-func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (client *client) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	req := &gorpcbinlogcommon.KeyRangeRequest{
-		Position:       position,
-		KeyspaceIdType: keyspaceIDType,
-		KeyRange:       keyRange,
-		Charset:        charset,
+		Position: position,
+		KeyRange: keyRange,
+		Charset:  charset,
 	}
 	result := make(chan *binlogdatapb.BinlogTransaction, 10)
 	responseChan := make(chan *binlogdatapb.BinlogTransaction, 10)
