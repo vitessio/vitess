@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
-	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -36,9 +34,6 @@ var (
 
 const (
 	gatewayImplementationDiscovery = "discoverygateway"
-
-	// the period to wait for endpoint availability during initialization
-	waitAvailableEndPointPeriod = 30 * time.Second
 )
 
 func init() {
@@ -82,63 +77,19 @@ type discoveryGateway struct {
 }
 
 func (dg *discoveryGateway) waitForEndPoints() error {
-	ctx := context.Background()
-
 	// Skip waiting for endpoints if we are not told to do so.
 	if len(dg.tabletTypesToWait) == 0 {
 		return nil
 	}
 
-	// Go through all serving shards and create connections,
-	// and wait for at least one available endpoint for specified tablet type.
-	ksNames, err := dg.srvTopoServer.GetSrvKeyspaceNames(ctx, dg.localCell)
-	if err != nil {
-		return err
+	ctx := context.Background()
+	err := discovery.WaitForAllEndPoints(ctx, dg.hc, dg.srvTopoServer, dg.localCell, dg.tabletTypesToWait)
+	if err == discovery.ErrWaitForEndPointsTimeout {
+		// ignore this error, we will still start up, and may not serve
+		// all endpoints.
+		err = nil
 	}
-	var wg sync.WaitGroup
-	var errRecorder concurrency.AllErrorRecorder
-	for _, ksName := range ksNames {
-		wg.Add(1)
-		go func(keyspace string) {
-			defer wg.Done()
-			// get SrvKeyspace for cell/keyspace
-			ks, err := dg.srvTopoServer.GetSrvKeyspace(ctx, dg.localCell, keyspace)
-			if err != nil {
-				errRecorder.RecordError(err)
-				return
-			}
-			// get all shard names
-			allShards := make(map[string]bool)
-			for _, ksPartition := range ks.Partitions {
-				for _, shard := range ksPartition.ShardReferences {
-					allShards[shard.Name] = true
-				}
-			}
-			// check connections
-			for shardName := range allShards {
-				for _, tt := range dg.tabletTypesToWait {
-					wg.Add(1)
-					go func(shard string, tabletType topodatapb.TabletType) {
-						defer wg.Done()
-						expiry := time.Now().Add(waitAvailableEndPointPeriod)
-						for expiry.After(time.Now()) {
-							epl := dg.hc.GetEndPointStatsFromTarget(keyspace, shard, tabletType)
-							if len(epl) > 0 {
-								return
-							}
-							time.Sleep(time.Second)
-						}
-						log.Warningf("waitForEndPoints timeout for %v.%v.%v", keyspace, shard, tabletType)
-					}(shardName, tt)
-				}
-			}
-		}(ksName)
-	}
-	wg.Wait()
-	if errRecorder.HasErrors() {
-		return errRecorder.AggrError(AggregateVtGateErrors)
-	}
-	return nil
+	return err
 }
 
 // InitializeConnections creates connections to VTTablets.

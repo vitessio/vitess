@@ -77,12 +77,6 @@ type BinlogPlayerController struct {
 	// They will change depending on our state.
 	playerMutex sync.Mutex
 
-	// initialEndpointFound is a channel created with the controller,
-	// that will be closed the first time we receive an endPoint.
-	// It is meant to let the healthcheck module figure out the
-	// first endpoint we can use before our first iteration.
-	initialEndpointFound chan struct{}
-
 	// ctx is the context to cancel to stop the playback.
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -102,35 +96,23 @@ type BinlogPlayerController struct {
 
 func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
-		ts:                   ts,
-		vtClientFactory:      vtClientFactory,
-		mysqld:               mysqld,
-		cell:                 cell,
-		keyspaceIDType:       keyspaceIDType,
-		keyRange:             keyRange,
-		dbName:               dbName,
-		sourceShard:          sourceShard,
-		binlogPlayerStats:    binlogplayer.NewStats(),
-		healthCheck:          discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *retryDelay),
-		initialEndpointFound: make(chan struct{}),
+		ts:                ts,
+		vtClientFactory:   vtClientFactory,
+		mysqld:            mysqld,
+		cell:              cell,
+		keyspaceIDType:    keyspaceIDType,
+		keyRange:          keyRange,
+		dbName:            dbName,
+		sourceShard:       sourceShard,
+		binlogPlayerStats: binlogplayer.NewStats(),
+		healthCheck:       discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *retryDelay),
 	}
-	blc.healthCheck.SetListener(blc)
 	blc.shardReplicationWatcher = discovery.NewShardReplicationWatcher(ts, blc.healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthcheckTopologyRefresh, 5)
 	return blc
 }
 
 func (bpc *BinlogPlayerController) String() string {
 	return "BinlogPlayerController(" + topoproto.SourceShardString(bpc.sourceShard) + ")"
-}
-
-// StatsUpdate is part of the discover.HealthCheckStatsListener interface
-func (bpc *BinlogPlayerController) StatsUpdate(*discovery.EndPointStats) {
-	bpc.playerMutex.Lock()
-	if bpc.initialEndpointFound != nil {
-		close(bpc.initialEndpointFound)
-		bpc.initialEndpointFound = nil
-	}
-	bpc.playerMutex.Unlock()
 }
 
 // Start will start the player in the background and run forever.
@@ -278,19 +260,9 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("not starting because flag '%v' is set", binlogplayer.BlpFlagDontStart)
 	}
 
-	// wait for the initial endpoint set if this is the first run
-	bpc.playerMutex.Lock()
-	ief := bpc.initialEndpointFound
-	bpc.playerMutex.Unlock()
-	if ief != nil {
-		t := time.NewTimer(*retryDelay)
-		select {
-		case <-ief:
-			t.Stop()
-			break
-		case <-t.C:
-			return fmt.Errorf("healthcheck has no endpoint for %v %v %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA)
-		}
+	// wait for the endpoint set (usefull for the first run at least, fast for next runs)
+	if err := discovery.WaitForEndPoints(bpc.healthCheck, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
+		return fmt.Errorf("error waiting for endpoints for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA, err)
 	}
 
 	// Find the server list from the health check
