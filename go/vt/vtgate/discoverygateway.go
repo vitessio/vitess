@@ -40,7 +40,7 @@ func init() {
 	RegisterGatewayCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, _ time.Duration, retryCount int, _, _, _ time.Duration, _ *stats.MultiTimings, tabletTypesToWait []topodatapb.TabletType) Gateway {
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, _ time.Duration, retryCount int, _, _, _ time.Duration, _ *stats.MultiTimings, tabletTypesToWait []topodatapb.TabletType) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
 		topoServer:        topoServer,
@@ -68,7 +68,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 type discoveryGateway struct {
 	hc                discovery.HealthCheck
 	topoServer        topo.Server
-	srvTopoServer     SrvTopoServer
+	srvTopoServer     topo.SrvTopoServer
 	localCell         string
 	retryCount        int
 	tabletTypesToWait []topodatapb.TabletType

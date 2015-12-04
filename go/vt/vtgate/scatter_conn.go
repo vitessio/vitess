@@ -45,7 +45,7 @@ type shardActionFunc func(shard string, transactionID int64, sResults chan<- int
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate connections.
-func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, testGateway string) *ScatterConn {
+func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, testGateway string) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	tabletConnectStatsName := ""
 	if statsName != "" {
