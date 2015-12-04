@@ -36,7 +36,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	// always authorized)
 	tablet := agent.Tablet()
 	originalType := tablet.Type
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = topodatapb.TabletType_RESTORE
 		return nil
 	}); err != nil {
@@ -63,7 +63,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	}
 
 	// Change type back to original type if we're ok to serve.
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = originalType
 		return nil
 	}); err != nil {

@@ -106,19 +106,17 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 
 	// Save the old tablet so callbacks can have a better idea of
 	// the precise nature of the transition.
-	oldTablet := agent.Tablet().Tablet
+	oldTablet := agent.Tablet()
 
 	// Actions should have side effects on the tablet, so reload the data.
-	ti, err := agent.updateTabletFromTopo(ctx)
+	tablet, err := agent.updateTabletFromTopo(ctx)
 	if err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
 		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
 	}
 
-	if updatedTablet := agent.checkTabletMysqlPort(ctx, ti); updatedTablet != nil {
-		agent.mutex.Lock()
-		agent._tablet = updatedTablet
-		agent.mutex.Unlock()
+	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
+		agent.setTablet(updatedTablet)
 	}
 
 	if err := agent.updateState(ctx, oldTablet, reason); err != nil {
@@ -131,9 +129,7 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 // updateState will use the provided tablet record as a base, the current
 // tablet record as the new one, run changeCallback, and dispatch the event.
 func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topodatapb.Tablet, reason string) error {
-	agent.mutex.Lock()
-	newTablet := agent._tablet.Tablet
-	agent.mutex.Unlock()
+	newTablet := agent.Tablet()
 	log.Infof("Running tablet callback because: %v", reason)
 	if err := agent.changeCallback(ctx, oldTablet, newTablet); err != nil {
 		return err

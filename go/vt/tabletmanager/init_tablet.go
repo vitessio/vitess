@@ -183,8 +183,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		}
 
 	case topo.ErrNodeExists:
-		// The node already exists, will just try to update
-		// it. So we read it first.
+		// The node already exists, will just try to update it. So we read it first.
 		oldTablet, err := agent.TopoServer.GetTablet(ctx, tablet.Alias)
 		if err != nil {
 			return fmt.Errorf("InitTablet failed to read existing tablet record: %v", err)
@@ -195,9 +194,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			return fmt.Errorf("InitTablet failed because existing tablet keyspace and shard %v/%v differ from the provided ones %v/%v", oldTablet.Keyspace, oldTablet.Shard, tablet.Keyspace, tablet.Shard)
 		}
 
-		// And overwrite the rest
-		*(oldTablet.Tablet) = *tablet
-		if err := agent.TopoServer.UpdateTablet(ctx, oldTablet); err != nil {
+		// Then overwrite everything, ignoring version mismatch.
+		if err := agent.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, -1)); err != nil {
 			return fmt.Errorf("UpdateTablet failed: %v", err)
 		}
 

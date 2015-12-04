@@ -164,6 +164,10 @@ func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *topodatapb
 		return err
 	}
 
+	if !topo.IsTrivialTypeChange(ti.Type, tabletType) {
+		return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeSlaveType", tabletAlias, ti.Type, tabletType)
+	}
+
 	// ask the tablet to make the change
 	if err := wr.tmc.ChangeType(ctx, ti, tabletType); err != nil {
 		return err

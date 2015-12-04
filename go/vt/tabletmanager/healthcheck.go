@@ -16,6 +16,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -146,8 +147,8 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 
 	// read the current tablet record and tablet control
 	agent.mutex.Lock()
-	tablet := agent._tablet
-	tabletControl := agent._tabletControl
+	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
+	tabletControl := proto.Clone(agent._tabletControl).(*topodatapb.Shard_TabletControl)
 	agent.mutex.Unlock()
 
 	// figure out if we should be running the query service
@@ -205,7 +206,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 			// query service, shut it down.
 			// Note this is possibly sending 'spare' as
 			// the tablet type, we will clean it up later.
-			agent.disallowQueries(tablet.Tablet.Type,
+			agent.disallowQueries(tablet.Type,
 				fmt.Sprintf("health-check failure(%v)", err),
 			)
 		}
@@ -233,7 +234,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 			agent.mutex.Unlock()
 		} else {
 			log.Infof("Updating tablet mysql port to %v", mysqlPort)
-			if err := agent.TopoServer.UpdateTabletFields(agent.batchCtx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
+			if _, err := agent.TopoServer.UpdateTabletFields(agent.batchCtx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
 				if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
 					return err
 				}
@@ -302,12 +303,11 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 
 	// Change the Type, update the health. Note we pass in a map
 	// that's not nil, meaning if it's empty, we will clear it.
-	if err := topotools.ChangeOwnType(agent.batchCtx, agent.TopoServer, agent.initialTablet, newTabletType, health); err != nil {
+	tablet, err = topotools.ChangeOwnType(agent.batchCtx, agent.TopoServer, agent.initialTablet, newTabletType, health)
+	if err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
-	tablet.HealthMap = health
-	tablet.Type = newTabletType
 
 	// Rebuild the serving graph in our cell, only if we're dealing with
 	// a serving type
@@ -322,7 +322,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 }
 
 // terminateHealthChecks is called when we enter lame duck mode.
-// We will clean up our state, and shut down query service.
+// We will clean up our state, and set query service to lame duck mode.
 // We only do something if we are in targetTabletType state, and then
 // we just go to spare.
 func (agent *ActionAgent) terminateHealthChecks(targetTabletType topodatapb.TabletType) {
@@ -339,14 +339,9 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topodatapb.Tabl
 
 	// Change the Type to spare, update the health. Note we pass in a map
 	// that's not nil, meaning we will clear it.
-	if err := topotools.ChangeOwnType(agent.batchCtx, agent.TopoServer, agent.initialTablet, topodatapb.TabletType_SPARE, make(map[string]string)); err != nil {
-		log.Infof("Error updating tablet record: %v", err)
-		return
-	}
-	// The change above succeeded, so update our local copy.
-	tablet, err := agent.updateTabletFromTopo(agent.batchCtx)
+	tablet, err := topotools.ChangeOwnType(agent.batchCtx, agent.TopoServer, agent.initialTablet, topodatapb.TabletType_SPARE, make(map[string]string))
 	if err != nil {
-		log.Infof("Error re-reading tablet record: %v", err)
+		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
 
@@ -367,9 +362,9 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topodatapb.Tabl
 }
 
 // updateServingGraph will update the serving graph if we need to.
-func (agent *ActionAgent) updateServingGraph(tablet *topo.TabletInfo, targetTabletType topodatapb.TabletType) error {
+func (agent *ActionAgent) updateServingGraph(tablet *topodatapb.Tablet, targetTabletType topodatapb.TabletType) error {
 	if topo.IsInServingGraph(targetTabletType) {
-		if err := topotools.UpdateTabletEndpoints(agent.batchCtx, agent.TopoServer, tablet.Tablet); err != nil {
+		if err := topotools.UpdateTabletEndpoints(agent.batchCtx, agent.TopoServer, tablet); err != nil {
 			return fmt.Errorf("UpdateTabletEndpoints failed: %v", err)
 		}
 	}
