@@ -90,9 +90,7 @@ func (agent *ActionAgent) broadcastHealth() {
 	if !terTime.IsZero() {
 		ts = terTime.Unix()
 	}
-	go func() {
-		agent.QueryServiceControl.BroadcastHealth(ts, stats)
-	}()
+	go agent.QueryServiceControl.BroadcastHealth(ts, stats)
 }
 
 // refreshTablet needs to be run after an action may have changed the current

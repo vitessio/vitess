@@ -43,6 +43,7 @@ import (
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
@@ -200,6 +201,8 @@ func NewActionAgent(
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, mysqld, func() binlogplayer.VtClient {
 		return binlogplayer.NewDbClient(&agent.DBConfigs.Filtered)
 	})
+	// Stop all binlog players upon entering lameduck.
+	servenv.OnTerm(agent.BinlogPlayerMap.StopAllPlayersAndReset)
 	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
 
 	// try to figure out the mysql port
@@ -501,6 +504,14 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		us.RegisterService()
 		agent.UpdateStream = us
 	}
+	servenv.OnTerm(func() {
+		// Disable UpdateStream (if any) upon entering lameduck.
+		// We do this regardless of initUpdateStream, since agent.UpdateStream
+		// may have been set from elsewhere.
+		if agent.UpdateStream != nil {
+			agent.UpdateStream.Disable()
+		}
+	})
 
 	// initialize tablet server
 	if err := agent.QueryServiceControl.InitDBConfig(querypb.Target{
@@ -544,7 +555,10 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	return nil
 }
 
-// Stop shutdowns this agent.
+// Stop shuts down the agent. Normally this is not necessary, since we use
+// servenv OnTerm and OnClose hooks to coordinate shutdown automatically,
+// while taking lameduck into account. However, this may be useful for tests,
+// when you want to clean up an agent immediately.
 func (agent *ActionAgent) Stop() {
 	if agent.UpdateStream != nil {
 		agent.UpdateStream.Disable()

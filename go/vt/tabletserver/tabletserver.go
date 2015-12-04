@@ -400,7 +400,7 @@ func (tsv *TabletServer) gracefulStop() {
 // StopService shuts down the tabletserver to the uninitialized state.
 // It first transitions to StateShuttingDown, then waits for existing
 // transactions to complete. Once all transactions are resolved, it shuts
-// down the rest of the services nad transitions to StateNotConnected.
+// down the rest of the services and transitions to StateNotConnected.
 func (tsv *TabletServer) StopService() {
 	defer close(tsv.setTimeBomb())
 	defer logError(tsv.qe.queryServiceStats)
