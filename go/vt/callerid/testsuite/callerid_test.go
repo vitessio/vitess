@@ -1,4 +1,4 @@
-package callerid
+package testsuite
 
 import (
 	"testing"
@@ -16,5 +16,5 @@ func TestFakeCallerID(t *testing.T) {
 		Component:    FakeComponent,
 		Subcomponent: FakeSubcomponent,
 	}
-	Tests(t, &im, &ef)
+	RunTests(t, &im, &ef)
 }

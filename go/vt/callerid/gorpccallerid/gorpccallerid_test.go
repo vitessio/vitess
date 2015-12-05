@@ -3,17 +3,17 @@ package gorpccallerid
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/callerid/testsuite"
 )
 
 func TestGoRPCCallerID(t *testing.T) {
 	im := VTGateCallerID{
-		Username: callerid.FakeUsername,
+		Username: testsuite.FakeUsername,
 	}
 	ef := CallerID{
-		Principal:    callerid.FakePrincipal,
-		Component:    callerid.FakeComponent,
-		Subcomponent: callerid.FakeSubcomponent,
+		Principal:    testsuite.FakePrincipal,
+		Component:    testsuite.FakeComponent,
+		Subcomponent: testsuite.FakeSubcomponent,
 	}
 	// Test nil cases
 	if n := GoRPCImmediateCallerID(nil); n != nil {
@@ -22,5 +22,5 @@ func TestGoRPCCallerID(t *testing.T) {
 	if n := GoRPCEffectiveCallerID(nil); n != nil {
 		t.Errorf("Expect nil from GoRPCEffectiveCallerID(nil), but got %v", n)
 	}
-	callerid.Tests(t, GoRPCImmediateCallerID(&im), GoRPCEffectiveCallerID(&ef))
+	testsuite.RunTests(t, GoRPCImmediateCallerID(&im), GoRPCEffectiveCallerID(&ef))
 }
