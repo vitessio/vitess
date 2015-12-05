@@ -329,6 +329,18 @@ type Server struct {
 	Impl
 }
 
+// SrvTopoServer is a subset of Server that only contains the serving
+// graph read-only calls used by clients to resolve serving addresses.
+type SrvTopoServer interface {
+	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
+
+	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
+
+	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error)
+
+	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error)
+}
+
 // Registry for Server implementations.
 var serverImpls = make(map[string]Impl)
 

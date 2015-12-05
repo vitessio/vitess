@@ -241,7 +241,7 @@ func (updateStream *UpdateStreamImpl) ServeUpdateStream(position string, sendRep
 }
 
 // StreamKeyRange is part of the UpdateStream interface
-func (updateStream *UpdateStreamImpl) StreamKeyRange(position string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStreamImpl) StreamKeyRange(position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
@@ -262,7 +262,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(position string, keyspaceID
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
 	// Calls cascade like this: binlog.Streamer->KeyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->sendReply
-	f := KeyRangeFilterFunc(keyspaceIDType, keyRange, func(reply *binlogdatapb.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(keyRange, func(reply *binlogdatapb.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)

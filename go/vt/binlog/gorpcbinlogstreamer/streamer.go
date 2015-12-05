@@ -28,7 +28,7 @@ func (server *UpdateStream) ServeUpdateStream(req *gorpcbinlogcommon.UpdateStrea
 // StreamKeyRange is part of the gorpc UpdateStream service
 func (server *UpdateStream) StreamKeyRange(req *gorpcbinlogcommon.KeyRangeRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.StreamKeyRange(req.Position, req.KeyspaceIdType, req.KeyRange, req.Charset, func(reply *binlogdatapb.BinlogTransaction) error {
+	return server.updateStream.StreamKeyRange(req.Position, req.KeyRange, req.Charset, func(reply *binlogdatapb.BinlogTransaction) error {
 		return sendReply(reply)
 	})
 }

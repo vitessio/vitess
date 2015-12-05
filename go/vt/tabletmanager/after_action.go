@@ -237,17 +237,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// See if we need to start or stop any binlog player
 	if agent.BinlogPlayerMap != nil {
 		if newTablet.Type == topodatapb.TabletType_MASTER {
-			// Read the keyspace on masters to get
-			// ShardingColumnType, for binlog replication,
-			// only if source shards are set.
-			var keyspaceInfo *topo.KeyspaceInfo
-			if shardInfo != nil && len(shardInfo.SourceShards) > 0 {
-				keyspaceInfo, err = agent.TopoServer.GetKeyspace(ctx, newTablet.Keyspace)
-				if err != nil {
-					keyspaceInfo = nil
-				}
-			}
-			agent.BinlogPlayerMap.RefreshMap(agent.batchCtx, newTablet, keyspaceInfo, shardInfo)
+			agent.BinlogPlayerMap.RefreshMap(agent.batchCtx, newTablet, shardInfo)
 		} else {
 			agent.BinlogPlayerMap.StopAllPlayersAndReset()
 		}

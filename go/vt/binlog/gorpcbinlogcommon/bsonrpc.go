@@ -18,10 +18,9 @@ type UpdateStreamRequest struct {
 
 // KeyRangeRequest is used to make a request for StreamKeyRange.
 type KeyRangeRequest struct {
-	Position       string
-	KeyspaceIdType topodatapb.KeyspaceIdType
-	KeyRange       *topodatapb.KeyRange
-	Charset        *binlogdatapb.Charset
+	Position string
+	KeyRange *topodatapb.KeyRange
+	Charset  *binlogdatapb.Charset
 }
 
 // TablesRequest is used to make a request for StreamTables.

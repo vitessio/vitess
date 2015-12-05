@@ -24,10 +24,9 @@ import (
 
 // keyRangeRequest is used to make a request for StreamKeyRange.
 type keyRangeRequest struct {
-	Position       string
-	KeyspaceIdType topodatapb.KeyspaceIdType
-	KeyRange       *topodatapb.KeyRange
-	Charset        *binlogdatapb.Charset
+	Position string
+	KeyRange *topodatapb.KeyRange
+	Charset  *binlogdatapb.Charset
 }
 
 // tablesRequest is used to make a request for StreamTables.
@@ -130,8 +129,7 @@ func testServeUpdateStreamPanics(t *testing.T, bpc binlogplayer.Client) {
 //
 
 var testKeyRangeRequest = &keyRangeRequest{
-	Position:       "KeyRange starting position",
-	KeyspaceIdType: topodatapb.KeyspaceIdType_UINT64,
+	Position: "KeyRange starting position",
 	KeyRange: &topodatapb.KeyRange{
 		Start: key.Uint64Key(0x7000000000000000).Bytes(),
 		End:   key.Uint64Key(0x9000000000000000).Bytes(),
@@ -160,15 +158,14 @@ var testBinlogTransaction = &binlogdatapb.BinlogTransaction{
 }
 
 // StreamKeyRange is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) StreamKeyRange(position string, keyspaceIdType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error {
+func (fake *FakeBinlogStreamer) StreamKeyRange(position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	req := &keyRangeRequest{
-		Position:       position,
-		KeyspaceIdType: keyspaceIdType,
-		KeyRange:       keyRange,
-		Charset:        charset,
+		Position: position,
+		KeyRange: keyRange,
+		Charset:  charset,
 	}
 	if !reflect.DeepEqual(req, testKeyRangeRequest) {
 		fake.t.Errorf("wrong StreamKeyRange parameter, got %+v want %+v", req, testKeyRangeRequest)
@@ -179,7 +176,7 @@ func (fake *FakeBinlogStreamer) StreamKeyRange(position string, keyspaceIdType t
 
 func testStreamKeyRange(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest.Position, testKeyRangeRequest.KeyspaceIdType, testKeyRangeRequest.KeyRange, testKeyRangeRequest.Charset)
+	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest.Position, testKeyRangeRequest.KeyRange, testKeyRangeRequest.Charset)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -200,7 +197,7 @@ func testStreamKeyRange(t *testing.T, bpc binlogplayer.Client) {
 
 func testStreamKeyRangePanics(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest.Position, testKeyRangeRequest.KeyspaceIdType, testKeyRangeRequest.KeyRange, testKeyRangeRequest.Charset)
+	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest.Position, testKeyRangeRequest.KeyRange, testKeyRangeRequest.Charset)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}

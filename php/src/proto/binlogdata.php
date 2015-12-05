@@ -1088,9 +1088,6 @@ namespace binlogdata {
     /**  @var string */
     public $position = null;
     
-    /**  @var int - \topodata\KeyspaceIdType */
-    public $keyspace_id_type = null;
-    
     /**  @var \topodata\KeyRange */
     public $key_range = null;
     
@@ -1113,27 +1110,18 @@ namespace binlogdata {
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
-      // OPTIONAL ENUM keyspace_id_type = 2
+      // OPTIONAL MESSAGE key_range = 2
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 2;
-      $f->name      = "keyspace_id_type";
-      $f->type      = \DrSlump\Protobuf::TYPE_ENUM;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $f->reference = '\topodata\KeyspaceIdType';
-      $descriptor->addField($f);
-
-      // OPTIONAL MESSAGE key_range = 3
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 3;
       $f->name      = "key_range";
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $f->reference = '\topodata\KeyRange';
       $descriptor->addField($f);
 
-      // OPTIONAL MESSAGE charset = 4
+      // OPTIONAL MESSAGE charset = 3
       $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 4;
+      $f->number    = 3;
       $f->name      = "charset";
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
@@ -1185,49 +1173,12 @@ namespace binlogdata {
     }
     
     /**
-     * Check if <keyspace_id_type> has a value
-     *
-     * @return boolean
-     */
-    public function hasKeyspaceIdType(){
-      return $this->_has(2);
-    }
-    
-    /**
-     * Clear <keyspace_id_type> value
-     *
-     * @return \binlogdata\StreamKeyRangeRequest
-     */
-    public function clearKeyspaceIdType(){
-      return $this->_clear(2);
-    }
-    
-    /**
-     * Get <keyspace_id_type> value
-     *
-     * @return int - \topodata\KeyspaceIdType
-     */
-    public function getKeyspaceIdType(){
-      return $this->_get(2);
-    }
-    
-    /**
-     * Set <keyspace_id_type> value
-     *
-     * @param int - \topodata\KeyspaceIdType $value
-     * @return \binlogdata\StreamKeyRangeRequest
-     */
-    public function setKeyspaceIdType( $value){
-      return $this->_set(2, $value);
-    }
-    
-    /**
      * Check if <key_range> has a value
      *
      * @return boolean
      */
     public function hasKeyRange(){
-      return $this->_has(3);
+      return $this->_has(2);
     }
     
     /**
@@ -1236,7 +1187,7 @@ namespace binlogdata {
      * @return \binlogdata\StreamKeyRangeRequest
      */
     public function clearKeyRange(){
-      return $this->_clear(3);
+      return $this->_clear(2);
     }
     
     /**
@@ -1245,7 +1196,7 @@ namespace binlogdata {
      * @return \topodata\KeyRange
      */
     public function getKeyRange(){
-      return $this->_get(3);
+      return $this->_get(2);
     }
     
     /**
@@ -1255,7 +1206,7 @@ namespace binlogdata {
      * @return \binlogdata\StreamKeyRangeRequest
      */
     public function setKeyRange(\topodata\KeyRange $value){
-      return $this->_set(3, $value);
+      return $this->_set(2, $value);
     }
     
     /**
@@ -1264,7 +1215,7 @@ namespace binlogdata {
      * @return boolean
      */
     public function hasCharset(){
-      return $this->_has(4);
+      return $this->_has(3);
     }
     
     /**
@@ -1273,7 +1224,7 @@ namespace binlogdata {
      * @return \binlogdata\StreamKeyRangeRequest
      */
     public function clearCharset(){
-      return $this->_clear(4);
+      return $this->_clear(3);
     }
     
     /**
@@ -1282,7 +1233,7 @@ namespace binlogdata {
      * @return \binlogdata\Charset
      */
     public function getCharset(){
-      return $this->_get(4);
+      return $this->_get(3);
     }
     
     /**
@@ -1292,7 +1243,7 @@ namespace binlogdata {
      * @return \binlogdata\StreamKeyRangeRequest
      */
     public function setCharset(\binlogdata\Charset $value){
-      return $this->_set(4, $value);
+      return $this->_set(3, $value);
     }
   }
 }
