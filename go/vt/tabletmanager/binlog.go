@@ -53,10 +53,9 @@ type BinlogPlayerController struct {
 	mysqld          mysqlctl.MysqlDaemon
 
 	// Information about us (set at construction, immutable).
-	cell           string
-	keyspaceIDType topodatapb.KeyspaceIdType
-	keyRange       *topodatapb.KeyRange
-	dbName         string
+	cell     string
+	keyRange *topodatapb.KeyRange
+	dbName   string
 
 	// Information about the source (set at construction, immutable).
 	sourceShard *topodatapb.Shard_SourceShard
@@ -94,13 +93,12 @@ type BinlogPlayerController struct {
 	lastError error
 }
 
-func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) *BinlogPlayerController {
+func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
 		ts:                ts,
 		vtClientFactory:   vtClientFactory,
 		mysqld:            mysqld,
 		cell:              cell,
-		keyspaceIDType:    keyspaceIDType,
 		keyRange:          keyRange,
 		dbName:            dbName,
 		sourceShard:       sourceShard,
@@ -304,7 +302,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
 
-	player, err := binlogplayer.NewBinlogPlayerKeyRange(vtClient, endPoint, bpc.keyspaceIDType, overlap, bpc.sourceShard.Uid, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+	player, err := binlogplayer.NewBinlogPlayerKeyRange(vtClient, endPoint, overlap, bpc.sourceShard.Uid, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
 	if err != nil {
 		return fmt.Errorf("NewBinlogPlayerKeyRange failed: %v", err)
 	}
@@ -421,14 +419,14 @@ func (blm *BinlogPlayerMap) maxSecondsBehindMasterUNGUARDED() int64 {
 }
 
 // addPlayer adds a new player to the map. It assumes we have the lock.
-func (blm *BinlogPlayerMap) addPlayer(ctx context.Context, cell string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) {
+func (blm *BinlogPlayerMap) addPlayer(ctx context.Context, cell string, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) {
 	bpc, ok := blm.players[sourceShard.Uid]
 	if ok {
 		log.Infof("Already playing logs for %v", sourceShard)
 		return
 	}
 
-	bpc = newBinlogPlayerController(blm.ts, blm.vtClientFactory, blm.mysqld, cell, keyspaceIDType, keyRange, sourceShard, dbName)
+	bpc = newBinlogPlayerController(blm.ts, blm.vtClientFactory, blm.mysqld, cell, keyRange, sourceShard, dbName)
 	blm.players[sourceShard.Uid] = bpc
 	if blm.state == BpmStateRunning {
 		bpc.Start(ctx)
@@ -456,15 +454,10 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 
 // RefreshMap reads the right data from topo.Server and makes sure
 // we're playing the right logs.
-func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topodatapb.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
+func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topodatapb.Tablet, shardInfo *topo.ShardInfo) {
 	log.Infof("Refreshing map of binlog players")
 	if shardInfo == nil {
 		log.Warningf("Could not read shardInfo, not changing anything")
-		return
-	}
-
-	if len(shardInfo.SourceShards) > 0 && keyspaceInfo == nil {
-		log.Warningf("Could not read keyspaceInfo, not changing anything")
 		return
 	}
 
@@ -480,7 +473,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topodatapb.T
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, topoproto.TabletDbName(tablet))
+		blm.addPlayer(ctx, tablet.Alias.Cell, tablet.KeyRange, sourceShard, topoproto.TabletDbName(tablet))
 		delete(toRemove, sourceShard.Uid)
 	}
 	hasPlayers := len(shardInfo.SourceShards) > 0

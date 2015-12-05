@@ -37,7 +37,7 @@ func (server *UpdateStream) StreamUpdate(req *binlogdatapb.StreamUpdateRequest, 
 // StreamKeyRange is part of the binlogservicepb.UpdateStreamServer interface
 func (server *UpdateStream) StreamKeyRange(req *binlogdatapb.StreamKeyRangeRequest, stream binlogservicepb.UpdateStream_StreamKeyRangeServer) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.StreamKeyRange(req.Position, req.KeyspaceIdType, req.KeyRange, req.Charset, func(reply *binlogdatapb.BinlogTransaction) error {
+	return server.updateStream.StreamKeyRange(req.Position, req.KeyRange, req.Charset, func(reply *binlogdatapb.BinlogTransaction) error {
 		return stream.Send(&binlogdatapb.StreamKeyRangeResponse{
 			BinlogTransaction: reply,
 		})

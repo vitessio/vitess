@@ -109,7 +109,7 @@ func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, 
 }
 
 // StreamKeyRange is part of the binlogplayer.Client interface
-func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	actualKeyRange := key.KeyRangeString(keyRange)
 	if actualKeyRange != fbc.expectedKeyRange {
 		return nil, nil, fmt.Errorf("Got wrong keyrange %v, expected %v", actualKeyRange, fbc.expectedKeyRange)
@@ -372,17 +372,13 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 		Shard:    "40-60",
 	}
 
-	ki, err := ts.GetKeyspace(ctx, "ks")
-	if err != nil {
-		t.Fatalf("GetKeyspace failed: %v", err)
-	}
 	si, err := ts.GetShard(ctx, "ks", "40-60")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 
 	// no source shard for the shard, not adding players
-	bpm.RefreshMap(ctx, tablet, ki, si)
+	bpm.RefreshMap(ctx, tablet, si)
 	if bpm.isRunningFilteredReplication() {
 		t.Errorf("isRunningFilteredReplication should be false")
 	}
@@ -406,7 +402,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	}
 
 	// now we have a source, adding players
-	bpm.RefreshMap(ctx, tablet, ki, si)
+	bpm.RefreshMap(ctx, tablet, si)
 	if !bpm.isRunningFilteredReplication() {
 		t.Errorf("isRunningFilteredReplication should be true")
 	}
@@ -481,7 +477,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	// this will stop the player, which will cancel its context,
 	// and exit the fake streaming connection.
 	si.SourceShards = nil
-	bpm.RefreshMap(ctx, tablet, ki, si)
+	bpm.RefreshMap(ctx, tablet, si)
 	if bpm.isRunningFilteredReplication() {
 		t.Errorf("isRunningFilteredReplication should be false")
 	}
@@ -552,10 +548,6 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 		Shard:    "40-60",
 	}
 
-	ki, err := ts.GetKeyspace(ctx, "ks")
-	if err != nil {
-		t.Fatalf("GetKeyspace failed: %v", err)
-	}
 	si, err := ts.GetShard(ctx, "ks", "40-60")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
@@ -575,7 +567,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 	}
 
 	// now we have a source, adding players
-	bpm.RefreshMap(ctx, tablet, ki, si)
+	bpm.RefreshMap(ctx, tablet, si)
 	if !bpm.isRunningFilteredReplication() {
 		t.Errorf("isRunningFilteredReplication should be true")
 	}
@@ -758,10 +750,6 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		Shard:    "0",
 	}
 
-	ki, err := ts.GetKeyspace(ctx, "destination")
-	if err != nil {
-		t.Fatalf("GetKeyspace failed: %v", err)
-	}
 	si, err := ts.GetShard(ctx, "destination", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
@@ -782,7 +770,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	}
 
 	// now we have a source, adding players
-	bpm.RefreshMap(ctx, tablet, ki, si)
+	bpm.RefreshMap(ctx, tablet, si)
 	if !bpm.isRunningFilteredReplication() {
 		t.Errorf("isRunningFilteredReplication should be true")
 	}
