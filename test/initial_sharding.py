@@ -343,7 +343,9 @@ index by_msg (msg)
     s = utils.vtgate.split_query(sql, 'test_keyspace', 4)
     self.assertEqual(len(s), 1)
     self.assertEqual(s[0]['key_range_part']['keyspace'], 'test_keyspace')
-    self.assertNotIn('key_ranges', s[0]['key_range_part'])
+    # There must be one empty KeyRange which represents the full keyspace.
+    self.assertEqual(len(s[0]['key_range_part']['key_ranges']), 1)
+    self.assertEqual(s[0]['key_range_part']['key_ranges'][0], {})
 
     # create the split shards
     shard_0_master.init_tablet('master', 'test_keyspace', '-80')
