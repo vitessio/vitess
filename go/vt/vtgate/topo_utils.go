@@ -122,13 +122,8 @@ func mapKeyRangesToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell
 		return "", nil, err
 	}
 	uniqueShards := make(map[string]bool)
-	if len(krs) == 0 {
-		// For single sharded keyspaces, keyrange is empty to represent the entire keyspace
-		resolveKeyRangeToShards(allShards, uniqueShards, nil)
-	} else {
-		for _, kr := range krs {
-			resolveKeyRangeToShards(allShards, uniqueShards, kr)
-		}
+	for _, kr := range krs {
+		resolveKeyRangeToShards(allShards, uniqueShards, kr)
 	}
 	var res = make([]string, 0, len(uniqueShards))
 	for s := range uniqueShards {
