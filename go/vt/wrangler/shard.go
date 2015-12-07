@@ -42,6 +42,8 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 		return nil
 	}
 
+	// we do need to update the shard, lock it to not interfere with
+	// reparenting operations.
 	actionNode := actionnode.UpdateShard()
 	keyspace := si.Keyspace()
 	shard := si.ShardName()
@@ -50,39 +52,32 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 		return err
 	}
 
-	// re-read the shard with the lock
-	si, err = wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
-	}
-
-	// update it
-	wasUpdated := false
-	if !si.HasCell(tabletAlias.Cell) {
-		si.Cells = append(si.Cells, tabletAlias.Cell)
-		wasUpdated = true
-	}
-	if tabletType == topodatapb.TabletType_MASTER && !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
-		if si.HasMaster() && !allowMasterOverride {
-			return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", topoproto.TabletAliasString(si.MasterAlias), keyspace, shard))
+	// run the update
+	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(s *topodatapb.Shard) error {
+		wasUpdated := false
+		if !topoproto.ShardHasCell(s, tabletAlias.Cell) {
+			s.Cells = append(s.Cells, tabletAlias.Cell)
+			wasUpdated = true
 		}
-		si.MasterAlias = tabletAlias
-		wasUpdated = true
-	}
 
-	if wasUpdated {
-		// write it back
-		if err := wr.ts.UpdateShard(ctx, si); err != nil {
-			return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
+		if tabletType == topodatapb.TabletType_MASTER && !topoproto.TabletAliasEqual(s.MasterAlias, tabletAlias) {
+			if !topoproto.TabletAliasIsZero(s.MasterAlias) && !allowMasterOverride {
+				return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", topoproto.TabletAliasString(s.MasterAlias), keyspace, shard)
+			}
+			s.MasterAlias = tabletAlias
+			wasUpdated = true
 		}
-	}
 
-	// and unlock
+		if !wasUpdated {
+			return topo.ErrNoUpdateNeeded
+		}
+		return nil
+	})
 	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
 // SetShardServedTypes changes the ServedTypes parameter of a shard.
-// It does not rebuild any serving graph or do any consistency check (yet).
+// It does not rebuild any serving graph or do any consistency check.
 func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, remove bool) error {
 
 	actionNode := actionnode.SetShardServedTypes(cells, servedType)
