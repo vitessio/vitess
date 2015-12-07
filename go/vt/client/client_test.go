@@ -21,9 +21,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/grpcvtgateservice"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-
-	// load the gRPC vtgate conn driver
-	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
 var (
