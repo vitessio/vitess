@@ -29,6 +29,8 @@ func tabletEqual(left, right *topodatapb.Tablet) (bool, error) {
 
 // CheckTablet verifies the topo server API is correct for managing tablets.
 func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
+	tts := topo.Server{Impl: ts}
+
 	cell := getLocalCell(ctx, t, ts)
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: 1},
@@ -90,7 +92,8 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
 	}
 
-	if _, err := ts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+	// test UpdateTabletFields works
+	if err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.Hostname = "anotherhost"
 		return nil
 	}); err != nil {
@@ -99,6 +102,16 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+	}
+
+	// test UpdateTabletFields that returns ErrNoUpdateNeeded works
+	if err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+		return topo.ErrNoUpdateNeeded
+	}); err != nil {
+		t.Errorf("UpdateTabletFields: %v", err)
+	}
+	if nnt, nnv, nnerr := ts.GetTablet(ctx, tablet.Alias); nnv != nv {
+		t.Errorf("GetTablet %v: %v %v %v", tablet.Alias, nnt, nnv, nnerr)
 	}
 
 	if want := "anotherhost"; nt.Hostname != want {

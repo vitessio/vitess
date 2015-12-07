@@ -22,12 +22,6 @@ import (
 )
 
 const (
-	// According to docs, the tablet uid / (mysql server id) is uint32.
-	// However, zero appears to be a sufficiently degenerate value to use
-	// as a marker for not having a parent server id.
-	// http://dev.mysql.com/doc/refman/5.1/en/replication-options.html
-	NO_TABLET = 0
-
 	// ReplicationLag is the key in the health map to indicate high
 	// replication lag
 	ReplicationLag = "replication_lag"
@@ -247,25 +241,40 @@ func (ts Server) UpdateTablet(ctx context.Context, tablet *TabletInfo) error {
 	return nil
 }
 
-// UpdateTabletFields is a high level wrapper for TopoServer.UpdateTabletFields
-// that generates trace spans.
+// UpdateTabletFields is a high level wrapper for atomic updates of a Tablet
+// record. It may call 'update' multiple times. 'update' can return
+// ErrNoUpdateNeeded if no tablet update is needed. This function also
+// generates trace spans.
 func (ts Server) UpdateTabletFields(ctx context.Context, alias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTabletFields")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
-	tablet, err := ts.Impl.UpdateTabletFields(ctx, alias, update)
-	if err != nil {
-		return err
+	for {
+		tablet, version, err := ts.Impl.GetTablet(ctx, alias)
+		if err != nil {
+			return err
+		}
+		if err = update(tablet); err != nil {
+			if err == ErrNoUpdateNeeded {
+				return nil
+			}
+			return err
+		}
+		switch _, err = ts.Impl.UpdateTablet(ctx, tablet, version); err {
+		case ErrBadVersion:
+			continue
+		case nil:
+			event.Dispatch(&events.TabletChange{
+				Tablet: *tablet,
+				Status: "updated",
+			})
+			return nil
+		default:
+			return err
+		}
 	}
-	if tablet != nil {
-		event.Dispatch(&events.TabletChange{
-			Tablet: *tablet,
-			Status: "updated",
-		})
-	}
-	return nil
 }
 
 // Validate makes sure a tablet is represented correctly in the topology server.
