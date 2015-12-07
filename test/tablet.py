@@ -367,7 +367,7 @@ class Tablet(object):
       extra_args=None, extra_env=None, include_mysql_port=True,
       init_tablet_type=None, init_keyspace=None,
       init_shard=None, init_db_name_override=None,
-      supports_backups=False):
+      supports_backups=False, grace_period='1s'):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -478,6 +478,8 @@ class Tablet(object):
       args.extend(['-grpc_port', str(self.grpc_port)])
     if lameduck_period:
       args.extend(['-lameduck-period', lameduck_period])
+    if grace_period:
+      args.extend(['-serving_state_grace_period', grace_period])
     if security_policy:
       args.extend(['-security_policy', security_policy])
     if extra_args:
@@ -571,13 +573,15 @@ class Tablet(object):
   def kill_vttablet(self, wait=True):
     logging.debug('killing vttablet: %s, wait: %s', self.tablet_alias,
                   str(wait))
-    if self.proc is not None:
+    proc = self.proc
+    if proc is not None:
       Tablet.tablets_running -= 1
-      if self.proc.poll() is None:
-        self.proc.terminate()
+      if proc.poll() is None:
+        proc.terminate()
         if wait:
-          self.proc.wait()
+          proc.wait()
       self.proc = None
+    return proc
 
   def hard_kill_vttablet(self):
     logging.debug('hard killing vttablet: %s', self.tablet_alias)

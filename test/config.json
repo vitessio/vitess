@@ -311,6 +311,17 @@
 				"site_test"
 			]
 		},
+		"vtgatev2_discovery": {
+			"File": "vtgatev2_test.py",
+			"Args": ["--vtgate-gateway-flavor=discoverygateway"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
 		"vtgatev3": {
 			"File": "vtgatev3_test.py",
 			"Args": [],
