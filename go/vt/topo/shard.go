@@ -148,12 +148,7 @@ func (si *ShardInfo) HasMaster() bool {
 
 // HasCell returns true if the cell is listed in the Cells for the shard.
 func (si *ShardInfo) HasCell(cell string) bool {
-	for _, c := range si.Cells {
-		if c == cell {
-			return true
-		}
-	}
-	return false
+	return topoproto.ShardHasCell(si.Shard, cell)
 }
 
 // GetShard is a high level function to read shard data.

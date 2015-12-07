@@ -154,11 +154,6 @@ type Impl interface {
 	// Do not use directly, but instead use topo.UpdateTablet.
 	UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, existingVersion int64) (newVersion int64, err error)
 
-	// UpdateTabletFields updates the current tablet record
-	// with new values, independently of the version
-	// Can return ErrNoNode if the tablet doesn't exist.
-	UpdateTabletFields(ctx context.Context, tabletAlias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error)
-
 	// DeleteTablet removes a tablet from the system.
 	// We assume no RPC is currently running to it.
 	// TODO(alainjobart) verify this assumption, link with RPC code.
