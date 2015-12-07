@@ -1533,6 +1533,12 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 		}
 	}
 
+	keyspaceIDTypeSet := (kit != topodatapb.KeyspaceIdType_UNSET)
+	columnNameSet := (columnName != "")
+	if (keyspaceIDTypeSet && !columnNameSet) || (!keyspaceIDTypeSet && columnNameSet) {
+		return fmt.Errorf("Both <column name> and <column type> must be set, or both must be unset.")
+	}
+
 	return wr.SetKeyspaceShardingInfo(ctx, keyspace, columnName, kit, int32(*splitShardCount), *force)
 }
 
