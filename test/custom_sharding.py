@@ -215,5 +215,32 @@ primary key (id)
       expected[200 + i] = 'row %d' % (200 + i)
     self.assertEqual(rows, expected)
 
+    self._test_vtclient_execute_shards_fallback()
+
+  def _test_vtclient_execute_shards_fallback(self):
+    """Test per-shard mode of Go SQL driver (through vtclient)."""
+    for shard in [0, 1]:
+      id_val = (shard + 1) * 1000  # example: 1000, 2000
+      name_val = 'row %d' % id_val
+
+      # write
+      utils.vtgate.vtclient('insert into data(id, name) values (:v1, :v2)',
+                            bindvars=[id_val, name_val],
+                            keyspace='test_keyspace', shard=str(shard))
+
+      want = ['Index\tid\tname', '0\t%d\t%s' % (id_val, name_val)]
+      # read non-streaming
+      out, _ = utils.vtgate.vtclient(
+          'select * from data where id = :v1', bindvars=[id_val],
+          keyspace='test_keyspace', shard=str(shard))
+      self.assertEqual(out, want)
+
+      # read streaming
+      out, _ = utils.vtgate.vtclient(
+          'select * from data where id = :v1', bindvars=[id_val],
+          keyspace='test_keyspace', shard=str(shard), streaming=True)
+      self.assertEqual(out, want)
+
+
 if __name__ == '__main__':
   utils.main()
