@@ -1,4 +1,4 @@
-package client
+package vitessdriver
 
 import (
 	"database/sql/driver"

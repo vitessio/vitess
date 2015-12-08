@@ -18,7 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 
 	// import the 'vitess' sql driver
-	_ "github.com/youtube/vitess/go/vt/client"
+	_ "github.com/youtube/vitess/go/vt/vitessdriver"
 )
 
 var (
