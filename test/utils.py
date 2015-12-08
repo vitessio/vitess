@@ -598,13 +598,18 @@ class VtGate(object):
     """Returns the vars for this process."""
     return get_vars(self.port)
 
-  def vtclient(self, sql, tablet_type='master', bindvars=None,
-               streaming=False, verbose=False, raise_on_error=False):
+  def vtclient(self, sql, keyspace=None, shard=None, tablet_type='master',
+               bindvars=None, streaming=False,
+               verbose=False, raise_on_error=True):
     """Uses the vtclient binary to send a query to vtgate."""
     args = environment.binary_args('vtclient') + [
         '-server', self.rpc_endpoint(),
         '-tablet_type', tablet_type,
         '-vtgate_protocol', protocols_flavor().vtgate_protocol()]
+    if keyspace:
+      args.extend(['-keyspace', keyspace])
+    if shard:
+      args.extend(['-shard', shard])
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if streaming:
