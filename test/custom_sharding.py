@@ -11,6 +11,8 @@ import environment
 import tablet
 import utils
 
+from vtproto import topodata_pb2
+
 # shards
 shard_0_master = tablet.Tablet()
 shard_0_rdonly = tablet.Tablet()
@@ -108,9 +110,7 @@ class TestCustomSharding(unittest.TestCase):
                      shard_0_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
-    ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    self.assertEqual(len(ks['partitions'][0]['shard_references']), 1)
-    self.assertEqual(len(ks['partitions'][0]['shard_references']), 1)
+    self._check_shards_count_in_srv_keyspace(1)
     s = utils.run_vtctl_json(['GetShard', 'test_keyspace/0'])
     self.assertEqual(len(s['served_types']), 3)
 
@@ -176,9 +176,7 @@ primary key (id)
     self._check_data('1', 400, 10, table='data2')
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-    ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    self.assertEqual(len(ks['partitions'][0]['shard_references']), 2)
-    self.assertEqual(len(ks['partitions'][0]['shard_references']), 2)
+    self._check_shards_count_in_srv_keyspace(2)
 
     # Now test SplitQuery API works (used in MapReduce usually, but bringing
     # up a full MR-capable cluster is too much for this test environment)
@@ -216,6 +214,19 @@ primary key (id)
     self.assertEqual(rows, expected)
 
     self._test_vtclient_execute_shards_fallback()
+
+  def _check_shards_count_in_srv_keyspace(self, shard_count):
+    ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
+    check_types = set([topodata_pb2.MASTER, topodata_pb2.RDONLY])
+    for p in ks['partitions']:
+      if p['served_type'] in check_types:
+        self.assertEqual(len(p['shard_references']), shard_count)
+        check_types.remove(p['served_type'])
+
+    self.assertEqual(len(check_types), 0,
+                     'The number of expected shard_references in GetSrvKeyspace'
+                     ' was not equal %d for all expected tablet types.'
+                     % shard_count)
 
   def _test_vtclient_execute_shards_fallback(self):
     """Test per-shard mode of Go SQL driver (through vtclient)."""
