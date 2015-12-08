@@ -241,38 +241,31 @@ func (ts Server) UpdateTablet(ctx context.Context, tablet *TabletInfo) error {
 	return nil
 }
 
-// UpdateTabletFields is a high level wrapper for atomic updates of a Tablet
-// record. It may call 'update' multiple times. 'update' can return
-// ErrNoUpdateNeeded if no tablet update is needed. This function also
-// generates trace spans.
-func (ts Server) UpdateTabletFields(ctx context.Context, alias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) error {
+// UpdateTabletFields is a high level helper to read a tablet record, call an
+// update function on it, and then write it back. If the write fails due to
+// a version mismatch, it will re-read the record and retry the update.
+// If the update succeeds, it returns the updated tablet.
+// If the update method returns ErrNoUpdateNeeded, nothing is written,
+// and nil,nil is returned.
+func (ts Server) UpdateTabletFields(ctx context.Context, alias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTabletFields")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
 	for {
-		tablet, version, err := ts.Impl.GetTablet(ctx, alias)
+		ti, err := ts.GetTablet(ctx, alias)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err = update(tablet); err != nil {
+		if err = update(ti.Tablet); err != nil {
 			if err == ErrNoUpdateNeeded {
-				return nil
+				return nil, nil
 			}
-			return err
+			return nil, err
 		}
-		switch _, err = ts.Impl.UpdateTablet(ctx, tablet, version); err {
-		case ErrBadVersion:
-			continue
-		case nil:
-			event.Dispatch(&events.TabletChange{
-				Tablet: *tablet,
-				Status: "updated",
-			})
-			return nil
-		default:
-			return err
+		if err = ts.UpdateTablet(ctx, ti); err != ErrBadVersion {
+			return ti.Tablet, err
 		}
 	}
 }

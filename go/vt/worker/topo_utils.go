@@ -102,7 +102,7 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	ourURL := servenv.ListeningURL.String()
 	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, topoproto.TabletAliasString(tabletAlias))
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = wr.TopoServer().UpdateTabletFields(shortCtx, tabletAlias, func(tablet *topodatapb.Tablet) error {
+	_, err = wr.TopoServer().UpdateTabletFields(shortCtx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
 		}

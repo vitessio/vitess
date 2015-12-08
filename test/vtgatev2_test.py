@@ -745,10 +745,18 @@ class TestFailures(BaseTestCase):
     utils.vtgate.kill()
     utils.VtGate(port=port).start()
 
-  def tablet_start(self, tablet_obj, tablet_type, lameduck_period='0.5s'):
+  def tablet_start(self, tablet_obj, tablet_type, lameduck_period='0.5s',
+                   grace_period=None):
     _ = tablet_type
-    return tablet_obj.start_vttablet(target_tablet_type=tablet_type,
-                                     lameduck_period=lameduck_period)
+    if grace_period is None:
+      # If grace_period is not specified, use whatever default is defined in
+      # start_vttablet() itself.
+      return tablet_obj.start_vttablet(target_tablet_type=tablet_type,
+                                       lameduck_period=lameduck_period)
+    else:
+      return tablet_obj.start_vttablet(target_tablet_type=tablet_type,
+                                       lameduck_period=lameduck_period,
+                                       grace_period=grace_period)
 
   def test_status_with_error(self):
     """Tests that the status page loads correctly after a VTGate error."""
@@ -1096,7 +1104,7 @@ class TestFailures(BaseTestCase):
       utils.wait_for_tablet_type(t.tablet_alias, 'replica')
       t.wait_for_vttablet_state('SERVING')
     self.replica_tablet2.kill_vttablet()
-    self.replica_tablet.kill_vttablet(wait=False)
+    replica_tablet_proc = self.replica_tablet.kill_vttablet(wait=False)
     time.sleep(0.1)
     # send query while vttablet is in lameduck, should fail as no vttablet
     try:
@@ -1122,8 +1130,8 @@ class TestFailures(BaseTestCase):
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
       self.assertNotIsInstance(e, dbexceptions.TimeoutError)
-    # sleep over the lameduck period
-    time.sleep(0.5)
+    # Wait for original tablet to finish before restarting.
+    replica_tablet_proc.wait()
     self.tablet_start(self.replica_tablet, 'replica')
     self.tablet_start(self.replica_tablet2, 'replica')
     self.replica_tablet.wait_for_vttablet_state('SERVING')
@@ -1137,7 +1145,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
 
   # Test the case that there are queries sent during one vttablet shuts down,
-  # and all querys succeed because there is another vttablet.
+  # and all queries succeed because there is another vttablet.
   def test_restart_mysql_tablet_queries_multi_tablets(self):
     vtgate_conn = get_connection()
     utils.wait_procs([self.replica_tablet.shutdown_mysql(),])
@@ -1157,7 +1165,7 @@ class TestFailures(BaseTestCase):
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
     # kill tablet2 and leave it in lameduck mode
-    self.replica_tablet2.kill_vttablet(wait=False)
+    replica_tablet2_proc = self.replica_tablet2.kill_vttablet(wait=False)
     time.sleep(0.1)
     # send query while tablet2 is in lameduck, should retry on tablet1
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
@@ -1168,9 +1176,23 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
-    # sleep over the lameduck period
-    time.sleep(0.5)
+    # With shardgateway and the new grace period, vttablet doesn't immediately
+    # start rejecting queries, so we don't know which tablet they'll use.
+    # In that case, we only test that the query doesn't raise an exception.
+    if vtgate_gateway_flavor().flavor() != 'shardgateway':
+      self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
+    # Wait for tablet2 to go down.
+    replica_tablet2_proc.wait()
+    if vtgate_gateway_flavor().flavor() == 'shardgateway':
+      # The first query actually may have gone to tablet2.
+      # Now that tablet2 is gone, we need to make sure vtgate drops it.
+      try:
+        vtgate_conn._execute(
+            'select 1 from vt_insert_test', {},
+            KEYSPACE_NAME, 'replica',
+            keyranges=[self.keyrange])
+      except Exception, e:  # pylint: disable=broad-except
+        self.assertIsInstance(e, dbexceptions.DatabaseError)
     # send another query, should also succeed on tablet1
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
@@ -1180,7 +1202,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
+    self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
     # start tablet2
     self.tablet_start(self.replica_tablet2, 'replica')
     self.replica_tablet2.wait_for_vttablet_state('SERVING')
@@ -1197,8 +1219,8 @@ class TestFailures(BaseTestCase):
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
     tablet2_vars = utils.get_vars(self.replica_tablet2.port)
     t2_query_count_after = int(tablet2_vars['Queries']['TotalCount'])
-    self.assertTrue((t1_query_count_after-t1_query_count_before
-                     +t2_query_count_after-t2_query_count_before) == 1)
+    self.assertEquals(t1_query_count_after-t1_query_count_before
+                      +t2_query_count_after-t2_query_count_before, 1)
 
   # Test the case that there are queries sent during one vttablet is killed,
   # and all queries succeed because there is another vttablet.
@@ -1214,7 +1236,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     tablet2_vars = utils.get_vars(self.replica_tablet2.port)
     t2_query_count_after = int(tablet2_vars['Queries']['TotalCount'])
-    self.assertTrue((t2_query_count_after-t2_query_count_before) == 1)
+    self.assertEquals(t2_query_count_after-t2_query_count_before, 1)
     # start tablet1 mysql
     utils.wait_procs([self.replica_tablet.start_mysql(),])
     # then restart replication, and write data, make sure we go back to healthy
@@ -1253,7 +1275,7 @@ class TestFailures(BaseTestCase):
         keyranges=[self.keyrange])
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
+    self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
     # start tablet2
     self.tablet_start(self.replica_tablet2, 'replica')
     # then restart replication, and write data, make sure we go back to healthy
@@ -1274,8 +1296,8 @@ class TestFailures(BaseTestCase):
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
     tablet2_vars = utils.get_vars(self.replica_tablet2.port)
     t2_query_count_after = int(tablet2_vars['Queries']['TotalCount'])
-    self.assertTrue((t1_query_count_after-t1_query_count_before
-                     +t2_query_count_after-t2_query_count_before) == 1)
+    self.assertEquals(t1_query_count_after-t1_query_count_before
+                      +t2_query_count_after-t2_query_count_before, 1)
 
   def test_bind_vars_in_exception_message(self):
     vtgate_conn = get_connection()
@@ -1375,10 +1397,17 @@ class TestFailures(BaseTestCase):
       t.wait_for_vttablet_state('SERVING')
 
   def test_lameduck_ongoing_query_single(self):
+    self._test_lameduck_ongoing_query_single(0)
+
+  def test_lameduck_ongoing_query_single_grace_period(self):
+    self._test_lameduck_ongoing_query_single(2)
+
+  def _test_lameduck_ongoing_query_single(self, grace_period):
     vtgate_conn = get_connection()
     utils.wait_procs([self.replica_tablet2.shutdown_mysql(),])
     self.replica_tablet.kill_vttablet()
-    self.tablet_start(self.replica_tablet, 'replica', '5s')
+    self.tablet_start(self.replica_tablet, 'replica', '5s',
+                      grace_period='%ds'%grace_period)
     for t in [self.replica_tablet]:
       utils.run_vtctl(['StartSlave', t.tablet_alias])
       utils.wait_for_tablet_type(t.tablet_alias, 'replica')
@@ -1397,7 +1426,7 @@ class TestFailures(BaseTestCase):
       self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
-    self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
+    self.assertEquals(t1_query_count_after-t1_query_count_before, 1)
     # start a long running query
     num_requests = 10
     pool = ThreadPool(processes=num_requests)
@@ -1409,9 +1438,23 @@ class TestFailures(BaseTestCase):
     # soft kill vttablet
     # **should wait till previous queries are sent out**
     time.sleep(1)
-    self.replica_tablet.kill_vttablet(wait=False)
-    # send query while vttablet is in lameduck, should fail as no vttablet
+    replica_tablet_proc = self.replica_tablet.kill_vttablet(wait=False)
+    # Send query while vttablet is in lameduck.
     time.sleep(0.1)
+    if vtgate_gateway_flavor().flavor() == 'shardgateway' and grace_period > 0:
+      # With shardgateway, it should succeed iff we're using the new grace
+      # period. That's because vttablet will continue accepting queries while
+      # advertising unhealthy. Since shardgateway doesn't re-resolve in the
+      # absence of errors, vtgate will still send queries through.
+      vtgate_conn._execute(
+          'select 1 from vt_insert_test', {},
+          KEYSPACE_NAME, 'replica',
+          keyranges=[self.keyrange])
+      # Wait until after grace_period, then it should fail like before.
+      time.sleep(grace_period)
+    # With discoverygateway, it should fail regardless of grace period,
+    # because vttablet broadcasts that it's unhealthy, and vtgate should
+    # remove it immediately.
     try:
       vtgate_conn._execute(
           'select 1 from vt_insert_test', {},
@@ -1430,8 +1473,8 @@ class TestFailures(BaseTestCase):
     # all should succeed
     for query_result in query_results:
       self.assertTrue(query_result)
-    # sleep over lameduck period
-    time.sleep(5)
+    # Wait for the old replica_tablet to exit.
+    replica_tablet_proc.wait()
     # start tablet1
     self.tablet_start(self.replica_tablet, 'replica')
     for t in [self.replica_tablet]:

@@ -7,8 +7,10 @@ package tabletmanager
 // This file handles the agent state changes.
 
 import (
+	"flag"
 	"fmt"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -28,6 +30,13 @@ import (
 var (
 	// constants for this module
 	historyLength = 16
+
+	// gracePeriod is the amount of time we pause after broadcasting to vtgate
+	// that we're going to stop serving a particular target type (e.g. when going
+	// spare, or when being promoted to master). During this period, we expect
+	// vtgate to gracefully redirect traffic elsewhere, before we begin actually
+	// rejecting queries for that target type.
+	gracePeriod = flag.Duration("serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
 )
 
 // Query rules from blacklist
@@ -67,6 +76,12 @@ func (agent *ActionAgent) disallowQueries(tabletType topodatapb.TabletType, reas
 	return agent.QueryServiceControl.SetServingType(tabletType, false, nil)
 }
 
+func (agent *ActionAgent) enterLameduck(reason string) {
+	log.Infof("Agent is entering lameduck, reason: %v", reason)
+
+	agent.QueryServiceControl.EnterLameduck()
+}
+
 func (agent *ActionAgent) broadcastHealth() {
 	// get the replication delays
 	agent.mutex.Lock()
@@ -90,9 +105,7 @@ func (agent *ActionAgent) broadcastHealth() {
 	if !terTime.IsZero() {
 		ts = terTime.Unix()
 	}
-	go func() {
-		agent.QueryServiceControl.BroadcastHealth(ts, stats)
-	}()
+	go agent.QueryServiceControl.BroadcastHealth(ts, stats)
 }
 
 // refreshTablet needs to be run after an action may have changed the current
@@ -108,19 +121,17 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 
 	// Save the old tablet so callbacks can have a better idea of
 	// the precise nature of the transition.
-	oldTablet := agent.Tablet().Tablet
+	oldTablet := agent.Tablet()
 
 	// Actions should have side effects on the tablet, so reload the data.
-	ti, err := agent.updateTabletFromTopo(ctx)
+	tablet, err := agent.updateTabletFromTopo(ctx)
 	if err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
 		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
 	}
 
-	if updatedTablet := agent.checkTabletMysqlPort(ctx, ti); updatedTablet != nil {
-		agent.mutex.Lock()
-		agent._tablet = updatedTablet
-		agent.mutex.Unlock()
+	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
+		agent.setTablet(updatedTablet)
 	}
 
 	if err := agent.updateState(ctx, oldTablet, reason); err != nil {
@@ -133,9 +144,7 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 // updateState will use the provided tablet record as a base, the current
 // tablet record as the new one, run changeCallback, and dispatch the event.
 func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topodatapb.Tablet, reason string) error {
-	agent.mutex.Lock()
-	newTablet := agent._tablet.Tablet
-	agent.mutex.Unlock()
+	newTablet := agent.Tablet()
 	log.Infof("Running tablet callback because: %v", reason)
 	if err := agent.changeCallback(ctx, oldTablet, newTablet); err != nil {
 		return err
@@ -211,10 +220,34 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	}
 
 	if allowQuery {
+		// Query service should be running.
+		if oldTablet.Type == topodatapb.TabletType_REPLICA &&
+			newTablet.Type == topodatapb.TabletType_MASTER {
+			// When promoting from replica to master, allow both master and replica
+			// queries to be served during gracePeriod.
+			if err := agent.QueryServiceControl.SetServingType(newTablet.Type, true,
+				[]topodatapb.TabletType{oldTablet.Type}); err != nil {
+				log.Errorf("Can't start query service for MASTER+REPLICA mode: %v", err)
+			} else {
+				// If successful, broadcast to vtgate and then wait.
+				agent.broadcastHealth()
+				time.Sleep(*gracePeriod)
+			}
+		}
 		if err := agent.allowQueries(newTablet.Type); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	} else {
+		// Query service should be stopped.
+		if (oldTablet.Type == topodatapb.TabletType_REPLICA ||
+			oldTablet.Type == topodatapb.TabletType_RDONLY) &&
+			newTablet.Type == topodatapb.TabletType_SPARE {
+			// When a non-MASTER serving type is going SPARE,
+			// put query service in lameduck during gracePeriod.
+			agent.enterLameduck(disallowQueryReason)
+			agent.broadcastHealth()
+			time.Sleep(*gracePeriod)
+		}
 		agent.disallowQueries(newTablet.Type, disallowQueryReason)
 	}
 

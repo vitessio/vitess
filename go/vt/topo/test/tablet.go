@@ -93,19 +93,26 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	// test UpdateTabletFields works
-	if err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+	updatedTablet, err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.Hostname = "anotherhost"
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)
+	}
+	if got, want := updatedTablet.Hostname, "anotherhost"; got != want {
+		t.Errorf("updatedTablet.Hostname = %q, want %q", got, want)
 	}
 	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
+	if got, want := nt.Hostname, "anotherhost"; got != want {
+		t.Errorf("nt.Hostname = %q, want %q", got, want)
+	}
 
 	// test UpdateTabletFields that returns ErrNoUpdateNeeded works
-	if err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+	if _, err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		return topo.ErrNoUpdateNeeded
 	}); err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
@@ -68,10 +69,18 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		return nil
 	}
 
+	// Remember when we were first told we're the master.
+	// If another tablet claims to be master and offers a more recent time,
+	// that tablet will be trusted over us.
+	agent.mutex.Lock()
+	agent._tabletExternallyReparentedTime = startTime
+	agent._replicationDelay = 0
+	agent.mutex.Unlock()
+
 	// Create a reusable Reparent event with available info.
 	ev := &events.Reparent{
 		ShardInfo: *si,
-		NewMaster: *tablet.Tablet,
+		NewMaster: *tablet,
 		OldMaster: topodatapb.Tablet{
 			Alias: si.MasterAlias,
 			Type:  topodatapb.TabletType_MASTER,
@@ -85,43 +94,57 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	}()
 	event.DispatchUpdate(ev, "starting external from tablet (fast)")
 
+	var wg sync.WaitGroup
+	var errs concurrency.AllErrorRecorder
+
 	// Execute state change to master by force-updating only the local copy of the
 	// tablet record. The actual record in topo will be updated later.
 	log.Infof("fastTabletExternallyReparented: executing change callback for state change to MASTER")
-	oldTablet := *tablet.Tablet
-	newTablet := oldTablet
-	newTablet.Type = topodatapb.TabletType_MASTER
-	newTablet.HealthMap = nil
-	agent.setTablet(topo.NewTabletInfo(&newTablet, -1))
-	if err := agent.updateState(ctx, &oldTablet, "fastTabletExternallyReparented"); err != nil {
-		return fmt.Errorf("fastTabletExternallyReparented: failed to change tablet state to MASTER: %v", err)
-	}
+	oldTablet := proto.Clone(tablet).(*topodatapb.Tablet)
+	tablet.Type = topodatapb.TabletType_MASTER
+	tablet.HealthMap = nil
+	agent.setTablet(tablet)
 
-	agent.mutex.Lock()
-	agent._tabletExternallyReparentedTime = time.Now()
-	agent._replicationDelay = 0
-	agent.mutex.Unlock()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 
-	// update the listeners in the background
-	event.DispatchUpdate(ev, "broadcasting to listeners")
-	agent.broadcastHealth()
+		// This is where updateState will block for gracePeriod, while it gives
+		// vtgate a chance to stop sending replica queries.
+		if err := agent.updateState(ctx, oldTablet, "fastTabletExternallyReparented"); err != nil {
+			errs.RecordError(fmt.Errorf("fastTabletExternallyReparented: failed to change tablet state to MASTER: %v", err))
+		}
+	}()
 
-	// Directly write the new master endpoint in the serving graph.
-	// We will do a true rebuild in the background soon, but in the meantime,
-	// this will be enough for clients to re-resolve the new master.
-	event.DispatchUpdate(ev, "writing new master endpoint")
-	log.Infof("fastTabletExternallyReparented: writing new master endpoint to serving graph")
-	ep, err := topo.TabletEndPoint(tablet.Tablet)
-	if err != nil {
-		return fmt.Errorf("fastTabletExternallyReparented: failed to generate EndPoint for tablet %v: %v", tablet.Alias, err)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Directly write the new master endpoint in the serving graph.
+		// We will do a true rebuild in the background soon, but in the meantime,
+		// this will be enough for clients to re-resolve the new master.
+		event.DispatchUpdate(ev, "writing new master endpoint")
+		log.Infof("fastTabletExternallyReparented: writing new master endpoint to serving graph")
+		ep, err := topo.TabletEndPoint(tablet)
+		if err != nil {
+			errs.RecordError(fmt.Errorf("fastTabletExternallyReparented: failed to generate EndPoint for tablet %v: %v", tablet.Alias, err))
+			return
+		}
+		err = topo.UpdateEndPoints(ctx, agent.TopoServer, tablet.Alias.Cell,
+			si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER,
+			&topodatapb.EndPoints{Entries: []*topodatapb.EndPoint{ep}}, -1)
+		if err != nil {
+			errs.RecordError(fmt.Errorf("fastTabletExternallyReparented: failed to update master endpoint: %v", err))
+			return
+		}
+		externalReparentStats.Record("NewMasterVisible", startTime)
+	}()
+
+	// Wait for serving state grace period and serving graph update.
+	wg.Wait()
+	if errs.HasErrors() {
+		return errs.Error()
 	}
-	err = topo.UpdateEndPoints(ctx, agent.TopoServer, tablet.Alias.Cell,
-		si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER,
-		&topodatapb.EndPoints{Entries: []*topodatapb.EndPoint{ep}}, -1)
-	if err != nil {
-		return fmt.Errorf("fastTabletExternallyReparented: failed to update master endpoint: %v", err)
-	}
-	externalReparentStats.Record("NewMasterVisible", startTime)
 
 	// Start the finalize stage with a background context, but connect the trace.
 	bgCtx, cancel := context.WithTimeout(agent.batchCtx, *finalizeReparentTimeout)
@@ -157,12 +180,10 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	go func() {
 		defer wg.Done()
 		// Update our own record to master.
-		var updatedTablet *topodatapb.Tablet
-		err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
+		updatedTablet, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
 			func(tablet *topodatapb.Tablet) error {
 				tablet.Type = topodatapb.TabletType_MASTER
 				tablet.HealthMap = nil
-				updatedTablet = tablet
 				return nil
 			})
 		if err != nil {
@@ -180,12 +201,11 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	if !topoproto.TabletAliasIsZero(oldMasterAlias) {
 		wg.Add(1)
 		go func() {
-			// Force the old master to spare.
-			var oldMasterTablet *topodatapb.Tablet
-			err := agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
+			// Forcibly demote the old master in topology, since we can't rely on the
+			// old master to be up to change its own record.
+			oldMasterTablet, err := agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
 				func(tablet *topodatapb.Tablet) error {
 					tablet.Type = topodatapb.TabletType_SPARE
-					oldMasterTablet = tablet
 					return nil
 				})
 			if err != nil {
@@ -194,19 +214,18 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 				return
 			}
 
-			if oldMasterTablet != nil {
-				// We now know more about the old master, so add it to event data.
-				ev.OldMaster = *oldMasterTablet
+			// We now know more about the old master, so add it to event data.
+			ev.OldMaster = *oldMasterTablet
 
-				// Update the serving graph.
-				errs.RecordError(
-					topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, oldMasterTablet))
-				wg.Done()
+			// Update the serving graph.
+			errs.RecordError(
+				topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, oldMasterTablet))
+			wg.Done()
 
-				// Tell the old master to refresh its state. We don't need to wait for it.
-				tmc := tmclient.NewTabletManagerClient()
-				tmc.RefreshState(ctx, topo.NewTabletInfo(oldMasterTablet, -1))
-			}
+			// Tell the old master to re-read its tablet record and change its state.
+			// We don't need to wait for it.
+			tmc := tmclient.NewTabletManagerClient()
+			tmc.RefreshState(ctx, topo.NewTabletInfo(oldMasterTablet, -1))
 		}()
 	}
 

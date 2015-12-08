@@ -77,6 +77,7 @@ func main() {
 		log.Warning(err)
 	}
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
+	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init
 	initTabletMap(ts, *topology, mysqld, dbcfgs, mycnf)
@@ -103,9 +104,7 @@ func main() {
 	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
 
 	servenv.OnTerm(func() {
-		// FIXME(alainjobart) stop vtgate, all tablets
-		//		qsc.DisallowQueries()
-		//		agent.Stop()
+		// FIXME(alainjobart): stop vtgate
 	})
 	servenv.OnClose(func() {
 		// We will still use the topo server during lameduck period

@@ -80,6 +80,11 @@ func main() {
 
 	// creates and registers the query service
 	qsc := tabletserver.NewServer()
+	servenv.OnClose(func() {
+		// We now leave the queryservice running during lameduck,
+		// so stop it in OnClose(), after lameduck is over.
+		qsc.StopService()
+	})
 	qsc.Register()
 
 	if *tableAclConfig != "" {
@@ -108,6 +113,7 @@ func main() {
 	// before initializing the agent, so the initial health check
 	// done by the agent has the right reporter)
 	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
+	servenv.OnClose(mysqld.Close)
 	registerHealthReporter(mysqld)
 
 	// Depends on both query and updateStream.
@@ -123,10 +129,6 @@ func main() {
 
 	servenv.OnRun(func() {
 		addStatusParts(qsc)
-	})
-	servenv.OnTerm(func() {
-		qsc.StopService()
-		agent.Stop()
 	})
 	servenv.OnClose(func() {
 		// We will still use the topo server during lameduck period

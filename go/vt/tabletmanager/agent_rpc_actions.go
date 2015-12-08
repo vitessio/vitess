@@ -141,7 +141,7 @@ func (agent *ActionAgent) Ping(ctx context.Context, args string) string {
 // GetSchema returns the schema.
 // Should be called under RPCWrap.
 func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	return agent.MysqlDaemon.GetSchema(agent.Tablet().DbName(), tables, excludeTables, includeViews)
+	return agent.MysqlDaemon.GetSchema(topoproto.TabletDbName(agent.Tablet()), tables, excludeTables, includeViews)
 }
 
 // GetPermissions returns the db permissions.
@@ -159,7 +159,8 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 // ChangeType changes the tablet type
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
-	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil)
+	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil)
+	return err
 }
 
 // Sleep sleeps for the duration
@@ -204,20 +205,20 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context) {
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) PreflightSchema(ctx context.Context, change string) (*tmutils.SchemaChangeResult, error) {
 	// get the db name from the tablet
-	tablet := agent.Tablet()
+	dbName := topoproto.TabletDbName(agent.Tablet())
 
 	// and preflight the change
-	return agent.MysqlDaemon.PreflightSchemaChange(tablet.DbName(), change)
+	return agent.MysqlDaemon.PreflightSchemaChange(dbName, change)
 }
 
 // ApplySchema will apply a schema change
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	// get the db name from the tablet
-	tablet := agent.Tablet()
+	dbName := topoproto.TabletDbName(agent.Tablet())
 
 	// apply the change
-	scr, err := agent.MysqlDaemon.ApplySchemaChange(tablet.DbName(), change)
+	scr, err := agent.MysqlDaemon.ApplySchemaChange(dbName, change)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +429,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	}
 
 	// Change our type to master if not already
-	if err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = topodatapb.TabletType_MASTER
 		tablet.HealthMap = nil
 		return nil
@@ -497,7 +498,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// Now disallow queries, to make sure nobody is writing to the
 	// database.
 	tablet := agent.Tablet()
-	if err := agent.disallowQueries(tablet.Tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
+	if err := agent.disallowQueries(tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
 		return "", fmt.Errorf("disallowQueries failed: %v", err)
 	}
 
@@ -517,10 +518,6 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 // shard master.
 func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
 	pos, err := replication.DecodePosition(position)
-	if err != nil {
-		return "", err
-	}
-	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return "", err
 	}
@@ -547,24 +544,24 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 		return "", err
 	}
 
-	return replication.EncodePosition(pos), agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, topotools.ClearHealthMap); err != nil {
+		return "", err
+	}
+
+	return replication.EncodePosition(pos), nil
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
-	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-
-	return agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
+	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, topotools.ClearHealthMap)
+	return err
 }
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
-	ti, err := agent.TopoServer.GetTablet(ctx, parent)
+func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
 	}
@@ -586,7 +583,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent *topodatapb.Tabl
 	if wasReplicating {
 		cmds = append(cmds, mysqlctl.SQLStopSlave)
 	}
-	smc, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, int(ti.PortMap["mysql"]))
+	smc, err := agent.MysqlDaemon.SetMasterCommands(parent.Hostname, int(parent.PortMap["mysql"]))
 	if err != nil {
 		return err
 	}
@@ -599,16 +596,16 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent *topodatapb.Tabl
 	}
 
 	// change our type to spare if we used to be the master
-	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	_, err = agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+		if tablet.Type == topodatapb.TabletType_MASTER {
+			tablet.Type = topodatapb.TabletType_SPARE
+			tablet.HealthMap = nil
+			return nil
+		}
+		return topo.ErrNoUpdateNeeded
+	})
 	if err != nil {
 		return err
-	}
-	if tablet.Type == topodatapb.TabletType_MASTER {
-		tablet.Type = topodatapb.TabletType_SPARE
-		tablet.HealthMap = nil
-		if err := agent.TopoServer.UpdateTablet(ctx, tablet); err != nil {
-			return err
-		}
 	}
 
 	// if needed, wait until we get the replicated row, or our
@@ -622,28 +619,15 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent *topodatapb.Tabl
 // SlaveWasRestarted updates the parent record for a tablet.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error {
-	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-
 	// Once this action completes, update authoritative tablet node first.
-	if tablet.Type == topodatapb.TabletType_MASTER {
-		tablet.Type = topodatapb.TabletType_SPARE
-	}
-	err = agent.TopoServer.UpdateTablet(ctx, tablet)
-	if err != nil {
-		return err
-	}
-
-	// Update the new tablet location in the replication graph now that
-	// we've updated the tablet.
-	err = topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet.Tablet)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	return nil
+	_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+		if tablet.Type == topodatapb.TabletType_MASTER {
+			tablet.Type = topodatapb.TabletType_SPARE
+			return nil
+		}
+		return topo.ErrNoUpdateNeeded
+	})
+	return err
 }
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
@@ -671,11 +655,6 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*rep
 
 // PromoteSlave makes the current tablet the master
 func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
-	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
-	if err != nil {
-		return "", err
-	}
-
 	pos, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
 		return "", err
@@ -686,32 +665,11 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	return replication.EncodePosition(pos), agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
-}
-
-// updateReplicationGraphForPromotedSlave makes sure the newly promoted slave
-// is correctly represented in the replication graph
-func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Context, tablet *topo.TabletInfo) error {
-	// Update tablet regardless - trend towards consistency.
-	tablet.Type = topodatapb.TabletType_MASTER
-	tablet.HealthMap = nil
-	err := agent.TopoServer.UpdateTablet(ctx, tablet)
-	if err != nil {
-		return err
-	}
-	// NOTE(msolomon) A serving graph update is required, but in
-	// order for the shard to be consistent the old master must be
-	// dealt with first. That is externally coordinated by the
-	// wrangler reparent action.
-
-	// Insert the new tablet location in the replication graph now that
-	// we've updated the tablet.
-	err = topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet.Tablet)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, topotools.ClearHealthMap); err != nil {
+		return "", err
 	}
 
-	return nil
+	return replication.EncodePosition(pos), nil
 }
 
 //
@@ -730,7 +688,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
 	}
 	originalType := tablet.Type
-	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP, make(map[string]string)); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP, make(map[string]string)); err != nil {
 		return err
 	}
 
@@ -753,7 +711,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	if agent.IsRunningHealthCheck() {
 		originalType = topodatapb.TabletType_SPARE
 	}
-	err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType, nil)
+	_, err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType, nil)
 	if err != nil {
 		// failure in changing the topology type is probably worse,
 		// so returning that (we logged the snapshot error anyway)

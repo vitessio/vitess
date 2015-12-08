@@ -667,7 +667,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	return wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
+	_, err = wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if *hostname != "" {
 			tablet.Hostname = *hostname
 		}
@@ -690,6 +690,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 		}
 		return nil
 	})
+	return err
 }
 
 func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -34,6 +34,7 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
@@ -43,6 +44,7 @@ import (
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
@@ -111,7 +113,7 @@ type ActionAgent struct {
 	// mutex protects the following fields, only hold the mutex
 	// to update the fields, nothing else.
 	mutex            sync.Mutex
-	_tablet          *topo.TabletInfo
+	_tablet          *topodatapb.Tablet
 	_tabletControl   *topodatapb.Shard_TabletControl
 	_waitingForMysql bool
 
@@ -200,6 +202,8 @@ func NewActionAgent(
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, mysqld, func() binlogplayer.VtClient {
 		return binlogplayer.NewDbClient(&agent.DBConfigs.Filtered)
 	})
+	// Stop all binlog players upon entering lameduck.
+	servenv.OnTerm(agent.BinlogPlayerMap.StopAllPlayersAndReset)
 	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
 
 	// try to figure out the mysql port
@@ -313,27 +317,25 @@ func (agent *ActionAgent) registerQueryRuleSources() {
 
 // updateTabletFromTopo will read the tablet record from the topology,
 // save it in the agent's tablet record, and return it.
-func (agent *ActionAgent) updateTabletFromTopo(ctx context.Context) (*topo.TabletInfo, error) {
-	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+func (agent *ActionAgent) updateTabletFromTopo(ctx context.Context) (*topodatapb.Tablet, error) {
+	ti, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	agent.mutex.Lock()
-	agent._tablet = tablet
-	agent.mutex.Unlock()
-	return tablet, nil
+	agent.setTablet(ti.Tablet)
+	return ti.Tablet, nil
 }
 
-func (agent *ActionAgent) setTablet(tablet *topo.TabletInfo) {
+func (agent *ActionAgent) setTablet(tablet *topodatapb.Tablet) {
 	agent.mutex.Lock()
-	agent._tablet = tablet
+	agent._tablet = proto.Clone(tablet).(*topodatapb.Tablet)
 	agent.mutex.Unlock()
 }
 
-// Tablet reads the stored TabletInfo from the agent, protected by mutex.
-func (agent *ActionAgent) Tablet() *topo.TabletInfo {
+// Tablet reads the stored Tablet from the agent, protected by mutex.
+func (agent *ActionAgent) Tablet() *topodatapb.Tablet {
 	agent.mutex.Lock()
-	tablet := agent._tablet
+	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
 	agent.mutex.Unlock()
 	return tablet
 }
@@ -382,7 +384,7 @@ func (agent *ActionAgent) DisableQueryService() bool {
 
 func (agent *ActionAgent) setTabletControl(tc *topodatapb.Shard_TabletControl) {
 	agent.mutex.Lock()
-	agent._tabletControl = tc
+	agent._tabletControl = proto.Clone(tc).(*topodatapb.Shard_TabletControl)
 	agent.mutex.Unlock()
 }
 
@@ -401,13 +403,13 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) error {
 }
 
 func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
-	ti := agent.Tablet()
-	if !topo.IsRunningQueryService(ti.Type) {
+	tablet := agent.Tablet()
+	if !topo.IsRunningQueryService(tablet.Type) {
 		return nil
 	}
 
 	// Check to see our address is registered in the right place.
-	return topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, ti.Tablet)
+	return topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, tablet)
 }
 
 // Start validates and updates the topology records for the tablet, and performs
@@ -458,7 +460,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		}
 		return nil
 	}
-	if err := agent.TopoServer.UpdateTabletFields(ctx, agent.Tablet().Alias, f); err != nil {
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.Tablet().Alias, f); err != nil {
 		return err
 	}
 
@@ -469,7 +471,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	}
 
 	// Save the original tablet record as it is now (at startup).
-	agent.initialTablet = tablet.Tablet
+	agent.initialTablet = proto.Clone(tablet).(*topodatapb.Tablet)
 
 	if err = agent.verifyTopology(ctx); err != nil {
 		return err
@@ -484,10 +486,10 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		// Only for real instances
 		// Update our DB config to match the info we have in the tablet
 		if agent.DBConfigs.App.DbName == "" {
-			agent.DBConfigs.App.DbName = topoproto.TabletDbName(tablet.Tablet)
+			agent.DBConfigs.App.DbName = topoproto.TabletDbName(tablet)
 		}
 		if agent.DBConfigs.Filtered.DbName == "" {
-			agent.DBConfigs.Filtered.DbName = topoproto.TabletDbName(tablet.Tablet)
+			agent.DBConfigs.Filtered.DbName = topoproto.TabletDbName(tablet)
 		}
 		agent.DBConfigs.App.Keyspace = tablet.Keyspace
 		agent.DBConfigs.App.Shard = tablet.Shard
@@ -501,6 +503,14 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		us.RegisterService()
 		agent.UpdateStream = us
 	}
+	servenv.OnTerm(func() {
+		// Disable UpdateStream (if any) upon entering lameduck.
+		// We do this regardless of initUpdateStream, since agent.UpdateStream
+		// may have been set from elsewhere.
+		if agent.UpdateStream != nil {
+			agent.UpdateStream.Disable()
+		}
+	})
 
 	// initialize tablet server
 	if err := agent.QueryServiceControl.InitDBConfig(querypb.Target{
@@ -544,7 +554,10 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	return nil
 }
 
-// Stop shutdowns this agent.
+// Stop shuts down the agent. Normally this is not necessary, since we use
+// servenv OnTerm and OnClose hooks to coordinate shutdown automatically,
+// while taking lameduck into account. However, this may be useful for tests,
+// when you want to clean up an agent immediately.
 func (agent *ActionAgent) Stop() {
 	if agent.UpdateStream != nil {
 		agent.UpdateStream.Disable()
@@ -565,7 +578,7 @@ func (agent *ActionAgent) hookExtraEnv() map[string]string {
 // checkTabletMysqlPort will check the mysql port for the tablet is good,
 // and if not will try to update it. It returns the modified Tablet record,
 // if it was changed.
-func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo.TabletInfo) *topo.TabletInfo {
+func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topodatapb.Tablet) *topodatapb.Tablet {
 	mport, err := agent.MysqlDaemon.GetMysqlPort()
 	if err != nil {
 		log.Warningf("Cannot get current mysql port, not checking it: %v", err)
@@ -577,17 +590,17 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	}
 
 	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.PortMap["mysql"], mport)
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+	newTablet, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.PortMap["mysql"] = mport
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		log.Warningf("Failed to update tablet record, may use old mysql port")
 		return nil
 	}
 
 	// update worked, return the new record
-	tablet.PortMap["mysql"] = mport
-	return tablet
+	return newTablet
 }
 
 // initializeKeyRangeRule will create and set the key range rules

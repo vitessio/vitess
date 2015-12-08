@@ -131,3 +131,7 @@ func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.Realt
 		RealtimeStats: *stats,
 	}
 }
+
+// EnterLameduck implements tabletserver.Controller.
+func (tqsc *Controller) EnterLameduck() {
+}

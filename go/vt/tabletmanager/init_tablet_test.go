@@ -116,6 +116,23 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
+	// It should still be spare, because the tablet record doesn't agree.
+	if ti.Type != topodatapb.TabletType_SPARE {
+		t.Errorf("wrong tablet type: %v", ti.Type)
+	}
+
+	// Fix the tablet record to agree that we're master.
+	ti.Type = topodatapb.TabletType_MASTER
+	if err := ts.UpdateTablet(ctx, ti); err != nil {
+		t.Fatalf("UpdateTablet failed: %v", err)
+	}
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
+		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
+	}
+	ti, err = ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
 	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
