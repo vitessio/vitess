@@ -1,16 +1,16 @@
 <?php
 
 /*
- * This is a sample for using the PHP Vitess client.
+ * This is a sample for using the PHP Vitess client with VTGateV3.
  *
- * Before running this, start up a local demo cluster by running:
- * vitess$ examples/demo/run.py
+ * Before running this, start up a local V3 demo cluster by running:
+ * vitess/examples/demo$ ./run.py
  *
  * Then in another terminal:
- * vitess/php$ php demo.php --server=localhost:12346
+ * vitess/examples/demo$ php client.php --server=localhost:12346
  */
-require_once ('./src/VTGateConn.php');
-require_once ('./src/VTGrpcClient.php');
+require_once ('../../php/src/VTGateConn.php');
+require_once ('../../php/src/VTGrpcClient.php');
 
 $opts = getopt('', array(
 		'server:' 
