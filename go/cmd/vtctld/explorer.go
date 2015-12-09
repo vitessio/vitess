@@ -5,56 +5,42 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"strings"
 	"sync"
 
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vtctld/explorer"
 )
-
-// Explorer allows exploring a topology server.
-type Explorer interface {
-	// HandlePath returns a result (suitable to be passed to a
-	// template) appropriate for url, using actionRepo to populate
-	// the actions in result.
-	HandlePath(url string, r *http.Request) interface{}
-}
 
 var (
 	// explorerMutex protects against concurrent registration attempts (e.g. OnRun).
 	// Other than registration, the explorer should never change.
-	explorerMutex sync.Mutex
-	explorerName  string
-	explorer      Explorer
+	explorerMutex    sync.Mutex
+	explorerName     string
+	explorerInstance explorer.Explorer
 )
 
 // HandleExplorer registers the Explorer under url, using the given template.
 // It should be called by a plugin either from init() or from servenv.OnRun().
 // Only one Explorer can be registered in a given instance of vtctld.
-func HandleExplorer(name, url, templateName string, exp Explorer) {
+func HandleExplorer(name string, exp explorer.Explorer) {
 	explorerMutex.Lock()
 	defer explorerMutex.Unlock()
 
-	if explorer != nil {
+	if explorerInstance != nil {
 		panic(fmt.Sprintf("Only one Explorer can be registered in vtctld. Trying to register %q, but %q was already registered.", name, explorerName))
 	}
 
 	// Topo explorer API for client-side vtctld app.
 	handleCollection("topodata", func(r *http.Request) (interface{}, error) {
-		return exp.HandlePath(path.Clean(url+getItemPath(r.URL.Path)), r), nil
+		return exp.HandlePath(path.Clean("/"+getItemPath(r.URL.Path)), r), nil
 	})
 
-	// Old server-side explorer.
-	explorer = exp
+	// save our instance
+	explorerInstance = exp
 	explorerName = name
-	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
-		// Get the part after the prefix url.
-		topoPath := r.URL.Path[strings.Index(r.URL.Path, url)+len(url):]
-		// Redirect to the new client-side topo browser.
-		http.Redirect(w, r, appPrefix+"#"+path.Join("/topo", topoPath), http.StatusFound)
-	})
 }
 
 // handleExplorerRedirect returns the redirect target URL.
@@ -112,4 +98,27 @@ func handleExplorerRedirect(ctx context.Context, ts topo.Server, r *http.Request
 	default:
 		return "", errors.New("bad redirect type")
 	}
+}
+
+// initExplorer initializes the redirects for explorer
+func initExplorer() {
+	// redirects for explorers
+	http.HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
+		if explorerInstance == nil {
+			http.Error(w, "no explorer configured", http.StatusInternalServerError)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			httpErrorf(w, r, "cannot parse form: %s", err)
+			return
+		}
+
+		target, err := handleExplorerRedirect(context.Background(), ts, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		http.Redirect(w, r, target, http.StatusFound)
+	})
 }

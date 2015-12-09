@@ -155,25 +155,8 @@ func main() {
 	// Serve the REST API for the vtctld web app.
 	initAPI(context.Background(), ts, actionRepo)
 
-	// redirects for explorers
-	http.HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
-		if explorer == nil {
-			http.Error(w, "no explorer configured", http.StatusInternalServerError)
-			return
-		}
-		if err := r.ParseForm(); err != nil {
-			httpErrorf(w, r, "cannot parse form: %s", err)
-			return
-		}
-
-		target, err := handleExplorerRedirect(context.Background(), ts, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		http.Redirect(w, r, target, http.StatusFound)
-	})
+	// Init redirects for explorers
+	initExplorer()
 
 	// Start schema manager service.
 	if *schemaChangeDir != "" {

@@ -6,17 +6,17 @@ package etcdtopo
 
 import (
 	"fmt"
-	"html/template"
 	"net/http"
 	"path"
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
+
+	"github.com/youtube/vitess/go/vt/vtctld/explorer"
 )
 
 const (
-	explorerRoot = "/etcd"
-	globalCell   = "global"
+	globalCell = "global"
 )
 
 // Explorer is an implementation of vtctld's Explorer interface for etcd.
@@ -30,18 +30,11 @@ func NewExplorer(ts *Server) *Explorer {
 }
 
 // HandlePath implements vtctld Explorer.
-func (ex Explorer) HandlePath(rPath string, r *http.Request) interface{} {
-	result := newExplorerResult(rPath)
-
-	// Cut off explorerRoot prefix.
-	if !strings.HasPrefix(rPath, explorerRoot) {
-		result.Error = "invalid etcd explorer path: " + rPath
-		return result
-	}
-	rPath = rPath[len(explorerRoot):]
+func (ex Explorer) HandlePath(rPath string, r *http.Request) *explorer.Result {
+	result := &explorer.Result{}
 
 	// Root is a list of cells.
-	if rPath == "" {
+	if rPath == "/" {
 		cells, err := ex.ts.getCellList()
 		if err != nil {
 			result.Error = err.Error()
@@ -86,23 +79,6 @@ func (ex Explorer) HandlePath(rPath string, r *http.Request) interface{} {
 	}
 
 	return result
-}
-
-type explorerResult struct {
-	Path     string
-	Data     string
-	Links    map[string]template.URL
-	Children []string
-	Actions  map[string]template.URL
-	Error    string
-}
-
-func newExplorerResult(p string) *explorerResult {
-	return &explorerResult{
-		Links:   make(map[string]template.URL),
-		Actions: make(map[string]template.URL),
-		Path:    p,
-	}
 }
 
 func getNodeData(client Client, node *etcd.Node) string {
