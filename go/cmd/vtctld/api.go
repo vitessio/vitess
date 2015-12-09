@@ -9,11 +9,13 @@ import (
 	"reflect"
 	"strings"
 
+	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"golang.org/x/net/context"
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -23,6 +25,12 @@ const (
 
 	jsonContentType = "application/json; charset=utf-8"
 )
+
+func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
+	errMsg := fmt.Sprintf(format, args...)
+	log.Errorf("HTTP error on %v: %v, request: %#v", r.URL.Path, errMsg, r)
+	http.Error(w, errMsg, http.StatusInternalServerError)
+}
 
 func handleCollection(collection string, getFunc func(*http.Request) (interface{}, error)) {
 	http.HandleFunc(apiPrefix+collection+"/", func(w http.ResponseWriter, r *http.Request) {
