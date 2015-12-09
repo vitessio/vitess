@@ -32,7 +32,7 @@ func TestAPI(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"cell1", "cell2"}
 	ts := zktopo.NewTestServer(t, cells)
-	actionRepo = NewActionRepository(ts)
+	actionRepo := NewActionRepository(ts)
 	initAPI(ctx, ts, actionRepo)
 
 	server := httptest.NewServer(nil)

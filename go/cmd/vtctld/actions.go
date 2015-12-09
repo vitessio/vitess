@@ -2,9 +2,7 @@ package main
 
 import (
 	"flag"
-	"html/template"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"golang.org/x/net/context"
@@ -170,46 +168,4 @@ func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName st
 	}
 	result.Output = output
 	return result
-}
-
-// PopulateKeyspaceActions populates result with actions that can be
-// performed on the keyspace.
-func (ar ActionRepository) PopulateKeyspaceActions(actions map[string]template.URL, keyspace string) {
-	for name := range ar.keyspaceActions {
-		values := url.Values{}
-		values.Set("action", name)
-		values.Set("keyspace", keyspace)
-		actions[name] = template.URL("/keyspace_actions?" + values.Encode())
-	}
-}
-
-// PopulateShardActions populates result with actions that can be
-// performed on the shard.
-func (ar ActionRepository) PopulateShardActions(actions map[string]template.URL, keyspace, shard string) {
-	for name := range ar.shardActions {
-		values := url.Values{}
-		values.Set("action", name)
-		values.Set("keyspace", keyspace)
-		values.Set("shard", shard)
-		actions[name] = template.URL("/shard_actions?" + values.Encode())
-	}
-}
-
-// PopulateTabletActions populates result with actions that can be
-// performed on the tablet.
-func (ar ActionRepository) PopulateTabletActions(actions map[string]template.URL, tabletAlias string, r *http.Request) {
-	for name, value := range ar.tabletActions {
-		// check we are authorized for the role we need
-		if value.role != "" {
-			if err := acl.CheckAccessHTTP(r, value.role); err != nil {
-				continue
-			}
-		}
-
-		// and populate the entry
-		values := url.Values{}
-		values.Set("action", name)
-		values.Set("alias", tabletAlias)
-		actions[name] = template.URL("/tablet_actions?" + values.Encode())
-	}
 }

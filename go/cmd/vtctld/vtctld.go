@@ -24,13 +24,10 @@ import (
 
 var (
 	webDir                    = flag.String("web_dir", "", "directory from which to serve vtctld web interface resources")
-	debug                     = flag.Bool("debug", false, "recompile templates for every request")
 	schemaChangeDir           = flag.String("schema_change_dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
 	schemaChangeController    = flag.String("schema_change_controller", "", "schema change controller is responsible for finding schema changes and responsing schema change events")
 	schemaChangeCheckInterval = flag.Int("schema_change_check_interval", 60, "this value decides how often we check schema change dir, in seconds")
 	schemaChangeUser          = flag.String("schema_change_user", "", "The user who submits this schema change.")
-
-	_ = flag.String("templates", "", "<deprecated>")
 
 	appPrefix = "/app/"
 )
@@ -47,8 +44,7 @@ func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...i
 
 // used at runtime by plug-ins
 var (
-	actionRepo *ActionRepository
-	ts         topo.Server
+	ts topo.Server
 )
 
 func main() {
@@ -59,7 +55,7 @@ func main() {
 	ts = topo.GetServer()
 	defer topo.CloseServers()
 
-	actionRepo = NewActionRepository(ts)
+	actionRepo := NewActionRepository(ts)
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",

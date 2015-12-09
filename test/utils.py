@@ -1050,7 +1050,6 @@ class Vtctld(object):
 
   def start(self):
     args = environment.binary_args('vtctld') + [
-        '-debug',
         '-web_dir', environment.vttop + '/web/vtctld',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),
