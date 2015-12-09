@@ -63,28 +63,26 @@
         },
         {
             "name": "firebase/php-jwt",
-            "version": "2.0.0",
-            "target-dir": "Firebase/PHP-JWT",
+            "version": "v3.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/firebase/php-jwt.git",
-                "reference": "ffcfd888ce1e4f2d70cac2dc9b7301038332fe57"
+                "reference": "fa8a06e96526eb7c0eeaa47e4f39be59d21f16e1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/firebase/php-jwt/zipball/ffcfd888ce1e4f2d70cac2dc9b7301038332fe57",
-                "reference": "ffcfd888ce1e4f2d70cac2dc9b7301038332fe57",
+                "url": "https://api.github.com/repos/firebase/php-jwt/zipball/fa8a06e96526eb7c0eeaa47e4f39be59d21f16e1",
+                "reference": "fa8a06e96526eb7c0eeaa47e4f39be59d21f16e1",
                 "shasum": ""
             },
             "require": {
-                "php": ">=5.2.0"
+                "php": ">=5.3.0"
             },
             "type": "library",
             "autoload": {
-                "classmap": [
-                    "Authentication/",
-                    "Exceptions/"
-                ]
+                "psr-4": {
+                    "Firebase\\JWT\\": "src"
+                }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -104,7 +102,7 @@
             ],
             "description": "A simple library to encode and decode JSON Web Tokens (JWT) in PHP. Should conform to the current spec.",
             "homepage": "https://github.com/firebase/php-jwt",
-            "time": "2015-04-01 18:46:38"
+            "time": "2015-07-22 18:31:08"
         },
         {
             "name": "google/auth",
@@ -112,16 +110,16 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/google/google-auth-library-php.git",
-                "reference": "213ca8725ec3e3c5f5ee6560fa9f277b1cde0994"
+                "reference": "b2d0e7bdcbe8ccdd0f83a7527ef23bcc202e331a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/google/google-auth-library-php/zipball/213ca8725ec3e3c5f5ee6560fa9f277b1cde0994",
-                "reference": "213ca8725ec3e3c5f5ee6560fa9f277b1cde0994",
+                "url": "https://api.github.com/repos/google/google-auth-library-php/zipball/b2d0e7bdcbe8ccdd0f83a7527ef23bcc202e331a",
+                "reference": "b2d0e7bdcbe8ccdd0f83a7527ef23bcc202e331a",
                 "shasum": ""
             },
             "require": {
-                "firebase/php-jwt": "2.0.0",
+                "firebase/php-jwt": "~2.0|~3.0",
                 "guzzlehttp/guzzle": "5.2.*",
                 "php": ">=5.4"
             },
@@ -149,7 +147,7 @@
                 "google",
                 "oauth2"
             ],
-            "time": "2015-10-02 15:51:39"
+            "time": "2015-11-03 23:16:35"
         },
         {
             "name": "grpc/grpc",
@@ -157,12 +155,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/grpc/grpc.git",
-                "reference": "7a94236d698477636dd06282f12f706cad527029"
+                "reference": "8a8a8760eb243fe758452a2e2bed6e2821b992f1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/grpc/grpc/zipball/7a94236d698477636dd06282f12f706cad527029",
-                "reference": "7a94236d698477636dd06282f12f706cad527029",
+                "url": "https://api.github.com/repos/grpc/grpc/zipball/8a8a8760eb243fe758452a2e2bed6e2821b992f1",
+                "reference": "8a8a8760eb243fe758452a2e2bed6e2821b992f1",
                 "shasum": ""
             },
             "require": {
@@ -184,7 +182,7 @@
             "keywords": [
                 "rpc"
             ],
-            "time": "2015-10-02 06:23:50"
+            "time": "2015-12-07 19:45:30"
         },
         {
             "name": "guzzlehttp/guzzle",
