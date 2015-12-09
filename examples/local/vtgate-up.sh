@@ -5,7 +5,8 @@
 set -e
 
 cell='test'
-port=15001
+web_port=15001 # This is also the bsonrpc port.
+grpc_port=15991
 
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
@@ -13,10 +14,11 @@ source $script_root/env.sh
 # Start vtgate.
 $VTROOT/bin/vtgate \
   -log_dir $VTDATAROOT/tmp \
-  -port $port \
+  -port $web_port \
+  -grpc_port $grpc_port \
   -cell $cell \
   -tablet_protocol grpc \
-  -service_map 'bsonrpc-vt-vtgateservice' \
+  -service_map 'bsonrpc-vt-vtgateservice,grpc-vtgateservice' \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
 

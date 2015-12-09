@@ -54,11 +54,19 @@ until vtctlclient -server localhost:15999 ApplySchema -sql "$(cat create_test_ta
   retry_with_timeout
 done
 
-echo "Run client script..."
+echo "Run Python client script..."
+# Retry until vtgate is ready.
 start=`date +%s`
 until ./client.sh; do
   retry_with_timeout
 done
+
+echo "Run PHP client script..."
+# We don't need to retry anymore, because we've established that vtgate is ready.
+php client.php --server=localhost:15991 || teardown
+
+echo "Run Go client script..."
+go run client.go -server=localhost:15991 || teardown
 
 exitcode=0
 teardown
