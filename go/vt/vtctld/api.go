@@ -1,4 +1,4 @@
-package main
+package vtctld
 
 import (
 	"encoding/json"

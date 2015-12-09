@@ -1,4 +1,6 @@
-package main
+// Package vtctld contains all the code to expose a vtctld server
+// based on the provided topo.Server.
+package vtctld
 
 import (
 	"flag"
@@ -21,7 +23,7 @@ var (
 	appPrefix = "/app/"
 )
 
-// InitVtctld initializes all the vtctld functionnalities.
+// InitVtctld initializes all the vtctld functionnality.
 func InitVtctld(ts topo.Server) {
 	actionRepo := NewActionRepository(ts)
 
@@ -120,5 +122,5 @@ func InitVtctld(ts topo.Server) {
 	initAPI(context.Background(), ts, actionRepo)
 
 	// Init redirects for explorers
-	initExplorer()
+	initExplorer(ts)
 }

@@ -1,4 +1,4 @@
-package main
+package vtctld
 
 import (
 	"errors"
@@ -101,7 +101,7 @@ func handleExplorerRedirect(ctx context.Context, ts topo.Server, r *http.Request
 }
 
 // initExplorer initializes the redirects for explorer
-func initExplorer() {
+func initExplorer(ts topo.Server) {
 	// redirects for explorers
 	http.HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
 		if explorerInstance == nil {

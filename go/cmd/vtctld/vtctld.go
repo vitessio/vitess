@@ -5,6 +5,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtctld"
 )
 
 func init() {
@@ -25,7 +26,7 @@ func main() {
 	defer topo.CloseServers()
 
 	// Init the vtctld core
-	InitVtctld(ts)
+	vtctld.InitVtctld(ts)
 
 	// Start schema manager service.
 	initSchema()
