@@ -91,7 +91,6 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	storedK.ShardingColumnName = "other_id"
-	storedK.ShardingColumnType = topodatapb.KeyspaceIdType_BYTES
 	var newServedFroms []*topodatapb.Keyspace_ServedFrom
 	for _, ksf := range storedK.ServedFroms {
 		if ksf.TabletType == topodatapb.TabletType_MASTER {
@@ -107,6 +106,14 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Fatalf("UpdateKeyspace: %v", err)
 	}
+
+	// unconditional update
+	storedK.ShardingColumnType = topodatapb.KeyspaceIdType_BYTES
+	_, err = ts.UpdateKeyspace(ctx, "test_keyspace2", storedK, -1)
+	if err != nil {
+		t.Fatalf("UpdateKeyspace(-1): %v", err)
+	}
+
 	storedK, storedVersion, err = ts.GetKeyspace(ctx, "test_keyspace2")
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)

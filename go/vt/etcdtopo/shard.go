@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/coreos/go-etcd/etcd"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -34,8 +35,14 @@ func (s *Server) UpdateShard(ctx context.Context, keyspace, shard string, value 
 		return -1, err
 	}
 
-	resp, err := s.getGlobal().CompareAndSwap(shardFilePath(keyspace, shard),
-		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	var resp *etcd.Response
+	if existingVersion == -1 {
+		// Set unconditionally.
+		resp, err = s.getGlobal().Set(shardFilePath(keyspace, shard), string(data), 0 /* ttl */)
+	} else {
+		resp, err = s.getGlobal().CompareAndSwap(shardFilePath(keyspace, shard),
+			string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	}
 	if err != nil {
 		return -1, convertError(err)
 	}

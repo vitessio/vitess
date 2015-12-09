@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
@@ -43,8 +44,14 @@ func (s *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, ex
 	if err != nil {
 		return -1, err
 	}
-	resp, err := cell.CompareAndSwap(tabletFilePath(tablet.Alias),
-		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	var resp *etcd.Response
+	if existingVersion == -1 {
+		// Set unconditionally.
+		resp, err = cell.Set(tabletFilePath(tablet.Alias), string(data), 0 /* ttl */)
+	} else {
+		resp, err = cell.CompareAndSwap(tabletFilePath(tablet.Alias),
+			string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	}
 	if err != nil {
 		return -1, convertError(err)
 	}

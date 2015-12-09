@@ -120,6 +120,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Fatalf("UpdateShardFields error: %v", err)
 	}
+
 	s, _, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
 	if err != nil {
 		t.Fatalf("GetShard: %v", err)
@@ -127,12 +128,11 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if *s.MasterAlias != *other {
 		t.Fatalf("shard.MasterAlias = %v, want %v", s.MasterAlias, other)
 	}
-	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(shard *topodatapb.Shard) error {
-		shard.MasterAlias = master
-		return nil
-	})
+
+	// unconditional shard update
+	_, err = ts.UpdateShard(ctx, "test_keyspace", "b0-c0", shard, -1)
 	if err != nil {
-		t.Fatalf("UpdateShardFields error: %v", err)
+		t.Fatalf("UpdateShard(-1) error: %v", err)
 	}
 
 	updatedShard, _, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
