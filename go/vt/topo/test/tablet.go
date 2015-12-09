@@ -92,6 +92,20 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
 	}
 
+	// unconditional tablet update
+	nt.Hostname = "remotehost2"
+	if _, err := ts.UpdateTablet(ctx, nt, -1); err != nil {
+		t.Errorf("UpdateTablet(-1): %v", err)
+	}
+
+	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
+	if err != nil {
+		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+	}
+	if want := "remotehost2"; nt.Hostname != want {
+		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
+	}
+
 	// test UpdateTabletFields works
 	updatedTablet, err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.Hostname = "anotherhost"
