@@ -1,7 +1,9 @@
 #!/usr/bin/env python
+import json
 import logging
-import unittest
 import re
+import unittest
+import urllib2
 
 from vtctl import vtctl_client
 
@@ -101,8 +103,25 @@ class TestVtctld(unittest.TestCase):
                      shard_1_master.tablet_alias], auto_log=True)
     shard_0_replica.wait_for_vttablet_state('SERVING')
 
-    # run checks now before we start the tablets
+    # run checks now
     utils.validate_topology()
+
+  def test_api(self):
+    # for manual tests
+    utils.pause('Now is a good time to look at vtctld UI at:'
+                'http://localhost:%d/' % utils.vtctld.port)
+
+    # test root works
+    url = 'http://localhost:%d/api/topodata/' % utils.vtctld.port
+    f = urllib2.urlopen(url)
+    root = f.read()
+    f.close()
+    result = json.loads(root)
+    self.assertEqual(result['Error'], '')
+    self.assertIn('global', result['Children'])
+    self.assertIn('test_ca', result['Children'])
+    self.assertIn('test_nj', result['Children'])
+    self.assertIn('test_ny', result['Children'])
 
   def _check_all_tablets(self, result):
     lines = result.splitlines()
