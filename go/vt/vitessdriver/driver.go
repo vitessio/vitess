@@ -37,7 +37,7 @@ func Open(address, tabletType string, timeout time.Duration) (*sql.DB, error) {
 // OpenShard connects to vtgate running at "address".
 //
 // Unlike Open(), all queries will target a specific shard in a given keyspace
-// ("fallback" mode to vtgate v2).
+// ("fallback" mode to vtgate v1).
 //
 // This mode is recommended when you want to try out Vitess initially because it
 // does not require defining a VSchema. Just replace the MySQL/MariaDB driver
@@ -148,7 +148,7 @@ type Configuration struct {
 
 	// Keyspace of a specific keyspace and shard to target. Disables vtgate v3.
 	//
-	// If Keyspace and Shard are not empty, vtgate v2 instead of v3 will be used
+	// If Keyspace and Shard are not empty, vtgate v1 instead of v3 will be used
 	// and all requests will be sent only to that particular shard.
 	// This functionality is meant for initial migrations from MySQL/MariaDB to Vitess.
 	Keyspace string

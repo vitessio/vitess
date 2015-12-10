@@ -153,7 +153,7 @@ func TestExec(t *testing.T) {
 			requestName: "request1",
 		},
 		{
-			desc: "vtgate v2",
+			desc: "vtgate v1",
 			config: Configuration{
 				Protocol:   "grpc",
 				Address:    testAddress,
@@ -240,7 +240,7 @@ func TestQuery(t *testing.T) {
 			requestName: "request1",
 		},
 		{
-			desc: "non-streaming, vtgate v2",
+			desc: "non-streaming, vtgate v1",
 			config: Configuration{
 				Protocol:   "grpc",
 				Address:    testAddress,
@@ -263,7 +263,7 @@ func TestQuery(t *testing.T) {
 			requestName: "request1",
 		},
 		{
-			desc: "streaming, vtgate v2",
+			desc: "streaming, vtgate v1",
 			config: Configuration{
 				Protocol:   "grpc",
 				Address:    testAddress,
@@ -367,7 +367,7 @@ func TestTx(t *testing.T) {
 			requestName: "txRequest",
 		},
 		{
-			desc: "vtgate v2",
+			desc: "vtgate v1",
 			config: Configuration{
 				Protocol:   "grpc",
 				Address:    testAddress,
