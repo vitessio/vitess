@@ -1,8 +1,4 @@
-// Copyright 2015, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package main
+package vtctld
 
 import (
 	"bytes"
@@ -32,7 +28,7 @@ func TestAPI(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"cell1", "cell2"}
 	ts := zktopo.NewTestServer(t, cells)
-	actionRepo = NewActionRepository(ts)
+	actionRepo := NewActionRepository(ts)
 	initAPI(ctx, ts, actionRepo)
 
 	server := httptest.NewServer(nil)

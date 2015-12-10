@@ -1048,18 +1048,8 @@ class Vtctld(object):
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
 
-  def serving_graph(self):
-    data = json.load(
-        urllib2.urlopen(
-            'http://localhost:%d/serving_graph/test_nj?format=json' %
-            self.port))
-    if data['Errors']:
-      raise VtctldError(data['Errors'])
-    return data['Keyspaces']
-
   def start(self):
     args = environment.binary_args('vtctld') + [
-        '-debug',
         '-web_dir', environment.vttop + '/web/vtctld',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),

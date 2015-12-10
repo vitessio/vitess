@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -60,7 +61,8 @@ func main() {
 	}
 
 	// register topo server
-	topo.RegisterServer("fakezk", zktopo.NewServer(fakezk.NewConn()))
+	zkconn := fakezk.NewConn()
+	topo.RegisterServer("fakezk", zktopo.NewServer(zkconn))
 	ts := topo.GetServerByName("fakezk")
 
 	servenv.Init()
@@ -102,6 +104,10 @@ func main() {
 		topodatapb.TabletType_RDONLY,
 	}
 	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, cell, 1*time.Millisecond /*retryDelay*/, 2 /*retryCount*/, 30*time.Second /*connTimeoutTotal*/, 10*time.Second /*connTimeoutPerConn*/, 365*24*time.Hour /*connLife*/, tabletTypesToWait, 0 /*maxInFlight*/, "" /*testGateway*/)
+
+	// vtctld configuration and init
+	vtctld.InitVtctld(ts)
+	vtctld.HandleExplorer("zk", zktopo.NewZkExplorer(zkconn))
 
 	servenv.OnTerm(func() {
 		// FIXME(alainjobart): stop vtgate

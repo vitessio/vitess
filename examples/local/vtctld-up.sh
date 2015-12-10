@@ -11,7 +11,7 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 echo "Starting vtctld..."
-$VTROOT/bin/vtctld -debug \
+$VTROOT/bin/vtctld \
   -web_dir $VTTOP/web/vtctld \
   -tablet_protocol grpc \
   -tablet_manager_protocol grpc \
