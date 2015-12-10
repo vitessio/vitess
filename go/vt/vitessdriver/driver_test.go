@@ -251,6 +251,30 @@ func TestQuery(t *testing.T) {
 			},
 			requestName: "request1SpecificShard",
 		},
+		{
+			desc: "streaming, vtgate v3",
+			config: Configuration{
+				Protocol:   "grpc",
+				Address:    testAddress,
+				TabletType: "rdonly",
+				Timeout:    30 * time.Second,
+				Streaming:  true,
+			},
+			requestName: "request1",
+		},
+		{
+			desc: "streaming, vtgate v2",
+			config: Configuration{
+				Protocol:   "grpc",
+				Address:    testAddress,
+				Keyspace:   "ks1",
+				Shard:      "0",
+				TabletType: "rdonly",
+				Timeout:    30 * time.Second,
+				Streaming:  true,
+			},
+			requestName: "request1SpecificShard",
+		},
 	}
 
 	for _, tc := range testcases {
@@ -313,63 +337,16 @@ func TestQuery(t *testing.T) {
 
 		rows, err := s2.Query(nil)
 		want := "no match for: none"
+		if tc.config.Streaming && err == nil {
+			// gRPC requires to consume the stream first before the error becomes visible.
+			if rows.Next() {
+				t.Fatalf("%v: query should not have returned anything but did.", tc.desc)
+			}
+			err = rows.Err()
+		}
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("%v: err: %v, does not contain %s", tc.desc, err, want)
 		}
-	}
-}
-
-func TestQueryStreaming(t *testing.T) {
-	var testcases = []struct {
-		dataSourceName string
-		requestName    string
-	}{
-		{
-			dataSourceName: `{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`,
-			requestName:    "request1",
-		},
-		{
-			dataSourceName: `{"protocol": "grpc", "address": "%s", "keyspace": "ks1", "shard": "0", "tablet_type": "rdonly", "timeout": %d}`,
-			requestName:    "request1SpecificShard",
-		},
-	}
-
-	for _, tc := range testcases {
-		connStr := fmt.Sprintf(tc.dataSourceName, testAddress, int64(30*time.Second))
-		c, err := drv{}.Open(connStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		s, _ := c.Prepare(tc.requestName)
-		r, err := s.Query([]driver.Value{int64(0)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		cols := r.Columns()
-		wantCols := []string{
-			"field1",
-			"field2",
-		}
-		if !reflect.DeepEqual(cols, wantCols) {
-			t.Fatalf("cols: %v, want %v", cols, wantCols)
-		}
-		row := make([]driver.Value, 2)
-		count := 0
-		for {
-			err = r.Next(row)
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				t.Fatal(err)
-			}
-			count++
-		}
-		if count != 2 {
-			t.Errorf("count: %d, want 2", count)
-		}
-		_ = s.Close()
-		_ = c.Close()
 	}
 }
 
