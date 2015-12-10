@@ -5,7 +5,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -17,8 +16,7 @@ import (
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 
-	// import the 'vitess' sql driver
-	_ "github.com/youtube/vitess/go/vt/vitessdriver"
+	"github.com/youtube/vitess/go/vt/vitessdriver"
 )
 
 var (
@@ -106,8 +104,15 @@ func main() {
 		exit.Return(1)
 	}
 
-	connStr := fmt.Sprintf(`{"address": "%s", "keyspace": "%s", "shard": "%s", "tablet_type": "%s", "streaming": %v, "timeout": %d}`, *server, *keyspace, *shard, *tabletType, *streaming, int64(30*(*timeout)))
-	db, err := sql.Open("vitess", connStr)
+	c := vitessdriver.Configuration{
+		Address:    *server,
+		Keyspace:   *keyspace,
+		Shard:      *shard,
+		TabletType: *tabletType,
+		Timeout:    *timeout,
+		Streaming:  *streaming,
+	}
+	db, err := vitessdriver.OpenWithConfiguration(c)
 	if err != nil {
 		log.Errorf("client error: %v", err)
 		exit.Return(1)

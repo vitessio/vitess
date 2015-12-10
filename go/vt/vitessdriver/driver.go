@@ -25,27 +25,86 @@ func init() {
 	sql.Register("vitess", drv{})
 }
 
-// TODO(mberlin): Add helper methods.
+// Open is a Vitess helper function for sql.Open().
+//
+// It opens a database connection to vtgate running at "address".
+//
+// Note that this is the vtgate v3 mode and requires a loaded VSchema.
+func Open(address, tabletType string, timeout time.Duration) (*sql.DB, error) {
+	return OpenShard(address, "" /* keyspace */, "" /* shard */, tabletType, timeout)
+}
+
+// OpenShard connects to vtgate running at "address".
+//
+// Unlike Open(), all queries will target a specific shard in a given keyspace
+// ("fallback" mode to vtgate v2).
+//
+// This mode is recommended when you want to try out Vitess initially because it
+// does not require defining a VSchema. Just replace the MySQL/MariaDB driver
+// invocation in your application with the Vitess driver.
+func OpenShard(address, keyspace, shard, tabletType string, timeout time.Duration) (*sql.DB, error) {
+	c := newDefaultConfiguration()
+	c.Address = address
+	c.Keyspace = keyspace
+	c.Shard = shard
+	c.TabletType = tabletType
+	c.Timeout = timeout
+	return OpenWithConfiguration(c)
+}
+
+// OpenForStreaming is the same as Open() but uses streaming RPCs to retrieve
+// the results.
+//
+// The streaming mode is recommended for large results.
+func OpenForStreaming(address, tabletType string, timeout time.Duration) (*sql.DB, error) {
+	return OpenShardForStreaming(address, "" /* keyspace */, "" /* shard */, tabletType, timeout)
+}
+
+// OpenShardForStreaming is the same as OpenShard() but uses streaming RPCs to
+// retrieve the results.
+//
+// The streaming mode is recommended for large results.
+func OpenShardForStreaming(address, keyspace, shard, tabletType string, timeout time.Duration) (*sql.DB, error) {
+	c := newDefaultConfiguration()
+	c.Address = address
+	c.Keyspace = keyspace
+	c.Shard = shard
+	c.TabletType = tabletType
+	c.Timeout = timeout
+	c.Streaming = true
+	return OpenWithConfiguration(c)
+}
+
+// OpenWithConfiguration is the generic Vitess helper function for sql.Open().
+//
+// It allows to pass in a Configuration struct to control all possible
+// settings of the Vitess Go SQL driver.
+func OpenWithConfiguration(c Configuration) (*sql.DB, error) {
+	jsonBytes, err := json.Marshal(c)
+	if err != nil {
+		return nil, err
+	}
+	return sql.Open("vitess", string(jsonBytes))
+}
 
 type drv struct {
 }
 
-// Open must be called with a JSON string that looks like this:
+// Open implements the database/sql/driver.Driver interface.
+//
+// For "name", the Vitess driver requires that a JSON object is passed in.
+//
+// Instead of using this call and passing in a hand-crafted JSON string, it's
+// recommended to use the public Vitess helper functions like
+// Open(), OpenShard() or OpenWithConfiguration() instead. These will generate
+// the required JSON string behind the scenes for you.
+//
+// Example for a JSON string:
 //
 //   {"protocol": "gorpc", "address": "localhost:1111", "tablet_type": "master", "timeout": 1000000000}
 //
-// protocol specifies the rpc protocol to use.
-// address specifies the address for the VTGate to connect to.
-// tablet_type represents the consistency level of your operations.
-// For example "replica" means eventually consistent reads, while
-// "master" supports transactions and gives you read-after-write consistency.
-// timeout is specified in nanoseconds. It applies for all operations.
-//
-// If you want to execute queries which are not supported by vtgate v3, you can
-// run queries against a specific keyspace and shard.
-// Therefore, add the fields "keyspace" and "shard" to the JSON string. Example:
-//
-//   {"protocol": "gorpc", "address": "localhost:1111", "keyspace": "ks1", "shard": "0", "tablet_type": "master", "timeout": 1000000000}
+// For a description of the available fields, see the Configuration struct.
+// Note: In the JSON string, timeout has to be specified in nanoseconds.
 //
 // Note that this function will always create a connection to vtgate i.e. there
 // is no need to call DB.Ping() to verify the connection.
