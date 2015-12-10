@@ -123,6 +123,10 @@ primary key (id)
     utils.run_vtctl(['ApplySchema', '-sql=' + sql, 'test_keyspace'],
                     auto_log=True)
 
+    # reload schema everywhere so the QueryService knows about the tables
+    for t in [shard_0_master, shard_0_rdonly]:
+      utils.run_vtctl(['ReloadSchema', t.tablet_alias], auto_log=True)
+
     # insert data on shard 0
     self._insert_data('0', 100, 10)
 
