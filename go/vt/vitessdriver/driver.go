@@ -50,7 +50,7 @@ type drv struct {
 // Note that this function will always create a connection to vtgate i.e. there
 // is no need to call DB.Ping() to verify the connection.
 func (d drv) Open(name string) (driver.Conn, error) {
-	c := &conn{TabletType: "master"}
+	c := &conn{Configuration: newDefaultConfiguration()}
 	err := json.Unmarshal([]byte(name), c)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	if c.useExecuteShards() {
 		log.Infof("Sending queries only to keyspace/shard: %v/%v", c.Keyspace, c.Shard)
 	}
-	c.tabletType, err = topoproto.ParseTabletType(c.TabletType)
+	c.tabletTypeProto, err = topoproto.ParseTabletType(c.TabletType)
 	if err != nil {
 		return nil, err
 	}
@@ -72,23 +72,63 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	return c, nil
 }
 
-type conn struct {
+// Configuration holds all Vitess driver settings.
+//
+// Fields with documented default values do not have to be set explicitly.
+type Configuration struct {
+	// Protocol is the name of the vtgate RPC client implementation.
+	// Note: In open-source "grpc" is the recommended implementation.
+	//
+	// Default: "grpc"
 	Protocol string
-	Address  string
-	// Keyspace of a specific keyspace/shard to target. Disables vtgate v3.
+
+	// Address must point to a vtgate instance.
+	//
+	// Format: hostname:port
+	Address string
+
+	// Keyspace of a specific keyspace and shard to target. Disables vtgate v3.
+	//
 	// If Keyspace and Shard are not empty, vtgate v2 instead of v3 will be used
 	// and all requests will be sent only to that particular shard.
 	// This functionality is meant for initial migrations from MySQL/MariaDB to Vitess.
 	Keyspace string
-	// Shard of a specific keyspace/shard to target. Disables vtgate v3.
-	Shard      string
-	TabletType string `json:"tablet_type"`
-	Streaming  bool
-	Timeout    time.Duration
+	// Shard of a specific keyspace and shard to target. Disables vtgate v3.
+	Shard string
 
-	tabletType topodatapb.TabletType
-	vtgateConn *vtgateconn.VTGateConn
-	tx         *vtgateconn.VTGateTx
+	// TabletType is the type of tablet you want to access and affects the
+	// freshness of read data.
+	//
+	// For example, "replica" means eventually consistent reads, while
+	// "master" supports transactions and gives you read-after-write consistency.
+	//
+	// Default: "master"
+	// Allowed values: "master", "replica", "rdonly"
+	TabletType string `json:"tablet_type"`
+
+	// Streaming is true when streaming RPCs are used.
+	// Recommended for large results.
+	// Default: false
+	Streaming bool
+
+	// Timeout after which a pending query will be aborted.
+	Timeout time.Duration
+}
+
+func newDefaultConfiguration() Configuration {
+	return Configuration{
+		Protocol:   "grpc",
+		TabletType: "master",
+		Streaming:  false,
+	}
+}
+
+type conn struct {
+	Configuration
+	// tabletTypeProto is the protobof enum value of the string Configuration.TabletType.
+	tabletTypeProto topodatapb.TabletType
+	vtgateConn      *vtgateconn.VTGateConn
+	tx              *vtgateconn.VTGateTx
 }
 
 func (c *conn) dial() error {
@@ -188,9 +228,9 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 		var errFunc vtgateconn.ErrFunc
 		var err error
 		if s.c.useExecuteShards() {
-			qrc, errFunc, err = s.c.vtgateConn.StreamExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletType)
+			qrc, errFunc, err = s.c.vtgateConn.StreamExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto)
 		} else {
-			qrc, errFunc, err = s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.tabletType)
+			qrc, errFunc, err = s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto)
 		}
 		if err != nil {
 			return nil, err
@@ -210,16 +250,16 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 func (s *stmt) executeVitess(ctx context.Context, args []driver.Value) (*sqltypes.Result, error) {
 	if s.c.tx != nil {
 		if s.c.useExecuteShards() {
-			return s.c.tx.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletType, false /* notInTransaction */)
+			return s.c.tx.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto, false /* notInTransaction */)
 		}
-		return s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.tabletType, false /* notInTransaction */)
+		return s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto, false /* notInTransaction */)
 	}
 
 	// Non-transactional case.
 	if s.c.useExecuteShards() {
-		return s.c.vtgateConn.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletType)
+		return s.c.vtgateConn.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto)
 	}
-	return s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.tabletType)
+	return s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto)
 }
 
 func makeBindVars(args []driver.Value) map[string]interface{} {
