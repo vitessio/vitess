@@ -60,6 +60,7 @@ class TestMysqlctl(unittest.TestCase):
             'test_keyspace/80-:test_keyspace_1',
             '--schema_dir', os.path.join(environment.vttop, 'test',
                                          'vttest_schema'),
+            '--web_dir', environment.vttop + '/web/vtctld',
            ]
     sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     config = json.loads(sp.stdout.readline())

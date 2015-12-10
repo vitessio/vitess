@@ -106,7 +106,7 @@ class VtProcess(object):
     try:
       return json.loads(data)
     except ValueError:
-      logging.error('%s' % data)
+      logging.error('%s', data)
       raise
 
   def kill(self):
@@ -132,10 +132,11 @@ class VtcomboProcess(VtProcess):
       '-queryserver-config-txpool-timeout', '300',
       ]
 
-  def __init__(self, directory, shards, mysql_db, vschema, charset):
+  def __init__(self, directory, shards, mysql_db, vschema, charset,
+               web_dir=None):
     VtProcess.__init__(self, 'vtcombo-%s' % os.environ['USER'], directory,
                        environment.vtcombo_binary, port_name='vtcombo')
-    topology = ",".join(["%s/%s:%s" % (shard.keyspace, shard.name,
+    topology = ','.join(['%s/%s:%s' % (shard.keyspace, shard.name,
                                        shard.db_name) for shard in shards])
     self.extraparams = [
         '-db-config-app-charset', charset,
@@ -150,13 +151,15 @@ class VtcomboProcess(VtProcess):
     ] + self.QUERYSERVER_PARAMETERS + environment.extra_vtcombo_parameters()
     if vschema:
       self.extraparams.extend(['-vschema', vschema])
+    if web_dir:
+      self.extraparams.extend(['-web_dir', web_dir])
 
 
 vtcombo_process = None
 
 
 def start_vt_processes(directory, shards, mysql_db, vschema,
-                       charset='utf8'):
+                       charset='utf8', web_dir=None):
   """Start the vt processes.
 
   Parameters:
@@ -164,12 +167,14 @@ def start_vt_processes(directory, shards, mysql_db, vschema,
     shards: an array of ShardInfo objects.
     mysql_db: an instance of the mysql_db.MySqlDB class.
     charset: the character set for the database connections.
+    web_dir: contains the web app for vtctld side of vtcombo.
   """
   global vtcombo_process
 
   logging.info('start_vt_processes(directory=%s,vtcombo_binary=%s)',
                directory, environment.vtcombo_binary)
-  vtcombo_process = VtcomboProcess(directory, shards, mysql_db, vschema, charset)
+  vtcombo_process = VtcomboProcess(directory, shards, mysql_db, vschema,
+                                   charset, web_dir=web_dir)
   vtcombo_process.wait_start()
 
 

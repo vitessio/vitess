@@ -108,7 +108,7 @@ class TestVtctld(unittest.TestCase):
 
   def test_api(self):
     # for manual tests
-    utils.pause('Now is a good time to look at vtctld UI at:'
+    utils.pause('Now is a good time to look at vtctld UI at: '
                 'http://localhost:%d/' % utils.vtctld.port)
 
     # test root works
