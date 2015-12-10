@@ -27,17 +27,21 @@ var (
 	testAddress string
 )
 
+// TestMain tests the Vitess Go SQL driver.
+//
+// Note that the queries used in the test are not valid SQL queries and don't
+// have to be. The main point here is to test the interactions against a
+// vtgate implementation (here: fakeVTGateService from fakeserver_test.go).
 func TestMain(m *testing.M) {
-	// fake service
 	service := CreateFakeServer()
 
-	// listen on a random port
+	// listen on a random port.
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		panic(fmt.Sprintf("Cannot listen: %v", err))
 	}
 
-	// Create a gRPC server and listen on the port
+	// Create a gRPC server and listen on the port.
 	server := grpc.NewServer()
 	grpcvtgateservice.RegisterForTest(server, service)
 	go server.Serve(listener)
@@ -66,18 +70,22 @@ func TestDriver(t *testing.T) {
 	_ = db.Close()
 }
 
-func TestDial(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
+func TestOpen(t *testing.T) {
+	connStr := fmt.Sprintf(`{"address": "%s", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err := drv{}.Open(connStr)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer c.Close()
+
 	wantc := &conn{
-		Protocol:   "grpc",
-		TabletType: "replica",
-		Streaming:  false,
-		Timeout:    30 * time.Second,
-		tabletType: topodatapb.TabletType_REPLICA,
+		Configuration: Configuration{
+			Protocol:   "grpc",
+			TabletType: "replica",
+			Streaming:  false,
+			Timeout:    30 * time.Second,
+		},
+		tabletTypeProto: topodatapb.TabletType_REPLICA,
 	}
 	newc := *(c.(*conn))
 	newc.Address = ""
@@ -85,16 +93,67 @@ func TestDial(t *testing.T) {
 	if !reflect.DeepEqual(&newc, wantc) {
 		t.Errorf("conn: %+v, want %+v", &newc, wantc)
 	}
-	_ = c.Close()
+}
 
-	_, err = drv{}.Open(`{"protocol": "none"}`)
+func TestOpenShard(t *testing.T) {
+	connStr := fmt.Sprintf(`{"address": "%s", "keyspace": "ks1", "shard": "0", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
+	c, err := drv{}.Open(connStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	wantc := &conn{
+		Configuration: Configuration{
+			Protocol:   "grpc",
+			Keyspace:   "ks1",
+			Shard:      "0",
+			TabletType: "replica",
+			Streaming:  false,
+			Timeout:    30 * time.Second,
+		},
+		tabletTypeProto: topodatapb.TabletType_REPLICA,
+	}
+	newc := *(c.(*conn))
+	newc.Address = ""
+	newc.vtgateConn = nil
+	if !reflect.DeepEqual(&newc, wantc) {
+		t.Errorf("conn: %+v, want %+v", &newc, wantc)
+	}
+}
+
+func TestOpen_UnregisteredProtocol(t *testing.T) {
+	_, err := drv{}.Open(`{"protocol": "none"}`)
 	want := "no dialer registered for VTGate protocol none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, want %s", err, want)
 	}
+}
 
-	_, err = drv{}.Open(`{`)
-	want = "unexpected end of JSON input"
+func TestOpen_InvalidJson(t *testing.T) {
+	_, err := drv{}.Open(`{`)
+	want := "unexpected end of JSON input"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, want %s", err, want)
+	}
+}
+
+func TestOpen_KeyspaceAndShardBelongTogether(t *testing.T) {
+	_, err := drv{}.Open(`{"keyspace": "ks1"}`)
+	want := "Always set both keyspace and shard or leave both empty."
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, want %s", err, want)
+	}
+
+	_, err = drv{}.Open(`{"shard": "0"}`)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, want %s", err, want)
+	}
+}
+
+func TestOpen_ValidTabletTypeRequired(t *testing.T) {
+	_, err := drv{}.Open(`{"tablet_type": "foobar"}`)
+	want := "unknown TabletType foobar"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, want %s", err, want)
 	}
