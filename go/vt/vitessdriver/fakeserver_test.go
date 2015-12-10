@@ -143,6 +143,38 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 
 // StreamExecuteShards is part of the VTGateService interface
 func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+	execCase, ok := execSpecificShardMap[sql]
+	if !ok {
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecuteSpecificShard{
+		queryExecute: queryExecute{
+			SQL:              sql,
+			BindVariables:    bindVariables,
+			TabletType:       tabletType,
+		},
+		Keyspace: keyspace,
+		Shard:    shards[0],
+	}
+	if !reflect.DeepEqual(query, execCase.execQuery) {
+		return fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
+	}
+	if execCase.result != nil {
+		result := &sqltypes.Result{
+			Fields: execCase.result.Fields,
+		}
+		if err := sendReply(result); err != nil {
+			return err
+		}
+		for _, row := range execCase.result.Rows {
+			result := &sqltypes.Result{
+				Rows: [][]sqltypes.Value{row},
+			}
+			if err := sendReply(result); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 

@@ -5,10 +5,7 @@
 package vitessdriver
 
 import (
-	"database/sql"
-	"database/sql/driver"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"reflect"
@@ -27,17 +24,21 @@ var (
 	testAddress string
 )
 
+// TestMain tests the Vitess Go SQL driver.
+//
+// Note that the queries used in the test are not valid SQL queries and don't
+// have to be. The main point here is to test the interactions against a
+// vtgate implementation (here: fakeVTGateService from fakeserver_test.go).
 func TestMain(m *testing.M) {
-	// fake service
 	service := CreateFakeServer()
 
-	// listen on a random port
+	// listen on a random port.
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		panic(fmt.Sprintf("Cannot listen: %v", err))
 	}
 
-	// Create a gRPC server and listen on the port
+	// Create a gRPC server and listen on the port.
 	server := grpc.NewServer()
 	grpcvtgateservice.RegisterForTest(server, service)
 	go server.Serve(listener)
@@ -46,38 +47,22 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestDriver(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`, testAddress, int64(30*time.Second))
-	db, err := sql.Open("vitess", connStr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := db.Query("request1", int64(0))
-	if err != nil {
-		t.Fatal(err)
-	}
-	count := 0
-	for r.Next() {
-		count++
-	}
-	if count != 2 {
-		t.Errorf("count: %d, want 2", count)
-	}
-	_ = db.Close()
-}
-
-func TestDial(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
+func TestOpen(t *testing.T) {
+	connStr := fmt.Sprintf(`{"address": "%s", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err := drv{}.Open(connStr)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer c.Close()
+
 	wantc := &conn{
-		Protocol:   "grpc",
-		TabletType: "replica",
-		Streaming:  false,
-		Timeout:    30 * time.Second,
-		tabletType: topodatapb.TabletType_REPLICA,
+		Configuration: Configuration{
+			Protocol:   "grpc",
+			TabletType: "replica",
+			Streaming:  false,
+			Timeout:    30 * time.Second,
+		},
+		tabletTypeProto: topodatapb.TabletType_REPLICA,
 	}
 	newc := *(c.(*conn))
 	newc.Address = ""
@@ -85,16 +70,67 @@ func TestDial(t *testing.T) {
 	if !reflect.DeepEqual(&newc, wantc) {
 		t.Errorf("conn: %+v, want %+v", &newc, wantc)
 	}
-	_ = c.Close()
+}
 
-	_, err = drv{}.Open(`{"protocol": "none"}`)
+func TestOpenShard(t *testing.T) {
+	connStr := fmt.Sprintf(`{"address": "%s", "keyspace": "ks1", "shard": "0", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
+	c, err := drv{}.Open(connStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	wantc := &conn{
+		Configuration: Configuration{
+			Protocol:   "grpc",
+			Keyspace:   "ks1",
+			Shard:      "0",
+			TabletType: "replica",
+			Streaming:  false,
+			Timeout:    30 * time.Second,
+		},
+		tabletTypeProto: topodatapb.TabletType_REPLICA,
+	}
+	newc := *(c.(*conn))
+	newc.Address = ""
+	newc.vtgateConn = nil
+	if !reflect.DeepEqual(&newc, wantc) {
+		t.Errorf("conn: %+v, want %+v", &newc, wantc)
+	}
+}
+
+func TestOpen_UnregisteredProtocol(t *testing.T) {
+	_, err := drv{}.Open(`{"protocol": "none"}`)
 	want := "no dialer registered for VTGate protocol none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, want %s", err, want)
 	}
+}
 
-	_, err = drv{}.Open(`{`)
-	want = "unexpected end of JSON input"
+func TestOpen_InvalidJson(t *testing.T) {
+	_, err := drv{}.Open(`{`)
+	want := "unexpected end of JSON input"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, want %s", err, want)
+	}
+}
+
+func TestOpen_KeyspaceAndShardBelongTogether(t *testing.T) {
+	_, err := drv{}.Open(`{"keyspace": "ks1"}`)
+	want := "Always set both keyspace and shard or leave both empty."
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, want %s", err, want)
+	}
+
+	_, err = drv{}.Open(`{"shard": "0"}`)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, want %s", err, want)
+	}
+}
+
+func TestOpen_ValidTabletTypeRequired(t *testing.T) {
+	_, err := drv{}.Open(`{"tablet_type": "foobar"}`)
+	want := "unknown TabletType foobar"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, want %s", err, want)
 	}
@@ -102,59 +138,85 @@ func TestDial(t *testing.T) {
 
 func TestExec(t *testing.T) {
 	var testcases = []struct {
-		dataSourceName string
-		requestName    string
+		desc        string
+		config      Configuration
+		requestName string
 	}{
 		{
-			dataSourceName: `{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`,
-			requestName:    "request1",
+			desc: "vtgate v3",
+			config: Configuration{
+				Protocol:   "grpc",
+				Address:    testAddress,
+				TabletType: "rdonly",
+				Timeout:    30 * time.Second,
+			},
+			requestName: "request1",
 		},
 		{
-			dataSourceName: `{"protocol": "grpc", "address": "%s", "keyspace": "ks1", "shard": "0", "tablet_type": "rdonly", "timeout": %d}`,
-			requestName:    "request1SpecificShard",
+			desc: "vtgate v1",
+			config: Configuration{
+				Protocol:   "grpc",
+				Address:    testAddress,
+				Keyspace:   "ks1",
+				Shard:      "0",
+				TabletType: "rdonly",
+				Timeout:    30 * time.Second,
+			},
+			requestName: "request1SpecificShard",
 		},
 	}
 
 	for _, tc := range testcases {
-		connStr := fmt.Sprintf(tc.dataSourceName, testAddress, int64(30*time.Second))
-		c, err := drv{}.Open(connStr)
+		db, err := OpenWithConfiguration(tc.config)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("%v: %v", tc.desc, err)
 		}
-		s, _ := c.Prepare(tc.requestName)
-		if ni := s.NumInput(); ni != -1 {
-			t.Errorf("got %d, want -1", ni)
-		}
-		r, err := s.Exec([]driver.Value{int64(0)})
+		defer db.Close()
+
+		s, err := db.Prepare(tc.requestName)
 		if err != nil {
-			t.Error(err)
+			t.Fatalf("%v: %v", tc.desc, err)
+		}
+		defer s.Close()
+
+		r, err := s.Exec(int64(0))
+		if err != nil {
+			t.Fatalf("%v: %v", tc.desc, err)
 		}
 		if v, _ := r.LastInsertId(); v != 72 {
-			t.Errorf("insert id: %d, want 72", v)
+			t.Fatalf("%v: insert id: %d, want 72", tc.desc, v)
 		}
 		if v, _ := r.RowsAffected(); v != 123 {
-			t.Errorf("rows affected: %d, want 123", v)
+			t.Fatalf("%v: rows affected: %d, want 123", tc.desc, v)
 		}
-		_ = s.Close()
 
-		s, _ = c.Prepare("none")
-		_, err = s.Exec(nil)
+		s2, err := db.Prepare("none")
+		if err != nil {
+			t.Fatalf("%v: %v", tc.desc, err)
+		}
+		defer s2.Close()
+
+		_, err = s2.Exec(nil)
 		want := "no match for: none"
 		if err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("err: %v, does not contain %s", err, want)
+			t.Errorf("%v: err: %v, does not contain %s", tc.desc, err, want)
 		}
-		_ = c.Close()
 	}
 }
 
 func TestExecStreamingNotAllowed(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
-	c, err := drv{}.Open(connStr)
+	db, err := OpenForStreaming(testAddress, "rdonly", 30*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, _ := c.Prepare("request1")
-	_, err = s.Exec([]driver.Value{int64(0)})
+
+	s, err := db.Prepare("request1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	_, err = s.Exec(int64(0))
 	want := "Exec not allowed for streaming connections"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, does not contain %s", err, want)
@@ -163,195 +225,244 @@ func TestExecStreamingNotAllowed(t *testing.T) {
 
 func TestQuery(t *testing.T) {
 	var testcases = []struct {
-		dataSourceName string
-		requestName    string
+		desc        string
+		config      Configuration
+		requestName string
 	}{
 		{
-			dataSourceName: `{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`,
-			requestName:    "request1",
+			desc: "non-streaming, vtgate v3",
+			config: Configuration{
+				Protocol:   "grpc",
+				Address:    testAddress,
+				TabletType: "rdonly",
+				Timeout:    30 * time.Second,
+			},
+			requestName: "request1",
 		},
 		{
-			dataSourceName: `{"protocol": "grpc", "address": "%s", "keyspace": "ks1", "shard": "0", "tablet_type": "rdonly", "timeout": %d}`,
-			requestName:    "request1SpecificShard",
+			desc: "non-streaming, vtgate v1",
+			config: Configuration{
+				Protocol:   "grpc",
+				Address:    testAddress,
+				Keyspace:   "ks1",
+				Shard:      "0",
+				TabletType: "rdonly",
+				Timeout:    30 * time.Second,
+			},
+			requestName: "request1SpecificShard",
+		},
+		{
+			desc: "streaming, vtgate v3",
+			config: Configuration{
+				Protocol:   "grpc",
+				Address:    testAddress,
+				TabletType: "rdonly",
+				Timeout:    30 * time.Second,
+				Streaming:  true,
+			},
+			requestName: "request1",
+		},
+		{
+			desc: "streaming, vtgate v1",
+			config: Configuration{
+				Protocol:   "grpc",
+				Address:    testAddress,
+				Keyspace:   "ks1",
+				Shard:      "0",
+				TabletType: "rdonly",
+				Timeout:    30 * time.Second,
+				Streaming:  true,
+			},
+			requestName: "request1SpecificShard",
 		},
 	}
 
 	for _, tc := range testcases {
-		connStr := fmt.Sprintf(tc.dataSourceName, testAddress, int64(30*time.Second))
-		c, err := drv{}.Open(connStr)
+		db, err := OpenWithConfiguration(tc.config)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("%v: %v", tc.desc, err)
 		}
-		s, _ := c.Prepare(tc.requestName)
-		r, err := s.Query([]driver.Value{int64(0)})
+		defer db.Close()
+
+		s, err := db.Prepare(tc.requestName)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("%v: %v", tc.desc, err)
 		}
-		cols := r.Columns()
+		defer s.Close()
+
+		r, err := s.Query(int64(0))
+		if err != nil {
+			t.Fatalf("%v: %v", tc.desc, err)
+		}
+		cols, err := r.Columns()
+		if err != nil {
+			t.Fatalf("%v: %v", tc.desc, err)
+		}
 		wantCols := []string{
 			"field1",
 			"field2",
 		}
 		if !reflect.DeepEqual(cols, wantCols) {
-			t.Fatalf("cols: %v, want %v", cols, wantCols)
+			t.Fatalf("%v: cols: %v, want %v", tc.desc, cols, wantCols)
 		}
-		row := make([]driver.Value, 2)
 		count := 0
-		for {
-			err = r.Next(row)
+		wantValues := []struct {
+			field1 int16
+			field2 string
+		}{{1, "value1"}, {2, "value2"}}
+		for r.Next() {
+			var field1 int16
+			var field2 string
+			err := r.Scan(&field1, &field2)
 			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				t.Error(err)
+				t.Fatalf("%v: %v", tc.desc, err)
+			}
+			if want := wantValues[count].field1; field1 != want {
+				t.Fatalf("%v: wrong value for field1: got: %v want: %v", tc.desc, field1, want)
+			}
+			if want := wantValues[count].field2; field2 != want {
+				t.Fatalf("%v: wrong value for field2: got: %v want: %v", tc.desc, field2, want)
 			}
 			count++
 		}
-		if count != 2 {
-			t.Errorf("count: %d, want 2", count)
+		if count != len(wantValues) {
+			t.Errorf("%v: count: %d, want %d", tc.desc, count, len(wantValues))
 		}
-		_ = s.Close()
 
-		s, _ = c.Prepare("none")
-		_, err = s.Query(nil)
+		s2, err := db.Prepare("none")
+		if err != nil {
+			t.Fatalf("%v: %v", tc.desc, err)
+		}
+		defer s2.Close()
+
+		rows, err := s2.Query(nil)
 		want := "no match for: none"
-		if err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("err: %v, does not contain %s", err, want)
-		}
-		_ = c.Close()
-	}
-}
-
-func TestQueryStreaming(t *testing.T) {
-	var testcases = []struct {
-		dataSourceName string
-		requestName    string
-	}{
-		{
-			dataSourceName: `{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`,
-			requestName:    "request1",
-		},
-		{
-			dataSourceName: `{"protocol": "grpc", "address": "%s", "keyspace": "ks1", "shard": "0", "tablet_type": "rdonly", "timeout": %d}`,
-			requestName:    "request1SpecificShard",
-		},
-	}
-
-	for _, tc := range testcases {
-		connStr := fmt.Sprintf(tc.dataSourceName, testAddress, int64(30*time.Second))
-		c, err := drv{}.Open(connStr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		s, _ := c.Prepare(tc.requestName)
-		r, err := s.Query([]driver.Value{int64(0)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		cols := r.Columns()
-		wantCols := []string{
-			"field1",
-			"field2",
-		}
-		if !reflect.DeepEqual(cols, wantCols) {
-			t.Fatalf("cols: %v, want %v", cols, wantCols)
-		}
-		row := make([]driver.Value, 2)
-		count := 0
-		for {
-			err = r.Next(row)
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				t.Fatal(err)
+		if tc.config.Streaming && err == nil {
+			// gRPC requires to consume the stream first before the error becomes visible.
+			if rows.Next() {
+				t.Fatalf("%v: query should not have returned anything but did.", tc.desc)
 			}
-			count++
+			err = rows.Err()
 		}
-		if count != 2 {
-			t.Errorf("count: %d, want 2", count)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%v: err: %v, does not contain %s", tc.desc, err, want)
 		}
-		_ = s.Close()
-		_ = c.Close()
 	}
 }
 
 func TestTx(t *testing.T) {
 	var testcases = []struct {
-		dataSourceName string
-		requestName    string
+		desc        string
+		config      Configuration
+		requestName string
 	}{
 		{
-			dataSourceName: `{"protocol": "grpc", "address": "%s", "tablet_type": "master", "timeout": %d}`,
-			requestName:    "txRequest",
+			desc: "vtgate v3",
+			config: Configuration{
+				Protocol:   "grpc",
+				Address:    testAddress,
+				TabletType: "master",
+				Timeout:    30 * time.Second,
+			},
+			requestName: "txRequest",
 		},
 		{
-			dataSourceName: `{"protocol": "grpc", "address": "%s", "keyspace": "ks1", "shard": "0", "tablet_type": "master", "timeout": %d}`,
-			requestName:    "txRequestSpecificShard",
+			desc: "vtgate v1",
+			config: Configuration{
+				Protocol:   "grpc",
+				Address:    testAddress,
+				Keyspace:   "ks1",
+				Shard:      "0",
+				TabletType: "master",
+				Timeout:    30 * time.Second,
+			},
+			requestName: "txRequestSpecificShard",
 		},
 	}
 
 	for _, tc := range testcases {
-		connStr := fmt.Sprintf(tc.dataSourceName, testAddress, int64(30*time.Second))
-		c, err := drv{}.Open(connStr)
-		if err != nil {
-			t.Fatalf("%v: %v", tc.requestName, err)
-		}
-		tx, err := c.Begin()
-		if err != nil {
-			t.Errorf("%v: %v", tc.requestName, err)
-		}
-		s, _ := c.Prepare(tc.requestName)
-		_, err = s.Exec([]driver.Value{int64(0)})
-		if err != nil {
-			t.Errorf("%v: %v", tc.requestName, err)
-		}
-		err = tx.Commit()
-		if err != nil {
-			t.Errorf("%v: %v", tc.requestName, err)
-		}
-		err = tx.Commit()
-		want := "commit: not in transaction"
-		if err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("case: %v err: %v, does not contain %s", tc.requestName, err, want)
-		}
-		_ = c.Close()
+		testTxCommit(t, tc.config, tc.desc, tc.requestName)
 
-		c, err = drv{}.Open(connStr)
-		if err != nil {
-			t.Fatalf("%v: %v", tc.requestName, err)
-		}
-		tx, err = c.Begin()
-		if err != nil {
-			t.Errorf("%v: %v", tc.requestName, err)
-		}
-		s, _ = c.Prepare(tc.requestName)
-		_, err = s.Query([]driver.Value{int64(0)})
-		if err != nil {
-			t.Errorf("%v: %v", tc.requestName, err)
-		}
-		err = tx.Rollback()
-		if err != nil {
-			t.Errorf("%v: %v", tc.requestName, err)
-		}
-		err = tx.Rollback()
-		if err != nil {
-			t.Errorf("%v: %v", tc.requestName, err)
-		}
-		_ = c.Close()
+		testTxRollback(t, tc.config, tc.desc, tc.requestName)
+	}
+}
+
+func testTxCommit(t *testing.T, c Configuration, desc, requestName string) {
+	db, err := OpenWithConfiguration(c)
+	if err != nil {
+		t.Fatalf("%v: %v", desc, err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("%v: %v", desc, err)
+	}
+
+	s, err := tx.Prepare(requestName)
+	if err != nil {
+		t.Fatalf("%v: %v", desc, err)
+	}
+
+	_, err = s.Exec(int64(0))
+	if err != nil {
+		t.Fatalf("%v: %v", desc, err)
+	}
+	err = tx.Commit()
+	if err != nil {
+		t.Fatalf("%v: %v", desc, err)
+	}
+	// Commit on committed transaction is caught by Golang sql package.
+	// We actually don't have to cover this in our code.
+	err = tx.Commit()
+	want := "sql: Transaction has already been committed or rolled back"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("%v: err: %v, does not contain %s", desc, err, want)
+	}
+}
+
+func testTxRollback(t *testing.T, c Configuration, desc, requestName string) {
+	db, err := OpenWithConfiguration(c)
+	if err != nil {
+		t.Fatalf("%v: %v", desc, err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("%v: %v", desc, err)
+	}
+	s, err := tx.Prepare(requestName)
+	if err != nil {
+		t.Fatalf("%v: %v", desc, err)
+	}
+	_, err = s.Query(int64(0))
+	if err != nil {
+		t.Fatalf("%v: %v", desc, err)
+	}
+	err = tx.Rollback()
+	if err != nil {
+		t.Fatalf("%v: %v", desc, err)
+	}
+	// Rollback on rolled back transaction is caught by Golang sql package.
+	// We actually don't have to cover this in our code.
+	err = tx.Rollback()
+	want := "sql: Transaction has already been committed or rolled back"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("%v: err: %v, does not contain %s", desc, err, want)
 	}
 }
 
 func TestTxExecStreamingNotAllowed(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
-	c, err := drv{}.Open(connStr)
+	db, err := OpenForStreaming(testAddress, "rdonly", 30*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = c.Begin()
+	defer db.Close()
+
+	_, err = db.Begin()
 	want := "transaction not allowed for streaming connection"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, does not contain %s", err, want)
 	}
-	_ = c.Close()
 }

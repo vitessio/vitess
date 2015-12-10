@@ -10,14 +10,12 @@
 package main
 
 import (
-	"database/sql"
 	"flag"
 	"fmt"
 	"os"
 	"time"
 
-	// import the 'vitess' sql driver
-	_ "github.com/youtube/vitess/go/vt/vitessdriver"
+	"github.com/youtube/vitess/go/vt/vitessdriver"
 )
 
 var (
@@ -25,16 +23,14 @@ var (
 )
 
 func main() {
-	keyspace := "test_keyspace"
-	timeout := (10 * time.Second).Nanoseconds()
-	shard := "0"
-
 	flag.Parse()
 
+	keyspace := "test_keyspace"
+	shard := "0"
+	timeout := 10 * time.Second
+
 	// Connect to vtgate.
-	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "keyspace": "%s", "shard": "%s", "tablet_type": "%s", "streaming": %v, "timeout": %d}`,
-		*server, keyspace, shard, "master", false, timeout)
-	db, err := sql.Open("vitess", connStr)
+	db, err := vitessdriver.OpenShard(*server, keyspace, shard, "master", timeout)
 	if err != nil {
 		fmt.Printf("client error: %v\n", err)
 		os.Exit(1)
@@ -82,9 +78,7 @@ func main() {
 	// Note that this may be behind master due to replication lag.
 	fmt.Println("Reading from replica...")
 
-	connStr = fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "keyspace": "%s", "shard": "%s", "tablet_type": "%s", "streaming": %v, "timeout": %d}`,
-		*server, keyspace, shard, "replica", false, timeout)
-	dbr, err := sql.Open("vitess", connStr)
+	dbr, err := vitessdriver.OpenShard(*server, keyspace, shard, "replica", timeout)
 	if err != nil {
 		fmt.Printf("client error: %v\n", err)
 		os.Exit(1)

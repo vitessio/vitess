@@ -228,7 +228,8 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
   logging.debug('Tearing down the servers and setup')
-  keyspace_env.teardown()
+  if keyspace_env:
+    keyspace_env.teardown()
 
   environment.topo_server().teardown()
 
