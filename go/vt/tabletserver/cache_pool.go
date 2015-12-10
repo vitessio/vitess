@@ -153,7 +153,7 @@ func (cp *CachePool) startCacheService() {
 	for {
 		c, err := cacheservice.Connect(cacheservice.Config{
 			Address: cp.socket,
-			Timeout: 30 * time.Millisecond,
+			Timeout: 10 * time.Second,
 		})
 
 		if err != nil {
