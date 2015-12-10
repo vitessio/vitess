@@ -18,7 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 
 	// import the 'vitess' sql driver
-	_ "github.com/youtube/vitess/go/vt/client"
+	_ "github.com/youtube/vitess/go/vt/vitessdriver"
 )
 
 var (
@@ -137,8 +137,8 @@ func main() {
 		}
 
 		rowsAffected, err := result.RowsAffected()
-		lastInsertId, err := result.LastInsertId()
-		log.Infof("Total time: %v / Row affected: %v / Last Insert Id: %v", time.Now().Sub(now), rowsAffected, lastInsertId)
+		lastInsertID, err := result.LastInsertId()
+		log.Infof("Total time: %v / Row affected: %v / Last Insert Id: %v", time.Now().Sub(now), rowsAffected, lastInsertID)
 	} else {
 
 		// launch the query

@@ -1,4 +1,4 @@
-// client.go is a sample for using the Go Vitess client with an unsharded keyspace.
+// client.go is a sample for using the Vitess Go SQL driver with an unsharded keyspace.
 //
 // Before running this, start up a local example cluster as described in the
 // README.md file.
@@ -17,7 +17,7 @@ import (
 	"time"
 
 	// import the 'vitess' sql driver
-	_ "github.com/youtube/vitess/go/vt/client"
+	_ "github.com/youtube/vitess/go/vt/vitessdriver"
 )
 
 var (
