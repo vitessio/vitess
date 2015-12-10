@@ -183,6 +183,11 @@ func (dg *discoveryGateway) Close(ctx context.Context) error {
 	return nil
 }
 
+// CacheStatus returns a list of GatewayEndPointCacheStatus per endpoint.
+func (dg *discoveryGateway) CacheStatus() GatewayEndPointCacheStatusList {
+	return nil
+}
+
 // StatsUpdate receives updates about target and realtime stats changes.
 func (dg *discoveryGateway) StatsUpdate(*discovery.EndPointStats) {
 }

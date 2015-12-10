@@ -152,6 +152,11 @@ func (sg *shardGateway) Close(ctx context.Context) error {
 	return nil
 }
 
+// CacheStatus returns a list of GatewayEndPointCacheStatus per endpoint.
+func (sg *shardGateway) CacheStatus() GatewayEndPointCacheStatusList {
+	return nil
+}
+
 func (sg *shardGateway) getConnection(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType) *ShardConn {
 	sg.mu.Lock()
 	defer sg.mu.Unlock()

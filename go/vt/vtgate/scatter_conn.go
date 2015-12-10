@@ -542,6 +542,11 @@ func (stc *ScatterConn) Close() error {
 	return stc.gateway.Close(context.Background())
 }
 
+// GetGatewayCacheStatus returns a displayable version of the Gateway cache.
+func (stc *ScatterConn) GetGatewayCacheStatus() GatewayEndPointCacheStatusList {
+	return stc.gateway.CacheStatus()
+}
+
 // ScatterConnError is the ScatterConn specific error.
 type ScatterConnError struct {
 	Code int
