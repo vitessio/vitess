@@ -34,7 +34,7 @@ google.load("visualization", "1", {packages:["corechart"]});
 
 function minutesAgo(d, i) {
   var copy = new Date(d);
-  copy.setMinutes(copy.getMinutes() - i);
+  copy.setTime(copy.getTime() - i*60*1000);
   return copy
 }
 
