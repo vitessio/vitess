@@ -202,6 +202,7 @@ func (s *stmt) Close() error {
 }
 
 func (s *stmt) NumInput() int {
+	// -1 = Golang sql won't sanity check argument counts before Exec or Query.
 	return -1
 }
 
