@@ -40,7 +40,6 @@ spec:
               mkdir -p $VTDATAROOT/tmp &&
               chown -R vitess /vt &&
               su -p -c "/vt/bin/vtctld
-              -debug
               -web_dir $VTTOP/web/vtctld
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
