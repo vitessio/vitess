@@ -6,6 +6,8 @@ package vtgate
 
 import (
 	"flag"
+	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -56,6 +58,9 @@ type Gateway interface {
 
 	// Close shuts down underlying connections.
 	Close(ctx context.Context) error
+
+	// CacheStatus returns a list of GatewayEndPointCacheStatus per endpoint.
+	CacheStatus() GatewayEndPointCacheStatusList
 }
 
 // GatewayCreator is the func which can create the actual gateway object.
@@ -88,4 +93,118 @@ func GetGatewayCreatorByName(name string) GatewayCreator {
 		return nil
 	}
 	return gc
+}
+
+// GatewayEndPointCacheStatusList is a slice of GatewayEndPointCacheStatus.
+type GatewayEndPointCacheStatusList []*GatewayEndPointCacheStatus
+
+// Len is part of sort.Interface.
+func (gepcsl GatewayEndPointCacheStatusList) Len() int {
+	return len(gepcsl)
+}
+
+// Less is part of sort.Interface.
+func (gepcsl GatewayEndPointCacheStatusList) Less(i, j int) bool {
+	iKey := strings.Join([]string{gepcsl[i].Keyspace, gepcsl[i].Shard, string(gepcsl[i].TabletType), gepcsl[i].Name}, ".")
+	jKey := strings.Join([]string{gepcsl[j].Keyspace, gepcsl[j].Shard, string(gepcsl[j].TabletType), gepcsl[j].Name}, ".")
+	return iKey < jKey
+}
+
+// Swap is part of sort.Interface.
+func (gepcsl GatewayEndPointCacheStatusList) Swap(i, j int) {
+	gepcsl[i], gepcsl[j] = gepcsl[j], gepcsl[i]
+}
+
+// GatewayEndPointCacheStatus contains the status per endpoint for a gateway.
+type GatewayEndPointCacheStatus struct {
+	Keyspace   string
+	Shard      string
+	TabletType topodatapb.TabletType
+	Name       string
+	Addr       string
+
+	QueryCount uint64
+	QueryError uint64
+	QPS        uint64
+	AvgLatency uint64 // in milliseconds
+}
+
+// NewGatewayEndPointStatusAggregator creates a GatewayEndPointStatusAggregator.
+func NewGatewayEndPointStatusAggregator() *GatewayEndPointStatusAggregator {
+	gepsa := &GatewayEndPointStatusAggregator{}
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		for _ = range ticker.C {
+			gepsa.resetNextSlot()
+		}
+	}()
+	return gepsa
+}
+
+// GatewayEndPointStatusAggregator tracks endpoint status for a gateway.
+type GatewayEndPointStatusAggregator struct {
+	Keyspace   string
+	Shard      string
+	TabletType topodatapb.TabletType
+	Name       string // the alternative name of an endpoint
+	Addr       string // the host:port of an endpoint
+
+	// mu protects below fields.
+	mu         sync.RWMutex
+	QueryCount uint64
+	QueryError uint64
+	// for QPS and latency (avg value over a minute)
+	queryCountInMinute [60]uint64
+	latencyInMinute    [60]time.Duration
+}
+
+// UpdateQueryInfo updates the aggregator with the given information about a query.
+func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(tabletType topodatapb.TabletType, elapsed time.Duration, hasError bool) {
+	gepsa.mu.Lock()
+	defer gepsa.mu.Unlock()
+	gepsa.TabletType = tabletType
+	idx := time.Now().Second() % 60
+	gepsa.QueryCount++
+	gepsa.queryCountInMinute[idx]++
+	gepsa.latencyInMinute[idx] += elapsed
+	if hasError {
+		gepsa.QueryError++
+	}
+}
+
+// GetCacheStatus returns a GatewayEndPointCacheStatus representing the current gateway status.
+func (gepsa *GatewayEndPointStatusAggregator) GetCacheStatus() *GatewayEndPointCacheStatus {
+	status := &GatewayEndPointCacheStatus{
+		Keyspace:   gepsa.Keyspace,
+		Shard:      gepsa.Shard,
+		TabletType: gepsa.TabletType,
+		Name:       gepsa.Name,
+		Addr:       gepsa.Addr,
+	}
+	gepsa.mu.RLock()
+	defer gepsa.mu.RUnlock()
+	status.QueryCount = gepsa.QueryCount
+	status.QueryError = gepsa.QueryError
+	var totalQuery uint64
+	for _, c := range gepsa.queryCountInMinute {
+		totalQuery += c
+	}
+	var totalLatency time.Duration
+	for _, d := range gepsa.latencyInMinute {
+		totalLatency += d
+	}
+	status.QPS = totalQuery / 60
+	if totalQuery > 0 {
+		status.AvgLatency = uint64(totalLatency.Nanoseconds()) / totalQuery / 100000
+	}
+	return status
+}
+
+// resetNextSlot resets the next tracking slot.
+func (gepsa *GatewayEndPointStatusAggregator) resetNextSlot() {
+	gepsa.mu.Lock()
+	defer gepsa.mu.Unlock()
+	idx := (time.Now().Second() + 1) % 60
+	gepsa.queryCountInMinute[idx] = 0
+	gepsa.latencyInMinute[idx] = 0
 }

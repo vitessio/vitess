@@ -373,6 +373,11 @@ func (res *Resolver) Rollback(ctx context.Context, inSession *vtgatepb.Session) 
 	return res.scatterConn.Rollback(ctx, NewSafeSession(inSession))
 }
 
+// GetGatewayCacheStatus returns a displayable version of the Gateway cache.
+func (res *Resolver) GetGatewayCacheStatus() GatewayEndPointCacheStatusList {
+	return res.scatterConn.GetGatewayCacheStatus()
+}
+
 // StrsEquals compares contents of two string slices.
 func StrsEquals(a, b []string) bool {
 	if len(a) != len(b) {

@@ -96,7 +96,7 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, maxInFlight int, testGateway string) {
+func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, maxInFlight int, testGateway string) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -137,6 +137,7 @@ func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoSer
 	for _, f := range RegisterVTGates {
 		f(rpcVTGate)
 	}
+	return rpcVTGate
 }
 
 // InitializeConnections pre-initializes VTGate by connecting to vttablets of all keyspace/shard/type.
@@ -636,6 +637,11 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topoda
 // GetSrvShard is part of the vtgate service API.
 func (vtg *VTGate) GetSrvShard(ctx context.Context, keyspace, shard string) (*topodatapb.SrvShard, error) {
 	return vtg.resolver.toposerv.GetSrvShard(ctx, vtg.resolver.cell, keyspace, shard)
+}
+
+// GetGatewayCacheStatus returns a displayable version of the Gateway cache.
+func (vtg *VTGate) GetGatewayCacheStatus() GatewayEndPointCacheStatusList {
+	return vtg.resolver.GetGatewayCacheStatus()
 }
 
 // Any errors that are caused by VTGate dependencies (e.g, VtTablet) should be logged

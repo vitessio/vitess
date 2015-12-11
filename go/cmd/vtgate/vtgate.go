@@ -99,6 +99,10 @@ startServer:
 			tabletTypes = append(tabletTypes, tt)
 		}
 	}
-	vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, tabletTypes, *maxInFlight, *testGateway)
+	vtg := vtgate.Init(healthCheck, ts, resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, tabletTypes, *maxInFlight, *testGateway)
+
+	servenv.OnRun(func() {
+		addStatusParts(vtg)
+	})
 	servenv.RunDefault()
 }
