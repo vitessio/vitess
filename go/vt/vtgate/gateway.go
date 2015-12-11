@@ -159,9 +159,10 @@ type GatewayEndPointStatusAggregator struct {
 }
 
 // UpdateQueryInfo updates the aggregator with the given information about a query.
-func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(elapsed time.Duration, hasError bool) {
+func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(tabletType topodatapb.TabletType, elapsed time.Duration, hasError bool) {
 	gepsa.mu.Lock()
 	defer gepsa.mu.Unlock()
+	gepsa.TabletType = tabletType
 	idx := time.Now().Second() % 60
 	gepsa.QueryCount++
 	gepsa.queryCountInMinute[idx]++
