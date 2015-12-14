@@ -172,7 +172,7 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 	tabletconn.RegisterDialer("internal", dialer)
 	*tabletconn.TabletProtocol = "internal"
 
-	// Register the tablet dialer for tablet manager
+	// Register the tablet manager client factory for tablet manager
 	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
 		return &internalTabletManagerClient{}
 	})
