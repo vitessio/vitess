@@ -80,11 +80,11 @@ func OpenShardForStreaming(address, keyspace, shard, tabletType string, timeout 
 // It allows to pass in a Configuration struct to control all possible
 // settings of the Vitess Go SQL driver.
 func OpenWithConfiguration(c Configuration) (*sql.DB, error) {
-	jsonBytes, err := json.Marshal(c)
+	json, err := c.toJSON()
 	if err != nil {
 		return nil, err
 	}
-	return sql.Open("vitess", string(jsonBytes))
+	return sql.Open("vitess", json)
 }
 
 type drv struct {
@@ -105,9 +105,6 @@ type drv struct {
 //
 // For a description of the available fields, see the Configuration struct.
 // Note: In the JSON string, timeout has to be specified in nanoseconds.
-//
-// Note that this function will always create a connection to vtgate i.e. there
-// is no need to call DB.Ping() to verify the connection.
 func (d drv) Open(name string) (driver.Conn, error) {
 	c := &conn{Configuration: newDefaultConfiguration()}
 	err := json.Unmarshal([]byte(name), c)
@@ -175,11 +172,31 @@ type Configuration struct {
 }
 
 func newDefaultConfiguration() Configuration {
-	return Configuration{
-		Protocol:   "grpc",
-		TabletType: "master",
-		Streaming:  false,
+	c := Configuration{}
+	c.setDefaults()
+	return c
+}
+
+// toJSON converts Configuration to the JSON string which is required by the
+// Vitess driver. Default values for empty fields will be set.
+func (c Configuration) toJSON() (string, error) {
+	c.setDefaults()
+	jsonBytes, err := json.Marshal(c)
+	if err != nil {
+		return "", err
 	}
+	return string(jsonBytes), nil
+}
+
+// setDefaults sets the default values for empty fields.
+func (c *Configuration) setDefaults() {
+	if c.Protocol == "" {
+		c.Protocol = "grpc"
+	}
+	if c.TabletType == "" {
+		c.TabletType = "master"
+	}
+	// c.Streaming = false is enforced by Go's zero value.
 }
 
 type conn struct {

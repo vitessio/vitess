@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 
 	"github.com/youtube/vitess/go/vt/vitessdriver"
 )
@@ -105,6 +106,7 @@ func main() {
 	}
 
 	c := vitessdriver.Configuration{
+		Protocol:   *vtgateconn.VtgateProtocol,
 		Address:    *server,
 		Keyspace:   *keyspace,
 		Shard:      *shard,

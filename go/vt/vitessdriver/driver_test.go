@@ -48,54 +48,68 @@ func TestMain(m *testing.M) {
 }
 
 func TestOpen(t *testing.T) {
-	connStr := fmt.Sprintf(`{"address": "%s", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
-	c, err := drv{}.Open(connStr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-
-	wantc := &conn{
-		Configuration: Configuration{
-			Protocol:   "grpc",
-			TabletType: "replica",
-			Streaming:  false,
-			Timeout:    30 * time.Second,
+	var testcases = []struct {
+		desc    string
+		connStr string
+		conn    *conn
+	}{
+		{
+			desc:    "Open() vtgate v3",
+			connStr: fmt.Sprintf(`{"address": "%s", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
+			conn: &conn{
+				Configuration: Configuration{
+					Protocol:   "grpc",
+					TabletType: "replica",
+					Streaming:  false,
+					Timeout:    30 * time.Second,
+				},
+				tabletTypeProto: topodatapb.TabletType_REPLICA,
+			},
 		},
-		tabletTypeProto: topodatapb.TabletType_REPLICA,
-	}
-	newc := *(c.(*conn))
-	newc.Address = ""
-	newc.vtgateConn = nil
-	if !reflect.DeepEqual(&newc, wantc) {
-		t.Errorf("conn: %+v, want %+v", &newc, wantc)
-	}
-}
-
-func TestOpenShard(t *testing.T) {
-	connStr := fmt.Sprintf(`{"address": "%s", "keyspace": "ks1", "shard": "0", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
-	c, err := drv{}.Open(connStr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-
-	wantc := &conn{
-		Configuration: Configuration{
-			Protocol:   "grpc",
-			Keyspace:   "ks1",
-			Shard:      "0",
-			TabletType: "replica",
-			Streaming:  false,
-			Timeout:    30 * time.Second,
+		{
+			desc:    "Open() vtgate v3 (defaults omitted)",
+			connStr: fmt.Sprintf(`{"address": "%s", "timeout": %d}`, testAddress, int64(30*time.Second)),
+			conn: &conn{
+				Configuration: Configuration{
+					Protocol:   "grpc",
+					TabletType: "master",
+					Streaming:  false,
+					Timeout:    30 * time.Second,
+				},
+				tabletTypeProto: topodatapb.TabletType_MASTER,
+			},
 		},
-		tabletTypeProto: topodatapb.TabletType_REPLICA,
+		{
+			desc:    "Open() vtgate v1 (per-shard)",
+			connStr: fmt.Sprintf(`{"address": "%s", "keyspace": "ks1", "shard": "0", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
+			conn: &conn{
+				Configuration: Configuration{
+					Protocol:   "grpc",
+					Keyspace:   "ks1",
+					Shard:      "0",
+					TabletType: "replica",
+					Streaming:  false,
+					Timeout:    30 * time.Second,
+				},
+				tabletTypeProto: topodatapb.TabletType_REPLICA,
+			},
+		},
 	}
-	newc := *(c.(*conn))
-	newc.Address = ""
-	newc.vtgateConn = nil
-	if !reflect.DeepEqual(&newc, wantc) {
-		t.Errorf("conn: %+v, want %+v", &newc, wantc)
+
+	for _, tc := range testcases {
+		c, err := drv{}.Open(tc.connStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+
+		wantc := tc.conn
+		newc := *(c.(*conn))
+		newc.Address = ""
+		newc.vtgateConn = nil
+		if !reflect.DeepEqual(&newc, wantc) {
+			t.Errorf("%v: conn: %+v, want %+v", tc.desc, &newc, wantc)
+		}
 	}
 }
 
@@ -200,6 +214,46 @@ func TestExec(t *testing.T) {
 		want := "no match for: none"
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%v: err: %v, does not contain %s", tc.desc, err, want)
+		}
+	}
+}
+
+func TestConfigurationToJSON(t *testing.T) {
+	var testcases = []struct {
+		desc   string
+		config Configuration
+		json   string
+	}{
+		{
+			desc: "all fields set",
+			config: Configuration{
+				Protocol:   "some-invalid-protocol",
+				Keyspace:   "ks2",
+				Shard:      "-80",
+				TabletType: "replica",
+				Streaming:  true,
+				Timeout:    1 * time.Second,
+			},
+			json: `{"Protocol":"some-invalid-protocol","Address":"","Keyspace":"ks2","Shard":"-80","tablet_type":"replica","Streaming":true,"Timeout":1000000000}`,
+		},
+		{
+			desc: "default fields are empty",
+			config: Configuration{
+				Keyspace: "ks2",
+				Shard:    "-80",
+				Timeout:  1 * time.Second,
+			},
+			json: `{"Protocol":"grpc","Address":"","Keyspace":"ks2","Shard":"-80","tablet_type":"master","Streaming":false,"Timeout":1000000000}`,
+		},
+	}
+
+	for _, tc := range testcases {
+		json, err := tc.config.toJSON()
+		if err != nil {
+			t.Errorf("%v: JSON conversion should have succeeded but did not: %v", tc.desc, err)
+		}
+		if json != tc.json {
+			t.Errorf("%v: Configuration.JSON(): got: %v want: %v Configuration: %v", tc.desc, json, tc.json, tc.config)
 		}
 	}
 }
