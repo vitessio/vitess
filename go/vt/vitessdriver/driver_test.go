@@ -218,6 +218,46 @@ func TestExec(t *testing.T) {
 	}
 }
 
+func TestConfigurationToJSON(t *testing.T) {
+	var testcases = []struct {
+		desc   string
+		config Configuration
+		json   string
+	}{
+		{
+			desc: "all fields set",
+			config: Configuration{
+				Protocol:   "some-invalid-protocol",
+				Keyspace:   "ks2",
+				Shard:      "-80",
+				TabletType: "replica",
+				Streaming:  true,
+				Timeout:    1 * time.Second,
+			},
+			json: `{"Protocol":"some-invalid-protocol","Address":"","Keyspace":"ks2","Shard":"-80","tablet_type":"replica","Streaming":true,"Timeout":1000000000}`,
+		},
+		{
+			desc: "default fields are empty",
+			config: Configuration{
+				Keyspace: "ks2",
+				Shard:    "-80",
+				Timeout:  1 * time.Second,
+			},
+			json: `{"Protocol":"grpc","Address":"","Keyspace":"ks2","Shard":"-80","tablet_type":"master","Streaming":false,"Timeout":1000000000}`,
+		},
+	}
+
+	for _, tc := range testcases {
+		json, err := tc.config.toJSON()
+		if err != nil {
+			t.Errorf("%v: JSON conversion should have succeeded but did not: %v", tc.desc, err)
+		}
+		if json != tc.json {
+			t.Errorf("%v: Configuration.JSON(): got: %v want: %v Configuration: %v", tc.desc, json, tc.json, tc.config)
+		}
+	}
+}
+
 func TestExecStreamingNotAllowed(t *testing.T) {
 	db, err := OpenForStreaming(testAddress, "rdonly", 30*time.Second)
 	if err != nil {
