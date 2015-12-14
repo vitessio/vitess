@@ -39,6 +39,8 @@ var (
 	shardingColumnName = flag.String("sharding_column_name", "keyspace_id", "Specifies the column to use for sharding operations")
 	shardingColumnType = flag.String("sharding_column_type", "uint64", "Specifies the type of the column to use for sharding operations")
 	vschema            = flag.String("vschema", "", "vschema file")
+
+	ts topo.Server
 )
 
 func init() {
@@ -63,7 +65,7 @@ func main() {
 	// register topo server
 	zkconn := fakezk.NewConn()
 	topo.RegisterServer("fakezk", zktopo.NewServer(zkconn))
-	ts := topo.GetServerByName("fakezk")
+	ts = topo.GetServerByName("fakezk")
 
 	servenv.Init()
 	tabletserver.Init()
