@@ -95,7 +95,7 @@ https://github.com/youtube/vitess/blob/master/doc/VTGateV3Features.md
 
 To enable vtgate v3, you need to create a VSchema. A VSchema defines for vtgate
 the properties of your Vitess setup (e.g. what is the sharding key, which
-cross-shard indexes should be maintained, what are the AUTO_INCREMENT columns.)
+cross-shard indexes should be maintained, what are the AUTO_INCREMENT columns).
 
 As of 12/2015, the VSchema creation is not documented yet as we are in the
 process of simplifying the VSchema definition and the overall process for
