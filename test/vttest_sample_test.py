@@ -80,8 +80,10 @@ class TestMysqlctl(unittest.TestCase):
     else:
       vtagte_addr = 'localhost:%d' % config['port']
     conn_timeout = 30.0
-    utils.pause('good time to test vtcombo with database running on'
-                ' %s using protocol %s' % (vtagte_addr, protocol))
+    utils.pause('Paused test after vtcombo was started.\n'
+                'For manual testing, connect to vtgate at: %s '
+                'using protocol: %s.\n'
+                'Press enter to continue.' % (vtagte_addr, protocol))
 
     # Connect to vtgate.
     conn = vtgate_client.connect(protocol, vtagte_addr, conn_timeout)
