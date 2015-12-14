@@ -23,7 +23,8 @@ const (
 )
 
 var (
-	vtgateProtocol = flag.String("vtgate_protocol", GoRPCProtocol, "how to talk to vtgate")
+	// VtgateProtocol defines the RPC implementation used for connecting to vtgate.
+	VtgateProtocol = flag.String("vtgate_protocol", GoRPCProtocol, "how to talk to vtgate")
 )
 
 // VTGateConn is the client API object to talk to vtgate.
@@ -424,5 +425,5 @@ func DialProtocol(ctx context.Context, protocol string, address string, timeout 
 // Dial dials using the command-line specified protocol, and returns
 // the *VTGateConn.
 func Dial(ctx context.Context, address string, timeout time.Duration) (*VTGateConn, error) {
-	return DialProtocol(ctx, *vtgateProtocol, address, timeout)
+	return DialProtocol(ctx, *VtgateProtocol, address, timeout)
 }
