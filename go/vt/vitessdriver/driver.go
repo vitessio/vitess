@@ -105,9 +105,6 @@ type drv struct {
 //
 // For a description of the available fields, see the Configuration struct.
 // Note: In the JSON string, timeout has to be specified in nanoseconds.
-//
-// Note that this function will always create a connection to vtgate i.e. there
-// is no need to call DB.Ping() to verify the connection.
 func (d drv) Open(name string) (driver.Conn, error) {
 	c := &conn{Configuration: newDefaultConfiguration()}
 	err := json.Unmarshal([]byte(name), c)
