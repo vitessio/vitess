@@ -541,11 +541,11 @@ var testExecuteFetchQuery = "fetch this"
 var testExecuteFetchMaxRows = 100
 var testExecuteFetchResult = &querypb.QueryResult{
 	Fields: []*querypb.Field{
-		&querypb.Field{
+		{
 			Name: "column1",
 			Type: sqltypes.Blob,
 		},
-		&querypb.Field{
+		{
 			Name: "column2",
 			Type: sqltypes.Datetime,
 		},

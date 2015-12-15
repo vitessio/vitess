@@ -50,11 +50,11 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *q
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&querypb.Field{
+			{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
@@ -67,7 +67,7 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *q
 	for i := 0; i < 1000; i++ {
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 				},
@@ -97,15 +97,15 @@ func TestVerticalSplitDiff(t *testing.T) {
 	// Create the destination keyspace with the appropriate ServedFromMap
 	ki := &topodatapb.Keyspace{
 		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   "source_ks",
 			},
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_REPLICA,
 				Keyspace:   "source_ks",
 			},
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_RDONLY,
 				Keyspace:   "source_ks",
 			},

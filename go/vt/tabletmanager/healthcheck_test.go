@@ -343,7 +343,7 @@ func TestTabletControl(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	si.TabletControls = []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:          targetTabletType,
 			DisableQueryService: true,
 		},

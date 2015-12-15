@@ -292,11 +292,11 @@ const executeTransactionID int64 = 678
 
 var executeQueryResult = sqltypes.Result{
 	Fields: []*querypb.Field{
-		&querypb.Field{
+		{
 			Name: "field1",
 			Type: sqltypes.Int8,
 		},
-		&querypb.Field{
+		{
 			Name: "field2",
 			Type: sqltypes.Char,
 		},
@@ -304,11 +304,11 @@ var executeQueryResult = sqltypes.Result{
 	RowsAffected: 123,
 	InsertID:     72,
 	Rows: [][]sqltypes.Value{
-		[]sqltypes.Value{
+		{
 			sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
 			sqltypes.NULL,
 		},
-		[]sqltypes.Value{
+		{
 			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
 			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
 		},
@@ -384,11 +384,11 @@ const streamExecuteTransactionID int64 = 6789992
 
 var streamExecuteQueryResult1 = sqltypes.Result{
 	Fields: []*querypb.Field{
-		&querypb.Field{
+		{
 			Name: "field1",
 			Type: sqltypes.Int8,
 		},
-		&querypb.Field{
+		{
 			Name: "field2",
 			Type: sqltypes.Char,
 		},
@@ -397,11 +397,11 @@ var streamExecuteQueryResult1 = sqltypes.Result{
 
 var streamExecuteQueryResult2 = sqltypes.Result{
 	Rows: [][]sqltypes.Value{
-		[]sqltypes.Value{
+		{
 			sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
 			sqltypes.MakeTrusted(sqltypes.Char, []byte("row1 value2")),
 		},
-		[]sqltypes.Value{
+		{
 			sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
 			sqltypes.MakeTrusted(sqltypes.Char, []byte("row2 value2")),
 		},
@@ -542,13 +542,13 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 }
 
 var executeBatchQueries = []querytypes.BoundQuery{
-	querytypes.BoundQuery{
+	{
 		Sql: "executeBatchQueries1",
 		BindVariables: map[string]interface{}{
 			"bind1": int64(43),
 		},
 	},
-	querytypes.BoundQuery{
+	{
 		Sql: "executeBatchQueries2",
 		BindVariables: map[string]interface{}{
 			"bind2": int64(72),
@@ -559,9 +559,9 @@ var executeBatchQueries = []querytypes.BoundQuery{
 const executeBatchTransactionID int64 = 678
 
 var executeBatchQueryResultList = []sqltypes.Result{
-	sqltypes.Result{
+	{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "field1",
 				Type: sqltypes.Int8,
 			},
@@ -569,17 +569,17 @@ var executeBatchQueryResultList = []sqltypes.Result{
 		RowsAffected: 1232,
 		InsertID:     712,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int8, []byte("1")),
 			},
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int8, []byte("2")),
 			},
 		},
 	},
-	sqltypes.Result{
+	{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "field1",
 				Type: sqltypes.VarBinary,
 			},
@@ -587,10 +587,10 @@ var executeBatchQueryResultList = []sqltypes.Result{
 		RowsAffected: 12333,
 		InsertID:     74442,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte("row1 value1")),
 			},
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte("row1 value2")),
 			},
 		},
@@ -657,7 +657,7 @@ const splitQuerySplitColumn = "nice_column_to_split"
 const splitQuerySplitCount = 372
 
 var splitQueryQuerySplitList = []querytypes.QuerySplit{
-	querytypes.QuerySplit{
+	{
 		Sql: "splitQuery",
 		BindVariables: map[string]interface{}{
 			"bind1":       int64(43),

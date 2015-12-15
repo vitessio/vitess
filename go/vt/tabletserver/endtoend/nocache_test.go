@@ -66,7 +66,7 @@ func TestBinary(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(binaryData)),
 			},
 		},
@@ -295,7 +295,7 @@ func TestBindInSelect(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 			},
 		},
@@ -320,7 +320,7 @@ func TestBindInSelect(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("abcd")),
 			},
 		},
@@ -345,7 +345,7 @@ func TestBindInSelect(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\x00\xff")),
 			},
 		},

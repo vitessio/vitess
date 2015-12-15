@@ -12,25 +12,25 @@ import (
 
 var rowsResult1 = sqltypes.Result{
 	Fields: []*querypb.Field{
-		&querypb.Field{
+		{
 			Name: "field1",
 			Type: sqltypes.Int32,
 		},
-		&querypb.Field{
+		{
 			Name: "field2",
 			Type: sqltypes.Float32,
 		},
-		&querypb.Field{
+		{
 			Name: "field3",
 			Type: sqltypes.VarChar,
 		},
 		// Signed types which are smaller than uint64, will become an int64.
-		&querypb.Field{
+		{
 			Name: "field4",
 			Type: sqltypes.Uint32,
 		},
 		// Signed uint64 values must be mapped to uint64.
-		&querypb.Field{
+		{
 			Name: "field5",
 			Type: sqltypes.Uint64,
 		},
@@ -38,14 +38,14 @@ var rowsResult1 = sqltypes.Result{
 	RowsAffected: 2,
 	InsertID:     0,
 	Rows: [][]sqltypes.Value{
-		[]sqltypes.Value{
+		{
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			sqltypes.MakeTrusted(sqltypes.Float32, []byte("1.1")),
 			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("value1")),
 			sqltypes.MakeTrusted(sqltypes.Uint32, []byte("2147483647")),          // 2^31-1, NOT out of range for int32 => should become int64
 			sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775807")), // 2^63-1, NOT out of range for int64
 		},
-		[]sqltypes.Value{
+		{
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
 			sqltypes.MakeTrusted(sqltypes.Float32, []byte("2.2")),
 			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("value2")),

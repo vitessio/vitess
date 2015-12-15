@@ -44,188 +44,188 @@ func TestPermissions(t *testing.T) {
 
 	// master will be asked for permissions
 	master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT * FROM mysql.user": &sqltypes.Result{
+		"SELECT * FROM mysql.user": {
 			Fields: []*querypb.Field{
-				&querypb.Field{
+				{
 					Name: "Host",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "User",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Password",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Select_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Insert_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Update_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Delete_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Create_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Drop_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Reload_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Shutdown_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Process_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "File_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Grant_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "References_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Index_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Alter_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Show_db_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Super_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Create_tmp_table_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Lock_tables_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Execute_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Repl_slave_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Repl_client_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Create_view_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Show_view_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Create_routine_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Alter_routine_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Create_user_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Event_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Trigger_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Create_tablespace_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "ssl_type",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "ssl_cipher",
 					Type: 252,
 				},
-				&querypb.Field{
+				{
 					Name: "x509_issuer",
 					Type: 252,
 				},
-				&querypb.Field{
+				{
 					Name: "x509_subject",
 					Type: 252,
 				},
-				&querypb.Field{
+				{
 					Name: "max_questions",
 					Type: 3,
 				},
-				&querypb.Field{
+				{
 					Name: "max_updates",
 					Type: 3,
 				},
-				&querypb.Field{
+				{
 					Name: "max_connections",
 					Type: 3,
 				},
-				&querypb.Field{
+				{
 					Name: "max_user_connections",
 					Type: 3,
 				},
-				&querypb.Field{
+				{
 					Name: "plugin",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "authentication_string",
 					Type: 252,
 				},
-				&querypb.Field{
+				{
 					Name: "password_expired",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "is_role",
 					Type: sqltypes.Char,
 				}},
 			RowsAffected: 0x6,
 			InsertID:     0x0,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_host1")),
 					sqltypes.MakeString([]byte("test_user1")),
 					sqltypes.MakeString([]byte("test_password1")),
@@ -270,7 +270,7 @@ func TestPermissions(t *testing.T) {
 					sqltypes.MakeString([]byte("")),
 					sqltypes.MakeString([]byte("N")),
 					sqltypes.MakeString([]byte("N"))},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_host2")),
 					sqltypes.MakeString([]byte("test_user2")),
 					sqltypes.MakeString([]byte("test_password2")),
@@ -315,7 +315,7 @@ func TestPermissions(t *testing.T) {
 					sqltypes.MakeString([]byte("")),
 					sqltypes.MakeString([]byte("N")),
 					sqltypes.MakeString([]byte("N"))},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_host3")),
 					sqltypes.MakeString([]byte("test_user3")),
 					sqltypes.MakeString([]byte("test_password3")),
@@ -360,7 +360,7 @@ func TestPermissions(t *testing.T) {
 					sqltypes.MakeString([]byte("")),
 					sqltypes.MakeString([]byte("N")),
 					sqltypes.MakeString([]byte("N"))},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_host4")),
 					sqltypes.MakeString([]byte("test_user4")),
 					sqltypes.MakeString([]byte("test_password4")),
@@ -408,93 +408,93 @@ func TestPermissions(t *testing.T) {
 				},
 			},
 		},
-		"SELECT * FROM mysql.db": &sqltypes.Result{
+		"SELECT * FROM mysql.db": {
 			Fields: []*querypb.Field{
-				&querypb.Field{
+				{
 					Name: "Host",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Db",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "User",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Select_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Insert_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Update_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Delete_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Create_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Drop_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Grant_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "References_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Index_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Alter_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Create_tmp_table_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Lock_tables_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Create_view_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Show_view_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Create_routine_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Alter_routine_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Execute_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Event_priv",
 					Type: sqltypes.Char,
 				},
-				&querypb.Field{
+				{
 					Name: "Trigger_priv",
 					Type: sqltypes.Char,
 				},
@@ -502,7 +502,7 @@ func TestPermissions(t *testing.T) {
 			RowsAffected: 0,
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_host")),
 					sqltypes.MakeString([]byte("test_db")),
 					sqltypes.MakeString([]byte("test_user")),

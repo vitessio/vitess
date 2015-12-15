@@ -32,7 +32,7 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 			"query",
 			nil,
 			"TestResolverExecuteKeyspaceIds",
-			[][]byte{[]byte{0x10}, []byte{0x25}},
+			[][]byte{{0x10}, {0x25}},
 			topodatapb.TabletType_MASTER,
 			nil,
 			false)
@@ -46,7 +46,7 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 			"query",
 			nil,
 			"TestResolverExecuteKeyRanges",
-			[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
+			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}},
 			topodatapb.TabletType_MASTER,
 			nil,
 			false)
@@ -62,12 +62,12 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 			"TestResolverExecuteEntityIds",
 			"col",
 			[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-				&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+				{
 					XidType:    sqltypes.Int64,
 					XidValue:   []byte("0"),
 					KeyspaceId: []byte{0x10},
 				},
-				&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+				{
 					XidType:    sqltypes.VarBinary,
 					XidValue:   []byte("1"),
 					KeyspaceId: []byte{0x25},
@@ -90,8 +90,8 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 				},
 				Keyspace: "TestResolverExecuteBatchKeyspaceIds",
 				KeyspaceIds: [][]byte{
-					[]byte{0x10},
-					[]byte{0x25},
+					{0x10},
+					{0x25},
 				},
 			}},
 			topodatapb.TabletType_MASTER,
@@ -113,7 +113,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyspaceIds",
-			[][]byte{[]byte{0x10}, []byte{0x15}},
+			[][]byte{{0x10}, {0x15}},
 			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
@@ -128,7 +128,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyspaceIds",
-			[][]byte{[]byte{0x10}, []byte{0x15}, []byte{0x25}},
+			[][]byte{{0x10}, {0x15}, {0x25}},
 			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
@@ -148,7 +148,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyRanges",
-			[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x15}}},
+			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x15}}},
 			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
@@ -164,7 +164,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyRanges",
-			[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
+			[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}},
 			topodatapb.TabletType_MASTER,
 			func(r *sqltypes.Result) error {
 				appendResult(qr, r)
@@ -391,19 +391,19 @@ func testResolverStreamGeneric(t *testing.T, name string, action func() (*sqltyp
 func TestResolverInsertSqlClause(t *testing.T) {
 	clause := "col in (:col1, :col2)"
 	tests := [][]string{
-		[]string{
+		{
 			"select a from table",
 			"select a from table where " + clause},
-		[]string{
+		{
 			"select a from table where id = 1",
 			"select a from table where id = 1 and " + clause},
-		[]string{
+		{
 			"select a from table group by a",
 			"select a from table where " + clause + " group by a"},
-		[]string{
+		{
 			"select a from table where id = 1 order by a limit 10",
 			"select a from table where id = 1 and " + clause + " order by a limit 10"},
-		[]string{
+		{
 			"select a from table where id = 1 for update",
 			"select a from table where id = 1 and " + clause + " for update"},
 	}
@@ -430,8 +430,8 @@ func TestResolverBuildEntityIds(t *testing.T) {
 		"20-40": "select a from table where id=:id and uid in (:uid0)",
 	}
 	wantBindVars := map[string]map[string]interface{}{
-		"-20":   map[string]interface{}{"id": 10, "uid0": "0", "uid1": 1},
-		"20-40": map[string]interface{}{"id": 10, "uid0": "2"},
+		"-20":   {"id": 10, "uid0": "0", "uid1": 1},
+		"20-40": {"id": 10, "uid0": "2"},
 	}
 	sort.Strings(wantShards)
 	sort.Strings(shards)
@@ -460,7 +460,7 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 		"update table set a = b",
 		nil,
 		"TestResolverExecuteKeyspaceIds",
-		[][]byte{[]byte{0x10}, []byte{0x25}},
+		[][]byte{{0x10}, {0x25}},
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)

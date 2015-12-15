@@ -200,7 +200,7 @@ func TestResolveWildcards(t *testing.T) {
 		"/zk/nyc/path2",
 	}
 	zconn.children = map[string][]string{
-		"/zk/nyc": []string{"path1", "path2"},
+		"/zk/nyc": {"path1", "path2"},
 	}
 	result, err = ResolveWildcards(zconn, []string{"/zk/nyc/*"})
 	checkResult(t, []string{
@@ -214,7 +214,7 @@ func TestResolveWildcards(t *testing.T) {
 		"/zk/nyc/path2/actionlog",
 	}
 	zconn.children = map[string][]string{
-		"/zk/nyc": []string{"path1", "path2"},
+		"/zk/nyc": {"path1", "path2"},
 	}
 	result, err = ResolveWildcards(zconn, []string{"/zk/nyc/*/actionlog"})
 	checkResult(t, []string{
@@ -229,9 +229,9 @@ func TestResolveWildcards(t *testing.T) {
 		"/zk/nyc/path2/shards/subpath2.1/actionlog",
 	}
 	zconn.children = map[string][]string{
-		"/zk/nyc":              []string{"path1", "path2"},
-		"/zk/nyc/path1/shards": []string{"subpath1.1", "subpath1.2"},
-		"/zk/nyc/path2/shards": []string{"subpath2.1", "subpath2.2"},
+		"/zk/nyc":              {"path1", "path2"},
+		"/zk/nyc/path1/shards": {"subpath1.1", "subpath1.2"},
+		"/zk/nyc/path2/shards": {"subpath2.1", "subpath2.2"},
 	}
 	result, err = ResolveWildcards(zconn, []string{
 		"/zk/nyc/*/shards/*/actionlog"})
@@ -308,8 +308,8 @@ func TestResolveWildcardsCell(t *testing.T) {
 		"/zk/ny/shards/subpath.ny.2/actionlog",
 	}
 	zconn.children = map[string][]string{
-		"/zk/nj/shards": []string{"subpath.nj.2", "subpath.nj.1"},
-		"/zk/ny/shards": []string{"subpath.ny.1", "subpath.ny.2"},
+		"/zk/nj/shards": {"subpath.nj.2", "subpath.nj.1"},
+		"/zk/ny/shards": {"subpath.ny.1", "subpath.ny.2"},
 	}
 	result, err = ResolveWildcards(zconn, []string{
 		"/zk/*/shards/*/actionlog"})

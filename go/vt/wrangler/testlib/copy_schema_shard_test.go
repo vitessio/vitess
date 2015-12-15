@@ -44,7 +44,7 @@ func NewFakePoolConnectionQuery(t *testing.T, query string) *FakePoolConnection 
 	return &FakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			ExpectedExecuteFetch{
+			{
 				Query:       query,
 				QueryResult: &sqltypes.Result{},
 			},

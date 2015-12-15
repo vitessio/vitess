@@ -50,10 +50,10 @@ func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 	if keyspace == "big" {
 		return &topodatapb.SrvKeyspace{
 			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-				&topodatapb.SrvKeyspace_KeyspacePartition{
+				{
 					ServedType: topodatapb.TabletType_REPLICA,
 					ShardReferences: []*topodatapb.ShardReference{
-						&topodatapb.ShardReference{
+						{
 							Name: "shard0",
 							KeyRange: &topodatapb.KeyRange{
 								Start: []byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
@@ -66,7 +66,7 @@ func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 			ShardingColumnName: "sharding_column_name",
 			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 			ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
-				&topodatapb.SrvKeyspace_ServedFrom{
+				{
 					TabletType: topodatapb.TabletType_MASTER,
 					Keyspace:   "other_keyspace",
 				},

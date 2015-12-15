@@ -221,10 +221,10 @@ func TestMultiExecs(t *testing.T) {
 	s.MapTestConn("1", sbc1)
 	stc := NewScatterConn(nil, topo.Server{}, new(sandboxTopo), "", "aa", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, nil, "")
 	shardVars := map[string]map[string]interface{}{
-		"0": map[string]interface{}{
+		"0": {
 			"bv0": 0,
 		},
-		"1": map[string]interface{}{
+		"1": {
 			"bv1": 1,
 		},
 	}

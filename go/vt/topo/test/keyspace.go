@@ -52,12 +52,12 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 		ShardingColumnName: "user_id",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_REPLICA,
 				Cells:      []string{"c1", "c2"},
 				Keyspace:   "test_keyspace3",
 			},
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_MASTER,
 				Cells:      nil,
 				Keyspace:   "test_keyspace3",

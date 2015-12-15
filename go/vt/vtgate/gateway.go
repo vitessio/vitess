@@ -134,7 +134,7 @@ func NewGatewayEndPointStatusAggregator() *GatewayEndPointStatusAggregator {
 	gepsa := &GatewayEndPointStatusAggregator{}
 	go func() {
 		ticker := time.NewTicker(time.Second)
-		for _ = range ticker.C {
+		for range ticker.C {
 			gepsa.resetNextSlot()
 		}
 	}()

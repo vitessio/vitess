@@ -29,28 +29,28 @@ var (
 	shardsEcho = "[-80 80-]"
 
 	keyspaceIDs = [][]byte{
-		[]byte{1, 2, 3, 4},
-		[]byte{5, 6, 7, 8},
+		{1, 2, 3, 4},
+		{5, 6, 7, 8},
 	}
 	keyspaceIDsEcho = "[[1 2 3 4] [5 6 7 8]]"
 
 	keyRanges = []*topodatapb.KeyRange{
-		&topodatapb.KeyRange{Start: []byte{1, 2, 3, 4}, End: []byte{5, 6, 7, 8}},
+		{Start: []byte{1, 2, 3, 4}, End: []byte{5, 6, 7, 8}},
 	}
 	keyRangesEcho = "[start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\" ]"
 
 	entityKeyspaceIDs = []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-		&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+		{
 			KeyspaceId: []byte{1, 2, 3},
 			XidType:    sqltypes.Int64,
 			XidValue:   []byte("123"),
 		},
-		&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+		{
 			KeyspaceId: []byte{4, 5, 6},
 			XidType:    sqltypes.Float64,
 			XidValue:   []byte("2"),
 		},
-		&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+		{
 			KeyspaceId: []byte{7, 8, 9},
 			XidType:    sqltypes.VarBinary,
 			XidValue:   []byte{1, 2, 3},

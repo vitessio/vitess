@@ -29,7 +29,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 
 	endPoints := &topodatapb.EndPoints{
 		Entries: []*topodatapb.EndPoint{
-			&topodatapb.EndPoint{
+			{
 				Uid:  1,
 				Host: "host1",
 				PortMap: map[string]int32{
@@ -153,10 +153,10 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 	// test cell/keyspace entries (SrvKeyspace)
 	srvKeyspace := topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name: "-80",
 						KeyRange: &topodatapb.KeyRange{
 							End: []byte{0x80},
@@ -168,7 +168,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 		ShardingColumnName: "video_id",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 		ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
-			&topodatapb.SrvKeyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_REPLICA,
 				Keyspace:   "other_keyspace",
 			},
@@ -243,17 +243,17 @@ func CheckWatchSrvKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 	srvKeyspace := &topodatapb.SrvKeyspace{
 		ShardingColumnName: "test_column",
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_RDONLY,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name: "0",
 					},
 				},
 			},
 		},
 		ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
-			&topodatapb.SrvKeyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   "other_keyspace",
 			},

@@ -33,8 +33,8 @@ func TestTheFramework(t *testing.T) {
 		Name:  "fail",
 		Query: "select /* fail */ eid, id from vitess_a union select eid, id from vitess_b",
 		Result: [][]string{
-			[]string{"2", "1"},
-			[]string{"1", "2"},
+			{"2", "1"},
+			{"1", "2"},
 		},
 		RowsAffected: 1,
 		Rewritten: []string{

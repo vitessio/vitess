@@ -15,9 +15,9 @@ func TestEstimator(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	e := NewEstimator(1000, 0.8)
 	input := map[string][]float64{
-		"select aa from t_test where col1=:bv1":              []float64{200000, 210000, 201000, 197000},
-		"select bb from t_test where col1=:bv1 or col2=:bv2": []float64{900000, 1100000, 950000, 970000, 990000},
-		"select * from t_test_small":                         []float64{10000, 11000, 9000},
+		"select aa from t_test where col1=:bv1":              {200000, 210000, 201000, 197000},
+		"select bb from t_test where col1=:bv1 or col2=:bv2": {900000, 1100000, 950000, 970000, 990000},
+		"select * from t_test_small":                         {10000, 11000, 9000},
 	}
 	output := map[string]float64{
 		"select aa from t_test where col1=:bv1":              200840,

@@ -40,39 +40,39 @@ func TestParseMysql56GTIDSet(t *testing.T) {
 
 	table := map[string]Mysql56GTIDSet{
 		// Empty
-		"": Mysql56GTIDSet{},
+		"": {},
 		// Simple case
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5": {
 			sid1: []interval{{1, 5}},
 		},
 		// Capital hex chars
-		"00010203-0405-0607-0809-0A0B0C0D0E0F:1-5": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0A0B0C0D0E0F:1-5": {
 			sid1: []interval{{1, 5}},
 		},
 		// Interval with same start and end
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:12": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:12": {
 			sid1: []interval{{12, 12}},
 		},
 		// Multiple intervals
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20": {
 			sid1: []interval{{1, 5}, {10, 20}},
 		},
 		// Multiple intervals, out of oder
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:10-20:1-5": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:10-20:1-5": {
 			sid1: []interval{{1, 5}, {10, 20}},
 		},
 		// Intervals with end < start are discarded by MySQL 5.6
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:8-7": Mysql56GTIDSet{},
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:8-7:10-20": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:8-7": {},
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:8-7:10-20": {
 			sid1: []interval{{1, 5}, {10, 20}},
 		},
 		// Multiple SIDs
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50": {
 			sid1: []interval{{1, 5}, {10, 20}},
 			sid2: []interval{{1, 5}, {50, 50}},
 		},
 		// Multiple SIDs with space around the comma
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20, 00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20, 00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50": {
 			sid1: []interval{{1, 5}, {10, 20}},
 			sid2: []interval{{1, 5}, {50, 50}},
 		},
@@ -117,19 +117,19 @@ func TestMysql56GTIDSetString(t *testing.T) {
 
 	table := map[string]Mysql56GTIDSet{
 		// Simple case
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5": {
 			sid1: []interval{{1, 5}},
 		},
 		// Interval with same start and end
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:12": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:12": {
 			sid1: []interval{{12, 12}},
 		},
 		// Multiple intervals
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20": {
 			sid1: []interval{{1, 5}, {10, 20}},
 		},
 		// Multiple SIDs
-		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50": Mysql56GTIDSet{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50": {
 			sid1: []interval{{1, 5}, {10, 20}},
 			sid2: []interval{{1, 5}, {50, 50}},
 		},
@@ -201,14 +201,14 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 		// The set should contain itself.
 		set,
 		// Every set contains the empty set.
-		Mysql56GTIDSet{},
+		{},
 
 		// Simple case
-		Mysql56GTIDSet{sid1: []interval{{25, 30}}},
+		{sid1: []interval{{25, 30}}},
 		// Multiple intervals
-		Mysql56GTIDSet{sid2: []interval{{1, 2}, {4, 5}, {60, 70}}},
+		{sid2: []interval{{1, 2}, {4, 5}, {60, 70}}},
 		// Multiple SIDs
-		Mysql56GTIDSet{
+		{
 			sid1: []interval{{25, 30}, {35, 37}},
 			sid2: []interval{{1, 5}},
 		},
@@ -267,7 +267,7 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 		// Same underlying map instance
 		set,
 		// Different instance, same data
-		Mysql56GTIDSet{
+		{
 			sid1: []interval{{20, 30}, {35, 40}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
@@ -348,50 +348,50 @@ func TestMysql56GTIDSetAddGTID(t *testing.T) {
 		fakeGTID{}: set,
 
 		// Adding GTIDs that are already in the set
-		Mysql56GTID{Server: sid1, Sequence: 20}: Mysql56GTIDSet{
+		Mysql56GTID{Server: sid1, Sequence: 20}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
-		Mysql56GTID{Server: sid1, Sequence: 30}: Mysql56GTIDSet{
+		Mysql56GTID{Server: sid1, Sequence: 30}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
-		Mysql56GTID{Server: sid1, Sequence: 25}: Mysql56GTIDSet{
+		Mysql56GTID{Server: sid1, Sequence: 25}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// New interval beginning
-		Mysql56GTID{Server: sid1, Sequence: 1}: Mysql56GTIDSet{
+		Mysql56GTID{Server: sid1, Sequence: 1}: {
 			sid1: []interval{{1, 1}, {20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// New interval middle
-		Mysql56GTID{Server: sid1, Sequence: 32}: Mysql56GTIDSet{
+		Mysql56GTID{Server: sid1, Sequence: 32}: {
 			sid1: []interval{{20, 30}, {32, 32}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// New interval end
-		Mysql56GTID{Server: sid1, Sequence: 50}: Mysql56GTIDSet{
+		Mysql56GTID{Server: sid1, Sequence: 50}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}, {50, 50}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// Extend interval start
-		Mysql56GTID{Server: sid2, Sequence: 49}: Mysql56GTIDSet{
+		Mysql56GTID{Server: sid2, Sequence: 49}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {49, 50}, {60, 70}},
 		},
 		// Extend interval end
-		Mysql56GTID{Server: sid2, Sequence: 51}: Mysql56GTIDSet{
+		Mysql56GTID{Server: sid2, Sequence: 51}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 51}, {60, 70}},
 		},
 		// Merge intervals
-		Mysql56GTID{Server: sid1, Sequence: 41}: Mysql56GTIDSet{
+		Mysql56GTID{Server: sid1, Sequence: 41}: {
 			sid1: []interval{{20, 30}, {35, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// Different SID
-		Mysql56GTID{Server: sid3, Sequence: 1}: Mysql56GTIDSet{
+		Mysql56GTID{Server: sid3, Sequence: 1}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 			sid3: []interval{{1, 1}},

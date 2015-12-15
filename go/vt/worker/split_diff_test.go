@@ -50,15 +50,15 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&querypb.Field{
+			{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
-			&querypb.Field{
+			{
 				Name: "keyspace_id",
 				Type: sqltypes.Int64,
 			},
@@ -72,7 +72,7 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 	for i := 0; i < 100; i++ {
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
@@ -109,15 +109,15 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&querypb.Field{
+			{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
-			&querypb.Field{
+			{
 				Name: "keyspace_id",
 				Type: sqltypes.Int64,
 			},
@@ -131,7 +131,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 	for i := 0; i < 100; i++ {
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),

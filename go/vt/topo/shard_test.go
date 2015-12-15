@@ -68,7 +68,7 @@ func TestUpdateSourceBlacklistedTables(t *testing.T) {
 
 	// add one cell
 	if err := si.UpdateSourceBlacklistedTables(topodatapb.TabletType_RDONLY, []string{"first"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			Cells:             []string{"first"},
 			BlacklistedTables: []string{"t1", "t2"},
@@ -96,7 +96,7 @@ func TestUpdateSourceBlacklistedTables(t *testing.T) {
 
 	// add another cell, see the list grow
 	if err := si.UpdateSourceBlacklistedTables(topodatapb.TabletType_RDONLY, []string{"second"}, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			Cells:             []string{"first", "second"},
 			BlacklistedTables: []string{"t1", "t2"},
@@ -107,7 +107,7 @@ func TestUpdateSourceBlacklistedTables(t *testing.T) {
 
 	// add all cells, see the list grow to all
 	if err := si.UpdateSourceBlacklistedTables(topodatapb.TabletType_RDONLY, nil, false, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			Cells:             nil,
 			BlacklistedTables: []string{"t1", "t2"},
@@ -118,7 +118,7 @@ func TestUpdateSourceBlacklistedTables(t *testing.T) {
 
 	// remove one cell from the full list
 	if err := si.UpdateSourceBlacklistedTables(topodatapb.TabletType_RDONLY, []string{"second"}, true, []string{"t1", "t2"}); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			Cells:             []string{"first", "third"},
 			BlacklistedTables: []string{"t1", "t2"},
@@ -135,7 +135,7 @@ func TestUpdateDisableQueryService(t *testing.T) {
 
 	// add one cell
 	if err := si.UpdateDisableQueryService(topodatapb.TabletType_RDONLY, []string{"first"}, true); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:          topodatapb.TabletType_RDONLY,
 			Cells:               []string{"first"},
 			DisableQueryService: true,
@@ -160,7 +160,7 @@ func TestUpdateDisableQueryService(t *testing.T) {
 
 	// add another cell, see the list grow
 	if err := si.UpdateDisableQueryService(topodatapb.TabletType_RDONLY, []string{"second"}, true); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:          topodatapb.TabletType_RDONLY,
 			Cells:               []string{"first", "second"},
 			DisableQueryService: true,
@@ -171,7 +171,7 @@ func TestUpdateDisableQueryService(t *testing.T) {
 
 	// add all cells, see the list grow to all
 	if err := si.UpdateDisableQueryService(topodatapb.TabletType_RDONLY, nil, true); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:          topodatapb.TabletType_RDONLY,
 			Cells:               nil,
 			DisableQueryService: true,
@@ -182,7 +182,7 @@ func TestUpdateDisableQueryService(t *testing.T) {
 
 	// remove one cell from the full list
 	if err := si.UpdateDisableQueryService(topodatapb.TabletType_RDONLY, []string{"second"}, false); err != nil || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:          topodatapb.TabletType_RDONLY,
 			Cells:               []string{"first", "third"},
 			DisableQueryService: true,
@@ -199,7 +199,7 @@ func TestUpdateServedTypesMap(t *testing.T) {
 
 	// add all cells for rdonly
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_RDONLY, nil, false); err != nil || !reflect.DeepEqual(si.ServedTypes, []*topodatapb.Shard_ServedType{
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 			Cells:      nil,
 		},
@@ -209,11 +209,11 @@ func TestUpdateServedTypesMap(t *testing.T) {
 
 	// add some cells for replica
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_REPLICA, []string{"second"}, false); err != nil || !reflect.DeepEqual(si.ServedTypes, []*topodatapb.Shard_ServedType{
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 			Cells:      nil,
 		},
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_REPLICA,
 			Cells:      []string{"second"},
 		},
@@ -223,11 +223,11 @@ func TestUpdateServedTypesMap(t *testing.T) {
 
 	// remove some cells for rdonly
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_RDONLY, []string{"second"}, true); err != nil || !reflect.DeepEqual(si.ServedTypes, []*topodatapb.Shard_ServedType{
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 			Cells:      []string{"first", "third"},
 		},
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_REPLICA,
 			Cells:      []string{"second"},
 		},
@@ -237,7 +237,7 @@ func TestUpdateServedTypesMap(t *testing.T) {
 
 	// remove last cell for replica
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_REPLICA, []string{"second"}, true); err != nil || !reflect.DeepEqual(si.ServedTypes, []*topodatapb.Shard_ServedType{
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 			Cells:      []string{"first", "third"},
 		},
@@ -247,11 +247,11 @@ func TestUpdateServedTypesMap(t *testing.T) {
 
 	// migrate all
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_REPLICA, nil, false); err != nil || !reflect.DeepEqual(si.ServedTypes, []*topodatapb.Shard_ServedType{
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 			Cells:      []string{"first", "third"},
 		},
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_REPLICA,
 			Cells:      nil,
 		},
@@ -259,11 +259,11 @@ func TestUpdateServedTypesMap(t *testing.T) {
 		t.Fatalf("migrate replica failed: %v", err)
 	}
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_RDONLY, nil, false); err != nil || !reflect.DeepEqual(si.ServedTypes, []*topodatapb.Shard_ServedType{
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 			Cells:      nil,
 		},
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_REPLICA,
 			Cells:      nil,
 		},
@@ -271,15 +271,15 @@ func TestUpdateServedTypesMap(t *testing.T) {
 		t.Fatalf("migrate rdonly failed: %v", err)
 	}
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_MASTER, nil, false); err != nil || !reflect.DeepEqual(si.ServedTypes, []*topodatapb.Shard_ServedType{
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 			Cells:      nil,
 		},
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_REPLICA,
 			Cells:      nil,
 		},
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_MASTER,
 			Cells:      nil,
 		},

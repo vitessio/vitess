@@ -65,7 +65,7 @@ func TestLookupHashAutoMapBadData(t *testing.T) {
 			Type: sqltypes.Float64,
 		}},
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Float64, []byte("1.1")),
 			},
 		},

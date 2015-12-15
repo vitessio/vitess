@@ -136,7 +136,7 @@ func TestBackupRestore(t *testing.T) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SHOW DATABASES": &sqltypes.Result{},
+		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
 	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}

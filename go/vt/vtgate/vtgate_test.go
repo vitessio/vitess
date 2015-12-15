@@ -180,7 +180,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateExecuteKeyspaceIds",
-		[][]byte{[]byte{0x10}},
+		[][]byte{{0x10}},
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
@@ -202,7 +202,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateExecuteKeyspaceIds",
-		[][]byte{[]byte{0x10}},
+		[][]byte{{0x10}},
 		topodatapb.TabletType_MASTER,
 		session,
 		false)
@@ -229,7 +229,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateExecuteKeyspaceIds",
-		[][]byte{[]byte{0x10}, []byte{0x30}},
+		[][]byte{{0x10}, {0x30}},
 		topodatapb.TabletType_MASTER,
 		session,
 		false)
@@ -249,7 +249,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]*topodatapb.KeyRange{&topodatapb.KeyRange{End: []byte{0x20}}},
+		[]*topodatapb.KeyRange{{End: []byte{0x20}}},
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
@@ -271,7 +271,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]*topodatapb.KeyRange{&topodatapb.KeyRange{End: []byte{0x20}}},
+		[]*topodatapb.KeyRange{{End: []byte{0x20}}},
 		topodatapb.TabletType_MASTER,
 		session,
 		false)
@@ -300,7 +300,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	qr, err = rpcVTGate.ExecuteKeyRanges(context.Background(), "query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x30}}},
+		[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x30}}},
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
@@ -322,7 +322,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		"TestVTGateExecuteEntityIds",
 		"kid",
 		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
 				XidType:    sqltypes.VarBinary,
 				XidValue:   []byte("id1"),
 				KeyspaceId: []byte{0x10},
@@ -351,7 +351,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		"TestVTGateExecuteEntityIds",
 		"kid",
 		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
 				XidType:    sqltypes.VarBinary,
 				XidValue:   []byte("id1"),
 				KeyspaceId: []byte{0x10},
@@ -385,12 +385,12 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		"TestVTGateExecuteEntityIds",
 		"kid",
 		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
 				XidType:    sqltypes.VarBinary,
 				XidValue:   []byte("id1"),
 				KeyspaceId: []byte{0x10},
 			},
-			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
 				XidType:    sqltypes.VarBinary,
 				XidValue:   []byte("id2"),
 				KeyspaceId: []byte{0x30},
@@ -556,7 +556,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyspaceIds",
-		[][]byte{[]byte{0x10}},
+		[][]byte{{0x10}},
 		topodatapb.TabletType_MASTER,
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
@@ -576,7 +576,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyspaceIds",
-		[][]byte{[]byte{0x10}, []byte{0x15}},
+		[][]byte{{0x10}, {0x15}},
 		topodatapb.TabletType_MASTER,
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
@@ -594,7 +594,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyspaceIds",
-		[][]byte{[]byte{0x10}, []byte{0x30}},
+		[][]byte{{0x10}, {0x30}},
 		topodatapb.TabletType_MASTER,
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
@@ -617,7 +617,7 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyRanges",
-		[]*topodatapb.KeyRange{&topodatapb.KeyRange{End: []byte{0x20}}},
+		[]*topodatapb.KeyRange{{End: []byte{0x20}}},
 		topodatapb.TabletType_MASTER,
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
@@ -636,7 +636,7 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyRanges",
-		[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x40}}},
+		[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x40}}},
 		topodatapb.TabletType_MASTER,
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
@@ -781,7 +781,7 @@ func TestAnnotatingExecuteKeyspaceIds(t *testing.T) {
 		"INSERT INTO table () VALUES();",
 		nil,
 		keyspace,
-		[][]byte{[]byte{0x10}},
+		[][]byte{{0x10}},
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
@@ -800,7 +800,7 @@ func TestAnnotatingExecuteKeyspaceIdsMultipleIds(t *testing.T) {
 		"INSERT INTO table () VALUES();",
 		nil,
 		keyspace,
-		[][]byte{[]byte{0x10}, []byte{0x15}},
+		[][]byte{{0x10}, {0x15}},
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
@@ -821,7 +821,7 @@ func TestAnnotatingExecuteKeyRanges(t *testing.T) {
 		"UPDATE table SET col1=1 WHERE col2>3;",
 		nil,
 		keyspace,
-		[]*topodatapb.KeyRange{&topodatapb.KeyRange{Start: []byte{0x10}, End: []byte{0x40}}},
+		[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x40}}},
 		topodatapb.TabletType_MASTER,
 		nil,
 		false)
@@ -844,12 +844,12 @@ func TestAnnotatingExecuteEntityIds(t *testing.T) {
 		keyspace,
 		"entity_column_name",
 		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
 				XidType:    sqltypes.Int64,
 				XidValue:   []byte("0"),
 				KeyspaceId: []byte{0x10}, // First shard.
 			},
-			&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
 				XidType:    sqltypes.Int64,
 				XidValue:   []byte("1"),
 				KeyspaceId: []byte{0x25}, // Second shard.
@@ -894,21 +894,21 @@ func TestAnnotatingExecuteBatchKeyspaceIds(t *testing.T) {
 					Sql: "INSERT INTO table () VALUES();",
 				},
 				Keyspace:    keyspace,
-				KeyspaceIds: [][]byte{[]byte{0x10}},
+				KeyspaceIds: [][]byte{{0x10}},
 			},
 			{
 				Query: &querypb.BoundQuery{
 					Sql: "UPDATE table SET col1=1 WHERE col2>3;",
 				},
 				Keyspace:    keyspace,
-				KeyspaceIds: [][]byte{[]byte{0x15}},
+				KeyspaceIds: [][]byte{{0x15}},
 			},
 			{
 				Query: &querypb.BoundQuery{
 					Sql: "DELETE FROM table WHERE col1==4;",
 				},
 				Keyspace:    keyspace,
-				KeyspaceIds: [][]byte{[]byte{0x25}},
+				KeyspaceIds: [][]byte{{0x25}},
 			},
 		},
 		topodatapb.TabletType_MASTER,
@@ -920,11 +920,11 @@ func TestAnnotatingExecuteBatchKeyspaceIds(t *testing.T) {
 
 	verifyBatchQueryAnnotatedWithKeyspaceIds(
 		t,
-		[][]byte{[]byte{0x10}, []byte{0x15}},
+		[][]byte{{0x10}, {0x15}},
 		shards[0])
 	verifyBatchQueryAnnotatedWithKeyspaceIds(
 		t,
-		[][]byte{[]byte{0x25}},
+		[][]byte{{0x25}},
 		shards[1])
 }
 
@@ -939,8 +939,8 @@ func TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds(t *testing.T) {
 				},
 				Keyspace: keyspace,
 				KeyspaceIds: [][]byte{
-					[]byte{0x10},
-					[]byte{0x15},
+					{0x10},
+					{0x15},
 				},
 			},
 		},
@@ -1022,7 +1022,7 @@ func TestAnnotatingExecuteBatchShards(t *testing.T) {
 // for a keyspace, and may re-send queries to the shards created in
 // a previous call to this method.
 func setUpSandboxWithTwoShards(keyspace string) (string, []*sandboxConn) {
-	shards := []*sandboxConn{&sandboxConn{}, &sandboxConn{}}
+	shards := []*sandboxConn{{}, {}}
 	aSandbox := createSandbox(keyspace)
 	aSandbox.MapTestConn("-20", shards[0])
 	aSandbox.MapTestConn("20-40", shards[1])

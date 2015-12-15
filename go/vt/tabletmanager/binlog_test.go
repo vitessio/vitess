@@ -300,7 +300,7 @@ func checkBlpPositionList(t *testing.T, bpm *BinlogPlayerMap, vtClientSyncChanne
 			RowsAffected: 1,
 			InsertID:     0,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("MariaDB/0-1-1235")),
 					sqltypes.MakeString([]byte("")),
 				},
@@ -388,7 +388,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 
 	// now add the source in shard
 	si.SourceShards = []*topodatapb.Shard_SourceShard{
-		&topodatapb.Shard_SourceShard{
+		{
 			Uid:      1,
 			Keyspace: "ks",
 			Shard:    "-80",
@@ -416,7 +416,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
 				sqltypes.MakeString([]byte("")),
 			},
@@ -553,7 +553,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	si.SourceShards = []*topodatapb.Shard_SourceShard{
-		&topodatapb.Shard_SourceShard{
+		{
 			Uid:      1,
 			Keyspace: "ks",
 			Shard:    "-80",
@@ -581,7 +581,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
 				sqltypes.MakeString([]byte("")),
 			},
@@ -755,7 +755,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	si.SourceShards = []*topodatapb.Shard_SourceShard{
-		&topodatapb.Shard_SourceShard{
+		{
 			Uid:      1,
 			Keyspace: "source",
 			Shard:    "0",
@@ -784,7 +784,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte("MariaDB/0-1-1234")),
 				sqltypes.MakeString([]byte("")),
 			},

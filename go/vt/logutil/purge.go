@@ -73,7 +73,7 @@ func PurgeLogs() {
 	program := filepath.Base(os.Args[0])
 
 	timer := time.NewTimer(*purgeLogsInterval)
-	for _ = range timer.C {
+	for range timer.C {
 		purgeLogsOnce(time.Now(), logDir, program, *keepLogs)
 	}
 }

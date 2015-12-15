@@ -180,15 +180,15 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 		ShardingColumnName: "user_id", // exact value is ignored
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType:      topodatapb.TabletType_MASTER,
 				ShardReferences: shards,
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType:      topodatapb.TabletType_REPLICA,
 				ShardReferences: shards,
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType:      topodatapb.TabletType_RDONLY,
 				ShardReferences: shards,
 			},
@@ -196,11 +196,11 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 	}
 	if servedFromKeyspace != "" {
 		shardedSrvKeyspace.ServedFrom = []*topodatapb.SrvKeyspace_ServedFrom{
-			&topodatapb.SrvKeyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_RDONLY,
 				Keyspace:   servedFromKeyspace,
 			},
-			&topodatapb.SrvKeyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   servedFromKeyspace,
 			},
@@ -216,15 +216,15 @@ func createUnshardedKeyspace() (*topodatapb.SrvKeyspace, error) {
 
 	unshardedSrvKeyspace := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType:      topodatapb.TabletType_MASTER,
 				ShardReferences: []*topodatapb.ShardReference{shard},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType:      topodatapb.TabletType_REPLICA,
 				ShardReferences: []*topodatapb.ShardReference{shard},
 			},
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType:      topodatapb.TabletType_RDONLY,
 				ShardReferences: []*topodatapb.ShardReference{shard},
 			},
@@ -265,11 +265,11 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 			return nil, err
 		}
 		servedFromKeyspace.ServedFrom = []*topodatapb.SrvKeyspace_ServedFrom{
-			&topodatapb.SrvKeyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_RDONLY,
 				Keyspace:   KsTestUnsharded,
 			},
-			&topodatapb.SrvKeyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   KsTestUnsharded,
 			},
@@ -457,7 +457,7 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []querytypes.B
 	}
 	sbc.BatchQueries = append(sbc.BatchQueries, queries)
 	result := make([]sqltypes.Result, 0, len(queries))
-	for _ = range queries {
+	for range queries {
 		result = append(result, *(sbc.getNextResult()))
 	}
 	return result, nil
