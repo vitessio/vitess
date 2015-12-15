@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -662,6 +663,10 @@ func rowsAreEqual(row1, row2 []sqltypes.Value) bool {
 }
 
 func (qre *QueryExecutor) getConn(pool *ConnPool) (*DBConn, error) {
+	span := trace.NewSpanFromContext(qre.ctx)
+	span.StartLocal("QueryExecutor.getConn")
+	defer span.Finish()
+
 	start := time.Now()
 	conn, err := pool.Get(qre.ctx)
 	switch err {

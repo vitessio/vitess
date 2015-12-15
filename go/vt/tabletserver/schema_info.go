@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/trace"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
@@ -409,6 +410,10 @@ func (si *SchemaInfo) DropTable(tableName string) {
 
 // GetPlan returns the ExecPlan that for the query. Plans are cached in a cache.LRUCache.
 func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql string) *ExecPlan {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("SchemaInfo.GetPlan")
+	defer span.Finish()
+
 	// Fastpath if plan already exists.
 	if plan := si.getQuery(sql); plan != nil {
 		return plan
