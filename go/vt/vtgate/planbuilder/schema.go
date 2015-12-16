@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sort"
+	"strings"
 )
 
 // Schema represents the denormalized version of SchemaFormal,
@@ -85,7 +86,7 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 					return nil, fmt.Errorf("vindex %s not found for class %s", ind.Name, cname)
 				}
 				columnVindex := &ColVindex{
-					Col:    ind.Col,
+					Col:    strings.ToLower(ind.Col),
 					Type:   vindexInfo.Type,
 					Name:   ind.Name,
 					Owned:  vindexInfo.Owner == tname,
