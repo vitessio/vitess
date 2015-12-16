@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2015, Google Inc. All rights reserved.
+# Copyright 2015 Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 """Contain abstract VTGate gateway flavor."""
@@ -11,20 +11,12 @@ import logging
 class VTGateGateway(object):
   """Base class that defines the required interface."""
 
-  def setup(self):
-    """Initialize dependent service."""
-    raise NotImplementedError()
-
-  def teardown(self):
-    """Teardown dependent service."""
-    raise NotImplementedError()
-
-  def flags(self, cell=None):
+  def flags(self, cell=None, tablets=None):
     """Return a list of args that tell a VTGate process to start with."""
     raise NotImplementedError()
 
-  def wipe(self):
-    """Wipe the Vitess paths in the topo server."""
+  def connection_count_vars(self):
+    """Return the vars name containing the number of serving connections."""
     raise NotImplementedError()
 
   def flavor(self):
