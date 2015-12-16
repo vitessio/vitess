@@ -38,9 +38,12 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtwo
 	// (started in Instance.setAndStartWorker()) which has its own panic handler.
 	defer servenv.HandlePanic("vtworker", &err)
 
-	// create a logger, send the result back to the caller
+	// Stream everything back what the Wrangler is logging.
 	logstream := logutil.NewChannelLogger(10)
-	logger := logutil.NewTeeLogger(logstream, logutil.NewMemoryLogger())
+	// Let the Wrangler also log everything to the console (and thereby
+	// effectively to a logfile) to make sure that any information or errors
+	// is preserved in the logs in case the RPC or vtworker crashes.
+	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
 
 	// send logs to the caller
 	wg := sync.WaitGroup{}
