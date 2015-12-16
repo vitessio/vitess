@@ -8,6 +8,8 @@ package schema
 // It contains a data structure that's shared between sqlparser & tabletserver
 
 import (
+	"strings"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -55,7 +57,7 @@ func NewTable(name string) *Table {
 // AddColumn adds a column to the Table.
 func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes.Value, extra string) {
 	index := len(ta.Columns)
-	ta.Columns = append(ta.Columns, TableColumn{Name: name})
+	ta.Columns = append(ta.Columns, TableColumn{Name: strings.ToLower(name)})
 	ta.Columns[index].Type = columnType
 	if extra == "auto_increment" {
 		ta.Columns[index].IsAuto = true
@@ -119,7 +121,7 @@ func NewIndex(name string) *Index {
 
 // AddColumn adds a column to the index.
 func (idx *Index) AddColumn(name string, cardinality uint64) {
-	idx.Columns = append(idx.Columns, name)
+	idx.Columns = append(idx.Columns, strings.ToLower(name))
 	if cardinality == 0 {
 		cardinality = uint64(len(idx.Cardinality) + 1)
 	}

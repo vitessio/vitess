@@ -571,6 +571,29 @@ func TestNocacheCases(t *testing.T) {
 			},
 		},
 		&framework.MultiCase{
+			Name: "insert with mixed case column names",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert into vitess_mixed_case(col1, col2) values(1, 2)",
+					Rewritten: []string{
+						"insert into vitess_mixed_case(col1, col2) values (1, 2) /* _stream vitess_mixed_case (col1 ) (1 )",
+					},
+					RowsAffected: 1,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select COL1, COL2 from vitess_mixed_case",
+					Result: [][]string{
+						{"1", "2"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_mixed_case"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
 			Name: "insert auto_increment",
 			Cases: []framework.Testable{
 				framework.TestQuery("alter table vitess_e auto_increment = 1"),
