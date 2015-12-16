@@ -15,9 +15,9 @@ gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
 unformatted=$(gofmt -s -l $gofiles 2>&1)
 [ -z "$unformatted" ] && exit 0
 
-# Some files are not goimports'd. Print message and fail.
+# Some files are not gofmt'd. Print message and fail.
 
-echo >&2 "Go files must be formatted with goimports. Please run:"
+echo >&2 "Go files must be formatted with gofmt. Please run:"
 echo >&2
 echo -n >&2 "  gofmt -s -w"
 for fn in $unformatted; do
