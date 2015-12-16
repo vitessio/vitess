@@ -106,6 +106,7 @@ create unique index id2_idx on upsert_test(id2);
 insert into vitess_a(eid, id, name, foo) values(1, 1, 'abcd', 'efgh'), (1, 2, 'bcde', 'fghi');
 insert into vitess_b(eid, id) values(1, 1), (1, 2);
 insert into vitess_c(eid, name, foo) values(10, 'abcd', '20'), (11, 'bcde', '30');
+create table vitess_mixed_case(Col1 int, COL2 int, primary key(col1)) comment 'vitess_nocache';
 
 create table vitess_cached1(eid bigint, name varchar(128), foo varbinary(128), primary key(eid));
 create index aname1 on vitess_cached1(name);
@@ -178,7 +179,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess",
-      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_big", "vitess_view"],
+      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_big", "vitess_view"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
