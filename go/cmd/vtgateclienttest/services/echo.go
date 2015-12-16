@@ -270,7 +270,7 @@ func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string
 			return nil, err
 		}
 		return []*vtgatepb.SplitQueryResponse_Part{
-			&vtgatepb.SplitQueryResponse_Part{
+			{
 				Query: &querypb.BoundQuery{
 					Sql:           fmt.Sprintf("%v:%v:%v", sql, splitColumn, splitCount),
 					BindVariables: bv,

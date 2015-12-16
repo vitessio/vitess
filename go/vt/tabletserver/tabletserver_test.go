@@ -478,7 +478,7 @@ func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
 		t.Fatalf("call TabletServer.StreamExecute should fail because of an invalid session id: 0")
 	}
 	if _, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
-		querytypes.BoundQuery{
+		{
 			Sql:           "noquery",
 			BindVariables: nil,
 		},
@@ -534,7 +534,7 @@ func TestTabletServerCommitTransaciton(t *testing.T) {
 	executeSQLResult := &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+			{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
@@ -568,7 +568,7 @@ func TestTabletServerRollback(t *testing.T) {
 	executeSQLResult := &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+			{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
@@ -602,7 +602,7 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	executeSQLResult := &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
+			{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
@@ -644,7 +644,7 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
-		querytypes.BoundQuery{
+		{
 			Sql:           sql,
 			BindVariables: nil,
 		},
@@ -685,7 +685,7 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	_, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
-		querytypes.BoundQuery{
+		{
 			Sql:           "begin",
 			BindVariables: nil,
 		},
@@ -709,7 +709,7 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
-		querytypes.BoundQuery{
+		{
 			Sql:           "begin",
 			BindVariables: nil,
 		},
@@ -734,11 +734,11 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
-		querytypes.BoundQuery{
+		{
 			Sql:           "begin",
 			BindVariables: nil,
 		},
-		querytypes.BoundQuery{
+		{
 			Sql:           "commit",
 			BindVariables: nil,
 		},
@@ -776,7 +776,7 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	}
 
 	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
-		querytypes.BoundQuery{
+		{
 			Sql:           sql,
 			BindVariables: nil,
 		},
@@ -814,7 +814,7 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
-		querytypes.BoundQuery{
+		{
 			Sql:           sql,
 			BindVariables: nil,
 		},
@@ -837,7 +837,7 @@ func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
-		querytypes.BoundQuery{
+		{
 			Sql:           "commit",
 			BindVariables: nil,
 		},
@@ -866,23 +866,23 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{
-		querytypes.BoundQuery{
+		{
 			Sql:           "begin",
 			BindVariables: nil,
 		},
-		querytypes.BoundQuery{
+		{
 			Sql:           "begin",
 			BindVariables: nil,
 		},
-		querytypes.BoundQuery{
+		{
 			Sql:           sql,
 			BindVariables: nil,
 		},
-		querytypes.BoundQuery{
+		{
 			Sql:           "commit",
 			BindVariables: nil,
 		},
-		querytypes.BoundQuery{
+		{
 			Sql:           "commit",
 			BindVariables: nil,
 		},
@@ -896,11 +896,11 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	db := setUpTabletServerTest()
 	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{Name: "pk", Type: sqltypes.Int32},
+			{Name: "pk", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
 			},
@@ -908,11 +908,11 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	})
 	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{Name: "pk", Type: sqltypes.Int32},
+			{Name: "pk", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			},
 		},
@@ -938,11 +938,11 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	db := setUpTabletServerTest()
 	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{Name: "pk", Type: sqltypes.Int32},
+			{Name: "pk", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
 			},
@@ -950,11 +950,11 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	})
 	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{Name: "pk", Type: sqltypes.Int32},
+			{Name: "pk", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			},
 		},
@@ -982,12 +982,12 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 	pkMinMaxQuery := "SELECT MIN(pk), MAX(pk) FROM test_table"
 	pkMinMaxQueryResp := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{Name: "pk", Type: sqltypes.Int32},
+			{Name: "pk", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			// this make SplitQueryFail
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte("invalid")),
 				sqltypes.MakeString([]byte("invalid")),
 			},
@@ -995,11 +995,11 @@ func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
 	}
 	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{Name: "pk", Type: sqltypes.Int32},
+			{Name: "pk", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			},
 		},
@@ -1244,28 +1244,28 @@ func checkTabletServerState(t *testing.T, tsv *TabletServer, expectState int64) 
 func getSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for schema info
-		"select unix_timestamp()": &sqltypes.Result{
+		"select unix_timestamp()": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeString([]byte("1427325875"))},
+				{sqltypes.MakeString([]byte("1427325875"))},
 			},
 		},
-		"select @@global.sql_mode": &sqltypes.Result{
+		"select @@global.sql_mode": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
+				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
-		"select * from test_table where 1 != 1": &sqltypes.Result{
+		"select * from test_table where 1 != 1": {
 			Fields: getTestTableFields(),
 		},
-		"select * from `test_table` where 1 != 1": &sqltypes.Result{
+		"select * from `test_table` where 1 != 1": {
 			Fields: getTestTableFields(),
 		},
-		baseShowTables: &sqltypes.Result{
+		baseShowTables: {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeString([]byte("1427325875")),
@@ -1277,10 +1277,10 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"describe `test_table`": &sqltypes.Result{
+		"describe `test_table`": {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("pk")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -1288,7 +1288,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("1")),
 					sqltypes.MakeString([]byte{}),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("name")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -1296,7 +1296,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("1")),
 					sqltypes.MakeString([]byte{}),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("addr")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -1307,10 +1307,10 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		// for SplitQuery because it needs a primary key column
-		"show index from `test_table`": &sqltypes.Result{
+		"show index from `test_table`": {
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("PRIMARY")),
@@ -1319,7 +1319,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("300")),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("INDEX")),
@@ -1330,13 +1330,13 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"begin":    &sqltypes.Result{},
-		"commit":   &sqltypes.Result{},
-		"rollback": &sqltypes.Result{},
-		baseShowTables + " and table_name = 'test_table'": &sqltypes.Result{
+		"begin":    {},
+		"commit":   {},
+		"rollback": {},
+		baseShowTables + " and table_name = 'test_table'": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeString([]byte("1427325875")),

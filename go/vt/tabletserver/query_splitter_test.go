@@ -333,7 +333,7 @@ func TestSplitQuery(t *testing.T) {
 		t.Errorf("unexpected error while splitting on empty pkMinMax, %s", err)
 	}
 
-	pkMinMax.Rows = [][]sqltypes.Value{[]sqltypes.Value{min, max}}
+	pkMinMax.Rows = [][]sqltypes.Value{{min, max}}
 	splits, err = splitter.split(sqltypes.Int64, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -387,7 +387,7 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 	fields := []*querypb.Field{minField, maxField}
 	pkMinMax := &sqltypes.Result{
 		Fields: fields,
-		Rows:   [][]sqltypes.Value{[]sqltypes.Value{min, max}},
+		Rows:   [][]sqltypes.Value{{min, max}},
 	}
 
 	splits, err := splitter.split(sqltypes.Float32, pkMinMax)

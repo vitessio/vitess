@@ -2144,7 +2144,7 @@ var execMap = map[string]struct {
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
-				[]byte{0x61},
+				{0x61},
 			},
 			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
@@ -2156,7 +2156,7 @@ var execMap = map[string]struct {
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
-				&topodatapb.KeyRange{
+				{
 					Start: []byte{0x72},
 					End:   []byte{0x90},
 				},
@@ -2172,7 +2172,7 @@ var execMap = map[string]struct {
 			Keyspace:         "ks",
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-				&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+				{
 					XidType:    sqltypes.VarBinary,
 					XidValue:   []byte{105, 100, 49},
 					KeyspaceId: []byte{0x6B},
@@ -2187,7 +2187,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "request1",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": &querypb.BindVariable{
+							"bind1": {
 								Type:  sqltypes.Int64,
 								Value: []byte("11143"),
 							},
@@ -2207,7 +2207,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "request1",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": &querypb.BindVariable{
+							"bind1": {
 								Type:  sqltypes.Int64,
 								Value: []byte("11143"),
 							},
@@ -2215,7 +2215,7 @@ var execMap = map[string]struct {
 					},
 					Keyspace: "ks",
 					KeyspaceIds: [][]byte{
-						[]byte{'k', 'i', '1'},
+						{'k', 'i', '1'},
 					},
 				},
 			},
@@ -2252,7 +2252,7 @@ var execMap = map[string]struct {
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
-				[]byte{0x61},
+				{0x61},
 			},
 			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
@@ -2264,7 +2264,7 @@ var execMap = map[string]struct {
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
-				&topodatapb.KeyRange{
+				{
 					Start: []byte{0x73},
 					End:   []byte{0x99},
 				},
@@ -2280,7 +2280,7 @@ var execMap = map[string]struct {
 			Keyspace:         "ks",
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-				&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+				{
 					XidType:    sqltypes.VarBinary,
 					XidValue:   []byte{105, 100, 49},
 					KeyspaceId: []byte{0x6B},
@@ -2295,7 +2295,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "errorRequst",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": &querypb.BindVariable{
+							"bind1": {
 								Type:  sqltypes.Int64,
 								Value: []byte("11143"),
 							},
@@ -2315,7 +2315,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "errorRequst",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": &querypb.BindVariable{
+							"bind1": {
 								Type:  sqltypes.Int64,
 								Value: []byte("11143"),
 							},
@@ -2323,7 +2323,7 @@ var execMap = map[string]struct {
 					},
 					Keyspace: "ks",
 					KeyspaceIds: [][]byte{
-						[]byte{'k', 'i', '1'},
+						{'k', 'i', '1'},
 					},
 				},
 			},
@@ -2360,7 +2360,7 @@ var execMap = map[string]struct {
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
-				[]byte{0x61},
+				{0x61},
 			},
 			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    session1,
@@ -2372,7 +2372,7 @@ var execMap = map[string]struct {
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
-				&topodatapb.KeyRange{
+				{
 					Start: []byte{0x23},
 					End:   []byte{0x66},
 				},
@@ -2388,7 +2388,7 @@ var execMap = map[string]struct {
 			Keyspace:         "ks",
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-				&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+				{
 					XidType:    sqltypes.Int64,
 					XidValue:   []byte("-12345"),
 					KeyspaceId: []byte{0x6B},
@@ -2403,7 +2403,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "txRequest",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": &querypb.BindVariable{
+							"bind1": {
 								Type:  sqltypes.Int64,
 								Value: []byte("11143"),
 							},
@@ -2423,7 +2423,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "txRequest",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": &querypb.BindVariable{
+							"bind1": {
 								Type:  sqltypes.Int64,
 								Value: []byte("11143"),
 							},
@@ -2431,7 +2431,7 @@ var execMap = map[string]struct {
 					},
 					Keyspace: "ks",
 					KeyspaceIds: [][]byte{
-						[]byte{'k', 'i', '1'},
+						{'k', 'i', '1'},
 					},
 				},
 			},
@@ -2470,7 +2470,7 @@ var execMap = map[string]struct {
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
-				[]byte{0x61},
+				{0x61},
 			},
 			TabletType:       topodatapb.TabletType_RDONLY,
 			Session:          session1,
@@ -2483,7 +2483,7 @@ var execMap = map[string]struct {
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
-				&topodatapb.KeyRange{
+				{
 					Start: []byte{0x34},
 					End:   []byte{0x77},
 				},
@@ -2500,7 +2500,7 @@ var execMap = map[string]struct {
 			Keyspace:         "ks",
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-				&vtgatepb.ExecuteEntityIdsRequest_EntityId{
+				{
 					XidType:    sqltypes.Int64,
 					XidValue:   []byte("123456"),
 					KeyspaceId: []byte{0x6B},
@@ -2516,7 +2516,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "txRequestNIT",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": &querypb.BindVariable{
+							"bind1": {
 								Type:  sqltypes.Int64,
 								Value: []byte("11143"),
 							},
@@ -2536,7 +2536,7 @@ var execMap = map[string]struct {
 					Query: &querypb.BoundQuery{
 						Sql: "txRequestNIT",
 						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": &querypb.BindVariable{
+							"bind1": {
 								Type:  sqltypes.Int64,
 								Value: []byte("11143"),
 							},
@@ -2544,7 +2544,7 @@ var execMap = map[string]struct {
 					},
 					Keyspace: "ks",
 					KeyspaceIds: [][]byte{
-						[]byte{'k', 'i', '1'},
+						{'k', 'i', '1'},
 					},
 				},
 			},
@@ -2559,11 +2559,11 @@ var execMap = map[string]struct {
 
 var result1 = sqltypes.Result{
 	Fields: []*querypb.Field{
-		&querypb.Field{
+		{
 			Name: "field1",
 			Type: sqltypes.Int16,
 		},
-		&querypb.Field{
+		{
 			Name: "field2",
 			Type: sqltypes.Int32,
 		},
@@ -2571,11 +2571,11 @@ var result1 = sqltypes.Result{
 	RowsAffected: 123,
 	InsertID:     72,
 	Rows: [][]sqltypes.Value{
-		[]sqltypes.Value{
+		{
 			sqltypes.MakeTrusted(sqltypes.Int16, []byte("1")),
 			sqltypes.NULL,
 		},
-		[]sqltypes.Value{
+		{
 			sqltypes.MakeTrusted(sqltypes.Int16, []byte("2")),
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		},
@@ -2595,7 +2595,7 @@ var session1 = &vtgatepb.Session{
 var session2 = &vtgatepb.Session{
 	InTransaction: true,
 	ShardSessions: []*vtgatepb.Session_ShardSession{
-		&vtgatepb.Session_ShardSession{
+		{
 			Target: &querypb.Target{
 				Keyspace:   "ks",
 				Shard:      "1",
@@ -2617,11 +2617,11 @@ var splitQueryRequest = &querySplitQuery{
 }
 
 var splitQueryResult = []*vtgatepb.SplitQueryResponse_Part{
-	&vtgatepb.SplitQueryResponse_Part{
+	{
 		Query: &querypb.BoundQuery{
 			Sql: "out for SplitQuery",
 			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": &querypb.BindVariable{
+				"bind1": {
 					Type:  sqltypes.Int64,
 					Value: []byte("1114444"),
 				},
@@ -2630,7 +2630,7 @@ var splitQueryResult = []*vtgatepb.SplitQueryResponse_Part{
 		KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
 			Keyspace: "ksout",
 			KeyRanges: []*topodatapb.KeyRange{
-				&topodatapb.KeyRange{
+				{
 					Start: []byte{'s'},
 					End:   []byte{'e'},
 				},
@@ -2644,10 +2644,10 @@ var getSrvKeyspaceKeyspace = "test_keyspace"
 
 var getSrvKeyspaceResult = &topodatapb.SrvKeyspace{
 	Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-		&topodatapb.SrvKeyspace_KeyspacePartition{
+		{
 			ServedType: topodatapb.TabletType_REPLICA,
 			ShardReferences: []*topodatapb.ShardReference{
-				&topodatapb.ShardReference{
+				{
 					Name: "shard0",
 					KeyRange: &topodatapb.KeyRange{
 						Start: []byte{'s'},
@@ -2660,7 +2660,7 @@ var getSrvKeyspaceResult = &topodatapb.SrvKeyspace{
 	ShardingColumnName: "sharding_column_name",
 	ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
-		&topodatapb.SrvKeyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_MASTER,
 			Keyspace:   "other_keyspace",
 		},

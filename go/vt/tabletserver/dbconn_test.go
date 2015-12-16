@@ -22,7 +22,7 @@ func TestDBConnExec(t *testing.T) {
 	expectedResult := &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeString([]byte("123"))},
+			{sqltypes.MakeString([]byte("123"))},
 		},
 	}
 	db.AddQuery(sql, expectedResult)
@@ -96,7 +96,7 @@ func TestDBConnStream(t *testing.T) {
 	expectedResult := &sqltypes.Result{
 		RowsAffected: 0,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeString([]byte("123"))},
+			{sqltypes.MakeString([]byte("123"))},
 		},
 	}
 	db.AddQuery(sql, expectedResult)

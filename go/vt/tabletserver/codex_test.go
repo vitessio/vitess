@@ -26,7 +26,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pkValues := []interface{}{pk1Val}
 	// want [[1]]
-	want := [][]sqltypes.Value{[]sqltypes.Value{pk1Val}}
+	want := [][]sqltypes.Value{{pk1Val}}
 	got, _ := buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -36,7 +36,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	bindVars["pk1"] = 1
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
-	want = [][]sqltypes.Value{[]sqltypes.Value{pk1Val}}
+	want = [][]sqltypes.Value{{pk1Val}}
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -46,7 +46,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	bindVars["pk1"] = nil
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
-	want = [][]sqltypes.Value{[]sqltypes.Value{sqltypes.Value{}}}
+	want = [][]sqltypes.Value{{{}}}
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -88,7 +88,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pk2Val, _ := sqltypes.BuildValue("abc")
 	pkValues = []interface{}{pk1Val, pk2Val}
 	// want [[1 abc]]
-	want = [][]sqltypes.Value{[]sqltypes.Value{pk1Val, pk2Val}}
+	want = [][]sqltypes.Value{{pk1Val, pk2Val}}
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -104,8 +104,8 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 	// want [[1 abc][2 xyz]]
 	want = [][]sqltypes.Value{
-		[]sqltypes.Value{pk1Val, pk2Val},
-		[]sqltypes.Value{pk1Val2, pk2Val2}}
+		{pk1Val, pk2Val},
+		{pk1Val2, pk2Val2}}
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -119,8 +119,8 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 	// want [[1 abc][1 xyz]]
 	want = [][]sqltypes.Value{
-		[]sqltypes.Value{pk1Val, pk2Val},
-		[]sqltypes.Value{pk1Val, pk2Val2},
+		{pk1Val, pk2Val},
+		{pk1Val, pk2Val2},
 	}
 
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
@@ -142,8 +142,8 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 	// want [[1 abc][1 xyz]]
 	want = [][]sqltypes.Value{
-		[]sqltypes.Value{pk1Val, pk2Val},
-		[]sqltypes.Value{pk1Val, pk2Val2},
+		{pk1Val, pk2Val},
+		{pk1Val, pk2Val2},
 	}
 
 	// list arg one value
@@ -159,7 +159,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 	// want [[1 abc][1 xyz]]
 	want = [][]sqltypes.Value{
-		[]sqltypes.Value{pk1Val, pk2Val},
+		{pk1Val, pk2Val},
 	}
 
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
@@ -278,7 +278,7 @@ func TestCodexBuildSecondaryList(t *testing.T) {
 	secondaryPKValues := []interface{}{nil, pk2SecVal}
 	// want [[1 xyz]]
 	want := [][]sqltypes.Value{
-		[]sqltypes.Value{pk1Val, pk2SecVal}}
+		{pk1Val, pk2SecVal}}
 	got, _ := buildSecondaryList(&tableInfo, pkList, secondaryPKValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("case 1 failed, got %v, want %v", got, want)

@@ -53,7 +53,7 @@ func TestLookupHashUniqueAutoMapNomatch(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := [][]byte{[]byte{}, []byte{}}
+	want := [][]byte{{}, {}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
@@ -74,7 +74,7 @@ func TestLookupHashUniqueAutoMapBadData(t *testing.T) {
 			Type: sqltypes.Float64,
 		}},
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Float64, []byte("1.1")),
 			},
 		},

@@ -77,19 +77,19 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	shard.MasterAlias = master
 	shard.KeyRange = newKeyRange("b0-c0")
 	shard.ServedTypes = []*topodatapb.Shard_ServedType{
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_MASTER,
 		},
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_REPLICA,
 			Cells:      []string{"c1"},
 		},
-		&topodatapb.Shard_ServedType{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 		},
 	}
 	shard.SourceShards = []*topodatapb.Shard_SourceShard{
-		&topodatapb.Shard_SourceShard{
+		{
 			Uid:      1,
 			Keyspace: "source_ks",
 			Shard:    "b8-c0",
@@ -98,12 +98,12 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 		},
 	}
 	shard.TabletControls = []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_MASTER,
 			Cells:             []string{"c1", "c2"},
 			BlacklistedTables: []string{"black1", "black2"},
 		},
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:          topodatapb.TabletType_REPLICA,
 			DisableQueryService: true,
 		},

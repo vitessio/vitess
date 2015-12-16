@@ -76,7 +76,7 @@ func commandSucceeds(t *testing.T, client vtworkerclient.Client) {
 	if err != nil {
 		t.Fatalf("Cannot execute remote command: %v", err)
 	}
-	for _ = range logs {
+	for range logs {
 	}
 	if err := errFunc(); err != nil {
 		t.Fatalf("Cannot execute remote command: %v", err)

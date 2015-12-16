@@ -186,7 +186,7 @@ func TestSelectEqual(t *testing.T) {
 func TestSelectEqualNotFound(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 
-	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{}})
+	sbclookup.setResults([]*sqltypes.Result{{}})
 	result, err := routerExec(router, "select * from music where id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -196,7 +196,7 @@ func TestSelectEqualNotFound(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{}})
+	sbclookup.setResults([]*sqltypes.Result{{}})
 	result, err = routerExec(router, "select * from user where name = 'foo'", nil)
 	if err != nil {
 		t.Error(err)

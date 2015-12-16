@@ -162,7 +162,7 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 	db.AddQuery(selectQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
+			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
 		},
 	})
 
@@ -194,7 +194,7 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	db.AddQuery(selectQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
+			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
 		},
 	})
 
@@ -384,14 +384,14 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	fields := []*querypb.Field{
-		&querypb.Field{Name: "addr", Type: sqltypes.Int32},
+		{Name: "addr", Type: sqltypes.Int32},
 	}
 	query := "select addr from test_table where pk = 1 limit 1000"
 	want := &sqltypes.Result{
 		Fields:       fields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeString([]byte("123"))},
+			{sqltypes.MakeString([]byte("123"))},
 		},
 	}
 	db.AddQuery(query, want)
@@ -475,7 +475,7 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 		Fields:       getTestTableFields(),
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("20")),
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("30")),
@@ -505,7 +505,7 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 		Fields:       getTestTableFields(),
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("20")),
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("30")),
@@ -1051,9 +1051,9 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 
 func getTestTableFields() []*querypb.Field {
 	return []*querypb.Field{
-		&querypb.Field{Name: "pk", Type: sqltypes.Int32},
-		&querypb.Field{Name: "name", Type: sqltypes.Int32},
-		&querypb.Field{Name: "addr", Type: sqltypes.Int32},
+		{Name: "pk", Type: sqltypes.Int32},
+		{Name: "name", Type: sqltypes.Int32},
+		{Name: "addr", Type: sqltypes.Int32},
 	}
 }
 
@@ -1069,7 +1069,7 @@ func checkPlanID(
 
 func getTestTableSchemaOverrides() []SchemaOverride {
 	return []SchemaOverride{
-		SchemaOverride{
+		{
 			Name:      "test_table",
 			PKColumns: []string{"pk"},
 			Cache: &struct {
@@ -1086,22 +1086,22 @@ func getTestTableSchemaOverrides() []SchemaOverride {
 func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for schema info
-		"select unix_timestamp()": &sqltypes.Result{
+		"select unix_timestamp()": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
+				{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
 			},
 		},
-		"select @@global.sql_mode": &sqltypes.Result{
+		"select @@global.sql_mode": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
+				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
-		baseShowTables: &sqltypes.Result{
+		baseShowTables: {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
@@ -1113,7 +1113,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table` where 1 != 1": &sqltypes.Result{
+		"select * from `test_table` where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -1125,10 +1125,10 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table`": &sqltypes.Result{
+		"describe `test_table`": {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("pk")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -1136,7 +1136,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("1")),
 					sqltypes.MakeString([]byte{}),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("name")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -1144,7 +1144,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("1")),
 					sqltypes.MakeString([]byte{}),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("addr")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -1155,10 +1155,10 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		// for SplitQuery because it needs a primary key column
-		"show index from `test_table`": &sqltypes.Result{
+		"show index from `test_table`": {
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("PRIMARY")),
@@ -1167,7 +1167,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("300")),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("index")),
@@ -1178,12 +1178,12 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"begin":  &sqltypes.Result{},
-		"commit": &sqltypes.Result{},
-		baseShowTables + " and table_name = 'test_table'": &sqltypes.Result{
+		"begin":  {},
+		"commit": {},
+		baseShowTables + " and table_name = 'test_table'": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
@@ -1195,6 +1195,6 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"rollback": &sqltypes.Result{},
+		"rollback": {},
 	}
 }

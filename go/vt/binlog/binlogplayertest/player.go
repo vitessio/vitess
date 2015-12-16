@@ -60,7 +60,7 @@ var testStreamEvent = &binlogdatapb.StreamEvent{
 	Category:  binlogdatapb.StreamEvent_SE_DML,
 	TableName: "table1",
 	PrimaryKeyFields: []*querypb.Field{
-		&querypb.Field{
+		{
 			Name: "id",
 			Type: sqltypes.Binary,
 		},

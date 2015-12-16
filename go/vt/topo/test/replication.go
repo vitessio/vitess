@@ -22,7 +22,7 @@ func CheckShardReplication(ctx context.Context, t *testing.T, ts topo.Impl) {
 
 	sr := &topodatapb.ShardReplication{
 		Nodes: []*topodatapb.ShardReplication_Node{
-			&topodatapb.ShardReplication_Node{
+			{
 				TabletAlias: &topodatapb.TabletAlias{
 					Cell: "c1",
 					Uid:  1,

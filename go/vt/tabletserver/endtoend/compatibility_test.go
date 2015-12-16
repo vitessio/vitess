@@ -38,7 +38,7 @@ func TestCharaterSet(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Float32, []byte("1.12345")),
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\xc2\xa2")),
@@ -120,7 +120,7 @@ func TestInts(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int8, []byte("-128")),
 				sqltypes.MakeTrusted(sqltypes.Uint8, []byte("255")),
 				sqltypes.MakeTrusted(sqltypes.Int16, []byte("-32768")),
@@ -184,7 +184,7 @@ func TestFractionals(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1.99")),
 				sqltypes.MakeTrusted(sqltypes.Decimal, []byte("2.99")),
@@ -263,7 +263,7 @@ func TestStrings(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("a")),
 				sqltypes.MakeTrusted(sqltypes.Char, []byte("b")),
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("c")),
@@ -326,7 +326,7 @@ func TestMiscTypes(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 				sqltypes.MakeTrusted(sqltypes.Bit, []byte("\x01")),
 				sqltypes.MakeTrusted(sqltypes.Date, []byte("2012-01-01")),
@@ -356,8 +356,8 @@ func TestNull(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
-				sqltypes.Value{},
+			{
+				{},
 			},
 		},
 	}

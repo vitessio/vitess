@@ -56,7 +56,7 @@ func TestUpdateEqual(t *testing.T) {
 
 	sbc1.Queries = nil
 	sbc2.Queries = nil
-	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{}})
+	sbclookup.setResults([]*sqltypes.Result{{}})
 	_, err = routerExec(router, "update music set a=2 where id = 2", nil)
 	if err != nil {
 		t.Error(err)
@@ -119,7 +119,7 @@ func TestUpdateEqualFail(t *testing.T) {
 func TestDeleteEqual(t *testing.T) {
 	router, sbc, _, sbclookup := createRouterEnv()
 
-	sbc.setResults([]*sqltypes.Result{&sqltypes.Result{
+	sbc.setResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{"id", sqltypes.Int32},
 			{"name", sqltypes.VarChar},
@@ -166,7 +166,7 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.Queries = nil
 	sbclookup.Queries = nil
-	sbc.setResults([]*sqltypes.Result{&sqltypes.Result{}})
+	sbc.setResults([]*sqltypes.Result{{}})
 	_, err = routerExec(router, "delete from user where id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -189,7 +189,7 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.Queries = nil
 	sbclookup.Queries = nil
-	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{}})
+	sbclookup.setResults([]*sqltypes.Result{{}})
 	_, err = routerExec(router, "delete from music where id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -323,7 +323,7 @@ func TestInsertSharded(t *testing.T) {
 func TestInsertGenerator(t *testing.T) {
 	router, sbc, _, sbclookup := createRouterEnv()
 
-	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{RowsAffected: 1, InsertID: 1}})
+	sbclookup.setResults([]*sqltypes.Result{{RowsAffected: 1, InsertID: 1}})
 	result, err := routerExec(router, "insert into user(v, name) values (2, 'myname')", nil)
 	if err != nil {
 		t.Error(err)
@@ -394,7 +394,7 @@ func TestInsertLookupOwned(t *testing.T) {
 func TestInsertLookupOwnedGenerator(t *testing.T) {
 	router, sbc, _, sbclookup := createRouterEnv()
 
-	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{RowsAffected: 1, InsertID: 1}})
+	sbclookup.setResults([]*sqltypes.Result{{RowsAffected: 1, InsertID: 1}})
 	result, err := routerExec(router, "insert into music(user_id) values (2)", nil)
 	if err != nil {
 		t.Error(err)
@@ -522,7 +522,7 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
-	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{}})
+	sbclookup.setResults([]*sqltypes.Result{{}})
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
 	want = "execInsertSharded: could not map 1 to a keyspace id"
 	if err == nil || err.Error() != want {
@@ -584,8 +584,8 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	sbclookup.setResults([]*sqltypes.Result{
-		&sqltypes.Result{RowsAffected: 1, InsertID: 1},
-		&sqltypes.Result{RowsAffected: 1, InsertID: 1},
+		{RowsAffected: 1, InsertID: 1},
+		{RowsAffected: 1, InsertID: 1},
 	})
 	_, err = routerExec(router, "insert into multi_autoinc_table(id1, id2) values (null, null)", nil)
 	want = "insert generated more than one value"
@@ -605,8 +605,8 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
-	sbc.setResults([]*sqltypes.Result{&sqltypes.Result{RowsAffected: 1, InsertID: 1}})
-	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{RowsAffected: 1, InsertID: 1}})
+	sbc.setResults([]*sqltypes.Result{{RowsAffected: 1, InsertID: 1}})
+	sbclookup.setResults([]*sqltypes.Result{{RowsAffected: 1, InsertID: 1}})
 	_, err = routerExec(router, "insert into user(id, v, name) values (null, 2, 'myname')", nil)
 	want = "vindex and db generated a value each for insert"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {

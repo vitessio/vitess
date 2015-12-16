@@ -56,15 +56,15 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&querypb.Field{
+			{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
-			&querypb.Field{
+			{
 				Name: "keyspace_id",
 				Type: sqltypes.Int64,
 			},
@@ -78,7 +78,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	for i := min; i < max; i++ {
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
@@ -113,7 +113,7 @@ func NewFakePoolConnectionQuery(t *testing.T, query string, err error) *FakePool
 	return &FakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			ExpectedExecuteFetch{
+			{
 				Query:       query,
 				QueryResult: &sqltypes.Result{},
 				Error:       err,
@@ -178,21 +178,21 @@ func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 		return &FakePoolConnection{
 			t: t,
 			ExpectedExecuteFetch: []ExpectedExecuteFetch{
-				ExpectedExecuteFetch{
+				{
 					Query: "SELECT MIN(id), MAX(id) FROM vt_ks.table1",
 					QueryResult: &sqltypes.Result{
 						Fields: []*querypb.Field{
-							&querypb.Field{
+							{
 								Name: "min",
 								Type: sqltypes.Int64,
 							},
-							&querypb.Field{
+							{
 								Name: "max",
 								Type: sqltypes.Int64,
 							},
 						},
 						Rows: [][]sqltypes.Value{
-							[]sqltypes.Value{
+							{
 								sqltypes.MakeString([]byte("100")),
 								sqltypes.MakeString([]byte("200")),
 							},

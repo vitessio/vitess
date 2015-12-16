@@ -26,9 +26,9 @@ func toJSON(t *testing.T, value interface{}) string {
 
 func TestSplitCellPath(t *testing.T) {
 	table := map[string][]string{
-		"/cell-a":            []string{"cell-a", "/"},
-		"/cell-b/x":          []string{"cell-b", "/x"},
-		"/cell1/other/stuff": []string{"cell1", "/other/stuff"},
+		"/cell-a":            {"cell-a", "/"},
+		"/cell-b/x":          {"cell-b", "/x"},
+		"/cell1/other/stuff": {"cell1", "/other/stuff"},
 	}
 	for input, want := range table {
 		cell, rest, err := splitCellPath(input)

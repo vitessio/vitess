@@ -149,9 +149,9 @@ func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string,
 	}
 	query := &queryExecuteSpecificShard{
 		queryExecute: queryExecute{
-			SQL:              sql,
-			BindVariables:    bindVariables,
-			TabletType:       tabletType,
+			SQL:           sql,
+			BindVariables: bindVariables,
+			TabletType:    tabletType,
 		},
 		Keyspace: keyspace,
 		Shard:    shards[0],
@@ -313,11 +313,11 @@ var execSpecificShardMap = map[string]struct {
 
 var result1 = sqltypes.Result{
 	Fields: []*querypb.Field{
-		&querypb.Field{
+		{
 			Name: "field1",
 			Type: sqltypes.Int16,
 		},
-		&querypb.Field{
+		{
 			Name: "field2",
 			Type: sqltypes.VarChar,
 		},
@@ -325,11 +325,11 @@ var result1 = sqltypes.Result{
 	RowsAffected: 123,
 	InsertID:     72,
 	Rows: [][]sqltypes.Value{
-		[]sqltypes.Value{
+		{
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("value1")),
 		},
-		[]sqltypes.Value{
+		{
 			sqltypes.MakeString([]byte("2")),
 			sqltypes.MakeString([]byte("value2")),
 		},
@@ -343,7 +343,7 @@ var session1 = &vtgatepb.Session{
 var session2 = &vtgatepb.Session{
 	InTransaction: true,
 	ShardSessions: []*vtgatepb.Session_ShardSession{
-		&vtgatepb.Session_ShardSession{
+		{
 			Target: &querypb.Target{
 				Keyspace:   "ks",
 				Shard:      "1",

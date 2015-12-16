@@ -23,10 +23,10 @@ func testSuccess(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testGetSrvKeyspace(t *testing.T, conn *vtgateconn.VTGateConn) {
 	want := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			&topodatapb.SrvKeyspace_KeyspacePartition{
+			{
 				ServedType: topodatapb.TabletType_REPLICA,
 				ShardReferences: []*topodatapb.ShardReference{
-					&topodatapb.ShardReference{
+					{
 						Name: "shard0",
 						KeyRange: &topodatapb.KeyRange{
 							Start: []byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
@@ -39,7 +39,7 @@ func testGetSrvKeyspace(t *testing.T, conn *vtgateconn.VTGateConn) {
 		ShardingColumnName: "sharding_column_name",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 		ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
-			&topodatapb.SrvKeyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   "other_keyspace",
 			},

@@ -37,21 +37,21 @@ func TestFilterUnhealthy(t *testing.T) {
 			// All are healthy and all should be returned.
 			source: &topodatapb.EndPoints{
 				Entries: []*topodatapb.EndPoint{
-					&topodatapb.EndPoint{
+					{
 						Uid:       1,
 						HealthMap: nil,
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid:       2,
 						HealthMap: map[string]string{},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid: 3,
 						HealthMap: map[string]string{
 							"Random": "Value1",
 						},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid:       4,
 						HealthMap: nil,
 					},
@@ -59,21 +59,21 @@ func TestFilterUnhealthy(t *testing.T) {
 			},
 			want: &topodatapb.EndPoints{
 				Entries: []*topodatapb.EndPoint{
-					&topodatapb.EndPoint{
+					{
 						Uid:       1,
 						HealthMap: nil,
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid:       2,
 						HealthMap: map[string]string{},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid: 3,
 						HealthMap: map[string]string{
 							"Random": "Value1",
 						},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid:       4,
 						HealthMap: nil,
 					},
@@ -84,27 +84,27 @@ func TestFilterUnhealthy(t *testing.T) {
 			// 4 is unhealthy, it should be filtered out.
 			source: &topodatapb.EndPoints{
 				Entries: []*topodatapb.EndPoint{
-					&topodatapb.EndPoint{
+					{
 						Uid:       1,
 						HealthMap: nil,
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid:       2,
 						HealthMap: map[string]string{},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid: 3,
 						HealthMap: map[string]string{
 							"Random": "Value2",
 						},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid: 4,
 						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid:       5,
 						HealthMap: nil,
 					},
@@ -112,21 +112,21 @@ func TestFilterUnhealthy(t *testing.T) {
 			},
 			want: &topodatapb.EndPoints{
 				Entries: []*topodatapb.EndPoint{
-					&topodatapb.EndPoint{
+					{
 						Uid:       1,
 						HealthMap: nil,
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid:       2,
 						HealthMap: map[string]string{},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid: 3,
 						HealthMap: map[string]string{
 							"Random": "Value2",
 						},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid:       5,
 						HealthMap: nil,
 					},
@@ -137,19 +137,19 @@ func TestFilterUnhealthy(t *testing.T) {
 			// Only unhealthy servers, return all of them.
 			source: &topodatapb.EndPoints{
 				Entries: []*topodatapb.EndPoint{
-					&topodatapb.EndPoint{
+					{
 						Uid: 1,
 						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid: 2,
 						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid: 3,
 						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
@@ -159,19 +159,19 @@ func TestFilterUnhealthy(t *testing.T) {
 			},
 			want: &topodatapb.EndPoints{
 				Entries: []*topodatapb.EndPoint{
-					&topodatapb.EndPoint{
+					{
 						Uid: 1,
 						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid: 2,
 						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
-					&topodatapb.EndPoint{
+					{
 						Uid: 3,
 						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
@@ -233,7 +233,7 @@ func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace
 	if cell == ft.cell || tabletType != topodatapb.TabletType_MASTER {
 		return &topodatapb.EndPoints{
 			Entries: []*topodatapb.EndPoint{
-				&topodatapb.EndPoint{
+				{
 					Uid:       0,
 					HealthMap: nil,
 				},
@@ -242,7 +242,7 @@ func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace
 	}
 	return &topodatapb.EndPoints{
 		Entries: []*topodatapb.EndPoint{
-			&topodatapb.EndPoint{
+			{
 				Uid:       1,
 				HealthMap: nil,
 			},

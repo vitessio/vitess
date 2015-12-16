@@ -56,11 +56,11 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *query
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&querypb.Field{
+			{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
@@ -73,7 +73,7 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *query
 	for i := min; i < max; i++ {
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 				},
@@ -98,7 +98,7 @@ func NewVerticalFakePoolConnectionQuery(t *testing.T, query string, err error) *
 	return &VerticalFakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			ExpectedExecuteFetch{
+			{
 				Query:       query,
 				QueryResult: &sqltypes.Result{},
 				Error:       err,
@@ -163,21 +163,21 @@ func VerticalSourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection
 		return &VerticalFakePoolConnection{
 			t: t,
 			ExpectedExecuteFetch: []ExpectedExecuteFetch{
-				ExpectedExecuteFetch{
+				{
 					Query: "SELECT MIN(id), MAX(id) FROM vt_source_ks.moving1",
 					QueryResult: &sqltypes.Result{
 						Fields: []*querypb.Field{
-							&querypb.Field{
+							{
 								Name: "min",
 								Type: sqltypes.Int64,
 							},
-							&querypb.Field{
+							{
 								Name: "max",
 								Type: sqltypes.Int64,
 							},
 						},
 						Rows: [][]sqltypes.Value{
-							[]sqltypes.Value{
+							{
 								sqltypes.MakeString([]byte("100")),
 								sqltypes.MakeString([]byte("200")),
 							},
@@ -242,15 +242,15 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	// Create the destination keyspace with the appropriate ServedFromMap
 	ki := &topodatapb.Keyspace{
 		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   "source_ks",
 			},
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_REPLICA,
 				Keyspace:   "source_ks",
 			},
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_RDONLY,
 				Keyspace:   "source_ks",
 			},

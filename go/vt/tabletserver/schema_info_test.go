@@ -51,7 +51,7 @@ func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
 		// make this query fail
 		RowsAffected: math.MaxUint64,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeString([]byte("1427325875"))},
+			{sqltypes.MakeString([]byte("1427325875"))},
 		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
@@ -97,7 +97,7 @@ func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			// make safety check fail, invalid time format
-			[]sqltypes.Value{sqltypes.MakeString([]byte("invalid_time"))},
+			{sqltypes.MakeString([]byte("invalid_time"))},
 		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
@@ -602,10 +602,10 @@ func newTestSchemaInfoCachePool(enablePublishStats bool, queryServiceStats *Quer
 func getSchemaInfoBaseTestQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for schema info
-		"select unix_timestamp()": &sqltypes.Result{
+		"select unix_timestamp()": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeString([]byte("1427325875"))},
+				{sqltypes.MakeString([]byte("1427325875"))},
 			},
 		},
 	}
@@ -613,7 +613,7 @@ func getSchemaInfoBaseTestQueries() map[string]*sqltypes.Result {
 
 func getSchemaInfoTestSchemaOverride() []SchemaOverride {
 	return []SchemaOverride{
-		SchemaOverride{
+		{
 			Name:      "test_table_01",
 			PKColumns: []string{"pk"},
 			Cache: &struct {
@@ -625,7 +625,7 @@ func getSchemaInfoTestSchemaOverride() []SchemaOverride {
 			},
 		},
 		// this should be ignored by schema info due to unknown table
-		SchemaOverride{
+		{
 			Name:      "unknown_table",
 			PKColumns: []string{"column_01"},
 			Cache: &struct {
@@ -637,7 +637,7 @@ func getSchemaInfoTestSchemaOverride() []SchemaOverride {
 			},
 		},
 		// this should be ignored by schema info due to invalid primary key column
-		SchemaOverride{
+		{
 			Name:      "test_table_01",
 			PKColumns: []string{"unknown_column"},
 			Cache: &struct {
@@ -648,7 +648,7 @@ func getSchemaInfoTestSchemaOverride() []SchemaOverride {
 				Table: "test_table",
 			},
 		},
-		SchemaOverride{
+		{
 			Name:      "test_table_02",
 			PKColumns: []string{"pk"},
 			Cache: &struct {
@@ -659,7 +659,7 @@ func getSchemaInfoTestSchemaOverride() []SchemaOverride {
 				Table: "test_table_02",
 			},
 		},
-		SchemaOverride{
+		{
 			Name:      "test_table_02",
 			PKColumns: []string{"pk"},
 			Cache: &struct {
@@ -671,7 +671,7 @@ func getSchemaInfoTestSchemaOverride() []SchemaOverride {
 				Table: "",
 			},
 		},
-		SchemaOverride{
+		{
 			Name:      "test_table_02",
 			PKColumns: []string{"pk"},
 			Cache: &struct {
@@ -683,7 +683,7 @@ func getSchemaInfoTestSchemaOverride() []SchemaOverride {
 				Table: "unknown_table",
 			},
 		},
-		SchemaOverride{
+		{
 			Name:      "test_table_02",
 			PKColumns: []string{"pk"},
 			Cache: &struct {
@@ -695,7 +695,7 @@ func getSchemaInfoTestSchemaOverride() []SchemaOverride {
 				Table: "test_table_03",
 			},
 		},
-		SchemaOverride{
+		{
 			Name:      "test_table_02",
 			PKColumns: []string{"pk"},
 			Cache: &struct {
@@ -762,22 +762,22 @@ func createTestTableShowIndex(pkColumnName string) []sqltypes.Value {
 func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for schema info
-		"select unix_timestamp()": &sqltypes.Result{
+		"select unix_timestamp()": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
+				{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
 			},
 		},
-		"select @@global.sql_mode": &sqltypes.Result{
+		"select @@global.sql_mode": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
+				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
-		baseShowTables: &sqltypes.Result{
+		baseShowTables: {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_table_01")),
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
@@ -787,7 +787,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_table_02")),
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
@@ -797,7 +797,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("test_table_03")),
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
@@ -809,16 +809,16 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table_01` where 1 != 1": &sqltypes.Result{
+		"select * from `test_table_01` where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table_01`": &sqltypes.Result{
+		"describe `test_table_01`": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("pk")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -828,16 +828,16 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table_02` where 1 != 1": &sqltypes.Result{
+		"select * from `test_table_02` where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table_02`": &sqltypes.Result{
+		"describe `test_table_02`": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("pk")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -847,16 +847,16 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table_03` where 1 != 1": &sqltypes.Result{
+		"select * from `test_table_03` where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table_03`": &sqltypes.Result{
+		"describe `test_table_03`": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("pk")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -867,10 +867,10 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		// for SplitQuery because it needs a primary key column
-		"show index from `test_table_01`": &sqltypes.Result{
+		"show index from `test_table_01`": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("PRIMARY")),
@@ -881,10 +881,10 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"show index from `test_table_02`": &sqltypes.Result{
+		"show index from `test_table_02`": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("PRIMARY")),
@@ -895,10 +895,10 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"show index from `test_table_03`": &sqltypes.Result{
+		"show index from `test_table_03`": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("PRIMARY")),
@@ -909,8 +909,8 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"begin":  &sqltypes.Result{},
-		"commit": &sqltypes.Result{},
+		"begin":  {},
+		"commit": {},
 	}
 }
 
