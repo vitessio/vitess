@@ -107,4 +107,19 @@ func TestFilterByReplicationLag(t *testing.T) {
 	if len(got) != 4 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) || !reflect.DeepEqual(got[2], eps3) || !reflect.DeepEqual(got[3], eps4) {
 		t.Errorf("FilterByReplicationLag([30m, 35m, 40m, 45m]) = %+v, want all", got)
 	}
+	// lags of (1m, 100m) - always return at least 2 items to avoid overloading
+	eps1 = &EndPointStats{
+		EndPoint: &topodatapb.EndPoint{Uid: 1},
+		Serving:  true,
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
+	}
+	eps2 = &EndPointStats{
+		EndPoint: &topodatapb.EndPoint{Uid: 2},
+		Serving:  true,
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
+	}
+	got = FilterByReplicationLag([]*EndPointStats{eps1, eps2})
+	if len(got) != 2 || !reflect.DeepEqual(got[0], eps1) || !reflect.DeepEqual(got[1], eps2) {
+		t.Errorf("FilterByReplicationLag([1m, 100m]) = %+v, want all", got)
+	}
 }

@@ -3,6 +3,7 @@ package discovery
 import (
 	"flag"
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -47,6 +48,26 @@ func FilterByReplicationLag(epsList []*EndPointStats) []*EndPointStats {
 		mi, _ := mean(list, i)
 		if float64(mi) > float64(m)*0.7 {
 			res = append(res, eps)
+		}
+	}
+	// return at least 2 endpoints to avoid over loading
+	if len(res) == 0 {
+		return list
+	}
+	if len(res) == 1 && len(list) > 1 {
+		minLag := uint32(math.MaxUint32)
+		idx := -1
+		for i, eps := range list {
+			if eps == res[0] {
+				continue
+			}
+			if eps.Stats.SecondsBehindMaster < minLag {
+				idx = i
+				minLag = eps.Stats.SecondsBehindMaster
+			}
+		}
+		if idx >= 0 {
+			res = append(res, list[idx])
 		}
 	}
 	return res
