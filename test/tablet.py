@@ -1,23 +1,25 @@
+"""Manage VTTablet during test."""
+
 import json
 import logging
 import os
+import re
 import shutil
 import sys
 import time
 import urllib2
 import warnings
-import re
+
+import environment
+from mysql_flavor import mysql_flavor
+import MySQLdb
+from protocols_flavor import protocols_flavor
+from topo_flavor.server import topo_server
+import utils
+
 # Dropping a table inexplicably produces a warning despite
 # the 'IF EXISTS' clause. Squelch these warnings.
 warnings.simplefilter('ignore')
-
-import MySQLdb
-
-import environment
-import utils
-from mysql_flavor import mysql_flavor
-from protocols_flavor import protocols_flavor
-
 
 tablet_cell_map = {
     62344: 'nj',
@@ -103,6 +105,8 @@ class Tablet(object):
     # filled in during init_tablet
     self.keyspace = None
     self.shard = None
+    self.index = None
+    self.tablet_index = None
 
     # utility variables
     self.tablet_alias = 'test_%s-%010d' % (self.cell, self.tablet_uid)
@@ -117,10 +121,10 @@ class Tablet(object):
     protocol = protocols_flavor().binlog_player_python_protocol()
     port = self.port
     if protocol == 'gorpc':
-      from vtdb import gorpc_update_stream
+      from vtdb import gorpc_update_stream  # pylint: disable=g-import-not-at-top,unused-variable
     elif protocol == 'grpc':
       # import the grpc update stream client implementation, change the port
-      from vtdb import grpc_update_stream
+      from vtdb import grpc_update_stream  # pylint: disable=g-import-not-at-top,unused-variable
       port = self.grpc_port
     return (protocol, 'localhost:%d' % port)
 
@@ -309,11 +313,13 @@ class Tablet(object):
     return utils.run_vtctl(args)
 
   def init_tablet(self, tablet_type, keyspace, shard,
+                  tablet_index=None,
                   start=False, dbname=None, parent=True, wait_for_start=True,
                   include_mysql_port=True, **kwargs):
     self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
+    self.tablet_index = tablet_index
 
     self.dbname = dbname or ('vt_' + self.keyspace)
 
@@ -371,6 +377,8 @@ class Tablet(object):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
+
+    Returns: the process started.
     """
     args = environment.binary_args('vttablet')
     # Use 'localhost' as hostname because Travis CI worker hostnames
@@ -509,6 +517,11 @@ class Tablet(object):
     if wait_for_state:
       self.wait_for_vttablet_state(wait_for_state, port=port)
 
+    if self.tablet_index is not None:
+      topo_server().update_addr(
+          'test_'+self.cell, self.keyspace, self.shard,
+          self.tablet_index, (port or self.port))
+
     return self.proc
 
   def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
@@ -595,7 +608,7 @@ class Tablet(object):
   def wait_for_binlog_server_state(self, expected, timeout=30.0):
     while True:
       v = utils.get_vars(self.port)
-      if v == None:
+      if v is None:
         if self.proc.poll() is not None:
           raise utils.TestError(
               'vttablet died while test waiting for binlog state %s' %
@@ -621,7 +634,7 @@ class Tablet(object):
   def wait_for_binlog_player_count(self, expected, timeout=30.0):
     while True:
       v = utils.get_vars(self.port)
-      if v == None:
+      if v is None:
         if self.proc.poll() is not None:
           raise utils.TestError(
               'vttablet died while test waiting for binlog count %s' %
@@ -645,12 +658,14 @@ class Tablet(object):
                   self.tablet_alias, expected)
 
   @classmethod
-  def check_vttablet_count(klass):
+  def check_vttablet_count(cls):
     if Tablet.tablets_running > 0:
       raise utils.TestError('This test is not killing all its vttablets')
 
   def execute(self, sql, bindvars=None, transaction_id=None, auto_log=True):
     """execute uses 'vtctl VtTabletExecute' to execute a command.
+
+    Returns: the result of running vtctl command.
     """
     args = [
         'VtTabletExecute',

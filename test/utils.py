@@ -17,24 +17,20 @@ import time
 import unittest
 import urllib2
 
-import MySQLdb
-
-from vtproto import topodata_pb2
-
-from vtdb import vtgatev2  # pylint: disable=unused-import, registers 'gorpc' vtgate_client
-from vtdb import keyrange_constants
-
-from vtctl import gorpc_vtctl_client  # pylint: disable=unused-import, registers 'gorpc' vtctl_client.
-from vtctl import vtctl_client
-
 import environment
 from mysql_flavor import mysql_flavor
 from mysql_flavor import set_mysql_flavor
+import MySQLdb
 from protocols_flavor import protocols_flavor
 from protocols_flavor import set_protocols_flavor
 from topo_flavor.server import set_topo_server_flavor
-from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
+from vtctl import gorpc_vtctl_client  # pylint: disable=unused-import, registers 'gorpc' vtctl_client.
+from vtctl import vtctl_client
+from vtdb import keyrange_constants
+from vtdb import vtgatev2  # pylint: disable=unused-import, registers 'gorpc' vtgate_client
 from vtgate_gateway_flavor.gateway import set_vtgate_gateway_flavor
+from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
+from vtproto import topodata_pb2
 
 
 options = None
@@ -356,7 +352,7 @@ def zk_cat_json(path):
 #      if done:
 #        break
 #      timeout = utils.wait_step('condition', timeout)
-def wait_step(msg, timeout, sleep_time=1.0):
+def wait_step(msg, timeout, sleep_time=0.1):
   timeout -= sleep_time
   if timeout <= 0:
     raise TestError('timeout waiting for condition "%s"' % msg)
@@ -515,7 +511,7 @@ class VtGate(object):
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
             timeout_total='2s', timeout_per_conn='1s',
-            extra_args=None):
+            extra_args=None, tablets=None):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
 
     args = environment.binary_args('vtgate') + [
@@ -532,7 +528,7 @@ class VtGate(object):
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
         '-tablet_types_to_wait', 'MASTER,REPLICA',
     ]
-    args.extend(vtgate_gateway_flavor().flags(cell=cell))
+    args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():

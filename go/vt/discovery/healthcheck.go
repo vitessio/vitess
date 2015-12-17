@@ -18,12 +18,11 @@ import (
 )
 
 var (
-	hcConnCounters  *stats.MultiCounters
+	hcConnCounters  *stats.MultiCountersFunc
 	hcErrorCounters *stats.MultiCounters
 )
 
 func init() {
-	hcConnCounters = stats.NewMultiCounters("HealthcheckConnections", []string{"keyspace", "shardname", "tablettype"})
 	hcErrorCounters = stats.NewMultiCounters("HealthcheckErrors", []string{"keyspace", "shardname", "tablettype"})
 }
 
@@ -65,12 +64,16 @@ type HealthCheck interface {
 
 // NewHealthCheck creates a new HealthCheck object.
 func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration) HealthCheck {
-	return &HealthCheckImpl{
+	hc := &HealthCheckImpl{
 		addrToConns: make(map[string]*healthCheckConn),
 		targetToEPs: make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.EndPoint),
 		connTimeout: connTimeout,
 		retryDelay:  retryDelay,
 	}
+	if hcConnCounters == nil {
+		hcConnCounters = stats.NewMultiCountersFunc("HealthcheckConnections", []string{"keyspace", "shardname", "tablettype"}, hc.servingConnStats)
+	}
+	return hc
 }
 
 // HealthCheckImpl performs health checking and notifies downstream components about any changes.
@@ -106,6 +109,21 @@ type healthCheckConn struct {
 	tabletExternallyReparentedTimestamp int64
 	stats                               *querypb.RealtimeStats
 	lastError                           error
+}
+
+// servingConnStats returns the number of serving endpoints per keyspace/shard/tablet type.
+func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
+	res := make(map[string]int64)
+	hc.mu.RLock()
+	defer hc.mu.RUnlock()
+	for _, hcc := range hc.addrToConns {
+		if !hcc.up || !hcc.serving || hcc.lastError != nil {
+			continue
+		}
+		key := fmt.Sprintf("%s.%s.%s", hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String()))
+		res[key]++
+	}
+	return res
 }
 
 // checkConn performs health checking on the given endpoint.
@@ -453,7 +471,6 @@ func (hc *HealthCheckImpl) addEndPointToTargetProtected(target *querypb.Target, 
 		}
 	}
 	ttMap[target.TabletType] = append(epList, endPoint)
-	hcConnCounters.Add([]string{target.Keyspace, target.Shard, strings.ToLower(target.TabletType.String())}, 1)
 }
 
 // deleteEndPointFromTargetProtected deletes the endpoint for the given target.
@@ -475,7 +492,6 @@ func (hc *HealthCheckImpl) deleteEndPointFromTargetProtected(target *querypb.Tar
 		if topo.EndPointEquality(ep, endPoint) {
 			epList = append(epList[:i], epList[i+1:]...)
 			ttMap[target.TabletType] = epList
-			hcConnCounters.Add([]string{target.Keyspace, target.Shard, strings.ToLower(target.TabletType.String())}, -1)
 			return
 		}
 	}
