@@ -68,5 +68,8 @@ php client.php --server=localhost:15991 || teardown
 echo "Run Go client script..."
 go run client.go -server=localhost:15991 || teardown
 
+echo "Run Java client script..."
+mvn -f ../../java/example/pom.xml exec:java -Dexec.cleanupDaemonThreads=false -Dexec.mainClass="com.youtube.vitess.example.VitessClientExample" -Dexec.args="localhost:15991" 
+
 exitcode=0
 teardown
