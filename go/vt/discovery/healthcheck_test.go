@@ -32,7 +32,7 @@ func TestHealthCheck(t *testing.T) {
 	createFakeConn(ep, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond).(*HealthCheckImpl)
+	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour).(*HealthCheckImpl)
 	hc.SetListener(l)
 	hc.AddEndPoint("cell", "", ep)
 	t.Logf(`hc = HealthCheck(); hc.AddEndPoint("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
@@ -181,6 +181,69 @@ func TestHealthCheck(t *testing.T) {
 	epsList = hc.GetEndPointStatsFromKeyspaceShard("k", "s")
 	if len(epsList) != 0 {
 		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want empty`, epsList)
+	}
+}
+
+func TestHealthCheckTimeout(t *testing.T) {
+	timeout := 500 * time.Millisecond
+	ep := topo.NewEndPoint(0, "a")
+	ep.PortMap["vt"] = 1
+	input := make(chan *querypb.StreamHealthResponse)
+	createFakeConn(ep, input)
+	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
+	l := newListener()
+	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, timeout).(*HealthCheckImpl)
+	hc.SetListener(l)
+	hc.AddEndPoint("cell", "", ep)
+	t.Logf(`hc = HealthCheck(); hc.AddEndPoint("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
+
+	// one endpoint after receiving a StreamHealthResponse
+	shr := &querypb.StreamHealthResponse{
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving: true,
+		TabletExternallyReparentedTimestamp: 10,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+	want := &EndPointStats{
+		EndPoint: ep,
+		Cell:     "cell",
+		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Up:       true,
+		Serving:  true,
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		TabletExternallyReparentedTimestamp: 10,
+	}
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
+	res := <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+	epsList := hc.GetEndPointStatsFromKeyspaceShard("k", "s")
+	if len(epsList) != 1 || !reflect.DeepEqual(epsList[0], want) {
+		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want %+v`, epsList, want)
+	}
+	// wait for timeout period
+	time.Sleep(2 * timeout)
+	t.Logf(`Sleep(2 * timeout)`)
+	res = <-l.output
+	if res.Serving {
+		t.Errorf(`<-l.output: %+v; want not serving`, res)
+	}
+	epsList = hc.GetEndPointStatsFromKeyspaceShard("k", "s")
+	if len(epsList) != 1 || epsList[0].Serving {
+		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want not serving`, epsList)
+	}
+	// send a healthcheck response, it should be serving again
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
+	res = <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+	epsList = hc.GetEndPointStatsFromKeyspaceShard("k", "s")
+	if len(epsList) != 1 || !reflect.DeepEqual(epsList[0], want) {
+		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want %+v`, epsList, want)
 	}
 }
 
