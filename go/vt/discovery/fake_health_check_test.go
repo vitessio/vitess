@@ -17,7 +17,7 @@ type fakeHealthCheck struct {
 }
 
 // SetListener sets the listener for healthcheck updates.
-func (fhc *fakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
+func (*fakeHealthCheck) SetListener(listener HealthCheckStatsListener) {
 }
 
 // AddEndPoint adds the endpoint, and starts health check.
@@ -37,22 +37,27 @@ func (fhc *fakeHealthCheck) RemoveEndPoint(endPoint *topodatapb.EndPoint) {
 }
 
 // GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
-func (fhc *fakeHealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats {
+func (*fakeHealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats {
 	return nil
 }
 
 // GetEndPointStatsFromTarget returns all EndPointStats for the given target.
-func (fhc *fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*EndPointStats {
+func (*fakeHealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType topodatapb.TabletType) []*EndPointStats {
 	return nil
 }
 
 // GetConnection returns the TabletConn of the given endpoint.
-func (fhc *fakeHealthCheck) GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn {
+func (*fakeHealthCheck) GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn {
 	return nil
 }
 
 // CacheStatus returns a displayable version of the cache.
-func (fhc *fakeHealthCheck) CacheStatus() EndPointsCacheStatusList {
+func (*fakeHealthCheck) CacheStatus() EndPointsCacheStatusList {
+	return nil
+}
+
+// Close stops the healthcheck.
+func (*fakeHealthCheck) Close() error {
 	return nil
 }
 

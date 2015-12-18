@@ -60,6 +60,8 @@ type HealthCheck interface {
 	GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn
 	// CacheStatus returns a displayable version of the cache.
 	CacheStatus() EndPointsCacheStatusList
+	// Close stops the healthcheck.
+	Close() error
 }
 
 // NewHealthCheck creates a new HealthCheck object.
@@ -70,14 +72,31 @@ func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthC
 		connTimeout:        connTimeout,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
+		closeChan:          make(chan struct{}),
 	}
 	if hcConnCounters == nil {
 		hcConnCounters = stats.NewMultiCountersFunc("HealthcheckConnections", []string{"keyspace", "shardname", "tablettype"}, hc.servingConnStats)
 	}
 	go func() {
+		// Start another go routine to check timeout.
+		// Currently vttablet sends healthcheck response every 20 seconds.
+		// We set the default timeout to 1 minute (20s * 3),
+		// and also perform the timeout check in sync with vttablet frequency.
+		// When we change the healthcheck frequency on vttablet,
+		// we should also adjust here.
 		t := time.NewTicker(healthCheckTimeout / 3)
-		for range t.C {
-			hc.checkHealthCheckTimeout()
+		defer t.Stop()
+		for {
+			select {
+			case <-hc.closeChan:
+				return
+			case _, ok := <-t.C:
+				if !ok {
+					// the ticker stoped
+					return
+				}
+				hc.checkHealthCheckTimeout()
+			}
 		}
 	}()
 	return hc
@@ -90,6 +109,7 @@ type HealthCheckImpl struct {
 	connTimeout        time.Duration
 	retryDelay         time.Duration
 	healthCheckTimeout time.Duration
+	closeChan          chan struct{} // signals the process gorouting to terminate
 
 	// mu protects all the following fields
 	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
@@ -126,10 +146,13 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
 	for _, hcc := range hc.addrToConns {
+		hcc.mu.RLock()
 		if !hcc.up || !hcc.serving || hcc.lastError != nil {
+			hcc.mu.RUnlock()
 			continue
 		}
 		key := fmt.Sprintf("%s.%s.%s", hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String()))
+		hcc.mu.RUnlock()
 		res[key]++
 	}
 	return res
@@ -688,6 +711,20 @@ func (hc *HealthCheckImpl) CacheStatus() EndPointsCacheStatusList {
 	}
 	sort.Sort(epcsl)
 	return epcsl
+}
+
+// Close stops the healthcheck.
+func (hc *HealthCheckImpl) Close() error {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	close(hc.closeChan)
+	hc.listener = nil
+	for _, hcc := range hc.addrToConns {
+		hcc.cancelFunc()
+	}
+	hc.addrToConns = make(map[string]*healthCheckConn)
+	hc.targetToEPs = make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.EndPoint)
+	return nil
 }
 
 // EndPointToMapKey creates a key to the map from endpoint's host and ports.

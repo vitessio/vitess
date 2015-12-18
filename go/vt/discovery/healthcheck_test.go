@@ -182,6 +182,8 @@ func TestHealthCheck(t *testing.T) {
 	if len(epsList) != 0 {
 		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want empty`, epsList)
 	}
+	// close healthcheck
+	hc.Close()
 }
 
 func TestHealthCheckTimeout(t *testing.T) {
@@ -245,6 +247,8 @@ func TestHealthCheckTimeout(t *testing.T) {
 	if len(epsList) != 1 || !reflect.DeepEqual(epsList[0], want) {
 		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want %+v`, epsList, want)
 	}
+	// close healthcheck
+	hc.Close()
 }
 
 type listener struct {

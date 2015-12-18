@@ -39,7 +39,7 @@ var (
 	healthcheckTopologyRefresh = flag.Duration("binlog_player_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology when filtered replication is running")
 
 	retryDelay         = flag.Duration("binlog_player_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck or a failed binlog connection")
-	healthCheckTimeout = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
+	healthCheckTimeout = flag.Duration("binlog_player_healthcheck_timeout", time.Minute, "the health check timeout period")
 )
 
 func init() {

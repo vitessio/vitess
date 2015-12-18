@@ -325,6 +325,11 @@ func (fhc *fakeHealthCheck) CacheStatus() discovery.EndPointsCacheStatusList {
 	return nil
 }
 
+// Close stops the healthcheck.
+func (fhc *fakeHealthCheck) Close() error {
+	return nil
+}
+
 func (fhc *fakeHealthCheck) addTestEndPoint(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, conn tabletconn.TabletConn) *topodatapb.EndPoint {
 	ep := topo.NewEndPoint(0, host)
 	ep.PortMap["vt"] = port
