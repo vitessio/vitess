@@ -29,11 +29,11 @@ func TestCopySchemaShardTask(t *testing.T) {
 		"vtctld_endpoint": "localhost:15000",
 		"exclude_tables":  "",
 	}
-	testTask(t, "CopySchemaShard", task, parameters)
+	testTask(t, "CopySchemaShard", task, parameters, fake)
 
 	fake.RegisterResult([]string{"CopySchemaShard", "--exclude_tables=excluded_table1", "test_keyspace/0", "test_keyspace/2"},
 		"",  // No output.
 		nil) // No error.
 	parameters["exclude_tables"] = "excluded_table1"
-	testTask(t, "CopySchemaShard", task, parameters)
+	testTask(t, "CopySchemaShard", task, parameters, fake)
 }

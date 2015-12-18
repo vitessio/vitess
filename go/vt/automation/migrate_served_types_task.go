@@ -21,8 +21,8 @@ func (t *MigrateServedTypesTask) Run(parameters map[string]string) ([]*automatio
 	keyspaceAndShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
 
 	args := []string{"MigrateServedTypes"}
-	if cell := parameters["cell"]; cell != "" {
-		args = append(args, "--cells="+cell)
+	if cells := parameters["cells"]; cells != "" {
+		args = append(args, "--cells="+cells)
 	}
 	if reverse := parameters["reverse"]; reverse != "" {
 		args = append(args, "--reverse="+reverse)
@@ -39,5 +39,5 @@ func (t *MigrateServedTypesTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *MigrateServedTypesTask) OptionalParameters() []string {
-	return []string{"cell", "reverse"}
+	return []string{"cells", "reverse"}
 }

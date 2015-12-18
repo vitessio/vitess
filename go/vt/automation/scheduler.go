@@ -209,12 +209,14 @@ func defaultTaskCreator(taskName string) Task {
 		return &CopySchemaShardTask{}
 	case "MigrateServedTypesTask":
 		return &MigrateServedTypesTask{}
-	case "WaitForFilteredReplicationTask":
-		return &WaitForFilteredReplicationTask{}
+	case "RebuildKeyspaceGraph":
+		return &RebuildKeyspaceGraphTask{}
 	case "SplitCloneTask":
 		return &SplitCloneTask{}
 	case "SplitDiffTask":
 		return &SplitDiffTask{}
+	case "WaitForFilteredReplicationTask":
+		return &WaitForFilteredReplicationTask{}
 	default:
 		return nil
 	}
