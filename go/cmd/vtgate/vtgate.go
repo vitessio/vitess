@@ -34,6 +34,7 @@ var (
 	connLife              = flag.Duration("conn-life", 365*24*time.Hour, "average life of vttablet connections")
 	maxInFlight           = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
 	healthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
+	healthCheckTimeout    = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
 	tabletTypesToWait     = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
 	testGateway           = flag.String("test_gateway", "", "additional gateway to test health check module")
 )
@@ -86,7 +87,7 @@ func main() {
 startServer:
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 
-	healthCheck = discovery.NewHealthCheck(*connTimeoutTotal, *healthCheckRetryDelay)
+	healthCheck = discovery.NewHealthCheck(*connTimeoutTotal, *healthCheckRetryDelay, *healthCheckTimeout)
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	if len(*tabletTypesToWait) != 0 {

@@ -60,28 +60,56 @@ type HealthCheck interface {
 	GetConnection(endPoint *topodatapb.EndPoint) tabletconn.TabletConn
 	// CacheStatus returns a displayable version of the cache.
 	CacheStatus() EndPointsCacheStatusList
+	// Close stops the healthcheck.
+	Close() error
 }
 
 // NewHealthCheck creates a new HealthCheck object.
-func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration) HealthCheck {
+func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthCheckTimeout time.Duration) HealthCheck {
 	hc := &HealthCheckImpl{
-		addrToConns: make(map[string]*healthCheckConn),
-		targetToEPs: make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.EndPoint),
-		connTimeout: connTimeout,
-		retryDelay:  retryDelay,
+		addrToConns:        make(map[string]*healthCheckConn),
+		targetToEPs:        make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.EndPoint),
+		connTimeout:        connTimeout,
+		retryDelay:         retryDelay,
+		healthCheckTimeout: healthCheckTimeout,
+		closeChan:          make(chan struct{}),
 	}
 	if hcConnCounters == nil {
 		hcConnCounters = stats.NewMultiCountersFunc("HealthcheckConnections", []string{"keyspace", "shardname", "tablettype"}, hc.servingConnStats)
 	}
+	go func() {
+		// Start another go routine to check timeout.
+		// Currently vttablet sends healthcheck response every 20 seconds.
+		// We set the default timeout to 1 minute (20s * 3),
+		// and also perform the timeout check in sync with vttablet frequency.
+		// When we change the healthcheck frequency on vttablet,
+		// we should also adjust here.
+		t := time.NewTicker(healthCheckTimeout / 3)
+		defer t.Stop()
+		for {
+			select {
+			case <-hc.closeChan:
+				return
+			case _, ok := <-t.C:
+				if !ok {
+					// the ticker stoped
+					return
+				}
+				hc.checkHealthCheckTimeout()
+			}
+		}
+	}()
 	return hc
 }
 
 // HealthCheckImpl performs health checking and notifies downstream components about any changes.
 type HealthCheckImpl struct {
 	// set at construction time
-	listener    HealthCheckStatsListener
-	connTimeout time.Duration
-	retryDelay  time.Duration
+	listener           HealthCheckStatsListener
+	connTimeout        time.Duration
+	retryDelay         time.Duration
+	healthCheckTimeout time.Duration
+	closeChan          chan struct{} // signals the process gorouting to terminate
 
 	// mu protects all the following fields
 	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
@@ -109,6 +137,7 @@ type healthCheckConn struct {
 	tabletExternallyReparentedTimestamp int64
 	stats                               *querypb.RealtimeStats
 	lastError                           error
+	lastResponseTimestamp               time.Time // timestamp of the last healthcheck response
 }
 
 // servingConnStats returns the number of serving endpoints per keyspace/shard/tablet type.
@@ -117,10 +146,13 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
 	for _, hcc := range hc.addrToConns {
+		hcc.mu.RLock()
 		if !hcc.up || !hcc.serving || hcc.lastError != nil {
+			hcc.mu.RUnlock()
 			continue
 		}
 		key := fmt.Sprintf("%s.%s.%s", hcc.target.Keyspace, hcc.target.Shard, strings.ToLower(hcc.target.TabletType.String()))
+		hcc.mu.RUnlock()
 		res[key]++
 	}
 	return res
@@ -241,6 +273,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topod
 		if hcc.target.TabletType == topodatapb.TabletType_UNKNOWN {
 			// The first time we see response for the endpoint.
 			hcc.mu.Lock()
+			hcc.lastResponseTimestamp = time.Now()
 			hcc.target = shr.Target
 			hcc.serving = serving
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
@@ -257,6 +290,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topod
 			hc.mu.Lock()
 			hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 			hcc.mu.Lock()
+			hcc.lastResponseTimestamp = time.Now()
 			hcc.target = shr.Target
 			hcc.serving = serving
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
@@ -268,6 +302,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topod
 			hc.mu.Unlock()
 		} else {
 			hcc.mu.Lock()
+			hcc.lastResponseTimestamp = time.Now()
 			hcc.target = shr.Target
 			hcc.serving = serving
 			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
@@ -293,6 +328,62 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, endPoint *topod
 			hc.listener.StatsUpdate(eps)
 		}
 		return false, nil
+	}
+}
+
+func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
+	hc.mu.RLock()
+	list := make([]*healthCheckConn, 0, len(hc.addrToConns))
+	for _, hcc := range hc.addrToConns {
+		list = append(list, hcc)
+	}
+	hc.mu.RUnlock()
+	for _, hcc := range list {
+		hcc.mu.RLock()
+		if !hcc.serving {
+			// ignore non-serving endpoint
+			hcc.mu.RUnlock()
+			continue
+		}
+		if time.Now().Sub(hcc.lastResponseTimestamp) < hc.healthCheckTimeout {
+			// received a healthcheck response recently
+			hcc.mu.RUnlock()
+			continue
+		}
+		hcc.mu.RUnlock()
+		// mark the endpoint non-serving as we have not seen a health check response for a long time
+		hcc.mu.Lock()
+		// check again to avoid race condition
+		if !hcc.serving {
+			// ignore non-serving endpoint
+			hcc.mu.Unlock()
+			continue
+		}
+		if time.Now().Sub(hcc.lastResponseTimestamp) < hc.healthCheckTimeout {
+			// received a healthcheck response recently
+			hcc.mu.Unlock()
+			continue
+		}
+		hcc.serving = false
+		hcc.lastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
+		eps := &EndPointStats{
+			EndPoint: hcc.endPoint,
+			Cell:     hcc.cell,
+			Name:     hcc.name,
+			Target:   hcc.target,
+			Up:       hcc.up,
+			Serving:  hcc.serving,
+			Stats:    hcc.stats,
+			TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
+			LastError:                           hcc.lastError,
+		}
+		target := hcc.target
+		hcc.mu.Unlock()
+		// notify downstream for serving status change
+		if hc.listener != nil {
+			hc.listener.StatsUpdate(eps)
+		}
+		hcErrorCounters.Add([]string{target.Keyspace, target.Shard, strings.ToLower(target.TabletType.String())}, 1)
 	}
 }
 
@@ -620,6 +711,20 @@ func (hc *HealthCheckImpl) CacheStatus() EndPointsCacheStatusList {
 	}
 	sort.Sort(epcsl)
 	return epcsl
+}
+
+// Close stops the healthcheck.
+func (hc *HealthCheckImpl) Close() error {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	close(hc.closeChan)
+	hc.listener = nil
+	for _, hcc := range hc.addrToConns {
+		hcc.cancelFunc()
+	}
+	hc.addrToConns = make(map[string]*healthCheckConn)
+	hc.targetToEPs = make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.EndPoint)
+	return nil
 }
 
 // EndPointToMapKey creates a key to the map from endpoint's host and ports.
