@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-var lowReplicationLag = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
+var (
+	lowReplicationLag            = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
+	highReplicationLagMinServing = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting miminum 2 vttablets for serving")
+)
 
 // FilterByReplicationLag filters the list of EndPointStats by EndPointStats.Stats.SecondsBehindMaster.
 // The algorithm (EndPointStats that is non-serving or has error is ignored):
@@ -50,7 +53,8 @@ func FilterByReplicationLag(epsList []*EndPointStats) []*EndPointStats {
 			res = append(res, eps)
 		}
 	}
-	// return at least 2 endpoints to avoid over loading
+	// return at least 2 endpoints to avoid over loading,
+	// if there is another endpoint with replication lag < highReplicationLagMinServing.
 	if len(res) == 0 {
 		return list
 	}
@@ -66,7 +70,7 @@ func FilterByReplicationLag(epsList []*EndPointStats) []*EndPointStats {
 				minLag = eps.Stats.SecondsBehindMaster
 			}
 		}
-		if idx >= 0 {
+		if idx >= 0 && minLag <= uint32(highReplicationLagMinServing.Seconds()) {
 			res = append(res, list[idx])
 		}
 	}
