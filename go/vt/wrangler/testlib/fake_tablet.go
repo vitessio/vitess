@@ -27,7 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 
 	// import the gRPC client implementation for tablet manager
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"

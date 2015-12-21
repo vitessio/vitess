@@ -10,11 +10,12 @@ import (
 	"sync"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/topo"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // CreateKeyspace implements topo.Server.

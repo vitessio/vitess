@@ -9,13 +9,13 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/tb"
-	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
+	"github.com/youtube/vitess/go/vt/proto/vtgatepb"
 )
 
 var errTerminal = errors.New("vtgate test client, errTerminal")

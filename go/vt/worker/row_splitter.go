@@ -11,8 +11,8 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // RowSplitter is a helper class to split rows into multiple

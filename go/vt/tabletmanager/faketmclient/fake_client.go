@@ -20,11 +20,11 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/logutilpb"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/replicationdatapb"
+	"github.com/youtube/vitess/go/vt/proto/tabletmanagerdatapb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 type timeoutError error

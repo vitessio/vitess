@@ -9,11 +9,12 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	hk "github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	hk "github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/topo"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // ExecuteHook will run the hook on the tablet

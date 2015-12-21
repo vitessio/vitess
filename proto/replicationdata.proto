@@ -2,6 +2,8 @@
 
 syntax = "proto3";
 
+option go_package = "replicationdatapb";
+
 package replicationdata;
 
 // Status is the replication status for MySQL (returned by 'show slave status'

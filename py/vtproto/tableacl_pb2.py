@@ -17,7 +17,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='tableacl.proto',
   package='tableacl',
   syntax='proto3',
-  serialized_pb=b'\n\x0etableacl.proto\x12\x08tableacl\"q\n\x0eTableGroupSpec\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1f\n\x17table_names_or_prefixes\x18\x02 \x03(\t\x12\x0f\n\x07readers\x18\x03 \x03(\t\x12\x0f\n\x07writers\x18\x04 \x03(\t\x12\x0e\n\x06\x61\x64mins\x18\x05 \x03(\t\"8\n\x06\x43onfig\x12.\n\x0ctable_groups\x18\x01 \x03(\x0b\x32\x18.tableacl.TableGroupSpecb\x06proto3'
+  serialized_pb=b'\n\x0etableacl.proto\x12\x08tableacl\"q\n\x0eTableGroupSpec\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1f\n\x17table_names_or_prefixes\x18\x02 \x03(\t\x12\x0f\n\x07readers\x18\x03 \x03(\t\x12\x0f\n\x07writers\x18\x04 \x03(\t\x12\x0e\n\x06\x61\x64mins\x18\x05 \x03(\t\"8\n\x06\x43onfig\x12.\n\x0ctable_groups\x18\x01 \x03(\x0b\x32\x18.tableacl.TableGroupSpecB\x0cZ\ntableaclpbb\x06proto3'
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -132,6 +132,8 @@ Config = _reflection.GeneratedProtocolMessageType('Config', (_message.Message,),
 _sym_db.RegisterMessage(Config)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), b'Z\ntableaclpb')
 import abc
 from grpc.beta import implementations as beta_implementations
 from grpc.early_adopter import implementations as early_adopter_implementations

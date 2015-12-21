@@ -9,12 +9,14 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/stats"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
-	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 var (

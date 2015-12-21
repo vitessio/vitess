@@ -13,6 +13,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/mysql"
@@ -25,11 +27,10 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 const (

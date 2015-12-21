@@ -3,6 +3,8 @@
 
 syntax = "proto3";
 
+option go_package = "vtctlservicepb";
+
 package vtctlservice;
 
 import "vtctldata.proto";

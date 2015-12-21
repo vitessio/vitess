@@ -12,6 +12,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -20,9 +22,9 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/callerid"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 /* Function naming convention:

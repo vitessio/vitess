@@ -7,6 +7,7 @@ package grpcqueryservice
 import (
 	"sync"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -16,10 +17,9 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	queryservicepb "github.com/youtube/vitess/go/vt/proto/queryservice"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/queryservicepb"
 )
 
 // query is the gRPC query service implementation.

@@ -16,7 +16,7 @@ import (
 
 	. "github.com/youtube/vitess/go/vt/topotools"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // TestCreateShard tests a few cases for CreateShard

@@ -9,11 +9,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 func TestFilterUnhealthy(t *testing.T) {

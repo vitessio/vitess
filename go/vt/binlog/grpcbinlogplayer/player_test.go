@@ -13,8 +13,8 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayertest"
 	"github.com/youtube/vitess/go/vt/binlog/grpcbinlogstreamer"
 
-	binlogservicepb "github.com/youtube/vitess/go/vt/proto/binlogservice"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/binlogservicepb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // the test here creates a fake server implementation, a fake client

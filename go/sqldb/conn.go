@@ -11,8 +11,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 // NewConnFunc is a factory method that creates a Conn instance

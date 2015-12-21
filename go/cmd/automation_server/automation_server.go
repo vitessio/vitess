@@ -13,8 +13,9 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/automation"
-	automationservicepb "github.com/youtube/vitess/go/vt/proto/automationservice"
 	"github.com/youtube/vitess/go/vt/servenv"
+
+	"github.com/youtube/vitess/go/vt/proto/automationservicepb"
 )
 
 func init() {

@@ -6,9 +6,9 @@ package gorpcvtgatecommon
 
 import (
 	"github.com/youtube/vitess/go/sqltypes"
-
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+
+	"github.com/youtube/vitess/go/vt/proto/vtgatepb"
 )
 
 // This file contains methods to convert the bson rpc structures to and from

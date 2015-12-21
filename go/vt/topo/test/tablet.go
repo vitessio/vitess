@@ -12,7 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 func tabletEqual(left, right *topodatapb.Tablet) (bool, error) {

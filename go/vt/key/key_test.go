@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"testing"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 func TestKey(t *testing.T) {

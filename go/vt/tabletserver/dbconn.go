@@ -10,13 +10,15 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 // DBConn is a db connection for tabletserver.

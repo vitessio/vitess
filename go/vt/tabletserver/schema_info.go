@@ -14,6 +14,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
 	"github.com/youtube/vitess/go/sqldb"
@@ -21,12 +23,12 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/trace"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
-	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 const baseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment, table_rows, data_length, index_length, data_free FROM information_schema.tables WHERE table_schema = database()"

@@ -12,13 +12,12 @@ import (
 
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/sqltypes"
-
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/vtgatepb"
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 var (

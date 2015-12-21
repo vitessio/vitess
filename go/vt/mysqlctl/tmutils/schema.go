@@ -13,7 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/concurrency"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	"github.com/youtube/vitess/go/vt/proto/tabletmanagerdatapb"
 )
 
 // This file contains helper methods to deal with Schema information.

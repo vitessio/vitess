@@ -9,13 +9,14 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/net/context"
+
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/vtctl/gorpcproto"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
-	"golang.org/x/net/context"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	"github.com/youtube/vitess/go/vt/proto/logutilpb"
 )
 
 type goRPCVtctlClient struct {

@@ -21,10 +21,10 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/replicationdatapb"
+	"github.com/youtube/vitess/go/vt/proto/tabletmanagerdatapb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // This file contains the actions that exist as RPC only on the ActionAgent.

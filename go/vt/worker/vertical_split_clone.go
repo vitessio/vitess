@@ -23,8 +23,8 @@ import (
 	"github.com/youtube/vitess/go/vt/worker/events"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/tabletmanagerdatapb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // VerticalSplitCloneWorker will clone the data from a source keyspace/shard

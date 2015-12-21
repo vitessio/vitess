@@ -18,7 +18,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtctlservice.proto',
   package='vtctlservice',
   syntax='proto3',
-  serialized_pb=b'\n\x12vtctlservice.proto\x12\x0cvtctlservice\x1a\x0fvtctldata.proto2q\n\x05Vtctl\x12h\n\x13\x45xecuteVtctlCommand\x12%.vtctldata.ExecuteVtctlCommandRequest\x1a&.vtctldata.ExecuteVtctlCommandResponse\"\x00\x30\x01\x62\x06proto3'
+  serialized_pb=b'\n\x12vtctlservice.proto\x12\x0cvtctlservice\x1a\x0fvtctldata.proto2q\n\x05Vtctl\x12h\n\x13\x45xecuteVtctlCommand\x12%.vtctldata.ExecuteVtctlCommandRequest\x1a&.vtctldata.ExecuteVtctlCommandResponse\"\x00\x30\x01\x42\x10Z\x0evtctlservicepbb\x06proto3'
   ,
   dependencies=[vtctldata__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -27,6 +27,8 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), b'Z\016vtctlservicepb')
 import abc
 from grpc.beta import implementations as beta_implementations
 from grpc.early_adopter import implementations as early_adopter_implementations

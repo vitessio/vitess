@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/flagutil"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 const (

@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 func toJSON(t *testing.T, value interface{}) string {

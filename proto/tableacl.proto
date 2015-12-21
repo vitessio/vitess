@@ -2,6 +2,8 @@
 
 syntax = "proto3";
 
+option go_package = "tableaclpb";
+
 package tableacl;
 
 // TableGroupSpec defines ACLs for a group of tables.

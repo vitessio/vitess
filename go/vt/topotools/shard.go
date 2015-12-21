@@ -7,11 +7,12 @@ package topotools
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/topo"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // CreateShard will create the shard, while holding the keyspace lock

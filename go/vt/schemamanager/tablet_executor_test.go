@@ -10,7 +10,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+
+	"github.com/youtube/vitess/go/vt/proto/tabletmanagerdatapb"
 )
 
 func TestTabletExecutorOpen(t *testing.T) {

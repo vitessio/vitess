@@ -18,7 +18,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='automationservice.proto',
   package='automationservice',
   syntax='proto3',
-  serialized_pb=b'\n\x17\x61utomationservice.proto\x12\x11\x61utomationservice\x1a\x10\x61utomation.proto2\x81\x02\n\nAutomation\x12t\n\x17\x45nqueueClusterOperation\x12*.automation.EnqueueClusterOperationRequest\x1a+.automation.EnqueueClusterOperationResponse\"\x00\x12}\n\x1aGetClusterOperationDetails\x12-.automation.GetClusterOperationDetailsRequest\x1a..automation.GetClusterOperationDetailsResponse\"\x00\x62\x06proto3'
+  serialized_pb=b'\n\x17\x61utomationservice.proto\x12\x11\x61utomationservice\x1a\x10\x61utomation.proto2\x81\x02\n\nAutomation\x12t\n\x17\x45nqueueClusterOperation\x12*.automation.EnqueueClusterOperationRequest\x1a+.automation.EnqueueClusterOperationResponse\"\x00\x12}\n\x1aGetClusterOperationDetails\x12-.automation.GetClusterOperationDetailsRequest\x1a..automation.GetClusterOperationDetailsResponse\"\x00\x42\x15Z\x13\x61utomationservicepbb\x06proto3'
   ,
   dependencies=[automation__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -27,6 +27,8 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), b'Z\023automationservicepb')
 import abc
 from grpc.beta import implementations as beta_implementations
 from grpc.early_adopter import implementations as early_adopter_implementations

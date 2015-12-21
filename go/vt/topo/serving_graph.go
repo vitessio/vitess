@@ -11,7 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/trace"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // UpdateEndPoints is a high level wrapper for TopoServer.UpdateEndPoints.

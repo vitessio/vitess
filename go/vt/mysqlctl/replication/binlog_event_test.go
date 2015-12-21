@@ -7,7 +7,7 @@ package replication
 import (
 	"testing"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
 )
 
 func TestQueryString(t *testing.T) {

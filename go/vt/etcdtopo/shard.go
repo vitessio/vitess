@@ -8,10 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/coreos/go-etcd/etcd"
 	"golang.org/x/net/context"
 
-	"github.com/coreos/go-etcd/etcd"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // CreateShard implements topo.Server.

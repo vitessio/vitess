@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"testing"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
 )
 
 var dmlErrorCases = []string{

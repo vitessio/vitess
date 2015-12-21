@@ -10,11 +10,13 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
-	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 // TableInfo contains the tabletserver related info for a table.

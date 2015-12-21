@@ -3,6 +3,7 @@
 
 syntax = "proto3";
 
+option go_package = "vtgateservicepb";
 option java_package="com.youtube.vitess.proto.grpc";
 
 package vtgateservice;

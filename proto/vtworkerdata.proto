@@ -2,6 +2,8 @@
 
 syntax = "proto3";
 
+option go_package = "vtworkerdatapb";
+
 package vtworkerdata;
 
 import "logutil.proto";

@@ -13,11 +13,12 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {

@@ -3,6 +3,8 @@
 
 syntax = "proto3";
 
+option go_package = "querypb";
+
 package query;
 
 option java_package="com.youtube.vitess.proto";

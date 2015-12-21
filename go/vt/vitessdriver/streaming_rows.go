@@ -12,8 +12,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 // streamingRows creates a database/sql/driver compliant Row iterator

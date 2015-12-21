@@ -10,7 +10,8 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
 )
 
 // binlogEvent wraps a raw packet buffer and provides methods to examine it

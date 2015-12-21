@@ -96,8 +96,8 @@ bson:
 # 3. (go) run protoc for each proto and put in go/vt/proto/${proto_file_name}/
 # 4. (python) run protoc for each proto and put in py/vtproto/
 proto:
-	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --go_out=plugins=grpc:go/vt/proto/{}
-	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
+	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --go_out=plugins=grpc:go/vt/proto/{}pb
+	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1pb",g'
 	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --python_out=py/vtproto --grpc_out=py/vtproto --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 
 # This rule builds the bootstrap images for all flavors.

@@ -12,8 +12,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 func TestVitess(t *testing.T) {

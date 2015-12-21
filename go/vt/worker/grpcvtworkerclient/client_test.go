@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/worker/grpcvtworkerserver"
-	"github.com/youtube/vitess/go/vt/worker/vtworkerclienttest"
 	"google.golang.org/grpc"
 
-	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
+	"github.com/youtube/vitess/go/vt/worker/grpcvtworkerserver"
+	"github.com/youtube/vitess/go/vt/worker/vtworkerclienttest"
+
+	"github.com/youtube/vitess/go/vt/proto/vtworkerservicepb"
 )
 
 // Test gRPC interface using a vtworker and vtworkerclient.

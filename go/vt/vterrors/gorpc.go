@@ -9,7 +9,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 // This file contains methods to pack errors in and out of mproto.RPCError

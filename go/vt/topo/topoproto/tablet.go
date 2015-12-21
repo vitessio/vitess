@@ -14,7 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/netutil"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // This file contains the topodata.Tablet utility functions.

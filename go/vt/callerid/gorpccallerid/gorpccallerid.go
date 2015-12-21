@@ -3,8 +3,8 @@ package gorpccallerid
 import (
 	"github.com/youtube/vitess/go/vt/callerid"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 // CallerID is the BSON implementation of the proto3 vtrpc.CallerID

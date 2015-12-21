@@ -18,7 +18,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtrpc.proto',
   package='vtrpc',
   syntax='proto3',
-  serialized_pb=b'\n\x0bvtrpc.proto\x12\x05vtrpc\"F\n\x08\x43\x61llerID\x12\x11\n\tprincipal\x18\x01 \x01(\t\x12\x11\n\tcomponent\x18\x02 \x01(\t\x12\x14\n\x0csubcomponent\x18\x03 \x01(\t\";\n\x08RPCError\x12\x1e\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x10.vtrpc.ErrorCode\x12\x0f\n\x07message\x18\x02 \x01(\t*\x87\x02\n\tErrorCode\x12\x0b\n\x07SUCCESS\x10\x00\x12\r\n\tCANCELLED\x10\x01\x12\x11\n\rUNKNOWN_ERROR\x10\x02\x12\r\n\tBAD_INPUT\x10\x03\x12\x15\n\x11\x44\x45\x41\x44LINE_EXCEEDED\x10\x04\x12\x13\n\x0fINTEGRITY_ERROR\x10\x05\x12\x15\n\x11PERMISSION_DENIED\x10\x06\x12\x16\n\x12RESOURCE_EXHAUSTED\x10\x07\x12\x14\n\x10QUERY_NOT_SERVED\x10\x08\x12\r\n\tNOT_IN_TX\x10\t\x12\x12\n\x0eINTERNAL_ERROR\x10\n\x12\x13\n\x0fTRANSIENT_ERROR\x10\x0b\x12\x13\n\x0fUNAUTHENTICATED\x10\x0c\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3'
+  serialized_pb=b'\n\x0bvtrpc.proto\x12\x05vtrpc\"F\n\x08\x43\x61llerID\x12\x11\n\tprincipal\x18\x01 \x01(\t\x12\x11\n\tcomponent\x18\x02 \x01(\t\x12\x14\n\x0csubcomponent\x18\x03 \x01(\t\";\n\x08RPCError\x12\x1e\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x10.vtrpc.ErrorCode\x12\x0f\n\x07message\x18\x02 \x01(\t*\x87\x02\n\tErrorCode\x12\x0b\n\x07SUCCESS\x10\x00\x12\r\n\tCANCELLED\x10\x01\x12\x11\n\rUNKNOWN_ERROR\x10\x02\x12\r\n\tBAD_INPUT\x10\x03\x12\x15\n\x11\x44\x45\x41\x44LINE_EXCEEDED\x10\x04\x12\x13\n\x0fINTEGRITY_ERROR\x10\x05\x12\x15\n\x11PERMISSION_DENIED\x10\x06\x12\x16\n\x12RESOURCE_EXHAUSTED\x10\x07\x12\x14\n\x10QUERY_NOT_SERVED\x10\x08\x12\r\n\tNOT_IN_TX\x10\t\x12\x12\n\x0eINTERNAL_ERROR\x10\n\x12\x13\n\x0fTRANSIENT_ERROR\x10\x0b\x12\x13\n\x0fUNAUTHENTICATED\x10\x0c\x42#\n\x18\x63om.youtube.vitess.protoZ\x07vtrpcpbb\x06proto3'
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -208,7 +208,7 @@ _sym_db.RegisterMessage(RPCError)
 
 
 DESCRIPTOR.has_options = True
-DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), b'\n\030com.youtube.vitess.proto')
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), b'\n\030com.youtube.vitess.protoZ\007vtrpcpb')
 import abc
 from grpc.beta import implementations as beta_implementations
 from grpc.early_adopter import implementations as early_adopter_implementations

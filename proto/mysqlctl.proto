@@ -3,6 +3,8 @@
 
 syntax = "proto3";
 
+option go_package = "mysqlctlpb";
+
 package mysqlctl;
 
 message StartRequest{}

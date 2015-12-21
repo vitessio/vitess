@@ -14,13 +14,15 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cacheservice"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 // CachePool re-exposes ResourcePool as a pool of Memcache connection objects.

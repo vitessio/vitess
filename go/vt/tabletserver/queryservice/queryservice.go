@@ -9,11 +9,12 @@ package queryservice
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/sqltypes"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 // QueryService is the interface implemented by the tablet's query service.

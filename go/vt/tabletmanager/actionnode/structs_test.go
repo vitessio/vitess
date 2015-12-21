@@ -6,7 +6,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // These tests encode a slaveWasRestartedTestArgs (same as

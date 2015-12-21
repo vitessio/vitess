@@ -9,7 +9,8 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
 )
 
 // sample event data

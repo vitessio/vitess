@@ -8,12 +8,11 @@ import (
 	"flag"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
-
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 /*

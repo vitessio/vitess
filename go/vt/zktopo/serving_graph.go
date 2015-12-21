@@ -13,13 +13,14 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/zk"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // WatchSleepDuration is how many seconds interval to poll for in case

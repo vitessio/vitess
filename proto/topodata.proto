@@ -5,6 +5,7 @@
 
 syntax = "proto3";
 
+option go_package = "topodatapb";
 option java_package="com.youtube.vitess.proto";
 
 package topodata;

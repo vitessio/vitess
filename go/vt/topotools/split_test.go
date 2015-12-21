@@ -6,7 +6,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // helper methods for tests to be shorter

@@ -7,8 +7,9 @@ package automation
 import (
 	"fmt"
 
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/proto/automationpb"
 )
 
 // SplitCloneTask runs SplitClone on a remote vtworker to split an existing shard.

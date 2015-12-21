@@ -1,7 +1,7 @@
 package events
 
 import (
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // ShardChange is an event that describes changes to a shard.

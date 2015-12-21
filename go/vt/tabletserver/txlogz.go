@@ -12,11 +12,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/callerid"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 var (

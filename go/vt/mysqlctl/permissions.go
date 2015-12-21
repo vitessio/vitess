@@ -6,7 +6,8 @@ package mysqlctl
 
 import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+
+	"github.com/youtube/vitess/go/vt/proto/tabletmanagerdatapb"
 )
 
 // GetPermissions lists the permissions on the mysqld

@@ -12,9 +12,8 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/net/context"
-
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/trace"
@@ -23,7 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // Functions for dealing with shard representations in topology.

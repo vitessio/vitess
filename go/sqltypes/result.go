@@ -4,7 +4,7 @@
 
 package sqltypes
 
-import querypb "github.com/youtube/vitess/go/vt/proto/query"
+import "github.com/youtube/vitess/go/vt/proto/querypb"
 
 // Result represents a query result.
 type Result struct {

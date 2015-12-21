@@ -3,6 +3,8 @@
 
 syntax = "proto3";
 
+option go_package = "binlogservicepb";
+
 package binlogservice;
 
 import "binlogdata.proto";

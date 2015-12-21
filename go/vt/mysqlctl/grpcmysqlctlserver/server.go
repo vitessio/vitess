@@ -9,12 +9,12 @@ side of the remote execution of mysqlctl commands.
 package grpcmysqlctlserver
 
 import (
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"golang.org/x/net/context"
 
-	mysqlctlpb "github.com/youtube/vitess/go/vt/proto/mysqlctl"
+	"github.com/youtube/vitess/go/vt/proto/mysqlctlpb"
 )
 
 // server is our gRPC server.

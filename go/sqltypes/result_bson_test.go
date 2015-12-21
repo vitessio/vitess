@@ -9,7 +9,8 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/bson"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 type TestCase struct {

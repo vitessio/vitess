@@ -4,9 +4,11 @@ import (
 	"net/http"
 	"testing"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/zktopo"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 func TestHandleExplorerRedirect(t *testing.T) {

@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/stats"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 // This file uses the sandbox_test framework.

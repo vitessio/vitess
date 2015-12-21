@@ -10,7 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 // BoundQueryToProto3 converts internal types to proto3 BoundQuery

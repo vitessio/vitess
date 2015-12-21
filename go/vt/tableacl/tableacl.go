@@ -14,10 +14,11 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 
-	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
+	"github.com/youtube/vitess/go/vt/proto/tableaclpb"
 )
 
 // ACLResult embeds an acl.ACL and also tell which table group it belongs to.

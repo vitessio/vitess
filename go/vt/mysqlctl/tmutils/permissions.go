@@ -13,9 +13,9 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/tabletmanagerdatapb"
 )
 
 // This file contains helper methods to deal with Permissions.

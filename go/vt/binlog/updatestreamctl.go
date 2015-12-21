@@ -9,14 +9,15 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 /* API and config for UpdateStream Service */

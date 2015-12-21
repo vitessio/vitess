@@ -15,7 +15,7 @@ import (
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 var routerSchema = createTestSchema(`
