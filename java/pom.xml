@@ -12,6 +12,7 @@
     <inceptionYear>2014</inceptionYear>
     <modules>
         <module>client</module>
+        <module>example</module>
         <module>gorpc</module>
         <module>grpc-client</module>
         <module>hadoop</module>
