@@ -12,10 +12,10 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sync2"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 // SlaveConnection represents a connection to mysqld that pretends to be a slave
@@ -23,7 +23,7 @@ import (
 // mysqld with a server ID that is unique both among other SlaveConnections and
 // among actual slaves in the topology.
 type SlaveConnection struct {
-	*mysql.Connection
+	sqldb.Conn
 	mysqld  *Mysqld
 	slaveID uint32
 	svm     sync2.ServiceManager
@@ -36,21 +36,21 @@ type SlaveConnection struct {
 // 1) No other processes are making fake slave connections to our mysqld.
 // 2) No real slave servers will have IDs in the range 1-N where N is the peak
 //    number of concurrent fake slave connections we will ever make.
-func NewSlaveConnection(mysqld *Mysqld) (*SlaveConnection, error) {
+func (mysqld *Mysqld) NewSlaveConnection() (*SlaveConnection, error) {
 	params, err := dbconfigs.MysqlParams(mysqld.dba)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := mysql.Connect(params)
+	conn, err := sqldb.Connect(params)
 	if err != nil {
 		return nil, err
 	}
 
 	sc := &SlaveConnection{
-		Connection: conn,
-		mysqld:     mysqld,
-		slaveID:    slaveIDPool.Get(),
+		Conn:    conn,
+		mysqld:  mysqld,
+		slaveID: slaveIDPool.Get(),
 	}
 	log.Infof("new slave connection: slaveID=%d", sc.slaveID)
 	return sc, nil
@@ -64,26 +64,26 @@ var slaveIDPool = pools.NewIDPool()
 // be sent. The stream will continue, waiting for new events if necessary,
 // until the connection is closed, either by the master or by calling
 // SlaveConnection.Close(). At that point, the channel will also be closed.
-func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (<-chan blproto.BinlogEvent, error) {
+func (sc *SlaveConnection) StartBinlogDump(startPos replication.Position) (<-chan replication.BinlogEvent, error) {
 	flavor, err := sc.mysqld.flavor()
 	if err != nil {
 		return nil, fmt.Errorf("StartBinlogDump needs flavor: %v", err)
 	}
 
 	log.Infof("sending binlog dump command: startPos=%v, slaveID=%v", startPos, sc.slaveID)
-	if err = flavor.SendBinlogDumpCommand(sc.mysqld, sc, startPos); err != nil {
+	if err = flavor.SendBinlogDumpCommand(sc, startPos); err != nil {
 		log.Errorf("couldn't send binlog dump command: %v", err)
 		return nil, err
 	}
 
 	// Read the first packet to see if it's an error response to our dump command.
-	buf, err := sc.Connection.ReadPacket()
+	buf, err := sc.Conn.ReadPacket()
 	if err != nil {
 		log.Errorf("couldn't start binlog dump: %v", err)
 		return nil, err
 	}
 
-	eventChan := make(chan blproto.BinlogEvent)
+	eventChan := make(chan replication.BinlogEvent)
 
 	// Start reading events.
 	sc.svm.Go(func(svc *sync2.ServiceContext) error {
@@ -103,10 +103,10 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 				return nil
 			}
 
-			buf, err = sc.Connection.ReadPacket()
+			buf, err = sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*mysql.SqlError); ok && sqlErr.Number() == 2013 {
-					// errno 2013 = Lost connection to MySQL server during query
+				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysql.ErrServerLost {
+					// ErrServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.
 					log.Infof("connection closed during binlog stream (possibly intentional): %v", err)
@@ -126,23 +126,23 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 // started with StartBinlogDump() to stop and close its BinlogEvent channel.
 // The ID for the slave connection is recycled back into the pool.
 func (sc *SlaveConnection) Close() {
-	if sc.Connection != nil {
-		log.Infof("force-closing slave socket to unblock reads")
-		sc.Connection.ForceClose()
+	if sc.Conn != nil {
+		log.Infof("shutting down slave socket to unblock reads")
+		sc.Conn.Shutdown()
 
 		log.Infof("waiting for slave dump thread to end")
 		sc.svm.Stop()
 
 		log.Infof("closing slave MySQL client, recycling slaveID %v", sc.slaveID)
-		sc.Connection.Close()
-		sc.Connection = nil
+		sc.Conn.Close()
+		sc.Conn = nil
 		slaveIDPool.Put(sc.slaveID)
 	}
 }
 
 // makeBinlogDumpCommand builds a buffer containing the data for a MySQL
 // COM_BINLOG_DUMP command.
-func makeBinlogDumpCommand(pos uint32, flags uint16, server_id uint32, filename string) []byte {
+func makeBinlogDumpCommand(pos uint32, flags uint16, serverID uint32, filename string) []byte {
 	var buf bytes.Buffer
 	buf.Grow(4 + 2 + 4 + len(filename))
 
@@ -151,7 +151,7 @@ func makeBinlogDumpCommand(pos uint32, flags uint16, server_id uint32, filename 
 	// binlog_flags (2 bytes)
 	binary.Write(&buf, binary.LittleEndian, flags)
 	// server_id of slave (4 bytes)
-	binary.Write(&buf, binary.LittleEndian, server_id)
+	binary.Write(&buf, binary.LittleEndian, serverID)
 	// binlog_filename (string with no terminator and no length)
 	buf.WriteString(filename)
 

@@ -10,9 +10,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 /*
@@ -21,54 +20,71 @@ This file handles the differences between flavors of mysql.
 
 // MysqlFlavor is the abstract interface for a flavor.
 type MysqlFlavor interface {
-	// VersionMatch returns true if the version string (from SELECT VERSION())
-	// represents a server that this flavor knows how to talk to.
+	// VersionMatch returns true if the version string (from
+	// SELECT VERSION()) represents a server that this flavor
+	// knows how to talk to.
 	VersionMatch(version string) bool
 
 	// MasterPosition returns the ReplicationPosition of a master.
-	MasterPosition(mysqld *Mysqld) (proto.ReplicationPosition, error)
+	MasterPosition(mysqld *Mysqld) (replication.Position, error)
 
 	// SlaveStatus returns the ReplicationStatus of a slave.
-	SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error)
+	SlaveStatus(mysqld *Mysqld) (replication.Status, error)
+
+	// ResetReplicationCommands returns the commands to completely reset
+	// replication on the host.
+	ResetReplicationCommands() []string
 
 	// PromoteSlaveCommands returns the commands to run to change
 	// a slave into a master.
 	PromoteSlaveCommands() []string
 
-	// StartReplicationCommands returns the commands to start replicating from
-	// a given master and position as specified in a ReplicationStatus.
-	StartReplicationCommands(params *mysql.ConnectionParams, status *proto.ReplicationStatus) ([]string, error)
+	// SetSlavePositionCommands returns the commands to set the
+	// replication position at which the slave will resume
+	// when it is later reparented with SetMasterCommands.
+	SetSlavePositionCommands(pos replication.Position) ([]string, error)
 
-	// ParseGTID parses a GTID in the canonical format of this MySQL flavor into
-	// a proto.GTID interface value.
-	ParseGTID(string) (proto.GTID, error)
+	// SetMasterCommands returns the commands to use the provided master
+	// as the new master (without changing any GTID position).
+	// It is guaranteed to be called with replication stopped.
+	// It should not start or stop replication.
+	SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
 
-	// ParseReplicationPosition parses a replication position in the canonical
-	// format of this MySQL flavor into a proto.ReplicationPosition struct.
-	ParseReplicationPosition(string) (proto.ReplicationPosition, error)
+	// ParseGTID parses a GTID in the canonical format of this
+	// MySQL flavor into a replication.GTID interface value.
+	ParseGTID(string) (replication.GTID, error)
 
-	// SendBinlogDumpCommand sends the flavor-specific version of the
-	// COM_BINLOG_DUMP command to start dumping raw binlog events over a slave
-	// connection, starting at a given GTID.
-	SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error
+	// ParseReplicationPosition parses a replication position in
+	// the canonical format of this MySQL flavor into a
+	// replication.Position struct.
+	ParseReplicationPosition(string) (replication.Position, error)
 
-	// MakeBinlogEvent takes a raw packet from the MySQL binlog stream connection
-	// and returns a BinlogEvent through which the packet can be examined.
-	MakeBinlogEvent(buf []byte) blproto.BinlogEvent
+	// SendBinlogDumpCommand sends the flavor-specific version of
+	// the COM_BINLOG_DUMP command to start dumping raw binlog
+	// events over a slave connection, starting at a given GTID.
+	SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error
 
-	// WaitMasterPos waits until slave replication reaches at least targetPos.
-	WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosition, waitTimeout time.Duration) error
+	// MakeBinlogEvent takes a raw packet from the MySQL binlog
+	// stream connection and returns a BinlogEvent through which
+	// the packet can be examined.
+	MakeBinlogEvent(buf []byte) replication.BinlogEvent
 
-	// EnableBinlogPlayback prepares the server to play back events from a binlog stream.
-	// Whatever it does for a given flavor, it must be idempotent.
+	// WaitMasterPos waits until slave replication reaches at
+	// least targetPos.
+	WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, waitTimeout time.Duration) error
+
+	// EnableBinlogPlayback prepares the server to play back
+	// events from a binlog stream.  Whatever it does for a given
+	// flavor, it must be idempotent.
 	EnableBinlogPlayback(mysqld *Mysqld) error
 
-	// DisableBinlogPlayback returns the server to the normal state after playback is done.
-	// Whatever it does for a given flavor, it must be idempotent.
+	// DisableBinlogPlayback returns the server to the normal
+	// state after playback is done.  Whatever it does for a given
+	// flavor, it must be idempotent.
 	DisableBinlogPlayback(mysqld *Mysqld) error
 }
 
-var mysqlFlavors map[string]MysqlFlavor = make(map[string]MysqlFlavor)
+var mysqlFlavors = make(map[string]MysqlFlavor)
 
 // registerFlavorBuiltin adds a flavor to the map only if the name is unused.
 // The flavor implementation passed to this function will only be used if there
@@ -103,7 +119,7 @@ func (mysqld *Mysqld) detectFlavor() (MysqlFlavor, error) {
 
 	// If no environment variable set, fall back to auto-detect.
 	log.Infof("MYSQL_FLAVOR empty or unset, attempting to auto-detect...")
-	qr, err := mysqld.fetchSuperQuery("SELECT VERSION()")
+	qr, err := mysqld.FetchSuperQuery("SELECT VERSION()")
 	if err != nil {
 		return nil, fmt.Errorf("couldn't SELECT VERSION(): %v", err)
 	}

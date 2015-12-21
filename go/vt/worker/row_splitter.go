@@ -10,22 +10,25 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // RowSplitter is a helper class to split rows into multiple
-// subsets targetted to different shards.
+// subsets targeted to different shards.
 type RowSplitter struct {
-	Type       key.KeyspaceIdType
-	ValueIndex int
-	KeyRanges  []key.KeyRange
+	KeyspaceIdType topodatapb.KeyspaceIdType
+	ValueIndex     int
+	KeyRanges      []*topodatapb.KeyRange
 }
 
 // NewRowSplitter returns a new row splitter for the given shard distribution.
-func NewRowSplitter(shardInfos []*topo.ShardInfo, typ key.KeyspaceIdType, valueIndex int) *RowSplitter {
+func NewRowSplitter(shardInfos []*topo.ShardInfo, keyspaceIdType topodatapb.KeyspaceIdType, valueIndex int) *RowSplitter {
 	result := &RowSplitter{
-		Type:       typ,
-		ValueIndex: valueIndex,
-		KeyRanges:  make([]key.KeyRange, len(shardInfos)),
+		KeyspaceIdType: keyspaceIdType,
+		ValueIndex:     valueIndex,
+		KeyRanges:      make([]*topodatapb.KeyRange, len(shardInfos)),
 	}
 	for i, si := range shardInfos {
 		result.KeyRanges[i] = si.KeyRange
@@ -33,19 +36,22 @@ func NewRowSplitter(shardInfos []*topo.ShardInfo, typ key.KeyspaceIdType, valueI
 	return result
 }
 
+// StartSplit starts a new split. Split can then be called multiple times.
+func (rs *RowSplitter) StartSplit() [][][]sqltypes.Value {
+	return make([][][]sqltypes.Value, len(rs.KeyRanges))
+}
+
 // Split will split the rows into subset for each distribution
-func (rs *RowSplitter) Split(rows [][]sqltypes.Value) ([][][]sqltypes.Value, error) {
-	result := make([][][]sqltypes.Value, len(rs.KeyRanges))
-	if rs.Type == key.KIT_UINT64 {
+func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Value) error {
+	if rs.KeyspaceIdType == topodatapb.KeyspaceIdType_UINT64 {
 		for _, row := range rows {
-			v := sqltypes.MakeNumeric(row[rs.ValueIndex].Raw())
-			i, err := v.ParseUint64()
+			i, err := row[rs.ValueIndex].ParseUint64()
 			if err != nil {
-				return nil, fmt.Errorf("Non numerical value: %v", err)
+				return fmt.Errorf("Non numerical value: %v", err)
 			}
-			k := key.Uint64Key(i).KeyspaceId()
+			k := key.Uint64Key(i).Bytes()
 			for i, kr := range rs.KeyRanges {
-				if kr.Contains(k) {
+				if key.KeyRangeContains(kr, k) {
 					result[i] = append(result[i], row)
 					break
 				}
@@ -53,14 +59,32 @@ func (rs *RowSplitter) Split(rows [][]sqltypes.Value) ([][][]sqltypes.Value, err
 		}
 	} else {
 		for _, row := range rows {
-			k := key.KeyspaceId(row[rs.ValueIndex].Raw())
+			k := row[rs.ValueIndex].Raw()
 			for i, kr := range rs.KeyRanges {
-				if kr.Contains(k) {
+				if key.KeyRangeContains(kr, k) {
 					result[i] = append(result[i], row)
 					break
 				}
 			}
 		}
 	}
-	return result, nil
+	return nil
+}
+
+// Send will send the rows to the list of channels. Returns true if aborted.
+func (rs *RowSplitter) Send(fields []*querypb.Field, result [][][]sqltypes.Value, baseCmd string, insertChannels []chan string, abort <-chan struct{}) bool {
+	for i, c := range insertChannels {
+		// one of the chunks might be empty, so no need
+		// to send data in that case
+		if len(result[i]) > 0 {
+			cmd := baseCmd + makeValueString(fields, result[i])
+			// also check on abort, so we don't wait forever
+			select {
+			case c <- cmd:
+			case <-abort:
+				return true
+			}
+		}
+	}
+	return false
 }

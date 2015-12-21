@@ -9,10 +9,11 @@ package dbconfigs
 import (
 	"encoding/json"
 	"flag"
-	"strconv"
+	"fmt"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 )
 
 // Offer a default config.
@@ -22,8 +23,36 @@ var DefaultDBConfigs = DBConfigs{}
 // the flags will change
 var dbConfigs DBConfigs
 
+// DBConfigFlag describes which flags we need
+type DBConfigFlag int
+
+// config flags
+const (
+	EmptyConfig DBConfigFlag = 0
+	AppConfig   DBConfigFlag = 1 << iota
+	DbaConfig
+	FilteredConfig
+	ReplConfig
+)
+
+// DbConfigName describes which DB config we should use
+type DbConfigName string
+
+// DBA config
+const DbaConfigName DbConfigName = "dba"
+
+// Regular app config
+const AppConfigName DbConfigName = "app"
+
+// Config for filtered replication
+const FilteredConfigName DbConfigName = "filtered"
+
+// Config for replication
+const ReplConfigName DbConfigName = "repl"
+
 // The flags will change the global singleton
-func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultParams mysql.ConnectionParams) {
+func registerConnFlags(connParams *sqldb.ConnParams, cnfName DbConfigName, defaultParams sqldb.ConnParams) {
+	name := string(cnfName)
 	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", defaultParams.Host, "db "+name+" connection host")
 	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", defaultParams.Port, "db "+name+" connection port")
 	flag.StringVar(&connParams.Uname, "db-config-"+name+"-uname", defaultParams.Uname, "db "+name+" connection uname")
@@ -36,60 +65,69 @@ func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultP
 	flag.StringVar(&connParams.SslCaPath, "db-config-"+name+"-ssl-ca-path", defaultParams.SslCaPath, "db "+name+" connection ssl ca path")
 	flag.StringVar(&connParams.SslCert, "db-config-"+name+"-ssl-cert", defaultParams.SslCert, "db "+name+" connection ssl certificate")
 	flag.StringVar(&connParams.SslKey, "db-config-"+name+"-ssl-key", defaultParams.SslKey, "db "+name+" connection ssl key")
-
 }
 
-// vttablet will register client, dba and repl.
-func RegisterFlags() {
-	registerConnFlags(&dbConfigs.Dba, "dba", DefaultDBConfigs.Dba)
-	registerConnFlags(&dbConfigs.Filtered, "filtered", DefaultDBConfigs.Filtered)
-	registerConnFlags(&dbConfigs.Repl, "repl", DefaultDBConfigs.Repl)
-	registerConnFlags(&dbConfigs.App.ConnectionParams, "app", DefaultDBConfigs.App.ConnectionParams)
+// RegisterFlags registers the flags for the given DBConfigFlag.
+// For instance, vttablet will register client, dba and repl.
+// Returns all registered flags.
+func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
+	if flags == EmptyConfig {
+		panic("No DB config is provided.")
+	}
+	registeredFlags := EmptyConfig
+	if AppConfig&flags != 0 {
+		registerConnFlags(&dbConfigs.App.ConnParams, AppConfigName, DefaultDBConfigs.App.ConnParams)
+		registeredFlags |= AppConfig
+	}
+	if DbaConfig&flags != 0 {
+		registerConnFlags(&dbConfigs.Dba, DbaConfigName, DefaultDBConfigs.Dba)
+		registeredFlags |= DbaConfig
+	}
+	if FilteredConfig&flags != 0 {
+		registerConnFlags(&dbConfigs.Filtered, FilteredConfigName, DefaultDBConfigs.Filtered)
+		registeredFlags |= FilteredConfig
+	}
+	if ReplConfig&flags != 0 {
+		registerConnFlags(&dbConfigs.Repl, ReplConfigName, DefaultDBConfigs.Repl)
+		registeredFlags |= ReplConfig
+	}
 	flag.StringVar(&dbConfigs.App.Keyspace, "db-config-app-keyspace", DefaultDBConfigs.App.Keyspace, "db app connection keyspace")
 	flag.StringVar(&dbConfigs.App.Shard, "db-config-app-shard", DefaultDBConfigs.App.Shard, "db app connection shard")
+	return registeredFlags
 }
 
-// InitConnectionParams may overwrite the socket file,
+// initConnParams may overwrite the socket file,
 // and refresh the password to check that works.
-func InitConnectionParams(cp *mysql.ConnectionParams, socketFile string) error {
+func initConnParams(cp *sqldb.ConnParams, socketFile string) error {
 	if socketFile != "" {
 		cp.UnixSocket = socketFile
 	}
-	params := *cp
-	return refreshPassword(&params)
+	_, err := MysqlParams(cp)
+	return err
 }
 
-// refreshPassword uses the CredentialServer to refresh the password
-// to use.
-func refreshPassword(params *mysql.ConnectionParams) error {
-	user, passwd, err := GetCredentialsServer().GetUserAndPassword(params.Uname)
+// MysqlParams returns a copy of our ConnParams that we can use
+// to connect, after going through the CredentialsServer.
+func MysqlParams(cp *sqldb.ConnParams) (sqldb.ConnParams, error) {
+	result := *cp
+	user, passwd, err := GetCredentialsServer().GetUserAndPassword(cp.Uname)
 	switch err {
 	case nil:
-		params.Uname = user
-		params.Pass = passwd
+		result.Uname = user
+		result.Pass = passwd
 	case ErrUnknownUser:
-	default:
-		return err
+		// we just use what we have, and will fail later anyway
+		err = nil
 	}
-	return nil
+	return result, err
 }
 
-// returns a copy of our ConnectionParams that we can use to connect,
-// after going through the CredentialsServer.
-func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
-	params := *cp
-	err := refreshPassword(&params)
-	return params, err
-}
-
-// DBConfig encapsulates a ConnectionParams object and adds a keyspace and a
+// DBConfig encapsulates a ConnParams object and adds a keyspace and a
 // shard.
 type DBConfig struct {
-	mysql.ConnectionParams
-	Keyspace          string
-	Shard             string
-	EnableRowcache    bool
-	EnableInvalidator bool
+	sqldb.ConnParams
+	Keyspace string
+	Shard    string
 }
 
 func (d *DBConfig) String() string {
@@ -107,13 +145,13 @@ func (d *DBConfig) String() string {
 // - Replication access to change master
 type DBConfigs struct {
 	App      DBConfig
-	Dba      mysql.ConnectionParams
-	Filtered mysql.ConnectionParams
-	Repl     mysql.ConnectionParams
+	Dba      sqldb.ConnParams
+	Filtered sqldb.ConnParams
+	Repl     sqldb.ConnParams
 }
 
 func (dbcfgs *DBConfigs) String() string {
-	if dbcfgs.App.ConnectionParams.Pass != mysql.REDACTED_PASSWORD {
+	if dbcfgs.App.ConnParams.Pass != mysql.RedactedPassword {
 		panic("Cannot log a non-redacted DBConfig")
 	}
 	data, err := json.MarshalIndent(dbcfgs, "", "  ")
@@ -123,86 +161,53 @@ func (dbcfgs *DBConfigs) String() string {
 	return string(data)
 }
 
-// This will remove the password, so the object can be logged
+// Redact will remove the password, so the object can be logged
 func (dbcfgs *DBConfigs) Redact() {
-	dbcfgs.App.ConnectionParams.Redact()
-	dbcfgs.Dba.Redact()
-	dbcfgs.Filtered.Redact()
-	dbcfgs.Repl.Redact()
+	dbcfgs.App.ConnParams.Pass = mysql.RedactedPassword
+	dbcfgs.Dba.Pass = mysql.RedactedPassword
+	dbcfgs.Filtered.Pass = mysql.RedactedPassword
+	dbcfgs.Repl.Pass = mysql.RedactedPassword
 }
 
-// Initialize app, dba, filterec and repl configs
-func Init(socketFile string) (*DBConfigs, error) {
-	if err := InitConnectionParams(&dbConfigs.App.ConnectionParams, socketFile); err != nil {
-		return nil, err
-	}
-	if err := InitConnectionParams(&dbConfigs.Dba, socketFile); err != nil {
-		return nil, err
-	}
-	if err := InitConnectionParams(&dbConfigs.Filtered, socketFile); err != nil {
-		return nil, err
-	}
-	if err := InitConnectionParams(&dbConfigs.Repl, socketFile); err != nil {
-		return nil, err
-	}
+// IsZero returns true if DBConfigs was uninitialized.
+func (dbcfgs *DBConfigs) IsZero() bool {
+	return dbcfgs.App.ConnParams.Uname == ""
+}
 
+// Init will initialize app, dba, filterec and repl configs
+func Init(socketFile string, flags DBConfigFlag) (DBConfigs, error) {
+	if flags == EmptyConfig {
+		panic("No DB config is provided.")
+	}
+	if AppConfig&flags != 0 {
+		if err := initConnParams(&dbConfigs.App.ConnParams, socketFile); err != nil {
+			return DBConfigs{}, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
+		}
+	}
+	if DbaConfig&flags != 0 {
+		if err := initConnParams(&dbConfigs.Dba, socketFile); err != nil {
+			return DBConfigs{}, fmt.Errorf("dba dbconfig cannot be initialized: %v", err)
+		}
+	}
+	if FilteredConfig&flags != 0 {
+		if err := initConnParams(&dbConfigs.Filtered, socketFile); err != nil {
+			return DBConfigs{}, fmt.Errorf("filtered dbconfig cannot be initialized: %v", err)
+		}
+	}
+	if ReplConfig&flags != 0 {
+		if err := initConnParams(&dbConfigs.Repl, socketFile); err != nil {
+			return DBConfigs{}, fmt.Errorf("repl dbconfig cannot be initialized: %v", err)
+		}
+	}
 	// the Dba connection is not linked to a specific database
 	// (allows us to create them)
-	dbConfigs.Dba.DbName = ""
+	if dbConfigs.Dba.DbName != "" {
+		log.Warningf("dba dbname is set to '%v', ignoring the value", dbConfigs.Dba.DbName)
+		dbConfigs.Dba.DbName = ""
+	}
 
 	toLog := dbConfigs
 	toLog.Redact()
 	log.Infof("DBConfigs: %v\n", toLog.String())
-	return &dbConfigs, nil
-}
-
-func GetSubprocessFlags() []string {
-	cmd := []string{}
-	f := func(connParams *mysql.ConnectionParams, name string) {
-		if connParams.Host != "" {
-			cmd = append(cmd, "-db-config-"+name+"-host", connParams.Host)
-		}
-		if connParams.Port > 0 {
-			cmd = append(cmd, "-db-config-"+name+"-port", strconv.Itoa(connParams.Port))
-		}
-		if connParams.Uname != "" {
-			cmd = append(cmd, "-db-config-"+name+"-uname", connParams.Uname)
-		}
-		if connParams.DbName != "" {
-			cmd = append(cmd, "-db-config-"+name+"-dbname", connParams.DbName)
-		}
-		if connParams.UnixSocket != "" {
-			cmd = append(cmd, "-db-config-"+name+"-unixsocket", connParams.UnixSocket)
-		}
-		if connParams.Charset != "" {
-			cmd = append(cmd, "-db-config-"+name+"-charset", connParams.Charset)
-		}
-		if connParams.Flags > 0 {
-			cmd = append(cmd, "-db-config-"+name+"-flags", strconv.FormatUint(connParams.Flags, 10))
-		}
-		if connParams.SslCa != "" {
-			cmd = append(cmd, "-db-config-"+name+"-ssl-ca", connParams.SslCa)
-		}
-		if connParams.SslCaPath != "" {
-			cmd = append(cmd, "-db-config-"+name+"-ssl-ca-path", connParams.SslCaPath)
-		}
-		if connParams.SslCert != "" {
-			cmd = append(cmd, "-db-config-"+name+"-ssl-cert", connParams.SslCert)
-		}
-		if connParams.SslKey != "" {
-			cmd = append(cmd, "-db-config-"+name+"-ssl-key", connParams.SslKey)
-		}
-	}
-	f(&dbConfigs.App.ConnectionParams, "app")
-	if dbConfigs.App.Keyspace != "" {
-		cmd = append(cmd, "-db-config-app-keyspace", dbConfigs.App.Keyspace)
-	}
-	if dbConfigs.App.Shard != "" {
-		cmd = append(cmd, "-db-config-app-shard", dbConfigs.App.Shard)
-	}
-	f(&dbConfigs.Dba, "dba")
-	f(&dbConfigs.Filtered, "filtered")
-	f(&dbConfigs.Repl, "repl")
-	cmd = append(cmd, getCredentialsServerSubprocessFlags()...)
-	return cmd
+	return dbConfigs, nil
 }

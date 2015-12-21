@@ -16,7 +16,7 @@
           "Owner": "user"
         }
       },
-      "Tables": {
+      "Classes": {
         "user": {
           "ColVindexes": [
             {
@@ -61,11 +61,17 @@
             }
           ]
         }
+      },
+      "Tables": {
+        "user": "user",
+        "user_extra": "user_extra",
+        "music": "music",
+        "music_extra": "music_extra"
       }
     },
     "main": {
       "Tables": {
-        "main1": {}
+        "main1": ""
       }
     }
   }

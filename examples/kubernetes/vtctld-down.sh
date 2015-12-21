@@ -1,10 +1,14 @@
 #!/bin/bash
 
 # This is an example script that stops vtctld.
-# It assumes that kubernetes/cluster/kubecfg.sh is in the path.
 
-echo "Deleting vtctld pod..."
-kubecfg.sh delete pods/vtctld
+set -e
+
+script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
+
+echo "Stopping vtctld replicationcontroller..."
+$KUBECTL stop replicationcontroller vtctld
 
 echo "Deleting vtctld service..."
-kubecfg.sh delete services/vtctld
+$KUBECTL delete service vtctld

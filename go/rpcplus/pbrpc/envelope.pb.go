@@ -14,7 +14,7 @@ It has these top-level messages:
 */
 package pbrpc
 
-import proto "code.google.com/p/goprotobuf/proto"
+import proto "github.com/golang/protobuf/proto"
 import json "encoding/json"
 import math "math"
 

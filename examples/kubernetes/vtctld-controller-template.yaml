@@ -1,0 +1,66 @@
+kind: ReplicationController
+apiVersion: v1
+metadata:
+  name: vtctld
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        component: vtctld
+        app: vitess
+    spec:
+      containers:
+        - name: vtctld
+          image: vitess/lite
+          livenessProbe:
+            httpGet:
+              path: /debug/vars
+              port: 15000
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: syslog
+              mountPath: /dev/log
+            - name: vtdataroot
+              mountPath: /vt/vtdataroot
+            - name: certs
+              readOnly: true
+              # Mount root certs from the host OS into the location
+              # expected for our container OS (Debian):
+              mountPath: /etc/ssl/certs/ca-certificates.crt
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          command:
+            - sh
+            - "-c"
+            - >-
+              mkdir -p $VTDATAROOT/tmp &&
+              chown -R vitess /vt &&
+              su -p -c "/vt/bin/vtctld
+              -web_dir $VTTOP/web/vtctld
+              -log_dir $VTDATAROOT/tmp
+              -alsologtostderr
+              -port 15000
+              -grpc_port 15999
+              -service_map 'grpc-vtctl'
+              -topo_implementation etcd
+              -tablet_protocol grpc
+              -tablet_manager_protocol grpc
+              -etcd_global_addrs http://etcd-global:4001
+              {{backup_flags}}" vitess
+      volumes:
+        - name: syslog
+          hostPath: {path: /dev/log}
+        - name: vtdataroot
+          emptyDir: {}
+        - name: certs
+          # Uncomment one of the following lines to configure the location
+          # of the root certificates file on your host OS. We need this so
+          # we can import it into the container OS.
+          # If your host OS is Fedora/RHEL:
+          #hostPath: {path: /etc/pki/tls/certs/ca-bundle.crt}
+          # If your host OS is Debian/Ubuntu/Gentoo:
+          hostPath: {path: /etc/ssl/certs/ca-certificates.crt}

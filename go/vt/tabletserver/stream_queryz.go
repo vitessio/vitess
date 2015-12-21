@@ -1,3 +1,7 @@
+// Copyright 2015, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package tabletserver
 
 import (
@@ -7,6 +11,7 @@ import (
 	"strconv"
 	"text/template"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 )
 
@@ -23,7 +28,7 @@ var (
         </thead>
 	`)
 	streamqueryzTmpl = template.Must(template.New("example").Parse(`
-		<tr> 
+		<tr>
 			<td>{{.Query}}</td>
 			<td>{{.ContextHTML}}</td>
 			<td>{{.Duration}}</td>
@@ -34,17 +39,12 @@ var (
 	`))
 )
 
-func init() {
-	http.HandleFunc("/streamqueryz", streamqueryzHandler)
-	http.HandleFunc("/streamqueryz/terminate", streamqueryzTerminateHandler)
-}
-
-func streamqueryzHandler(w http.ResponseWriter, r *http.Request) {
+func streamQueryzHandler(queryList *QueryList, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
 	}
-	rows := SqlQueryRpcService.qe.streamQList.GetQueryzRows()
+	rows := queryList.GetQueryzRows()
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, fmt.Sprintf("cannot parse form: %s", err), http.StatusInternalServerError)
 		return
@@ -64,11 +64,13 @@ func streamqueryzHandler(w http.ResponseWriter, r *http.Request) {
 	defer endHTMLTable(w)
 	w.Write(streamqueryzHeader)
 	for i := range rows {
-		streamqueryzTmpl.Execute(w, rows[i])
+		if err := streamqueryzTmpl.Execute(w, rows[i]); err != nil {
+			log.Errorf("streamlogz: couldn't execute template: %v", err)
+		}
 	}
 }
 
-func streamqueryzTerminateHandler(w http.ResponseWriter, r *http.Request) {
+func streamQueryzTerminateHandler(queryList *QueryList, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 		acl.SendError(w, err)
 		return
@@ -83,9 +85,9 @@ func streamqueryzTerminateHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid connID", http.StatusInternalServerError)
 		return
 	}
-	if err = SqlQueryRpcService.qe.streamQList.Terminate(int64(c)); err != nil {
+	if err = queryList.Terminate(int64(c)); err != nil {
 		http.Error(w, fmt.Sprintf("error: %v", err), http.StatusInternalServerError)
 		return
 	}
-	streamqueryzHandler(w, r)
+	streamQueryzHandler(queryList, w, r)
 }

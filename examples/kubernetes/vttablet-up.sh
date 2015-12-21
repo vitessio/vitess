@@ -1,47 +1,61 @@
 #!/bin/bash
 
-# This is an example script that creates a single shard vttablet deployment.
-# It assumes that kubernetes/cluster/kubecfg.sh is in the path.
+# This is an example script that creates a vttablet deployment.
 
 set -e
 
+script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
+
 # Create the pods for shard-0
-cell=test_cell
-keyspace=test_keyspace
-shard=0
-uid_base=100
-port_base=15000
+CELLS=${CELLS:-'test'}
+keyspace='test_keyspace'
+SHARDS=${SHARDS:-'0'}
+TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-5}
+port=15002
+grpc_port=16002
+UID_BASE=${UID_BASE:-100}
+VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
+VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
+RDONLY_COUNT=${RDONLY_COUNT:-2}
 
-echo "Creating $keyspace.shard-$shard pods in cell $cell..."
-for uid_index in 0 1 2; do
-  uid=$[$uid_base + $uid_index]
-  printf -v alias '%s-%010d' $cell $uid
-  printf -v tablet_subdir 'vt_%010d' $uid
+vtdataroot_volume='emptyDir: {}'
+if [ -n "$VTDATAROOT_VOLUME" ]; then
+  vtdataroot_volume="hostPath: {path: ${VTDATAROOT_VOLUME}}"
+fi
 
-  # It's not strictly necessary to assign a unique port to every tablet since
-  # Kubernetes gives every pod its own IP address. However, Kubernetes currently
-  # doesn't provide routing from the internet into a particular pod, so we have
-  # to publish a port to the host if we want to access each tablet's status page
-  # from a workstation. As a result, we need tablets to have unique ports or
-  # else Kubernetes will be unable to schedule more than one tablet per host.
-  port=$[$port_base + $uid]
+uid_base=$UID_BASE
+indices=${TASKS:-`seq 0 $(($TABLETS_PER_SHARD-1))`}
+for shard in $(echo $SHARDS | tr "," " "); do
+  cell_index=0
+  for cell in `echo $CELLS | tr ',' ' '`; do
+    echo "Creating $keyspace.shard-$shard pods in cell $CELL..."
+    for uid_index in $indices; do
+      uid=$[$uid_base + $uid_index + $cell_index]
+      printf -v alias '%s-%010d' $cell $uid
+      printf -v tablet_subdir 'vt_%010d' $uid
 
-  if [ "$uid_index" == "0" ]; then
-    type=master
-  else
-    type=replica
-  fi
+      echo "Creating pod for tablet $alias..."
 
-  echo "Creating pod for tablet $alias..."
+      # Add xx to beginning or end if there is a dash.  K8s does not allow for
+      # leading or trailing dashes for labels
+      shard_label=`echo $shard | sed s'/[-]$/-xx/' | sed s'/^-/xx-/'`
 
-  # Expand template variables
-  sed_script=""
-  for var in alias cell uid keyspace shard type port tablet_subdir; do
-    sed_script+="s/{{$var}}/${!var}/g;"
+      tablet_type=replica
+      if [ $uid_index -gt $(($TABLETS_PER_SHARD-$RDONLY_COUNT-1)) ]; then
+        tablet_type=rdonly
+      fi
+
+      # Expand template variables
+      sed_script=""
+      for var in alias cell uid keyspace shard shard_label port grpc_port tablet_subdir vtdataroot_volume tablet_type backup_flags; do
+        sed_script+="s,{{$var}},${!var},g;"
+      done
+
+      # Instantiate template and send to kubectl.
+      cat $VTTABLET_TEMPLATE | sed -e "$sed_script" | $KUBECTL create -f -
+    done
+    let cell_index=cell_index+100000000
   done
-
-  # Instantiate template and send to kubecfg.
-  cat vttablet-pod-template.yaml | \
-    sed -e "$sed_script" | \
-    kubecfg.sh -c - create pods
+  let uid_base=uid_base+100
 done

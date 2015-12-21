@@ -5,84 +5,194 @@
 package binlog
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
-// sample Google MySQL event data
+// fakeEvent implements replication.BinlogEvent.
+type fakeEvent struct{}
+
+func (fakeEvent) IsValid() bool                         { return true }
+func (fakeEvent) IsFormatDescription() bool             { return false }
+func (fakeEvent) IsQuery() bool                         { return false }
+func (fakeEvent) IsXID() bool                           { return false }
+func (fakeEvent) IsGTID() bool                          { return false }
+func (fakeEvent) IsRotate() bool                        { return false }
+func (fakeEvent) IsIntVar() bool                        { return false }
+func (fakeEvent) IsRand() bool                          { return false }
+func (fakeEvent) HasGTID(replication.BinlogFormat) bool { return true }
+func (fakeEvent) Timestamp() uint32                     { return 1407805592 }
+func (fakeEvent) Format() (replication.BinlogFormat, error) {
+	return replication.BinlogFormat{}, errors.New("not a format")
+}
+func (fakeEvent) GTID(replication.BinlogFormat) (replication.GTID, error) {
+	return replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0xd}, nil
+}
+func (fakeEvent) IsBeginGTID(replication.BinlogFormat) bool { return false }
+func (fakeEvent) Query(replication.BinlogFormat) (replication.Query, error) {
+	return replication.Query{}, errors.New("not a query")
+}
+func (fakeEvent) IntVar(replication.BinlogFormat) (string, uint64, error) {
+	return "", 0, errors.New("not an intvar")
+}
+func (fakeEvent) Rand(replication.BinlogFormat) (uint64, uint64, error) {
+	return 0, 0, errors.New("not a rand")
+}
+func (ev fakeEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+type invalidEvent struct{ fakeEvent }
+
+func (invalidEvent) IsValid() bool { return false }
+func (ev invalidEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+type rotateEvent struct{ fakeEvent }
+
+func (rotateEvent) IsRotate() bool { return true }
+func (ev rotateEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+type formatEvent struct{ fakeEvent }
+
+func (formatEvent) IsFormatDescription() bool { return true }
+func (formatEvent) Format() (replication.BinlogFormat, error) {
+	return replication.BinlogFormat{FormatVersion: 1}, nil
+}
+func (ev formatEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+type invalidFormatEvent struct{ formatEvent }
+
+func (invalidFormatEvent) Format() (replication.BinlogFormat, error) {
+	return replication.BinlogFormat{}, errors.New("invalid format event")
+}
+func (ev invalidFormatEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+type queryEvent struct {
+	fakeEvent
+	query replication.Query
+}
+
+func (queryEvent) IsQuery() bool { return true }
+func (ev queryEvent) Query(replication.BinlogFormat) (replication.Query, error) {
+	return ev.query, nil
+}
+func (ev queryEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+type invalidQueryEvent struct{ queryEvent }
+
+func (invalidQueryEvent) Query(replication.BinlogFormat) (replication.Query, error) {
+	return replication.Query{}, errors.New("invalid query event")
+}
+func (ev invalidQueryEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+type xidEvent struct{ fakeEvent }
+
+func (xidEvent) IsXID() bool { return true }
+func (ev xidEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+type intVarEvent struct {
+	fakeEvent
+	name  string
+	value uint64
+}
+
+func (intVarEvent) IsIntVar() bool { return true }
+func (ev intVarEvent) IntVar(replication.BinlogFormat) (string, uint64, error) {
+	return ev.name, ev.value, nil
+}
+func (ev intVarEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+type invalidIntVarEvent struct{ intVarEvent }
+
+func (invalidIntVarEvent) IntVar(replication.BinlogFormat) (string, uint64, error) {
+	return "", 0, errors.New("invalid intvar event")
+}
+func (ev invalidIntVarEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+// sample MariaDB event data
 var (
-	rotateEvent       = []byte{0x0, 0x0, 0x0, 0x0, 0x4, 0x88, 0xf3, 0x0, 0x0, 0x33, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0, 0x23, 0x3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x76, 0x74, 0x2d, 0x30, 0x30, 0x30, 0x30, 0x30, 0x36, 0x32, 0x33, 0x34, 0x34, 0x2d, 0x62, 0x69, 0x6e, 0x2e, 0x30, 0x30, 0x30, 0x30, 0x30, 0x31}
-	formatEvent       = []byte{0x98, 0x68, 0xe9, 0x53, 0xf, 0x88, 0xf3, 0x0, 0x0, 0x66, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x0, 0x35, 0x2e, 0x31, 0x2e, 0x36, 0x33, 0x2d, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2d, 0x6c, 0x6f, 0x67, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1b, 0x38, 0xd, 0x0, 0x8, 0x0, 0x12, 0x0, 0x4, 0x4, 0x4, 0x4, 0x12, 0x0, 0x0, 0x53, 0x0, 0x4, 0x1a, 0x8, 0x0, 0x0, 0x0, 0x8, 0x8, 0x8, 0x2}
-	beginEvent        = []byte{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x58, 0x0, 0x0, 0x0, 0xc2, 0x0, 0x0, 0x0, 0x8, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x42, 0x45, 0x47, 0x49, 0x4e}
-	commitEvent       = []byte{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x59, 0x0, 0x0, 0x0, 0xc2, 0x0, 0x0, 0x0, 0x8, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x43, 0x4f, 0x4d, 0x4d, 0x49, 0x54}
-	rollbackEvent     = []byte{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x5b, 0x0, 0x0, 0x0, 0xc2, 0x0, 0x0, 0x0, 0x8, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x52, 0x4f, 0x4c, 0x4c, 0x42, 0x41, 0x43, 0x4b}
-	insertEvent       = []byte{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x9f, 0x0, 0x0, 0x0, 0x61, 0x1, 0x0, 0x0, 0x0, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x20, 0x69, 0x6e, 0x74, 0x6f, 0x20, 0x76, 0x74, 0x5f, 0x61, 0x28, 0x65, 0x69, 0x64, 0x2c, 0x20, 0x69, 0x64, 0x29, 0x20, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x20, 0x28, 0x31, 0x2c, 0x20, 0x31, 0x29, 0x20, 0x2f, 0x2a, 0x20, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x20, 0x76, 0x74, 0x5f, 0x61, 0x20, 0x28, 0x65, 0x69, 0x64, 0x20, 0x69, 0x64, 0x20, 0x29, 0x20, 0x28, 0x31, 0x20, 0x31, 0x20, 0x29, 0x3b, 0x20, 0x2a, 0x2f}
-	createEvent       = []byte{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0xca, 0x0, 0x0, 0x0, 0xed, 0x3, 0x0, 0x0, 0x0, 0x0, 0xa, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x8, 0x0, 0x8, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x20, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x20, 0x69, 0x66, 0x20, 0x6e, 0x6f, 0x74, 0x20, 0x65, 0x78, 0x69, 0x73, 0x74, 0x73, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x20, 0x28, 0xa, 0x69, 0x64, 0x20, 0x62, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x20, 0x61, 0x75, 0x74, 0x6f, 0x5f, 0x69, 0x6e, 0x63, 0x72, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x2c, 0xa, 0x6d, 0x73, 0x67, 0x20, 0x76, 0x61, 0x72, 0x63, 0x68, 0x61, 0x72, 0x28, 0x36, 0x34, 0x29, 0x2c, 0xa, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x20, 0x6b, 0x65, 0x79, 0x20, 0x28, 0x69, 0x64, 0x29, 0xa, 0x29, 0x20, 0x45, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x3d, 0x49, 0x6e, 0x6e, 0x6f, 0x44, 0x42}
-	xidEvent          = []byte{0x98, 0x68, 0xe9, 0x53, 0x10, 0x88, 0xf3, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x4e, 0xa, 0x0, 0x0, 0x0, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x78, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-	insertIDEvent     = []byte{0xea, 0xa8, 0xea, 0x53, 0x5, 0x88, 0xf3, 0x0, 0x0, 0x24, 0x0, 0x0, 0x0, 0xb8, 0x6, 0x0, 0x0, 0x0, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2, 0x65, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-	otherDBEvent      = []byte{0x86, 0x11, 0xed, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0xc8, 0x0, 0x0, 0x0, 0x30, 0x6, 0x0, 0x0, 0x0, 0x0, 0xf, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xe, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x8, 0x0, 0x8, 0x0, 0x21, 0x0, 0x6f, 0x74, 0x68, 0x65, 0x72, 0x5f, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x0, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x20, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x20, 0x69, 0x66, 0x20, 0x6e, 0x6f, 0x74, 0x20, 0x65, 0x78, 0x69, 0x73, 0x74, 0x73, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x20, 0x28, 0xa, 0x69, 0x64, 0x20, 0x62, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x20, 0x61, 0x75, 0x74, 0x6f, 0x5f, 0x69, 0x6e, 0x63, 0x72, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x2c, 0xa, 0x6d, 0x73, 0x67, 0x20, 0x76, 0x61, 0x72, 0x63, 0x68, 0x61, 0x72, 0x28, 0x36, 0x34, 0x29, 0x2c, 0xa, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x20, 0x6b, 0x65, 0x79, 0x20, 0x28, 0x69, 0x64, 0x29, 0xa, 0x29, 0x20, 0x45, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x3d, 0x49, 0x6e, 0x6e, 0x6f, 0x44, 0x42}
-	otherDBBeginEvent = []byte{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x56, 0x0, 0x0, 0x0, 0xc2, 0x0, 0x0, 0x0, 0x8, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xe, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x6f, 0x74, 0x68, 0x65, 0x72, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x42, 0x45, 0x47, 0x49, 0x4e}
+	mariadbRotateEvent         = mysqlctl.NewMariadbBinlogEvent([]byte{0x0, 0x0, 0x0, 0x0, 0x4, 0x88, 0xf3, 0x0, 0x0, 0x33, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0, 0x4, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x76, 0x74, 0x2d, 0x30, 0x30, 0x30, 0x30, 0x30, 0x36, 0x32, 0x33, 0x34, 0x34, 0x2d, 0x62, 0x69, 0x6e, 0x2e, 0x30, 0x30, 0x30, 0x30, 0x30, 0x31})
+	mariadbFormatEvent         = mysqlctl.NewMariadbBinlogEvent([]byte{0x87, 0x41, 0x9, 0x54, 0xf, 0x88, 0xf3, 0x0, 0x0, 0xf4, 0x0, 0x0, 0x0, 0xf8, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x0, 0x31, 0x30, 0x2e, 0x30, 0x2e, 0x31, 0x33, 0x2d, 0x4d, 0x61, 0x72, 0x69, 0x61, 0x44, 0x42, 0x2d, 0x31, 0x7e, 0x70, 0x72, 0x65, 0x63, 0x69, 0x73, 0x65, 0x2d, 0x6c, 0x6f, 0x67, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x87, 0x41, 0x9, 0x54, 0x13, 0x38, 0xd, 0x0, 0x8, 0x0, 0x12, 0x0, 0x4, 0x4, 0x4, 0x4, 0x12, 0x0, 0x0, 0xdc, 0x0, 0x4, 0x1a, 0x8, 0x0, 0x0, 0x0, 0x8, 0x8, 0x8, 0x2, 0x0, 0x0, 0x0, 0xa, 0xa, 0xa, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x13, 0x4, 0x0, 0x6e, 0xe0, 0xfd, 0x41})
+	mariadbStandaloneGTIDEvent = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0xa2, 0x88, 0xf3, 0x0, 0x0, 0x26, 0x0, 0x0, 0x0, 0xcf, 0x8, 0x0, 0x0, 0x8, 0x0, 0x9, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})
+	mariadbBeginGTIDEvent      = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0xa2, 0x88, 0xf3, 0x0, 0x0, 0x26, 0x0, 0x0, 0x0, 0xb5, 0x9, 0x0, 0x0, 0x8, 0x0, 0xa, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})
+	mariadbCreateEvent         = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0x2, 0x88, 0xf3, 0x0, 0x0, 0xc2, 0x0, 0x0, 0x0, 0xf2, 0x6, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x8, 0x0, 0x8, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x20, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x20, 0x69, 0x66, 0x20, 0x6e, 0x6f, 0x74, 0x20, 0x65, 0x78, 0x69, 0x73, 0x74, 0x73, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x20, 0x28, 0xa, 0x69, 0x64, 0x20, 0x62, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x20, 0x61, 0x75, 0x74, 0x6f, 0x5f, 0x69, 0x6e, 0x63, 0x72, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x2c, 0xa, 0x6d, 0x73, 0x67, 0x20, 0x76, 0x61, 0x72, 0x63, 0x68, 0x61, 0x72, 0x28, 0x36, 0x34, 0x29, 0x2c, 0xa, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x20, 0x6b, 0x65, 0x79, 0x20, 0x28, 0x69, 0x64, 0x29, 0xa, 0x29, 0x20, 0x45, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x3d, 0x49, 0x6e, 0x6e, 0x6f, 0x44, 0x42})
+	mariadbInsertEvent         = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0x2, 0x88, 0xf3, 0x0, 0x0, 0xa8, 0x0, 0x0, 0x0, 0x79, 0xa, 0x0, 0x0, 0x0, 0x0, 0x27, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x20, 0x69, 0x6e, 0x74, 0x6f, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x28, 0x6d, 0x73, 0x67, 0x29, 0x20, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x20, 0x28, 0x27, 0x74, 0x65, 0x73, 0x74, 0x20, 0x30, 0x27, 0x29, 0x20, 0x2f, 0x2a, 0x20, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x20, 0x28, 0x69, 0x64, 0x20, 0x29, 0x20, 0x28, 0x6e, 0x75, 0x6c, 0x6c, 0x20, 0x29, 0x3b, 0x20, 0x2a, 0x2f})
+	mariadbXidEvent            = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0x10, 0x88, 0xf3, 0x0, 0x0, 0x1b, 0x0, 0x0, 0x0, 0xe0, 0xc, 0x0, 0x0, 0x0, 0x0, 0x85, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})
 
-	mariadbRotateEvent         = []byte{0x0, 0x0, 0x0, 0x0, 0x4, 0x88, 0xf3, 0x0, 0x0, 0x33, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0, 0x4, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x76, 0x74, 0x2d, 0x30, 0x30, 0x30, 0x30, 0x30, 0x36, 0x32, 0x33, 0x34, 0x34, 0x2d, 0x62, 0x69, 0x6e, 0x2e, 0x30, 0x30, 0x30, 0x30, 0x30, 0x31}
-	mariadbFormatEvent         = []byte{0x87, 0x41, 0x9, 0x54, 0xf, 0x88, 0xf3, 0x0, 0x0, 0xf4, 0x0, 0x0, 0x0, 0xf8, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x0, 0x31, 0x30, 0x2e, 0x30, 0x2e, 0x31, 0x33, 0x2d, 0x4d, 0x61, 0x72, 0x69, 0x61, 0x44, 0x42, 0x2d, 0x31, 0x7e, 0x70, 0x72, 0x65, 0x63, 0x69, 0x73, 0x65, 0x2d, 0x6c, 0x6f, 0x67, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x87, 0x41, 0x9, 0x54, 0x13, 0x38, 0xd, 0x0, 0x8, 0x0, 0x12, 0x0, 0x4, 0x4, 0x4, 0x4, 0x12, 0x0, 0x0, 0xdc, 0x0, 0x4, 0x1a, 0x8, 0x0, 0x0, 0x0, 0x8, 0x8, 0x8, 0x2, 0x0, 0x0, 0x0, 0xa, 0xa, 0xa, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x13, 0x4, 0x0, 0x6e, 0xe0, 0xfd, 0x41}
-	mariadbStandaloneGTIDEvent = []byte{0x88, 0x41, 0x9, 0x54, 0xa2, 0x88, 0xf3, 0x0, 0x0, 0x26, 0x0, 0x0, 0x0, 0xcf, 0x8, 0x0, 0x0, 0x8, 0x0, 0x9, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-	mariadbBeginGTIDEvent      = []byte{0x88, 0x41, 0x9, 0x54, 0xa2, 0x88, 0xf3, 0x0, 0x0, 0x26, 0x0, 0x0, 0x0, 0xb5, 0x9, 0x0, 0x0, 0x8, 0x0, 0xa, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-	mariadbCreateEvent         = []byte{0x88, 0x41, 0x9, 0x54, 0x2, 0x88, 0xf3, 0x0, 0x0, 0xc2, 0x0, 0x0, 0x0, 0xf2, 0x6, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x8, 0x0, 0x8, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x20, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x20, 0x69, 0x66, 0x20, 0x6e, 0x6f, 0x74, 0x20, 0x65, 0x78, 0x69, 0x73, 0x74, 0x73, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x20, 0x28, 0xa, 0x69, 0x64, 0x20, 0x62, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x20, 0x61, 0x75, 0x74, 0x6f, 0x5f, 0x69, 0x6e, 0x63, 0x72, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x2c, 0xa, 0x6d, 0x73, 0x67, 0x20, 0x76, 0x61, 0x72, 0x63, 0x68, 0x61, 0x72, 0x28, 0x36, 0x34, 0x29, 0x2c, 0xa, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x20, 0x6b, 0x65, 0x79, 0x20, 0x28, 0x69, 0x64, 0x29, 0xa, 0x29, 0x20, 0x45, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x3d, 0x49, 0x6e, 0x6e, 0x6f, 0x44, 0x42}
-	mariadbInsertEvent         = []byte{0x88, 0x41, 0x9, 0x54, 0x2, 0x88, 0xf3, 0x0, 0x0, 0xa8, 0x0, 0x0, 0x0, 0x79, 0xa, 0x0, 0x0, 0x0, 0x0, 0x27, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x20, 0x69, 0x6e, 0x74, 0x6f, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x28, 0x6d, 0x73, 0x67, 0x29, 0x20, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x20, 0x28, 0x27, 0x74, 0x65, 0x73, 0x74, 0x20, 0x30, 0x27, 0x29, 0x20, 0x2f, 0x2a, 0x20, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x20, 0x28, 0x69, 0x64, 0x20, 0x29, 0x20, 0x28, 0x6e, 0x75, 0x6c, 0x6c, 0x20, 0x29, 0x3b, 0x20, 0x2a, 0x2f}
-	mariadbXidEvent            = []byte{0x88, 0x41, 0x9, 0x54, 0x10, 0x88, 0xf3, 0x0, 0x0, 0x1b, 0x0, 0x0, 0x0, 0xe0, 0xc, 0x0, 0x0, 0x0, 0x0, 0x85, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
+	charset = &binlogdatapb.Charset{Client: 33, Conn: 33, Server: 33}
 )
 
-func sendTestEvents(channel chan<- proto.BinlogEvent, events [][]byte) {
-	for _, buf := range events {
-		channel <- mysqlctl.NewGoogleBinlogEvent(buf)
+func sendTestEvents(channel chan<- replication.BinlogEvent, events []replication.BinlogEvent) {
+	for _, ev := range events {
+		channel <- ev
 	}
 	close(channel)
 }
 
-func sendMariadbTestEvents(channel chan<- proto.BinlogEvent, events [][]byte) {
-	for _, buf := range events {
-		channel <- mysqlctl.NewMariadbBinlogEvent(buf)
-	}
-	close(channel)
-}
-
-func TestBinlogStreamerParseEventsXID(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsXID(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+	want := []binlogdatapb.BinlogTransaction{
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -90,7 +200,7 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -99,34 +209,43 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsCommit(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		insertEvent,
-		commitEvent,
+func TestStreamerParseEventsCommit(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "COMMIT"}},
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+	want := []binlogdatapb.BinlogTransaction{
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -134,7 +253,7 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -143,13 +262,13 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerStop(t *testing.T) {
-	events := make(chan proto.BinlogEvent)
+func TestStreamerStop(t *testing.T) {
+	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	// Start parseEvents(), but don't send it anything, so it just waits.
 	svm := &sync2.ServiceManager{}
@@ -174,22 +293,26 @@ func TestBinlogStreamerStop(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsClientEOF(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
-	want := ClientEOF
+	want := ErrClientEOF
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return io.EOF
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -206,16 +329,16 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsServerEOF(t *testing.T) {
-	want := ServerEOF
+func TestStreamerParseEventsServerEOF(t *testing.T) {
+	want := ErrServerEOF
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 	close(events)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(func(ctx *sync2.ServiceContext) error {
@@ -231,22 +354,26 @@ func TestBinlogStreamerParseEventsServerEOF(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsSendErrorXID(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsSendErrorXID(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
 	want := "send reply error: foobar"
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -264,22 +391,28 @@ func TestBinlogStreamerParseEventsSendErrorXID(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsSendErrorCommit(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		insertEvent,
-		commitEvent,
+func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "COMMIT"}},
 	}
 	want := "send reply error: foobar"
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -297,24 +430,24 @@ func TestBinlogStreamerParseEventsSendErrorCommit(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsInvalid(t *testing.T) {
-	invalidEvent := rotateEvent[:19]
-
-	input := [][]byte{
-		invalidEvent,
-		formatEvent,
-		beginEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsInvalid(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		invalidEvent{},
+		xidEvent{},
 	}
-	want := "can't parse binlog event, invalid data: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0x0, 0x0, 0x0, 0x0, 0x4, 0x88, 0xf3, 0x0, 0x0, 0x33, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0}}"
+	want := "can't parse binlog event, invalid data:"
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -327,31 +460,31 @@ func TestBinlogStreamerParseEventsInvalid(t *testing.T) {
 		t.Errorf("expected error, got none")
 		return
 	}
-	if got := err.Error(); got != want {
+	if got := err.Error(); !strings.HasPrefix(got, want) {
 		t.Errorf("wrong error, got %#v, want %#v", got, want)
 	}
 }
 
-func TestBinlogStreamerParseEventsInvalidFormat(t *testing.T) {
-	invalidEvent := make([]byte, len(formatEvent))
-	copy(invalidEvent, formatEvent)
-	invalidEvent[19+2+50+4] = 12 // mess up the HeaderLength
-
-	input := [][]byte{
-		rotateEvent,
-		invalidEvent,
-		beginEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsInvalidFormat(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		invalidFormatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
-	want := "can't parse FORMAT_DESCRIPTION_EVENT: header length = 12, should be >= 19, event data: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0x98, 0x68, 0xe9, 0x53, 0xf, 0x88, 0xf3, 0x0, 0x0, 0x66, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x0, 0x35, 0x2e, 0x31, 0x2e, 0x36, 0x33, 0x2d, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2d, 0x6c, 0x6f, 0x67, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xc, 0x38, 0xd, 0x0, 0x8, 0x0, 0x12, 0x0, 0x4, 0x4, 0x4, 0x4, 0x12, 0x0, 0x0, 0x53, 0x0, 0x4, 0x1a, 0x8, 0x0, 0x0, 0x0, 0x8, 0x8, 0x8, 0x2}}"
+	want := "can't parse FORMAT_DESCRIPTION_EVENT:"
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -364,27 +497,31 @@ func TestBinlogStreamerParseEventsInvalidFormat(t *testing.T) {
 		t.Errorf("expected error, got none")
 		return
 	}
-	if got := err.Error(); got != want {
+	if got := err.Error(); !strings.HasPrefix(got, want) {
 		t.Errorf("wrong error, got %#v, want %#v", got, want)
 	}
 }
 
-func TestBinlogStreamerParseEventsNoFormat(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		//formatEvent,
-		beginEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsNoFormat(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		//formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
-	want := "got a real event before FORMAT_DESCRIPTION_EVENT: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x58, 0x0, 0x0, 0x0, 0xc2, 0x0, 0x0, 0x0, 0x8, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x42, 0x45, 0x47, 0x49, 0x4e}}"
+	want := "got a real event before FORMAT_DESCRIPTION_EVENT:"
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -397,31 +534,29 @@ func TestBinlogStreamerParseEventsNoFormat(t *testing.T) {
 		t.Errorf("expected error, got none")
 		return
 	}
-	if got := err.Error(); got != want {
+	if got := err.Error(); !strings.HasPrefix(got, want) {
 		t.Errorf("wrong error, got %#v, want %#v", got, want)
 	}
 }
 
-func TestBinlogStreamerParseEventsInvalidQuery(t *testing.T) {
-	invalidEvent := make([]byte, len(insertEvent))
-	copy(invalidEvent, insertEvent)
-	invalidEvent[19+8+4+4] = 200 // mess up the db_name length
-
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		invalidEvent,
-		xidEvent,
+func TestStreamerParseEventsInvalidQuery(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		invalidQueryEvent{},
+		xidEvent{},
 	}
-	want := "can't get query from binlog event: SQL query position overflows buffer (240 > 132), event data: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x9f, 0x0, 0x0, 0x0, 0x61, 0x1, 0x0, 0x0, 0x0, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xc8, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x20, 0x69, 0x6e, 0x74, 0x6f, 0x20, 0x76, 0x74, 0x5f, 0x61, 0x28, 0x65, 0x69, 0x64, 0x2c, 0x20, 0x69, 0x64, 0x29, 0x20, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x20, 0x28, 0x31, 0x2c, 0x20, 0x31, 0x29, 0x20, 0x2f, 0x2a, 0x20, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x20, 0x76, 0x74, 0x5f, 0x61, 0x20, 0x28, 0x65, 0x69, 0x64, 0x20, 0x69, 0x64, 0x20, 0x29, 0x20, 0x28, 0x31, 0x20, 0x31, 0x20, 0x29, 0x3b, 0x20, 0x2a, 0x2f}}"
+	want := "can't get query from binlog event:"
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -434,49 +569,67 @@ func TestBinlogStreamerParseEventsInvalidQuery(t *testing.T) {
 		t.Errorf("expected error, got none")
 		return
 	}
-	if got := err.Error(); got != want {
+	if got := err.Error(); !strings.HasPrefix(got, want) {
 		t.Errorf("wrong error, got %#v, want %#v", got, want)
 	}
 }
 
-func TestBinlogStreamerParseEventsRollback(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		insertEvent,
-		insertEvent,
-		rollbackEvent,
-		beginEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsRollback(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "ROLLBACK"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
+	want := []binlogdatapb.BinlogTransaction{
+		{
 			Statements: nil,
 			Timestamp:  1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -484,7 +637,7 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -493,39 +646,47 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+	want := []binlogdatapb.BinlogTransaction{
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
-		proto.BinlogTransaction{
+		{
 			Statements: nil,
 			Timestamp:  1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -533,7 +694,7 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -542,40 +703,50 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		insertEvent,
-		beginEvent,
-		xidEvent,
+func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		xidEvent{},
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+	want := []binlogdatapb.BinlogTransaction{
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{},
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{},
 			Timestamp:  1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -583,7 +754,7 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -592,36 +763,43 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		insertIDEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsSetInsertID(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		intVarEvent{name: "INSERT_ID", value: 101},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: nil, Sql: []byte("SET INSERT_ID=101")},
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+	want := []binlogdatapb.BinlogTransaction{
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET INSERT_ID=101"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -629,7 +807,7 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -638,27 +816,27 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsInvalidIntVar(t *testing.T) {
-	invalidEvent := make([]byte, len(insertIDEvent))
-	copy(invalidEvent, insertIDEvent)
-	invalidEvent[19+8] = 3 // mess up the variable ID
-
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		invalidEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		invalidIntVarEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
-	want := "can't parse INTVAR_EVENT: invalid IntVar ID: 3, event data: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0xea, 0xa8, 0xea, 0x53, 0x5, 0x88, 0xf3, 0x0, 0x0, 0x24, 0x0, 0x0, 0x0, 0xb8, 0x6, 0x0, 0x0, 0x0, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x3, 0x65, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}}"
+	want := "can't parse INTVAR_EVENT:"
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -671,40 +849,49 @@ func TestBinlogStreamerParseEventsInvalidIntVar(t *testing.T) {
 		t.Errorf("expected error, got none")
 		return
 	}
-	if got := err.Error(); got != want {
+	if got := err.Error(); !strings.HasPrefix(got, want) {
 		t.Errorf("wrong error, got %#v, want %#v", got, want)
 	}
 }
 
-func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		otherDBEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsOtherDB(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "other",
+			SQL:      "INSERT INTO test values (3, 4)"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+	want := []binlogdatapb.BinlogTransaction{
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -712,7 +899,7 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -721,35 +908,44 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		otherDBBeginEvent, // Check that this doesn't get filtered out.
-		otherDBEvent,
-		insertEvent,
-		xidEvent,
+func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "other",
+			SQL:      "BEGIN"}}, // Check that this doesn't get filtered out.
+		queryEvent{query: replication.Query{
+			Database: "other",
+			SQL:      "INSERT INTO test values (3, 4)"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		xidEvent{},
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+	want := []binlogdatapb.BinlogTransaction{
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -757,7 +953,7 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -766,21 +962,27 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		beginEvent,
-		insertEvent,
-		beginEvent,
+func TestStreamerParseEventsBeginAgain(t *testing.T) {
+	input := []replication.BinlogEvent{
+		rotateEvent{},
+		formatEvent{},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: replication.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN"}},
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)
@@ -789,7 +991,7 @@ func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 	after := binlogStreamerErrors.Counts()["ParseEvents"]
@@ -798,8 +1000,8 @@ func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
-	input := [][]byte{
+func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
+	input := []replication.BinlogEvent{
 		mariadbRotateEvent,
 		mariadbFormatEvent,
 		mariadbBeginGTIDEvent,
@@ -807,33 +1009,36 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		mariadbXidEvent,
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1409892744")},
-				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */")},
+	want := []binlogdatapb.BinlogTransaction{
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Charset: charset, Sql: "SET TIMESTAMP=1409892744"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Charset: charset, Sql: "insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */"},
 			},
 			Timestamp: 1409892744,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 10,
+			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
-	go sendMariadbTestEvents(events, input)
+	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
 	svm.Go(func(ctx *sync2.ServiceContext) error {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -842,41 +1047,44 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	}
 }
 
-func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
-	input := [][]byte{
+func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
+	input := []replication.BinlogEvent{
 		mariadbRotateEvent,
 		mariadbFormatEvent,
 		mariadbStandaloneGTIDEvent,
 		mariadbCreateEvent,
 	}
 
-	events := make(chan proto.BinlogEvent)
+	events := make(chan replication.BinlogEvent)
 
-	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: []byte("SET TIMESTAMP=1409892744")},
-				proto.Statement{Category: proto.BL_DDL, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: []byte("create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB")},
+	want := []binlogdatapb.BinlogTransaction{
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Charset: &binlogdatapb.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "SET TIMESTAMP=1409892744"},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DDL, Charset: &binlogdatapb.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB"},
 			},
 			Timestamp: 1409892744,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 9}},
+			TransactionId: replication.EncodeGTID(replication.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 9,
+			}),
 		},
 	}
-	var got []proto.BinlogTransaction
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
+	var got []binlogdatapb.BinlogTransaction
+	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, sendTransaction)
 
-	go sendMariadbTestEvents(events, input)
+	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
 	svm.Go(func(ctx *sync2.ServiceContext) error {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -886,28 +1094,28 @@ func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 }
 
 func TestGetStatementCategory(t *testing.T) {
-	table := map[string]int{
-		"":  proto.BL_UNRECOGNIZED,
-		" ": proto.BL_UNRECOGNIZED,
-		" UPDATE we don't try to fix leading spaces": proto.BL_UNRECOGNIZED,
-		"FOOBAR unknown query prefix":                proto.BL_UNRECOGNIZED,
+	table := map[string]binlogdatapb.BinlogTransaction_Statement_Category{
+		"":  binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
+		" ": binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
+		" UPDATE we don't try to fix leading spaces": binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
+		"FOOBAR unknown query prefix":                binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED,
 
-		"BEGIN":    proto.BL_BEGIN,
-		"COMMIT":   proto.BL_COMMIT,
-		"ROLLBACK": proto.BL_ROLLBACK,
-		"INSERT something (something, something)": proto.BL_DML,
-		"UPDATE something SET something=nothing":  proto.BL_DML,
-		"DELETE something":                        proto.BL_DML,
-		"CREATE something":                        proto.BL_DDL,
-		"ALTER something":                         proto.BL_DDL,
-		"DROP something":                          proto.BL_DDL,
-		"TRUNCATE something":                      proto.BL_DDL,
-		"RENAME something":                        proto.BL_DDL,
-		"SET something=nothing":                   proto.BL_SET,
+		"BEGIN":    binlogdatapb.BinlogTransaction_Statement_BL_BEGIN,
+		"COMMIT":   binlogdatapb.BinlogTransaction_Statement_BL_COMMIT,
+		"ROLLBACK": binlogdatapb.BinlogTransaction_Statement_BL_ROLLBACK,
+		"INSERT something (something, something)": binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"UPDATE something SET something=nothing":  binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"DELETE something":                        binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"CREATE something":                        binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"ALTER something":                         binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"DROP something":                          binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"TRUNCATE something":                      binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"RENAME something":                        binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+		"SET something=nothing":                   binlogdatapb.BinlogTransaction_Statement_BL_SET,
 	}
 
 	for input, want := range table {
-		if got := getStatementCategory([]byte(input)); got != want {
+		if got := getStatementCategory(input); got != want {
 			t.Errorf("getStatementCategory(%v) = %v, want %v", input, got, want)
 		}
 	}

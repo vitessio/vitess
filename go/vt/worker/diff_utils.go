@@ -6,48 +6,54 @@ package worker
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // QueryResultReader will stream rows towards the output channel.
 type QueryResultReader struct {
-	Output      <-chan *mproto.QueryResult
-	Fields      []mproto.Field
+	Output      <-chan *sqltypes.Result
+	Fields      []*querypb.Field
 	conn        tabletconn.TabletConn
 	clientErrFn func() error
 }
 
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
 // the provided tablet / sql query
-func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias, sql string) (*QueryResultReader, error) {
-	tablet, err := ts.GetTablet(tabletAlias)
+func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, sql string) (*QueryResultReader, error) {
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	tablet, err := ts.GetTablet(shortCtx, tabletAlias)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
 
-	endPoint, err := tablet.EndPoint()
+	endPoint, err := topo.TabletEndPoint(tablet.Tablet)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(context.TODO(), *endPoint, tablet.Keyspace, tablet.Shard, 30*time.Second)
+	// use sessionId for now
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, tablet.Keyspace, tablet.Shard, topodatapb.TabletType_UNKNOWN, *remoteActionsTimeout)
 	if err != nil {
 		return nil, err
 	}
 
-	sr, clientErrFn, err := conn.StreamExecute(context.TODO(), sql, make(map[string]interface{}), 0)
+	sr, clientErrFn, err := conn.StreamExecute(ctx, sql, make(map[string]interface{}), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +75,7 @@ func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias,
 // orderedColumns returns the list of columns:
 // - first the primary key columns in the right order
 // - then the rest of the columns
-func orderedColumns(tableDefinition *myproto.TableDefinition) []string {
+func orderedColumns(tableDefinition *tabletmanagerdatapb.TableDefinition) []string {
 	result := make([]string, 0, len(tableDefinition.Columns))
 	result = append(result, tableDefinition.PrimaryKeyColumns...)
 	for _, column := range tableDefinition.Columns {
@@ -87,72 +93,75 @@ func orderedColumns(tableDefinition *myproto.TableDefinition) []string {
 	return result
 }
 
-// uint64FromKeyspaceId returns a 64 bits hex number as a string
+// uint64FromKeyspaceID returns a 64 bits hex number as a string
 // (in the form of 0x0123456789abcdef) from the provided keyspaceId
-func uint64FromKeyspaceId(keyspaceId key.KeyspaceId) string {
-	hex := string(keyspaceId.Hex())
+func uint64FromKeyspaceID(keyspaceID []byte) string {
+	hex := hex.EncodeToString(keyspaceID)
 	return "0x" + hex + strings.Repeat("0", 16-len(hex))
 }
 
 // TableScan returns a QueryResultReader that gets all the rows from a
 // table, ordered by Primary Key. The returned columns are ordered
 // with the Primary Key columns in front.
-func TableScan(log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition) (*QueryResultReader, error) {
+func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition) (*QueryResultReader, error) {
 	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
-	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
-	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
+	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
+	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 
 // TableScanByKeyRange returns a QueryResultReader that gets all the
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *topodatapb.TabletAlias, tableDefinition *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceIDType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
-	switch keyspaceIdType {
-	case key.KIT_UINT64:
-		if keyRange.Start != key.MinKey {
-			if keyRange.End != key.MaxKey {
-				// have start & end
-				where = fmt.Sprintf("WHERE keyspace_id >= %v AND keyspace_id < %v ", uint64FromKeyspaceId(keyRange.Start), uint64FromKeyspaceId(keyRange.End))
+	if keyRange != nil {
+		switch keyspaceIDType {
+		case topodatapb.KeyspaceIdType_UINT64:
+			if len(keyRange.Start) > 0 {
+				if len(keyRange.End) > 0 {
+					// have start & end
+					where = fmt.Sprintf("WHERE keyspace_id >= %v AND keyspace_id < %v ", uint64FromKeyspaceID(keyRange.Start), uint64FromKeyspaceID(keyRange.End))
+				} else {
+					// have start only
+					where = fmt.Sprintf("WHERE keyspace_id >= %v ", uint64FromKeyspaceID(keyRange.Start))
+				}
 			} else {
-				// have start only
-				where = fmt.Sprintf("WHERE keyspace_id >= %v ", uint64FromKeyspaceId(keyRange.Start))
+				if len(keyRange.End) > 0 {
+					// have end only
+					where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceID(keyRange.End))
+				}
 			}
-		} else {
-			if keyRange.End != key.MaxKey {
-				// have end only
-				where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceId(keyRange.End))
-			}
-		}
-	case key.KIT_BYTES:
-		if keyRange.Start != key.MinKey {
-			if keyRange.End != key.MaxKey {
-				// have start & end
-				where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' AND HEX(keyspace_id) < '%v' ", keyRange.Start.Hex(), keyRange.End.Hex())
+		case topodatapb.KeyspaceIdType_BYTES:
+			if len(keyRange.Start) > 0 {
+				if len(keyRange.End) > 0 {
+					// have start & end
+					where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' AND HEX(keyspace_id) < '%v' ", hex.EncodeToString(keyRange.Start), hex.EncodeToString(keyRange.End))
+				} else {
+					// have start only
+					where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' ", hex.EncodeToString(keyRange.Start))
+				}
 			} else {
-				// have start only
-				where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' ", keyRange.Start.Hex())
+				if len(keyRange.End) > 0 {
+					// have end only
+					where = fmt.Sprintf("WHERE HEX(keyspace_id) < '%v' ", hex.EncodeToString(keyRange.End))
+				}
 			}
-		} else {
-			if keyRange.End != key.MaxKey {
-				// have end only
-				where = fmt.Sprintf("WHERE HEX(keyspace_id) < '%v' ", keyRange.End.Hex())
-			}
+		default:
+			return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIDType)
 		}
-	default:
-		return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIdType)
 	}
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
-	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
-	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
+	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
+	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 
 func (qrr *QueryResultReader) Error() error {
 	return qrr.clientErrFn()
 }
 
+// Close closes the connection to the tablet.
 func (qrr *QueryResultReader) Close() {
 	qrr.conn.Close()
 }
@@ -160,7 +169,7 @@ func (qrr *QueryResultReader) Close() {
 // RowReader returns individual rows from a QueryResultReader
 type RowReader struct {
 	queryResultReader *QueryResultReader
-	currentResult     *mproto.QueryResult
+	currentResult     *sqltypes.Result
 	currentIndex      int
 }
 
@@ -174,7 +183,7 @@ func NewRowReader(queryResultReader *QueryResultReader) *RowReader {
 // Next will return:
 // (row, nil) for the next row
 // (nil, nil) for EOF
-// (nil, error) if an error occured
+// (nil, error) if an error occurred
 func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 	if rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
 		var ok bool
@@ -193,7 +202,7 @@ func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 }
 
 // Fields returns the types for the rows
-func (rr *RowReader) Fields() []mproto.Field {
+func (rr *RowReader) Fields() []*querypb.Field {
 	return rr.queryResultReader.Fields
 }
 
@@ -259,20 +268,21 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // -1 if left is smaller than right
 // 0 if left and right are equal
 // +1 if left is bigger than right
-func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
+// TODO: This can panic if types for left and right don't match.
+func CompareRows(fields []*querypb.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
-		fieldType := fields[i].Type
-		lv, err := mproto.Convert(fieldType, left[i])
-		if err != nil {
-			return 0, err
-		}
-		rv, err := mproto.Convert(fieldType, right[i])
-		if err != nil {
-			return 0, err
-		}
+		lv := left[i].ToNative()
+		rv := right[i].ToNative()
 		switch l := lv.(type) {
 		case int64:
 			r := rv.(int64)
+			if l < r {
+				return -1, nil
+			} else if l > r {
+				return 1, nil
+			}
+		case uint64:
+			r := rv.(uint64)
 			if l < r {
 				return -1, nil
 			} else if l > r {
@@ -305,7 +315,7 @@ type RowDiffer struct {
 }
 
 // NewRowDiffer returns a new RowDiffer
-func NewRowDiffer(left, right *QueryResultReader, tableDefinition *myproto.TableDefinition) (*RowDiffer, error) {
+func NewRowDiffer(left, right *QueryResultReader, tableDefinition *tabletmanagerdatapb.TableDefinition) (*RowDiffer, error) {
 	if len(left.Fields) != len(right.Fields) {
 		return nil, fmt.Errorf("Cannot diff inputs with different types")
 	}

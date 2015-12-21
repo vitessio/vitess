@@ -7,10 +7,18 @@ package planbuilder
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 // This file defines interfaces and registration for vindexes.
+
+// A VCursor is an interface that allows you to execute queries
+// in the current context and session of a VTGate request. Vindexes
+// can use this interface to execute lookup queries.
+type VCursor interface {
+	Execute(query *querytypes.BoundQuery) (*sqltypes.Result, error)
+}
 
 // Vindex defines the interface required to register a vindex.
 // Additional to these functions, a vindex also needs
@@ -26,20 +34,20 @@ type Vindex interface {
 
 	// Verify must be implented by all vindexes. It should return
 	// true if the id can be mapped to the keyspace id.
-	Verify(id interface{}, ks key.KeyspaceId) (bool, error)
+	Verify(cursor VCursor, id interface{}, ks []byte) (bool, error)
 }
 
 // Unique defines the interface for a unique vindex.
 // For a vindex to be unique, an id has to map to at most
 // one keyspace id.
 type Unique interface {
-	Map(ids []interface{}) ([]key.KeyspaceId, error)
+	Map(cursor VCursor, ids []interface{}) ([][]byte, error)
 }
 
 // NonUnique defines the interface for a non-unique vindex.
 // This means that an id can map to multiple keyspace ids.
 type NonUnique interface {
-	Map(ids []interface{}) ([][]key.KeyspaceId, error)
+	Map(cursor VCursor, ids []interface{}) ([][][]byte, error)
 }
 
 // IsUnique returns true if the Vindex is Unique.
@@ -53,7 +61,7 @@ func IsUnique(v Vindex) bool {
 // is optional. If present, VTGate can use it to
 // fill column values based on the target keyspace id.
 type Reversible interface {
-	ReverseMap(key.KeyspaceId) (interface{}, error)
+	ReverseMap(cursor VCursor, ks []byte) (interface{}, error)
 }
 
 // A Functional vindex is an index that can compute
@@ -66,16 +74,16 @@ type Reversible interface {
 // If it's not unique, we cannot determine the target shard
 // for an insert operation.
 type Functional interface {
-	Create(id interface{}) error
-	Delete(id interface{}, keyspace_id key.KeyspaceId) error
+	Create(VCursor, interface{}) error
+	Delete(VCursor, []interface{}, []byte) error
 	Unique
 }
 
-// A FuncionalGenerator vindex is a Functional vindex
+// A FunctionalGenerator vindex is a Functional vindex
 // that can generate new ids.
 type FunctionalGenerator interface {
 	Functional
-	Generate() (id interface{}, err error)
+	Generate(cursor VCursor) (id int64, err error)
 }
 
 // A Lookup vindex is one that needs to lookup
@@ -87,15 +95,15 @@ type FunctionalGenerator interface {
 // keyspace_id, which must be supplied, can be used
 // to determine the target shard for an insert operation.
 type Lookup interface {
-	Create(id interface{}, keyspace_id key.KeyspaceId) error
-	Delete(id interface{}, keyspace_id key.KeyspaceId) error
+	Create(VCursor, interface{}, []byte) error
+	Delete(VCursor, []interface{}, []byte) error
 }
 
 // A LookupGenerator vindex is a Lookup that can
 // generate new ids.
 type LookupGenerator interface {
 	Lookup
-	Generate(keyspace_id key.KeyspaceId) (id interface{}, err error)
+	Generate(VCursor, []byte) (id int64, err error)
 }
 
 // A NewVindexFunc is a function that creates a Vindex based on the
@@ -116,7 +124,9 @@ func Register(vindexType string, newVindexFunc NewVindexFunc) {
 	registry[vindexType] = newVindexFunc
 }
 
-func createVindex(vindexType string, params map[string]interface{}) (Vindex, error) {
+// CreateVindex creates a vindex of the specified type using the
+// supplied params. The type must have been previously registered.
+func CreateVindex(vindexType string, params map[string]interface{}) (Vindex, error) {
 	f, ok := registry[vindexType]
 	if !ok {
 		return nil, fmt.Errorf("vindexType %s not found", vindexType)

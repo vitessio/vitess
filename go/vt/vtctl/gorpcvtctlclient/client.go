@@ -11,42 +11,45 @@ import (
 
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/gorpcproto"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	"golang.org/x/net/context"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
-type goRpcVtctlClient struct {
+type goRPCVtctlClient struct {
 	rpcClient *rpc.Client
 }
 
-func goRpcVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
+func goRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
 	// create the RPC client
-	rpcClient, err := bsonrpc.DialHTTP("tcp", addr, dialTimeout, nil)
+	rpcClient, err := bsonrpc.DialHTTP("tcp", addr, dialTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("RPC error for %v: %v", addr, err)
 	}
 
-	return &goRpcVtctlClient{rpcClient}, nil
+	return &goRPCVtctlClient{rpcClient}, nil
 }
 
-// ExecuteVtctlCommand is part of the VtctlClient interface
-func (client *goRpcVtctlClient) ExecuteVtctlCommand(args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc) {
+// ExecuteVtctlCommand is part of the VtctlClient interface.
+// Note the bson rpc version doesn't honor timeouts in the context
+// (but the server side will honor the actionTimeout)
+func (client *goRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (<-chan *logutilpb.Event, vtctlclient.ErrFunc, error) {
 	req := &gorpcproto.ExecuteVtctlCommandArgs{
 		Args:          args,
 		ActionTimeout: actionTimeout,
-		LockTimeout:   lockTimeout,
 	}
-	sr := make(chan *logutil.LoggerEvent, 10)
+	sr := make(chan *logutilpb.Event, 10)
 	c := client.rpcClient.StreamGo("VtctlServer.ExecuteVtctlCommand", req, sr)
-	return sr, func() error { return c.Error }
+	return sr, func() error { return c.Error }, nil
 }
 
 // Close is part of the VtctlClient interface
-func (client *goRpcVtctlClient) Close() {
+func (client *goRPCVtctlClient) Close() {
 	client.rpcClient.Close()
 }
 
 func init() {
-	vtctlclient.RegisterVtctlClientFactory("gorpc", goRpcVtctlClientFactory)
+	vtctlclient.RegisterFactory("gorpc", goRPCVtctlClientFactory)
 }

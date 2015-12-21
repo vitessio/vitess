@@ -1,0 +1,34 @@
+<md-dialog aria-label="Action">
+<form>
+
+<md-toolbar>
+  <div class="md-toolbar-tools">
+  <h2 ng-bind="action.title"></h2>
+  <span flex></span>
+  <md-button class="md-icon-button" ng-click="hide()">
+    <md-icon md-font-set="material-icons">close</md-icon>
+  </md-button>
+  </div>
+</md-toolbar>
+
+<md-dialog-content layout="column">
+
+<div ng-if="!result.$resolved" flex layout="column" layout-align="center center">
+  <md-progress-circular md-mode="indeterminate"></md-progress-circular>
+  <h3>Executing action...</h3>
+</div>
+
+<md-content ng-if="result.$resolved" class="md-padding">
+<h2 ng-if="result.Error">Action Failed</h2>
+<h2 ng-if="!result.Error && !result.Output">Action Succeeded</h2>
+<pre ng-bind="result.Output"></pre>
+</md-content>
+
+</md-dialog-content>
+
+<div class="md-actions" layout="row" layout-align="end center">
+  <md-button ng-click="hide()" class="md-primary">Close</md-button>
+</div>
+
+</form>
+</md-dialog>

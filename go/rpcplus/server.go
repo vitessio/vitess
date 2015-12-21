@@ -138,12 +138,14 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 )
 
 const (
-	// Defaults used by HandleHTTP
-	DefaultRPCPath   = "/_goRPC_"
+	// DefaultRPCPath used as handler location for HandleHTTP
+	DefaultRPCPath = "/_goRPC_"
+
+	// DefaultDebugPath used as debug handler location for HandleHTTP
 	DefaultDebugPath = "/debug/rpc"
 )
 
@@ -566,11 +568,11 @@ func (server *Server) ServeCodecWithContext(ctx context.Context, codec ServerCod
 	codec.Close()
 }
 
-func (mtype *methodType) prepareContext(ctx context.Context) reflect.Value {
+func (m *methodType) prepareContext(ctx context.Context) reflect.Value {
 	if contextv := reflect.ValueOf(ctx); contextv.IsValid() {
 		return contextv
 	}
-	return reflect.Zero(mtype.ContextType)
+	return reflect.Zero(m.ContextType)
 }
 
 // ServeRequest is like ServeCodec but synchronously serves a single request.

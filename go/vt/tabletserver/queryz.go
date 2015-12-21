@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
@@ -108,12 +109,7 @@ func (sorter *queryzSorter) Less(i, j int) bool {
 	return sorter.less(sorter.rows[i], sorter.rows[j])
 }
 
-func init() {
-	http.HandleFunc("/queryz", queryzHandler)
-}
-
-// queryzHandler displays the query stats.
-func queryzHandler(w http.ResponseWriter, r *http.Request) {
+func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
@@ -122,7 +118,6 @@ func queryzHandler(w http.ResponseWriter, r *http.Request) {
 	defer endHTMLTable(w)
 	w.Write(queryzHeader)
 
-	si := SqlQueryRpcService.qe.schemaInfo
 	keys := si.queries.Keys()
 	sorter := queryzSorter{
 		rows: make([]*queryzRow, 0, len(keys)),
@@ -131,14 +126,14 @@ func queryzHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	for _, v := range si.queries.Keys() {
-		plan := si.getQuery(v)
+		plan := si.peekQuery(v)
 		if plan == nil {
 			continue
 		}
 		Value := &queryzRow{
 			Query:  wrappable(v),
 			Table:  plan.TableName,
-			Plan:   plan.PlanId,
+			Plan:   plan.PlanID,
 			Reason: plan.Reason,
 		}
 		Value.Count, Value.tm, Value.Rows, Value.Errors = plan.Stats()
@@ -154,6 +149,8 @@ func queryzHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Sort(&sorter)
 	for _, Value := range sorter.rows {
-		queryzTmpl.Execute(w, Value)
+		if err := queryzTmpl.Execute(w, Value); err != nil {
+			log.Errorf("queryz: couldn't execute template: %v", err)
+		}
 	}
 }

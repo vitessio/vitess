@@ -20,8 +20,11 @@ import (
 	"unsafe"
 
 	"github.com/youtube/vitess/go/hack"
-	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -33,84 +36,148 @@ const (
 func init() {
 	// This needs to be called before threads begin to spawn.
 	C.vt_library_init()
+	sqldb.RegisterDefault(Connect)
 }
 
 const (
-	DUP_ENTRY                 = C.ER_DUP_ENTRY
-	LOCK_WAIT_TIMEOUT         = C.ER_LOCK_WAIT_TIMEOUT
-	LOCK_DEADLOCK             = C.ER_LOCK_DEADLOCK
-	OPTION_PREVENTS_STATEMENT = C.ER_OPTION_PREVENTS_STATEMENT
-
-	REDACTED_PASSWORD = "****"
+	// typeDecimal is a deprecated type.
+	// Value is 0.
+	typeDecimal = C.MYSQL_TYPE_DECIMAL
+	// TypeTiny specifies a TINYINT type.
+	// Value is 1.
+	TypeTiny = C.MYSQL_TYPE_TINY
+	// TypeShort specifies a SMALLINT type.
+	// Value is 2.
+	TypeShort = C.MYSQL_TYPE_SHORT
+	// TypeLong specifies a INTEGER type.
+	// Value is 3.
+	TypeLong = C.MYSQL_TYPE_LONG
+	// TypeFloat specifies a FLOAT type.
+	// Value is 4.
+	TypeFloat = C.MYSQL_TYPE_FLOAT
+	// TypeDouble specifies a DOUBLE or REAL type.
+	// Value is 5.
+	TypeDouble = C.MYSQL_TYPE_DOUBLE
+	// TypeNull specifies a NULL type.
+	// Value is 6.
+	TypeNull = C.MYSQL_TYPE_NULL
+	// TypeTimestamp specifies a TIMESTAMP type.
+	// Value is 7. NOT SUPPORTED.
+	TypeTimestamp = C.MYSQL_TYPE_TIMESTAMP
+	// TypeLonglong specifies a BIGINT type.
+	// Value is 8.
+	TypeLonglong = C.MYSQL_TYPE_LONGLONG
+	// TypeInt24 specifies a MEDIUMINT type.
+	// Value is 9.
+	TypeInt24 = C.MYSQL_TYPE_INT24
+	// TypeDate specifies a DATE type.
+	// Value is 10.
+	TypeDate = C.MYSQL_TYPE_DATE
+	// TypeTime specifies a TIME type.
+	// Value is 11.
+	TypeTime = C.MYSQL_TYPE_TIME
+	// TypeDatetime specifies a DATETIME type.
+	// Value is 12.
+	TypeDatetime = C.MYSQL_TYPE_DATETIME
+	// TypeYear specifies a YEAR type.
+	// Value is 13.
+	TypeYear = C.MYSQL_TYPE_YEAR
+	// TypeBit specifies a BIT type.
+	// Value is 16.
+	TypeBit = C.MYSQL_TYPE_BIT
+	// TypeNewDecimal specifies a DECIMAL or NUMERIC type.
+	// Value is 246.
+	TypeNewDecimal = C.MYSQL_TYPE_NEWDECIMAL
+	// TypeBlob specifies a BLOB or TEXT type.
+	// Value is 252.
+	TypeBlob = C.MYSQL_TYPE_BLOB
+	// TypeVarString specifies a VARCHAR or VARBINARY type.
+	// Value is 253.
+	TypeVarString = C.MYSQL_TYPE_VAR_STRING
+	// TypeString specifies a CHAR or BINARY type.
+	// Value is 254.
+	TypeString = C.MYSQL_TYPE_STRING
+	// TypeGeometry specifies a Spatial field.
+	// Value is 255. NOT SUPPORTED.
+	TypeGeometry = C.MYSQL_TYPE_GEOMETRY
 )
 
-type SqlError struct {
-	Num     int
-	Message string
-	Query   string
-}
+const (
+	// FlagUnsigned specifies if the value is an unsigned.
+	// Value is 32 (0x20).
+	FlagUnsigned = C.UNSIGNED_FLAG
+	// FlagBinary specifies if the data is binary.
+	// Value is 128 (0x80).
+	FlagBinary = C.BINARY_FLAG
+	// FlagEnum specifies if the value is an enum.
+	// Value is 256 (0x100).
+	FlagEnum = C.ENUM_FLAG
+	// FlagSet specifies if the value is a set.
+	// Value is 2048 (0x800).
+	FlagSet = C.SET_FLAG
 
-func NewSqlError(number int, format string, args ...interface{}) *SqlError {
-	return &SqlError{Num: number, Message: fmt.Sprintf(format, args...)}
-}
+	// RelevantFlags is used to mask out irrelevant flags.
+	RelevantFlags = FlagUnsigned |
+		FlagBinary |
+		FlagEnum |
+		FlagSet
+)
 
-func (se *SqlError) Error() string {
-	if se.Query == "" {
-		return fmt.Sprintf("%v (errno %v)", se.Message, se.Num)
-	}
-	return fmt.Sprintf("%v (errno %v) during query: %s", se.Message, se.Num, se.Query)
-}
+const (
+	// ErrDupEntry is C.ER_DUP_ENTRY
+	ErrDupEntry = C.ER_DUP_ENTRY
 
-func (se *SqlError) Number() int {
-	return se.Num
-}
+	// ErrLockWaitTimeout is C.ER_LOCK_WAIT_TIMEOUT
+	ErrLockWaitTimeout = C.ER_LOCK_WAIT_TIMEOUT
+
+	// ErrLockDeadlock is C.ER_LOCK_DEADLOCK
+	ErrLockDeadlock = C.ER_LOCK_DEADLOCK
+
+	// ErrOptionPreventsStatement is C.ER_OPTION_PREVENTS_STATEMENT
+	ErrOptionPreventsStatement = C.ER_OPTION_PREVENTS_STATEMENT
+
+	// ErrDataTooLong is C.ER_DATA_TOO_LONG
+	ErrDataTooLong = C.ER_DATA_TOO_LONG
+
+	// ErrBadNullError is C.ER_BAD_NULL_ERROR
+	ErrBadNullError = C.ER_BAD_NULL_ERROR
+
+	// ErrDataOutOfRange is C.ER_WARN_DATA_OUT_OF_RANGE
+	ErrDataOutOfRange = C.ER_WARN_DATA_OUT_OF_RANGE
+
+	// ErrServerLost is C.CR_SERVER_LOST.
+	// It's hard-coded for now because it causes problems on import.
+	ErrServerLost = 2013
+
+	// RedactedPassword is the password value used in redacted configs
+	RedactedPassword = "****"
+)
 
 func handleError(err *error) {
 	if x := recover(); x != nil {
-		terr := x.(*SqlError)
+		terr := x.(*sqldb.SQLError)
 		*err = terr
 	}
 }
 
-type ConnectionParams struct {
-	Host       string `json:"host"`
-	Port       int    `json:"port"`
-	Uname      string `json:"uname"`
-	Pass       string `json:"pass"`
-	DbName     string `json:"dbname"`
-	UnixSocket string `json:"unix_socket"`
-	Charset    string `json:"charset"`
-	Flags      uint64 `json:"flags"`
-
-	// the following flags are only used for 'Change Master' command
-	// for now (along with flags |= 2048 for CLIENT_SSL)
-	SslCa     string `json:"ssl_ca"`
-	SslCaPath string `json:"ssl_ca_path"`
-	SslCert   string `json:"ssl_cert"`
-	SslKey    string `json:"ssl_key"`
+// EnableSSL will set the right flag on the parameters
+func EnableSSL(connParams *sqldb.ConnParams) {
+	connParams.Flags |= C.CLIENT_SSL
 }
 
-func (c *ConnectionParams) EnableMultiStatements() {
-	c.Flags |= C.CLIENT_MULTI_STATEMENTS
+// SslEnabled returns if SSL is enabled
+func SslEnabled(connParams *sqldb.ConnParams) bool {
+	return (connParams.Flags & C.CLIENT_SSL) != 0
 }
 
-func (c *ConnectionParams) EnableSSL() {
-	c.Flags |= C.CLIENT_SSL
-}
-
-func (c *ConnectionParams) SslEnabled() bool {
-	return (c.Flags & C.CLIENT_SSL) != 0
-}
-
-func (c *ConnectionParams) Redact() {
-	c.Pass = REDACTED_PASSWORD
-}
-
+// Connection encapsulates a C mysql library connection
 type Connection struct {
 	c C.VT_CONN
 }
 
-func Connect(params ConnectionParams) (conn *Connection, err error) {
+// Connect uses the connection parameters to connect and returns the connection
+func Connect(params sqldb.ConnParams) (sqldb.Conn, error) {
+	var err error
 	defer handleError(&err)
 
 	host := C.CString(params.Host)
@@ -122,31 +189,34 @@ func Connect(params ConnectionParams) (conn *Connection, err error) {
 	defer cfree(pass)
 	dbname := C.CString(params.DbName)
 	defer cfree(dbname)
-	unix_socket := C.CString(params.UnixSocket)
-	defer cfree(unix_socket)
+	unixSocket := C.CString(params.UnixSocket)
+	defer cfree(unixSocket)
 	charset := C.CString(params.Charset)
 	defer cfree(charset)
 	flags := C.ulong(params.Flags)
 
-	conn = &Connection{}
-	if C.vt_connect(&conn.c, host, uname, pass, dbname, port, unix_socket, charset, flags) != 0 {
+	conn := &Connection{}
+	if C.vt_connect(&conn.c, host, uname, pass, dbname, port, unixSocket, charset, flags) != 0 {
 		defer conn.Close()
 		return nil, conn.lastError("")
 	}
 	return conn, nil
 }
 
+// Close closes the mysql connection
 func (conn *Connection) Close() {
 	C.vt_close(&conn.c)
 }
 
+// IsClosed returns if the connection was ever closed
 func (conn *Connection) IsClosed() bool {
 	return conn.c.mysql == nil
 }
 
-func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
+// ExecuteFetch executes the query on the connection
+func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *sqltypes.Result, err error) {
 	if conn.IsClosed() {
-		return nil, NewSqlError(2006, "Connection is closed")
+		return nil, sqldb.NewSQLError(2006, "Connection is closed")
 	}
 
 	if C.vt_execute(&conn.c, (*C.char)(hack.StringPointer(query)), C.ulong(len(query)), 0) != 0 {
@@ -154,15 +224,19 @@ func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool)
 	}
 	defer conn.CloseResult()
 
-	qr = &proto.QueryResult{}
+	qr = &sqltypes.Result{}
 	qr.RowsAffected = uint64(conn.c.affected_rows)
-	qr.InsertId = uint64(conn.c.insert_id)
+	qr.InsertID = uint64(conn.c.insert_id)
 	if conn.c.num_fields == 0 {
 		return qr, nil
 	}
 
 	if qr.RowsAffected > uint64(maxrows) {
-		return nil, &SqlError{0, fmt.Sprintf("Row count exceeded %d", maxrows), string(query)}
+		return nil, &sqldb.SQLError{
+			Num:     0,
+			Message: fmt.Sprintf("Row count exceeded %d", maxrows),
+			Query:   string(query),
+		}
 	}
 	if wantfields {
 		qr.Fields = conn.Fields()
@@ -192,10 +266,11 @@ func (conn *Connection) ExecuteFetchMap(query string) (map[string]string, error)
 	return rowMap, nil
 }
 
-// when using ExecuteStreamFetch, use FetchNext on the Connection until it returns nil or error
+// ExecuteStreamFetch starts a streaming query to mysql. Use FetchNext
+// on the Connection until it returns nil or error
 func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 	if conn.IsClosed() {
-		return NewSqlError(2006, "Connection is closed")
+		return sqldb.NewSQLError(2006, "Connection is closed")
 	}
 	if C.vt_execute(&conn.c, (*C.char)(hack.StringPointer(query)), C.ulong(len(query)), 1) != 0 {
 		return conn.lastError(query)
@@ -203,7 +278,8 @@ func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 	return nil
 }
 
-func (conn *Connection) Fields() (fields []proto.Field) {
+// Fields returns the current fields description for the query
+func (conn *Connection) Fields() (fields []*querypb.Field) {
 	nfields := int(conn.c.num_fields)
 	if nfields == 0 {
 		return nil
@@ -213,12 +289,14 @@ func (conn *Connection) Fields() (fields []proto.Field) {
 	for i := 0; i < nfields; i++ {
 		totalLength += uint64(cfields[i].name_length)
 	}
-	fields = make([]proto.Field, nfields)
+	fields = make([]*querypb.Field, nfields)
+	fvals := make([]querypb.Field, nfields)
 	for i := 0; i < nfields; i++ {
 		length := cfields[i].name_length
 		fname := (*[maxSize]byte)(unsafe.Pointer(cfields[i].name))[:length]
-		fields[i].Name = string(fname)
-		fields[i].Type = int64(cfields[i]._type)
+		fvals[i].Name = string(fname)
+		fvals[i].Type = sqltypes.MySQLToType(int64(cfields[i]._type), int64(cfields[i].flags))
+		fields[i] = &fvals[i]
 	}
 	return fields
 }
@@ -238,6 +316,7 @@ func (conn *Connection) fetchAll() (rows [][]sqltypes.Value, err error) {
 	return rows, nil
 }
 
+// FetchNext returns the next row for a query
 func (conn *Connection) FetchNext() (row []sqltypes.Value, err error) {
 	vtrow := C.vt_fetch_next(&conn.c)
 	if vtrow.has_error != 0 {
@@ -264,17 +343,22 @@ func (conn *Connection) FetchNext() (row []sqltypes.Value, err error) {
 		}
 		start := len(arena)
 		arena = append(arena, colPtr[:colLength]...)
-		row[i] = BuildValue(arena[start:start+int(colLength)], cfields[i]._type)
+		// MySQL values can be trusted.
+		row[i] = sqltypes.MakeTrusted(
+			sqltypes.MySQLToType(int64(cfields[i]._type), int64(cfields[i].flags)),
+			arena[start:start+int(colLength)],
+		)
 	}
 	return row, nil
 }
 
+// CloseResult finishes the result set
 func (conn *Connection) CloseResult() {
 	C.vt_close_result(&conn.c)
 }
 
-// Id returns the MySQL thread_id of the connection.
-func (conn *Connection) Id() int64 {
+// ID returns the MySQL thread_id of the connection.
+func (conn *Connection) ID() int64 {
 	if conn.c.mysql == nil {
 		return 0
 	}
@@ -283,9 +367,17 @@ func (conn *Connection) Id() int64 {
 
 func (conn *Connection) lastError(query string) error {
 	if err := C.vt_error(&conn.c); *err != 0 {
-		return &SqlError{Num: int(C.vt_errno(&conn.c)), Message: C.GoString(err), Query: query}
+		return &sqldb.SQLError{
+			Num:     int(C.vt_errno(&conn.c)),
+			Message: C.GoString(err),
+			Query:   query,
+		}
 	}
-	return &SqlError{0, "Dummy", string(query)}
+	return &sqldb.SQLError{
+		Num:     0,
+		Message: "Dummy",
+		Query:   string(query),
+	}
 }
 
 // ReadPacket reads a raw packet from the MySQL connection.
@@ -316,56 +408,57 @@ func (conn *Connection) SendCommand(command uint32, data []byte) error {
 	return nil
 }
 
-// ForceClose closes a MySQL connection forcibly at the socket level, instead of
-// gracefully through mysql_close(). This is necessary when a thread is blocked
-// in a call to ReadPacket(), and another thread wants to cancel the read. We
-// can't use mysql_close() because it isn't safe to use while another thread is
-// blocked in an I/O call on that MySQL connection.
-func (conn *Connection) ForceClose() {
-	C.vt_force_close(&conn.c)
+// Shutdown invokes the low-level shutdown call on the socket associated with
+// a MySQL connection to stop ongoing communication. This is necessary when a
+// thread is blocked in a MySQL I/O call, such as  ReadPacket(), and another
+// thread wants to cancel the operation. We can't use mysql_close() because it
+// isn't thread-safe.
+func (conn *Connection) Shutdown() {
+	C.vt_shutdown(&conn.c)
 }
 
 // GetCharset returns the current numerical values of the per-session character
 // set variables.
-func (conn *Connection) GetCharset() (cs proto.Charset, err error) {
+func (conn *Connection) GetCharset() (*binlogdatapb.Charset, error) {
 	// character_set_client
 	row, err := conn.ExecuteFetchMap("SHOW COLLATION WHERE `charset`=@@session.character_set_client AND `default`='Yes'")
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	i, err := strconv.ParseInt(row["Id"], 10, 16)
+	client, err := strconv.ParseInt(row["Id"], 10, 16)
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	cs.Client = int(i)
 
 	// collation_connection
 	row, err = conn.ExecuteFetchMap("SHOW COLLATION WHERE `collation`=@@session.collation_connection")
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	i, err = strconv.ParseInt(row["Id"], 10, 16)
+	connection, err := strconv.ParseInt(row["Id"], 10, 16)
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	cs.Conn = int(i)
 
 	// collation_server
 	row, err = conn.ExecuteFetchMap("SHOW COLLATION WHERE `collation`=@@session.collation_server")
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	i, err = strconv.ParseInt(row["Id"], 10, 16)
+	server, err := strconv.ParseInt(row["Id"], 10, 16)
 	if err != nil {
-		return cs, err
+		return nil, err
 	}
-	cs.Server = int(i)
 
-	return cs, nil
+	return &binlogdatapb.Charset{
+		Client: int32(client),
+		Conn:   int32(connection),
+		Server: int32(server),
+	}, nil
 }
 
 // SetCharset changes the per-session character set variables.
-func (conn *Connection) SetCharset(cs proto.Charset) error {
+func (conn *Connection) SetCharset(cs *binlogdatapb.Charset) error {
 	sql := fmt.Sprintf(
 		"SET @@session.character_set_client=%d, @@session.collation_connection=%d, @@session.collation_server=%d",
 		cs.Client, cs.Conn, cs.Server)
@@ -373,26 +466,11 @@ func (conn *Connection) SetCharset(cs proto.Charset) error {
 	return err
 }
 
-func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {
-	if bytes == nil {
-		return sqltypes.NULL
-	}
-	switch fieldType {
-	case C.MYSQL_TYPE_DECIMAL, C.MYSQL_TYPE_FLOAT, C.MYSQL_TYPE_DOUBLE, C.MYSQL_TYPE_NEWDECIMAL:
-		return sqltypes.MakeFractional(bytes)
-	case C.MYSQL_TYPE_TIMESTAMP:
-		return sqltypes.MakeString(bytes)
-	}
-	// The below condition represents the following list of values:
-	// C.MYSQL_TYPE_TINY, C.MYSQL_TYPE_SHORT, C.MYSQL_TYPE_LONG, C.MYSQL_TYPE_LONGLONG, C.MYSQL_TYPE_INT24, C.MYSQL_TYPE_YEAR:
-	if fieldType <= C.MYSQL_TYPE_INT24 || fieldType == C.MYSQL_TYPE_YEAR {
-		return sqltypes.MakeNumeric(bytes)
-	}
-	return sqltypes.MakeString(bytes)
-}
-
 func cfree(str *C.char) {
 	if str != nil {
 		C.free(unsafe.Pointer(str))
 	}
 }
+
+// Make sure mysql.Connection implements sqldb.Conn
+var _ (sqldb.Conn) = (*Connection)(nil)

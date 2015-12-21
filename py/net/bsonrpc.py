@@ -4,16 +4,10 @@
 
 # Go-style RPC client using BSON as the codec.
 
-import bson
 import hmac
 import struct
-try:
-  # use optimized cbson which has slightly different API
-  import cbson
-  decode_document = cbson.decode_next
-except ImportError:
-  from bson import codec
-  decode_document = codec.decode_document
+
+import bson
 
 from net import gorpc
 
@@ -25,27 +19,23 @@ len_struct = struct.Struct('<i')
 unpack_length = len_struct.unpack_from
 len_struct_size = len_struct.size
 
+
 class BsonRpcClient(gorpc.GoRpcClient):
-  def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+
+  def __init__(self, addr, timeout, user=None, password=None,
+               keyfile=None, certfile=None):
     if bool(user) != bool(password):
-      raise ValueError("You must provide either both or none of user and password.")
-    if addr.startswith('/'):
-      socket_file = addr
-      self.addr = 'localhost'
-    else:
-      socket_file = None
-      self.addr = addr
+      raise ValueError(
+          'You must provide either both or none of user and password.')
+    self.addr = addr
     self.user = user
     self.password = password
-    if encrypted:
-      protocol = 'https'
-    else:
-      protocol = 'http'
     if self.user:
-      uri = '%s://%s/_bson_rpc_/auth' % (protocol, self.addr)
+      uri = 'http://%s/_bson_rpc_/auth' % self.addr
     else:
-      uri = '%s://%s/_bson_rpc_' % (protocol, self.addr)
-    gorpc.GoRpcClient.__init__(self, uri, timeout, keyfile=keyfile, certfile=certfile, socket_file=socket_file)
+      uri = 'http://%s/_bson_rpc_' % self.addr
+    gorpc.GoRpcClient.__init__(
+        self, uri, timeout, keyfile=keyfile, certfile=certfile)
 
   def dial(self):
     gorpc.GoRpcClient.dial(self)
@@ -57,10 +47,11 @@ class BsonRpcClient(gorpc.GoRpcClient):
         raise
 
   def authenticate(self):
-    challenge = self.call('AuthenticatorCRAMMD5.GetNewChallenge', "").reply['Challenge']
+    challenge = self.call(
+        'AuthenticatorCRAMMD5.GetNewChallenge', '').reply['Challenge']
     # CRAM-MD5 authentication.
-    proof = self.user + " " + hmac.HMAC(self.password, challenge).hexdigest()
-    self.call('AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
+    proof = self.user + ' ' + hmac.HMAC(self.password, challenge).hexdigest()
+    self.call('AuthenticatorCRAMMD5.Authenticate', {'Proof': proof})
 
   def encode_request(self, req):
     try:
@@ -89,21 +80,18 @@ class BsonRpcClient(gorpc.GoRpcClient):
     # decode the payload length and see if we have enough
     body_len = unpack_length(data, header_len)[0]
     if data_len < header_len + body_len:
-        return None, header_len + body_len - data_len
+      return None, header_len + body_len - data_len
 
     # we have enough data, decode it all
     try:
-      offset, response.header = decode_document(data, 0)
-      offset, response.reply = decode_document(data, offset)
+      offset, response.header = bson.codec.decode_document(data, 0)
+      offset, response.reply = bson.codec.decode_document(data, offset)
       # unpack primitive values
       # FIXME(msolomon) remove this hack
       response.reply = response.reply.get(WRAPPED_FIELD, response.reply)
 
-      # the pure-python bson library returns the offset in the buffer
-      # the cbson library returns -1 if everything was read
-      # so we cannot use the 'offset' variable. Instead use
-      # header_len + body_len for the complete length read
-
+      # Return header_len + body_len instead of the offsets returned
+      # by the library, should be the same.
       return header_len + body_len, None
     except Exception as e:
       raise gorpc.GoRpcError('decode error', e)

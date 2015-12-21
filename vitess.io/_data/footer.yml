@@ -1,0 +1,16 @@
+# Footer navigation links
+
+- title: Home
+  url: /
+
+- title: Getting Started
+  url: /getting-started/
+
+- title: About
+  url: /about/
+
+- title: FAQ
+  url: /faq/
+
+- title: Terms
+  url: /terms/

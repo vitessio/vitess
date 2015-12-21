@@ -42,7 +42,7 @@ func TestLifeCycleGlobal(t *testing.T) {
 	testLifeCycle(t, "1255@voltron:2890:3890:2183", 1255)
 }
 
-func testLifeCycle(t *testing.T, config string, myId uint32) {
+func testLifeCycle(t *testing.T, config string, myID uint32) {
 	currentVtDataRoot := os.Getenv("VTDATAROOT")
 	vtDataRoot := path.Join(os.TempDir(), fmt.Sprintf("VTDATAROOT_%v", getUUID(t)))
 	if err := os.Setenv("VTDATAROOT", vtDataRoot); err != nil {
@@ -57,7 +57,7 @@ func testLifeCycle(t *testing.T, config string, myId uint32) {
 			t.Errorf("cannot remove test VTDATAROOT directory: %v", err)
 		}
 	}()
-	zkConf := MakeZkConfigFromString(config, myId)
+	zkConf := MakeZkConfigFromString(config, myID)
 	zkd := NewZkd(zkConf)
 	if err := zkd.Init(); err != nil {
 		t.Fatalf("Init() err: %v", err)

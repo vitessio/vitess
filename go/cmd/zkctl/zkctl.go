@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/zk/zkctl"
 )
@@ -53,6 +54,7 @@ func confirm(prompt string) bool {
 }
 
 func main() {
+	defer exit.Recover()
 	defer logutil.Flush()
 
 	flag.Parse()
@@ -60,7 +62,7 @@ func main() {
 
 	if len(args) == 0 {
 		flag.Usage()
-		os.Exit(1)
+		exit.Return(1)
 	}
 
 	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myId))
@@ -78,9 +80,11 @@ func main() {
 	case "teardown":
 		err = zkd.Teardown()
 	default:
-		log.Fatalf("invalid action: %v", action)
+		log.Errorf("invalid action: %v", action)
+		exit.Return(1)
 	}
 	if err != nil {
-		log.Fatalf("failed %v: %v", action, err)
+		log.Errorf("failed %v: %v", action, err)
+		exit.Return(1)
 	}
 }

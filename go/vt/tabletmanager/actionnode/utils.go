@@ -8,24 +8,32 @@ package actionnode
 // topology server.
 
 import (
+	"flag"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 var (
 	// DefaultLockTimeout is a good value to use as a default for
 	// locking a shard / keyspace.
 	DefaultLockTimeout = 30 * time.Second
+
+	// LockTimeout is the command line flag that introduces a shorter
+	// timeout for locking topology structures.
+	LockTimeout = flag.Duration("lock_timeout", DefaultLockTimeout, "timeout for acquiring topology locks")
 )
 
 // LockKeyspace will lock the keyspace in the topology server.
 // UnlockKeyspace should be called if this returns no error.
-func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace string) (lockPath string, err error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, n.Action)
+
+	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
+	defer cancel()
 
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.LockKeyspaceForAction")
@@ -33,22 +41,47 @@ func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace 
 	span.Annotate("keyspace", keyspace)
 	defer span.Finish()
 
-	return ts.LockKeyspaceForAction(keyspace, n.ToJson(), lockTimeout, interrupted)
+	j, err := n.ToJSON()
+	if err != nil {
+		return "", err
+	}
+	return ts.LockKeyspaceForAction(ctx, keyspace, j)
 }
 
 // UnlockKeyspace unlocks a previously locked keyspace.
-func (n *ActionNode) UnlockKeyspace(ts topo.Server, keyspace string, lockPath string, actionError error) error {
+func (n *ActionNode) UnlockKeyspace(ctx context.Context, ts topo.Server, keyspace string, lockPath string, actionError error) error {
+	// Detach from the parent timeout, but copy the trace span.
+	// We need to still release the lock even if the parent context timed out.
+	ctx = trace.CopySpan(context.TODO(), ctx)
+	ctx, cancel := context.WithTimeout(ctx, DefaultLockTimeout)
+	defer cancel()
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UnlockKeyspaceForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	defer span.Finish()
+
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking keyspace %v for action %v with error %v", keyspace, n.Action, actionError)
 		n.Error = actionError.Error()
-		n.State = ACTION_STATE_FAILED
+		n.State = ActionStateFailed
 	} else {
 		log.Infof("Unlocking keyspace %v for successful action %v", keyspace, n.Action)
 		n.Error = ""
-		n.State = ACTION_STATE_DONE
+		n.State = ActionStateDone
 	}
-	err := ts.UnlockKeyspaceForAction(keyspace, lockPath, n.ToJson())
+	j, err := n.ToJSON()
+	if err != nil {
+		if actionError != nil {
+			// this will be masked
+			log.Warningf("node.ToJSON failed: %v", err)
+			return actionError
+		}
+		return err
+	}
+	err = ts.UnlockKeyspaceForAction(ctx, keyspace, lockPath, j)
 	if actionError != nil {
 		if err != nil {
 			// this will be masked
@@ -61,8 +94,11 @@ func (n *ActionNode) UnlockKeyspace(ts topo.Server, keyspace string, lockPath st
 
 // LockShard will lock the shard in the topology server.
 // UnlockShard should be called if this returns no error.
-func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, shard string) (lockPath string, err error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, n.Action)
+
+	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
+	defer cancel()
 
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.LockShardForAction")
@@ -71,22 +107,48 @@ func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, sh
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	return ts.LockShardForAction(keyspace, shard, n.ToJson(), lockTimeout, interrupted)
+	j, err := n.ToJSON()
+	if err != nil {
+		return "", err
+	}
+	return ts.LockShardForAction(ctx, keyspace, shard, j)
 }
 
 // UnlockShard unlocks a previously locked shard.
-func (n *ActionNode) UnlockShard(ts topo.Server, keyspace, shard string, lockPath string, actionError error) error {
+func (n *ActionNode) UnlockShard(ctx context.Context, ts topo.Server, keyspace, shard string, lockPath string, actionError error) error {
+	// Detach from the parent timeout, but copy the trace span.
+	// We need to still release the lock even if the parent context timed out.
+	ctx = trace.CopySpan(context.TODO(), ctx)
+	ctx, cancel := context.WithTimeout(ctx, DefaultLockTimeout)
+	defer cancel()
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UnlockShardForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	defer span.Finish()
+
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, n.Action, actionError)
 		n.Error = actionError.Error()
-		n.State = ACTION_STATE_FAILED
+		n.State = ActionStateFailed
 	} else {
 		log.Infof("Unlocking shard %v/%v for successful action %v", keyspace, shard, n.Action)
 		n.Error = ""
-		n.State = ACTION_STATE_DONE
+		n.State = ActionStateDone
 	}
-	err := ts.UnlockShardForAction(keyspace, shard, lockPath, n.ToJson())
+	j, err := n.ToJSON()
+	if err != nil {
+		if actionError != nil {
+			// this will be masked
+			log.Warningf("node.ToJSON failed: %v", err)
+			return actionError
+		}
+		return err
+	}
+	err = ts.UnlockShardForAction(ctx, keyspace, shard, lockPath, j)
 	if actionError != nil {
 		if err != nil {
 			// this will be masked
@@ -99,8 +161,11 @@ func (n *ActionNode) UnlockShard(ts topo.Server, keyspace, shard string, lockPat
 
 // LockSrvShard will lock the serving shard in the topology server.
 // UnlockSrvShard should be called if this returns no error.
-func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string) (lockPath string, err error) {
 	log.Infof("Locking serving shard %v/%v/%v for action %v", cell, keyspace, shard, n.Action)
+
+	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
+	defer cancel()
 
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.LockSrvShardForAction")
@@ -110,22 +175,49 @@ func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, key
 	span.Annotate("cell", cell)
 	defer span.Finish()
 
-	return ts.LockSrvShardForAction(cell, keyspace, shard, n.ToJson(), lockTimeout, interrupted)
+	j, err := n.ToJSON()
+	if err != nil {
+		return "", err
+	}
+	return ts.LockSrvShardForAction(ctx, cell, keyspace, shard, j)
 }
 
 // UnlockSrvShard unlocks a previously locked serving shard.
-func (n *ActionNode) UnlockSrvShard(ts topo.Server, cell, keyspace, shard string, lockPath string, actionError error) error {
+func (n *ActionNode) UnlockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string, lockPath string, actionError error) error {
+	// Detach from the parent timeout, but copy the trace span.
+	// We need to still release the lock even if the parent context timed out.
+	ctx = trace.CopySpan(context.TODO(), ctx)
+	ctx, cancel := context.WithTimeout(ctx, DefaultLockTimeout)
+	defer cancel()
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UnlockSrvShardForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("cell", cell)
+	defer span.Finish()
+
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking serving shard %v/%v/%v for action %v with error %v", cell, keyspace, shard, n.Action, actionError)
 		n.Error = actionError.Error()
-		n.State = ACTION_STATE_FAILED
+		n.State = ActionStateFailed
 	} else {
 		log.Infof("Unlocking serving shard %v/%v/%v for successful action %v", cell, keyspace, shard, n.Action)
 		n.Error = ""
-		n.State = ACTION_STATE_DONE
+		n.State = ActionStateDone
 	}
-	err := ts.UnlockSrvShardForAction(cell, keyspace, shard, lockPath, n.ToJson())
+	j, err := n.ToJSON()
+	if err != nil {
+		if actionError != nil {
+			// this will be masked
+			log.Warningf("node.ToJSON failed: %v", err)
+			return actionError
+		}
+		return err
+	}
+	err = ts.UnlockSrvShardForAction(ctx, cell, keyspace, shard, lockPath, j)
 	if actionError != nil {
 		if err != nil {
 			// this will be masked

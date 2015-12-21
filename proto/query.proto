@@ -1,0 +1,373 @@
+// This file contains all the types necessary to make
+// RPC calls to Vttablet.
+
+syntax = "proto3";
+
+package query;
+
+option java_package="com.youtube.vitess.proto";
+
+import "topodata.proto";
+import "vtrpc.proto";
+
+// Target describes what the client expects the tablet is.
+// If the tablet does not match, an error is returned.
+message Target {
+  string keyspace = 1;
+  string shard = 2;
+  topodata.TabletType tablet_type = 3;
+}
+
+// VTGateCallerID is sent by VTGate to VTTablet to describe the
+// caller. If possible, this information is secure. For instance,
+// if using unique certificates that guarantee that VTGate->VTTablet
+// traffic cannot be spoofed, then VTTablet can trust this information,
+// and VTTablet will use it for tablet ACLs, for instance.
+// Because of this security guarantee, this is different than the CallerID
+// structure, which is not secure at all, because it is provided
+// by the Vitess client.
+message VTGateCallerID {
+  string username = 1;
+}
+
+// Flag allows us to qualify types by their common properties.
+enum Flag {
+  NONE = 0;
+  ISINTEGRAL = 256;
+  ISUNSIGNED = 512;
+  ISFLOAT = 1024;
+  ISQUOTED = 2048;
+  ISTEXT = 4096;
+  ISBINARY = 8192;
+}
+
+// Type defines the various supported data types in bind vars
+// and query results.
+enum Type {
+  // NULL_TYPE specifies a NULL type.
+  NULL_TYPE = 0;
+  // INT8 specifies a TINYINT type.
+  // Properties: 1, IsNumber.
+  INT8 = 257;
+  // UINT8 specifies a TINYINT UNSIGNED type.
+  // Properties: 2, IsNumber, IsUnsigned.
+  UINT8 = 770;
+  // INT16 specifies a SMALLINT type.
+  // Properties: 3, IsNumber.
+  INT16 = 259;
+  // UINT16 specifies a SMALLINT UNSIGNED type.
+  // Properties: 4, IsNumber, IsUnsigned.
+  UINT16 = 772;
+  // INT24 specifies a MEDIUMINT type.
+  // Properties: 5, IsNumber.
+  INT24 = 261;
+  // UINT24 specifies a MEDIUMINT UNSIGNED type.
+  // Properties: 6, IsNumber, IsUnsigned.
+  UINT24 = 774;
+  // INT32 specifies a INTEGER type.
+  // Properties: 7, IsNumber.
+  INT32 = 263;
+  // UINT32 specifies a INTEGER UNSIGNED type.
+  // Properties: 8, IsNumber, IsUnsigned.
+  UINT32 = 776;
+  // INT64 specifies a BIGINT type.
+  // Properties: 9, IsNumber.
+  INT64 = 265;
+  // UINT64 specifies a BIGINT UNSIGNED type.
+  // Properties: 10, IsNumber, IsUnsigned.
+  UINT64 = 778;
+  // FLOAT32 specifies a FLOAT type.
+  // Properties: 11, IsFloat.
+  FLOAT32 = 1035;
+  // FLOAT64 specifies a DOUBLE or REAL type.
+  // Properties: 12, IsFloat.
+  FLOAT64 = 1036;
+  // TIMESTAMP specifies a TIMESTAMP type.
+  // Properties: 13, IsQuoted.
+  TIMESTAMP = 2061;
+  // DATE specifies a DATE type.
+  // Properties: 14, IsQuoted.
+  DATE = 2062;
+  // TIME specifies a TIME type.
+  // Properties: 15, IsQuoted.
+  TIME = 2063;
+  // DATETIME specifies a DATETIME type.
+  // Properties: 16, IsQuoted.
+  DATETIME = 2064;
+  // YEAR specifies a YEAR type.
+  // Properties: 17, IsNumber, IsUnsigned.
+  YEAR = 785;
+  // DECIMAL specifies a DECIMAL or NUMERIC type.
+  // Properties: 18, None.
+  DECIMAL = 18;
+  // TEXT specifies a TEXT type.
+  // Properties: 19, IsQuoted, IsText.
+  TEXT = 6163;
+  // BLOB specifies a BLOB type.
+  // Properties: 20, IsQuoted, IsBinary.
+  BLOB = 10260;
+  // VARCHAR specifies a VARCHAR type.
+  // Properties: 21, IsQuoted, IsText.
+  VARCHAR = 6165;
+  // VARBINARY specifies a VARBINARY type.
+  // Properties: 22, IsQuoted, IsBinary.
+  VARBINARY = 10262;
+  // CHAR specifies a CHAR type.
+  // Properties: 23, IsQuoted, IsText.
+  CHAR = 6167;
+  // BINARY specifies a BINARY type.
+  // Properties: 24, IsQuoted, IsBinary.
+  BINARY = 10264;
+  // BIT specifies a BIT type.
+  // Properties: 25, IsQuoted.
+  BIT = 2073;
+  // ENUM specifies an ENUM type.
+  // Properties: 26, IsQuoted.
+  ENUM = 2074;
+  // SET specifies a SET type.
+  // Properties: 27, IsQuoted.
+  SET = 2075;
+  // TUPLE specifies a a tuple. This cannot
+  // be returned in a QueryResult, but it can
+  // be sent as a bind var.
+  // Properties: 28, None.
+  TUPLE = 28;
+}
+
+// Value represents a typed value.
+message Value {
+  Type type = 1;
+  bytes value = 2;
+}
+
+// BindVariable represents a single bind variable in a Query.
+message BindVariable {
+  Type type = 1;
+  bytes value = 2;
+  // values are set if type is TUPLE.
+  repeated Value values = 3;
+}
+
+// BoundQuery is a query with its bind variables
+message BoundQuery {
+  // sql is the SQL query to execute
+  string sql = 1;
+
+  // bind_variables is a map of all bind variables to expand in the query
+  map<string, BindVariable> bind_variables = 2;
+}
+
+// Field describes a single column returned by a query
+message Field {
+  // name of the field as returned by mysql C API
+  string name = 1;
+
+  // vitess-defined type. Conversion function is in sqltypes package.
+  Type type = 2;
+}
+
+// Row is a database row.
+message Row {
+  // lengths contains the length of each value in values.
+  // A length of -1 means that the field is NULL. While
+  // reading values, you have to accummulate the length
+  // to know the offset where the next value begins in values.
+  repeated sint64 lengths = 1;
+  // values contains a concatenation of all values in the row.
+  bytes values = 2;
+}
+
+// QueryResult is returned by Execute and ExecuteStream.
+//
+// As returned by Execute, len(fields) is always equal to len(row)
+// (for each row in rows).
+//
+// As returned by StreamExecute, the first QueryResult has the fields
+// set, and subsequent QueryResult have rows set. And as Execute,
+// len(QueryResult[0].fields) is always equal to len(row) (for each
+// row in rows for each QueryResult in QueryResult[1:]).
+message QueryResult {
+  repeated Field fields = 1;
+  uint64 rows_affected = 2;
+  uint64 insert_id = 3;
+  repeated Row rows = 4;
+}
+
+// GetSessionIdRequest is the payload to GetSessionId
+message GetSessionIdRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  string keyspace = 3;
+  string shard = 4;
+}
+
+// GetSessionIdResponse is the returned value from GetSessionId
+message GetSessionIdResponse {
+  int64 session_id = 1;
+}
+
+// ExecuteRequest is the payload to Execute
+message ExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  int64 transaction_id = 5;
+  int64 session_id = 6;
+}
+
+// ExecuteResponse is the returned value from Execute
+message ExecuteResponse {
+  QueryResult result = 1;
+}
+
+// ExecuteBatchRequest is the payload to ExecuteBatch
+message ExecuteBatchRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  repeated BoundQuery queries = 4;
+  bool  as_transaction = 5;
+  int64 transaction_id = 6;
+  int64 session_id = 7;
+}
+
+// ExecuteBatchResponse is the returned value from ExecuteBatch
+message ExecuteBatchResponse {
+  repeated QueryResult results = 1;
+}
+
+// StreamExecuteRequest is the payload to StreamExecute
+message StreamExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  int64 session_id = 5;
+}
+
+// StreamExecuteResponse is the returned value from StreamExecute
+message StreamExecuteResponse {
+  QueryResult result = 1;
+}
+
+// BeginRequest is the payload to Begin
+message BeginRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  int64 session_id = 4;
+}
+
+// BeginResponse is the returned value from Begin
+message BeginResponse {
+  int64 transaction_id = 1;
+}
+
+// CommitRequest is the payload to Commit
+message CommitRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  int64 transaction_id = 4;
+  int64 session_id = 5;
+}
+
+// CommitResponse is the returned value from Commit
+message CommitResponse {}
+
+// RollbackRequest is the payload to Rollback
+message RollbackRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  int64 transaction_id = 4;
+  int64 session_id = 5;
+}
+
+// RollbackResponse is the returned value from Rollback
+message RollbackResponse {}
+
+// SplitQueryRequest is the payload for SplitQuery
+message SplitQueryRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  string split_column = 5;
+  int64 split_count = 6;
+  int64 session_id = 7;
+}
+
+// QuerySplit represents one query to execute on the tablet
+message QuerySplit {
+  // query is the query to execute
+  BoundQuery query = 1;
+
+  // row_count is the approximate row count the query will return
+  int64 row_count = 2;
+}
+
+// SplitQueryResponse is returned by SplitQuery and represents all the queries
+// to execute in order to get the entire data set.
+message SplitQueryResponse {
+  repeated QuerySplit queries = 1;
+}
+
+// StreamHealthRequest is the payload for StreamHealth
+message StreamHealthRequest {
+}
+
+// RealtimeStats contains information about the tablet status
+message RealtimeStats {
+  // health_error is the last error we got from health check,
+  // or empty is the server is healthy. This is used for subset selection,
+  // we do not send queries to servers that are not healthy.
+  string health_error = 1;
+
+  // seconds_behind_master is populated for slaves only. It indicates
+  // how far behind on (MySQL) replication a slave currently is.  It is used
+  // by clients for subset selection (so we don't try to send traffic
+  // to tablets that are too far behind).
+  // NOTE: This field must not be evaluated if "health_error" is not empty.
+  // TODO(mberlin): Let's switch it to int64 instead?
+  uint32 seconds_behind_master = 2;
+
+  // bin_log_players_count is the number of currently running binlog players.
+  // if the value is 0, it means that filtered replication is currently not
+  // running on the tablet. If >0, filtered replication is running.
+  // NOTE: This field must not be evaluated if "health_error" is not empty.
+  int32 binlog_players_count = 3;
+
+  // seconds_behind_master_filtered_replication is populated for the receiving
+  // master of an ongoing filtered replication only.
+  // It specifies how far the receiving master lags behind the sending master.
+  // NOTE: This field must not be evaluated if "health_error" is not empty.
+  // NOTE: This field must not be evaluated if "bin_log_players_count" is 0.
+  int64 seconds_behind_master_filtered_replication = 4;
+
+  // cpu_usage is used for load-based balancing
+  double cpu_usage = 5;
+}
+
+// StreamHealthResponse is streamed by StreamHealth on a regular basis
+message StreamHealthResponse {
+  // target is the current server type. Only queries with that exact Target
+  // record will be accepted.
+  Target target = 1;
+
+  // serving is true iff the tablet is serving. A tablet may not be serving
+  // if filtered replication is enabled on a master for instance,
+  // or if a replica should not be used because the keyspace is being resharded.
+  bool serving = 2;
+
+  // tablet_externally_reparented_timestamp contains the last time
+  // tabletmanager.TabletExternallyReparented was called on this tablet,
+  // or 0 if it was never called. This is meant to differentiate two tablets
+  // that report a target.TabletType of MASTER, only the one with the latest
+  // timestamp should be trusted.
+  int64 tablet_externally_reparented_timestamp = 3;
+
+  // realtime_stats contains information about the tablet status
+  RealtimeStats realtime_stats = 4;
+}

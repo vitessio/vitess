@@ -1,0 +1,166 @@
+// This file contains the service definition for making management API
+// calls to VtTablet.
+
+syntax = "proto3";
+
+package tabletmanagerservice;
+
+import "tabletmanagerdata.proto";
+
+// TabletManager is a service definition for tabletmanagerdata.TabletManager.
+service TabletManager {
+  //
+  // Various read-only methods
+  //
+
+  // Ping returns the input payload
+  rpc Ping(tabletmanagerdata.PingRequest) returns (tabletmanagerdata.PingResponse) {};
+
+  // Sleep sleeps for the provided duration
+  rpc Sleep(tabletmanagerdata.SleepRequest) returns (tabletmanagerdata.SleepResponse) {};
+
+  // ExecuteHook executes the hook remotely
+  rpc ExecuteHook(tabletmanagerdata.ExecuteHookRequest) returns (tabletmanagerdata.ExecuteHookResponse) {};
+
+  // GetSchema asks the tablet for its schema
+  rpc GetSchema(tabletmanagerdata.GetSchemaRequest) returns (tabletmanagerdata.GetSchemaResponse) {};
+
+  // GetPermissions asks the tablet for its permissions
+  rpc GetPermissions(tabletmanagerdata.GetPermissionsRequest) returns (tabletmanagerdata.GetPermissionsResponse) {};
+
+  //
+  // Various read-write methods
+  //
+
+  rpc SetReadOnly(tabletmanagerdata.SetReadOnlyRequest) returns (tabletmanagerdata.SetReadOnlyResponse) {};
+
+  rpc SetReadWrite(tabletmanagerdata.SetReadWriteRequest) returns (tabletmanagerdata.SetReadWriteResponse) {};
+
+  // ChangeType asks the remote tablet to change its type
+  rpc ChangeType(tabletmanagerdata.ChangeTypeRequest) returns (tabletmanagerdata.ChangeTypeResponse) {};
+
+  rpc RefreshState(tabletmanagerdata.RefreshStateRequest) returns (tabletmanagerdata.RefreshStateResponse) {};
+
+  rpc RunHealthCheck(tabletmanagerdata.RunHealthCheckRequest) returns (tabletmanagerdata.RunHealthCheckResponse) {};
+
+  rpc ReloadSchema(tabletmanagerdata.ReloadSchemaRequest) returns (tabletmanagerdata.ReloadSchemaResponse) {};
+
+  rpc PreflightSchema(tabletmanagerdata.PreflightSchemaRequest) returns (tabletmanagerdata.PreflightSchemaResponse) {};
+
+  rpc ApplySchema(tabletmanagerdata.ApplySchemaRequest) returns (tabletmanagerdata.ApplySchemaResponse) {};
+
+  rpc ExecuteFetchAsDba(tabletmanagerdata.ExecuteFetchAsDbaRequest) returns (tabletmanagerdata.ExecuteFetchAsDbaResponse) {};
+
+  rpc ExecuteFetchAsApp(tabletmanagerdata.ExecuteFetchAsAppRequest) returns (tabletmanagerdata.ExecuteFetchAsAppResponse) {};
+
+  //
+  // Replication related methods
+  //
+
+  // SlaveStatus returns the current slave status.
+  rpc SlaveStatus(tabletmanagerdata.SlaveStatusRequest) returns (tabletmanagerdata.SlaveStatusResponse) {};
+
+  // MasterPosition returns the current master position
+  rpc MasterPosition(tabletmanagerdata.MasterPositionRequest) returns (tabletmanagerdata.MasterPositionResponse) {};
+
+  // StopSlave makes mysql stop its replication
+  rpc StopSlave(tabletmanagerdata.StopSlaveRequest) returns (tabletmanagerdata.StopSlaveResponse) {};
+
+  // StopSlaveMinimum stops the mysql replication after it reaches
+  // the provided minimum point
+  rpc StopSlaveMinimum(tabletmanagerdata.StopSlaveMinimumRequest) returns (tabletmanagerdata.StopSlaveMinimumResponse) {};
+
+  // StartSlave starts the mysql replication
+  rpc StartSlave(tabletmanagerdata.StartSlaveRequest) returns (tabletmanagerdata.StartSlaveResponse) {};
+
+  // TabletExternallyReparented tells a tablet that its underlying MySQL is
+  // currently the master. It is only used in environments (tabletmanagerdata.such as Vitess+MoB)
+  // in which MySQL is reparented by some agent external to Vitess, and then
+  // that agent simply notifies Vitess.
+  //
+  // This call is idempotent with respect to a single target tablet.
+  // However, the tablet assumes there is a cooling-off period following the
+  // initial external reparent from A to B, before this call is repeated on any
+  // tablet other than B. This assumption is configurable with the vttablet flag
+  // "finalize_external_reparent_timeout".
+  //
+  // For more information, see the design doc at go/vt-fast-failover.
+  rpc TabletExternallyReparented(tabletmanagerdata.TabletExternallyReparentedRequest) returns (tabletmanagerdata.TabletExternallyReparentedResponse) {};
+
+  // TabletExternallyElected is an notification that may be sent in
+  // anticipation of potentially later sending TabletExternallyReparented.
+  // The tablet can use this extra lead time to prepare to react quickly if
+  // TabletExternallyReparented does follow.
+  //
+  // This call is effectively a no-op if it is not followed by a call to
+  // TabletExternallyReparented, so the external agent doing the reparent can
+  // still change its mind.
+  //
+  // The agent does not need to wait for this call or cancel it before calling
+  // TabletExternallyReparented if the external reparent operation finishes
+  // before TabletExternallyElected returns.
+  rpc TabletExternallyElected(tabletmanagerdata.TabletExternallyElectedRequest) returns (tabletmanagerdata.TabletExternallyElectedResponse) {};
+
+  // GetSlaves asks for the list of mysql slaves
+  rpc GetSlaves(tabletmanagerdata.GetSlavesRequest) returns (tabletmanagerdata.GetSlavesResponse) {};
+
+  // WaitBlpPosition tells the remote tablet to wait until it reaches
+  // the specified binolg player position
+  rpc WaitBlpPosition(tabletmanagerdata.WaitBlpPositionRequest) returns (tabletmanagerdata.WaitBlpPositionResponse) {};
+
+  // StopBlp asks the tablet to stop all its binlog players,
+  // and returns the current position for all of them
+  rpc StopBlp(tabletmanagerdata.StopBlpRequest) returns (tabletmanagerdata.StopBlpResponse) {};
+
+  // StartBlp asks the tablet to restart its binlog players
+  rpc StartBlp(tabletmanagerdata.StartBlpRequest) returns (tabletmanagerdata.StartBlpResponse) {};
+
+  // RunBlpUntil asks the tablet to restart its binlog players
+  rpc RunBlpUntil(tabletmanagerdata.RunBlpUntilRequest) returns (tabletmanagerdata.RunBlpUntilResponse) {};
+
+  //
+  // Reparenting related functions
+  //
+
+  // ResetReplication makes the target not replicating
+  rpc ResetReplication(tabletmanagerdata.ResetReplicationRequest) returns (tabletmanagerdata.ResetReplicationResponse) {};
+
+  // InitMaster initializes the tablet as a master
+  rpc InitMaster(tabletmanagerdata.InitMasterRequest) returns (tabletmanagerdata.InitMasterResponse) {};
+
+  // PopulateReparentJournal tells the tablet to add an entry to its
+  // reparent journal
+  rpc PopulateReparentJournal(tabletmanagerdata.PopulateReparentJournalRequest) returns (tabletmanagerdata.PopulateReparentJournalResponse) {};
+
+  // InitSlave tells the tablet to reparent to the master unconditionnally
+  rpc InitSlave(tabletmanagerdata.InitSlaveRequest) returns (tabletmanagerdata.InitSlaveResponse) {};
+
+  // DemoteMaster tells the soon-to-be-former master it's gonna change
+  rpc DemoteMaster(tabletmanagerdata.DemoteMasterRequest) returns (tabletmanagerdata.DemoteMasterResponse) {};
+
+  // PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
+  // and then be the master
+  rpc PromoteSlaveWhenCaughtUp(tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest) returns (tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse) {};
+
+  // SlaveWasPromoted tells the remote tablet it is now the master
+  rpc SlaveWasPromoted(tabletmanagerdata.SlaveWasPromotedRequest) returns (tabletmanagerdata.SlaveWasPromotedResponse) {};
+
+  // SetMaster tells the slave to reparent
+  rpc SetMaster(tabletmanagerdata.SetMasterRequest) returns (tabletmanagerdata.SetMasterResponse) {};
+
+  // SlaveWasRestarted tells the remote tablet its master has changed
+  rpc SlaveWasRestarted(tabletmanagerdata.SlaveWasRestartedRequest) returns (tabletmanagerdata.SlaveWasRestartedResponse) {};
+
+  // StopReplicationAndGetStatus stops MySQL replication, and returns the
+  // replication status
+  rpc StopReplicationAndGetStatus(tabletmanagerdata.StopReplicationAndGetStatusRequest) returns (tabletmanagerdata.StopReplicationAndGetStatusResponse) {};
+
+  // PromoteSlave makes the slave the new master
+  rpc PromoteSlave(tabletmanagerdata.PromoteSlaveRequest) returns (tabletmanagerdata.PromoteSlaveResponse) {};
+
+  //
+  // Backup related methods
+  //
+
+  rpc Backup(tabletmanagerdata.BackupRequest) returns (stream tabletmanagerdata.BackupResponse) {};
+}

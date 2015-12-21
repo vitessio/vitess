@@ -49,6 +49,17 @@ func (sem *Semaphore) Acquire() bool {
 	}
 }
 
+// TryAcquire acquires a semaphore if it's immediately available.
+// It returns false otherwise.
+func (sem *Semaphore) TryAcquire() bool {
+	select {
+	case <-sem.slots:
+		return true
+	default:
+		return false
+	}
+}
+
 // Release releases the acquired semaphore. You must
 // not release more than the number of semaphores you've
 // acquired.

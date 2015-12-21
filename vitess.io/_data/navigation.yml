@@ -1,0 +1,21 @@
+# Site navigation links
+
+- title: Getting Started
+  url: /getting-started/
+  excerpt: "Everything you need to know to get started with Vitess."
+  image: 400x250.gif
+
+- title: Documentation
+  url: /doc/
+  excerpt: "Vitess Docs."
+  image: 400x250.gif
+
+- title: About
+  url: /about/
+  excerpt: "All about Vitess."
+  image: 400x250.gif
+
+- title: FAQ
+  url: /faq/
+  excerpt: "Vitess Faq."
+  image: 400x250.gif

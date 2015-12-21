@@ -1,18 +1,46 @@
 #!/bin/bash
 
 # This is an example script that tears down the vttablet pods started by
-# vttablet-up.sh. It assumes that kubernetes/cluster/kubecfg.sh is in the path.
+# vttablet-up.sh.
 
-# Create the pods for shard-0
-cell=test_cell
-keyspace=test_keyspace
-shard=0
-uid_base=100
+set -e
 
-for uid_index in 0 1 2; do
-  uid=$[$uid_base + $uid_index]
-  printf -v alias '%s-%010d' $cell $uid
+script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
 
-  echo "Deleting pod for tablet $alias..."
-  kubecfg.sh delete pods/vttablet-$uid
+echo "Starting port forwarding to vtctld..."
+start_vtctld_forward
+trap stop_vtctld_forward EXIT
+VTCTLD_ADDR="localhost:$vtctld_forward_port"
+
+# Delete the pods for all shards
+CELLS=${CELLS:-'test'}
+keyspace='test_keyspace'
+SHARDS=${SHARDS:-'0'}
+TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-5}
+UID_BASE=${UID_BASE:-100}
+
+num_shards=`echo $SHARDS | tr "," " " | wc -w`
+uid_base=$UID_BASE
+
+for shard in `seq 1 $num_shards`; do
+  cell_index=0
+  for cell in `echo $CELLS | tr "," " "`; do
+    for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
+      uid=$[$uid_base + $uid_index + $cell_index]
+      printf -v alias '%s-%010d' $cell $uid
+
+      if [ -n "$VTCTLD_ADDR" ]; then
+        set +e
+        echo "Removing tablet $alias from Vitess topology..."
+        vtctlclient -server $VTCTLD_ADDR DeleteTablet -allow_master -skip_rebuild $alias
+        set -e
+      fi
+
+      echo "Deleting pod for tablet $alias..."
+      $KUBECTL delete pod vttablet-$uid
+    done
+    let cell_index=cell_index+100000000
+  done
+  let uid_base=uid_base+100
 done

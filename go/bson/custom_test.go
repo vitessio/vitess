@@ -19,7 +19,7 @@ const (
 	bsonValBytes   = "\x05Val\x00\x04\x00\x00\x00\x00test"
 	bsonValInt64   = "\x12Val\x00\x01\x00\x00\x00\x00\x00\x00\x00"
 	bsonValInt32   = "\x10Val\x00\x01\x00\x00\x00"
-	bsonValUint64  = "?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00"
+	bsonValUint64  = "\x12Val\x00\x01\x00\x00\x00\x00\x00\x00\x00"
 	bsonValFloat64 = "\x01Val\x00\x00\x00\x00\x00\x00\x00\xf0?"
 	bsonValBool    = "\bVal\x00\x01"
 	bsonValMap     = "\x03Val\x00\x13\x00\x00\x00\x12Val1\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
@@ -206,10 +206,10 @@ var customUnmarshalFailureCases = []struct {
 	{"string", stringDecoder, []byte{String, Binary, Null}},
 	{"[]byte", binaryDecoder, []byte{String, Binary, Null}},
 	{"int64", int64Decoder, []byte{Int, Long, Ulong, Null}},
-	{"int32", int32Decoder, []byte{Int, Null}},
+	{"int32", int32Decoder, []byte{Int, Long, Null}},
 	{"int", intDecoder, []byte{Int, Long, Ulong, Null}},
 	{"uint64", uint64Decoder, []byte{Int, Long, Ulong, Null}},
-	{"uint32", uint32Decoder, []byte{Int, Ulong, Null}},
+	{"uint32", uint32Decoder, []byte{Int, Long, Ulong, Null}},
 	{"uint", uintDecoder, []byte{Int, Long, Ulong, Null}},
 	{"float64", float64Decoder, []byte{Number, Null}},
 	{"bool", boolDecoder, []byte{Boolean, Int, Long, Ulong, Null}},

@@ -4,149 +4,133 @@
 
 MAKEFLAGS = -s
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson site_test site_integration_test
+# Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
+# Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
+.NOTPARALLEL:
+
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
 
 all: build test
 
-build:
-	go install ./go/...
+# Set a custom value for -p, the number of packages to be built/tested in parallel.
+# This is currently only used by our Travis CI test configuration.
+# (Also keep in mind that this value is independent of GOMAXPROCS.)
+ifdef VT_GO_PARALLEL
+VT_GO_PARALLEL := "-p" $(VT_GO_PARALLEL)
+endif
+# Link against the MySQL library in $VT_MYSQL_ROOT if it's specified.
+ifdef VT_MYSQL_ROOT
+# Clutter the env var only if it's a non-standard path.
+  ifneq ($(VT_MYSQL_ROOT),/usr)
+    CGO_LDFLAGS += -L$(VT_MYSQL_ROOT)/lib
+  endif
+endif
 
-# Set VT_TEST_FLAGS to pass flags to python tests.
-# For example, verbose output: export VT_TEST_FLAGS=-v
-test: unit_test queryservice_test integration_test
+build:
+ifndef NOBANNER
+	echo $$(date): Building source tree
+endif
+	godep go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
+
+# To pass extra flags, run test.go manually.
+# For example: go run test.go -docker=false -- --extra-flag
+# For more info see: go run test.go -help
+test:
+	go run test.go -docker=false
+
 site_test: unit_test site_integration_test
 
 clean:
 	go clean -i ./go/...
-	rm -rf java/vtocc-client/target java/vtocc-jdbc-driver/target third_party/acolyte
+	rm -rf third_party/acolyte
 
-unit_test:
-	go test ./go/...
+# This will remove object files for all Go projects in the same GOPATH.
+# This is necessary, for example, to make sure dependencies are rebuilt
+# when switching between different versions of Go.
+clean_pkg:
+	rm -rf ../../../../pkg Godeps/_workspace/pkg
+
+unit_test: build
+	echo $$(date): Running unit tests
+	godep go test $(VT_GO_PARALLEL) ./go/...
 
 # Run the code coverage tools, compute aggregate.
 # If you want to improve in a directory, run:
 #   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
-unit_test_cover:
-	go test -cover ./go/... | misc/parse_cover.py
+unit_test_cover: build
+	godep go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
-unit_test_race:
-	go test -race ./go/...
+unit_test_race: build
+	tools/unit_test_race.sh
 
-queryservice_test:
-	echo $$(date): Running test/queryservice_test.py...
-	if [ -e "/usr/bin/memcached" ]; then \
-		time test/queryservice_test.py -m -e vtocc $$VT_TEST_FLAGS || exit 1 ; \
-		time test/queryservice_test.py -m -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
-	else \
-		time test/queryservice_test.py -e vtocc $$VT_TEST_FLAGS || exit 1 ; \
-		time test/queryservice_test.py -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
-	fi
-
-# These tests should be run by users to check that Vitess works in their environment.
-site_integration_test_files = \
-	keyrange_test.py \
-	keyspace_test.py \
-	mysqlctl.py \
-	secure.py \
-	tabletmanager.py \
-	update_stream.py \
-	vtdb_test.py \
-	vtgatev2_test.py \
-	zkocc_test.py
-
-# These tests should be run by developers after making code changes.
-integration_test_files = \
-	binlog.py \
-	clone.py \
-	initial_sharding_bytes.py \
-	initial_sharding.py \
-	keyrange_test.py \
-	keyspace_test.py \
-	mysqlctl.py \
-	reparent.py \
-	resharding_bytes.py \
-	resharding.py \
-	rowcache_invalidator.py \
-	secure.py \
-	schema.py \
-	sharded.py \
-	tabletmanager.py \
-	update_stream.py \
-	vertical_split.py \
-	vertical_split_vtgate.py \
-	vtdb_test.py \
-	vtgatev2_test.py \
-	zkocc_test.py
+# Run coverage and upload to coveralls.io.
+# Requires the secret COVERALLS_TOKEN env variable to be set.
+unit_test_goveralls: build
+	travis/goveralls.sh
 
 .ONESHELL:
 SHELL = /bin/bash
-integration_test:
-	cd test ; \
-	for t in $(integration_test_files) ; do \
-		echo $$(date): Running test/$$t... ; \
-		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
-		if [[ $$? != 0 ]]; then \
-			echo "$$output" >&2 ; \
-			exit 1 ; \
-		fi ; \
-		echo ; \
-	done
+
+# Run the following tests after making worker changes.
+worker_test:
+	godep go test ./go/vt/worker/
+	go run test.go -docker=false -tag=worker_test
 
 site_integration_test:
-	cd test ; \
-	for t in $(site_integration_test_files) ; do \
-		echo $$(date): Running test/$$t... ; \
-		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
-		if [[ $$? != 0 ]]; then \
-			echo "$$output" >&2 ; \
-			exit 1 ; \
-		fi ; \
-		echo ; \
-	done
+	go run test.go -docker=false -tag=site_test
 
-# this rule only works if bootstrap.sh was successfully ran in ./java
 java_test:
-	cd java && mvn verify
+	godep go install ./go/cmd/vtgateclienttest
+	mvn -f java/pom.xml clean verify
+
+php_test:
+	godep go install ./go/cmd/vtgateclienttest
+	phpunit php/tests
 
 bson:
-	bsongen -file ./go/mysql/proto/structs.go -type QueryResult -o ./go/mysql/proto/query_result_bson.go
-	bsongen -file ./go/mysql/proto/structs.go -type Field -o ./go/mysql/proto/field_bson.go
-	bsongen -file ./go/mysql/proto/structs.go -type Charset -o ./go/mysql/proto/charset_bson.go
-	bsongen -file ./go/vt/key/key.go -type KeyRange -o ./go/vt/key/key_range_bson.go
-	bsongen -file ./go/vt/key/key.go -type KeyspaceId -o ./go/vt/key/keyspace_id_bson.go
-	bsongen -file ./go/vt/key/key.go -type KeyspaceIdType -o ./go/vt/key/keyspace_id_type_bson.go
-	bsongen -file ./go/vt/tabletserver/proto/structs.go -type Query -o ./go/vt/tabletserver/proto/query_bson.go
-	bsongen -file ./go/vt/tabletserver/proto/structs.go -type Session -o ./go/vt/tabletserver/proto/session_bson.go
-	bsongen -file ./go/vt/tabletserver/proto/structs.go -type BoundQuery -o ./go/vt/tabletserver/proto/bound_query_bson.go
-	bsongen -file ./go/vt/tabletserver/proto/structs.go -type QueryList -o ./go/vt/tabletserver/proto/query_list_bson.go
-	bsongen -file ./go/vt/tabletserver/proto/structs.go -type QueryResultList -o ./go/vt/tabletserver/proto/query_result_list_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type Query -o ./go/vt/vtgate/proto/query_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type QueryShard -o ./go/vt/vtgate/proto/query_shard_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type BatchQueryShard -o ./go/vt/vtgate/proto/batch_query_shard_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type KeyspaceIdQuery -o ./go/vt/vtgate/proto/keyspace_id_query_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type KeyRangeQuery -o ./go/vt/vtgate/proto/key_range_query_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type EntityId -o ./go/vt/vtgate/proto/entity_id_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type EntityIdsQuery -o ./go/vt/vtgate/proto/entity_ids_query_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type KeyspaceIdBatchQuery -o ./go/vt/vtgate/proto/keyspace_id_batch_query_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type Session -o ./go/vt/vtgate/proto/session_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type ShardSession -o ./go/vt/vtgate/proto/shard_session_bson.go
-	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type QueryResult -o ./go/vt/vtgate/proto/query_result_bson.go
-	bsongen -file ./go/vt/topo/srvshard.go -type SrvShard -o ./go/vt/topo/srvshard_bson.go
-	bsongen -file ./go/vt/topo/srvshard.go -type SrvKeyspace -o ./go/vt/topo/srvkeyspace_bson.go
-	bsongen -file ./go/vt/topo/srvshard.go -type KeyspacePartition -o ./go/vt/topo/keyspace_partition_bson.go
-	bsongen -file ./go/vt/topo/tablet.go -type TabletType -o ./go/vt/topo/tablet_type_bson.go
-	bsongen -file ./go/vt/topo/toporeader.go -type GetSrvKeyspaceNamesArgs -o ./go/vt/topo/get_srv_keyspace_names_args_bson.go
-	bsongen -file ./go/vt/topo/toporeader.go -type GetSrvKeyspaceArgs -o ./go/vt/topo/get_srv_keyspace_args_bson.go
-	bsongen -file ./go/vt/topo/toporeader.go -type SrvKeyspaceNames -o ./go/vt/topo/srv_keyspace_names_bson.go
-	bsongen -file ./go/vt/topo/toporeader.go -type GetEndPointsArgs -o ./go/vt/topo/get_end_points_args_bson.go
-	bsongen -file ./go/vt/binlog/proto/binlog_player.go -type BlpPosition -o ./go/vt/binlog/proto/blp_position_bson.go
-	bsongen -file ./go/vt/binlog/proto/binlog_player.go -type BlpPositionList -o ./go/vt/binlog/proto/blp_position_list_bson.go
-	bsongen -file ./go/vt/binlog/proto/binlog_transaction.go -type BinlogTransaction -o ./go/vt/binlog/proto/binlog_transaction_bson.go
-	bsongen -file ./go/vt/binlog/proto/binlog_transaction.go -type Statement -o ./go/vt/binlog/proto/statement_bson.go
-	bsongen -file ./go/vt/binlog/proto/stream_event.go -type StreamEvent -o ./go/vt/binlog/proto/stream_event_bson.go
-	bsongen -file ./go/zk/zkocc_structs.go -type ZkPath -o ./go/zk/zkpath_bson.go
-	bsongen -file ./go/zk/zkocc_structs.go -type ZkPathV -o ./go/zk/zkpathv_bson.go
-	bsongen -file ./go/zk/zkocc_structs.go -type ZkStat -o ./go/zk/zkstat_bson.go
-	bsongen -file ./go/zk/zkocc_structs.go -type ZkNode -o ./go/zk/zknode_bson.go
-	bsongen -file ./go/zk/zkocc_structs.go -type ZkNodeV -o ./go/zk/zknodev_bson.go
+	go generate ./go/...
 
+# This rule rebuilds all the go files from the proto definitions for gRPC.
+# 1. list all proto files.
+# 2. remove 'proto/' prefix and '.proto' suffix.
+# 3. (go) run protoc for each proto and put in go/vt/proto/${proto_file_name}/
+# 4. (python) run protoc for each proto and put in py/vtproto/
+proto:
+	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --go_out=plugins=grpc:go/vt/proto/{}
+	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
+	find proto -maxdepth 1 -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --python_out=py/vtproto --grpc_out=py/vtproto --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
+
+# This rule builds the bootstrap images for all flavors.
+docker_bootstrap:
+	docker/bootstrap/build.sh common
+	docker/bootstrap/build.sh mariadb
+	docker/bootstrap/build.sh mysql56
+
+docker_base:
+	# Fix permissions before copying files, to avoid AUFS bug.
+	chmod -R o=g *
+	docker build -t vitess/base .
+
+docker_lite:
+	cd docker/lite && ./build.sh
+
+docker_guestbook:
+	cd examples/kubernetes/guestbook && ./build.sh
+
+docker_etcd:
+	cd docker/etcd-lite && ./build.sh
+
+# This rule loads the working copy of the code into a bootstrap image,
+# and then runs the tests inside Docker.
+# Example: $ make docker_test flavor=mariadb
+docker_test:
+	go run test.go -flavor $(flavor)
+
+docker_unit_test:
+	go run test.go -flavor $(flavor) unit
+
+# This can be used to rebalance the total average runtime of each group of
+# tests in Travis. The results are saved in test/config.json, which you can
+# then commit and push.
+rebalance_tests:
+	go run test.go -rebalance 5 -remote-stats http://enisoc.com:15123/travis/stats

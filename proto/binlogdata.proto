@@ -1,0 +1,123 @@
+// This file contains all the types and servers necessary to make
+// RPC calls to VtTablet for the binlog protocol.
+
+syntax = "proto3";
+
+package binlogdata;
+
+import "query.proto";
+import "topodata.proto";
+
+// Charset is the per-statement charset info from a QUERY_EVENT binlog entry.
+message Charset {
+  // @@session.character_set_client
+  int32 client = 1;
+  // @@session.collation_connection
+  int32 conn = 2;
+  // @@session.collation_server
+  int32 server = 3;
+}
+
+// BinlogTransaction describes a transaction inside the binlogs.
+message BinlogTransaction {
+  message Statement {
+    enum Category {
+      BL_UNRECOGNIZED = 0;
+      BL_BEGIN = 1;
+      BL_COMMIT = 2;
+      BL_ROLLBACK = 3;
+      BL_DML = 4;
+      BL_DDL = 5;
+      BL_SET = 6;
+    }
+
+    // what type of statement is this?
+    Category category = 1;
+
+    // charset of this statement, if different from pre-negotiated default.
+    Charset charset = 2;
+
+    // the sql
+    string sql = 3;
+  }
+
+  // the statements in this transaction
+  repeated Statement statements = 1;
+
+  // the timestamp of the statements
+  int64 timestamp = 2;
+
+  // the Transaction ID after this statement was applied
+  string transaction_id = 3;
+}
+
+// StreamEvent describes an update stream event inside the binlogs.
+message StreamEvent {
+  // the category of this event
+  enum Category {
+    SE_ERR = 0;
+    SE_DML = 1;
+    SE_DDL = 2;
+    SE_POS = 3;
+  }
+  Category category = 1;
+
+  // table_name, primary_key_fields and primary_key_values are set for SE_DML
+  string table_name = 2;
+  repeated query.Field primary_key_fields = 3;
+  repeated query.Row primary_key_values = 4;
+
+  // sql is set for SE_DDL or SE_ERR
+  string sql = 5;
+
+  // timestamp is set for SE_DML, SE_DDL or SE_ERR
+  int64 timestamp = 6;
+
+  // the Transaction ID after this statement was applied
+  string transaction_id = 7;
+}
+
+// StreamUpdateRequest is the payload to StreamUpdate
+message StreamUpdateRequest{
+  // where to start
+  string position = 1;
+}
+
+// StreamUpdateResponse is the response from StreamUpdate
+message StreamUpdateResponse{
+  StreamEvent stream_event = 1;
+}
+
+// StreamKeyRangeRequest is the payload to StreamKeyRange
+message StreamKeyRangeRequest {
+  // where to start
+  string position = 1;
+
+  // what to get
+  topodata.KeyRange key_range = 2;
+
+  // default charset on the player side
+  Charset charset = 3;
+}
+
+// StreamKeyRangeResponse is the response from StreamKeyRange
+message StreamKeyRangeResponse{
+  BinlogTransaction binlog_transaction = 1;
+}
+
+// StreamTablesRequest is the payload to StreamTables
+message StreamTablesRequest {
+  // where to start
+  string position = 1;
+
+  // what to get
+  repeated string tables = 2;
+
+  // default charset on the player side
+  Charset charset = 3;
+}
+
+// StreamTablesResponse is the response from StreamTables
+message StreamTablesResponse {
+  BinlogTransaction binlog_transaction = 1;
+}

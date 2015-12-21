@@ -5,75 +5,161 @@
 package vtgate
 
 import (
+	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/context"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
-	kproto "github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // This file uses the sandbox_test framework.
 
 func init() {
-	Init(new(sandboxTopo), "aa", 1*time.Second, 10, 1*time.Millisecond, 0)
+	schema := createTestSchema(`
+{
+  "Keyspaces": {
+    "TestUnsharded": {
+      "Sharded": false,
+      "Tables": {
+        "t1": ""
+      }
+    }
+  }
+}
+`)
+	Init(nil, topo.Server{}, new(sandboxTopo), schema, "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, 0, "")
 }
 
-func TestVTGateExecuteShard(t *testing.T) {
-	sandbox := createSandbox("TestVTGateExecuteShard")
+func TestVTGateExecute(t *testing.T) {
+	sandbox := createSandbox(KsTestUnsharded)
 	sbc := &sandboxConn{}
 	sandbox.MapTestConn("0", sbc)
-	q := proto.QueryShard{
-		Sql:      "query",
-		Keyspace: "TestVTGateExecuteShard",
-		Shards:   []string{"0"},
-	}
-	qr := new(proto.QueryResult)
-	err := RpcVTGate.ExecuteShard(&context.DummyContext{}, &q, qr)
+	qr, err := rpcVTGate.Execute(context.Background(),
+		"select * from t1",
+		nil,
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	wantqr := new(proto.QueryResult)
-	wantqr.Result = singleRowResult
-	if !reflect.DeepEqual(wantqr, qr) {
+	if !reflect.DeepEqual(singleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
 	}
-	if qr.Session != nil {
-		t.Errorf("want nil, got %+v\n", qr.Session)
-	}
 
-	q.Session = new(proto.Session)
-	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
-	if !q.Session.InTransaction {
+	session, err := rpcVTGate.Begin(context.Background())
+	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
-	RpcVTGate.ExecuteShard(&context.DummyContext{}, &q, qr)
-	wantSession := &proto.Session{
+	rpcVTGate.Execute(context.Background(),
+		"select * from t1",
+		nil,
+		topodatapb.TabletType_MASTER,
+		session,
+		false)
+	wantSession := &vtgatepb.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestVTGateExecuteShard",
-			Shard:         "0",
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   KsTestUnsharded,
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, q.Session) {
-		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
+	if !reflect.DeepEqual(wantSession, session) {
+		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 
-	RpcVTGate.Commit(&context.DummyContext{}, q.Session)
-	if sbc.CommitCount != 1 {
-		t.Errorf("want 1, got %d", sbc.CommitCount)
+	rpcVTGate.Commit(context.Background(), session)
+	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	q.Session = new(proto.Session)
-	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
-	RpcVTGate.ExecuteShard(&context.DummyContext{}, &q, qr)
-	RpcVTGate.Rollback(&context.DummyContext{}, q.Session)
+	session, err = rpcVTGate.Begin(context.Background())
+	rpcVTGate.Execute(context.Background(),
+		"select * from t1",
+		nil,
+		topodatapb.TabletType_MASTER,
+		session,
+		false)
+	rpcVTGate.Rollback(context.Background(), session)
+}
+
+func TestVTGateExecuteShards(t *testing.T) {
+	sandbox := createSandbox("TestVTGateExecuteShards")
+	sbc := &sandboxConn{}
+	sandbox.MapTestConn("0", sbc)
+	qr, err := rpcVTGate.ExecuteShards(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteShards",
+		[]string{"0"},
+		topodatapb.TabletType_REPLICA,
+		nil,
+		false)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	if !reflect.DeepEqual(singleRowResult, qr) {
+		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
+	}
+
+	session, err := rpcVTGate.Begin(context.Background())
+	if !session.InTransaction {
+		t.Errorf("want true, got false")
+	}
+	rpcVTGate.ExecuteShards(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteShards",
+		[]string{"0"},
+		topodatapb.TabletType_REPLICA,
+		session,
+		false)
+	wantSession := &vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestVTGateExecuteShards",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_REPLICA,
+			},
+			TransactionId: 1,
+		}},
+	}
+	if !reflect.DeepEqual(wantSession, session) {
+		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
+	}
+
+	rpcVTGate.Commit(context.Background(), session)
+	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
+	}
+
+	session, err = rpcVTGate.Begin(context.Background())
+	rpcVTGate.ExecuteShards(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteShards",
+		[]string{"0"},
+		topodatapb.TabletType_REPLICA,
+		session,
+		false)
+	rpcVTGate.Rollback(context.Background(), session)
 	/*
 		// Flaky: This test should be run manually.
 		runtime.Gosched()
@@ -89,65 +175,66 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("20-40", sbc2)
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
-	q := proto.KeyspaceIdQuery{
-		Sql:         "query",
-		Keyspace:    "TestVTGateExecuteKeyspaceIds",
-		KeyspaceIds: []key.KeyspaceId{kid10},
-		TabletType:  topo.TYPE_MASTER,
-	}
 	// Test for successful execution
-	qr := new(proto.QueryResult)
-	err = RpcVTGate.ExecuteKeyspaceIds(&context.DummyContext{}, &q, qr)
+	qr, err := rpcVTGate.ExecuteKeyspaceIds(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteKeyspaceIds",
+		[][]byte{{0x10}},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	wantqr := new(proto.QueryResult)
-	wantqr.Result = singleRowResult
-	if !reflect.DeepEqual(wantqr, qr) {
+	if !reflect.DeepEqual(singleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
 	}
-	if qr.Session != nil {
-		t.Errorf("want nil, got %+v\n", qr.Session)
-	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("want 1, got %v\n", sbc1.ExecCount)
+	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	q.Session = new(proto.Session)
-	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
-	if !q.Session.InTransaction {
+	session, err := rpcVTGate.Begin(context.Background())
+	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
-	RpcVTGate.ExecuteKeyspaceIds(&context.DummyContext{}, &q, qr)
-	wantSession := &proto.Session{
+	rpcVTGate.ExecuteKeyspaceIds(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteKeyspaceIds",
+		[][]byte{{0x10}},
+		topodatapb.TabletType_MASTER,
+		session,
+		false)
+	wantSession := &vtgatepb.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestVTGateExecuteKeyspaceIds",
-			Shard:         "-20",
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestVTGateExecuteKeyspaceIds",
+				Shard:      "-20",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
 			TransactionId: 1,
-			TabletType:    topo.TYPE_MASTER,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, q.Session) {
-		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
+	if !reflect.DeepEqual(wantSession, session) {
+		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
-	RpcVTGate.Commit(&context.DummyContext{}, q.Session)
-	if sbc1.CommitCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc1.CommitCount.Get())
+	rpcVTGate.Commit(context.Background(), session)
+	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
 	}
 	// Test for multiple shards
-	kid30, err := key.HexKeyspaceId("30").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
-	q.KeyspaceIds = []key.KeyspaceId{kid10, kid30}
-	RpcVTGate.ExecuteKeyspaceIds(&context.DummyContext{}, &q, qr)
-	if qr.Result.RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qr.Result.RowsAffected)
+	qr, err = rpcVTGate.ExecuteKeyspaceIds(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteKeyspaceIds",
+		[][]byte{{0x10}, {0x30}},
+		topodatapb.TabletType_MASTER,
+		session,
+		false)
+	if qr.RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qr.RowsAffected)
 	}
 }
 
@@ -157,62 +244,68 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("20-40", sbc2)
-	kr, err := key.ParseKeyRangeParts("", "20")
-	q := proto.KeyRangeQuery{
-		Sql:        "query",
-		Keyspace:   "TestVTGateExecuteKeyRanges",
-		KeyRanges:  []key.KeyRange{kr},
-		TabletType: topo.TYPE_MASTER,
-	}
 	// Test for successful execution
-	qr := new(proto.QueryResult)
-	err = RpcVTGate.ExecuteKeyRanges(&context.DummyContext{}, &q, qr)
+	qr, err := rpcVTGate.ExecuteKeyRanges(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteKeyRanges",
+		[]*topodatapb.KeyRange{{End: []byte{0x20}}},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	wantqr := new(proto.QueryResult)
-	wantqr.Result = singleRowResult
-	if !reflect.DeepEqual(wantqr, qr) {
+	if !reflect.DeepEqual(singleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
 	}
-	if qr.Session != nil {
-		t.Errorf("want nil, got %+v\n", qr.Session)
-	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("want 1, got %v\n", sbc1.ExecCount)
+	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	q.Session = new(proto.Session)
-	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
-	if !q.Session.InTransaction {
+	session, err := rpcVTGate.Begin(context.Background())
+	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
-	err = RpcVTGate.ExecuteKeyRanges(&context.DummyContext{}, &q, qr)
+	qr, err = rpcVTGate.ExecuteKeyRanges(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteKeyRanges",
+		[]*topodatapb.KeyRange{{End: []byte{0x20}}},
+		topodatapb.TabletType_MASTER,
+		session,
+		false)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	wantSession := &proto.Session{
+	wantSession := &vtgatepb.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestVTGateExecuteKeyRanges",
-			Shard:         "-20",
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestVTGateExecuteKeyRanges",
+				Shard:      "-20",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
 			TransactionId: 1,
-			TabletType:    topo.TYPE_MASTER,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, q.Session) {
-		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
+	if !reflect.DeepEqual(wantSession, session) {
+		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
-	RpcVTGate.Commit(&context.DummyContext{}, q.Session)
-	if sbc1.CommitCount.Get() != 1 {
-		t.Errorf("want 1, got %v", sbc1.CommitCount.Get())
+	rpcVTGate.Commit(context.Background(), session)
+	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %v", commitCount)
 	}
 	// Test for multiple shards
-	kr, err = key.ParseKeyRangeParts("10", "30")
-	q.KeyRanges = []key.KeyRange{kr}
-	RpcVTGate.ExecuteKeyRanges(&context.DummyContext{}, &q, qr)
-	if qr.Result.RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qr.Result.RowsAffected)
+	qr, err = rpcVTGate.ExecuteKeyRanges(context.Background(), "query",
+		nil,
+		"TestVTGateExecuteKeyRanges",
+		[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x30}}},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	if qr.RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qr.RowsAffected)
 	}
 }
 
@@ -222,109 +315,150 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("20-40", sbc2)
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
-	q := proto.EntityIdsQuery{
-		Sql:              "query",
-		Keyspace:         "TestVTGateExecuteEntityIds",
-		EntityColumnName: "kid",
-		EntityKeyspaceIDs: []proto.EntityId{
-			proto.EntityId{
-				ExternalID: "id1",
-				KeyspaceID: kid10,
+	// Test for successful execution
+	qr, err := rpcVTGate.ExecuteEntityIds(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteEntityIds",
+		"kid",
+		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
+				XidType:    sqltypes.VarBinary,
+				XidValue:   []byte("id1"),
+				KeyspaceId: []byte{0x10},
 			},
 		},
-		TabletType: topo.TYPE_MASTER,
-	}
-	// Test for successful execution
-	qr := new(proto.QueryResult)
-	err = RpcVTGate.ExecuteEntityIds(&context.DummyContext{}, &q, qr)
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	wantqr := new(proto.QueryResult)
-	wantqr.Result = singleRowResult
-	if !reflect.DeepEqual(wantqr, qr) {
+	if !reflect.DeepEqual(singleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
 	}
-	if qr.Session != nil {
-		t.Errorf("want nil, got %+v\n", qr.Session)
-	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("want 1, got %v\n", sbc1.ExecCount)
+	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
-	q.Session = new(proto.Session)
-	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
-	if !q.Session.InTransaction {
+	session, err := rpcVTGate.Begin(context.Background())
+	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
-	RpcVTGate.ExecuteEntityIds(&context.DummyContext{}, &q, qr)
-	wantSession := &proto.Session{
+	rpcVTGate.ExecuteEntityIds(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteEntityIds",
+		"kid",
+		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
+				XidType:    sqltypes.VarBinary,
+				XidValue:   []byte("id1"),
+				KeyspaceId: []byte{0x10},
+			},
+		},
+		topodatapb.TabletType_MASTER,
+		session,
+		false)
+	wantSession := &vtgatepb.Session{
 		InTransaction: true,
-		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestVTGateExecuteEntityIds",
-			Shard:         "-20",
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestVTGateExecuteEntityIds",
+				Shard:      "-20",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
 			TransactionId: 1,
-			TabletType:    topo.TYPE_MASTER,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, q.Session) {
-		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
+	if !reflect.DeepEqual(wantSession, session) {
+		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
-	RpcVTGate.Commit(&context.DummyContext{}, q.Session)
-	if sbc1.CommitCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc1.CommitCount.Get())
+	rpcVTGate.Commit(context.Background(), session)
+	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
 	}
+
 	// Test for multiple shards
-	kid30, err := key.HexKeyspaceId("30").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
-	q.EntityKeyspaceIDs = append(q.EntityKeyspaceIDs, proto.EntityId{ExternalID: "id2", KeyspaceID: kid30})
-	RpcVTGate.ExecuteEntityIds(&context.DummyContext{}, &q, qr)
-	if qr.Result.RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qr.Result.RowsAffected)
+	qr, err = rpcVTGate.ExecuteEntityIds(context.Background(), "query",
+		nil,
+		"TestVTGateExecuteEntityIds",
+		"kid",
+		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
+				XidType:    sqltypes.VarBinary,
+				XidValue:   []byte("id1"),
+				KeyspaceId: []byte{0x10},
+			},
+			{
+				XidType:    sqltypes.VarBinary,
+				XidValue:   []byte("id2"),
+				KeyspaceId: []byte{0x30},
+			},
+		},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	if qr.RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qr.RowsAffected)
 	}
 }
 
-func TestVTGateExecuteBatchShard(t *testing.T) {
-	s := createSandbox("TestVTGateExecuteBatchShard")
+func TestVTGateExecuteBatchShards(t *testing.T) {
+	s := createSandbox("TestVTGateExecuteBatchShards")
 	s.MapTestConn("-20", &sandboxConn{})
 	s.MapTestConn("20-40", &sandboxConn{})
-	q := proto.BatchQueryShard{
-		Queries: []tproto.BoundQuery{{
-			"query",
-			nil,
+	qrl, err := rpcVTGate.ExecuteBatchShards(context.Background(),
+		[]*vtgatepb.BoundShardQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestVTGateExecuteBatchShards",
+			Shards:   []string{"-20", "20-40"},
 		}, {
-			"query",
-			nil,
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestVTGateExecuteBatchShards",
+			Shards:   []string{"-20", "20-40"},
 		}},
-		Keyspace: "TestVTGateExecuteBatchShard",
-		Shards:   []string{"-20", "20-40"},
-	}
-	qrl := new(proto.QueryResultList)
-	err := RpcVTGate.ExecuteBatchShard(&context.DummyContext{}, &q, qrl)
+		topodatapb.TabletType_MASTER,
+		false,
+		nil)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	if len(qrl.List) != 2 {
-		t.Errorf("want 2, got %v", len(qrl.List))
+	if len(qrl) != 2 {
+		t.Errorf("want 2, got %v", len(qrl))
 	}
-	if qrl.List[0].RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qrl.List[0].RowsAffected)
-	}
-	if qrl.Session != nil {
-		t.Errorf("want nil, got %+v\n", qrl.Session)
+	if qrl[0].RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qrl[0].RowsAffected)
 	}
 
-	q.Session = new(proto.Session)
-	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
-	RpcVTGate.ExecuteBatchShard(&context.DummyContext{}, &q, qrl)
-	if len(q.Session.ShardSessions) != 2 {
-		t.Errorf("want 2, got %d", len(q.Session.ShardSessions))
+	session, err := rpcVTGate.Begin(context.Background())
+	rpcVTGate.ExecuteBatchShards(context.Background(),
+		[]*vtgatepb.BoundShardQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestVTGateExecuteBatchShards",
+			Shards:   []string{"-20", "20-40"},
+		}, {
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: "TestVTGateExecuteBatchShards",
+			Shards:   []string{"-20", "20-40"},
+		}},
+		topodatapb.TabletType_MASTER,
+		false,
+		session)
+	if len(session.ShardSessions) != 2 {
+		t.Errorf("want 2, got %d", len(session.ShardSessions))
 	}
 }
 
@@ -332,46 +466,81 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 	s := createSandbox("TestVTGateExecuteBatchKeyspaceIds")
 	s.MapTestConn("-20", &sandboxConn{})
 	s.MapTestConn("20-40", &sandboxConn{})
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	kid30, err := key.HexKeyspaceId("30").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	q := proto.KeyspaceIdBatchQuery{
-		Queries: []tproto.BoundQuery{{
-			"query",
-			nil,
+	kid10 := []byte{0x10}
+	kid30 := []byte{0x30}
+	qrl, err := rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
+		[]*vtgatepb.BoundKeyspaceIdQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace:    "TestVTGateExecuteBatchKeyspaceIds",
+			KeyspaceIds: [][]byte{kid10, kid30},
 		}, {
-			"query",
-			nil,
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace:    "TestVTGateExecuteBatchKeyspaceIds",
+			KeyspaceIds: [][]byte{kid10, kid30},
 		}},
-		Keyspace:    "TestVTGateExecuteBatchKeyspaceIds",
-		KeyspaceIds: []key.KeyspaceId{kid10, kid30},
-		TabletType:  topo.TYPE_MASTER,
-	}
-	qrl := new(proto.QueryResultList)
-	err = RpcVTGate.ExecuteBatchKeyspaceIds(&context.DummyContext{}, &q, qrl)
+		topodatapb.TabletType_MASTER,
+		false,
+		nil)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	if len(qrl.List) != 2 {
-		t.Errorf("want 2, got %v", len(qrl.List))
+	if len(qrl) != 2 {
+		t.Errorf("want 2, got %v", len(qrl))
 	}
-	if qrl.List[0].RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qrl.List[0].RowsAffected)
-	}
-	if qrl.Session != nil {
-		t.Errorf("want nil, got %+v\n", qrl.Session)
+	if qrl[0].RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qrl[0].RowsAffected)
 	}
 
-	q.Session = new(proto.Session)
-	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
-	RpcVTGate.ExecuteBatchKeyspaceIds(&context.DummyContext{}, &q, qrl)
-	if len(q.Session.ShardSessions) != 2 {
-		t.Errorf("want 2, got %d", len(q.Session.ShardSessions))
+	session, err := rpcVTGate.Begin(context.Background())
+	rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
+		[]*vtgatepb.BoundKeyspaceIdQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace:    "TestVTGateExecuteBatchKeyspaceIds",
+			KeyspaceIds: [][]byte{kid10, kid30},
+		}, {
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace:    "TestVTGateExecuteBatchKeyspaceIds",
+			KeyspaceIds: [][]byte{kid10, kid30},
+		}},
+		topodatapb.TabletType_MASTER,
+		false,
+		session)
+	if len(session.ShardSessions) != 2 {
+		t.Errorf("want 2, got %d", len(session.ShardSessions))
+	}
+}
+
+func TestVTGateStreamExecute(t *testing.T) {
+	sandbox := createSandbox(KsTestUnsharded)
+	sbc := &sandboxConn{}
+	sandbox.MapTestConn("0", sbc)
+	var qrs []*sqltypes.Result
+	err := rpcVTGate.StreamExecute(context.Background(),
+		"select * from t1",
+		nil,
+		topodatapb.TabletType_MASTER,
+		func(r *sqltypes.Result) error {
+			qrs = append(qrs, r)
+			return nil
+		})
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	want := []*sqltypes.Result{singleRowResult}
+	if !reflect.DeepEqual(want, qrs) {
+		t.Errorf("want \n%+v, got \n%+v", want, qrs)
 	}
 }
 
@@ -381,92 +550,56 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 	s.MapTestConn("-20", sbc)
 	sbc1 := &sandboxConn{}
 	s.MapTestConn("20-40", sbc1)
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
-	sq := proto.KeyspaceIdQuery{
-		Sql:         "query",
-		Keyspace:    "TestVTGateStreamExecuteKeyspaceIds",
-		KeyspaceIds: []key.KeyspaceId{kid10},
-		TabletType:  topo.TYPE_MASTER,
-	}
 	// Test for successful execution
-	var qrs []*proto.QueryResult
-	err = RpcVTGate.StreamExecuteKeyspaceIds(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
+	var qrs []*sqltypes.Result
+	err := rpcVTGate.StreamExecuteKeyspaceIds(context.Background(),
+		"query",
+		nil,
+		"TestVTGateStreamExecuteKeyspaceIds",
+		[][]byte{{0x10}},
+		topodatapb.TabletType_MASTER,
+		func(r *sqltypes.Result) error {
+			qrs = append(qrs, r)
+			return nil
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	row := new(proto.QueryResult)
-	row.Result = singleRowResult
-	want := []*proto.QueryResult{row}
+	want := []*sqltypes.Result{singleRowResult}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
 	}
 
-	// Test for successful execution in transaction
-	sq.Session = new(proto.Session)
-	qrs = nil
-	RpcVTGate.Begin(&context.DummyContext{}, sq.Session)
-	err = RpcVTGate.StreamExecuteKeyspaceIds(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
-	want = []*proto.QueryResult{
-		row,
-		&proto.QueryResult{
-			Session: &proto.Session{
-				InTransaction: true,
-				ShardSessions: []*proto.ShardSession{{
-					Keyspace:      "TestVTGateStreamExecuteKeyspaceIds",
-					Shard:         "-20",
-					TransactionId: 1,
-					TabletType:    topo.TYPE_MASTER,
-				}},
-			},
-		},
-	}
-	if !reflect.DeepEqual(want, qrs) {
-		t.Errorf("want\n%#v\ngot\n%#v", want, qrs)
-	}
-	RpcVTGate.Commit(&context.DummyContext{}, sq.Session)
-	if sbc.CommitCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc.CommitCount.Get())
-	}
 	// Test for successful execution - multiple keyspaceids in single shard
-	sq.Session = nil
 	qrs = nil
-	kid15, err := key.HexKeyspaceId("15").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
-	sq.KeyspaceIds = []key.KeyspaceId{kid10, kid15}
-	err = RpcVTGate.StreamExecuteKeyspaceIds(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
+	err = rpcVTGate.StreamExecuteKeyspaceIds(context.Background(),
+		"query",
+		nil,
+		"TestVTGateStreamExecuteKeyspaceIds",
+		[][]byte{{0x10}, {0x15}},
+		topodatapb.TabletType_MASTER,
+		func(r *sqltypes.Result) error {
+			qrs = append(qrs, r)
+			return nil
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	row = new(proto.QueryResult)
-	row.Result = singleRowResult
-	want = []*proto.QueryResult{row}
+	want = []*sqltypes.Result{singleRowResult}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
 	}
 	// Test for successful execution - multiple keyspaceids in multiple shards
-	kid30, err := key.HexKeyspaceId("30").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
-	sq.KeyspaceIds = []key.KeyspaceId{kid10, kid30}
-	err = RpcVTGate.StreamExecuteKeyspaceIds(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
+	err = rpcVTGate.StreamExecuteKeyspaceIds(context.Background(),
+		"query",
+		nil,
+		"TestVTGateStreamExecuteKeyspaceIds",
+		[][]byte{{0x10}, {0x30}},
+		topodatapb.TabletType_MASTER,
+		func(r *sqltypes.Result) error {
+			qrs = append(qrs, r)
+			return nil
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -478,113 +611,62 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 	s.MapTestConn("-20", sbc)
 	sbc1 := &sandboxConn{}
 	s.MapTestConn("20-40", sbc1)
-	kr, err := key.ParseKeyRangeParts("", "20")
-	sq := proto.KeyRangeQuery{
-		Sql:        "query",
-		Keyspace:   "TestVTGateStreamExecuteKeyRanges",
-		KeyRanges:  []key.KeyRange{kr},
-		TabletType: topo.TYPE_MASTER,
-	}
 	// Test for successful execution
-	var qrs []*proto.QueryResult
-	err = RpcVTGate.StreamExecuteKeyRanges(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
+	var qrs []*sqltypes.Result
+	err := rpcVTGate.StreamExecuteKeyRanges(context.Background(),
+		"query",
+		nil,
+		"TestVTGateStreamExecuteKeyRanges",
+		[]*topodatapb.KeyRange{{End: []byte{0x20}}},
+		topodatapb.TabletType_MASTER,
+		func(r *sqltypes.Result) error {
+			qrs = append(qrs, r)
+			return nil
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	row := new(proto.QueryResult)
-	row.Result = singleRowResult
-	want := []*proto.QueryResult{row}
-	if !reflect.DeepEqual(want, qrs) {
-		t.Errorf("want \n%+v, got \n%+v", want, qrs)
-	}
-
-	sq.Session = new(proto.Session)
-	qrs = nil
-	RpcVTGate.Begin(&context.DummyContext{}, sq.Session)
-	err = RpcVTGate.StreamExecuteKeyRanges(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
-	want = []*proto.QueryResult{
-		row,
-		&proto.QueryResult{
-			Session: &proto.Session{
-				InTransaction: true,
-				ShardSessions: []*proto.ShardSession{{
-					Keyspace:      "TestVTGateStreamExecuteKeyRanges",
-					Shard:         "-20",
-					TransactionId: 1,
-					TabletType:    topo.TYPE_MASTER,
-				}},
-			},
-		},
-	}
+	want := []*sqltypes.Result{singleRowResult}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
 	}
 
 	// Test for successful execution - multiple shards
-	kr, err = key.ParseKeyRangeParts("10", "40")
-	sq.KeyRanges = []key.KeyRange{kr}
-	err = RpcVTGate.StreamExecuteKeyRanges(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
+	err = rpcVTGate.StreamExecuteKeyRanges(context.Background(),
+		"query",
+		nil,
+		"TestVTGateStreamExecuteKeyRanges",
+		[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x40}}},
+		topodatapb.TabletType_MASTER,
+		func(r *sqltypes.Result) error {
+			qrs = append(qrs, r)
+			return nil
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
 }
 
-func TestVTGateStreamExecuteShard(t *testing.T) {
-	s := createSandbox("TestVTGateStreamExecuteShard")
+func TestVTGateStreamExecuteShards(t *testing.T) {
+	s := createSandbox("TestVTGateStreamExecuteShards")
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
-	q := proto.QueryShard{
-		Sql:        "query",
-		Keyspace:   "TestVTGateStreamExecuteShard",
-		Shards:     []string{"0"},
-		TabletType: topo.TYPE_MASTER,
-	}
 	// Test for successful execution
-	var qrs []*proto.QueryResult
-	err := RpcVTGate.StreamExecuteShard(&context.DummyContext{}, &q, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
+	var qrs []*sqltypes.Result
+	err := rpcVTGate.StreamExecuteShards(context.Background(),
+		"query",
+		nil,
+		"TestVTGateStreamExecuteShards",
+		[]string{"0"},
+		topodatapb.TabletType_MASTER,
+		func(r *sqltypes.Result) error {
+			qrs = append(qrs, r)
+			return nil
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	row := new(proto.QueryResult)
-	row.Result = singleRowResult
-	want := []*proto.QueryResult{row}
-	if !reflect.DeepEqual(want, qrs) {
-		t.Errorf("want \n%+v, got \n%+v", want, qrs)
-	}
-
-	q.Session = new(proto.Session)
-	qrs = nil
-	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
-	err = RpcVTGate.StreamExecuteShard(&context.DummyContext{}, &q, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
-	want = []*proto.QueryResult{
-		row,
-		&proto.QueryResult{
-			Session: &proto.Session{
-				InTransaction: true,
-				ShardSessions: []*proto.ShardSession{{
-					Keyspace:      "TestVTGateStreamExecuteShard",
-					Shard:         "0",
-					TransactionId: 1,
-					TabletType:    topo.TYPE_MASTER,
-				}},
-			},
-		},
-	}
+	want := []*sqltypes.Result{singleRowResult}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
 	}
@@ -595,47 +677,41 @@ func TestVTGateSplitQuery(t *testing.T) {
 	keyranges, _ := key.ParseShardingSpec(DefaultShardSpec)
 	s := createSandbox(keyspace)
 	for _, kr := range keyranges {
-		s.MapTestConn(fmt.Sprintf("%s-%s", kr.Start, kr.End), &sandboxConn{})
+		s.MapTestConn(key.KeyRangeString(kr), &sandboxConn{})
 	}
 	sql := "select col1, col2 from table"
 	splitCount := 24
-	req := proto.SplitQueryRequest{
-		Keyspace: keyspace,
-		Query: tproto.BoundQuery{
-			Sql: sql,
-		},
-		SplitCount: splitCount,
-	}
-	result := new(proto.SplitQueryResult)
-	err := RpcVTGate.SplitQuery(&context.DummyContext{}, &req, result)
+	splits, err := rpcVTGate.SplitQuery(context.Background(),
+		keyspace,
+		sql,
+		nil,
+		"",
+		int64(splitCount))
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
 	_, err = getAllShards(DefaultShardSpec)
 	// Total number of splits should be number of shards * splitsPerShard
-	if splitCount != len(result.Splits) {
-		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", splitCount, len(result.Splits))
+	if splitCount != len(splits) {
+		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", splitCount, len(splits))
 	}
-	actualSqlsByKeyRange := map[kproto.KeyRange][]string{}
-	for _, split := range result.Splits {
+	actualSqlsByKeyRange := map[string][]string{}
+	for _, split := range splits {
 		if split.Size != sandboxSQRowCount {
 			t.Errorf("wrong split size, want \n%+v, got \n%+v", sandboxSQRowCount, split.Size)
 		}
-		if split.Query.Keyspace != keyspace {
-			t.Errorf("wrong split size, want \n%+v, got \n%+v", keyspace, split.Query.Keyspace)
+		if split.KeyRangePart.Keyspace != keyspace {
+			t.Errorf("wrong split size, want \n%+v, got \n%+v", keyspace, split.KeyRangePart.Keyspace)
 		}
-		if len(split.Query.KeyRanges) != 1 {
-			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.Query.KeyRanges))
+		if len(split.KeyRangePart.KeyRanges) != 1 {
+			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.KeyRangePart.KeyRanges))
 		}
-		if split.Query.TabletType != topo.TYPE_RDONLY {
-			t.Errorf("wrong tablet type, want \n%+v, got \n%+v", topo.TYPE_RDONLY, split.Query.TabletType)
-		}
-		kr := split.Query.KeyRanges[0]
+		kr := key.KeyRangeString(split.KeyRangePart.KeyRanges[0])
 		actualSqlsByKeyRange[kr] = append(actualSqlsByKeyRange[kr], split.Query.Sql)
 	}
-	expectedSqlsByKeyRange := map[kproto.KeyRange][]string{}
+	expectedSqlsByKeyRange := map[string][]string{}
 	for _, kr := range keyranges {
-		expectedSqlsByKeyRange[kr] = []string{
+		expectedSqlsByKeyRange[key.KeyRangeString(kr)] = []string{
 			"select col1, col2 from table /*split 0 */",
 			"select col1, col2 from table /*split 1 */",
 			"select col1, col2 from table /*split 2 */",
@@ -643,5 +719,409 @@ func TestVTGateSplitQuery(t *testing.T) {
 	}
 	if !reflect.DeepEqual(actualSqlsByKeyRange, expectedSqlsByKeyRange) {
 		t.Errorf("splits contain the wrong sqls and/or keyranges, got: %v, want: %v", actualSqlsByKeyRange, expectedSqlsByKeyRange)
+	}
+}
+
+func TestIsErrorCausedByVTGate(t *testing.T) {
+	unknownError := fmt.Errorf("unknown error")
+	serverError := &tabletconn.ServerError{
+		Code: tabletconn.ERR_RETRY,
+		Err:  "vttablet: retry: error message",
+	}
+	shardConnUnknownErr := &ShardConnError{Err: unknownError}
+	shardConnServerErr := &ShardConnError{Err: serverError}
+	shardConnCancelledErr := &ShardConnError{Err: tabletconn.Cancelled}
+
+	scatterConnErrAllUnknownErrs := &ScatterConnError{
+		Errs: []error{unknownError, unknownError, unknownError},
+	}
+	scatterConnErrMixed := &ScatterConnError{
+		Errs: []error{unknownError, shardConnServerErr, shardConnCancelledErr},
+	}
+	scatterConnErrAllNonVTGateErrs := &ScatterConnError{
+		Errs: []error{shardConnServerErr, shardConnServerErr, shardConnCancelledErr},
+	}
+
+	inputToWant := map[error]bool{
+		unknownError:         true,
+		serverError:          false,
+		tabletconn.Cancelled: false,
+		// OperationalErrors that are not tabletconn.Cancelled might be from VTGate
+		tabletconn.ConnClosed: true,
+		// Errors wrapped in ShardConnError should get unwrapped
+		shardConnUnknownErr:   true,
+		shardConnServerErr:    false,
+		shardConnCancelledErr: false,
+		// We consider a ScatterConnErr with all unknown errors to be from VTGate
+		scatterConnErrAllUnknownErrs: true,
+		// We consider a ScatterConnErr with a mix of errors to be from VTGate
+		scatterConnErrMixed: true,
+		// If every error in ScatterConnErr list is caused by external components, we shouldn't
+		// consider the error to be from VTGate
+		scatterConnErrAllNonVTGateErrs: false,
+	}
+
+	for input, want := range inputToWant {
+		got := isErrorCausedByVTGate(input)
+		if got != want {
+			t.Errorf("isErrorCausedByVTGate(%v) => %v, want %v",
+				input, got, want)
+		}
+	}
+}
+
+// Functions for testing
+// keyspace_id and 'filtered_replication_unfriendly'
+// annotations.
+func TestAnnotatingExecuteKeyspaceIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteKeyspaceIds")
+
+	_, err := rpcVTGate.ExecuteKeyspaceIds(
+		context.Background(),
+		"INSERT INTO table () VALUES();",
+		nil,
+		keyspace,
+		[][]byte{{0x10}},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyQueryAnnotatedWithKeyspaceID(t, []byte{0x10}, shards[0])
+}
+
+func TestAnnotatingExecuteKeyspaceIdsMultipleIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteKeyspaceIdsMultipleIds")
+
+	_, err := rpcVTGate.ExecuteKeyspaceIds(
+		context.Background(),
+		"INSERT INTO table () VALUES();",
+		nil,
+		keyspace,
+		[][]byte{{0x10}, {0x15}},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	if err == nil || !strings.Contains(err.Error(), "DML should not span multiple keyspace_ids") {
+		t.Fatalf("want specific error, got %v", err)
+	}
+
+	// Currently, there's logic in resolver.go for rejecting
+	// multiple-ids DML's so we expect 0 queries here.
+	verifyNumQueries(t, 0, shards[0].Queries)
+}
+
+func TestAnnotatingExecuteKeyRanges(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteKeyRanges")
+
+	_, err := rpcVTGate.ExecuteKeyRanges(
+		context.Background(),
+		"UPDATE table SET col1=1 WHERE col2>3;",
+		nil,
+		keyspace,
+		[]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x40}}},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	// Keyrange spans both shards.
+	verifyQueryAnnotatedAsUnfriendly(t, shards[0])
+	verifyQueryAnnotatedAsUnfriendly(t, shards[1])
+}
+
+func TestAnnotatingExecuteEntityIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteEntityIds")
+
+	_, err := rpcVTGate.ExecuteEntityIds(
+		context.Background(),
+		"INSERT INTO table () VALUES();",
+		nil,
+		keyspace,
+		"entity_column_name",
+		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
+				XidType:    sqltypes.Int64,
+				XidValue:   []byte("0"),
+				KeyspaceId: []byte{0x10}, // First shard.
+			},
+			{
+				XidType:    sqltypes.Int64,
+				XidValue:   []byte("1"),
+				KeyspaceId: []byte{0x25}, // Second shard.
+			},
+		},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyQueryAnnotatedAsUnfriendly(t, shards[0])
+	verifyQueryAnnotatedAsUnfriendly(t, shards[1])
+}
+
+func TestAnnotatingExecuteShards(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteShards")
+	_, err := rpcVTGate.ExecuteShards(
+		context.Background(),
+		"INSERT INTO table () VALUES();",
+		nil,
+		keyspace,
+		[]string{"20-40"},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false)
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyQueryAnnotatedAsUnfriendly(t, shards[1])
+}
+
+func TestAnnotatingExecuteBatchKeyspaceIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteBatchKeyspaceIds")
+	_, err := rpcVTGate.ExecuteBatchKeyspaceIds(
+		context.Background(),
+		[]*vtgatepb.BoundKeyspaceIdQuery{
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "INSERT INTO table () VALUES();",
+				},
+				Keyspace:    keyspace,
+				KeyspaceIds: [][]byte{{0x10}},
+			},
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "UPDATE table SET col1=1 WHERE col2>3;",
+				},
+				Keyspace:    keyspace,
+				KeyspaceIds: [][]byte{{0x15}},
+			},
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "DELETE FROM table WHERE col1==4;",
+				},
+				Keyspace:    keyspace,
+				KeyspaceIds: [][]byte{{0x25}},
+			},
+		},
+		topodatapb.TabletType_MASTER,
+		false,
+		nil)
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyBatchQueryAnnotatedWithKeyspaceIds(
+		t,
+		[][]byte{{0x10}, {0x15}},
+		shards[0])
+	verifyBatchQueryAnnotatedWithKeyspaceIds(
+		t,
+		[][]byte{{0x25}},
+		shards[1])
+}
+
+func TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteBatchKeyspaceIdsMultipleIds")
+	_, err := rpcVTGate.ExecuteBatchKeyspaceIds(
+		context.Background(),
+		[]*vtgatepb.BoundKeyspaceIdQuery{
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "INSERT INTO table () VALUES();",
+				},
+				Keyspace: keyspace,
+				KeyspaceIds: [][]byte{
+					{0x10},
+					{0x15},
+				},
+			},
+		},
+		topodatapb.TabletType_MASTER,
+		false,
+		nil)
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyBatchQueryAnnotatedAsUnfriendly(
+		t,
+		1, // expectedNumQueries
+		shards[0])
+}
+
+func TestAnnotatingExecuteBatchShards(t *testing.T) {
+	keyspace, shards := setUpSandboxWithTwoShards("TestAnnotatingExecuteBatchShards")
+
+	_, err := rpcVTGate.ExecuteBatchShards(
+		context.Background(),
+		[]*vtgatepb.BoundShardQuery{
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "INSERT INTO table () VALUES();",
+				},
+				Keyspace: keyspace,
+				Shards:   []string{"-20", "20-40"},
+			},
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "UPDATE table SET col1=1 WHERE col2>3;",
+				},
+				Keyspace: keyspace,
+				Shards:   []string{"-20"},
+			},
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "UPDATE table SET col1=1 WHERE col2>3;",
+				},
+				Keyspace: keyspace,
+				Shards:   []string{"20-40"},
+			},
+			{
+				Query: &querypb.BoundQuery{
+					Sql: "DELETE FROM table WHERE col1==4;",
+				},
+				Keyspace: keyspace,
+				Shards:   []string{"20-40"},
+			},
+		},
+		topodatapb.TabletType_MASTER,
+		false,
+		nil)
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+
+	verifyBatchQueryAnnotatedAsUnfriendly(
+		t,
+		2, // expectedNumQueries
+		shards[0])
+	verifyBatchQueryAnnotatedAsUnfriendly(
+		t,
+		3, // expectedNumQueries
+		shards[1])
+}
+
+// TODO(erez): Add testing annotations of vtgate.Execute (V3)
+
+// Sets up a sandbox with two shards:
+//   the first named "-20" for the -20 keyrange, and
+//   the second named "20-40" for the 20-40 keyrange.
+// It returns the created shards and as a convenience the given
+// keyspace.
+//
+// NOTE: You should not call this method multiple times with
+// the same 'keyspace' parameter: "shardGateway" caches connections
+// for a keyspace, and may re-send queries to the shards created in
+// a previous call to this method.
+func setUpSandboxWithTwoShards(keyspace string) (string, []*sandboxConn) {
+	shards := []*sandboxConn{{}, {}}
+	aSandbox := createSandbox(keyspace)
+	aSandbox.MapTestConn("-20", shards[0])
+	aSandbox.MapTestConn("20-40", shards[1])
+	return keyspace, shards
+}
+
+// Verifies that 'shard' was sent exactly one query and that it
+// was annotated with 'expectedKeyspaceID'
+func verifyQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte, shard *sandboxConn) {
+	if !verifyNumQueries(t, 1, shard.Queries) {
+		return
+	}
+	verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceID, &shard.Queries[0])
+}
+
+// Verifies that 'shard' was sent exactly one query and that it
+// was annotated as unfriendly.
+func verifyQueryAnnotatedAsUnfriendly(t *testing.T, shard *sandboxConn) {
+	if !verifyNumQueries(t, 1, shard.Queries) {
+		return
+	}
+	verifyBoundQueryAnnotatedAsUnfriendly(t, &shard.Queries[0])
+}
+
+// Verifies 'queries' has exactly 'expectedNumQueries' elements.
+// Returns true if verification succeeds.
+func verifyNumQueries(t *testing.T, expectedNumQueries int, queries []querytypes.BoundQuery) bool {
+	numElements := len(queries)
+	if numElements != expectedNumQueries {
+		t.Errorf("want %v queries, got: %v (queries: %v)", expectedNumQueries, numElements, queries)
+		return false
+	}
+	return true
+}
+
+// Verifies 'batchQueries' has exactly 'expectedNumQueries' elements.
+// Returns true if verification succeeds.
+func verifyNumBatchQueries(t *testing.T, expectedNumQueries int, batchQueries [][]querytypes.BoundQuery) bool {
+	numElements := len(batchQueries)
+	if numElements != expectedNumQueries {
+		t.Errorf("want %v batch queries, got: %v (batch queries: %v)", expectedNumQueries, numElements, batchQueries)
+		return false
+	}
+	return true
+}
+
+func verifyBoundQueryAnnotatedWithKeyspaceID(t *testing.T, expectedKeyspaceID []byte, query *querytypes.BoundQuery) {
+	verifyBoundQueryAnnotatedWithComment(
+		t,
+		"/* vtgate:: keyspace_id:"+hex.EncodeToString(expectedKeyspaceID)+" */",
+		query)
+}
+
+func verifyBoundQueryAnnotatedAsUnfriendly(t *testing.T, query *querytypes.BoundQuery) {
+	verifyBoundQueryAnnotatedWithComment(
+		t,
+		"/* vtgate:: filtered_replication_unfriendly */",
+		query)
+}
+
+func verifyBoundQueryAnnotatedWithComment(t *testing.T, expectedComment string, query *querytypes.BoundQuery) {
+	if !strings.Contains(query.Sql, expectedComment) {
+		t.Errorf("want query '%v' to be annotated with '%v'", query.Sql, expectedComment)
+	}
+}
+
+// Verifies that 'shard' was sent exactly one batch-query and that its
+// (single) queries are annotated with the elements of expectedKeyspaceIDs
+// in order.
+func verifyBatchQueryAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIDs [][]byte, shard *sandboxConn) {
+	if !verifyNumBatchQueries(t, 1, shard.BatchQueries) {
+		return
+	}
+	verifyBoundQueriesAnnotatedWithKeyspaceIds(t, expectedKeyspaceIDs, shard.BatchQueries[0])
+}
+
+// Verifies that 'shard' was sent exactly one batch-query and that its
+// (single) queries are annotated as unfriendly.
+func verifyBatchQueryAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int, shard *sandboxConn) {
+	if !verifyNumBatchQueries(t, 1, shard.BatchQueries) {
+		return
+	}
+	verifyBoundQueriesAnnotatedAsUnfriendly(t, expectedNumQueries, shard.BatchQueries[0])
+}
+
+func verifyBoundQueriesAnnotatedWithKeyspaceIds(t *testing.T, expectedKeyspaceIDs [][]byte, queries []querytypes.BoundQuery) {
+	if !verifyNumQueries(t, len(expectedKeyspaceIDs), queries) {
+		return
+	}
+	for i := range queries {
+		verifyBoundQueryAnnotatedWithKeyspaceID(t, expectedKeyspaceIDs[i], &queries[i])
+	}
+}
+
+func verifyBoundQueriesAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries int, queries []querytypes.BoundQuery) {
+	if !verifyNumQueries(t, expectedNumQueries, queries) {
+		return
+	}
+	for i := range queries {
+		verifyBoundQueryAnnotatedAsUnfriendly(t, &queries[i])
 	}
 }

@@ -10,20 +10,22 @@ import (
 
 	base "github.com/youtube/vitess/go/vt/events"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestReparentSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [reparent cell-0000012345 -> cell-0000054321] status (123-456-789)"
 	tc := &Reparent{
 		ShardInfo: *topo.NewShardInfo("keyspace-123", "shard-123", nil, -1),
-		OldMaster: topo.Tablet{
-			Alias: topo.TabletAlias{
+		OldMaster: topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
 				Cell: "cell",
 				Uid:  12345,
 			},
 		},
-		NewMaster: topo.Tablet{
-			Alias: topo.TabletAlias{
+		NewMaster: topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
 				Cell: "cell",
 				Uid:  54321,
 			},

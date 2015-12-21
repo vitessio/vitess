@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
-const EOFCHAR = 0x100
+const eofChar = 0x100
 
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
@@ -22,10 +22,11 @@ type Tokenizer struct {
 	ForceEOF      bool
 	lastChar      uint16
 	Position      int
-	errorToken    []byte
+	lastToken     []byte
 	LastError     string
 	posVarIndex   int
 	ParseTree     Statement
+	nesting       int
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -35,75 +36,81 @@ func NewStringTokenizer(sql string) *Tokenizer {
 }
 
 var keywords = map[string]int{
-	"all":           ALL,
-	"alter":         ALTER,
-	"analyze":       ANALYZE,
-	"and":           AND,
-	"as":            AS,
-	"asc":           ASC,
-	"between":       BETWEEN,
-	"by":            BY,
-	"case":          CASE,
-	"create":        CREATE,
-	"cross":         CROSS,
-	"default":       DEFAULT,
-	"delete":        DELETE,
-	"desc":          DESC,
-	"describe":      DESCRIBE,
-	"distinct":      DISTINCT,
-	"drop":          DROP,
-	"duplicate":     DUPLICATE,
-	"else":          ELSE,
-	"end":           END,
-	"except":        EXCEPT,
-	"exists":        EXISTS,
-	"explain":       EXPLAIN,
-	"for":           FOR,
-	"force":         FORCE,
-	"from":          FROM,
-	"group":         GROUP,
-	"having":        HAVING,
-	"if":            IF,
-	"ignore":        IGNORE,
-	"in":            IN,
-	"index":         INDEX,
-	"inner":         INNER,
-	"insert":        INSERT,
-	"intersect":     INTERSECT,
-	"into":          INTO,
-	"is":            IS,
-	"join":          JOIN,
-	"key":           KEY,
-	"left":          LEFT,
-	"like":          LIKE,
-	"limit":         LIMIT,
-	"lock":          LOCK,
-	"minus":         MINUS,
-	"natural":       NATURAL,
-	"not":           NOT,
-	"null":          NULL,
-	"on":            ON,
-	"or":            OR,
-	"order":         ORDER,
-	"outer":         OUTER,
-	"rename":        RENAME,
-	"right":         RIGHT,
-	"select":        SELECT,
-	"set":           SET,
-	"show":          SHOW,
-	"straight_join": STRAIGHT_JOIN,
-	"table":         TABLE,
-	"then":          THEN,
-	"to":            TO,
-	"union":         UNION,
-	"unique":        UNIQUE,
-	"update":        UPDATE,
-	"use":           USE,
-	"using":         USING,
-	"values":        VALUES,
-	"view":          VIEW,
-	"when":          WHEN,
-	"where":         WHERE,
+	"all":            ALL,
+	"alter":          ALTER,
+	"analyze":        ANALYZE,
+	"and":            AND,
+	"as":             AS,
+	"asc":            ASC,
+	"between":        BETWEEN,
+	"by":             BY,
+	"case":           CASE,
+	"create":         CREATE,
+	"cross":          CROSS,
+	"default":        DEFAULT,
+	"delete":         DELETE,
+	"desc":           DESC,
+	"describe":       DESCRIBE,
+	"distinct":       DISTINCT,
+	"drop":           DROP,
+	"duplicate":      DUPLICATE,
+	"else":           ELSE,
+	"end":            END,
+	"except":         EXCEPT,
+	"exists":         EXISTS,
+	"explain":        EXPLAIN,
+	"false":          FALSE,
+	"for":            FOR,
+	"force":          FORCE,
+	"from":           FROM,
+	"group":          GROUP,
+	"having":         HAVING,
+	"if":             IF,
+	"ignore":         IGNORE,
+	"in":             IN,
+	"index":          INDEX,
+	"inner":          INNER,
+	"insert":         INSERT,
+	"intersect":      INTERSECT,
+	"into":           INTO,
+	"is":             IS,
+	"join":           JOIN,
+	"key":            KEY,
+	"keyrange":       KEYRANGE,
+	"last_insert_id": LAST_INSERT_ID,
+	"left":           LEFT,
+	"like":           LIKE,
+	"limit":          LIMIT,
+	"lock":           LOCK,
+	"minus":          MINUS,
+	"natural":        NATURAL,
+	"not":            NOT,
+	"null":           NULL,
+	"on":             ON,
+	"or":             OR,
+	"order":          ORDER,
+	"outer":          OUTER,
+	"rename":         RENAME,
+	"regexp":         REGEXP,
+	"right":          RIGHT,
+	"rlike":          REGEXP,
+	"select":         SELECT,
+	"set":            SET,
+	"show":           SHOW,
+	"straight_join":  STRAIGHT_JOIN,
+	"table":          TABLE,
+	"then":           THEN,
+	"to":             TO,
+	"true":           TRUE,
+	"union":          UNION,
+	"unique":         UNIQUE,
+	"update":         UPDATE,
+	"use":            USE,
+	"using":          USING,
+	"values":         VALUES,
+	"view":           VIEW,
+	"when":           WHEN,
+	"where":          WHERE,
 }
 
 // Lex returns the next token form the Tokenizer.
@@ -120,15 +127,15 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	case ID, STRING, NUMBER, VALUE_ARG, LIST_ARG, COMMENT:
 		lval.bytes = val
 	}
-	tkn.errorToken = val
+	tkn.lastToken = val
 	return typ
 }
 
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
-	buf := bytes.NewBuffer(make([]byte, 0, 32))
-	if tkn.errorToken != nil {
-		fmt.Fprintf(buf, "%s at position %v near %s", err, tkn.Position, tkn.errorToken)
+	buf := &bytes.Buffer{}
+	if tkn.lastToken != nil {
+		fmt.Fprintf(buf, "%s at position %v near '%s'", err, tkn.Position, tkn.lastToken)
 	} else {
 		fmt.Fprintf(buf, "%s at position %v", err, tkn.Position)
 	}
@@ -156,7 +163,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	default:
 		tkn.next()
 		switch ch {
-		case EOFCHAR:
+		case eofChar:
 			return 0, nil
 		case '=', ',', ';', '(', ')', '+', '*', '%', '&', '|', '^', '~':
 			return int(ch), nil
@@ -168,9 +175,8 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		case '.':
 			if isDigit(tkn.lastChar) {
 				return tkn.scanNumber(true)
-			} else {
-				return int(ch), nil
 			}
+			return int(ch), nil
 		case '/':
 			switch tkn.lastChar {
 			case '/':
@@ -186,14 +192,16 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			if tkn.lastChar == '-' {
 				tkn.next()
 				return tkn.scanCommentType1("--")
-			} else {
-				return int(ch), nil
 			}
+			return int(ch), nil
 		case '<':
 			switch tkn.lastChar {
 			case '>':
 				tkn.next()
 				return NE, nil
+			case '<':
+				tkn.next()
+				return SHIFT_LEFT, nil
 			case '=':
 				tkn.next()
 				switch tkn.lastChar {
@@ -207,19 +215,22 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return int(ch), nil
 			}
 		case '>':
-			if tkn.lastChar == '=' {
+			switch tkn.lastChar {
+			case '=':
 				tkn.next()
 				return GE, nil
-			} else {
+			case '>':
+				tkn.next()
+				return SHIFT_RIGHT, nil
+			default:
 				return int(ch), nil
 			}
 		case '!':
 			if tkn.lastChar == '=' {
 				tkn.next()
 				return NE, nil
-			} else {
-				return LEX_ERROR, []byte("!")
 			}
+			return LEX_ERROR, []byte("!")
 		case '\'', '"':
 			return tkn.scanString(ch, STRING)
 		case '`':
@@ -239,20 +250,25 @@ func (tkn *Tokenizer) skipBlank() {
 }
 
 func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.next() {
 		buffer.WriteByte(byte(tkn.lastChar))
 	}
 	lowered := bytes.ToLower(buffer.Bytes())
-	if keywordId, found := keywords[string(lowered)]; found {
-		return keywordId, lowered
+	loweredStr := string(lowered)
+	if keywordID, found := keywords[loweredStr]; found {
+		return keywordID, lowered
+	}
+	// dual must always be case-insensitive
+	if loweredStr == "dual" {
+		return ID, lowered
 	}
 	return ID, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	if !isLetter(tkn.lastChar) {
 		return LEX_ERROR, buffer.Bytes()
@@ -268,7 +284,7 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanBindVar() (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	token := VALUE_ARG
 	tkn.next()
@@ -289,12 +305,12 @@ func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 
 func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 	for digitVal(tkn.lastChar) < base {
-		tkn.ConsumeNext(buffer)
+		tkn.consumeNext(buffer)
 	}
 }
 
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	if seenDecimalPoint {
 		buffer.WriteByte('.')
 		tkn.scanMantissa(10, buffer)
@@ -303,10 +319,10 @@ func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 
 	if tkn.lastChar == '0' {
 		// int or float
-		tkn.ConsumeNext(buffer)
+		tkn.consumeNext(buffer)
 		if tkn.lastChar == 'x' || tkn.lastChar == 'X' {
 			// hexadecimal int
-			tkn.ConsumeNext(buffer)
+			tkn.consumeNext(buffer)
 			tkn.scanMantissa(16, buffer)
 		} else {
 			// octal int or float
@@ -333,15 +349,15 @@ func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 
 fraction:
 	if tkn.lastChar == '.' {
-		tkn.ConsumeNext(buffer)
+		tkn.consumeNext(buffer)
 		tkn.scanMantissa(10, buffer)
 	}
 
 exponent:
 	if tkn.lastChar == 'e' || tkn.lastChar == 'E' {
-		tkn.ConsumeNext(buffer)
+		tkn.consumeNext(buffer)
 		if tkn.lastChar == '+' || tkn.lastChar == '-' {
-			tkn.ConsumeNext(buffer)
+			tkn.consumeNext(buffer)
 		}
 		tkn.scanMantissa(10, buffer)
 	}
@@ -351,7 +367,7 @@ exit:
 }
 
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	for {
 		ch := tkn.lastChar
 		tkn.next()
@@ -362,17 +378,17 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 				break
 			}
 		} else if ch == '\\' {
-			if tkn.lastChar == EOFCHAR {
+			if tkn.lastChar == eofChar {
 				return LEX_ERROR, buffer.Bytes()
 			}
-			if decodedChar := sqltypes.SqlDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DONTESCAPE {
+			if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DontEscape {
 				ch = tkn.lastChar
 			} else {
 				ch = uint16(decodedChar)
 			}
 			tkn.next()
 		}
-		if ch == EOFCHAR {
+		if ch == eofChar {
 			return LEX_ERROR, buffer.Bytes()
 		}
 		buffer.WriteByte(byte(ch))
@@ -381,40 +397,40 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	buffer.WriteString(prefix)
-	for tkn.lastChar != EOFCHAR {
+	for tkn.lastChar != eofChar {
 		if tkn.lastChar == '\n' {
-			tkn.ConsumeNext(buffer)
+			tkn.consumeNext(buffer)
 			break
 		}
-		tkn.ConsumeNext(buffer)
+		tkn.consumeNext(buffer)
 	}
 	return COMMENT, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
-	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer := &bytes.Buffer{}
 	buffer.WriteString("/*")
 	for {
 		if tkn.lastChar == '*' {
-			tkn.ConsumeNext(buffer)
+			tkn.consumeNext(buffer)
 			if tkn.lastChar == '/' {
-				tkn.ConsumeNext(buffer)
+				tkn.consumeNext(buffer)
 				break
 			}
 			continue
 		}
-		if tkn.lastChar == EOFCHAR {
+		if tkn.lastChar == eofChar {
 			return LEX_ERROR, buffer.Bytes()
 		}
-		tkn.ConsumeNext(buffer)
+		tkn.consumeNext(buffer)
 	}
 	return COMMENT, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) ConsumeNext(buffer *bytes.Buffer) {
-	if tkn.lastChar == EOFCHAR {
+func (tkn *Tokenizer) consumeNext(buffer *bytes.Buffer) {
+	if tkn.lastChar == eofChar {
 		// This should never happen.
 		panic("unexpected EOF")
 	}
@@ -425,7 +441,7 @@ func (tkn *Tokenizer) ConsumeNext(buffer *bytes.Buffer) {
 func (tkn *Tokenizer) next() {
 	if ch, err := tkn.InStream.ReadByte(); err != nil {
 		// Only EOF is possible.
-		tkn.lastChar = EOFCHAR
+		tkn.lastChar = eofChar
 	} else {
 		tkn.lastChar = uint16(ch)
 	}

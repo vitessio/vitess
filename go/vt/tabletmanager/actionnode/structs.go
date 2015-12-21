@@ -4,13 +4,7 @@
 
 package actionnode
 
-import (
-	"fmt"
-
-	"github.com/youtube/vitess/go/vt/key"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/topo"
-)
+import topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 /*
 This file defines all the payload structures for the ActionNode objects.
@@ -25,150 +19,98 @@ Note it's OK to rename the structures as the type name is not saved in json.
 
 // tablet action node structures
 
-type RestartSlaveData struct {
-	ReplicationStatus *myproto.ReplicationStatus
-	WaitPosition      myproto.ReplicationPosition
-	TimePromoted      int64 // used to verify replication - a row will be inserted with this timestamp
-	Parent            topo.TabletAlias
-	Force             bool
-}
-
-func (rsd *RestartSlaveData) String() string {
-	return fmt.Sprintf("RestartSlaveData{ReplicationStatus:%#v WaitPosition:%#v TimePromoted:%v Parent:%v Force:%v}", rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, rsd.Parent, rsd.Force)
-}
-
+// SlaveWasRestartedArgs is the paylod for SlaveWasRestarted
 type SlaveWasRestartedArgs struct {
-	Parent topo.TabletAlias
-}
-
-type SnapshotArgs struct {
-	Concurrency         int
-	ServerMode          bool
-	ForceMasterSnapshot bool
-}
-
-type SnapshotReply struct {
-	ParentAlias  topo.TabletAlias
-	ManifestPath string
-
-	// these two are only used for ServerMode=true full snapshot
-	SlaveStartRequired bool
-	ReadOnly           bool
-}
-
-type MultiSnapshotReply struct {
-	ParentAlias   topo.TabletAlias
-	ManifestPaths []string
-}
-
-type SnapshotSourceEndArgs struct {
-	SlaveStartRequired bool
-	ReadOnly           bool
-	OriginalType       topo.TabletType
-}
-
-type MultiSnapshotArgs struct {
-	KeyRanges        []key.KeyRange
-	Tables           []string
-	ExcludeTables    []string
-	Concurrency      int
-	SkipSlaveRestart bool
-	MaximumFilesize  uint64
-}
-
-type MultiRestoreArgs struct {
-	SrcTabletAliases       []topo.TabletAlias
-	Concurrency            int
-	FetchConcurrency       int
-	InsertTableConcurrency int
-	FetchRetryCount        int
-	Strategy               string
-}
-
-type ReserveForRestoreArgs struct {
-	SrcTabletAlias topo.TabletAlias
-}
-
-type RestoreArgs struct {
-	SrcTabletAlias        topo.TabletAlias
-	SrcFilePath           string
-	ParentAlias           topo.TabletAlias
-	FetchConcurrency      int
-	FetchRetryCount       int
-	WasReserved           bool
-	DontWaitForSlaveStart bool
+	Parent *topodatapb.TabletAlias
 }
 
 // shard action node structures
 
+// ApplySchemaShardArgs is the payload for ApplySchemaShard
 type ApplySchemaShardArgs struct {
-	MasterTabletAlias topo.TabletAlias
+	MasterTabletAlias *topodatapb.TabletAlias
 	Change            string
-	Simple            bool
 }
 
+// SetShardServedTypesArgs is the payload for SetShardServedTypes
 type SetShardServedTypesArgs struct {
 	Cells      []string
-	ServedType topo.TabletType
+	ServedType topodatapb.TabletType
 }
 
+// MigrateServedTypesArgs is the payload for MigrateServedTypes
 type MigrateServedTypesArgs struct {
-	ServedType topo.TabletType
+	ServedType topodatapb.TabletType
 }
 
 // keyspace action node structures
 
+// ApplySchemaKeyspaceArgs is the payload for ApplySchemaKeyspace
 type ApplySchemaKeyspaceArgs struct {
 	Change string
-	Simple bool
 }
 
+// MigrateServedFromArgs is the payload for MigrateServedFrom
 type MigrateServedFromArgs struct {
-	ServedType topo.TabletType
+	ServedType topodatapb.TabletType
 }
 
 // methods to build the shard action nodes
 
-func ReparentShard(tabletAlias topo.TabletAlias) *ActionNode {
-	return (&ActionNode{
-		Action: SHARD_ACTION_REPARENT,
-		Args:   &tabletAlias,
-	}).SetGuid()
+// ReparentShardArgs is the payload for ReparentShard
+type ReparentShardArgs struct {
+	Operation        string
+	MasterElectAlias *topodatapb.TabletAlias
 }
 
-func ShardExternallyReparented(tabletAlias topo.TabletAlias) *ActionNode {
+// ReparentShard returns an ActionNode
+func ReparentShard(operation string, masterElectAlias *topodatapb.TabletAlias) *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_EXTERNALLY_REPARENTED,
-		Args:   &tabletAlias,
-	}).SetGuid()
-}
-
-func RebuildShard() *ActionNode {
-	return (&ActionNode{
-		Action: SHARD_ACTION_REBUILD,
-	}).SetGuid()
-}
-
-func CheckShard() *ActionNode {
-	return (&ActionNode{
-		Action: SHARD_ACTION_CHECK,
-	}).SetGuid()
-}
-
-func ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple bool) *ActionNode {
-	return (&ActionNode{
-		Action: SHARD_ACTION_APPLY_SCHEMA,
-		Args: &ApplySchemaShardArgs{
-			MasterTabletAlias: masterTabletAlias,
-			Change:            change,
-			Simple:            simple,
+		Action: ShardActionReparent,
+		Args: &ReparentShardArgs{
+			Operation:        operation,
+			MasterElectAlias: masterElectAlias,
 		},
 	}).SetGuid()
 }
 
-func SetShardServedTypes(cells []string, servedType topo.TabletType) *ActionNode {
+// ShardExternallyReparented returns an ActionNode
+func ShardExternallyReparented(tabletAlias *topodatapb.TabletAlias) *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_SET_SERVED_TYPES,
+		Action: ShardActionExternallyReparented,
+		Args:   &tabletAlias,
+	}).SetGuid()
+}
+
+// RebuildShard returns an ActionNode
+func RebuildShard() *ActionNode {
+	return (&ActionNode{
+		Action: ShardActionRebuild,
+	}).SetGuid()
+}
+
+// CheckShard returns an ActionNode
+func CheckShard() *ActionNode {
+	return (&ActionNode{
+		Action: ShardActionCheck,
+	}).SetGuid()
+}
+
+// ApplySchemaShard returns an ActionNode
+func ApplySchemaShard(masterTabletAlias *topodatapb.TabletAlias, change string) *ActionNode {
+	return (&ActionNode{
+		Action: ShardActionApplySchema,
+		Args: &ApplySchemaShardArgs{
+			MasterTabletAlias: masterTabletAlias,
+			Change:            change,
+		},
+	}).SetGuid()
+}
+
+// SetShardServedTypes returns an ActionNode
+func SetShardServedTypes(cells []string, servedType topodatapb.TabletType) *ActionNode {
+	return (&ActionNode{
+		Action: ShardActionSetServedTypes,
 		Args: &SetShardServedTypesArgs{
 			Cells:      cells,
 			ServedType: servedType,
@@ -176,71 +118,79 @@ func SetShardServedTypes(cells []string, servedType topo.TabletType) *ActionNode
 	}).SetGuid()
 }
 
-func ShardMultiRestore(args *MultiRestoreArgs) *ActionNode {
+// MigrateServedTypes returns an ActionNode
+func MigrateServedTypes(servedType topodatapb.TabletType) *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_MULTI_RESTORE,
-		Args:   args,
-	}).SetGuid()
-}
-
-func MigrateServedTypes(servedType topo.TabletType) *ActionNode {
-	return (&ActionNode{
-		Action: SHARD_ACTION_MIGRATE_SERVED_TYPES,
+		Action: ShardActionMigrateServedTypes,
 		Args: &MigrateServedTypesArgs{
 			ServedType: servedType,
 		},
 	}).SetGuid()
 }
 
+// UpdateShard returns an ActionNode
 func UpdateShard() *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_UPDATE_SHARD,
+		Action: ShardActionUpdateShard,
 	}).SetGuid()
 }
 
 // methods to build the keyspace action nodes
 
+// RebuildKeyspace returns an ActionNode
 func RebuildKeyspace() *ActionNode {
 	return (&ActionNode{
-		Action: KEYSPACE_ACTION_REBUILD,
+		Action: KeyspaceActionRebuild,
 	}).SetGuid()
 }
 
+// SetKeyspaceShardingInfo returns an ActionNode
 func SetKeyspaceShardingInfo() *ActionNode {
 	return (&ActionNode{
-		Action: KEYSPACE_ACTION_SET_SHARDING_INFO,
+		Action: KeyspaceActionSetShardingInfo,
 	}).SetGuid()
 }
 
+// SetKeyspaceServedFrom returns an ActionNode
 func SetKeyspaceServedFrom() *ActionNode {
 	return (&ActionNode{
-		Action: KEYSPACE_ACTION_SET_SERVED_FROM,
+		Action: KeyspaceActionSetServedFrom,
 	}).SetGuid()
 }
 
-func ApplySchemaKeyspace(change string, simple bool) *ActionNode {
+// ApplySchemaKeyspace returns an ActionNode
+func ApplySchemaKeyspace(change string) *ActionNode {
 	return (&ActionNode{
-		Action: KEYSPACE_ACTION_APPLY_SCHEMA,
+		Action: KeyspaceActionApplySchema,
 		Args: &ApplySchemaKeyspaceArgs{
 			Change: change,
-			Simple: simple,
 		},
 	}).SetGuid()
 }
 
-func MigrateServedFrom(servedType topo.TabletType) *ActionNode {
+// MigrateServedFrom returns an ActionNode
+func MigrateServedFrom(servedType topodatapb.TabletType) *ActionNode {
 	return (&ActionNode{
-		Action: KEYSPACE_ACTION_MIGRATE_SERVED_FROM,
+		Action: KeyspaceActionMigrateServedFrom,
 		Args: &MigrateServedFromArgs{
 			ServedType: servedType,
 		},
 	}).SetGuid()
 }
 
+// KeyspaceCreateShard returns an ActionNode to use to lock a keyspace
+// for shard creation
+func KeyspaceCreateShard() *ActionNode {
+	return (&ActionNode{
+		Action: KeyspaceActionCreateShard,
+	}).SetGuid()
+}
+
 //methods to build the serving shard action nodes
 
+// RebuildSrvShard returns an ActionNode
 func RebuildSrvShard() *ActionNode {
 	return (&ActionNode{
-		Action: SRV_SHARD_ACTION_REBUILD,
+		Action: SrvShardActionRebuild,
 	}).SetGuid()
 }

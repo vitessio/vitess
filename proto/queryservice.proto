@@ -1,0 +1,46 @@
+// This file contains the service VtTablet exposes for queries.
+
+syntax = "proto3";
+
+package queryservice;
+
+import "query.proto";
+
+// Query defines the tablet query service, implemented by vttablet.
+service Query {
+  // GetSessionId gets a session id from the server. This call is being
+  // deprecated in favor of using the Target field of the subsequent
+  // queries, but is still here for backward compatibility.
+  rpc GetSessionId(query.GetSessionIdRequest) returns (query.GetSessionIdResponse) {};
+
+  // Execute executes the specified SQL query (might be in a
+  // transaction context, if Query.transaction_id is set).
+  rpc Execute(query.ExecuteRequest) returns (query.ExecuteResponse) {};
+
+  // ExecuteBatch executes a list of queries, and returns the result
+  // for each query.
+  rpc ExecuteBatch(query.ExecuteBatchRequest) returns (query.ExecuteBatchResponse) {};
+
+  // StreamExecute executes a streaming query. Use this method if the
+  // query returns a large number of rows. The first QueryResult will
+  // contain the Fields, subsequent QueryResult messages will contain
+  // the rows.
+  rpc StreamExecute(query.StreamExecuteRequest) returns (stream query.StreamExecuteResponse) {};
+
+  // Begin a transaction.
+  rpc Begin(query.BeginRequest) returns (query.BeginResponse) {};
+
+  // Commit a transaction.
+  rpc Commit(query.CommitRequest) returns (query.CommitResponse) {};
+
+  // Rollback a transaction.
+  rpc Rollback(query.RollbackRequest) returns (query.RollbackResponse) {};
+
+  // SplitQuery is the API to facilitate MapReduce-type iterations
+  // over large data sets (like full table dumps).
+  rpc SplitQuery(query.SplitQueryRequest) returns (query.SplitQueryResponse) {};
+
+  // StreamHealth runs a streaming RPC to the tablet, that returns the
+  // current health of the tablet on a regular basis.
+  rpc StreamHealth(query.StreamHealthRequest) returns (stream query.StreamHealthResponse) {};
+}

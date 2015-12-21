@@ -13,27 +13,37 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/vt/callerid"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
-	txlogzHeader = []byte(`<thead>
-
-		<tr>
-			<th>Transaction id</th>
-			<th>Start</th>
-			<th>End</th>
-			<th>Duration</th>
-			<th>Decision</th>
-			<th>Statements</th>
-		</tr>
-</thead>
+	txlogzHeader = []byte(`
+		<thead>
+			<tr>
+				<th>Transaction id</th>
+				<th>Effective caller</th>
+				<th>Immediate caller</th>
+				<th>Start</th>
+				<th>End</th>
+				<th>Duration</th>
+				<th>Decision</th>
+				<th>Statements</th>
+			</tr>
+		</thead>
 	`)
 	txlogzFuncMap = template.FuncMap{
-		"stampMicro": func(t time.Time) string { return t.Format(time.StampMicro) },
+		"stampMicro":         func(t time.Time) string { return t.Format(time.StampMicro) },
+		"getEffectiveCaller": func(e *vtrpcpb.CallerID) string { return callerid.GetPrincipal(e) },
+		"getImmediateCaller": func(i *querypb.VTGateCallerID) string { return callerid.GetUsername(i) },
 	}
 	txlogzTmpl = template.Must(template.New("example").Funcs(txlogzFuncMap).Parse(`
 		<tr class="{{.ColorLevel}}">
 			<td>{{.TransactionID}}</td>
+			<td>{{.EffectiveCallerID | getEffectiveCaller}}</td>
+			<td>{{.ImmediateCallerID | getImmediateCaller}}</td>
 			<td>{{.StartTime | stampMicro}}</td>
 			<td>{{.EndTime | stampMicro}}</td>
 			<td>{{.Duration}}</td>
@@ -52,20 +62,25 @@ func init() {
 
 // txlogzHandler serves a human readable snapshot of the
 // current transaction log.
-func txlogzHandler(w http.ResponseWriter, r *http.Request) {
-	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+// Endpoint: /txlogz?timeout=%d&limit=%d
+// timeout: the txlogz will keep dumping transactions until timeout
+// limit: txlogz will keep dumping transcations until it hits the limit
+func txlogzHandler(w http.ResponseWriter, req *http.Request) {
+	if err := acl.CheckAccessHTTP(req, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
 	}
+
+	timeout, limit := parseTimeoutLimitParams(req)
 	ch := TxLogger.Subscribe("txlogz")
 	defer TxLogger.Unsubscribe(ch)
 	startHTMLTable(w)
 	defer endHTMLTable(w)
 	w.Write(txlogzHeader)
 
-	tmr := time.NewTimer(10 * time.Second)
+	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
-	for i := 0; i < 300; i++ {
+	for i := 0; i < limit; i++ {
 		select {
 		case out := <-ch:
 			txc, ok := out.(*TxConnection)
@@ -91,7 +106,9 @@ func txlogzHandler(w http.ResponseWriter, r *http.Request) {
 				Duration   float64
 				ColorLevel string
 			}{txc, duration, level}
-			txlogzTmpl.Execute(w, tmplData)
+			if err := txlogzTmpl.Execute(w, tmplData); err != nil {
+				log.Errorf("txlogz: couldn't execute template: %v", err)
+			}
 		case <-tmr.C:
 			return
 		}

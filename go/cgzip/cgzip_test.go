@@ -25,18 +25,26 @@ func newPrettyTimer(name string) *prettyTimer {
 }
 
 func (pt *prettyTimer) stopAndPrintCompress(t *testing.T, size, processed int) {
-	durationMs := int(int64(time.Now().Sub(pt.before)) / 1000)
+	duration := time.Since(pt.before)
 	t.Log(pt.name + ":")
 	t.Log("  size :", size)
-	t.Log("  time :", durationMs, "ms")
-	t.Log("  speed:", processed*1000/durationMs, "KB/s")
+	t.Log("  time :", duration.String())
+	if duration != 0 {
+		t.Logf("  speed: %.0f KB/s", float64(processed)/duration.Seconds()/1024.0)
+	} else {
+		t.Log("  processed:", processed, "B")
+	}
 }
 
 func (pt *prettyTimer) stopAndPrintUncompress(t *testing.T, processed int) {
-	durationMs := int(int64(time.Now().Sub(pt.before)) / 1000)
+	duration := time.Since(pt.before)
 	t.Log("     " + pt.name + ":")
-	t.Log("       time :", durationMs, "ms")
-	t.Log("       speed:", processed*1000/durationMs, "KB/s")
+	t.Log("       time :", duration.String())
+	if duration != 0 {
+		t.Logf("       speed: %.0f KB/s", float64(processed)/duration.Seconds()/1024.0)
+	} else {
+		t.Log("       processed:", processed, "B")
+	}
 }
 
 func compareCompressedBuffer(t *testing.T, source []byte, compressed *bytes.Buffer) {

@@ -57,11 +57,11 @@ func (svm *ServiceManager) Go(service func(svc *ServiceContext) error) bool {
 	svm.wg.Add(1)
 	svm.err = nil
 	svm.shutdown = make(chan struct{})
-	go func() {
-		svm.err = service(&ServiceContext{ShuttingDown: svm.shutdown})
+	go func(shutdown chan struct{}) {
+		svm.err = service(&ServiceContext{ShuttingDown: shutdown})
 		svm.state.Set(SERVICE_STOPPED)
 		svm.wg.Done()
-	}()
+	}(svm.shutdown)
 	return true
 }
 

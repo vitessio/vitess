@@ -3,22 +3,25 @@ package zktopo
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 
+// TestServer is a proxy for a real implementation of topo.Server that
+// provides hooks for testing.
 type TestServer struct {
-	topo.Server
+	topo.Impl
 	localCells []string
 
 	HookLockSrvShardForAction func()
 }
 
-func NewTestServer(t *testing.T, cells []string) *TestServer {
+// newTestServer returns a new TestServer (with the required paths created)
+func newTestServer(t *testing.T, cells []string) topo.Impl {
 	zconn := fakezk.NewConn()
 
 	// create the toplevel zk paths
@@ -30,18 +33,24 @@ func NewTestServer(t *testing.T, cells []string) *TestServer {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
 	}
-	return &TestServer{Server: NewServer(zconn), localCells: cells}
+	return &TestServer{Impl: &Server{zconn}, localCells: cells}
 }
 
-func (s *TestServer) GetKnownCells() ([]string, error) {
+// NewTestServer returns a new TestServer (with the required paths created)
+func NewTestServer(t *testing.T, cells []string) topo.Server {
+	return topo.Server{Impl: newTestServer(t, cells)}
+}
+
+// GetKnownCells is part of topo.Server interface
+func (s *TestServer) GetKnownCells(ctx context.Context) ([]string, error) {
 	return s.localCells, nil
 }
 
 // LockSrvShardForAction should override the function defined by the underlying
 // topo.Server.
-func (s *TestServer) LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+func (s *TestServer) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
 	if s.HookLockSrvShardForAction != nil {
 		s.HookLockSrvShardForAction()
 	}
-	return s.Server.LockSrvShardForAction(cell, keyspace, shard, contents, timeout, interrupted)
+	return s.Impl.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
 }

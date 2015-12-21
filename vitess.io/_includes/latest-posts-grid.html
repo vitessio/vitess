@@ -1,0 +1,9 @@
+<div class="archive-wrap">
+  <h3>Latest {{ page.categories | first | replace: '-',' ' | capitalize }}</h3>
+  <ul class="th-grid">
+  {% capture category_name %}{{ page.categories | first }}{% endcapture %}
+  {% for post in site.categories.[category_name] limit:4 %}
+    <li><a href="{{ site.url }}{{ post.url }}" title="{{ post.title }}"><img src="{{ site.url }}/images/{{ post.image.thumb }}" alt=""></a></li>
+  {% endfor %}
+  </ul>
+</div>

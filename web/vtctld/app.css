@@ -1,0 +1,91 @@
+html, body {
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  height: 100%;
+  margin: 0px;
+  padding: 0px;
+}
+
+/* Toolbar area */
+.menu {
+  background-color: transparent;
+  border: none;
+  height: 38px;
+  margin: 16px;
+  width: 36px;
+}
+
+md-toolbar h1 {
+  margin: auto;
+}
+
+/* Sidenav area */
+md-sidenav md-list .md-button {
+  color: inherit;
+  font-weight: 500;
+  text-align: left;
+  width: 95%;
+}
+
+md-sidenav md-list .md-button.selected {
+  background-color: #ddddff;
+}
+
+md-sidenav md-list {
+  padding: 0px 0px 8px 0px;
+}
+
+md-toolbar h1 {
+  font-size: 1.250em;
+  font-weight: 400;
+}
+
+/* Primary content area */
+
+#content {
+  overflow: hidden;
+}
+
+/* Vitess */
+
+.shard-tile {
+  background-color: #eeeeee;
+}
+
+.shard-tile a {
+  color: inherit;
+  text-decoration: none;
+  text-align: center;
+}
+
+.card-table-row {
+  padding: 8px 0px 8px 0px;
+}
+
+.breadcrumb {
+  color: #E8EAF6;
+  background-color: #3F51B5;
+  padding: 0px 12px 0px 12px;
+}
+
+.breadcrumb md-icon {
+  color: #E8EAF6;
+}
+
+.breadcrumb-divider {
+  font-size: 1.5em;
+  font-weight: 900;
+}
+
+textarea.code {
+  font-family: monospace;
+}
+
+.notice {
+  background-color: #FFC107;
+}
+
+.input-header {
+  color: black !important;
+  font-weight: bold;
+}

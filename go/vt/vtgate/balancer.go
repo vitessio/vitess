@@ -13,12 +13,16 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/topo"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 var resetDownConnDelay = flag.Duration("reset-down-conn-delay", 10*time.Minute, "delay to reset a marked down tabletconn")
 
-type GetEndPointsFunc func() (*topo.EndPoints, error)
+// GetEndPointsFunc defines the callback to topo server.
+type GetEndPointsFunc func() (*topodatapb.EndPoints, error)
 
 // Balancer is a simple round-robin load balancer.
 // It allows you to temporarily mark down nodes that
@@ -33,12 +37,12 @@ type Balancer struct {
 }
 
 type addressStatus struct {
-	endPoint  topo.EndPoint
+	endPoint  *topodatapb.EndPoint
 	timeRetry time.Time
 	balancer  *Balancer
 }
 
-// NewBalancer creates a Balancer. getAddreses is the function
+// NewBalancer creates a Balancer. getAddresses is the function
 // it will use to refresh the list of addresses if one of the
 // nodes has been marked down. The list of addresses is shuffled.
 // retryDelay specifies the minimum time a node will be marked down
@@ -56,7 +60,7 @@ func NewBalancer(getEndPoints GetEndPointsFunc, retryDelay time.Duration) *Balan
 // it refreshes the list of addresses and returns the next available
 // node. If all addresses are marked down, it waits and retries.
 // If a refresh fails, it returns an error.
-func (blc *Balancer) Get() (endPoint topo.EndPoint, err error) {
+func (blc *Balancer) Get() (endPoints []*topodatapb.EndPoint, err error) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
 
@@ -70,18 +74,21 @@ func (blc *Balancer) Get() (endPoint topo.EndPoint, err error) {
 	// Get the latest endpoints
 	err = blc.refresh()
 	if err != nil {
-		return topo.EndPoint{}, err
+		return []*topodatapb.EndPoint{}, err
 	}
 
-	// Return the first endpoint, sleep if we need to
-	addrNode := blc.addressNodes[0]
-	if addrNode.timeRetry.After(time.Now()) {
-		// Allow mark downs to happen while sleeping
-		blc.mu.Unlock()
-		time.Sleep(addrNode.timeRetry.Sub(time.Now()))
-		blc.mu.Lock()
+	// Return all endpoints without markdown and timeRetry < now(),
+	// so endpoints just marked down (within retryDelay) are ignored.
+	validEndPoints := make([]*topodatapb.EndPoint, 0, 1)
+	for _, addrNode := range blc.addressNodes {
+		if addrNode.timeRetry.IsZero() || addrNode.timeRetry.Before(time.Now()) {
+			validEndPoints = append(validEndPoints, addrNode.endPoint)
+			continue
+		}
+		break
 	}
-	return addrNode.endPoint, nil
+
+	return validEndPoints, nil
 }
 
 // MarkDown marks the specified address down. Such addresses
@@ -124,7 +131,10 @@ func (blc *Balancer) refresh() error {
 		i++
 	}
 	if len(blc.addressNodes) == 0 {
-		return fmt.Errorf("no available addresses")
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_INTERNAL_ERROR,
+			fmt.Errorf("no available addresses"),
+		)
 	}
 	// Sort endpoints by timeRetry (from ZERO to largest)
 	sort.Sort(AddressList(blc.addressNodes))
@@ -133,6 +143,7 @@ func (blc *Balancer) refresh() error {
 	return nil
 }
 
+// AddressList is the slice of addressStatus.
 type AddressList []*addressStatus
 
 func (al AddressList) Len() int {
@@ -165,7 +176,7 @@ func findAddrNode(addressNodes []*addressStatus, uid uint32) (index int) {
 	return -1
 }
 
-func findAddress(endPoints *topo.EndPoints, uid uint32) (index int) {
+func findAddress(endPoints *topodatapb.EndPoints, uid uint32) (index int) {
 	if endPoints == nil {
 		return -1
 	}
@@ -189,9 +200,4 @@ func shuffle(addressNodes []*addressStatus, length int) {
 		index = rand.Intn(i + 1)
 		addressNodes[i], addressNodes[index] = addressNodes[index], addressNodes[i]
 	}
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	idGen.Set(rand.Int63())
 }

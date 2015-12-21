@@ -1,9 +1,0 @@
-{
-  "charset": "utf8",
-  "dbname": "<test db name>",
-  "host": "localhost",
-  "pass": "<password>",
-  "port": 3306,
-  "uname": "<user name>",
-  "unix_socket": ""
-}

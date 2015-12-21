@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"golang.org/x/net/context"
 )
 
 // This file contains the RPC method helpers for the tablet manager.
@@ -29,13 +31,18 @@ const rpcTimeout = time.Second * 30
 
 // rpcWrapper handles all the logic for rpc calls.
 func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error, lock, runAfterAction bool) (err error) {
-	from := callinfo.FromContext(ctx).String()
 	defer func() {
 		if x := recover(); x != nil {
-			log.Errorf("TabletManager.%v(%v) panic: %v", name, args, x)
+			log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(agent.TabletAlias), x, tb.Stack(4))
 			err = fmt.Errorf("caught panic during %v: %v", name, x)
 		}
 	}()
+
+	from := ""
+	ci, ok := callinfo.FromContext(ctx)
+	if ok {
+		from = ci.Text()
+	}
 
 	if lock {
 		beforeLock := time.Now()
@@ -47,50 +54,46 @@ func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, rep
 	}
 
 	if err = f(); err != nil {
-		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, from, err.Error())
-		return fmt.Errorf("TabletManager.%v on %v error: %v", name, agent.TabletAlias, err)
+		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, err.Error())
+		return fmt.Errorf("TabletManager.%v on %v error: %v", name, topoproto.TabletAliasString(agent.TabletAlias), err)
 	}
 	if verbose {
-		log.Infof("TabletManager.%v(%v)(from %v): %#v", name, args, from, reply)
+		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(agent.TabletAlias), from, reply)
 	}
 	if runAfterAction {
-		err = agent.refreshTablet("RPC(" + name + ")")
+		err = agent.refreshTablet(ctx, "RPC("+name+")")
 	}
 	return
 }
 
-// There are multiple kinds of actions:
-// 1 - read-only actions that can be executed in parallel.
-//     verbose is forced to false there.
-// 2 - read-write actions that change something, and need to take the
-//     action lock.
-// 3 - read-write actions that need to take the action lock, and also
-//     need to reload the tablet state.
-
-func (agent *ActionAgent) RpcWrap(ctx context.Context, name string, args, reply interface{}, f func() error) error {
+// RPCWrap is for read-only actions that can be executed concurrently.
+// verbose is forced to false.
+func (agent *ActionAgent) RPCWrap(ctx context.Context, name string, args, reply interface{}, f func() error) error {
 	return agent.rpcWrapper(ctx, name, args, reply, false /*verbose*/, f,
 		false /*lock*/, false /*runAfterAction*/)
 }
 
-func (agent *ActionAgent) RpcWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error {
+// RPCWrapLock is for actions that should not run concurrently with each other.
+func (agent *ActionAgent) RPCWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error {
 	return agent.rpcWrapper(ctx, name, args, reply, verbose, f,
 		true /*lock*/, false /*runAfterAction*/)
 }
 
-func (agent *ActionAgent) RpcWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error {
+// RPCWrapLockAction is the same as RPCWrapLock, plus it will call refreshTablet
+// after the action returns.
+func (agent *ActionAgent) RPCWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error {
 	return agent.rpcWrapper(ctx, name, args, reply, verbose, f,
 		true /*lock*/, true /*runAfterAction*/)
 }
 
 //
-// Glue to delay registration of RPC servers until we have all the objects
-//
-
+// RegisterQueryService is used to delay registration of RPC servers until we have all the objects.
 type RegisterQueryService func(*ActionAgent)
 
+// RegisterQueryServices is a list of functions to call when the delayed registration is triggered.
 var RegisterQueryServices []RegisterQueryService
 
-// registerQueryService will register all the instances
+// registerQueryService will register all the instances.
 func (agent *ActionAgent) registerQueryService() {
 	for _, f := range RegisterQueryServices {
 		f(agent)

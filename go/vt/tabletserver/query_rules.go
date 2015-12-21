@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -12,6 +13,9 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 //-----------------------------------------------
@@ -37,6 +41,13 @@ func (qrs *QueryRules) Copy() (newqrs *QueryRules) {
 		}
 	}
 	return newqrs
+}
+
+// Append merges the rules from another QueryRules into the receiver
+func (qrs *QueryRules) Append(otherqrs *QueryRules) {
+	for _, qr := range otherqrs.rules {
+		qrs.rules = append(qrs.rules, qr)
+	}
 }
 
 // Add adds a QueryRule to QueryRules. It does not check
@@ -71,20 +82,42 @@ func (qrs *QueryRules) Delete(name string) (qr *QueryRule) {
 	return nil
 }
 
+// UnmarshalJSON unmarshals QueryRules.
 func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
 	var rulesInfo []map[string]interface{}
-	err = json.Unmarshal(data, &rulesInfo)
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	err = dec.Decode(&rulesInfo)
 	if err != nil {
-		return NewTabletError(FAIL, "%v", err)
+		// TODO(aaijazi): There doesn't seem to be a better error code for this, but
+		// we consider InternalErrors to be retriable (which this error shouldn't be).
+		// Ideally, we should have an error code that means "This isn't the query's
+		// fault, but don't retry either, as this will be a global problem".
+		// (true for all INTERNAL_ERRORS in query_rules)
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "%v", err)
 	}
 	for _, ruleInfo := range rulesInfo {
-		qr, err := buildQueryRule(ruleInfo)
+		qr, err := BuildQueryRule(ruleInfo)
 		if err != nil {
 			return err
 		}
 		qrs.Add(qr)
 	}
 	return nil
+}
+
+// MarshalJSON marshals to JSON.
+func (qrs *QueryRules) MarshalJSON() ([]byte, error) {
+	b := bytes.NewBuffer(nil)
+	_, _ = b.WriteString("[")
+	for i, rule := range qrs.rules {
+		if i != 0 {
+			_, _ = b.WriteString(",")
+		}
+		safeEncode(b, "", rule)
+	}
+	_, _ = b.WriteString("]")
+	return b.Bytes(), nil
 }
 
 // filterByPlan creates a new QueryRules by prefiltering on the query and planId. This allows
@@ -102,11 +135,11 @@ func (qrs *QueryRules) filterByPlan(query string, planid planbuilder.PlanType, t
 
 func (qrs *QueryRules) getAction(ip, user string, bindVars map[string]interface{}) (action Action, desc string) {
 	for _, qr := range qrs.rules {
-		if act := qr.getAction(ip, user, bindVars); act != QR_CONTINUE {
+		if act := qr.getAction(ip, user, bindVars); act != QRContinue {
 			return act, qr.Description
 		}
 	}
-	return QR_CONTINUE, ""
+	return QRContinue, ""
 }
 
 //-----------------------------------------------
@@ -126,7 +159,7 @@ type QueryRule struct {
 	// All defined conditions must match for the rule to fire (AND).
 
 	// Regexp conditions. nil conditions are ignored (TRUE).
-	requestIP, user, query *regexp.Regexp
+	requestIP, user, query namedRegexp
 
 	// Any matched plan will make this condition true (OR)
 	plans []planbuilder.PlanType
@@ -139,6 +172,16 @@ type QueryRule struct {
 
 	// Action to be performed on trigger
 	act Action
+}
+
+type namedRegexp struct {
+	name string
+	*regexp.Regexp
+}
+
+// MarshalJSON marshals to JSON.
+func (nr namedRegexp) MarshalJSON() ([]byte, error) {
+	return json.Marshal(nr.name)
 }
 
 // NewQueryRule creates a new QueryRule.
@@ -172,17 +215,49 @@ func (qr *QueryRule) Copy() (newqr *QueryRule) {
 	return newqr
 }
 
+// MarshalJSON marshals to JSON.
+func (qr *QueryRule) MarshalJSON() ([]byte, error) {
+	b := bytes.NewBuffer(nil)
+	safeEncode(b, `{"Description":`, qr.Description)
+	safeEncode(b, `,"Name":`, qr.Name)
+	if qr.requestIP.Regexp != nil {
+		safeEncode(b, `,"RequestIP":`, qr.requestIP)
+	}
+	if qr.user.Regexp != nil {
+		safeEncode(b, `,"User":`, qr.user)
+	}
+	if qr.query.Regexp != nil {
+		safeEncode(b, `,"Query":`, qr.query)
+	}
+	if qr.plans != nil {
+		safeEncode(b, `,"Plans":`, qr.plans)
+	}
+	if qr.tableNames != nil {
+		safeEncode(b, `,"TableNames":`, qr.tableNames)
+	}
+	if qr.bindVarConds != nil {
+		safeEncode(b, `,"BindVarConds":`, qr.bindVarConds)
+	}
+	if qr.act != QRContinue {
+		safeEncode(b, `,"Action":`, qr.act)
+	}
+	_, _ = b.WriteString("}")
+	return b.Bytes(), nil
+}
+
 // SetIPCond adds a regular expression condition for the client IP.
 // It has to be a full match (not substring).
 func (qr *QueryRule) SetIPCond(pattern string) (err error) {
-	qr.requestIP, err = regexp.Compile(makeExact(pattern))
-	return
+	qr.requestIP.name = pattern
+	qr.requestIP.Regexp, err = regexp.Compile(makeExact(pattern))
+	return err
 }
 
 // SetUserCond adds a regular expression condition for the user name
 // used by the client.
 func (qr *QueryRule) SetUserCond(pattern string) (err error) {
-	qr.user, err = regexp.Compile(makeExact(pattern))
+	qr.user.name = pattern
+	qr.user.Regexp, err = regexp.Compile(makeExact(pattern))
 	return
 }
 
@@ -202,7 +277,8 @@ func (qr *QueryRule) AddTableCond(tableName string) {
 
 // SetQueryCond adds a regular expression condition for the query.
 func (qr *QueryRule) SetQueryCond(pattern string) (err error) {
-	qr.query, err = regexp.Compile(makeExact(pattern))
+	qr.query.name = pattern
+	qr.query.Regexp, err = regexp.Compile(makeExact(pattern))
 	return
 }
 
@@ -223,56 +299,57 @@ func makeExact(pattern string) string {
 // in the condition is the right operand: bindVar Operator value.
 // Value & operator rules
 // Type     Operators                              Bindvar
-// nil      NOOP                                   any type
-// uint64   EQ, NE, LT, GE, GT, LE                 whole numbers
-// int64    EQ, NE, LT, GE, GT, LE                 whole numbers
-// string   EQ, NE, LT, GE, GT, LE, MATCH, NOMATCH []byte, string
+// nil      ""                                     any type
+// uint64   ==, !=, <, >=, >, <=                   whole numbers
+// int64    ==, !=, <, >=, >, <=                   whole numbers
+// string   ==, !=, <, >=, >, <=, MATCH, NOMATCH   []byte, string
 // KeyRange IN, NOTIN                              whole numbers
 // whole numbers can be: int, int8, int16, int32, int64, uint64
 func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op Operator, value interface{}) error {
 	var converted bvcValue
-	if op == QR_NOOP {
+	if op == QRNoOp {
 		qr.bindVarConds = append(qr.bindVarConds, BindVarCond{name, onAbsent, onMismatch, op, nil})
 		return nil
 	}
 	switch v := value.(type) {
 	case uint64:
-		if op < QR_EQ || op > QR_LE {
+		if op < QREqual || op > QRLessEqual {
 			goto Error
 		}
 		converted = bvcuint64(v)
 	case int64:
-		if op < QR_EQ || op > QR_LE {
+		if op < QREqual || op > QRLessEqual {
 			goto Error
 		}
 		converted = bvcint64(v)
 	case string:
-		if op >= QR_EQ && op <= QR_LE {
+		if op >= QREqual && op <= QRLessEqual {
 			converted = bvcstring(v)
-		} else if op >= QR_MATCH && op <= QR_NOMATCH {
+		} else if op >= QRMatch && op <= QRNoMatch {
 			var err error
 			// Change the value to compiled regexp
 			re, err := regexp.Compile(makeExact(v))
 			if err != nil {
-				return NewTabletError(FAIL, "processing %s: %v", v, err)
+				return NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "processing %s: %v", v, err)
 			}
 			converted = bvcre{re}
 		} else {
 			goto Error
 		}
-	case key.KeyRange:
-		if op < QR_IN && op > QR_NOTIN {
+	case *topodatapb.KeyRange:
+		if op < QRIn || op > QRNotIn {
 			goto Error
 		}
-		converted = bvcKeyRange(v)
+		b := bvcKeyRange(*v)
+		converted = &b
 	default:
-		return NewTabletError(FAIL, "type %T not allowed as condition operand (%v)", value, value)
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "type %T not allowed as condition operand (%v)", value, value)
 	}
 	qr.bindVarConds = append(qr.bindVarConds, BindVarCond{name, onAbsent, onMismatch, op, converted})
 	return nil
 
 Error:
-	return NewTabletError(FAIL, "invalid operator %s for type %T (%v)", op, value, value)
+	return NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid operator %s for type %T (%v)", op, value, value)
 }
 
 // filterByPlan returns a new QueryRule if the query and planid match.
@@ -280,7 +357,7 @@ Error:
 // than the plan and query. If the plan and query don't match the QueryRule,
 // then it returns nil.
 func (qr *QueryRule) filterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *QueryRule) {
-	if !reMatch(qr.query, query) {
+	if !reMatch(qr.query.Regexp, query) {
 		return nil
 	}
 	if !planMatch(qr.plans, planid) {
@@ -290,22 +367,22 @@ func (qr *QueryRule) filterByPlan(query string, planid planbuilder.PlanType, tab
 		return nil
 	}
 	newqr = qr.Copy()
-	newqr.query = nil
+	newqr.query = namedRegexp{}
 	newqr.plans = nil
 	newqr.tableNames = nil
 	return newqr
 }
 
 func (qr *QueryRule) getAction(ip, user string, bindVars map[string]interface{}) Action {
-	if !reMatch(qr.requestIP, ip) {
-		return QR_CONTINUE
+	if !reMatch(qr.requestIP.Regexp, ip) {
+		return QRContinue
 	}
-	if !reMatch(qr.user, user) {
-		return QR_CONTINUE
+	if !reMatch(qr.user.Regexp, user) {
+		return QRContinue
 	}
 	for _, bvcond := range qr.bindVarConds {
 		if !bvMatch(bvcond, bindVars) {
-			return QR_CONTINUE
+			return QRContinue
 		}
 	}
 	return qr.act
@@ -344,7 +421,7 @@ func bvMatch(bvcond BindVarCond, bindVars map[string]interface{}) bool {
 	if !ok {
 		return bvcond.onAbsent
 	}
-	if bvcond.op == QR_NOOP {
+	if bvcond.op == QRNoOp {
 		return !bvcond.onAbsent
 	}
 	return bvcond.value.eval(bv, bvcond.op, bvcond.onMismatch)
@@ -357,11 +434,27 @@ func bvMatch(bvcond BindVarCond, bindVars map[string]interface{}) bool {
 // when a QueryRule is triggered.
 type Action int
 
+// These are actions.
 const (
-	QR_CONTINUE = Action(iota)
-	QR_FAIL
-	QR_FAIL_RETRY
+	QRContinue = Action(iota)
+	QRFail
+	QRFailRetry
 )
+
+// MarshalJSON marshals to JSON.
+func (act Action) MarshalJSON() ([]byte, error) {
+	// If we add more actions, we'll need to use a map.
+	var str string
+	switch act {
+	case QRFail:
+		str = "FAIL"
+	case QRFailRetry:
+		str = "FAIL_RETRY"
+	default:
+		str = "INVALID"
+	}
+	return json.Marshal(str)
+}
 
 // BindVarCond represents a bind var condition.
 type BindVarCond struct {
@@ -372,54 +465,75 @@ type BindVarCond struct {
 	value      bvcValue
 }
 
+// MarshalJSON marshals to JSON.
+func (bvc BindVarCond) MarshalJSON() ([]byte, error) {
+	b := bytes.NewBuffer(nil)
+	safeEncode(b, `{"Name":`, bvc.name)
+	safeEncode(b, `,"OnAbsent":`, bvc.onAbsent)
+	if bvc.op != QRNoOp {
+		safeEncode(b, `,"OnMismatch":`, bvc.onMismatch)
+	}
+	safeEncode(b, `,"Operator":`, bvc.op)
+	if bvc.op != QRNoOp {
+		safeEncode(b, `,"Value":`, bvc.value)
+	}
+	_, _ = b.WriteString("}")
+	return b.Bytes(), nil
+}
+
 // Operator represents the list of operators.
 type Operator int
 
+// These are comparison operators.
 const (
-	QR_NOOP = Operator(iota)
-	QR_EQ
-	QR_NE
-	QR_LT
-	QR_GE
-	QR_GT
-	QR_LE
-	QR_MATCH
-	QR_NOMATCH
-	QR_IN
-	QR_NOTIN
+	QRNoOp = Operator(iota)
+	QREqual
+	QRNotEqual
+	QRLessThan
+	QRGreaterEqual
+	QRGreaterThan
+	QRLessEqual
+	QRMatch
+	QRNoMatch
+	QRIn
+	QRNotIn
+	QRNumOp
 )
 
 var opmap = map[string]Operator{
-	"NOOP":    QR_NOOP,
-	"UEQ":     QR_EQ,
-	"UNE":     QR_NE,
-	"ULT":     QR_LT,
-	"UGE":     QR_GE,
-	"UGT":     QR_GT,
-	"ULE":     QR_LE,
-	"IEQ":     QR_EQ,
-	"INE":     QR_NE,
-	"ILT":     QR_LT,
-	"IGE":     QR_GE,
-	"IGT":     QR_GT,
-	"ILE":     QR_LE,
-	"SEQ":     QR_EQ,
-	"SNE":     QR_NE,
-	"SLT":     QR_LT,
-	"SGE":     QR_GE,
-	"SGT":     QR_GT,
-	"SLE":     QR_LE,
-	"MATCH":   QR_MATCH,
-	"NOMATCH": QR_NOMATCH,
-	"IN":      QR_IN,
-	"NOTIN":   QR_NOTIN,
+	"":        QRNoOp,
+	"==":      QREqual,
+	"!=":      QRNotEqual,
+	"<":       QRLessThan,
+	">=":      QRGreaterEqual,
+	">":       QRGreaterThan,
+	"<=":      QRLessEqual,
+	"MATCH":   QRMatch,
+	"NOMATCH": QRNoMatch,
+	"IN":      QRIn,
+	"NOTIN":   QRNotIn,
 }
 
+var opnames []string
+
+func init() {
+	opnames = make([]string, QRNumOp)
+	for k, v := range opmap {
+		opnames[v] = k
+	}
+}
+
+// These are return statii.
 const (
-	QR_OK = iota
-	QR_MISMATCH
-	QR_OUT_OF_RANGE
+	QROK = iota
+	QRMismatch
+	QROutOfRange
 )
+
+// MarshalJSON marshals to JSON.
+func (op Operator) MarshalJSON() ([]byte, error) {
+	return json.Marshal(opnames[op])
+}
 
 // bvcValue defines the common interface
 // for all bind var condition values
@@ -432,46 +546,46 @@ type bvcuint64 uint64
 func (uval bvcuint64) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	num, status := getuint64(bv)
 	switch op {
-	case QR_EQ:
+	case QREqual:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num == uint64(uval)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return false
 		}
-	case QR_NE:
+	case QRNotEqual:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num != uint64(uval)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return true
 		}
-	case QR_LT:
+	case QRLessThan:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num < uint64(uval)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return true
 		}
-	case QR_GE:
+	case QRGreaterEqual:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num >= uint64(uval)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return false
 		}
-	case QR_GT:
+	case QRGreaterThan:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num > uint64(uval)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return false
 		}
-	case QR_LE:
+	case QRLessEqual:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num <= uint64(uval)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return true
 		}
 	default:
@@ -486,46 +600,46 @@ type bvcint64 int64
 func (ival bvcint64) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	num, status := getint64(bv)
 	switch op {
-	case QR_EQ:
+	case QREqual:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num == int64(ival)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return false
 		}
-	case QR_NE:
+	case QRNotEqual:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num != int64(ival)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return true
 		}
-	case QR_LT:
+	case QRLessThan:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num < int64(ival)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return false
 		}
-	case QR_GE:
+	case QRGreaterEqual:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num >= int64(ival)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return true
 		}
-	case QR_GT:
+	case QRGreaterThan:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num > int64(ival)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return true
 		}
-	case QR_LE:
+	case QRLessEqual:
 		switch status {
-		case QR_OK:
+		case QROK:
 			return num <= int64(ival)
-		case QR_OUT_OF_RANGE:
+		case QROutOfRange:
 			return false
 		}
 	default:
@@ -539,21 +653,21 @@ type bvcstring string
 
 func (sval bvcstring) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	str, status := getstring(bv)
-	if status != QR_OK {
+	if status != QROK {
 		return onMismatch
 	}
 	switch op {
-	case QR_EQ:
+	case QREqual:
 		return str == string(sval)
-	case QR_NE:
+	case QRNotEqual:
 		return str != string(sval)
-	case QR_LT:
+	case QRLessThan:
 		return str < string(sval)
-	case QR_GE:
+	case QRGreaterEqual:
 		return str >= string(sval)
-	case QR_GT:
+	case QRGreaterThan:
 		return str > string(sval)
-	case QR_LE:
+	case QRLessEqual:
 		return str <= string(sval)
 	}
 	panic("unexpected:")
@@ -565,47 +679,47 @@ type bvcre struct {
 
 func (reval bvcre) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	str, status := getstring(bv)
-	if status != QR_OK {
+	if status != QROK {
 		return onMismatch
 	}
 	switch op {
-	case QR_MATCH:
+	case QRMatch:
 		return reval.re.MatchString(str)
-	case QR_NOMATCH:
+	case QRNoMatch:
 		return !reval.re.MatchString(str)
 	}
 	panic("unexpected:")
 }
 
-type bvcKeyRange key.KeyRange
+type bvcKeyRange topodatapb.KeyRange
 
-func (krval bvcKeyRange) eval(bv interface{}, op Operator, onMismatch bool) bool {
+func (krval *bvcKeyRange) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	switch op {
-	case QR_IN:
+	case QRIn:
 		switch num, status := getuint64(bv); status {
-		case QR_OK:
-			k := key.Uint64Key(num).KeyspaceId()
-			return key.KeyRange(krval).Contains(k)
-		case QR_OUT_OF_RANGE:
+		case QROK:
+			k := key.Uint64Key(num).Bytes()
+			return key.KeyRangeContains((*topodatapb.KeyRange)(krval), k)
+		case QROutOfRange:
 			return false
 		}
 		// Not a number. Check string.
 		switch str, status := getstring(bv); status {
-		case QR_OK:
-			return key.KeyRange(krval).Contains(key.KeyspaceId(str))
+		case QROK:
+			return key.KeyRangeContains((*topodatapb.KeyRange)(krval), []byte(str))
 		}
-	case QR_NOTIN:
+	case QRNotIn:
 		switch num, status := getuint64(bv); status {
-		case QR_OK:
-			k := key.Uint64Key(num).KeyspaceId()
-			return !key.KeyRange(krval).Contains(k)
-		case QR_OUT_OF_RANGE:
+		case QROK:
+			k := key.Uint64Key(num).Bytes()
+			return !key.KeyRangeContains((*topodatapb.KeyRange)(krval), k)
+		case QROutOfRange:
 			return true
 		}
 		// Not a number. Check string.
 		switch str, status := getstring(bv); status {
-		case QR_OK:
-			return !key.KeyRange(krval).Contains(key.KeyspaceId(str))
+		case QROK:
+			return !key.KeyRangeContains((*topodatapb.KeyRange)(krval), []byte(str))
 		}
 	default:
 		panic("unexpected:")
@@ -613,77 +727,86 @@ func (krval bvcKeyRange) eval(bv interface{}, op Operator, onMismatch bool) bool
 	return onMismatch
 }
 
-// getuint64 returns QR_OUT_OF_RANGE for negative values
+// getuint64 returns QROutOfRange for negative values
 func getuint64(val interface{}) (uv uint64, status int) {
 	switch v := val.(type) {
 	case int:
 		if v < 0 {
-			return 0, QR_OUT_OF_RANGE
+			return 0, QROutOfRange
 		}
-		return uint64(v), QR_OK
+		return uint64(v), QROK
 	case int8:
 		if v < 0 {
-			return 0, QR_OUT_OF_RANGE
+			return 0, QROutOfRange
 		}
-		return uint64(v), QR_OK
+		return uint64(v), QROK
 	case int16:
 		if v < 0 {
-			return 0, QR_OUT_OF_RANGE
+			return 0, QROutOfRange
 		}
-		return uint64(v), QR_OK
+		return uint64(v), QROK
 	case int32:
 		if v < 0 {
-			return 0, QR_OUT_OF_RANGE
+			return 0, QROutOfRange
 		}
-		return uint64(v), QR_OK
+		return uint64(v), QROK
 	case int64:
 		if v < 0 {
-			return 0, QR_OUT_OF_RANGE
+			return 0, QROutOfRange
 		}
-		return uint64(v), QR_OK
+		return uint64(v), QROK
 	case uint64:
-		return v, QR_OK
+		return v, QROK
 	}
-	return 0, QR_MISMATCH
+	return 0, QRMismatch
 }
 
-// getint64 returns QR_OUT_OF_RANGE if a uint64 is too large
+// getint64 returns QROutOfRange if a uint64 is too large
 func getint64(val interface{}) (iv int64, status int) {
 	switch v := val.(type) {
 	case int:
-		return int64(v), QR_OK
+		return int64(v), QROK
 	case int8:
-		return int64(v), QR_OK
+		return int64(v), QROK
 	case int16:
-		return int64(v), QR_OK
+		return int64(v), QROK
 	case int32:
-		return int64(v), QR_OK
+		return int64(v), QROK
 	case int64:
-		return int64(v), QR_OK
+		return int64(v), QROK
 	case uint64:
 		if v > 0x7FFFFFFFFFFFFFFF { // largest int64
-			return 0, QR_OUT_OF_RANGE
+			return 0, QROutOfRange
 		}
-		return int64(v), QR_OK
+		return int64(v), QROK
 	}
-	return 0, QR_MISMATCH
+	return 0, QRMismatch
 }
 
 func getstring(val interface{}) (sv string, status int) {
 	switch v := val.(type) {
 	case []byte:
-		return string(v), QR_OK
+		return string(v), QROK
 	case string:
-		return v, QR_OK
+		return v, QROK
 	}
-	return "", QR_MISMATCH
+	return "", QRMismatch
 }
 
 //-----------------------------------------------
 // Support functions for JSON
 
-func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) {
-	qr = NewQueryRule("", "", QR_FAIL)
+// MapStrOperator maps a string representation to an Operator.
+func MapStrOperator(strop string) (op Operator, err error) {
+	if op, ok := opmap[strop]; ok {
+		return op, nil
+	}
+	return QRNoOp, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid Operator %s", strop)
+}
+
+// BuildQueryRule builds a query rule from a ruleInfo.
+func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) {
+	qr = NewQueryRule("", "", QRFail)
 	for k, v := range ruleInfo {
 		var sv string
 		var lv []interface{}
@@ -692,15 +815,15 @@ func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 		case "Name", "Description", "RequestIP", "User", "Query", "Action":
 			sv, ok = v.(string)
 			if !ok {
-				return nil, NewTabletError(FAIL, "want string for %s", k)
+				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for %s", k)
 			}
 		case "Plans", "BindVarConds", "TableNames":
 			lv, ok = v.([]interface{})
 			if !ok {
-				return nil, NewTabletError(FAIL, "want list for %s", k)
+				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want list for %s", k)
 			}
 		default:
-			return nil, NewTabletError(FAIL, "unrecognized tag %s", k)
+			return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "unrecognized tag %s", k)
 		}
 		switch k {
 		case "Name":
@@ -710,27 +833,27 @@ func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 		case "RequestIP":
 			err = qr.SetIPCond(sv)
 			if err != nil {
-				return nil, NewTabletError(FAIL, "could not set IP condition: %v", sv)
+				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not set IP condition: %v", sv)
 			}
 		case "User":
 			err = qr.SetUserCond(sv)
 			if err != nil {
-				return nil, NewTabletError(FAIL, "could not set User condition: %v", sv)
+				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not set User condition: %v", sv)
 			}
 		case "Query":
 			err = qr.SetQueryCond(sv)
 			if err != nil {
-				return nil, NewTabletError(FAIL, "could not set Query condition: %v", sv)
+				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not set Query condition: %v", sv)
 			}
 		case "Plans":
 			for _, p := range lv {
 				pv, ok := p.(string)
 				if !ok {
-					return nil, NewTabletError(FAIL, "want string for Plans")
+					return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Plans")
 				}
 				pt, ok := planbuilder.PlanByName(pv)
 				if !ok {
-					return nil, NewTabletError(FAIL, "invalid plan name: %s", pv)
+					return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid plan name: %s", pv)
 				}
 				qr.AddPlanCond(pt)
 			}
@@ -738,7 +861,7 @@ func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 			for _, t := range lv {
 				tableName, ok := t.(string)
 				if !ok {
-					return nil, NewTabletError(FAIL, "want string for TableNames")
+					return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for TableNames")
 				}
 				qr.AddTableCond(tableName)
 			}
@@ -749,7 +872,6 @@ func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 					return nil, err
 				}
 				err = qr.AddBindVarCond(name, onAbsent, onMismatch, op, value)
-				// Shouldn't happen, but check anyway
 				if err != nil {
 					return nil, err
 				}
@@ -757,11 +879,11 @@ func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 		case "Action":
 			switch sv {
 			case "FAIL":
-				qr.act = QR_FAIL
+				qr.act = QRFail
 			case "FAIL_RETRY":
-				qr.act = QR_FAIL_RETRY
+				qr.act = QRFailRetry
 			default:
-				return nil, NewTabletError(FAIL, "invalid Action %s", sv)
+				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid Action %s", sv)
 			}
 		}
 	}
@@ -771,128 +893,130 @@ func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch bool, op Operator, value interface{}, err error) {
 	bvcinfo, ok := bvc.(map[string]interface{})
 	if !ok {
-		err = NewTabletError(FAIL, "want json object for bind var conditions")
+		err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want json object for bind var conditions")
 		return
 	}
 
 	var v interface{}
 	v, ok = bvcinfo["Name"]
 	if !ok {
-		err = NewTabletError(FAIL, "Name missing in BindVarConds")
+		err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Name missing in BindVarConds")
 		return
 	}
 	name, ok = v.(string)
 	if !ok {
-		err = NewTabletError(FAIL, "want string for Name in BindVarConds")
+		err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Name in BindVarConds")
 		return
 	}
 
 	v, ok = bvcinfo["OnAbsent"]
 	if !ok {
-		err = NewTabletError(FAIL, "OnAbsent missing in BindVarConds")
+		err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "OnAbsent missing in BindVarConds")
 		return
 	}
 	onAbsent, ok = v.(bool)
 	if !ok {
-		err = NewTabletError(FAIL, "want bool for OnAbsent")
+		err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want bool for OnAbsent")
 		return
 	}
 
 	v, ok = bvcinfo["Operator"]
 	if !ok {
-		err = NewTabletError(FAIL, "Operator missing in BindVarConds")
+		err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Operator missing in BindVarConds")
 		return
 	}
 	strop, ok := v.(string)
 	if !ok {
-		err = NewTabletError(FAIL, "want string for Operator")
+		err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Operator")
 		return
 	}
-	op, ok = opmap[strop]
-	if !ok {
-		err = NewTabletError(FAIL, "invalid Operator %s", strop)
+	op, err = MapStrOperator(strop)
+	if err != nil {
 		return
 	}
-	if op == QR_NOOP {
+	if op == QRNoOp {
 		return
 	}
 	v, ok = bvcinfo["Value"]
 	if !ok {
-		err = NewTabletError(FAIL, "Value missing in BindVarConds")
+		err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Value missing in BindVarConds")
 		return
 	}
-	if op >= QR_EQ && op <= QR_LE {
-		strvalue, ok := v.(string)
-		if !ok {
-			err = NewTabletError(FAIL, "want string: %v", v)
+	if op >= QREqual && op <= QRLessEqual {
+		switch v := v.(type) {
+		case json.Number:
+			value, err = v.Int64()
+			if err != nil {
+				// Maybe uint64
+				value, err = strconv.ParseUint(string(v), 10, 64)
+				if err != nil {
+					err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want int64/uint64: %s", string(v))
+					return
+				}
+			}
+		case string:
+			value = v
+		default:
+			err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string or number: %v", v)
 			return
 		}
-		if strop[0] == 'U' {
-			value, err = strconv.ParseUint(strvalue, 0, 64)
-			if err != nil {
-				err = NewTabletError(FAIL, "want uint64: %s", strvalue)
-				return
-			}
-		} else if strop[0] == 'I' {
-			value, err = strconv.ParseInt(strvalue, 0, 64)
-			if err != nil {
-				err = NewTabletError(FAIL, "want int64: %s", strvalue)
-				return
-			}
-		} else if strop[0] == 'S' {
-			value = strvalue
-		} else {
-			panic("unexpected")
-		}
-	} else if op == QR_MATCH || op == QR_NOMATCH {
+	} else if op == QRMatch || op == QRNoMatch {
 		strvalue, ok := v.(string)
 		if !ok {
-			err = NewTabletError(FAIL, "want string: %v", v)
+			err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string: %v", v)
 			return
 		}
 		value = strvalue
-	} else if op == QR_IN || op == QR_NOTIN {
+	} else if op == QRIn || op == QRNotIn {
 		kr, ok := v.(map[string]interface{})
 		if !ok {
-			err = NewTabletError(FAIL, "want keyrange for Value")
+			err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want keyrange for Value")
 			return
 		}
-		var keyrange key.KeyRange
+		keyrange := &topodatapb.KeyRange{}
 		strstart, ok := kr["Start"]
 		if !ok {
-			err = NewTabletError(FAIL, "Start missing in KeyRange")
+			err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Start missing in KeyRange")
 			return
 		}
 		start, ok := strstart.(string)
 		if !ok {
-			err = NewTabletError(FAIL, "want string for Start")
+			err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Start")
 			return
 		}
-		keyrange.Start = key.KeyspaceId(start)
+		keyrange.Start = []byte(start)
 
 		strend, ok := kr["End"]
 		if !ok {
-			err = NewTabletError(FAIL, "End missing in KeyRange")
+			err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "End missing in KeyRange")
 			return
 		}
 		end, ok := strend.(string)
 		if !ok {
-			err = NewTabletError(FAIL, "want string for End")
+			err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for End")
 			return
 		}
-		keyrange.End = key.KeyspaceId(end)
+		keyrange.End = []byte(end)
 		value = keyrange
 	}
 
 	v, ok = bvcinfo["OnMismatch"]
 	if !ok {
-		err = NewTabletError(FAIL, "OnMismatch missing in BindVarConds")
+		err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "OnMismatch missing in BindVarConds")
 		return
 	}
 	onMismatch, ok = v.(bool)
 	if !ok {
-		err = NewTabletError(FAIL, "want bool for OnAbsent")
+		err = NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "want bool for OnMismatch")
 		return
 	}
 	return
+}
+
+func safeEncode(b *bytes.Buffer, prefix string, v interface{}) {
+	enc := json.NewEncoder(b)
+	_, _ = b.WriteString(prefix)
+	if err := enc.Encode(v); err != nil {
+		_ = enc.Encode(err.Error())
+	}
 }

@@ -3,13 +3,32 @@ package tabletserver
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/context"
+	"golang.org/x/net/context"
 )
 
+type testConn struct {
+	id     int64
+	query  string
+	killed bool
+}
+
+func (tc *testConn) Current() string { return tc.query }
+
+func (tc *testConn) ID() int64 { return tc.id }
+
+func (tc *testConn) Kill() error {
+	tc.killed = true
+	return nil
+}
+
+func (tc *testConn) IsKilled() bool {
+	return tc.killed
+}
+
 func TestQueryList(t *testing.T) {
-	ql := NewQueryList(nil)
+	ql := NewQueryList()
 	connID := int64(1)
-	qd := NewQueryDetail("", &context.DummyContext{}, connID)
+	qd := NewQueryDetail(context.Background(), &testConn{id: connID})
 	ql.Add(qd)
 
 	if qd1, ok := ql.queryDetails[connID]; !ok || qd1.connID != connID {
@@ -17,7 +36,7 @@ func TestQueryList(t *testing.T) {
 	}
 
 	conn2ID := int64(2)
-	qd2 := NewQueryDetail("", &context.DummyContext{}, conn2ID)
+	qd2 := NewQueryDetail(context.Background(), &testConn{id: conn2ID})
 	ql.Add(qd2)
 
 	rows := ql.GetQueryzRows()

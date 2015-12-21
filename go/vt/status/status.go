@@ -15,11 +15,12 @@ import (
 
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
-	vtctldAddr         = flag.String("vtctld_addr", "", "address of a vtctld instance")
-	vtctldTopoExplorer = flag.String("vtctld_topo_explorer", "zk", "topo explorer to be used in status links")
+	vtctldAddr = flag.String("vtctld_addr", "", "address of a vtctld instance")
 )
 
 // MakeVtctldRedirect returns an absolute vtctld url that will
@@ -56,7 +57,6 @@ func VtctldKeyspace(keyspace string) template.HTML {
 	return MakeVtctldRedirect(keyspace,
 		map[string]string{
 			"type":     "keyspace",
-			"explorer": *vtctldTopoExplorer,
 			"keyspace": keyspace,
 		})
 }
@@ -66,7 +66,6 @@ func VtctldKeyspace(keyspace string) template.HTML {
 func VtctldShard(keyspace, shard string) template.HTML {
 	return MakeVtctldRedirect(shard, map[string]string{
 		"type":     "shard",
-		"explorer": *vtctldTopoExplorer,
 		"keyspace": keyspace,
 		"shard":    shard,
 	})
@@ -83,7 +82,6 @@ func VtctldSrvCell(cell string) template.HTML {
 func VtctldSrvKeyspace(cell, keyspace string) template.HTML {
 	return MakeVtctldRedirect(keyspace, map[string]string{
 		"type":     "srv_keyspace",
-		"explorer": *vtctldTopoExplorer,
 		"cell":     cell,
 		"keyspace": keyspace,
 	})
@@ -94,7 +92,6 @@ func VtctldSrvKeyspace(cell, keyspace string) template.HTML {
 func VtctldSrvShard(cell, keyspace, shard string) template.HTML {
 	return MakeVtctldRedirect(shard, map[string]string{
 		"type":     "srv_shard",
-		"explorer": *vtctldTopoExplorer,
 		"cell":     cell,
 		"keyspace": keyspace,
 		"shard":    shard,
@@ -103,19 +100,18 @@ func VtctldSrvShard(cell, keyspace, shard string) template.HTML {
 
 // VtctldSrvType returns the tablet type, possibly linked to the
 // EndPoints page in vtctld.
-func VtctldSrvType(cell, keyspace, shard string, tabletType topo.TabletType) template.HTML {
-	if topo.IsInServingGraph(tabletType) {
-		return MakeVtctldRedirect(string(tabletType), map[string]string{
-			"type":        "srv_type",
-			"explorer":    *vtctldTopoExplorer,
-			"cell":        cell,
-			"keyspace":    keyspace,
-			"shard":       shard,
-			"tablet_type": string(tabletType),
-		})
-	} else {
-		return template.HTML(tabletType)
+func VtctldSrvType(cell, keyspace, shard string, tabletType topodatapb.TabletType) template.HTML {
+	strTabletType := strings.ToLower(tabletType.String())
+	if !topo.IsInServingGraph(tabletType) {
+		return template.HTML(strTabletType)
 	}
+	return MakeVtctldRedirect(strTabletType, map[string]string{
+		"type":        "srv_type",
+		"cell":        cell,
+		"keyspace":    keyspace,
+		"shard":       shard,
+		"tablet_type": strTabletType,
+	})
 }
 
 // VtctldReplication returns 'cell/keyspace/shard', possibly linked to the
@@ -124,7 +120,6 @@ func VtctldReplication(cell, keyspace, shard string) template.HTML {
 	return MakeVtctldRedirect(fmt.Sprintf("%v/%v/%v", cell, keyspace, shard),
 		map[string]string{
 			"type":     "replication",
-			"explorer": *vtctldTopoExplorer,
 			"keyspace": keyspace,
 			"shard":    shard,
 			"cell":     cell,
@@ -135,9 +130,8 @@ func VtctldReplication(cell, keyspace, shard string) template.HTML {
 // Tablet page in vtctld.
 func VtctldTablet(aliasName string) template.HTML {
 	return MakeVtctldRedirect(aliasName, map[string]string{
-		"type":     "tablet",
-		"explorer": *vtctldTopoExplorer,
-		"alias":    aliasName,
+		"type":  "tablet",
+		"alias": aliasName,
 	})
 }
 

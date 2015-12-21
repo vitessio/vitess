@@ -8,14 +8,16 @@ import (
 	"sort"
 
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 )
 
 /*
 This file contains the cell management methods of zktopo.Server
 */
 
-func (zkts *Server) GetKnownCells() ([]string, error) {
-	cellsWithGlobal, err := zk.ZkKnownCells(false)
+// GetKnownCells is part of the topo.Server interface
+func (zkts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
+	cellsWithGlobal, err := zk.ZkKnownCells()
 	if err != nil {
 		return cellsWithGlobal, err
 	}

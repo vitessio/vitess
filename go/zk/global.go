@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/* Emulate a "global" namespace across n zk quorums. */
+// Package zk emulates a "global" namespace across n zk quorums.
 package zk
 
 import (

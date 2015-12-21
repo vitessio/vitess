@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" itemscope itemtype="https://schema.org/WebPage">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ site.title }} / {{ page.title }}</title>
+
+    {% include styles.liquid %}
+
+    <!-- metadata -->
+    <meta name="og:title" content="{{ site.title }} / {{page.title}}"/>
+    <meta name="og:image" content="{{ site.baseurl }}/images/{{ site.logo }}"/>
+    <meta name="og:description" content="{{ site.description }}"/>
+
+    <!-- GA -->
+    {% include analytics.liquid %}
+  </head>
+  <body class="{{ page.bodyclass }}" id="top_of_page">
+{% if page.tocDepth %}
+    <span id="toc-depth" data-toc-depth="{{ page.tocDepth }}"></span>
+{% else %}
+    <span id="toc-depth" data-toc-depth="h2,h3"></span>
+{% endif %}
+
+  	{{ content }}
+
+    {% include end-of-page-styles.liquid %}
+  </body>
+</html>

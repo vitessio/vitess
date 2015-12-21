@@ -13,7 +13,7 @@ level. In particular, it cannot depend on:
 topotools is used by wrangler, so it ends up in all tools using
 wrangler (vtctl, vtctld, ...). It is also included by vttablet, so it contains:
 - most of the logic to rebuild a shard serving graph (helthcheck module)
-- some of the logic to perform a ShardExternallyReparented (RPC call
+- some of the logic to perform a TabletExternallyReparented (RPC call
   to master vttablet to let it know it's the master).
 
 */
@@ -22,148 +22,109 @@ package topotools
 // This file contains utility functions for tablets
 
 import (
+	"errors"
 	"fmt"
-	"sync"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // ConfigureTabletHook configures the right parameters for a hook
 // running locally on a tablet.
-func ConfigureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
+func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 	if hk.ExtraEnv == nil {
 		hk.ExtraEnv = make(map[string]string, 1)
 	}
-	hk.ExtraEnv["TABLET_ALIAS"] = tabletAlias.String()
+	hk.ExtraEnv["TABLET_ALIAS"] = topoproto.TabletAliasString(tabletAlias)
 }
 
-// Scrap will update the tablet type to 'Scrap', and remove it from
-// the serving graph.
-//
-// 'force' means we are not on the tablet being scrapped, so it is
-// probably dead. So if 'force' is true, we will also remove pending
-// remote actions.  And if 'force' is false, we also run an optional
-// hook.
-func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
-	tablet, err := ts.GetTablet(tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// If you are already scrap, skip updating replication data. It won't
-	// be there anyway.
-	wasAssigned := tablet.IsAssigned()
-	tablet.Type = topo.TYPE_SCRAP
-	tablet.Parent = topo.TabletAlias{}
-	// Update the tablet first, since that is canonical.
-	err = topo.UpdateTablet(context.TODO(), ts, tablet)
-	if err != nil {
-		return err
-	}
-
-	if wasAssigned {
-		err = topo.DeleteTabletReplicationData(ts, tablet.Tablet)
-		if err != nil {
-			if err == topo.ErrNoNode {
-				log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)
-				err = nil
-			}
-			if err != nil {
-				log.Warningf("remove replication data for %v failed: %v", tablet.Alias, err)
-			}
+// changeType is a single iteration of the update loop for ChangeType().
+func changeType(tablet *topodatapb.Tablet, newType topodatapb.TabletType, health map[string]string) error {
+	tablet.Type = newType
+	if health != nil {
+		if len(health) == 0 {
+			tablet.HealthMap = nil
+		} else {
+			tablet.HealthMap = health
 		}
 	}
-
-	// run a hook for final cleanup, only in non-force mode.
-	// (force mode executes on the vtctl side, not on the vttablet side)
-	if !force {
-		hk := hook.NewSimpleHook("postflight_scrap")
-		ConfigureTabletHook(hk, tablet.Alias)
-		if hookErr := hk.ExecuteOptional(); hookErr != nil {
-			// we don't want to return an error, the server
-			// is already in bad shape probably.
-			log.Warningf("Scrap: postflight_scrap failed: %v", hookErr)
-		}
-	}
-
 	return nil
 }
 
+// ClearHealthMap is a sentinel value that tells ChangeType to clear the health
+// map, as opposed to passing nil, which will leave the health map unchanged.
+var ClearHealthMap = make(map[string]string)
+
 // ChangeType changes the type of the tablet and possibly also updates
-// the health informaton for it. Make this external, since these
+// the health information for it. Make this external, since these
 // transitions need to be forced from time to time.
 //
 // - if health is nil, we don't touch the Tablet's Health record.
 // - if health is an empty map, we clear the Tablet's Health record.
 // - if health has values, we overwrite the Tablet's Health record.
-func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, health map[string]string, runHooks bool) error {
-	tablet, err := ts.GetTablet(tabletAlias)
-	if err != nil {
-		return err
-	}
+//
+// If successful, the updated tablet record is returned.
+func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, health map[string]string) (*topodatapb.Tablet, error) {
+	return ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
+		return changeType(tablet, newType, health)
+	})
+}
 
-	if !topo.IsTrivialTypeChange(tablet.Type, newType) || !topo.IsValidTypeChange(tablet.Type, newType) {
-		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, tabletAlias)
-	}
+// ChangeOwnType is like ChangeType, except it fails if you no longer own the
+// tablet record, as determined by CheckOwnership().
+//
+// Note that oldTablet is only used for its Alias, and to call CheckOwnership().
+// Other fields in oldTablet have no effect on the update, which will read the
+// latest tablet record before setting the type and health info (just like
+// ChangeType() does).
+//
+// If successful, the updated tablet record is returned.
+func ChangeOwnType(ctx context.Context, ts topo.Server, oldTablet *topodatapb.Tablet, newType topodatapb.TabletType, health map[string]string) (*topodatapb.Tablet, error) {
+	return ts.UpdateTabletFields(ctx, oldTablet.Alias, func(tablet *topodatapb.Tablet) error {
+		if err := CheckOwnership(oldTablet, tablet); err != nil {
+			return err
+		}
+		return changeType(tablet, newType, health)
+	})
+}
 
-	if runHooks {
-		// Only run the preflight_serving_type hook when
-		// transitioning from non-serving to serving.
-		if !topo.IsInServingGraph(tablet.Type) && topo.IsInServingGraph(newType) {
-			if err := hook.NewSimpleHook("preflight_serving_type").ExecuteOptional(); err != nil {
-				return err
-			}
+// CheckOwnership returns nil iff the IP and port match on oldTablet and
+// newTablet, which implies that no other tablet process has taken over the
+// record.
+func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
+	if oldTablet == nil || newTablet == nil {
+		return errors.New("unable to verify ownership of tablet record")
+	}
+	if oldTablet.Ip != newTablet.Ip || oldTablet.PortMap["vt"] != newTablet.PortMap["vt"] {
+		return fmt.Errorf(
+			"tablet record was taken over by another process: "+
+				"my address is %v:%v, but record is owned by %v:%v",
+			oldTablet.Ip, oldTablet.PortMap["vt"], newTablet.Ip, newTablet.PortMap["vt"])
+	}
+	return nil
+}
+
+// DeleteTablet removes a tablet record from the topology:
+// - the replication data record if any
+// - the tablet record
+func DeleteTablet(ctx context.Context, ts topo.Server, tablet *topodatapb.Tablet) error {
+	// try to remove replication data, no fatal if we fail
+	if err := topo.DeleteTabletReplicationData(ctx, ts, tablet); err != nil {
+		if err == topo.ErrNoNode {
+			log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)
+			err = nil
+		}
+		if err != nil {
+			log.Warningf("remove replication data for %v failed: %v", topoproto.TabletAliasString(tablet.Alias), err)
 		}
 	}
 
-	tablet.Type = newType
-	if newType == topo.TYPE_IDLE {
-		if tablet.Parent.IsZero() {
-			si, err := ts.GetShard(tablet.Keyspace, tablet.Shard)
-			if err != nil {
-				return err
-			}
-			rec := concurrency.AllErrorRecorder{}
-			wg := sync.WaitGroup{}
-			for _, cell := range si.Cells {
-				wg.Add(1)
-				go func(cell string) {
-					defer wg.Done()
-					sri, err := ts.GetShardReplication(cell, tablet.Keyspace, tablet.Shard)
-					if err != nil {
-						log.Warningf("Cannot check cell %v for extra replication paths, assuming it's good", cell)
-						return
-					}
-					for _, rl := range sri.ReplicationLinks {
-						if rl.Parent == tabletAlias {
-							rec.RecordError(fmt.Errorf("Still have a ReplicationLink in cell %v", cell))
-						}
-					}
-				}(cell)
-			}
-			wg.Wait()
-			if rec.HasErrors() {
-				return rec.Error()
-			}
-		}
-		tablet.Parent = topo.TabletAlias{}
-		tablet.Keyspace = ""
-		tablet.Shard = ""
-		tablet.KeyRange = key.KeyRange{}
-		tablet.Health = health
-	}
-	if health != nil {
-		if len(health) == 0 {
-			tablet.Health = nil
-		} else {
-			tablet.Health = health
-		}
-	}
-	return topo.UpdateTablet(context.TODO(), ts, tablet)
+	// then delete the tablet record
+	return ts.DeleteTablet(ctx, tablet.Alias)
 }

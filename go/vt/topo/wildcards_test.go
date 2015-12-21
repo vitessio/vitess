@@ -3,6 +3,8 @@ package topo
 import (
 	"fmt"
 	"testing"
+
+	"golang.org/x/net/context"
 )
 
 type fakeWildcardBackend struct {
@@ -10,14 +12,14 @@ type fakeWildcardBackend struct {
 	shards    map[string][]string
 }
 
-func (fwb *fakeWildcardBackend) GetKeyspaces() ([]string, error) {
+func (fwb *fakeWildcardBackend) GetKeyspaces(ctx context.Context) ([]string, error) {
 	if fwb.keyspaces == nil {
 		return nil, fmt.Errorf("fake error")
 	}
 	return fwb.keyspaces, nil
 }
 
-func (fwb *fakeWildcardBackend) GetShard(keyspace, shard string) (*ShardInfo, error) {
+func (fwb *fakeWildcardBackend) GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error) {
 	shards, ok := fwb.shards[keyspace]
 	if !ok {
 		return nil, ErrNoNode
@@ -33,7 +35,7 @@ func (fwb *fakeWildcardBackend) GetShard(keyspace, shard string) (*ShardInfo, er
 	return nil, ErrNoNode
 }
 
-func (fwb *fakeWildcardBackend) GetShardNames(keyspace string) ([]string, error) {
+func (fwb *fakeWildcardBackend) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
 	shards, ok := fwb.shards[keyspace]
 	if !ok {
 		return nil, ErrNoNode
@@ -45,7 +47,8 @@ func (fwb *fakeWildcardBackend) GetShardNames(keyspace string) ([]string, error)
 }
 
 func validateKeyspaceWildcard(t *testing.T, fwb *fakeWildcardBackend, param string, expected []string) {
-	r, err := ResolveKeyspaceWildcard(fwb, param)
+	ctx := context.Background()
+	r, err := ResolveKeyspaceWildcard(ctx, fwb, param)
 	if err != nil {
 		if expected != nil {
 			t.Errorf("was not expecting an error but got: %v", err)
@@ -77,7 +80,8 @@ func TestKeyspaceWildcards(t *testing.T) {
 }
 
 func validateShardWildcard(t *testing.T, fwb *fakeWildcardBackend, param string, expected []KeyspaceShard) {
-	r, err := ResolveShardWildcard(fwb, param)
+	ctx := context.Background()
+	r, err := ResolveShardWildcard(ctx, fwb, param)
 	if err != nil {
 		if expected != nil {
 			t.Errorf("was not expecting an error but got: %v", err)
@@ -100,40 +104,40 @@ func TestShardWildcards(t *testing.T) {
 	fwb := &fakeWildcardBackend{
 		keyspaces: []string{"aaaaa", "bbbbb"},
 		shards: map[string][]string{
-			"aaaaa": []string{"s0", "s1"},
-			"bbbbb": []string{"-40", "40-80", "80-c0", "c0-"},
+			"aaaaa": {"s0", "s1"},
+			"bbbbb": {"-40", "40-80", "80-c0", "c0-"},
 		},
 	}
 	validateShardWildcard(t, fwb, "*/*", []KeyspaceShard{
-		KeyspaceShard{"aaaaa", "s0"},
-		KeyspaceShard{"aaaaa", "s1"},
-		KeyspaceShard{"bbbbb", "-40"},
-		KeyspaceShard{"bbbbb", "40-80"},
-		KeyspaceShard{"bbbbb", "80-c0"},
-		KeyspaceShard{"bbbbb", "c0-"},
+		{"aaaaa", "s0"},
+		{"aaaaa", "s1"},
+		{"bbbbb", "-40"},
+		{"bbbbb", "40-80"},
+		{"bbbbb", "80-c0"},
+		{"bbbbb", "c0-"},
 	})
 	validateShardWildcard(t, fwb, "aaaaa/*", []KeyspaceShard{
-		KeyspaceShard{"aaaaa", "s0"},
-		KeyspaceShard{"aaaaa", "s1"},
+		{"aaaaa", "s0"},
+		{"aaaaa", "s1"},
 	})
 	validateShardWildcard(t, fwb, "*/s1", []KeyspaceShard{
-		KeyspaceShard{"aaaaa", "s1"},
+		{"aaaaa", "s1"},
 	})
 	validateShardWildcard(t, fwb, "*/*0*", []KeyspaceShard{
-		KeyspaceShard{"aaaaa", "s0"},
-		KeyspaceShard{"bbbbb", "-40"},
-		KeyspaceShard{"bbbbb", "40-80"},
-		KeyspaceShard{"bbbbb", "80-c0"},
-		KeyspaceShard{"bbbbb", "c0-"},
+		{"aaaaa", "s0"},
+		{"bbbbb", "-40"},
+		{"bbbbb", "40-80"},
+		{"bbbbb", "80-c0"},
+		{"bbbbb", "c0-"},
 	})
 	validateShardWildcard(t, fwb, "aaaaa/ccccc", []KeyspaceShard{
-		KeyspaceShard{"aaaaa", "ccccc"},
+		{"aaaaa", "ccccc"},
 	})
 	validateShardWildcard(t, fwb, "ccccc/s0", []KeyspaceShard{
-		KeyspaceShard{"ccccc", "s0"},
+		{"ccccc", "s0"},
 	})
 	validateShardWildcard(t, fwb, "bbbbb/C0-", []KeyspaceShard{
-		KeyspaceShard{"bbbbb", "c0-"},
+		{"bbbbb", "c0-"},
 	})
 
 	// error cases

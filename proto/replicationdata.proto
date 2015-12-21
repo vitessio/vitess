@@ -1,0 +1,17 @@
+// This file defines the replication related structures we use.
+
+syntax = "proto3";
+
+package replicationdata;
+
+// Status is the replication status for MySQL (returned by 'show slave status'
+// and parsed into a Position and fields).
+message Status {
+  string position = 1;
+  bool slave_io_running = 2;
+  bool slave_sql_running = 3;
+  uint32 seconds_behind_master = 4;
+  string master_host = 5;
+  int32 master_port = 6;
+  int32 master_connect_retry = 7;
+}

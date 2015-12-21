@@ -3,160 +3,146 @@
 import environment
 import logging
 import os
+import subprocess
 
 
 class MysqlFlavor(object):
-  """Base class with default SQL statements"""
+  """Base class with default SQL statements."""
 
   def promote_slave_commands(self):
     """Returns commands to convert a slave to a master."""
     return [
-        "RESET MASTER",
         "STOP SLAVE",
         "RESET SLAVE",
-        "CHANGE MASTER TO MASTER_HOST = ''",
+        "RESET MASTER",
     ]
 
   def reset_replication_commands(self):
     """Returns commands to reset replication settings."""
     return [
-        "RESET MASTER",
         "STOP SLAVE",
         "RESET SLAVE",
-        'CHANGE MASTER TO MASTER_HOST = ""',
+        "RESET MASTER",
     ]
 
   def change_master_commands(self, host, port, pos):
-    return None
+    raise NotImplementedError()
 
   def extra_my_cnf(self):
     """Returns the path to an extra my_cnf file, or None."""
     return None
 
-  def bootstrap_archive(self):
-    """Returns the name of the bootstrap archive for mysqlctl, relative to vitess/data/bootstrap/"""
-    return "mysql-db-dir.tbz"
-
   def master_position(self, tablet):
-    """Returns the position from SHOW MASTER STATUS"""
-    return None
+    """Returns the position from SHOW MASTER STATUS as a string."""
+    raise NotImplementedError()
 
   def position_equal(self, a, b):
-    """Returns true if position 'a' is equal to 'b'"""
-    return None
+    """Returns true if position 'a' is equal to 'b'."""
+    raise NotImplementedError()
 
   def position_at_least(self, a, b):
     """Returns true if position 'a' is at least as far along as 'b'."""
-    return None
+    raise NotImplementedError()
 
   def position_after(self, a, b):
-    """Returns true if position 'a' is after 'b'"""
+    """Returns true if position 'a' is after 'b'."""
     return self.position_at_least(a, b) and not self.position_equal(a, b)
 
   def position_append(self, pos, gtid):
-    """Returns a new position with the given GTID appended"""
-    if self.position_at_least(pos, gtid):
-      return pos
-    else:
-      return gtid
+    """Returns a new position with the given GTID appended."""
+    raise NotImplementedError()
 
   def enable_binlog_checksum(self, tablet):
     """Enables binlog_checksum and returns True if the flavor supports it.
-       Returns False if the flavor doesn't support binlog_checksum."""
-    return False
+
+    Arg:
+      tablet: A tablet.Tablet object.
+
+    Returns:
+      False if the flavor doesn't support binlog_checksum.
+    """
+    tablet.mquery("", "SET @@global.binlog_checksum=1")
+    return True
 
   def disable_binlog_checksum(self, tablet):
     """Disables binlog_checksum if the flavor supports it."""
-    return
-
-
-class GoogleMysql(MysqlFlavor):
-  """Overrides specific to Google MySQL"""
-
-  def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_google.cnf"
-
-  def master_position(self, tablet):
-    conn, cursor = tablet.connect_dict("")
-    try:
-      cursor.execute("SHOW MASTER STATUS")
-      group_id = cursor.fetchall()[0]["Group_ID"]
-
-      cursor.execute("SHOW BINLOG INFO FOR " + str(group_id))
-      server_id = cursor.fetchall()[0]["Server_ID"]
-
-      return {"GoogleMysql": "%u-%u" % (server_id, group_id)}
-    finally:
-      conn.close()
-
-  def position_equal(self, a, b):
-    return int(a["GoogleMysql"].split("-")[1]) == int(
-        b["GoogleMysql"].split("-")[1])
-
-  def position_at_least(self, a, b):
-    return int(a["GoogleMysql"].split("-")[1]) >= int(
-        b["GoogleMysql"].split("-")[1])
-
-  def change_master_commands(self, host, port, pos):
-    parts = pos["GoogleMysql"].split("-")
-    server_id = parts[0]
-    group_id = parts[1]
-    return [
-        "SET binlog_group_id = %s, master_server_id = %s" %
-        (group_id, server_id),
-        "CHANGE MASTER TO "
-        "MASTER_HOST='%s', MASTER_PORT=%u, CONNECT_USING_GROUP_ID" %
-        (host, port)]
+    tablet.mquery("", "SET @@global.binlog_checksum=0")
 
 
 class MariaDB(MysqlFlavor):
-  """Overrides specific to MariaDB"""
-
-  def promote_slave_commands(self):
-    return [
-        "RESET MASTER",
-        "STOP SLAVE",
-        "RESET SLAVE",
-    ]
+  """Overrides specific to MariaDB."""
 
   def reset_replication_commands(self):
     return [
-        "RESET MASTER",
         "STOP SLAVE",
         "RESET SLAVE",
+        "RESET MASTER",
+        "SET GLOBAL gtid_slave_pos = ''",
     ]
 
   def extra_my_cnf(self):
     return environment.vttop + "/config/mycnf/master_mariadb.cnf"
 
-  def bootstrap_archive(self):
-    return "mysql-db-dir_10.0.13-MariaDB.tbz"
-
   def master_position(self, tablet):
-    return {
-        "MariaDB": tablet.mquery("", "SELECT @@GLOBAL.gtid_binlog_pos")[0]
-                         [0]
-    }
+    gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_binlog_pos")[0][0]
+    return "MariaDB/" + gtid
 
   def position_equal(self, a, b):
-    return a["MariaDB"] == b["MariaDB"]
+    return a == b
 
   def position_at_least(self, a, b):
-    return int(a["MariaDB"].split("-")[2]) >= int(b["MariaDB"].split("-")[2])
+    # positions are MariaDB/A-B-C and we only compare C
+    return int(a.split("-")[2]) >= int(b.split("-")[2])
+
+  def position_append(self, pos, gtid):
+    if self.position_at_least(pos, gtid):
+      return pos
+    else:
+      return gtid
 
   def change_master_commands(self, host, port, pos):
+    (_flavor, gtid) = pos.split("/")
     return [
-        "SET GLOBAL gtid_slave_pos = '%s'" % pos["MariaDB"],
-        "CHANGE MASTER TO "
-        "MASTER_HOST='%s', MASTER_PORT=%u, MASTER_USE_GTID = slave_pos" %
+        "SET GLOBAL gtid_slave_pos = '%s'" % gtid,
+        "CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, "
+        "MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos" %
         (host, port)]
 
-  def enable_binlog_checksum(self, tablet):
-    tablet.mquery('', 'SET @@global.binlog_checksum=1')
-    return True
 
-  def disable_binlog_checksum(self, tablet):
-    tablet.mquery('', 'SET @@global.binlog_checksum=0')
+class MySQL56(MysqlFlavor):
+  """Overrides specific to MySQL 5.6"""
+
+  def master_position(self, tablet):
+    gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_executed")[0][0]
+    return "MySQL56/" + gtid
+
+  def position_equal(self, a, b):
+    return subprocess.check_output([
+        "mysqlctl", "position", "equal", a, b,
+    ]).strip() == "true"
+
+  def position_at_least(self, a, b):
+    return subprocess.check_output([
+        "mysqlctl", "position", "at_least", a, b,
+    ]).strip() == "true"
+
+  def position_append(self, pos, gtid):
+    return "MySQL56/" + subprocess.check_output([
+        "mysqlctl", "position", "append", pos, gtid,
+    ]).strip()
+
+  def extra_my_cnf(self):
+    return environment.vttop + "/config/mycnf/master_mysql56.cnf"
+
+  def change_master_commands(self, host, port, pos):
+    (_flavor, gtid) = pos.split("/")
+    return [
+        "RESET MASTER",
+        "SET GLOBAL gtid_purged = '%s'" % gtid,
+        "CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, "
+        "MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1" %
+        (host, port)]
+
 
 __mysql_flavor = None
 
@@ -174,10 +160,10 @@ def set_mysql_flavor(flavor):
   global __mysql_flavor
 
   if not flavor:
-    flavor = os.environ.get("MYSQL_FLAVOR", "GoogleMysql")
+    flavor = os.environ.get("MYSQL_FLAVOR", "MariaDB")
     # The environment variable might be set, but equal to "".
     if flavor == "":
-      flavor = "GoogleMysql"
+      flavor = "MariaDB"
 
   # Set the environment variable explicitly in case we're overriding it via
   # command-line flag.
@@ -185,8 +171,8 @@ def set_mysql_flavor(flavor):
 
   if flavor == "MariaDB":
     __mysql_flavor = MariaDB()
-  elif flavor == "GoogleMysql":
-    __mysql_flavor = GoogleMysql()
+  elif flavor == "MySQL56":
+    __mysql_flavor = MySQL56()
   else:
     logging.error("Unknown MYSQL_FLAVOR '%s'", flavor)
     exit(1)

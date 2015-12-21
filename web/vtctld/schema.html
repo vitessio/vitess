@@ -1,0 +1,43 @@
+<md-content>
+
+<md-tabs md-border-bottom md-center-tabs="false">
+  <md-tab label="Apply Schema">
+  <md-content class="md-padding">
+
+  <form name="applyForm" ng-submit="submitSchema($event)">
+
+  <md-autocomplete md-floating-label="Keyspace" md-min-length="0"
+      md-input-name="keyspace" required
+      md-selected-item="schemaChange.Keyspace"
+      md-selected-item-change=""
+      md-search-text="keyspaceSelector.searchText"
+      md-search-text-change=""
+      md-items="item in keyspaceSelector.items()"
+      md-item-text="item" md-autofocus="false">
+    <md-item-template>
+      <span md-highlight-text="keyspaceSelector.searchText">{{item}}</span>
+    </md-item-template>
+    <md-not-found>No keyspaces found matching "{{keyspaceSelector.searchText}}".</md-not-found>
+    <div ng-messages="applyForm.keyspace.$error">
+      <div ng-message="required">Required</div>
+    </div>
+  </md-autocomplete>
+
+  <md-input-container flex>
+    <label>Schema Change SQL</label>
+    <textarea ng-model="schemaChange.SQL" class="code" name="sql" required></textarea>
+    <div ng-messages="applyForm.sql.$error">
+      <div ng-message="required">Required</div>
+    </div>
+  </md-input-container>
+
+  <md-button type="submit" class="md-primary md-raised" style="margin-left:0"
+    ng-disabled="applyForm.$invalid">Submit</md-button>
+
+  </form>
+
+  </md-content>
+  </md-tab>
+</md-tabs>
+
+</md-content>

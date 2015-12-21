@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	_ "github.com/youtube/vitess/go/vt/status"
+	"github.com/youtube/vitess/go/vt/vtgate"
 )
 
 var (
@@ -13,7 +14,7 @@ var (
   }
   td, th {
     border: 1px solid #999;
-    padding: 0.5rem;
+    padding: 0.2rem;
   }
 </style>
 <table>
@@ -27,7 +28,7 @@ var (
   {{range $i, $skn := .SrvKeyspaceNames}}
   <tr>
     <td>{{github_com_youtube_vitess_vtctld_srv_cell $skn.Cell}}</td>
-    <td>{{if $skn.LastError}}<b>{{$skn.LastError}}</b><br/>Client: {{$skn.LastErrorContext.HTML}}{{else}}{{range $j, $value := $skn.Value}}{{github_com_youtube_vitess_vtctld_srv_keyspace $skn.Cell $value}}&nbsp;{{end}}{{end}}</td>
+    <td>{{if $skn.LastError}}<b>{{$skn.LastError}}</b>{{else}}{{range $j, $value := $skn.Value}}{{github_com_youtube_vitess_vtctld_srv_keyspace $skn.Cell $value}}&nbsp;{{end}}{{end}}</td>
   </tr>
   {{end}}
 </table>
@@ -45,7 +46,7 @@ var (
   <tr>
     <td>{{github_com_youtube_vitess_vtctld_srv_cell $sk.Cell}}</td>
     <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $sk.Cell $sk.Keyspace}}</td>
-    <td>{{if $sk.LastError}}<b>{{$sk.LastError}}</b><br/>Client: {{$sk.LastErrorContext.HTML}}{{else}}{{$sk.StatusAsHTML}}{{end}}</td>
+    <td>{{if $sk.LastError}}<b>{{$sk.LastError}}</b>{{else}}{{$sk.StatusAsHTML}}{{end}}</td>
   </tr>
   {{end}}
 </table>
@@ -67,7 +68,7 @@ var (
     <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $ep.Cell $ep.Keyspace}}</td>
     <td>{{github_com_youtube_vitess_vtctld_srv_shard $ep.Cell $ep.Keyspace $ep.Shard}}</td>
     <td>{{github_com_youtube_vitess_vtctld_srv_type $ep.Cell $ep.Keyspace $ep.Shard $ep.TabletType}}</td>
-    <td>{{if $ep.LastError}}<b>{{$ep.LastError}}</b><br/>Client: {{$ep.LastErrorContext.HTML}}{{else}}{{$ep.StatusAsHTML}}{{end}}</td>
+    <td>{{if $ep.LastError}}<b>{{$ep.LastError}}</b>{{else}}{{$ep.StatusAsHTML}}{{end}}</td>
   </tr>
   {{end}}
 </table>
@@ -160,8 +161,17 @@ isStacked: true,
 
 function update() {
   var varzData;
+
+  // If we're accessing status through a proxy that requires a URL prefix,
+  // add the prefix to the vars URL.
+  var vars_url = '/debug/vars';
+  var pos = window.location.pathname.lastIndexOf('/debug/status');
+  if (pos > 0) {
+    vars_url = window.location.pathname.substring(0, pos) + vars_url;
+  }
+
   var up = function() {
-  $.getJSON('/debug/vars', function(d) {
+  $.getJSON(vars_url, function(d) {
     for (var i = 0; i < updateCallbacks.length; i++) {
       updateCallbacks[i](d, new Date());
     }
@@ -184,15 +194,97 @@ google.setOnLoadCallback(function() {
 
 </script>
 `
+
+	gatewayStatusTemplate = `
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.2rem;
+  }
+  table tr:nth-child(even) {
+    background-color: #eee;
+  }
+  table tr:nth-child(odd) {
+    background-color: #fff;
+  }
+</style>
+<table>
+  <tr>
+    <th>Keyspace</th>
+    <th>Shard</th>
+    <th>TabletType</th>
+    <th>Address</th>
+    <th>Query Sent</th>
+    <th>Query Error</th>
+    <th>QPS</th>
+    <th>Latency (ms)</th>
+  </tr>
+  {{range $i, $status := .}}
+  <tr>
+    <td>{{$status.Keyspace}}</td>
+    <td>{{$status.Shard}}</td>
+    <td>{{$status.TabletType}}</td>
+    <td><a href="http://{{$status.Addr}}">{{$status.Name}}</a></td>
+    <td>{{$status.QueryCount}}</td>
+    <td>{{$status.QueryError}}</td>
+    <td>{{$status.QPS}}</td>
+    <td>{{$status.AvgLatency}}</td>
+  </tr>
+  {{end}}
+</table>
+`
+
+	healthCheckTemplate = `
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.2rem;
+  }
+</style>
+<table>
+  <tr>
+    <th colspan="5">HealthCheck EndPoints Cache</th>
+  </tr>
+  <tr>
+    <th>Cell</th>
+    <th>Keyspace</th>
+    <th>Shard</th>
+    <th>TabletType</th>
+    <th>EndPointsStats</th>
+  </tr>
+  {{range $i, $eps := .}}
+  <tr>
+    <td>{{github_com_youtube_vitess_vtctld_srv_cell $eps.Cell}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $eps.Cell $eps.Target.Keyspace}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_shard $eps.Cell $eps.Target.Keyspace $eps.Target.Shard}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_type $eps.Cell $eps.Target.Keyspace $eps.Target.Shard $eps.Target.TabletType}}</td>
+    <td>{{$eps.StatusAsHTML}}</td>
+  </tr>
+  {{end}}
+</table>
+`
 )
 
-func init() {
-	servenv.OnRun(func() {
-		servenv.AddStatusPart("Topology Cache", topoTemplate, func() interface{} {
-			return resilientSrvTopoServer.CacheStatus()
-		})
-		servenv.AddStatusPart("Stats", statsTemplate, func() interface{} {
-			return nil
-		})
+// For use by plugins which wish to avoid racing when registering status page parts.
+var onStatusRegistered func()
+
+func addStatusParts(vtgate *vtgate.VTGate) {
+	servenv.AddStatusPart("Topology Cache", topoTemplate, func() interface{} {
+		return resilientSrvTopoServer.CacheStatus()
 	})
+	servenv.AddStatusPart("Gateway Status", gatewayStatusTemplate, func() interface{} {
+		return vtgate.GetGatewayCacheStatus()
+	})
+	servenv.AddStatusPart("Health Check Cache (NOT FOR QUERY ROUTING)", healthCheckTemplate, func() interface{} {
+		return healthCheck.CacheStatus()
+	})
+	if onStatusRegistered != nil {
+		onStatusRegistered()
+	}
 }

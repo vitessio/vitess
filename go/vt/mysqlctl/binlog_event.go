@@ -9,12 +9,12 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
 // binlogEvent wraps a raw packet buffer and provides methods to examine it
-// by partially implementing blproto.BinlogEvent. These methods can be composed
+// by partially implementing replication.BinlogEvent. These methods can be composed
 // into flavor-specific event types to pull in common parsing code.
 //
 // The default v4 header format is:
@@ -127,7 +127,7 @@ func (ev binlogEvent) IsRand() bool {
 //   50        server version string, 0-padded but not necessarily 0-terminated
 //   4         timestamp (same as timestamp header field)
 //   1         header length
-func (ev binlogEvent) Format() (f blproto.BinlogFormat, err error) {
+func (ev binlogEvent) Format() (f replication.BinlogFormat, err error) {
 	// FORMAT_DESCRIPTION_EVENT has a fixed header size of 19 because we have to
 	// read it before we know the header_length.
 	data := ev.Bytes()[19:]
@@ -141,6 +141,12 @@ func (ev binlogEvent) Format() (f blproto.BinlogFormat, err error) {
 	if f.HeaderLength < 19 {
 		return f, fmt.Errorf("header length = %d, should be >= 19", f.HeaderLength)
 	}
+
+	// MySQL/MariaDB 5.3+ always adds a 4-byte checksum to the end of a
+	// FORMAT_DESCRIPTION_EVENT, regardless of the server setting. The byte
+	// immediately before that checksum tells us which checksum algorithm (if any)
+	// is used for the rest of the events.
+	f.ChecksumAlgorithm = data[len(data)-5]
 	return f, nil
 }
 
@@ -156,7 +162,7 @@ func (ev binlogEvent) Format() (f blproto.BinlogFormat, err error) {
 //   Y         status vars block
 //   X+1       db_name + NULL terminator
 //   L-X-1-Y   SQL statement (no NULL terminator)
-func (ev binlogEvent) Query(f blproto.BinlogFormat) (query blproto.Query, err error) {
+func (ev binlogEvent) Query(f replication.BinlogFormat) (query replication.Query, err error) {
 	const varsPos = 4 + 4 + 1 + 2 + 2
 
 	data := ev.Bytes()[f.HeaderLength:]
@@ -177,7 +183,7 @@ func (ev binlogEvent) Query(f blproto.BinlogFormat) (query blproto.Query, err er
 	// We've checked that the buffer is big enough for sql, so everything before
 	// it (db and vars) is in-bounds too.
 	query.Database = string(data[dbPos : dbPos+dbLen])
-	query.Sql = data[sqlPos:]
+	query.SQL = string(data[sqlPos:])
 
 	// Scan the status vars for ones we care about. This requires us to know the
 	// size of every var that comes before the ones we're interested in.
@@ -210,10 +216,10 @@ varsLoop:
 			if pos+6 > len(vars) {
 				return query, fmt.Errorf("Q_CHARSET_CODE status var overflows buffer (%v + 6 > %v)", pos, len(vars))
 			}
-			query.Charset = &mproto.Charset{
-				Client: int(binary.LittleEndian.Uint16(vars[pos : pos+2])),
-				Conn:   int(binary.LittleEndian.Uint16(vars[pos+2 : pos+4])),
-				Server: int(binary.LittleEndian.Uint16(vars[pos+4 : pos+6])),
+			query.Charset = &binlogdatapb.Charset{
+				Client: int32(binary.LittleEndian.Uint16(vars[pos : pos+2])),
+				Conn:   int32(binary.LittleEndian.Uint16(vars[pos+2 : pos+4])),
+				Server: int32(binary.LittleEndian.Uint16(vars[pos+4 : pos+6])),
 			}
 			pos += 6
 		default:
@@ -231,7 +237,7 @@ varsLoop:
 //   # bytes   field
 //   1         variable ID
 //   8         variable value
-func (ev binlogEvent) IntVar(f blproto.BinlogFormat) (name string, value uint64, err error) {
+func (ev binlogEvent) IntVar(f replication.BinlogFormat) (name string, value uint64, err error) {
 	data := ev.Bytes()[f.HeaderLength:]
 
 	switch data[0] {
@@ -253,7 +259,7 @@ func (ev binlogEvent) IntVar(f blproto.BinlogFormat) (name string, value uint64,
 //   # bytes   field
 //   8         seed 1
 //   8         seed 2
-func (ev binlogEvent) Rand(f blproto.BinlogFormat) (seed1 uint64, seed2 uint64, err error) {
+func (ev binlogEvent) Rand(f replication.BinlogFormat) (seed1 uint64, seed2 uint64, err error) {
 	data := ev.Bytes()[f.HeaderLength:]
 	seed1 = binary.LittleEndian.Uint64(data[0:8])
 	seed2 = binary.LittleEndian.Uint64(data[8 : 8+8])
@@ -261,6 +267,16 @@ func (ev binlogEvent) Rand(f blproto.BinlogFormat) (seed1 uint64, seed2 uint64, 
 }
 
 // IsBeginGTID implements BinlogEvent.IsBeginGTID().
-func (ev binlogEvent) IsBeginGTID(f blproto.BinlogFormat) bool {
+func (ev binlogEvent) IsBeginGTID(f replication.BinlogFormat) bool {
 	return false
 }
+
+// These constants are common between MariaDB 10.0 and MySQL 5.6.
+const (
+	// BinlogChecksumAlgOff indicates that checksums are supported but off.
+	BinlogChecksumAlgOff = 0
+	// BinlogChecksumAlgCRC32 indicates that CRC32 checksums are used.
+	BinlogChecksumAlgCRC32 = 1
+	// BinlogChecksumAlgUndef indicates that checksums are not supported.
+	BinlogChecksumAlgUndef = 255
+)

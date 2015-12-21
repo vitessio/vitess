@@ -40,7 +40,7 @@ query_cache_type = 2
 read-only
 read_buffer_size = 1M
 read_rnd_buffer_size = 1M
-server-id = {{.ServerId}}
+server-id = {{.ServerID}}
 skip-name-resolve
 # we now need networking for replication. this is a tombstone to simpler times.
 #skip_networking
@@ -54,12 +54,12 @@ slow-query-log
 slow-query-log-file = {{.SlowLogPath}}
 socket = {{.SocketFile}}
 sort_buffer_size = 2M
-table_cache = 2048
+table_open_cache = 2048
 thread_cache = 200
 thread_concurrency = 2
 tmpdir = {{.TmpDir}}
 tmp_table_size = 32M
 transaction-isolation = REPEATABLE-READ
 # READ-COMMITTED would be better, but mysql 5.1 disables this with statement based replication
-# READ-UNCOMMTTED might be better
+# READ-UNCOMMITTED might be better
 lower_case_table_names = 1

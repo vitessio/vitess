@@ -4,7 +4,17 @@
 
 package planbuilder
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/youtube/vitess/go/vt/sqlparser"
+)
+
+// ListVarName is the bind var name used for plans
+// that require VTGate to compute custom list values,
+// like for IN clauses.
+const ListVarName = "_vals"
 
 // getWhereRouting fills the plan fields for the where clause of a SELECT
 // statement. It gets reused for DML planning also, where the select plan is
@@ -18,6 +28,17 @@ func getWhereRouting(where *sqlparser.Where, plan *Plan, onlyUnique bool) {
 	if hasSubquery(where.Expr) {
 		plan.ID = NoPlan
 		plan.Reason = "has subquery"
+		return
+	}
+	values, err := getKeyrangeMatch(where)
+	if err != nil {
+		plan.ID = NoPlan
+		plan.Reason = err.Error()
+		return
+	}
+	if values != nil {
+		plan.ID = SelectKeyrange
+		plan.Values = values
 		return
 	}
 	for _, index := range plan.Table.Ordered {
@@ -48,13 +69,13 @@ func hasSubquery(node sqlparser.Expr) bool {
 		return hasSubquery(node.Left) || hasSubquery(node.Right)
 	case *sqlparser.RangeCond:
 		return hasSubquery(node.Left) || hasSubquery(node.From) || hasSubquery(node.To)
-	case *sqlparser.NullCheck:
+	case *sqlparser.IsExpr:
 		return hasSubquery(node.Expr)
 	case *sqlparser.ExistsExpr:
 		return true
 	case sqlparser.StrVal, sqlparser.NumVal, sqlparser.ValArg,
-		*sqlparser.NullVal, *sqlparser.ColName, sqlparser.ValTuple,
-		sqlparser.ListArg:
+		*sqlparser.NullVal, sqlparser.BoolVal, *sqlparser.ColName,
+		sqlparser.ValTuple, sqlparser.ListArg, *sqlparser.KeyrangeExpr:
 		return false
 	case *sqlparser.Subquery:
 		return true
@@ -85,8 +106,66 @@ func hasSubquery(node sqlparser.Expr) bool {
 	case nil:
 		return false
 	default:
-		panic("unexpected")
+		panic(fmt.Errorf("unexpected type: %T", node))
 	}
+}
+
+func getKeyrangeMatch(where *sqlparser.Where) (values interface{}, err error) {
+	where.Expr, values, err = getKeyrangeFromBool(where.Expr)
+	return values, err
+}
+
+func getKeyrangeFromBool(node sqlparser.BoolExpr) (newnode sqlparser.BoolExpr, values interface{}, err error) {
+	switch node := node.(type) {
+	case *sqlparser.AndExpr:
+		node.Left, values, err = getKeyrangeFromBool(node.Left)
+		if err != nil {
+			return node, nil, err
+		}
+		// Left node was a keyrange expr.
+		// Eliminate Left node by returning the Right node.
+		if node.Left == nil {
+			return node.Right, values, nil
+		}
+		// A child of Left node was a keyrange expr.
+		// So, we root node.
+		if values != nil {
+			return node, values, nil
+		}
+		node.Right, values, err = getKeyrangeFromBool(node.Right)
+		if err != nil {
+			return node, nil, err
+		}
+		// Right node was a keyrange expr.
+		// Eliminate Right node by returning the Left node.
+		if node.Right == nil {
+			return node.Left, values, nil
+		}
+		return node, values, nil
+	case *sqlparser.ParenBoolExpr:
+		node.Expr, values, err = getKeyrangeFromBool(node.Expr)
+		if err != nil {
+			return node, nil, err
+		}
+		// Eliminate root parenthesis if sub-expr was a keyrange expr.
+		// This goes recursively up.
+		if node.Expr == nil {
+			return nil, values, nil
+		}
+		return node, values, nil
+	case *sqlparser.KeyrangeExpr:
+		vals := make([]interface{}, 2)
+		vals[0], err = asInterface(node.Start)
+		if err != nil {
+			return node, nil, fmt.Errorf("invalid keyrange: %v", err)
+		}
+		vals[1], err = asInterface(node.End)
+		if err != nil {
+			return node, nil, fmt.Errorf("invalid keyrange: %v", err)
+		}
+		return nil, vals, nil
+	}
+	return node, nil, nil
 }
 
 func getMatch(node sqlparser.BoolExpr, col string) (planID PlanID, values interface{}) {
@@ -109,7 +188,7 @@ func getMatch(node sqlparser.BoolExpr, col string) (planID PlanID, values interf
 			if !sqlparser.IsValue(node.Right) {
 				return SelectScatter, nil
 			}
-			val, err := sqlparser.AsInterface(node.Right)
+			val, err := asInterface(node.Right)
 			if err != nil {
 				return SelectScatter, nil
 			}
@@ -121,11 +200,11 @@ func getMatch(node sqlparser.BoolExpr, col string) (planID PlanID, values interf
 			if !sqlparser.IsSimpleTuple(node.Right) {
 				return SelectScatter, nil
 			}
-			val, err := sqlparser.AsInterface(node.Right)
+			val, err := asInterface(node.Right)
 			if err != nil {
 				return SelectScatter, nil
 			}
-			node.Right = sqlparser.ListArg("::_vals")
+			node.Right = sqlparser.ListArg("::" + ListVarName)
 			return SelectIN, val
 		}
 	}
@@ -141,4 +220,41 @@ func nameMatch(node sqlparser.ValExpr, col string) bool {
 		return false
 	}
 	return true
+}
+
+// asInterface is similar to sqlparser.AsInterface, but it converts
+// numeric and string types to native go types.
+func asInterface(node sqlparser.ValExpr) (interface{}, error) {
+	switch node := node.(type) {
+	case sqlparser.ValTuple:
+		vals := make([]interface{}, 0, len(node))
+		for _, val := range node {
+			v, err := asInterface(val)
+			if err != nil {
+				return nil, err
+			}
+			vals = append(vals, v)
+		}
+		return vals, nil
+	case sqlparser.ValArg:
+		return string(node), nil
+	case sqlparser.ListArg:
+		return string(node), nil
+	case sqlparser.StrVal:
+		return []byte(node), nil
+	case sqlparser.NumVal:
+		val := string(node)
+		signed, err := strconv.ParseInt(val, 0, 64)
+		if err == nil {
+			return signed, nil
+		}
+		unsigned, err := strconv.ParseUint(val, 0, 64)
+		if err == nil {
+			return unsigned, nil
+		}
+		return nil, err
+	case *sqlparser.NullVal:
+		return nil, nil
+	}
+	return nil, fmt.Errorf("%v is not a value", sqlparser.String(node))
 }

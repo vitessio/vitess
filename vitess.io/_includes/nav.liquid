@@ -1,0 +1,9 @@
+{% assign nav__list = site.data.nav %}
+<ul>
+  {% for nav__item in nav__list %}
+    <li {% if nav__item.url == "/" %}class="index"{% endif %}>
+      <a href="{{ site.util }}/{{ nav__item.path | replace:'index.html','' | replace:'index', '' }}">{{ nav__item.title }}</a>
+    </li>
+  {% endfor %}
+  <li><a href="{{ site.repo }}">GitHub</a></li>
+</ul>

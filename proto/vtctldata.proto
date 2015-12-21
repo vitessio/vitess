@@ -1,0 +1,20 @@
+// This package contains the data structures for a service allowing
+// you to use vtctld as a server for vt commands.
+
+syntax = "proto3";
+
+package vtctldata;
+
+import "logutil.proto";
+
+// ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
+// timeouts are in nanoseconds.
+message ExecuteVtctlCommandRequest {
+  repeated string args = 1;
+  int64 action_timeout = 2;
+}
+
+// ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
+message ExecuteVtctlCommandResponse {
+  logutil.Event event = 1;
+}

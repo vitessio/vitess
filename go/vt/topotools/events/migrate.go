@@ -7,6 +7,8 @@ package events
 import (
 	base "github.com/youtube/vitess/go/vt/events"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // MigrateServedFrom is an event that describes a single step in the process of
@@ -15,10 +17,10 @@ import (
 type MigrateServedFrom struct {
 	base.StatusUpdater
 
-	Keyspace         topo.KeyspaceInfo
+	KeyspaceName     string
 	SourceShard      topo.ShardInfo
 	DestinationShard topo.ShardInfo
-	ServedType       topo.TabletType
+	ServedType       topodatapb.TabletType
 	Reverse          bool
 }
 
@@ -27,9 +29,9 @@ type MigrateServedFrom struct {
 type MigrateServedTypes struct {
 	base.StatusUpdater
 
-	Keyspace          topo.KeyspaceInfo
+	KeyspaceName      string
 	SourceShards      []*topo.ShardInfo
 	DestinationShards []*topo.ShardInfo
-	ServedType        topo.TabletType
+	ServedType        topodatapb.TabletType
 	Reverse           bool
 }

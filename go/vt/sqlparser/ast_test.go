@@ -6,6 +6,21 @@ package sqlparser
 
 import "testing"
 
+func TestWhere(t *testing.T) {
+	var w *Where
+	buf := NewTrackedBuffer(nil)
+	w.Format(buf)
+	if buf.String() != "" {
+		t.Errorf("w.Format(nil): %q, want \"\"", buf.String)
+	}
+	w = NewWhere(WhereStr, nil)
+	buf = NewTrackedBuffer(nil)
+	w.Format(buf)
+	if buf.String() != "" {
+		t.Errorf("w.Format(&Where{nil}: %q, want \"\"", buf.String)
+	}
+}
+
 func TestLimits(t *testing.T) {
 	var l *Limit
 	o, r, err := l.Limits()
@@ -77,5 +92,17 @@ func TestLimits(t *testing.T) {
 	wantErr = "negative limit: -2"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got %v, want %s", err, wantErr)
+	}
+}
+
+func TestIsAggregate(t *testing.T) {
+	f := FuncExpr{Name: "avg"}
+	if !f.IsAggregate() {
+		t.Error("IsAggregate: false, want true")
+	}
+
+	f = FuncExpr{Name: "foo"}
+	if f.IsAggregate() {
+		t.Error("IsAggregate: true, want false")
 	}
 }

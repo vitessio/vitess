@@ -45,7 +45,7 @@ public class BsonClientCodec implements ClientCodec {
   public void ReadResponseHeader(Response response) throws IOException {
     BSONObject headerBson = decoder.readObject(socket.getInputStream());
     response.setServiceMethod(new String((byte[]) headerBson.get(Constants.SERVICE_METHOD)));
-    response.setSeq((UnsignedLong) headerBson.get(Constants.SEQ));
+    response.setSeq(UnsignedLong.fromLongBits((long) headerBson.get(Constants.SEQ)));
     if (headerBson.containsField(Constants.ERROR)) {
       Object error = headerBson.get(Constants.ERROR);
       if (error instanceof byte[] && ((byte[]) error).length != 0) {

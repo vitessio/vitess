@@ -9,36 +9,41 @@ import (
 	"sort"
 	"sync"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // FindTabletByIPAddrAndPort searches within a tablet map for tablets
-func FindTabletByIPAddrAndPort(tabletMap map[topo.TabletAlias]*topo.TabletInfo, addr, portName string, port int) (topo.TabletAlias, error) {
+func FindTabletByIPAddrAndPort(tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, addr, portName string, port int32) (topodatapb.TabletAlias, error) {
 	for alias, ti := range tabletMap {
-		if ti.IPAddr == addr && ti.Portmap[portName] == port {
+		if ti.Ip == addr && ti.PortMap[portName] == port {
 			return alias, nil
 		}
 	}
-	return topo.TabletAlias{}, topo.ErrNoNode
+	return topodatapb.TabletAlias{}, topo.ErrNoNode
 }
 
 // GetAllTablets returns a sorted list of tablets.
-func GetAllTablets(ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
-	aliases, err := ts.GetTabletsByCell(cell)
+func GetAllTablets(ctx context.Context, ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
+	aliases, err := ts.GetTabletsByCell(ctx, cell)
 	if err != nil {
 		return nil, err
 	}
-	sort.Sort(topo.TabletAliasList(aliases))
+	sort.Sort(topoproto.TabletAliasList(aliases))
 
-	tabletMap, err := topo.GetTabletMap(ts, aliases)
+	tabletMap, err := ts.GetTabletMap(ctx, aliases)
 	if err != nil {
 		// we got another error than topo.ErrNoNode
 		return nil, err
 	}
 	tablets := make([]*topo.TabletInfo, 0, len(aliases))
 	for _, tabletAlias := range aliases {
-		tabletInfo, ok := tabletMap[tabletAlias]
+		tabletInfo, ok := tabletMap[*tabletAlias]
 		if !ok {
 			// tablet disappeared on us (GetTabletMap ignores
 			// topo.ErrNoNode), just echo a warning
@@ -51,10 +56,10 @@ func GetAllTablets(ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
 	return tablets, nil
 }
 
-// GetAllTabletsAccrossCells returns all tablets from known cells.
+// GetAllTabletsAcrossCells returns all tablets from known cells.
 // If it returns topo.ErrPartialResult, then the list is valid, but partial.
-func GetAllTabletsAccrossCells(ts topo.Server) ([]*topo.TabletInfo, error) {
-	cells, err := ts.GetKnownCells()
+func GetAllTabletsAcrossCells(ctx context.Context, ts topo.Server) ([]*topo.TabletInfo, error) {
+	cells, err := ts.GetKnownCells(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -65,15 +70,15 @@ func GetAllTabletsAccrossCells(ts topo.Server) ([]*topo.TabletInfo, error) {
 	wg.Add(len(cells))
 	for i, cell := range cells {
 		go func(i int, cell string) {
-			results[i], errors[i] = GetAllTablets(ts, cell)
+			results[i], errors[i] = GetAllTablets(ctx, ts, cell)
 			wg.Done()
 		}(i, cell)
 	}
 	wg.Wait()
 
 	err = nil
-	allTablets := make([]*topo.TabletInfo, 0)
-	for i, _ := range cells {
+	var allTablets []*topo.TabletInfo
+	for i := range cells {
 		if errors[i] == nil {
 			allTablets = append(allTablets, results[i]...)
 		} else {
@@ -89,14 +94,14 @@ func GetAllTabletsAccrossCells(ts topo.Server) ([]*topo.TabletInfo, error) {
 // - The masterMap contains all the tablets without parents
 //   (scrapped or not). This can be used to special case
 //   the old master, and any tablet in a weird state, left over, ...
-func SortedTabletMap(tabletMap map[topo.TabletAlias]*topo.TabletInfo) (map[topo.TabletAlias]*topo.TabletInfo, map[topo.TabletAlias]*topo.TabletInfo) {
-	slaveMap := make(map[topo.TabletAlias]*topo.TabletInfo)
-	masterMap := make(map[topo.TabletAlias]*topo.TabletInfo)
+func SortedTabletMap(tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo) (map[topodatapb.TabletAlias]*topo.TabletInfo, map[topodatapb.TabletAlias]*topo.TabletInfo) {
+	slaveMap := make(map[topodatapb.TabletAlias]*topo.TabletInfo)
+	masterMap := make(map[topodatapb.TabletAlias]*topo.TabletInfo)
 	for alias, ti := range tabletMap {
-		if ti.Type != topo.TYPE_MASTER && ti.Type != topo.TYPE_SCRAP {
-			slaveMap[alias] = ti
-		} else if ti.Parent.Uid == topo.NO_TABLET {
+		if ti.Type == topodatapb.TabletType_MASTER {
 			masterMap[alias] = ti
+		} else {
+			slaveMap[alias] = ti
 		}
 	}
 	return slaveMap, masterMap
@@ -114,7 +119,7 @@ func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
 	return keys.Interface()
 }
 
-// CopyMapKeys copies values from from map m into a new slice with the
+// CopyMapValues copies values from from map m into a new slice with the
 // type specified by typeHint.  Reflection can't make a new slice type
 // just based on the key type AFAICT.
 func CopyMapValues(m interface{}, typeHint interface{}) interface{} {

@@ -7,54 +7,131 @@ package gorpcbinlogplayer
 import (
 	"time"
 
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/binlog/gorpcbinlogcommon"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// GoRpcBinlogPlayerResponse is the type returned by the Client for streaming
-type GoRpcBinlogPlayerResponse struct {
-	*rpcplus.Call
-}
-
-func (response *GoRpcBinlogPlayerResponse) Error() error {
-	return response.Call.Error
-}
-
-// GoRpcBinlogPlayerClient implements a BinlogPlayerClient over go rpc
-type GoRpcBinlogPlayerClient struct {
+// client implements a Client over go rpc
+type client struct {
 	*rpcplus.Client
 }
 
-func (client *GoRpcBinlogPlayerClient) Dial(addr string, connTimeout time.Duration) error {
+func (client *client) Dial(endPoint *topodatapb.EndPoint, connTimeout time.Duration) error {
+	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["vt"])
 	var err error
-	client.Client, err = bsonrpc.DialHTTP("tcp", addr, connTimeout, nil)
+	client.Client, err = bsonrpc.DialHTTP("tcp", addr, connTimeout)
 	return err
 }
 
-func (client *GoRpcBinlogPlayerClient) Close() {
+func (client *client) Close() {
 	client.Client.Close()
 }
 
-func (client *GoRpcBinlogPlayerClient) ServeUpdateStream(req *proto.UpdateStreamRequest, responseChan chan *proto.StreamEvent) binlogplayer.BinlogPlayerResponse {
+func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *binlogdatapb.StreamEvent, binlogplayer.ErrFunc, error) {
+	req := &gorpcbinlogcommon.UpdateStreamRequest{
+		Position: position,
+	}
+	result := make(chan *binlogdatapb.StreamEvent, 10)
+	responseChan := make(chan *binlogdatapb.StreamEvent, 10)
 	resp := client.Client.StreamGo("UpdateStream.ServeUpdateStream", req, responseChan)
-	return &GoRpcBinlogPlayerResponse{resp}
+	var finalError error
+	go func() {
+		defer close(result)
+		for {
+			select {
+			case <-ctx.Done():
+				finalError = ctx.Err()
+				return
+			case r, ok := <-responseChan:
+				if !ok {
+					// no more results from the server
+					finalError = resp.Error
+					return
+				}
+				result <- r
+			}
+		}
+	}()
+	return result, func() error {
+		return finalError
+	}, nil
 }
 
-func (client *GoRpcBinlogPlayerClient) StreamKeyRange(req *proto.KeyRangeRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
+func (client *client) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+	req := &gorpcbinlogcommon.KeyRangeRequest{
+		Position: position,
+		KeyRange: keyRange,
+		Charset:  charset,
+	}
+	result := make(chan *binlogdatapb.BinlogTransaction, 10)
+	responseChan := make(chan *binlogdatapb.BinlogTransaction, 10)
 	resp := client.Client.StreamGo("UpdateStream.StreamKeyRange", req, responseChan)
-	return &GoRpcBinlogPlayerResponse{resp}
+	var finalError error
+	go func() {
+		defer close(result)
+		for {
+			select {
+			case <-ctx.Done():
+				finalError = ctx.Err()
+				return
+			case r, ok := <-responseChan:
+				if !ok {
+					// no more results from the server
+					finalError = resp.Error
+					return
+				}
+				result <- r
+			}
+		}
+	}()
+	return result, func() error {
+		return finalError
+	}, nil
 }
 
-func (client *GoRpcBinlogPlayerClient) StreamTables(req *proto.TablesRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
+func (client *client) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset) (chan *binlogdatapb.BinlogTransaction, binlogplayer.ErrFunc, error) {
+	req := &gorpcbinlogcommon.TablesRequest{
+		Position: position,
+		Tables:   tables,
+		Charset:  charset,
+	}
+	result := make(chan *binlogdatapb.BinlogTransaction, 10)
+	responseChan := make(chan *binlogdatapb.BinlogTransaction, 10)
 	resp := client.Client.StreamGo("UpdateStream.StreamTables", req, responseChan)
-	return &GoRpcBinlogPlayerResponse{resp}
+	var finalError error
+	go func() {
+		defer close(result)
+		for {
+			select {
+			case <-ctx.Done():
+				finalError = ctx.Err()
+				return
+			case r, ok := <-responseChan:
+				if !ok {
+					// no more results from the server
+					finalError = resp.Error
+					return
+				}
+				result <- r
+			}
+		}
+	}()
+	return result, func() error {
+		return finalError
+	}, nil
 }
 
 // Registration as a factory
 func init() {
-	binlogplayer.RegisterBinlogPlayerClientFactory("gorpc", func() binlogplayer.BinlogPlayerClient {
-		return &GoRpcBinlogPlayerClient{}
+	binlogplayer.RegisterClientFactory("gorpc", func() binlogplayer.Client {
+		return &client{}
 	})
 }

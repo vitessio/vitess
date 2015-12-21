@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // ExecuteSuperQuery allows the user to execute a query as a super user.
@@ -33,10 +33,8 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
 	return nil
 }
 
-// fetchSuperQuery returns the results of executing a query as a super user.
-// FIXME(msolomon) should there be a query lock so we only
-// run one admin action at a time?
-func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error) {
+// FetchSuperQuery returns the results of executing a query as a super user.
+func (mysqld *Mysqld) FetchSuperQuery(query string) (*sqltypes.Result, error) {
 	conn, connErr := mysqld.dbaPool.Get(0)
 	if connErr != nil {
 		return nil, connErr
@@ -53,7 +51,7 @@ func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error)
 // fetchSuperQueryMap returns a map from column names to cell data for a query
 // that should return exactly 1 row.
 func (mysqld *Mysqld) fetchSuperQueryMap(query string) (map[string]string, error) {
-	qr, err := mysqld.fetchSuperQuery(query)
+	qr, err := mysqld.FetchSuperQuery(query)
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +68,9 @@ func (mysqld *Mysqld) fetchSuperQueryMap(query string) (map[string]string, error
 	}
 	return rowMap, nil
 }
+
+const masterPasswordStart = "  MASTER_PASSWORD = '"
+const masterPasswordEnd = "',\n"
 
 func redactMasterPassword(input string) string {
 	i := strings.Index(input, masterPasswordStart)

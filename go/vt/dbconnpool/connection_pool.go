@@ -14,23 +14,27 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
+	"golang.org/x/net/context"
 )
 
 var (
-	CONN_POOL_CLOSED_ERR = errors.New("connection pool is closed")
+	// ErrConnPoolClosed is returned / panicked whent he
+	// connection pool is closed.
+	ErrConnPoolClosed = errors.New("connection pool is closed")
 )
 
 // PoolConnection is the interface implemented by users of this specialized pool.
 type PoolConnection interface {
-	ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error)
-	ExecuteStreamFetch(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error
-	Id() int64
+	ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
+	ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error
+	ID() int64
 	Close()
 	IsClosed() bool
 	Recycle()
+	Reconnect() error
 }
 
 // CreateConnectionFunc is the factory method to create new connections
@@ -98,24 +102,16 @@ func (cp *ConnectionPool) Close() {
 func (cp *ConnectionPool) Get(timeout time.Duration) (PoolConnection, error) {
 	p := cp.pool()
 	if p == nil {
-		return nil, CONN_POOL_CLOSED_ERR
+		return nil, ErrConnPoolClosed
 	}
-	r, err := p.Get(timeout)
+	ctx := context.Background()
+	if timeout != 0 {
+		var cancel func()
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	r, err := p.Get(ctx)
 	if err != nil {
-		return nil, err
-	}
-	return r.(PoolConnection), nil
-}
-
-// TryGet returns a connection, or nil.
-// You must call Recycle on the PoolConnection once done.
-func (cp *ConnectionPool) TryGet() (PoolConnection, error) {
-	p := cp.pool()
-	if p == nil {
-		return nil, CONN_POOL_CLOSED_ERR
-	}
-	r, err := p.TryGet()
-	if err != nil || r == nil {
 		return nil, err
 	}
 	return r.(PoolConnection), nil
@@ -125,7 +121,7 @@ func (cp *ConnectionPool) TryGet() (PoolConnection, error) {
 func (cp *ConnectionPool) Put(conn PoolConnection) {
 	p := cp.pool()
 	if p == nil {
-		panic(CONN_POOL_CLOSED_ERR)
+		panic(ErrConnPoolClosed)
 	}
 	p.Put(conn)
 }

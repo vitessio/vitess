@@ -28,7 +28,7 @@ var (
 	localCell      = flag.String("zk.local-cell", "", "closest zk cell used for /zk/local paths")
 	localAddrs     = flag.String("zk.local-addrs", "", "list of zookeeper servers (host:port, ...)")
 	globalAddrs    = flag.String("zk.global-addrs", "", "list of global zookeeper servers (host:port, ...)")
-	baseTimeout    = flag.Duration("zk.base-timeout", DEFAULT_BASE_TIMEOUT, "zk or zkocc base timeout (see zkconn.go and zkoccconn.go)")
+	baseTimeout    = flag.Duration("zk.base-timeout", DEFAULT_BASE_TIMEOUT, "zk base timeout (see zkconn.go)")
 	connectTimeout = flag.Duration("zk.connect-timeout", 30*time.Second, "zk connect timeout")
 )
 
@@ -69,6 +69,7 @@ func letterPrefix(str string) string {
 	return str
 }
 
+// ZkCellFromZkPath extracts the cell name from a zkPath.
 func ZkCellFromZkPath(zkPath string) (string, error) {
 	pathParts := strings.Split(zkPath, "/")
 	if len(pathParts) < 3 {
@@ -78,8 +79,8 @@ func ZkCellFromZkPath(zkPath string) (string, error) {
 		return "", fmt.Errorf("path should start with /%v: %v", MagicPrefix, zkPath)
 	}
 	cell := pathParts[2]
-	if strings.Contains(cell, "-") {
-		return "", fmt.Errorf("invalid cell name %v", cell)
+	if cell == "" || strings.Contains(cell, "-") {
+		return "", fmt.Errorf("invalid cell name %q", cell)
 	}
 	return cell, nil
 }
@@ -110,7 +111,7 @@ func getCellAddrMap() (map[string]string, error) {
 	return nil, fmt.Errorf("no config file paths found")
 }
 
-func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
+func ZkPathToZkAddr(zkPath string) (string, error) {
 	cell, err := ZkCellFromZkPath(zkPath)
 	if err != nil {
 		return "", err
@@ -131,9 +132,6 @@ func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
 			cell = GuessLocalCell() + "-global"
 		}
 	}
-	if useCache {
-		cell += ":_zkocc"
-	}
 
 	addr := cellAddrMap[cell]
 	if addr != "" {
@@ -145,7 +143,7 @@ func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
 
 // returns all the known cells, alphabetically ordered. It will
 // include 'global' if there is a dc-specific global cell or a global cell
-func ZkKnownCells(useCache bool) ([]string, error) {
+func ZkKnownCells() ([]string, error) {
 	localCell := GuessLocalCell()
 	cellAddrMap, err := getCellAddrMap()
 	if err != nil {
@@ -154,34 +152,22 @@ func ZkKnownCells(useCache bool) ([]string, error) {
 	result := make([]string, 0, len(cellAddrMap))
 	foundGlobal := false
 	for cell := range cellAddrMap {
-		// figure out cell name and if it's zkocc
-		isZkoccCell := false
-		name := cell
-		if strings.HasSuffix(name, ":_zkocc") {
-			name = name[:len(name)-7]
-			isZkoccCell = true
-		}
-		if (useCache && !isZkoccCell) || (!useCache && isZkoccCell) {
-			// this is not the zkocc you're looking for
-			continue
-		}
-
 		// handle global, we just remember it
-		if name == "global" {
+		if cell == "global" {
 			foundGlobal = true
 			continue
 		}
 
 		// skip global cells, remember if we have our global
-		if strings.HasSuffix(name, "-global") {
-			if name == localCell+"-global" {
+		if strings.HasSuffix(cell, "-global") {
+			if cell == localCell+"-global" {
 				foundGlobal = true
 			}
 			continue
 		}
 
 		// non-global cell
-		result = append(result, name)
+		result = append(result, cell)
 	}
 	if foundGlobal {
 		result = append(result, "global")

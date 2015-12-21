@@ -10,15 +10,17 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func createSetup(t *testing.T) (topo.Server, topo.Server) {
+func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	fromConn := fakezk.NewConn()
 	fromTS := zktopo.NewServer(fromConn)
 
@@ -32,63 +34,57 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 	}
 
 	// create a keyspace and a couple tablets
-	if err := fromTS.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("cannot create keyspace: %v", err)
 	}
-	if err := fromTS.CreateShard("test_keyspace", "0", &topo.Shard{Cells: []string{"test_cell"}}); err != nil {
+	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &topodatapb.Shard{Cells: []string{"test_cell"}}); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
-	if err := topo.CreateTablet(fromTS, &topo.Tablet{
-		Alias: topo.TabletAlias{
+	tts := topo.Server{Impl: fromTS}
+	if err := tts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  123,
 		},
 		Hostname: "masterhost",
-		Parent:   topo.TabletAlias{},
-		IPAddr:   "1.2.3.4",
-		Portmap: map[string]int{
+		Ip:       "1.2.3.4",
+		PortMap: map[string]int32{
 			"vt":    8101,
-			"vts":   8102,
+			"gprc":  8102,
 			"mysql": 3306,
 		},
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
-		Type:           topo.TYPE_MASTER,
-		State:          topo.STATE_READ_WRITE,
+		Type:           topodatapb.TabletType_MASTER,
 		DbNameOverride: "",
-		KeyRange:       key.KeyRange{},
+		KeyRange:       nil,
 	}); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
-	if err := topo.CreateTablet(fromTS, &topo.Tablet{
-		Alias: topo.TabletAlias{
+	if err := tts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  234,
 		},
-		IPAddr: "2.3.4.5",
-		Portmap: map[string]int{
+		Ip: "2.3.4.5",
+		PortMap: map[string]int32{
 			"vt":    8101,
-			"vts":   8102,
+			"grpc":  8102,
 			"mysql": 3306,
 		},
 		Hostname: "slavehost",
 
-		Parent: topo.TabletAlias{
-			Cell: "test_cell",
-			Uid:  123,
-		},
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
-		Type:           topo.TYPE_REPLICA,
-		State:          topo.STATE_READ_ONLY,
+		Type:           topodatapb.TabletType_REPLICA,
 		DbNameOverride: "",
-		KeyRange:       key.KeyRange{},
+		KeyRange:       nil,
 	}); err != nil {
 		t.Fatalf("cannot create slave tablet: %v", err)
 	}
 
 	os.Setenv("ZK_CLIENT_CONFIG", testfiles.Locate("topo_helpers_test_zk_client.json"))
-	cells, err := fromTS.GetKnownCells()
+	cells, err := fromTS.GetKnownCells(ctx)
 	if err != nil {
 		t.Fatalf("fromTS.GetKnownCells: %v", err)
 	}
@@ -98,60 +94,60 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 }
 
 func TestBasic(t *testing.T) {
-
-	fromTS, toTS := createSetup(t)
+	ctx := context.Background()
+	fromTS, toTS := createSetup(ctx, t)
 
 	// check keyspace copy
-	CopyKeyspaces(fromTS, toTS)
-	keyspaces, err := toTS.GetKeyspaces()
+	CopyKeyspaces(ctx, fromTS, toTS)
+	keyspaces, err := toTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("toTS.GetKeyspaces failed: %v", err)
 	}
 	if len(keyspaces) != 1 || keyspaces[0] != "test_keyspace" {
 		t.Fatalf("unexpected keyspaces: %v", keyspaces)
 	}
-	CopyKeyspaces(fromTS, toTS)
+	CopyKeyspaces(ctx, fromTS, toTS)
 
 	// check shard copy
-	CopyShards(fromTS, toTS, true)
-	shards, err := toTS.GetShardNames("test_keyspace")
+	CopyShards(ctx, fromTS, toTS, true)
+	shards, err := toTS.GetShardNames(ctx, "test_keyspace")
 	if err != nil {
 		t.Fatalf("toTS.GetShardNames failed: %v", err)
 	}
 	if len(shards) != 1 || shards[0] != "0" {
 		t.Fatalf("unexpected shards: %v", shards)
 	}
-	CopyShards(fromTS, toTS, false)
-	si, err := toTS.GetShard("test_keyspace", "0")
+	CopyShards(ctx, fromTS, toTS, false)
+	s, _, err := toTS.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("cannot read shard: %v", err)
 	}
-	if len(si.Cells) != 1 || si.Cells[0] != "test_cell" {
-		t.Fatalf("bad shard data: %v", *si)
+	if len(s.Cells) != 1 || s.Cells[0] != "test_cell" {
+		t.Fatalf("bad shard data: %v", *s)
 	}
 
 	// check ShardReplication copy
-	sr, err := fromTS.GetShardReplication("test_cell", "test_keyspace", "0")
+	sr, err := fromTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("fromTS.GetShardReplication failed: %v", err)
 	}
-	CopyShardReplications(fromTS, toTS)
-	sr, err = toTS.GetShardReplication("test_cell", "test_keyspace", "0")
+	CopyShardReplications(ctx, fromTS, toTS)
+	sr, err = toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("toTS.GetShardReplication failed: %v", err)
 	}
-	if len(sr.ReplicationLinks) != 2 {
+	if len(sr.Nodes) != 2 {
 		t.Fatalf("unexpected ShardReplication: %v", sr)
 	}
 
 	// check tablet copy
-	CopyTablets(fromTS, toTS)
-	tablets, err := toTS.GetTabletsByCell("test_cell")
+	CopyTablets(ctx, fromTS, toTS)
+	tablets, err := toTS.GetTabletsByCell(ctx, "test_cell")
 	if err != nil {
 		t.Fatalf("toTS.GetTabletsByCell failed: %v", err)
 	}
 	if len(tablets) != 2 || tablets[0].Uid != 123 || tablets[1].Uid != 234 {
 		t.Fatalf("unexpected tablets: %v", tablets)
 	}
-	CopyTablets(fromTS, toTS)
+	CopyTablets(ctx, fromTS, toTS)
 }

@@ -1,0 +1,123 @@
+// GLOBAL
+// --------------------------------------------------
+
+.wrap {
+  @include outer-container;
+}
+
+.come-in {
+  @include transform(translateY(20px));
+  @include animation(pop 0.5s ease forwards);
+}
+
+.already-visible {
+  @include transform(translateY(0));
+  @include animation(none);
+}
+
+.hidden,
+.load {
+  display: none;
+}
+
+.no-scroll {
+  overflow: hidden;
+}
+
+.inline-btn {
+  @include clearfix;
+  a, btn {
+    display: inline-block;
+    margin-right: $gutter / 2;
+    &:last-child {
+      margin-right: 0;
+    }
+  }
+}
+
+// shorten length to improve readability
+@include media($medium) {
+  .shorten {
+    width: percentage(8/12);
+  }
+}
+
+.center {
+  text-align: center;
+}
+
+.image-right {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  @include media($medium) {
+    float: right;
+    margin-left: $gutter;
+  }
+}
+
+
+// thumbnail image grid default
+.th-grid {
+  @include row($direction: LTR);
+  @include clearfix;
+  margin: 0;
+  padding: 0;
+  li {
+    list-style: none;
+    @include span-columns(3);
+    @include omega(4n);
+    margin-bottom: flex-gutter($grid-columns);
+  }
+  a {
+    img {
+      // Image hover animation
+      &:hover {
+        @include animation(pop .3s 0 linear);
+        box-shadow: 0 0 10px rgba($black, .20);
+      }
+    }
+  }
+}
+// thumbnail image grid oversized
+.th-grid-full {
+  @include clearfix;
+  margin: 0;
+  padding: 0;
+  @include media($large) {
+    margin-right: -29em; // magic number ugh
+  }
+  @at-root {
+    .archive-wrap & {
+      margin-right: 0;
+    }
+  }  
+  li {
+    list-style: none;
+    margin-bottom: flex-gutter($grid-columns);
+    @include media($micro) {
+      @include span-columns(3);
+      @include omega(4n);
+    }
+    @media screen and (min-width: em(480)) and (max-width: em(999)) {
+      @include span-columns(3);
+      @include omega(4n);
+    }
+    @include media($large) {
+      float: left;
+      width: 6.575em;
+      margin-right: .25em; // magic number ugh
+      margin-bottom: .25em; // magic number ugh
+      @include omega(9n);
+    }
+  }
+  a {
+    img {
+      // Image hover animation
+      &:hover {
+        @include animation(pop .3s 0 linear);
+        box-shadow: 0 0 10px rgba($black, .20);
+      }
+    }
+  }
+}

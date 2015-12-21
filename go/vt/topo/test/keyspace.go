@@ -1,19 +1,23 @@
-// package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
-// want to call CheckAll in your test method. For an example, look at
-// the tests in github.com/youtube/vitess/go/vt/zktopo.
+// want to call all the check methods in your test methods. For an
+// example, look at the tests in
+// github.com/youtube/vitess/go/vt/zktopo.
 package test
 
 import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func CheckKeyspace(t *testing.T, ts topo.Server) {
-	keyspaces, err := ts.GetKeyspaces()
+// CheckKeyspace tests the keyspace part of the API
+func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
+	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
 		t.Errorf("GetKeyspaces(empty): %v", err)
 	}
@@ -21,14 +25,22 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 		t.Errorf("len(GetKeyspaces()) != 0: %v", keyspaces)
 	}
 
-	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)
 	}
-	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != topo.ErrNodeExists {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != topo.ErrNodeExists {
 		t.Errorf("CreateKeyspace(again) is not ErrNodeExists: %v", err)
 	}
 
-	keyspaces, err = ts.GetKeyspaces()
+	// Delete and re-create.
+	if err := ts.DeleteKeyspace(ctx, "test_keyspace"); err != nil {
+		t.Errorf("DeleteKeyspace: %v", err)
+	}
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
+		t.Errorf("CreateKeyspace: %v", err)
+	}
+
+	keyspaces, err = ts.GetKeyspaces(ctx)
 	if err != nil {
 		t.Errorf("GetKeyspaces: %v", err)
 	}
@@ -36,25 +48,27 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace"}, keyspaces)
 	}
 
-	k := &topo.Keyspace{
+	k := &topodatapb.Keyspace{
 		ShardingColumnName: "user_id",
-		ShardingColumnType: key.KIT_UINT64,
-		ServedFromMap: map[topo.TabletType]*topo.KeyspaceServedFrom{
-			topo.TYPE_REPLICA: &topo.KeyspaceServedFrom{
-				Cells:    []string{"c1", "c2"},
-				Keyspace: "test_keyspace3",
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
+			{
+				TabletType: topodatapb.TabletType_REPLICA,
+				Cells:      []string{"c1", "c2"},
+				Keyspace:   "test_keyspace3",
 			},
-			topo.TYPE_MASTER: &topo.KeyspaceServedFrom{
-				Cells:    nil,
-				Keyspace: "test_keyspace3",
+			{
+				TabletType: topodatapb.TabletType_MASTER,
+				Cells:      nil,
+				Keyspace:   "test_keyspace3",
 			},
 		},
 		SplitShardCount: 64,
 	}
-	if err := ts.CreateKeyspace("test_keyspace2", k); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace2", k); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)
 	}
-	keyspaces, err = ts.GetKeyspaces()
+	keyspaces, err = ts.GetKeyspaces(ctx)
 	if err != nil {
 		t.Errorf("GetKeyspaces: %v", err)
 	}
@@ -64,29 +78,51 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace", "test_keyspace2"}, keyspaces)
 	}
 
-	ki, err := ts.GetKeyspace("test_keyspace2")
+	// Call delete shards and make sure the keyspace still exists.
+	if err := ts.DeleteKeyspaceShards(ctx, "test_keyspace2"); err != nil {
+		t.Errorf("DeleteKeyspaceShards: %v", err)
+	}
+	storedK, storedVersion, err := ts.GetKeyspace(ctx, "test_keyspace2")
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)
 	}
-	if !reflect.DeepEqual(ki.Keyspace, k) {
-		t.Fatalf("returned keyspace doesn't match: got %v expected %v", ki.Keyspace, k)
+	if !reflect.DeepEqual(storedK, k) {
+		t.Fatalf("returned keyspace doesn't match: got %v expected %v", storedK, k)
 	}
 
-	ki.ShardingColumnName = "other_id"
-	ki.ShardingColumnType = key.KIT_BYTES
-	delete(ki.ServedFromMap, topo.TYPE_MASTER)
-	ki.ServedFromMap[topo.TYPE_REPLICA].Keyspace = "test_keyspace4"
-	err = topo.UpdateKeyspace(ts, ki)
+	storedK.ShardingColumnName = "other_id"
+	var newServedFroms []*topodatapb.Keyspace_ServedFrom
+	for _, ksf := range storedK.ServedFroms {
+		if ksf.TabletType == topodatapb.TabletType_MASTER {
+			continue
+		}
+		if ksf.TabletType == topodatapb.TabletType_REPLICA {
+			ksf.Keyspace = "test_keyspace4"
+		}
+		newServedFroms = append(newServedFroms, ksf)
+	}
+	storedK.ServedFroms = newServedFroms
+	_, err = ts.UpdateKeyspace(ctx, "test_keyspace2", storedK, storedVersion)
 	if err != nil {
 		t.Fatalf("UpdateKeyspace: %v", err)
 	}
-	ki, err = ts.GetKeyspace("test_keyspace2")
+
+	// unconditional update
+	storedK.ShardingColumnType = topodatapb.KeyspaceIdType_BYTES
+	_, err = ts.UpdateKeyspace(ctx, "test_keyspace2", storedK, -1)
+	if err != nil {
+		t.Fatalf("UpdateKeyspace(-1): %v", err)
+	}
+
+	storedK, storedVersion, err = ts.GetKeyspace(ctx, "test_keyspace2")
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)
 	}
-	if ki.ShardingColumnName != "other_id" ||
-		ki.ShardingColumnType != key.KIT_BYTES ||
-		ki.ServedFromMap[topo.TYPE_REPLICA].Keyspace != "test_keyspace4" {
-		t.Errorf("GetKeyspace: unexpected keyspace, got %v", *ki)
+	if storedK.ShardingColumnName != "other_id" ||
+		storedK.ShardingColumnType != topodatapb.KeyspaceIdType_BYTES ||
+		len(storedK.ServedFroms) != 1 ||
+		storedK.ServedFroms[0].TabletType != topodatapb.TabletType_REPLICA ||
+		storedK.ServedFroms[0].Keyspace != "test_keyspace4" {
+		t.Errorf("GetKeyspace: unexpected keyspace, got %v", *storedK)
 	}
 }

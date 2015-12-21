@@ -7,100 +7,128 @@ package main
 
 import (
 	"flag"
-	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/binlog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"golang.org/x/net/context"
+
+	// import mysql to register mysql connection function
+	_ "github.com/youtube/vitess/go/mysql"
+	// import memcache to register memcache connection function
+	_ "github.com/youtube/vitess/go/memcache"
 )
 
 var (
-	tabletPath     = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
-	enableRowcache = flag.Bool("enable-rowcache", false, "enable rowcacche")
-	overridesFile  = flag.String("schema-override", "", "schema overrides file")
-	tableAclConfig = flag.String("table-acl-config", "", "path to table access checker config file")
-	lockTimeout    = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
+	enforceTableACLConfig = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
+	tableAclConfig        = flag.String("table-acl-config", "", "path to table access checker config file")
+	tabletPath            = flag.String("tablet-path", "", "tablet alias")
+	overridesFile         = flag.String("schema-override", "", "schema overrides file")
 
 	agent *tabletmanager.ActionAgent
 )
 
 func init() {
 	servenv.RegisterDefaultFlags()
-	servenv.RegisterDefaultSecureFlags()
-	servenv.InitServiceMapForBsonRpcService("tabletmanager")
-	servenv.InitServiceMapForBsonRpcService("queryservice")
-	servenv.InitServiceMapForBsonRpcService("updatestream")
-}
-
-// tabletParamToTabletAlias takes either an old style ZK tablet path or a
-// new style tablet alias as a string, and returns a TabletAlias.
-func tabletParamToTabletAlias(param string) topo.TabletAlias {
-	if param[0] == '/' {
-		// old zookeeper path, convert to new-style string tablet alias
-		zkPathParts := strings.Split(param, "/")
-		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
-			log.Fatalf("Invalid tablet path: %v", param)
-		}
-		param = zkPathParts[2] + "-" + zkPathParts[5]
-	}
-	result, err := topo.ParseTabletAliasString(param)
-	if err != nil {
-		log.Fatalf("Invalid tablet alias %v: %v", param, err)
-	}
-	return result
 }
 
 func main() {
-	dbconfigs.RegisterFlags()
+	defer exit.Recover()
+
+	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
+		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
+	dbconfigs.RegisterFlags(flags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
+	tabletserver.Init()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
-		log.Fatalf("vttablet doesn't take any positional arguments")
+		log.Errorf("vttablet doesn't take any positional arguments")
+		exit.Return(1)
 	}
 
 	servenv.Init()
 
 	if *tabletPath == "" {
-		log.Fatalf("tabletPath required")
+		log.Errorf("tabletPath required")
+		exit.Return(1)
 	}
-	tabletAlias := tabletParamToTabletAlias(*tabletPath)
+	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
+	if err != nil {
+		log.Error(err)
+		exit.Return(1)
+	}
 
 	mycnf, err := mysqlctl.NewMycnfFromFlags(tabletAlias.Uid)
 	if err != nil {
-		log.Fatalf("mycnf read failed: %v", err)
+		log.Errorf("mycnf read failed: %v", err)
+		exit.Return(1)
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
 	if err != nil {
 		log.Warning(err)
 	}
-	dbcfgs.App.EnableRowcache = *enableRowcache
+
+	// creates and registers the query service
+	qsc := tabletserver.NewServer()
+	servenv.OnClose(func() {
+		// We now leave the queryservice running during lameduck,
+		// so stop it in OnClose(), after lameduck is over.
+		qsc.StopService()
+	})
+	qsc.Register()
 
 	if *tableAclConfig != "" {
-		tableacl.Init(*tableAclConfig)
+		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
+		tableacl.Register("simpleacl", &simpleacl.Factory{})
+	} else if *enforceTableACLConfig {
+		log.Error("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+		exit.Return(1)
 	}
-	tabletserver.InitQueryService()
-	binlog.RegisterUpdateStreamService(mycnf)
+	// tabletacl.Init loads ACL from file if *tableAclConfig is not empty
+	err = tableacl.Init(
+		*tableAclConfig,
+		func() {
+			qsc.ClearQueryPlanCache()
+		},
+	)
+	if err != nil {
+		log.Errorf("Fail to initialize Table ACL: %v", err)
+		if *enforceTableACLConfig {
+			log.Error("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
+			exit.Return(1)
+		}
+	}
+
+	// Create mysqld and register the health reporter (needs to be done
+	// before initializing the agent, so the initial health check
+	// done by the agent has the right reporter)
+	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
+	servenv.OnClose(mysqld.Close)
+	registerHealthReporter(mysqld)
 
 	// Depends on both query and updateStream.
-	agent, err = tabletmanager.NewActionAgent(tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
+	gRPCPort := int32(0)
+	if servenv.GRPCPort != nil {
+		gRPCPort = int32(*servenv.GRPCPort)
+	}
+	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, dbcfgs, mycnf, int32(*servenv.Port), gRPCPort, *overridesFile)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
+		exit.Return(1)
 	}
 
-	tabletmanager.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
-	servenv.OnTerm(func() {
-		tabletserver.DisallowQueries()
-		binlog.DisableUpdateStreamService()
-		agent.Stop()
+	servenv.OnRun(func() {
+		addStatusParts(qsc)
 	})
 	servenv.OnClose(func() {
 		// We will still use the topo server during lameduck period

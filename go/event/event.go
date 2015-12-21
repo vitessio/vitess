@@ -77,7 +77,7 @@ var (
 )
 
 // BadListenerError is raised via panic() when AddListener is called with an
-// invalid listener funcion.
+// invalid listener function.
 type BadListenerError string
 
 func (why BadListenerError) Error() string {

@@ -1,0 +1,124 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: vttablet-{{uid}}
+  labels:
+    component: vttablet
+    keyspace: "{{keyspace}}"
+    shard: "{{shard_label}}"
+    tablet: "{{alias}}"
+    app: vitess
+spec:
+  containers:
+    - name: vttablet
+      image: vitess/root
+      resources:
+        limits:
+          memory: "4Gi"
+          cpu: "2"
+      volumeMounts:
+        - name: syslog
+          mountPath: /dev/log
+        - name: vtdataroot
+          mountPath: /vt/vtdataroot
+      command:
+        - bash
+        - "-c"
+        - >-
+          set -e
+
+          mysql_socket="$VTDATAROOT/{{tablet_subdir}}/mysql.sock"
+
+          mkdir -p $VTDATAROOT/tmp
+
+          chown -R vitess /vt
+
+          while [ ! -e $mysql_socket ]; do
+          echo "[$(date)] waiting for $mysql_socket" ;
+          sleep 1 ;
+          done
+
+          su -p -s /bin/bash -c "mysql -u vt_dba -S $mysql_socket
+          -e 'CREATE DATABASE IF NOT EXISTS vt_{{keyspace}}'" vitess
+
+          su -p -s /bin/bash -c "/vt/bin/vttablet
+          -topo_implementation etcd
+          -etcd_global_addrs http://etcd-global:4001
+          -log_dir $VTDATAROOT/tmp
+          -alsologtostderr
+          -port {{port}}
+          -grpc_port {{grpc_port}}
+          -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream'
+          -binlog_player_protocol grpc
+          -tablet-path {{alias}}
+          -tablet_hostname $(hostname -i)
+          -init_keyspace {{keyspace}}
+          -init_shard {{shard}}
+          -target_tablet_type {{tablet_type}}
+          -mysqlctl_socket $VTDATAROOT/mysqlctl.sock
+          -db-config-app-uname vt_app
+          -db-config-app-dbname vt_{{keyspace}}
+          -db-config-app-charset utf8
+          -db-config-dba-uname vt_dba
+          -db-config-dba-dbname vt_{{keyspace}}
+          -db-config-dba-charset utf8
+          -db-config-repl-uname vt_repl
+          -db-config-repl-dbname vt_{{keyspace}}
+          -db-config-repl-charset utf8
+          -db-config-filtered-uname vt_filtered
+          -db-config-filtered-dbname vt_{{keyspace}}
+          -db-config-filtered-charset utf8
+          -queryserver-config-transaction-cap 300
+          -queryserver-config-schema-reload-time 1
+          -queryserver-config-pool-size 100
+          -enable-rowcache
+          -rowcache-bin /usr/bin/memcached
+          -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock" vitess
+      env:
+        - name: GOMAXPROCS
+          value: "16"
+    - name: mysql
+      image: vitess/root
+      resources:
+        limits:
+          memory: "4Gi"
+          cpu: "2"
+      volumeMounts:
+        - name: syslog
+          mountPath: /dev/log
+        - name: vtdataroot
+          mountPath: /vt/vtdataroot
+      command:
+        - sh
+        - "-c"
+        - >-
+          mkdir -p $VTDATAROOT/tmp &&
+          chown -R vitess /vt
+
+          su -p -c "/vt/bin/mysqlctld
+          -log_dir $VTDATAROOT/tmp
+          -alsologtostderr
+          -tablet_uid {{uid}}
+          -socket_file $VTDATAROOT/mysqlctl.sock
+          -db-config-app-uname vt_app
+          -db-config-app-dbname vt_{{keyspace}}
+          -db-config-app-charset utf8
+          -db-config-dba-uname vt_dba
+          -db-config-dba-dbname vt_{{keyspace}}
+          -db-config-dba-charset utf8
+          -db-config-repl-uname vt_repl
+          -db-config-repl-dbname vt_{{keyspace}}
+          -db-config-repl-charset utf8
+          -db-config-filtered-uname vt_filtered
+          -db-config-filtered-dbname vt_{{keyspace}}
+          -db-config-filtered-charset utf8
+          -init_db_sql_file $VTROOT/config/init_db.sql" vitess
+      env:
+        - name: EXTRA_MY_CNF
+          value: /vt/config/mycnf/benchmark.cnf:/vt/config/mycnf/master_mysql56.cnf
+  volumes:
+    - name: syslog
+      hostPath: {path: /dev/log}
+    - name: vtdataroot
+      {{vtdataroot_volume}}
+

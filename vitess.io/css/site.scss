@@ -1,0 +1,609 @@
+---
+---
+
+@import url("https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.css");
+
+// Colors
+$primaryBrandColor: #3F51B5;
+$darkerBrandColor: #283593;
+$lighterBrandColor: #E1F5FE;
+$accentColor: #6A1B9A;
+
+// This ensures that icons on the home page use 100% opacity
+// with the $primaryBrandColor. Otherwise, the icons inherit
+// opacity settings from the header or text is too dark.
+$homePageHeaderColor: #757575;
+
+$linkColor: $primaryBrandColor;
+$linkHoverColor: $darkerBrandColor;
+$codeColor: $darkerBrandColor;
+$codeBkColor: $lighterBrandColor;
+$wellColor: #FAFAFA;
+$textColor: #616161;
+$linkDisabledColor: $textColor;
+
+
+$fontFamily: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+// Override Bootstrap defaults
+body {
+  color: $textColor;
+  font-family: $fontFamily;
+  padding-top: 50px;
+}
+
+a {
+  color: $primaryBrandColor;
+}
+a:hover,
+a:focus {
+  color: $linkHoverColor;
+}
+a.disabled {
+  color: $linkDisabledColor;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: #000;
+  opacity: 0.54;
+}
+
+p, li {line-height: 22px;}
+
+code {
+  color: $codeColor;
+  background-color: transparent;
+  font-size: 14px;
+  padding: 0;
+}
+
+pre, pre.prettyprint {
+  background-color: $codeBkColor;
+  color: #000;
+  border: none !important;
+  font-size: 14px !important;
+  padding: 9.5px !important;
+}
+
+//tabs
+.ui-widget-content {
+  font-size:14px !important;
+  font-family: $fontFamily !important;
+  color: $textColor !important;
+}
+
+.ui-widget-content a {
+  color: $primaryBrandColor !important;
+}
+
+.ui-widget-content a:hover, a:focus {
+  color: $linkHoverColor !important;
+}
+
+// Fix Bootstrap mobile menu colors on inverse navbar.
+.navbar-toggle .icon-bar {
+  background-color: $lighterBrandColor;
+}
+
+// Shared
+.inverse {
+  background-color: $primaryBrandColor;
+  color: white;
+
+  a {
+    color: $lighterBrandColor;
+  }
+  a:hover,
+  a:focus {
+    color: $linkHoverColor;
+  }
+}
+
+.inverse .inverse-light {
+  background-color: $lighterBrandColor;
+}
+
+/* Home page styles */
+#home {
+  h2 {
+    color: $homePageHeaderColor;
+    opacity: 1;
+  }
+}
+.home-full-width {
+  width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+}
+.jumbotron {
+  background: $darkerBrandColor;
+  color: $lighterBrandColor;
+  text-align: center;
+  width: 100%;
+}
+.page-title-bar{
+  background-color: $lighterBrandColor;
+  margin: 50px 0px 0px;
+  padding-bottom: 10px;
+  padding-top: 15px;
+
+  h1, h2, h3, h4, h5, h6 {
+    color: $primaryBrandColor;
+  }
+}
+.page-spacer {
+  height: 100px;
+}
+
+// Used in top nav bar
+#common-nav{
+  margin-bottom: 0px;
+  background-color: $darkerBrandColor;
+
+  .logo {
+    width: 60px;
+  }
+}
+
+// Docs layout specific
+.docs-side-nav {
+  margin-top: 40px;
+}
+
+// collapsible menus
+h4.arrow-d, h4.arrow-r {
+  cursor: pointer;
+}
+
+h4.arrow-r::before {
+  content: "+ ";
+  font-family: monospace;
+  font-weight: bold;
+}
+
+h4.arrow-d::before {
+  content: "- ";
+  font-family: monospace;
+  font-weight: bold;
+}
+
+p {
+  margin: 0 0 1em;
+}
+
+table {
+  background:none repeat scroll 0 0 #FFF;
+  border:1px solid #D0D0D0;
+  border-bottom:1px solid #D0D0D0;
+  border-collapse:collapse;
+  border-spacing:0;
+  text-align:left;
+  width:100%;
+  margin-bottom: 2.125em;
+}
+
+table thead {
+  background-color: $primaryBrandColor;
+}
+
+table tr th {
+  color: #555;
+  font-weight: 500;
+  text-align: left;
+}
+
+table.comparison th {
+  color: #515B5D;
+  font-weight: bold;
+}
+
+table.comparison td {
+  background: #FFF;
+  vertical-align: top;
+  width: 47%;
+  border-bottom: solid 1px #E0E0E0;
+  padding: 16px;
+}
+
+table.comparison th, table.comparison td {
+  padding: 1em;
+}
+
+table tbody td {
+  vertical-align: top;
+}
+
+table tr td, table tr th {
+  padding:0.625em;
+}
+table tfoot, table thead, table tr:nth-of-type(2n) {
+  background:none repeat scroll 0 0 #F6F6F6;
+}
+table tbody {
+  background:none repeat scroll 0 0 #FFF;
+}
+#api-method-summary tr td.api-method-summary-group {
+  background:#F6F6F6;
+}
+#api-method-summary tr {
+  background:#FFF;
+}
+th, td {
+  border-right:1px solid #E0E0E0;
+}
+h2, h3, h4, h5 {
+  margin-bottom: 0.8em;
+}
+pre {
+  margin: 0 0 1.2em;
+}
+br.bigbreak {
+  line-height: 2em;
+}
+div.indent-details {
+  padding-left: 1.6250em;
+}
+#toc {
+  border-left: solid 3px $primaryBrandColor;
+  padding-left: 12px;
+}
+#toc ol, #toc ul {
+  font-size: 13px;
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+#toc ol ol, #toc ol ul, #toc ul ol, #toc ul ul {
+  padding-left: 25px;
+  list-style: circle;
+}
+#toc li {
+  margin-bottom: 0;
+}
+#toc-contents-header {
+  font-size: 13px;
+}
+ol ol, ol ul, ul ol, ul ul {
+  margin: 0.8em 0em;
+}
+ol ol li, ol ul li, ul ol li, ul ul li {
+  margin: 0;
+}
+li {
+  margin-bottom: 0.5em;
+}
+/*
+ * Left nav
+ */
+#left-nav {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.icon-bar {
+  background-color:#FFF;
+}
+
+#masthead {
+  background-color: $lighterBrandColor;
+  margin-bottom: 40px;
+  min-height: 105px;
+
+  h1 {
+    color: $primaryBrandColor;
+    font-size: 36px;
+    opacity: 1;
+    padding: 18px;
+    @media (min-width: 768px) {
+      font-size: 48px;
+    }
+  }
+}
+
+.navbar-brand {
+  padding: 7px 15px;
+}
+
+.nav > li {
+  margin-bottom: 0;
+}
+.nav li.active-item {
+  font-weight: bold;
+  text-decoration: none;
+  ul, ol {
+    font-weight: normal;
+  }
+}
+#sidebar > li > h4 {
+  font-size: 16px;
+  margin-top: 0.8em;
+}
+.nav > li > h4.no-top-margin {
+  margin-top: 0;
+}
+#sidebar > li > a {
+  padding: 6px 15px 6px 0px;
+}
+#sidebar li a {
+  font-size: 13px;
+}
+#sidebar li ul li, #sidebar li ol li {
+  padding-bottom: 5px;
+}
+
+.nav-stacked > li+li {
+  margin-top: 0;
+}
+.nav ol, .nav ul {
+  list-style: none;
+  padding-left: 1.5em;
+}
+#centerTextCol {
+  h2, h3, h4, h5, h6 {
+    // We need to set padding-top:50px so heading text isn't hidden
+    // by the nav bar when linking to a specific anchor. We then set
+    // a negative margin-top to try to close some of the gap back up,
+    // but we can only go as far as the margin-bottom of the previous
+    // paragraph, or else it will overlap and prevent links above from
+    // being clicked.
+    padding-top: 50px;
+    margin-top: -14px;
+  }
+}
+
+.affix-top,.affix{
+  position: static;
+}
+#sidebar.affix,#sidebar.affix-top{
+  max-width: 170px;
+  @media (min-width: 992px) {
+    width: 228px;
+  }
+}
+#sidebar.affix, #tocSidebar.affix {
+  @media (min-width: 1200px) {
+    position: fixed;
+    top: 70px;
+    bottom: 0px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  @media (min-width: 992px) {
+    position: fixed;
+    top: 70px;
+    bottom: 0px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
+@media (min-width: 1200px) {
+  #tocSidebar.affix, #tocSidebar.affix-top {
+    min-width: 170px;
+  }
+  #toc > ul > li > a {
+    display: inline-block;
+    padding-left: 10px;
+    text-indent: -10px;
+  }
+}
+@media (min-width: 992px) {
+  #sidebar.affix-top, #tocSidebar.affix-top {
+    position: static;
+  }
+}
+@media (min-width: 768px) {
+  #sidebar.affix {
+    position: fixed;
+    top: 70px;
+    bottom: 0px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
+
+/*
+ * Left nav highlighting title of selected document
+ */
+
+/*
+ * Responsive tables
+ */
+table.responsive tr:not(.alt) td td:first-child,
+table.responsive td tr:not(.alt) td:first-child {
+  vertical-align: top;
+}
+table.responsive table.responsive {
+  margin: 0;
+}
+
+table.responsive tr:first-child {
+  border-top: 0;
+}
+
+table.responsive td tr:first-child td {
+  padding-top: 0;
+}
+
+table.responsive td tr:last-child td {
+  padding-bottom: 0;
+}
+
+table.responsive td td:first-child {
+  padding-left: 0;
+}
+table.responsive th:not(:first-child) {
+  display: none;
+}
+
+/*** main layout ***/
+
+#home-page-logo {
+  margin: 40px;
+  text-align: center;
+  width: 402px;
+  height: 228px;
+}
+
+.navdrawer {
+  -webkit-transition: background-color 0.2s ease-out;
+          transition: background-color 0.2s ease-out;
+}
+// Might not need navdrawer-container, combine scrolled
+.navdrawer-container {
+  background: #3f4254;
+}
+.navdrawer-container h4 {
+  height: 60px;
+  color: #3F4254;
+}
+.navdrawer-container a {
+  font-family: $fontFamily;
+  text-transform: uppercase;
+}
+.navdrawer-container a {
+  text-transform: uppercase;
+}
+#menu {
+  background-image: url(/images/hamburger-white.svg);
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 24px 24px;
+}
+
+/* Three-column layout */
+#leftCol {
+  float: left;
+  overflow-x: hidden;
+  overflow-y: auto;
+  @media screen and (max-width: 991px) {
+    max-width: 200px;
+  }
+  @media screen and (max-width: 767px) {
+    display: none;
+  }
+}
+#centerCol {
+  @media screen and (max-width: 1199px) {
+    z-index: 1;
+  }
+  @media screen and (max-width: 991px) {
+    margin-left: calc(25% + 15px);
+    z-index: 1;
+  }
+  @media screen and (max-width: 767px) {
+    margin-left: 0;
+  }
+}
+#rightCol {
+  float: right;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 0px;
+  position: static;
+  z-index: 10000;
+
+  li.active > a {
+    color: $accentColor;
+    font-weight: bold;
+  }
+  @media (min-width: 1200px) {
+    #tocSidebar.affix, #tocSidebar.affix-top {
+      max-width: 210px;
+    }
+  }
+  @media screen and (max-width: 1199px) {
+    margin: 0;
+  }
+  @media screen and (max-width: 991px) {
+    float: none;
+    margin: 12px 0 30px calc(25% + 15px);
+    max-width: 255px;
+  }
+  @media screen and (max-width: 767px) {
+    margin: 12px 0 30px;
+  }
+}
+
+.scrolled {
+  margin-bottom: 80px;
+  z-index: 20000;
+}
+
+main .fa {
+  color: $primaryBrandColor;
+}
+#mobile-left-nav-menu-button {
+  display: none;
+  background-color: transparent;
+  background-image: url('/images/left-nav-menu-expander.svg');
+  border: 0;
+  height: 24px;
+  margin-left: 10px;
+  min-width: 24px;
+  @media screen and (max-width: 767px) {
+    display: block;
+  }
+}
+#collapsed-left-menu {
+  display: none;
+  h4 {
+    color: $lighterBrandColor;
+  }
+  @media screen and (max-width: 767px) {
+    display: block;
+  }
+}
+.main-site-content {
+  @media screen and (max-width: 991px) {
+    padding: 0 24px;
+  }
+  @media screen and (max-width: 767px) {
+    padding: 0 16px;
+  }
+}
+@media screen and (max-width: 1199px) {
+  #toc-content-row {
+    position: relative;
+    z-index: 1;
+  }
+}
+@media screen and (max-width: 991px) {
+  /*
+   * Force responsive tables to lay out completely vertically. The "responsive"
+   * class should only be applied to tables that are composed like a definition
+   * list, with a "term" (say, a property name) in the first column and any
+   * "definitions" (say, type, description, and a sample value) stacked on top
+   * of each other in the second column. This makes it possible to lay out the
+   * table vertically and keep it readable on smaller screens without horizontal
+   * scrolling. This structure and behavior is documented.
+   */
+  table.responsive,
+  table.responsive thead,
+  table.responsive tbody,
+  table.responsive tr,
+  table.responsive th,
+  table.responsive td {
+    display: block;
+  }
+}
+@media screen and (max-width: 767px) {
+  #standard-menu-links {
+    display: none;
+  }
+}
+.reset-box-sizing,
+.reset-box-sizing *,
+.reset-box-sizing *:before,
+.reset-box-sizing *:after {
+  -webkit-box-sizing: content-box;
+  -moz-box-sizing: content-box;
+  box-sizing: content-box;
+  border: none;
+  margin: 0px;
+  padding: 0px;
+}
+
+.gsc-table-result td {
+  padding-left: 8px;
+}

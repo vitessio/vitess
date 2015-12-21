@@ -1,0 +1,19 @@
+// Table ACL proto definitions.
+
+syntax = "proto3";
+
+package tableacl;
+
+// TableGroupSpec defines ACLs for a group of tables.
+message TableGroupSpec {
+  string name = 1;
+  // either tables or a table name prefixes (if it ends in a %)
+  repeated string table_names_or_prefixes = 2;
+  repeated string readers = 3;
+  repeated string writers = 4;
+  repeated string admins = 5;
+}
+
+message Config {
+  repeated TableGroupSpec table_groups = 1;
+}

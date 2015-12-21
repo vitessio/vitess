@@ -1,4 +1,4 @@
-// package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at
 // the tests in github.com/youtube/vitess/go/vt/zktopo.
@@ -7,14 +7,15 @@ package test
 import (
 	"encoding/json"
 	"testing"
-	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func tabletEqual(left, right *topo.Tablet) (bool, error) {
+func tabletEqual(left, right *topodatapb.Tablet) (bool, error) {
 	lj, err := json.Marshal(left)
 	if err != nil {
 		return false, err
@@ -26,138 +27,127 @@ func tabletEqual(left, right *topo.Tablet) (bool, error) {
 	return string(lj) == string(rj), nil
 }
 
-func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
-	cell := getLocalCell(t, ts)
-	tablet := &topo.Tablet{
-		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
+// CheckTablet verifies the topo server API is correct for managing tablets.
+func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
+	tts := topo.Server{Impl: ts}
+
+	cell := getLocalCell(ctx, t, ts)
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: 1},
 		Hostname: "localhost",
-		IPAddr:   "10.11.12.13",
-		Portmap: map[string]int{
+		Ip:       "10.11.12.13",
+		PortMap: map[string]int32{
 			"vt":    3333,
 			"mysql": 3334,
 		},
 
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
-		Type:     topo.TYPE_MASTER,
-		State:    topo.STATE_READ_WRITE,
+		Type:     topodatapb.TabletType_MASTER,
 		KeyRange: newKeyRange("-10"),
 	}
-	if err := ts.CreateTablet(tablet); err != nil {
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
 	}
-	if err := ts.CreateTablet(tablet); err != topo.ErrNodeExists {
+	if err := ts.CreateTablet(ctx, tablet); err != topo.ErrNodeExists {
 		t.Errorf("CreateTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(topo.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
+	if _, _, err := ts.GetTablet(ctx, &topodatapb.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
 		t.Errorf("GetTablet(666): %v", err)
 	}
 
-	ti, err := ts.GetTablet(tablet.Alias)
+	nt, nv, err := ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
-	if eq, err := tabletEqual(ti.Tablet, tablet); err != nil {
+	if eq, err := tabletEqual(nt, tablet); err != nil {
 		t.Errorf("cannot compare tablets: %v", err)
 	} else if !eq {
-		t.Errorf("put and got tablets are not identical:\n%#v\n%#v", tablet, ti.Tablet)
+		t.Errorf("put and got tablets are not identical:\n%#v\n%#v", tablet, t)
 	}
 
-	if _, err := ts.GetTabletsByCell("666"); err != topo.ErrNoNode {
+	if _, err := ts.GetTabletsByCell(ctx, "666"); err != topo.ErrNoNode {
 		t.Errorf("GetTabletsByCell(666): %v", err)
 	}
 
-	inCell, err := ts.GetTabletsByCell(cell)
+	inCell, err := ts.GetTabletsByCell(ctx, cell)
 	if err != nil {
 		t.Errorf("GetTabletsByCell: %v", err)
 	}
-	if len(inCell) != 1 || inCell[0] != tablet.Alias {
+	if len(inCell) != 1 || *inCell[0] != *tablet.Alias {
 		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.Alias, inCell)
 	}
 
-	ti.State = topo.STATE_READ_ONLY
-	if err := topo.UpdateTablet(ctx, ts, ti); err != nil {
+	nt.Hostname = "remotehost"
+	if _, err := ts.UpdateTablet(ctx, nt, nv); err != nil {
 		t.Errorf("UpdateTablet: %v", err)
 	}
 
-	ti, err = ts.GetTablet(tablet.Alias)
+	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
-	if want := topo.STATE_READ_ONLY; ti.State != want {
-		t.Errorf("ti.State: want %v, got %v", want, ti.State)
+	if want := "remotehost"; nt.Hostname != want {
+		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
 	}
 
-	if err := ts.UpdateTabletFields(tablet.Alias, func(t *topo.Tablet) error {
-		t.State = topo.STATE_READ_WRITE
+	// unconditional tablet update
+	nt.Hostname = "remotehost2"
+	if _, err := ts.UpdateTablet(ctx, nt, -1); err != nil {
+		t.Errorf("UpdateTablet(-1): %v", err)
+	}
+
+	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
+	if err != nil {
+		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+	}
+	if want := "remotehost2"; nt.Hostname != want {
+		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
+	}
+
+	// test UpdateTabletFields works
+	updatedTablet, err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+		t.Hostname = "anotherhost"
 		return nil
+	})
+	if err != nil {
+		t.Errorf("UpdateTabletFields: %v", err)
+	}
+	if got, want := updatedTablet.Hostname, "anotherhost"; got != want {
+		t.Errorf("updatedTablet.Hostname = %q, want %q", got, want)
+	}
+	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
+	if err != nil {
+		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+	}
+	if got, want := nt.Hostname, "anotherhost"; got != want {
+		t.Errorf("nt.Hostname = %q, want %q", got, want)
+	}
+
+	// test UpdateTabletFields that returns ErrNoUpdateNeeded works
+	if _, err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+		return topo.ErrNoUpdateNeeded
 	}); err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)
 	}
-	ti, err = ts.GetTablet(tablet.Alias)
-	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+	if nnt, nnv, nnerr := ts.GetTablet(ctx, tablet.Alias); nnv != nv {
+		t.Errorf("GetTablet %v: %v %v %v", tablet.Alias, nnt, nnv, nnerr)
 	}
 
-	if want := topo.STATE_READ_WRITE; ti.State != want {
-		t.Errorf("ti.State: want %v, got %v", want, ti.State)
+	if want := "anotherhost"; nt.Hostname != want {
+		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
 	}
 
-	if err := ts.DeleteTablet(tablet.Alias); err != nil {
+	if err := ts.DeleteTablet(ctx, tablet.Alias); err != nil {
 		t.Errorf("DeleteTablet: %v", err)
 	}
-	if err := ts.DeleteTablet(tablet.Alias); err != topo.ErrNoNode {
+	if err := ts.DeleteTablet(ctx, tablet.Alias); err != topo.ErrNoNode {
 		t.Errorf("DeleteTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(tablet.Alias); err != topo.ErrNoNode {
+	if _, _, err := ts.GetTablet(ctx, tablet.Alias); err != topo.ErrNoNode {
 		t.Errorf("GetTablet: expected error, tablet was deleted: %v", err)
 	}
 
-}
-
-func CheckPid(t *testing.T, ts topo.Server) {
-	cell := getLocalCell(t, ts)
-	tablet := &topo.Tablet{
-		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
-		Hostname: "localhost",
-		Portmap: map[string]int{
-			"vt": 3333,
-		},
-
-		Parent:   topo.TabletAlias{},
-		Keyspace: "test_keyspace",
-		Type:     topo.TYPE_MASTER,
-		State:    topo.STATE_READ_WRITE,
-		KeyRange: newKeyRange("-10"),
-	}
-	if err := ts.CreateTablet(tablet); err != nil {
-		t.Fatalf("CreateTablet: %v", err)
-	}
-	tabletAlias := topo.TabletAlias{Cell: cell, Uid: 1}
-
-	done := make(chan struct{}, 1)
-	if err := ts.CreateTabletPidNode(tabletAlias, "contents", done); err != nil {
-		t.Errorf("ts.CreateTabletPidNode: %v", err)
-	}
-
-	// wait for up to 30 seconds for the pid to appear
-	timeout := 30
-	for {
-		err := ts.ValidateTabletPidNode(tabletAlias)
-		if err == nil {
-			// exists, we're good
-			break
-		}
-
-		timeout -= 1
-		if timeout == 0 {
-			t.Fatalf("ts.ValidateTabletPidNode: %v", err)
-		}
-		t.Logf("Waiting for ValidateTabletPidNode to succeed %v/30", timeout)
-		time.Sleep(time.Second)
-	}
-
-	close(done)
 }

@@ -11,13 +11,14 @@ package gorpcvtctlserver
 import (
 	"sync"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/vtctl/gorpcproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 // VtctlServer is our RPC server
@@ -27,7 +28,9 @@ type VtctlServer struct {
 
 // ExecuteVtctlCommand is the server side method that will execute the query,
 // and stream the results.
-func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcproto.ExecuteVtctlCommandArgs, sendReply func(interface{}) error) error {
+func (s *VtctlServer) ExecuteVtctlCommand(ctx context.Context, query *gorpcproto.ExecuteVtctlCommandArgs, sendReply func(interface{}) error) (err error) {
+	defer servenv.HandlePanic("vtctl", &err)
+
 	// create a logger, send the result back to the caller
 	logstream := logutil.NewChannelLogger(10)
 	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
@@ -41,16 +44,19 @@ func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcp
 			// we still need to flush and finish the
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
-			sendReply(&e)
+			sendReply(e)
 		}
 		wg.Done()
 	}()
 
 	// create the wrangler
-	wr := wrangler.New(logger, s.ts, query.ActionTimeout, query.LockTimeout)
+	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient())
+	// FIXME(alainjobart) use a single context, copy the source info from it
+	ctx, cancel := context.WithTimeout(context.TODO(), query.ActionTimeout)
 
 	// execute the command
-	err := vtctl.RunCommand(wr, query.Args)
+	err = vtctl.RunCommand(ctx, wr, query.Args)
+	cancel()
 
 	// close the log channel, and wait for them all to be sent
 	close(logstream)

@@ -1,0 +1,276 @@
+// This file contains the Vitess topology related data structures.
+// Very few of these structures are exchanged over the wire (only
+// TabletType and KeyRange), but they are all used by the topology
+// service.
+
+syntax = "proto3";
+
+option java_package="com.youtube.vitess.proto";
+
+package topodata;
+
+// KeyRange describes a range of sharding keys, when range-based
+// sharding is used.
+message KeyRange {
+  bytes start = 1;
+  bytes end = 2;
+}
+
+// KeyspaceIdType describes the type of the sharding key for a
+// range-based sharded keyspace.
+enum KeyspaceIdType {
+  // UNSET is the default value, when range-based sharding is not used.
+  UNSET = 0;
+
+  // UINT64 is when uint64 value is used.
+  // This is represented as 'unsigned bigint' in mysql
+  UINT64 = 1;
+
+  // BYTES is when an array of bytes is used.
+  // This is represented as 'varbinary' in mysql
+  BYTES = 2;
+}
+
+// TabletAlias is a globally unique tablet identifier.
+message TabletAlias {
+  // cell is the cell (or datacenter) the tablet is in
+  string cell = 1;
+
+  // uid is a unique id for this tablet within the shard
+  // (this is the MySQL server id as well).
+  uint32 uid = 2;
+}
+
+// TabletType represents the type of a given tablet.
+enum TabletType {
+  option allow_alias = true; // so we can have RDONLY and BATCH co-exist
+  UNKNOWN = 0;               // not a valid value
+  MASTER = 1;
+  REPLICA = 2;
+  RDONLY = 3;
+  BATCH = 3;
+  SPARE = 4;
+  EXPERIMENTAL = 5;
+  BACKUP = 6;
+  RESTORE = 7;
+  WORKER = 8;
+}
+
+// Tablet represents information about a running instance of vttablet.
+message Tablet {
+  // alias is the unique name of the tablet.
+  TabletAlias alias = 1;
+
+  // Fully qualified domain name of the host.
+  string hostname = 2;
+
+  // IP address, stored as a string.
+  string ip = 3;
+
+  // Map of named ports. Normally this should include vt, grpc, and mysql.
+  map<string, int32> port_map = 4;
+
+  // Keyspace name.
+  string keyspace = 5;
+
+  // Shard name. If range based sharding is used, it should match
+  // key_range.
+  string shard = 6;
+
+  // If range based sharding is used, range for the tablet's shard.
+  KeyRange key_range = 7;
+
+  // type is the current type of the tablet.
+  TabletType type = 8;
+
+  // It this is set, it is used as the database name instead of the
+  // normal "vt_" + keyspace.
+  string db_name_override = 9;
+
+  // tablet tags
+  map<string, string> tags = 10;
+
+  // tablet health information
+  map<string, string> health_map = 11;
+}
+
+// A Shard contains data about a subset of the data whithin a keyspace.
+message Shard {
+  // master_alias is the tablet alias of the master for the shard.
+  // If it is unset, then there is no master in this shard yet.
+  TabletAlias master_alias = 1;
+
+  // key_range is the KeyRange for this shard. It can be unset if:
+  // - we are not using range-based sharding in this shard.
+  // - the shard covers the entire keyrange.
+  // This must match the shard name based on our other conventions, but
+  // helpful to have it decomposed here.
+  KeyRange key_range = 2;
+
+  // ServedType is an entry in the served_types
+  message ServedType {
+    TabletType tablet_type = 1;
+    repeated string cells = 2;
+  }
+
+  // served_types has at most one entry per TabletType
+  repeated ServedType served_types = 3;
+
+  // SourceShard represents a data source for filtered replication
+  // accross shards. When this is used in a destination shard, the master
+  // of that shard will run filtered replication.
+  message SourceShard {
+    // Uid is the unique ID for this SourceShard object.
+    uint32 uid = 1;
+
+    // the source keyspace
+    string keyspace = 2;
+
+    // the source shard
+    string shard = 3;
+
+    // the source shard keyrange
+    KeyRange key_range = 4;
+
+    // the source table list to replicate
+    repeated string tables = 5;
+  }
+
+  // SourceShards is the list of shards we're replicating from,
+  // using filtered replication.
+  repeated SourceShard source_shards = 4;
+
+  // Cells is the list of cells that contain tablets for this shard.
+  repeated string cells = 5;
+
+  // TabletControl controls tablet's behavior
+  message TabletControl {
+    // which tablet type is affected
+    TabletType tablet_type = 1;
+    repeated string cells = 2;
+
+    // what to do
+    bool disable_query_service = 3;
+    repeated string blacklisted_tables = 4;
+  }
+
+  // tablet_controls has at most one entry per TabletType
+  repeated TabletControl tablet_controls = 6;
+}
+
+// A Keyspace contains data about a keyspace.
+message Keyspace {
+  // name of the column used for sharding
+  // empty if the keyspace is not sharded
+  string sharding_column_name = 1;
+
+  // type of the column used for sharding
+  // UNSET if the keyspace is not sharded
+  KeyspaceIdType sharding_column_type = 2;
+
+  // SplitShardCount stores the number of jobs to run to be sure to
+  // always have at most one job per shard (used during resharding).
+  int32 split_shard_count = 3;
+
+  // ServedFrom indicates a relationship between a TabletType and the
+  // keyspace name that's serving it.
+  message ServedFrom {
+    // the tablet type (key for the map)
+    TabletType tablet_type = 1;
+
+    // the cells to limit this to
+    repeated string cells = 2;
+
+    // the keyspace name that's serving it
+    string keyspace = 3;
+  }
+
+  // ServedFrom will redirect the appropriate traffic to
+  // another keyspace.
+  repeated ServedFrom served_froms = 4;
+}
+
+// Replication graph information
+
+// ShardReplication describes the MySQL replication relationships
+// whithin a cell.
+message ShardReplication {
+
+  // Node describes a tablet instance within the cell
+  message Node {
+    TabletAlias tablet_alias = 1;
+  }
+
+  // Note there can be only one Node in this array
+  // for a given tablet.
+  repeated Node nodes = 1;
+}
+
+// Serving graph information
+
+// EndPoint corresponds to a single tablet.
+message EndPoint {
+  // The uid of the tablet.
+  uint32 uid = 1;
+
+  // The host the tablet is running on (FQDN).
+  string host = 2;
+
+  // The ports opened for service.
+  map<string, int32> port_map = 3;
+
+  // The health entries.
+  map<string, string> health_map = 4;
+}
+
+// EndPoints corresponds to a list of tablets.
+message EndPoints {
+  repeated EndPoint entries = 1;
+}
+
+// SrvShard is a rollup node for the shard itself.
+message SrvShard {
+  // Copied from Shard.
+  string name = 1;
+  KeyRange key_range = 2;
+
+  // The cell that master tablet resides in.
+  string master_cell = 3;
+}
+
+// ShardReference is used as a pointer from a SrvKeyspace to a SrvShard
+message ShardReference {
+  // Copied from Shard.
+  string name = 1;
+  KeyRange key_range = 2;
+}
+
+// SrvKeyspace is a rollup node for the keyspace itself.
+message SrvKeyspace {
+  message KeyspacePartition {
+    // The type this partition applies to.
+    TabletType served_type = 1;
+
+    // List of non-overlapping continuous shards sorted by range.
+    repeated ShardReference shard_references = 2;
+  }
+
+  // The partitions this keyspace is serving, per tablet type.
+  repeated KeyspacePartition partitions = 1;
+
+  // ServedFrom indicates a relationship between a TabletType and the
+  // keyspace name that's serving it.
+  message ServedFrom {
+    // the tablet type
+    TabletType tablet_type = 1;
+
+    // the keyspace name that's serving it
+    string keyspace = 2;
+  }
+
+  // copied from Keyspace
+  string sharding_column_name = 2;
+  KeyspaceIdType sharding_column_type = 3;
+  repeated ServedFrom served_from = 4;
+  int32 split_shard_count = 5;
+}

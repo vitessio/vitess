@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -29,7 +29,7 @@ var (
 )
 
 const (
-	newHttpPath = "/foo"
+	newHTTPPath = "/foo"
 )
 
 type Args struct {
@@ -97,7 +97,7 @@ func startServer() {
 	go Accept(l)
 
 	HandleHTTP()
-	httpOnce.Do(startHttpServer)
+	httpOnce.Do(startHTTPServer)
 }
 
 func startNewServer() {
@@ -109,11 +109,11 @@ func startNewServer() {
 	log.Println("NewServer test RPC server listening on", newServerAddr)
 	go Accept(l)
 
-	newServer.HandleHTTP(newHttpPath, "/bar")
-	httpOnce.Do(startHttpServer)
+	newServer.HandleHTTP(newHTTPPath, "/bar")
+	httpOnce.Do(startHTTPServer)
 }
 
-func startHttpServer() {
+func startHTTPServer() {
 	server := httptest.NewServer(nil)
 	httpServerAddr = server.Listener.Addr().String()
 	log.Println("Test HTTP RPC server listening on", httpServerAddr)
@@ -254,7 +254,7 @@ func TestHTTP(t *testing.T) {
 	once.Do(startServer)
 	testHTTPRPC(ctx, t, "")
 	newOnce.Do(startNewServer)
-	testHTTPRPC(ctx, t, newHttpPath)
+	testHTTPRPC(ctx, t, newHTTPPath)
 }
 
 func testHTTPRPC(ctx context.Context, t *testing.T, path string) {

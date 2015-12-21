@@ -10,12 +10,12 @@ import (
 	"path"
 	"sort"
 
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /*
@@ -26,7 +26,8 @@ const (
 	globalKeyspacesPath = "/zk/global/vt/keyspaces"
 )
 
-func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
+// CreateKeyspace is part of the topo.Server interface
+func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	pathList := []string{
 		keyspacePath,
@@ -35,11 +36,16 @@ func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 		path.Join(keyspacePath, "shards"),
 	}
 
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+
 	alreadyExists := false
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			c = jscfg.ToJson(value)
+			c = string(data)
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
@@ -53,18 +59,17 @@ func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 	if alreadyExists {
 		return topo.ErrNodeExists
 	}
-
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, value, -1),
-		Status:       "created",
-	})
 	return nil
 }
 
-func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
-	keyspacePath := path.Join(globalKeyspacesPath, ki.KeyspaceName())
-	data := jscfg.ToJson(ki.Keyspace)
-	stat, err := zkts.zconn.Set(keyspacePath, data, int(existingVersion))
+// UpdateKeyspace is part of the topo.Server interface
+func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (int64, error) {
+	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return -1, err
+	}
+	stat, err := zkts.zconn.Set(keyspacePath, string(data), int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
@@ -72,32 +77,43 @@ func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64)
 		return -1, err
 	}
 
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *ki,
-		Status:       "updated",
-	})
 	return int64(stat.Version()), nil
 }
 
-func (zkts *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
+// DeleteKeyspace is part of the topo.Server interface.
+func (zkts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
+	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
+	err := zk.DeleteRecursive(zkts.zconn, keyspacePath, -1)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
+		return err
+	}
+	return nil
+}
+
+// GetKeyspace is part of the topo.Server interface
+func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodatapb.Keyspace, int64, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	data, stat, err := zkts.zconn.Get(keyspacePath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
-		return nil, err
+		return nil, 0, err
 	}
 
-	k := &topo.Keyspace{}
+	k := &topodatapb.Keyspace{}
 	if err = json.Unmarshal([]byte(data), k); err != nil {
-		return nil, fmt.Errorf("bad keyspace data %v", err)
+		return nil, 0, fmt.Errorf("bad keyspace data %v", err)
 	}
 
-	return topo.NewKeyspaceInfo(keyspace, k, int64(stat.Version())), nil
+	return k, int64(stat.Version()), nil
 }
 
-func (zkts *Server) GetKeyspaces() ([]string, error) {
+// GetKeyspaces is part of the topo.Server interface
+func (zkts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 	children, _, err := zkts.zconn.Children(globalKeyspacesPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
@@ -110,15 +126,11 @@ func (zkts *Server) GetKeyspaces() ([]string, error) {
 	return children, nil
 }
 
-func (zkts *Server) DeleteKeyspaceShards(keyspace string) error {
+// DeleteKeyspaceShards is part of the topo.Server interface
+func (zkts *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
 	shardsPath := path.Join(globalKeyspacesPath, keyspace, "shards")
 	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 		return err
 	}
-
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil, -1),
-		Status:       "deleted all shards",
-	})
 	return nil
 }

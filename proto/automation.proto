@@ -1,0 +1,80 @@
+// Protobuf data structures for the automation framework.
+
+// Messages (e.g. Task) are used both for checkpoint data and API access
+// (e.g. retrieving the current status of a pending cluster operation).
+
+syntax = "proto3";
+
+package automation;
+
+enum ClusterOperationState {
+  UNKNOWN_CLUSTER_OPERATION_STATE = 0;
+  CLUSTER_OPERATION_NOT_STARTED = 1;
+  CLUSTER_OPERATION_RUNNING = 2;
+  CLUSTER_OPERATION_DONE = 3;
+}
+
+message ClusterOperation {
+  string id = 1;
+  // TaskContainer are processed sequentially, one at a time.
+  repeated TaskContainer serial_tasks = 2;
+  // Cached value. This has to be re-evaluated e.g. after a checkpoint load because running tasks may have already finished.
+  ClusterOperationState state = 3;
+  // Error of the first task which failed. Set after state advanced to CLUSTER_OPERATION_DONE. If empty, all tasks succeeded. Cached value, see state above.
+  string error = 4;
+}
+
+// TaskContainer holds one or more task which may be executed in parallel.
+// "concurrency", if > 0, limits the amount of concurrently executed tasks.
+message TaskContainer {
+  repeated Task parallel_tasks = 1;
+  int32 concurrency = 2;
+}
+
+enum TaskState {
+  UNKNOWN_TASK_STATE = 0;
+  NOT_STARTED = 1;
+  RUNNING = 2;
+  DONE = 3;
+}
+
+// Task represents a specific task which should be automatically executed.
+message Task {
+  // Task specification.
+  string name = 1;
+  map <string, string> parameters = 2;
+
+  // Runtime data.
+  string id = 3;
+  TaskState state = 4;
+  // Set after state advanced to DONE.
+  string output = 5;
+  // Set after state advanced to DONE. If empty, the task did succeed.
+  string error = 6;
+}
+
+message EnqueueClusterOperationRequest {
+  string name = 1;
+  map <string, string> parameters = 2;
+}
+
+message EnqueueClusterOperationResponse {
+  string id = 1;
+}
+
+message GetClusterOperationStateRequest {
+  string id = 1;
+}
+
+message GetClusterOperationStateResponse {
+  ClusterOperationState state = 1;
+}
+
+message GetClusterOperationDetailsRequest {
+  string id = 1;
+}
+
+message GetClusterOperationDetailsResponse {
+  // Full snapshot of the execution e.g. including output of each task.
+  ClusterOperation cluster_op = 2;
+}

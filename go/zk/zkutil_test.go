@@ -20,6 +20,65 @@ type TestZkConn struct {
 	children map[string][]string
 }
 
+type ZkStat struct {
+	czxid          int64
+	mzxid          int64
+	cTime          time.Time
+	mTime          time.Time
+	version        int
+	cVersion       int
+	aVersion       int
+	ephemeralOwner int64
+	dataLength     int
+	numChildren    int
+	pzxid          int64
+}
+
+// ZkStat methods to match zk.Stat interface
+func (zkStat *ZkStat) Czxid() int64 {
+	return zkStat.czxid
+}
+
+func (zkStat *ZkStat) Mzxid() int64 {
+	return zkStat.mzxid
+}
+
+func (zkStat *ZkStat) CTime() time.Time {
+	return zkStat.cTime
+}
+
+func (zkStat *ZkStat) MTime() time.Time {
+	return zkStat.mTime
+}
+
+func (zkStat *ZkStat) Version() int {
+	return zkStat.version
+}
+
+func (zkStat *ZkStat) CVersion() int {
+	return zkStat.cVersion
+}
+
+func (zkStat *ZkStat) AVersion() int {
+	return zkStat.aVersion
+}
+
+func (zkStat *ZkStat) EphemeralOwner() int64 {
+	return zkStat.ephemeralOwner
+}
+
+func (zkStat *ZkStat) DataLength() int {
+	return zkStat.dataLength
+}
+
+func (zkStat *ZkStat) NumChildren() int {
+	return zkStat.numChildren
+}
+
+func (zkStat *ZkStat) Pzxid() int64 {
+	return zkStat.pzxid
+}
+
 func (conn *TestZkConn) Get(path string) (data string, stat Stat, err error) {
 	panic("Should not be used")
 }
@@ -141,7 +200,7 @@ func TestResolveWildcards(t *testing.T) {
 		"/zk/nyc/path2",
 	}
 	zconn.children = map[string][]string{
-		"/zk/nyc": []string{"path1", "path2"},
+		"/zk/nyc": {"path1", "path2"},
 	}
 	result, err = ResolveWildcards(zconn, []string{"/zk/nyc/*"})
 	checkResult(t, []string{
@@ -155,7 +214,7 @@ func TestResolveWildcards(t *testing.T) {
 		"/zk/nyc/path2/actionlog",
 	}
 	zconn.children = map[string][]string{
-		"/zk/nyc": []string{"path1", "path2"},
+		"/zk/nyc": {"path1", "path2"},
 	}
 	result, err = ResolveWildcards(zconn, []string{"/zk/nyc/*/actionlog"})
 	checkResult(t, []string{
@@ -170,9 +229,9 @@ func TestResolveWildcards(t *testing.T) {
 		"/zk/nyc/path2/shards/subpath2.1/actionlog",
 	}
 	zconn.children = map[string][]string{
-		"/zk/nyc":              []string{"path1", "path2"},
-		"/zk/nyc/path1/shards": []string{"subpath1.1", "subpath1.2"},
-		"/zk/nyc/path2/shards": []string{"subpath2.1", "subpath2.2"},
+		"/zk/nyc":              {"path1", "path2"},
+		"/zk/nyc/path1/shards": {"subpath1.1", "subpath1.2"},
+		"/zk/nyc/path2/shards": {"subpath2.1", "subpath2.2"},
 	}
 	result, err = ResolveWildcards(zconn, []string{
 		"/zk/nyc/*/shards/*/actionlog"})
@@ -249,8 +308,8 @@ func TestResolveWildcardsCell(t *testing.T) {
 		"/zk/ny/shards/subpath.ny.2/actionlog",
 	}
 	zconn.children = map[string][]string{
-		"/zk/nj/shards": []string{"subpath.nj.2", "subpath.nj.1"},
-		"/zk/ny/shards": []string{"subpath.ny.1", "subpath.ny.2"},
+		"/zk/nj/shards": {"subpath.nj.2", "subpath.nj.1"},
+		"/zk/ny/shards": {"subpath.ny.1", "subpath.ny.2"},
 	}
 	result, err = ResolveWildcards(zconn, []string{
 		"/zk/*/shards/*/actionlog"})

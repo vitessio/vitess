@@ -1,13 +1,30 @@
 package tabletserver
 
 import (
+	"time"
+
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
 // This file contains the status web page export for tabletserver
 
 var queryserviceStatusTemplate = `
-State: {{.State}}<br>
+<h2>State: {{.State}}</h2>
+<h2>Queryservice History</h2>
+<table>
+  <tr>
+    <th>Time</th>
+    <th>Target Tablet Type</th>
+    <th>Serving State</th>
+  </tr>
+  {{range .History}}
+  <tr>
+    <td>{{.Time.Format "Jan 2, 2006 at 15:04:05 (MST)"}}</td>
+    <td>{{.TabletType}}</td>
+    <td>{{.ServingState}}</td>
+  </tr>
+  {{end}}
+</table>
 <div id="qps_chart">QPS: {{.CurrentQPS}}</div>
 <script type="text/javascript" src="https://www.google.com/jsapi"></script>
 <script type="text/javascript">
@@ -17,7 +34,7 @@ google.load("visualization", "1", {packages:["corechart"]});
 
 function minutesAgo(d, i) {
   var copy = new Date(d);
-  copy.setMinutes(copy.getMinutes() - i);
+  copy.setTime(copy.getTime() - i*60*1000);
   return copy
 }
 
@@ -33,9 +50,16 @@ function drawQPSChart() {
     }
   };
 
+  // If we're accessing status through a proxy that requires a URL prefix,
+  // add the prefix to the vars URL.
+  var vars_url = '/debug/vars';
+  var pos = window.location.pathname.lastIndexOf('/debug/status');
+  if (pos > 0) {
+    vars_url = window.location.pathname.substring(0, pos) + vars_url;
+  }
 
   var redraw = function() {
-    $.getJSON("/debug/vars", function(input_data) {
+    $.getJSON(vars_url, function(input_data) {
       var now = new Date();
       var qps = input_data.QPS;
       var planTypes = Object.keys(qps);
@@ -73,20 +97,37 @@ google.setOnLoadCallback(drawQPSChart);
 
 type queryserviceStatus struct {
 	State      string
+	History    []interface{}
 	CurrentQPS float64
 }
 
 // AddStatusPart registers the status part for the status page.
-func AddStatusPart() {
+func (tsv *TabletServer) AddStatusPart() {
 	servenv.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
 		status := queryserviceStatus{
-			State: SqlQueryRpcService.GetState(),
+			State:   tsv.GetState(),
+			History: tsv.history.Records(),
 		}
-		rates := QPSRates.Get()
+		rates := tsv.qe.queryServiceStats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
 
 		}
 		return status
 	})
+}
+
+type historyRecord struct {
+	Time         time.Time
+	TabletType   string
+	ServingState string
+}
+
+// IsDuplicate implements history.Deduplicable
+func (r *historyRecord) IsDuplicate(other interface{}) bool {
+	rother, ok := other.(*historyRecord)
+	if !ok {
+		return false
+	}
+	return r.TabletType == rother.TabletType && r.ServingState == rother.ServingState
 }

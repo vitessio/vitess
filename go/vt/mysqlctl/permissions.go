@@ -5,37 +5,30 @@
 package mysqlctl
 
 import (
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-func (mysqld *Mysqld) GetPermissions() (*proto.Permissions, error) {
-	permissions := &proto.Permissions{}
+// GetPermissions lists the permissions on the mysqld
+func GetPermissions(mysqld MysqlDaemon) (*tabletmanagerdatapb.Permissions, error) {
+	permissions := &tabletmanagerdatapb.Permissions{}
 
 	// get Users
-	qr, err := mysqld.fetchSuperQuery("SELECT * FROM mysql.user")
+	qr, err := mysqld.FetchSuperQuery("SELECT * FROM mysql.user")
 	if err != nil {
 		return nil, err
 	}
 	for _, row := range qr.Rows {
-		permissions.UserPermissions = append(permissions.UserPermissions, proto.NewUserPermission(qr.Fields, row))
+		permissions.UserPermissions = append(permissions.UserPermissions, tmutils.NewUserPermission(qr.Fields, row))
 	}
 
 	// get Dbs
-	qr, err = mysqld.fetchSuperQuery("SELECT * FROM mysql.db")
+	qr, err = mysqld.FetchSuperQuery("SELECT * FROM mysql.db")
 	if err != nil {
 		return nil, err
 	}
 	for _, row := range qr.Rows {
-		permissions.DbPermissions = append(permissions.DbPermissions, proto.NewDbPermission(qr.Fields, row))
-	}
-
-	// get Hosts
-	qr, err = mysqld.fetchSuperQuery("SELECT * FROM mysql.host")
-	if err != nil {
-		return nil, err
-	}
-	for _, row := range qr.Rows {
-		permissions.HostPermissions = append(permissions.HostPermissions, proto.NewHostPermission(qr.Fields, row))
+		permissions.DbPermissions = append(permissions.DbPermissions, tmutils.NewDbPermission(qr.Fields, row))
 	}
 
 	return permissions, nil

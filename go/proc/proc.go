@@ -29,7 +29,9 @@ const pidURL = "/debug/pid"
 // signal requesting the server to shutdown, and then attempts to
 // to create the listener.
 func Listen(port string) (l net.Listener, err error) {
-	killPredecessor(port)
+	if port != "" {
+		killPredecessor(port)
+	}
 	return listen(port)
 }
 
@@ -90,8 +92,12 @@ func killPredecessor(port string) {
 }
 
 func listen(port string) (l net.Listener, err error) {
+	laddr := ":" + port
+	if laddr == ":" {
+		laddr = ":0"
+	}
 	for i := 0; i < 100; i++ {
-		l, err = net.Listen("tcp", ":"+port)
+		l, err = net.Listen("tcp", laddr)
 		if err != nil {
 			if strings.Contains(err.Error(), "already in use") {
 				time.Sleep(1 * time.Millisecond)

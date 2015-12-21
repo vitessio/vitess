@@ -1,52 +1,194 @@
-# Reparenting
+**Reparenting** is the process of changing a shard's master tablet
+from one host to another or changing a slave tablet to have a
+different master. Reparenting can be initiated manually
+or it can occur automatically in response to particular database
+conditions. As examples, you might reparent a shard or tablet during
+a maintenance exercise or automatically trigger reparenting when
+a master tablet dies.
 
-This document describes the reparenting features of Vitess. Reparenting is used when the master for a Shard is
-changing from one host to another. It can be triggered (for maintenance for instance) or happen automatically
-(based on the current master dying for instance).
+This document explains the types of reparenting that Vitess supports:
 
-Two main types of reparenting supported by Vitess are Active Reparents (the Vitess toolchain is handing it all)
-and External Reparents (another tool is responsible for reparenting, and the Vitess toolchain just update its
-internal state.
+* *[Active reparenting](#active-reparenting)* occurs when the Vitess
+  toolchain manages the entire reparenting process.
+* *[External reparenting](#external-reparenting)* occurs when another tool
+  handles the reparenting process, and the Vitess toolchain just updates its
+  topology server, replication graph, and serving graph to accurately reflect
+  master-slave relationships.
 
-## Active Reparents
+**Note:** The <code>InitShardMaster</code> command defines the initial
+parenting relationships within a shard. That command makes the specified
+tablet the master and makes the other tablets in the shard slaves that
+replicate from that master.
 
-They are triggered by using the 'vtctl ReparentShard' command. See the help for that command. It currently doesn't use transaction GroupId.
+## MySQL requirements
 
-## External Reparents
+Vitess supports [MySQL 5.6](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html) and [MariaDB](https://mariadb.com/kb/en/mariadb/global-transaction-id/) implementations.
 
-In this part, we assume another tool has been reparenting our servers. We then trigger the
-'vtctl ShardExternallyReparented' command.
+### GTIDs
+Vitess requires the use of global transaction identifiers
+([GTIDs](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html)) for its operations:
 
-The flow for that command is as follows:
-- the shard is locked in the global topology server.
-- we read the Shard object from the global topology server.
-- we read all the tablets in the replication graph for the shard. We also check the new master is in the map. Note we allow partial reads here, so if a data center is down, as long as the data center containing the new master is up, we keep going.
-- we call the 'SlaveWasPromoted' remote action on the new master. This remote action makes sure the new master is not a MySQL slave of another server (the 'show slave status' command should not return anything, meaning 'reset slave' should ave been called).
-- for every host in the replication graph, we call the 'SlaveWasRestarted' action. It takes as paremeter the address of the new master. On each slave, it executes a 'show slave status'. If the master matches the new master, we update the topology server record for that tablet with the new master, and the replication graph for that tablet as well. If it doesn't match, we keep the old record in the replication graph (pointing at whatever master was there before). We optionally Scrap tablets that bad (disabled by default).
-- if a smaller percentage than a configurable value of the slaves works (80% be default), we stop here.
-- we then update the Shard object with the new master.
-- we rebuild the serving graph for that shard. This will update the 'master' record for sure, and also keep all the tablets that have successfully reparented.
+* During active reparenting, Vitess uses GTIDs to initialize the
+  replication process and then depends on the GTID stream to be
+  correct when reparenting. (During external reparenting, Vitess
+  assumes the external tool manages the replication process.)
+* During resharding, Vitess uses GTIDs for
+  [filtered replication](/user-guide/sharding.html#filtered-replication),
+  the process by which source tablet data is transferred to the proper
+  destination tablets.
 
-Optional Flags:
-- -accept-success-percents=80: will declare success if more than that many slaves can be reparented
-- -continue_on_unexpected_master=false: if a slave has the wrong master, we'll just log the error and keep going
-- -scrap-stragglers=false: will scrap bad hosts
+### Semisynchronous replication
 
-Failure cases:
-- The global topology server has to be available for locking and modification during this operation. If not, the operation will just fail.
-- If a single topology server is down in one data center 9and it's nto the master data center), the tablets in that data center will be ignored by the reparent. Provided it doesn't trigger the 80% threshold, this is not a big deal. When the topology server comes back up, just re-run 'vtctl InitTablet' on the tablets, and that will fix their master record.
-- If scrap-straggler is false (the default), a tablet that has the wrong master will be kept in the replication graph with its original master. When we rebuild the serving graph, that tablet won't be added, as it doesn't have the right master.
-- if more than 20% of the tablets fails, we don't update the Shard object, and don't rebuild. We assume something is seriously wrong, and it might be our process, not the servers. Figuring out the cause and re-running 'vtctl ShardExternallyReparented' should work.
-- if for some reasons none of the slaves report the right master (replication is going through a proxy for instance, and the master address is not what the clients are showing in 'show slave status'), the result is pretty bad. All slaves are kept in the replication graph, but with their old (incorrect) master. Next time a Shard rebuild happens, all the servers will disappear. At that point, fixing the issue and then re-parenting will work.
+Vitess does not depend on
+[semisynchronous replication](https://dev.mysql.com/doc/refman/5.6/en/replication-semisync.html) but does work if it is implemented.
+Larger Vitess deployments typically do implement semisynchronous replication.
+
+## Active Reparenting
+
+You can use the following <code>[vtctl](/reference/vtctl.html)</code>
+commands to perform reparenting operations:
+
+* <code>[PlannedReparentShard](#plannedreparentshard:-planned-reparenting)</code>
+* <code>[EmergencyReparentShard](#emergencyreparentshard:-emergency-reparenting)</code>
+
+Both commands lock the shard for write operations. The two commands
+cannot run in parallel, nor can either command run in parallel with the
+<code>[InitShardMaster](/reference/vtctl.html#initshardmaster)</code>
+command.
+
+The two commands are both dependent on the global topology server being
+available, and they both insert rows in the topology server's
+<code>\_vt.reparent\_journal</code> table. As such, you can review
+your database's reparenting history by inspecting that table.
+
+### PlannedReparentShard: Planned reparenting
+
+The <code>PlannedReparentShard</code> command reparents a healthy master
+tablet to a new master. The current and new master must both be up and
+running.
+
+This command performs the following actions:
+
+1. Puts the current master tablet in read-only mode.
+1. Shuts down the current master's query service, which is the part of
+   the system that handles user SQL queries. At this point, Vitess does
+   not handle any user SQL queries utnil the new master is configured
+   and can be used a few seconds later.
+1. Retrieves the current master's replication position.
+1. Instructs the master-elect tablet to wait for replication data and
+   then begin functioning as the new master after that data is fully
+   transferred.
+1. Ensures replication is functioning properly via the following steps:
+   1.  On the master-elect tablet, insert an entry in a test table
+       and then update the global <code>Shard</code> object's
+       <code>MasterAlias</code> record.
+   1.  In parallel on each slave, including the old master, set the new
+       master and wait for the test entry to replicate to the slave tablet.
+       (Slave tablets that had not been replicating before the command was
+       called are left in their current state and do not start replication
+       after the reparenting process.)
+   1.  Start replication on the old master tablet so it catches up to the
+       new master.
+
+In this scenario, the old master's tablet type transitions to
+<code>spare</code>. If health checking is enabled on the old master,
+it will likely rejoin the cluster as a replica on the next health
+check. To enable health checking, set the
+<code>target\_tablet\_type</code> parameter when starting a tablet.
+That parameter indicates what type of tablet that tablet tries to be
+when healthy. When it is not healthy, the tablet type changes to
+<code>spare</code>.
+
+### EmergencyReparentShard: Emergency reparenting
+
+The <code>EmergencyReparentShard</code> command is used to force
+a reparent to a new master when the current master is unavailable.
+The command assumes that data cannot be retrieved from the current
+master because it is dead or not working properly.
+
+As such, this command does not rely on the current master at all 
+to replicate data to the new master. Instead, it makes sure that
+the master-elect is the most advanced in replication within all
+of the available slaves.
+
+**Important:** Before calling this command, you must first identify
+the slave with the most advanced replication position as that slave
+must be designated as the new master. You can use the 
+<code>[vtctl ShardReplicationPositions](/reference/vtctl.html#shardreplicationpositions)</code>
+command to determine the current replication positions of a shard's slaves.
+
+This command performs the following actions:
+
+1. Determines the current replication position on all of the slave
+   tablets and confirms that the master-elect tablet has the most
+   advanced replication position.
+1. Promotes the master-elect tablet to be the new master. In addition to
+   changing its tablet type to <code>master</code>, the master-elect
+   performs any other changes that might be required for its new state.
+   For example, it might need to modify the way its rowcache works.
+1. Ensures replication is functioning properly via the following steps:
+   1.  On the master-elect tablet, Vitess inserts an entry in a test table
+       and then updates the <code>MasterAlias</code> record of the global
+       <code>Shard</code> object.
+   1.  In parallel on each slave, excluding the old master, Vitess sets the
+       master and waits for the test entry to replicate to the slave tablet.
+       (Slave tablets that had not been replicating before the command was
+       called are left in their current state and do not start replication
+       after the reparenting process.)
+
+## External Reparenting
+
+External reparenting occurs when another tool handles the process
+of changing a shard's master tablet. After that occurs, the tool
+needs to call the
+<code>[vtctl TabletExternallyReparented](/reference/vtctl.html#tabletexternallyreparented)</code>
+command to ensure that the topology server, replication graph, and serving
+graph are updated accordingly.
+
+That command performs the following operations:
+
+1. Locks the shard in the global topology server.
+1. Reads the <code>Shard</code> object from the global topology server.
+1. Reads all of the tablets in the replication graph for the shard.
+   Vitess does allow partial reads in this step, which means that Vitess
+   will proceed even if a data center is down as long as the data center
+   containing the new master is available.
+1. Ensures that the new master's state is updated correctly and that the
+   new master is not a MySQL slave of another server. It runs the MySQL
+   <code>show slave status</code> command, ultimately aiming to confirm
+   that the MySQL <code>reset slave</code> command already executed on
+   the tablet.
+1. Updates, for each slave, the topology server record and replication
+   graph to reflect the new master. If the old master does not return
+   successfully in this step, Vitess changes its tablet type to
+   <code>spare</code> to ensure that it does not interfere with ongoing
+   operations.
+1. Updates the <code>Shard</code> object to specify the new master.
+1. Rebuilds the shard's serving graph.
+
+The <code>TabletExternallyReparented</code> command fails in the following
+cases:
+
+* The global topology server is not available for locking and
+  modification. In that case, the operation fails completely.
+
+Active reparenting might be a dangerous practice in any system
+that depends on external reparents. You can disable active reparents
+by starting <code>vtctld</code> with the
+<code>--disable\_active\_reparents</code> flag set to <code>true</code>.
+(You cannot set the flag after <code>vtctld</code> is started.)
 
 ## Reparenting And Serving Graph
 
-When reparenting, we shuffle servers around. A server may get demoted, another promoted, and some servers may end up with the wrong master in the replication graph, or scrapped.
+During the reparenting process, Vitess shuffles servers such that servers
+might be demoted, or promoted. The **serving graph** should
+reflect the latest state of the service.
 
-It is important to understand that when we build the serving graph, we go through all the servers in the replication graph, and check their masters. If their master is the one we expect (because it is in the Shard record), we keep going and add them to the serving graph. If not, they are skipped, and a warning is displayed.
-
-When such a slave with the wrong master is present, re-running 'vtclt InitTablet' with the right parameters will fix the server. So the order of operations should be to fix mysql replication, make sure it is caught up, run 'vtctl InitTablet', and maybe restart vttablet if needed.
-
-Alternatively, if another reparent happens, and the bad slave recovers and now replicates from the new master, it will be re-added, and resume proper operation.
-
-The old master for reparenting is a specific case. If it doesn't have the right master during the reparent, it will be scrapped (because it's not in the replication graph at all, so it would get lost anyway).
+A tablet can be orphaned after a reparenting if it is unavailable
+when the reparent operation is running but then recovers later on.
+In that case, you can manually reset the tablet's master to the
+current shard master using the
+<code>[vtctl ReparentTablet](/reference/vtctl.html#reparenttablet)</code>
+command. You can then restart replication on the tablet if it was stopped
+by calling the <code>[vtctl StartSlave](/reference/vtctl.html#startslave)</code>
+command.

@@ -1,0 +1,7 @@
+innodb_doublewrite=0
+innodb_flush_log_at_trx_commit=0
+innodb_log_file_size=128M
+innodb_buffer_pool_size=1G
+max_connections=500
+open_files_limit=8192
+sync_binlog=0

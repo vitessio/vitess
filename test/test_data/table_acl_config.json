@@ -1,7 +1,0 @@
-{
-      "vtocc_acl_no_access": {},
-      "vtocc_acl_read_only": {"Reader": "youtube-dev-dedicated"},
-      "vtocc_acl_read_write": {"Writer": "youtube-dev-dedicated"},
-      "vtocc_acl_admin": {"Admin": "youtube-dev-dedicated"},
-      "vtocc_acl_all_user_read_only": {"READER":"*"}
-}

@@ -10,7 +10,6 @@ import (
 	"log/syslog"
 	"os"
 	"os/signal"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -18,15 +17,15 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 var (
-	waitTime        = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
-	lockWaitTimeout = flag.Duration("lock-wait-timeout", 0, "time to wait for a lock before starting an action")
+	waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
 )
 
 func init() {
@@ -42,17 +41,21 @@ func init() {
 }
 
 // signal handling, centralized here
-func installSignalHandlers() {
+func installSignalHandlers(cancel func()) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		<-sigChan
-		// we got a signal, notify our modules:
-		// - wrangler will interrupt anything waiting on a shard or
-		//   keyspace lock
-		wrangler.SignalInterrupt()
+		// we got a signal, cancel the current ctx
+		cancel()
 	}()
 }
+
+// hooks to register plug-ins after flag init
+
+type initFunc func()
+
+var initFuncs []initFunc
 
 func main() {
 	defer exit.RecoverAll()
@@ -65,7 +68,6 @@ func main() {
 		exit.Return(1)
 	}
 	action := args[0]
-	installSignalHandlers()
 
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
@@ -78,9 +80,16 @@ func main() {
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()
 
-	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *waitTime, *lockWaitTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, tmclient.NewTabletManagerClient())
+	installSignalHandlers(cancel)
 
-	err := vtctl.RunCommand(wr, args)
+	for _, f := range initFuncs {
+		f()
+	}
+
+	err := vtctl.RunCommand(ctx, wr, args)
+	cancel()
 	switch err {
 	case vtctl.ErrUnknownCommand:
 		flag.Usage()
@@ -91,53 +100,4 @@ func main() {
 		log.Errorf("action failed: %v %v", action, err)
 		exit.Return(255)
 	}
-}
-
-type rTablet struct {
-	*topo.TabletInfo
-	*myproto.ReplicationStatus
-}
-
-type rTablets []*rTablet
-
-func (rts rTablets) Len() int { return len(rts) }
-
-func (rts rTablets) Swap(i, j int) { rts[i], rts[j] = rts[j], rts[i] }
-
-// Sort for tablet replication.
-// master first, then i/o position, then sql position
-func (rts rTablets) Less(i, j int) bool {
-	// NOTE: Swap order of unpack to reverse sort
-	l, r := rts[j], rts[i]
-	// l or r ReplicationPosition would be nil if we failed to get
-	// the position (put them at the beginning of the list)
-	if l.ReplicationStatus == nil {
-		return r.ReplicationStatus != nil
-	}
-	if r.ReplicationStatus == nil {
-		return false
-	}
-	var lTypeMaster, rTypeMaster int
-	if l.Type == topo.TYPE_MASTER {
-		lTypeMaster = 1
-	}
-	if r.Type == topo.TYPE_MASTER {
-		rTypeMaster = 1
-	}
-	if lTypeMaster < rTypeMaster {
-		return true
-	}
-	if lTypeMaster == rTypeMaster {
-		return !l.Position.AtLeast(r.Position)
-	}
-	return false
-}
-
-func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*myproto.ReplicationStatus) []*rTablet {
-	rtablets := make([]*rTablet, len(tablets))
-	for i, status := range stats {
-		rtablets[i] = &rTablet{tablets[i], status}
-	}
-	sort.Sort(rTablets(rtablets))
-	return rtablets
 }

@@ -1,0 +1,127 @@
+// This file contains useful data structures for RPCs in Vitess.
+
+syntax = "proto3";
+
+option java_package="com.youtube.vitess.proto";
+
+package vtrpc;
+
+// CallerID is passed along RPCs to identify the originating client
+// for a request. It is not meant to be secure, but only
+// informational.  The client can put whatever info they want in these
+// fields, and they will be trusted by the servers. The fields will
+// just be used for logging purposes, and to easily find a client.
+// VtGate propagates it to VtTablet, and VtTablet may use this
+// information for monitoring purposes, to display on dashboards, or
+// for blacklisting purposes.
+message CallerID {
+  // principal is the effective user identifier. It is usually filled in
+  // with whoever made the request to the appserver, if the request
+  // came from an automated job or another system component.
+  // If the request comes directly from the Internet, or if the Vitess client
+  // takes action on its own accord, it is okay for this field to be absent.
+  string principal = 1;
+
+  // component describes the running process of the effective caller.
+  // It can for instance be the hostname:port of the servlet initiating the
+  // database call, or the container engine ID used by the servlet.
+  string component = 2;
+
+  // subcomponent describes a component inisde the immediate caller which
+  // is responsible for generating is request. Suggested values are a
+  // servlet name or an API endpoint name.
+  string subcomponent = 3;
+}
+
+// ErrorCode is the enum values for Errors. Internally, errors should
+// be created with one of these codes. These will then be translated over the wire
+// by various RPC frameworks.
+enum ErrorCode {
+  // SUCCESS is returned from a successful call
+  SUCCESS = 0;
+
+  // CANCELLED means that the context was cancelled (and noticed in the app layer,
+  // as opposed to the RPC layer)
+  CANCELLED = 1;
+
+  // UNKNOWN_ERROR includes:
+  // 1. MySQL error codes that we don't explicitly handle.
+  // 2. MySQL response that wasn't as expected. For example, we might expect a MySQL
+  //  timestamp to be returned in a particular way, but it wasn't.
+  // 3. Anything else that doesn't fall into a different bucket.
+  UNKNOWN_ERROR = 2;
+
+  // BAD_INPUT is returned when an end-user either sends SQL that couldn't be parsed correctly,
+  // or tries a query that isn't supported by Vitess.
+  BAD_INPUT = 3;
+
+  // DEADLINE_EXCEEDED is returned when an action is taking longer than a given timeout.
+  DEADLINE_EXCEEDED = 4;
+
+  // INTEGRITY_ERROR is returned on integrity error from MySQL, usually due to
+  // duplicate primary keys
+  INTEGRITY_ERROR = 5;
+
+  // PERMISSION_DENIED errors are returned when a user requests access to something
+  // that they don't have permissions for.
+  PERMISSION_DENIED = 6;
+
+  // RESOURCE_EXHAUSTED is returned when a query exceeds its quota in some dimension
+  // and can't be completed due to that. Queries that return RESOURCE_EXHAUSTED
+  // should not be retried, as it could be detrimental to the server's health.
+  // Examples of errors that will cause the RESOURCE_EXHAUSTED code:
+  // 1. TxPoolFull: this is retried server-side, and is only returned as an error
+  //  if the server-side retries failed.
+  // 2. Query is killed due to it taking too long.
+  RESOURCE_EXHAUSTED = 7;
+
+  // QUERY_NOT_SERVED means that a query could not be served right now.
+  // Client can interpret it as: "the tablet that you sent this query to cannot
+  // serve the query right now, try a different tablet or try again later."
+  // This could be due to various reasons: QueryService is not serving, should
+  // not be serving, wrong shard, wrong tablet type, blacklisted table, etc.
+  // Clients that receive this error should usually retry the query, but after taking
+  // the appropriate steps to make sure that the query will get sent to the correct
+  // tablet.
+  QUERY_NOT_SERVED = 8;
+
+  // NOT_IN_TX means that we're not currently in a transaction, but we should be.
+  NOT_IN_TX = 9;
+
+  // INTERNAL_ERRORs are problems that only the server can fix, not the client.
+  // These errors are not due to a query itself, but rather due to the state of
+  // the system.
+  // Generally, we don't expect the errors to go away by themselves, but they
+  // may go away after human intervention.
+  // Examples of scenarios where INTERNAL_ERROR is returned:
+  //  1. Something is not configured correctly internally.
+  //  2. A necessary resource is not available, and we don't expect it to become available by itself.
+  //  3. A sanity check fails
+  //  4. Some other internal error occurs
+  // Clients should not retry immediately, as there is little chance of success.
+  // However, it's acceptable for retries to happen internally, for example to
+  // multiple backends, in case only a subset of backend are not functional.
+  INTERNAL_ERROR = 10;
+
+  // TRANSIENT_ERROR is used for when there is some error that we expect we can
+  // recover from automatically - often due to a resource limit temporarily being
+  // reached. Retrying this error, with an exponential backoff, should succeed.
+  // Clients should be able to successfully retry the query on the same backends.
+  // Examples of things that can trigger this error:
+  // 1. Query has been throttled
+  // 2. VtGate could have request backlog
+  TRANSIENT_ERROR = 11;
+
+  // UNAUTHENTICATED errors are returned when a user requests access to something,
+  // and we're unable to verify the user's authentication.
+  UNAUTHENTICATED = 12;
+}
+
+// RPCError is an application-level error structure returned by
+// VtTablet (and passed along by VtGate if appropriate).
+// We use this so the clients don't have to parse the error messages,
+// but instead can depend on the value of the code.
+message RPCError {
+  ErrorCode code = 1;
+  string message = 2;
+}

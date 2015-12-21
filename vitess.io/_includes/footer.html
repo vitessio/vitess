@@ -1,0 +1,15 @@
+<footer role="contentinfo" id="site-footer">
+  <nav role="navigation" class="menu bottom-menu">
+    <ul class="menu-item">
+      {% for link in site.data.footer %}
+      {% if link.url contains 'http' %}
+        {% assign domain = '' %}
+        {% else %}
+        {% assign domain = site.url %}
+      {% endif %}
+      <li><a href="{{ domain }}{{ link.url }}" {% if link.url contains 'http' %}target="_blank"{% endif %}>{{ link.title }}</a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+  <p class="copyright">&#169; {{ site.time | date: '%Y' }} <a href="{{ site.url }}">{{ site.title }}</a> powered by <a href="http://www.google.com">Google Inc</a>.</p>
+</footer>

@@ -1,19 +1,13 @@
 {
   "/zk/testing/vt/ns/test_keyspace": {
-    "Shards": [
+    "ShardReferences": [
       {
         "KeyRange": {
           "Start": "",
           "End": ""
         },
-        "AddrsByType": null,
-        "ReadOnly": false
+        "Name": "0"
       }
-    ],
-    "TabletTypes": [
-      "rdonly",
-      "replica",
-      "master"
     ]
   },
   "/zk/testing": {
@@ -28,8 +22,8 @@
         "Uid": 0,
         "Host": "127.0.0.1",
         "NamedPortMap": {
-          "_mysql": 3307,
-          "_vtocc": 6711
+          "mysql": 3307,
+          "vt": 6711
         }
       }
     ]

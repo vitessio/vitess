@@ -2,46 +2,40 @@ package health
 
 import (
 	"errors"
-	"reflect"
 	"testing"
-
-	"github.com/youtube/vitess/go/vt/topo"
+	"time"
 )
 
 func TestReporters(t *testing.T) {
 
 	ag := NewAggregator()
 
-	ag.Register("a", FunctionReporter(func(typ topo.TabletType) (map[string]string, error) {
-		return map[string]string{"a": "value", "b": "value"}, nil
+	ag.Register("a", FunctionReporter(func(bool, bool) (time.Duration, error) {
+		return 10 * time.Second, nil
 	}))
 
-	ag.Register("b", FunctionReporter(func(typ topo.TabletType) (map[string]string, error) {
-		return map[string]string{"c": "value"}, nil
+	ag.Register("b", FunctionReporter(func(bool, bool) (time.Duration, error) {
+		return 5 * time.Second, nil
 	}))
 
-	status, err := ag.Run(topo.TYPE_REPLICA)
+	delay, err := ag.Report(true, true)
 
 	if err != nil {
 		t.Error(err)
 	}
-	if want := map[string]string(map[string]string{"a": "value", "b": "value", "c": "value"}); !reflect.DeepEqual(status, want) {
-		t.Errorf("status=%#v, want %#v", status, want)
+	if delay != 10*time.Second {
+		t.Errorf("delay=%v, want 10s", delay)
 	}
 
-	ag.Register("c", FunctionReporter(func(typ topo.TabletType) (map[string]string, error) {
-		return nil, errors.New("e error")
+	ag.Register("c", FunctionReporter(func(bool, bool) (time.Duration, error) {
+		return 0, errors.New("e error")
 	}))
-	if _, err := ag.Run(topo.TYPE_REPLICA); err == nil {
+	if _, err := ag.Report(true, false); err == nil {
 		t.Errorf("ag.Run: expected error")
 	}
 
-	// Handle duplicate keys.
-	ag.Register("d", FunctionReporter(func(typ topo.TabletType) (map[string]string, error) {
-		return map[string]string{"a": "value"}, nil
-	}))
-
-	if _, err := ag.Run(topo.TYPE_REPLICA); err == nil {
-		t.Errorf("ag.Run: expected error for duplicate keys")
+	name := ag.HTMLName()
+	if string(name) != "FunctionReporter&nbsp; + &nbsp;FunctionReporter&nbsp; + &nbsp;FunctionReporter" {
+		t.Errorf("ag.HTMLName() returned: %v", name)
 	}
 }

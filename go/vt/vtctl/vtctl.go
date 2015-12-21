@@ -2,9 +2,80 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// The following comment section contains definitions for command arguments.
+/*
+COMMAND ARGUMENT DEFINITIONS
+
+- cell, cell name: A cell is a location for a service. Generally, a cell
+        resides in only one cluster. In Vitess, the terms "cell" and
+        "data center" are interchangeable. The argument value is a
+        string that does not contain whitespace.
+
+- tablet alias: A Tablet Alias uniquely identifies a vttablet. The argument
+                value is in the format
+                <code>&lt;cell name&gt;-&lt;uid&gt;</code>.
+
+- keyspace, keyspace name: The name of a sharded database that contains one
+            or more tables. Vitess distributes keyspace shards into multiple
+            machines and provides an SQL interface to query the data. The
+            argument value must be a string that does not contain whitespace.
+
+- port name: A port number. The argument value should be an integer between
+             <code>0</code> and <code>65535</code>, inclusive.
+
+- shard, shard name: The name of a shard. The argument value is typically in
+         the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
+
+- keyspace/shard: The name of a sharded database that contains one or more
+                  tables as well as the shard associated with the command.
+                  The keyspace must be identified by a string that does not
+                  contain whitepace, while the shard is typically identified
+                  by a string in the format
+                  <code>&lt;range start&gt;-&lt;range end&gt;</code>.
+
+- duration: The amount of time that the action queue should be blocked.
+            The value is a string that contains a possibly signed sequence
+            of decimal numbers, each with optional fraction and a unit
+            suffix, such as "300ms" or "1h45m". See the definition of the
+            Go language's <a
+            href="http://golang.org/pkg/time/#ParseDuration">ParseDuration</a>
+            function for more details. Note that, in practice, the value
+            should be a positively signed value.
+
+- db type, tablet type: The vttablet's role. Valid values are:
+  -- backup: A slaved copy of data that is offline to queries other than
+             for backup purposes
+  -- batch: A slaved copy of data for OLAP load patterns (typically for
+            MapReduce jobs)
+  -- worker: A tablet that is in use by a vtworker process. The tablet is likely
+             lagging in replication.
+  -- experimental: A slaved copy of data that is ready but not serving query
+                   traffic. The value indicates a special characteristic of
+                   the tablet that indicates the tablet should not be
+                   considered a potential master. Vitess also does not
+                   worry about lag for experimental tablets when reparenting.
+  -- master: A primary copy of data
+  -- rdonly: A slaved copy of data for OLAP load patterns
+  -- replica: A slaved copy of data ready to be promoted to master
+  -- restore: A tablet that is restoring from a snapshot. Typically, this
+              happens at tablet startup, then it goes to its right state..
+  -- schema_apply: A slaved copy of data that had been serving query traffic
+                   but that is not applying a schema change. Following the
+                   change, the tablet will revert to its serving type.
+  -- snapshot_source: A slaved copy of data where mysqld is <b>not</b>
+                      running and where Vitess is serving data files to
+                      clone slaves. Use this command to enter this mode:
+                      <pre>vtctl Snapshot -server-mode ...</pre>
+                      Use this command to exit this mode:
+                      <pre>vtctl SnapshotSourceEnd ...</pre>
+  -- spare: A slaved copy of data that is ready but not serving query traffic.
+            The data could be a potential master tablet.
+*/
+
 package vtctl
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -15,29 +86,33 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/client2"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
-	// Error returned for an unknown command
+	// ErrUnknownCommand is returned for an unknown command
 	ErrUnknownCommand = errors.New("unknown command")
 )
 
 type command struct {
 	name   string
-	method func(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error
+	method func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error
 	params string
 	help   string // if help is empty, won't list the command
 }
@@ -48,251 +123,254 @@ type commandGroup struct {
 }
 
 var commands = []commandGroup{
-	commandGroup{
+	{
 		"Tablets", []command{
-			command{"InitTablet", commandInitTablet,
-				"[-force] [-parent] [-update] [-db-name-override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-vts_port=<port>] [-keyspace=<keyspace>] [-shard=<shard>] [-parent_alias=<parent alias>] <tablet alias> <tablet type>]",
+			{"InitTablet", commandInitTablet,
+				"[-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
 				"Initializes a tablet in the topology.\n" +
-					"Valid <tablet type>:\n" +
-					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
-			command{"GetTablet", commandGetTablet,
-				"<tablet alias|zk tablet path>",
-				"Outputs the json version of Tablet to stdout."},
-			command{"UpdateTabletAddrs", commandUpdateTabletAddrs,
-				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-vts-port <vts port>] <tablet alias|zk tablet path> ",
-				"Updates the addresses of a tablet."},
-			command{"ScrapTablet", commandScrapTablet,
-				"[-force] [-skip-rebuild] <tablet alias|zk tablet path>",
-				"Scraps a tablet."},
-			command{"DeleteTablet", commandDeleteTablet,
-				"<tablet alias|zk tablet path> ...",
-				"Deletes scrapped tablet(s) from the topology."},
-			command{"SetReadOnly", commandSetReadOnly,
-				"[<tablet alias|zk tablet path>]",
-				"Sets the tablet as ReadOnly."},
-			command{"SetReadWrite", commandSetReadWrite,
-				"[<tablet alias|zk tablet path>]",
-				"Sets the tablet as ReadWrite."},
-			command{"ChangeSlaveType", commandChangeSlaveType,
-				"[-force] [-dry-run] <tablet alias|zk tablet path> <tablet type>",
-				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
-					"NOTE: This will automatically update the serving graph.\n" +
-					"Valid <tablet type>:\n" +
-					"  " + strings.Join(topo.MakeStringTypeList(topo.SlaveTabletTypes), " ")},
-			command{"Ping", commandPing,
-				"<tablet alias|zk tablet path>",
-				"Check that the agent is awake and responding to RPCs. Can be blocked by other in-flight operations."},
-			command{"RefreshState", commandRefreshState,
-				"<tablet alias|zk tablet path>",
-				"Asks a remote tablet to reload its tablet record."},
-			command{"RunHealthCheck", commandRunHealthCheck,
+					"Valid <tablet type> values are:\n" +
+					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.AllTabletTypes), " ")},
+			{"GetTablet", commandGetTablet,
+				"<tablet alias>",
+				"Outputs a JSON structure that contains information about the Tablet."},
+			{"UpdateTabletAddrs", commandUpdateTabletAddrs,
+				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-grpc-port <grpc port>] <tablet alias> ",
+				"Updates the IP address and port numbers of a tablet."},
+			{"DeleteTablet", commandDeleteTablet,
+				"[-allow_master] [-skip_rebuild] <tablet alias> ...",
+				"Deletes tablet(s) from the topology."},
+			{"SetReadOnly", commandSetReadOnly,
+				"<tablet alias>",
+				"Sets the tablet as read-only."},
+			{"SetReadWrite", commandSetReadWrite,
+				"<tablet alias>",
+				"Sets the tablet as read-write."},
+			{"StartSlave", commandStartSlave,
+				"<tablet alias>",
+				"Starts replication on the specified slave."},
+			{"StopSlave", commandStopSlave,
+				"<tablet alias>",
+				"Stops replication on the specified slave."},
+			{"ChangeSlaveType", commandChangeSlaveType,
+				"[-dry-run] <tablet alias> <tablet type>",
+				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
+					"NOTE: This command automatically updates the serving graph.\n" +
+					"Valid <tablet type> values are:\n" +
+					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.SlaveTabletTypes), " ")},
+			{"Ping", commandPing,
+				"<tablet alias>",
+				"Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations."},
+			{"RefreshState", commandRefreshState,
+				"<tablet alias>",
+				"Reloads the tablet record on the specified tablet."},
+			{"RunHealthCheck", commandRunHealthCheck,
 				"<tablet alias> <target tablet type>",
-				"Asks a remote tablet to run a health check with the providd target type."},
-			command{"Query", commandQuery,
-				"<cell> <keyspace> <query>",
-				"Send a SQL query to a tablet."},
-			command{"Sleep", commandSleep,
-				"<tablet alias|zk tablet path> <duration>",
-				"Block the action queue for the specified duration (mostly for testing)."},
-			command{"Snapshot", commandSnapshot,
-				"[-force] [-server-mode] [-concurrency=4] <tablet alias|zk tablet path>",
-				"Stop mysqld and copy compressed data aside."},
-			command{"SnapshotSourceEnd", commandSnapshotSourceEnd,
-				"[-slave-start] [-read-write] <tablet alias|zk tablet path> <original tablet type>",
-				"Restart Mysql and restore original server type." +
-					"Valid <tablet type>:\n" +
-					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
-			command{"Restore", commandRestore,
-				"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <src tablet alias|zk src tablet path> <src manifest file> <dst tablet alias|zk dst tablet path> [<zk new master path>]",
-				"Copy the given snaphot from the source tablet and restart replication to the new master path (or uses the <src tablet path> if not specified). If <src manifest file> is 'default', uses the default value.\n" +
-					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
-			command{"Clone", commandClone,
-				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> ...",
-				"This performs Snapshot and then Restore on all the targets in parallel. The advantage of having separate actions is that one snapshot can be used for many restores, and it's then easier to spread them over time."},
-			command{"MultiSnapshot", commandMultiSnapshot,
-				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' [-tables=''] [-exclude_tables=''] <tablet alias|zk tablet path>",
-				"Locks mysqld and copy compressed data aside."},
-			command{"MultiRestore", commandMultiRestore,
-				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <dst tablet alias|destination zk path> <source zk path>...",
-				"Restores a snapshot from multiple hosts."},
-			command{"ExecuteHook", commandExecuteHook,
-				"<tablet alias|zk tablet path> <hook name> [<param1=value1> <param2=value2> ...]",
-				"This runs the specified hook on the given tablet."},
-			command{"ExecuteFetch", commandExecuteFetch,
-				"[--max_rows=10000] [--want_fields] [--disable_binlogs] <tablet alias|zk tablet path> <sql command>",
-				"Runs the given sql command as a DBA on the remote tablet"},
+				"Runs a health check on a remote tablet with the specified target type."},
+			{"Sleep", commandSleep,
+				"<tablet alias> <duration>",
+				"Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing."},
+			{"Backup", commandBackup,
+				"[-concurrency=4] <tablet alias>",
+				"Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes."},
+			{"ExecuteHook", commandExecuteHook,
+				"<tablet alias> <hook name> [<param1=value1> <param2=value2> ...]",
+				"Runs the specified hook on the given tablet. A hook is a script that resides in the $VTROOT/vthook directory. You can put any script into that directory and use this command to run that script.\n" +
+					"For this command, the param=value arguments are parameters that the command passes to the specified hook."},
+			{"ExecuteFetchAsDba", commandExecuteFetchAsDba,
+				"[--max_rows=10000] [--disable_binlogs] <tablet alias> <sql command>",
+				"Runs the given SQL command as a DBA on the remote tablet."},
 		},
 	},
-	commandGroup{
+	{
 		"Shards", []command{
-			command{"CreateShard", commandCreateShard,
-				"[-force] [-parent] <keyspace/shard|zk shard path>",
-				"Creates the given shard"},
-			command{"GetShard", commandGetShard,
-				"<keyspace/shard|zk shard path>",
-				"Outputs the json version of Shard to stdout."},
-			command{"RebuildShardGraph", commandRebuildShardGraph,
-				"[-cells=a,b] <zk shard path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
-				"Rebuild the replication graph and shard serving data in zk. This may trigger an update to all connected clients."},
-			command{"ShardExternallyReparented", commandShardExternallyReparented,
-				"[-use_rpc] <keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
-				"Changes metadata to acknowledge a shard master change performed by an external tool."},
-			command{"ValidateShard", commandValidateShard,
-				"[-ping-tablets] <keyspace/shard|zk shard path>",
-				"Validate all nodes reachable from this shard are consistent."},
-			command{"ShardReplicationPositions", commandShardReplicationPositions,
-				"<keyspace/shard|zk shard path>",
-				"Show slave status on all machines in the shard graph."},
-			command{"ListShardTablets", commandListShardTablets,
-				"<keyspace/shard|zk shard path>)",
-				"List all tablets in a given shard."},
-			command{"SetShardServedTypes", commandSetShardServedTypes,
-				"<keyspace/shard|zk shard path> [<served type1>,<served type2>,...]",
-				"Sets a given shard's served types. Does not rebuild any serving graph."},
-			command{"SetShardTabletControl", commandSetShardTabletControl,
-				"[--cells=c1,c2,...] [--blacklisted_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard|zk shard path> <tabletType>",
-				"Sets the TabletControl record for a shard and type. Only use this for an emergency fix, or after a finished vertical split. MigrateServedFrom and MigrateServedType will set this field appropriately already. Always specify blacklisted_tables for vertical splits, never for horizontal splits."},
-			command{"SourceShardDelete", commandSourceShardDelete,
+			{"CreateShard", commandCreateShard,
+				"[-force] [-parent] <keyspace/shard>",
+				"Creates the specified shard."},
+			{"GetShard", commandGetShard,
+				"<keyspace/shard>",
+				"Outputs a JSON structure that contains information about the Shard."},
+			{"RebuildShardGraph", commandRebuildShardGraph,
+				"[-cells=a,b] <keyspace/shard> ... ",
+				"Rebuilds the replication graph and shard serving data in ZooKeeper or etcd. This may trigger an update to all connected clients."},
+			{"TabletExternallyReparented", commandTabletExternallyReparented,
+				"<tablet alias>",
+				"Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the Reparenting guide for more information:" +
+					"https://github.com/youtube/vitess/blob/master/doc/Reparenting.md#external-reparents."},
+			{"ValidateShard", commandValidateShard,
+				"[-ping-tablets] <keyspace/shard>",
+				"Validates that all nodes that are reachable from this shard are consistent."},
+			{"ShardReplicationPositions", commandShardReplicationPositions,
+				"<keyspace/shard>",
+				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets."},
+			{"ListShardTablets", commandListShardTablets,
+				"<keyspace/shard>",
+				"Lists all tablets in the specified shard."},
+			{"SetShardServedTypes", commandSetShardServedTypes,
+				"<keyspace/shard> [<served tablet type1>,<served tablet type2>,...]",
+				"Sets a given shard's served tablet types. Does not rebuild any serving graph."},
+			{"SetShardTabletControl", commandSetShardTabletControl,
+				"[--cells=c1,c2,...] [--blacklisted_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard> <tablet type>",
+				"Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The *MigrateServedFrom* and *MigrateServedType* commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits."},
+			{"SourceShardDelete", commandSourceShardDelete,
 				"<keyspace/shard> <uid>",
-				"Deletes the SourceShard record with the provided index. This is meant as an emergency cleanup function. Does not RefreshState the shard master."},
-			command{"SourceShardAdd", commandSourceShardAdd,
+				"Deletes the SourceShard record with the provided index. This is meant as an emergency cleanup function. It does not call RefreshState for the shard master."},
+			{"SourceShardAdd", commandSourceShardAdd,
 				"[--key_range=<keyrange>] [--tables=<table1,table2,...>] <keyspace/shard> <uid> <source keyspace/shard>",
-				"Adds the SourceShard record with the provided index. This is meant as an emergency function. Does not RefreshState the shard master."},
-			command{"ShardMultiRestore", commandShardMultiRestore,
-				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] [-tables=<table1>,<table2>,...] <keyspace/shard|zk shard path> <source zk path>...",
-				"Restore multi-snapshots on all the tablets of a shard."},
-			command{"ShardReplicationAdd", commandShardReplicationAdd,
-				"<keyspace/shard|zk shard path> <tablet alias|zk tablet path> <parent tablet alias|zk parent tablet path>",
-				"HIDDEN Adds an entry to the replication graph in the given cell"},
-			command{"ShardReplicationRemove", commandShardReplicationRemove,
-				"<keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
-				"HIDDEN Removes an entry to the replication graph in the given cell"},
-			command{"ShardReplicationFix", commandShardReplicationFix,
-				"<cell> <keyspace/shard|zk shard path>",
-				"Walks through a ShardReplication object and fixes the first error it encrounters"},
-			command{"RemoveShardCell", commandRemoveShardCell,
-				"[-force] <keyspace/shard|zk shard path> <cell>",
-				"Removes the cell in the shard's Cells list."},
-			command{"DeleteShard", commandDeleteShard,
-				"<keyspace/shard|zk shard path> ...",
-				"Deletes the given shard(s)"},
+				"Adds the SourceShard record with the provided index. This is meant as an emergency function. It does not call RefreshState for the shard master."},
+			{"ShardReplicationAdd", commandShardReplicationAdd,
+				"<keyspace/shard> <tablet alias> <parent tablet alias>",
+				"HIDDEN Adds an entry to the replication graph in the given cell."},
+			{"ShardReplicationRemove", commandShardReplicationRemove,
+				"<keyspace/shard> <tablet alias>",
+				"HIDDEN Removes an entry from the replication graph in the given cell."},
+			{"ShardReplicationFix", commandShardReplicationFix,
+				"<cell> <keyspace/shard>",
+				"Walks through a ShardReplication object and fixes the first error that it encounters."},
+			{"WaitForFilteredReplication", commandWaitForFilteredReplication,
+				"[-max_delay <max_delay, default 30s>] <keyspace/shard>",
+				"Blocks until the specified shard has caught up with the filtered replication of its source shard."},
+			{"RemoveShardCell", commandRemoveShardCell,
+				"[-force] [-recursive] <keyspace/shard> <cell>",
+				"Removes the cell from the shard's Cells list."},
+			{"DeleteShard", commandDeleteShard,
+				"[-recursive] <keyspace/shard> ...",
+				"Deletes the specified shard(s). In recursive mode, it also deletes all tablets belonging to the shard. Otherwise, there must be no tablets left in the shard."},
 		},
 	},
-	commandGroup{
+	{
 		"Keyspaces", []command{
-			command{"CreateKeyspace", commandCreateKeyspace,
-				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-split_shard_count=N] [-force] <keyspace name|zk keyspace path>",
-				"Creates the given keyspace"},
-			command{"GetKeyspace", commandGetKeyspace,
-				"<keyspace|zk keyspace path>",
-				"Outputs the json version of Keyspace to stdout."},
-			command{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
-				"[-force] [-split_shard_count=N] <keyspace name|zk keyspace path> [<column name>] [<column type>]",
-				"Updates the sharding info for a keyspace"},
-			command{"SetKeyspaceServedFrom", commandSetKeyspaceServedFrom,
+			{"CreateKeyspace", commandCreateKeyspace,
+				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-split_shard_count=N] [-force] <keyspace name>",
+				"Creates the specified keyspace."},
+			{"DeleteKeyspace", commandDeleteKeyspace,
+				"[-recursive] <keyspace>",
+				"Deletes the specified keyspace. In recursive mode, it also recursively deletes all shards in the keyspace. Otherwise, there must be no shards left in the keyspace."},
+			{"RemoveKeyspaceCell", commandRemoveKeyspaceCell,
+				"[-force] [-recursive] <keyspace> <cell>",
+				"Removes the cell from the Cells list for all shards in the keyspace."},
+			{"GetKeyspace", commandGetKeyspace,
+				"<keyspace>",
+				"Outputs a JSON structure that contains information about the Keyspace."},
+			{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
+				"[-force] [-split_shard_count=N] <keyspace name> [<column name>] [<column type>]",
+				"Updates the sharding information for a keyspace."},
+			{"SetKeyspaceServedFrom", commandSetKeyspaceServedFrom,
 				"[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
-				"Manually change the ServedFromMap. Only use this for an emergency fix. MigrateServedFrom will set this field appropriately already. Does not rebuild the serving graph."},
-			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
-				"[-cells=a,b] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
-				"Rebuild the serving data for all shards in this keyspace. This may trigger an update to all connected clients."},
-			command{"ValidateKeyspace", commandValidateKeyspace,
-				"[-ping-tablets] <keyspace name|zk keyspace path>",
-				"Validate all nodes reachable from this keyspace are consistent."},
-			command{"MigrateServedTypes", commandMigrateServedTypes,
-				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] <keyspace/shard|zk shard path> <served type>",
-				"Migrates a serving type from the source shard to the shards it replicates to. Will also rebuild the serving graph. keyspace/shard can be any of the involved shards in the migration."},
-			command{"MigrateServedFrom", commandMigrateServedFrom,
-				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard|zk destination shard path> <served type>",
-				"Makes the destination keyspace/shard serve the given type. Will also rebuild the serving graph."},
+				"Changes the ServedFromMap manually. This command is intended for emergency fixes. This field is automatically set when you call the *MigrateServedFrom* command. This command does not rebuild the serving graph."},
+			{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
+				"[-cells=a,b] [-rebuild_srv_shards] <keyspace> ...",
+				"Rebuilds the serving data for the keyspace and, optionally, all shards in the specified keyspace. This command may trigger an update to all connected clients."},
+			{"ValidateKeyspace", commandValidateKeyspace,
+				"[-ping-tablets] <keyspace name>",
+				"Validates that all nodes reachable from the specified keyspace are consistent."},
+			{"MigrateServedTypes", commandMigrateServedTypes,
+				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] <keyspace/shard> <served tablet type>",
+				"Migrates a serving type from the source shard to the shards that it replicates to. This command also rebuilds the serving graph. The <keyspace/shard> argument can specify any of the shards involved in the migration."},
+			{"MigrateServedFrom", commandMigrateServedFrom,
+				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served tablet type>",
+				"Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph."},
+			{"FindAllShardsInKeyspace", commandFindAllShardsInKeyspace,
+				"<keyspace>",
+				"Displays all of the shards in the specified keyspace."},
 		},
 	},
-	commandGroup{
+	{
 		"Generic", []command{
-			command{"Resolve", commandResolve,
-				"<keyspace>.<shard>.<db type>:<port name>",
-				"Read a list of addresses that can answer this query. The port name is usually _mysql or _vtocc."},
-			command{"Validate", commandValidate,
-				"[-ping-tablets]",
-				"Validate all nodes reachable from global replication graph and all tablets in all discoverable cells are consistent."},
-			command{"RebuildReplicationGraph", commandRebuildReplicationGraph,
-				"<cell1|zk local vt path1>,<cell2|zk local vt path2>... <keyspace1>,<keyspace2>,...",
+			{"RebuildReplicationGraph", commandRebuildReplicationGraph,
+				"<cell1>,<cell2>... <keyspace1>,<keyspace2>,...",
 				"HIDDEN This takes the Thor's hammer approach of recovery and should only be used in emergencies.  cell1,cell2,... are the canonical source of data for the system. This function uses that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
-			command{"ListAllTablets", commandListAllTablets,
-				"<cell name|zk local vt path>",
-				"List all tablets in an awk-friendly way."},
-			command{"ListTablets", commandListTablets,
-				"<tablet alias|zk tablet path> ...",
-				"List specified tablets in an awk-friendly way."},
+			{"Validate", commandValidate,
+				"[-ping-tablets]",
+				"Validates that all nodes reachable from the global replication graph and that all tablets in all discoverable cells are consistent."},
+			{"ListAllTablets", commandListAllTablets,
+				"<cell name>",
+				"Lists all tablets in an awk-friendly way."},
+			{"ListTablets", commandListTablets,
+				"<tablet alias> ...",
+				"Lists specified tablets in an awk-friendly way."},
+			{"Panic", commandPanic,
+				"",
+				"HIDDEN Triggers a panic on the server side, to test the handling."},
 		},
 	},
-	commandGroup{
+	{
 		"Schema, Version, Permissions", []command{
-			command{"GetSchema", commandGetSchema,
-				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] <tablet alias|zk tablet path>",
-				"Display the full schema for a tablet, or just the schema for the provided tables."},
-			command{"ReloadSchema", commandReloadSchema,
-				"<tablet alias|zk tablet path>",
-				"Asks a remote tablet to reload its schema."},
-			command{"ValidateSchemaShard", commandValidateSchemaShard,
-				"[-exclude_tables=''] [-include-views] <keyspace/shard|zk shard path>",
-				"Validate the master schema matches all the slaves."},
-			command{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
-				"[-exclude_tables=''] [-include-views] <keyspace name|zk keyspace path>",
-				"Validate the master schema from shard 0 matches all the other tablets in the keyspace."},
-			command{"PreflightSchema", commandPreflightSchema,
-				"{-sql=<sql> || -sql-file=<filename>} <tablet alias|zk tablet path>",
-				"Apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file."},
-			command{"ApplySchema", commandApplySchema,
-				"[-force] {-sql=<sql> || -sql-file=<filename>} [-skip-preflight] [-stop-replication] <tablet alias|zk tablet path>",
-				"Apply the schema change to the specified tablet (allowing replication by default). The sql can be inlined or read from a file. Note this doesn't change any tablet state (doesn't go into 'schema' type)."},
-			command{"ApplySchemaShard", commandApplySchemaShard,
-				"[-force] {-sql=<sql> || -sql-file=<filename>} [-simple] [-new-parent=<zk tablet path>] <keyspace/shard|zk shard path>",
-				"Apply the schema change to the specified shard. If simple is specified, we just apply on the live master. Otherwise we will need to do the shell game. So we will apply the schema change to every single slave. if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care."},
-			command{"ApplySchemaKeyspace", commandApplySchemaKeyspace,
-				"[-force] {-sql=<sql> || -sql-file=<filename>} [-simple] <keyspace|zk keyspace path>",
-				"Apply the schema change to the specified keyspace. If simple is specified, we just apply on the live masters. Otherwise we will need to do the shell game on each shard. So we will apply the schema change to every single slave (running in parallel on all shards, but on one host at a time in a given shard). We will not reparent at the end, so the masters won't be touched at all. Using the force flag will cause a bunch of checks to be ignored, use with care."},
+			{"GetSchema", commandGetSchema,
+				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] <tablet alias>",
+				"Displays the full schema for a tablet, or just the schema for the specified tables in that tablet."},
+			{"ReloadSchema", commandReloadSchema,
+				"<tablet alias>",
+				"Reloads the schema on a remote tablet."},
+			{"ValidateSchemaShard", commandValidateSchemaShard,
+				"[-exclude_tables=''] [-include-views] <keyspace/shard>",
+				"Validates that the master schema matches all of the slaves."},
+			{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
+				"[-exclude_tables=''] [-include-views] <keyspace name>",
+				"Validates that the master schema from shard 0 matches the schema on all of the other tablets in the keyspace."},
+			{"ApplySchema", commandApplySchema,
+				"[-force] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
+				"Applies the schema change to the specified keyspace on every master, running in parallel on all shards. The changes are then propagated to slaves via replication. If the force flag is set, then numerous checks will be ignored, so that option should be used very cautiously."},
+			{"CopySchemaShard", commandCopySchemaShard,
+				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
+				"Copies the schema from a source shard's master (or a specific tablet) to a destination shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs."},
 
-			command{"ValidateVersionShard", commandValidateVersionShard,
-				"<keyspace/shard|zk shard path>",
-				"Validate the master version matches all the slaves."},
-			command{"ValidateVersionKeyspace", commandValidateVersionKeyspace,
-				"<keyspace name|zk keyspace path>",
-				"Validate the master version from shard 0 matches all the other tablets in the keyspace."},
+			{"ValidateVersionShard", commandValidateVersionShard,
+				"<keyspace/shard>",
+				"Validates that the master version matches all of the slaves."},
+			{"ValidateVersionKeyspace", commandValidateVersionKeyspace,
+				"<keyspace name>",
+				"Validates that the master version from shard 0 matches all of the other tablets in the keyspace."},
 
-			command{"GetPermissions", commandGetPermissions,
-				"<tablet alias|zk tablet path>",
-				"Display the permissions for a tablet."},
-			command{"ValidatePermissionsShard", commandValidatePermissionsShard,
-				"<keyspace/shard|zk shard path>",
-				"Validate the master permissions match all the slaves."},
-			command{"ValidatePermissionsKeyspace", commandValidatePermissionsKeyspace,
-				"<keyspace name|zk keyspace path>",
-				"Validate the master permissions from shard 0 match all the other tablets in the keyspace."},
+			{"GetPermissions", commandGetPermissions,
+				"<tablet alias>",
+				"Displays the permissions for a tablet."},
+			{"ValidatePermissionsShard", commandValidatePermissionsShard,
+				"<keyspace/shard>",
+				"Validates that the master permissions match all the slaves."},
+			{"ValidatePermissionsKeyspace", commandValidatePermissionsKeyspace,
+				"<keyspace name>",
+				"Validates that the master permissions from shard 0 match those of all of the other tablets in the keyspace."},
+
+			{"GetVSchema", commandGetVSchema,
+				"",
+				"Displays the VTGate routing schema."},
+			{"ApplyVSchema", commandApplyVSchema,
+				"{-vschema=<vschema> || -vschema_file=<vschema file>}",
+				"Applies the VTGate routing schema."},
 		},
 	},
-	commandGroup{
+	{
 		"Serving Graph", []command{
-			command{"GetSrvKeyspace", commandGetSrvKeyspace,
+			{"GetSrvKeyspace", commandGetSrvKeyspace,
 				"<cell> <keyspace>",
-				"Outputs the json version of SrvKeyspace to stdout."},
-			command{"GetSrvKeyspaceNames", commandGetSrvKeyspaceNames,
+				"Outputs a JSON structure that contains information about the SrvKeyspace."},
+			{"GetSrvKeyspaceNames", commandGetSrvKeyspaceNames,
 				"<cell>",
 				"Outputs a list of keyspace names."},
-			command{"GetSrvShard", commandGetSrvShard,
-				"<cell> <keyspace/shard|zk shard path>",
-				"Outputs the json version of SrvShard to stdout."},
-			command{"GetEndPoints", commandGetEndPoints,
-				"<cell> <keyspace/shard|zk shard path> <tablet type>",
-				"Outputs the json version of EndPoints to stdout."},
+			{"GetSrvShard", commandGetSrvShard,
+				"<cell> <keyspace/shard>",
+				"Outputs a JSON structure that contains information about the SrvShard."},
+			{"GetEndPoints", commandGetEndPoints,
+				"<cell> <keyspace/shard> <tablet type>",
+				"Outputs a JSON structure that contains information about the EndPoints."},
 		},
 	},
-	commandGroup{
+	{
 		"Replication Graph", []command{
-			command{"GetShardReplication", commandGetShardReplication,
-				"<cell> <keyspace/shard|zk shard path>",
-				"Outputs the json version of ShardReplication to stdout."},
+			{"GetShardReplication", commandGetShardReplication,
+				"<cell> <keyspace/shard>",
+				"Outputs a JSON structure that contains information about the ShardReplication."},
 		},
 	},
+}
+
+func init() {
+	// This cannot be in the static 'commands ' array, as commands
+	// would reference commandHelp that references commands
+	// (circular reference)
+	addCommand("Generic", command{"Help", commandHelp,
+		"[command name]",
+		"Prints the list of available commands, or help on a specific command."})
 }
 
 func addCommand(groupName string, c command) {
@@ -305,8 +383,10 @@ func addCommand(groupName string, c command) {
 	panic(fmt.Errorf("Trying to add to missing group %v", groupName))
 }
 
-var resolveWildcards = func(wr *wrangler.Wrangler, args []string) ([]string, error) {
-	return args, nil
+func addCommandGroup(groupName string) {
+	commands = append(commands, commandGroup{
+		name: groupName,
+	})
 }
 
 func fmtMapAwkable(m map[string]string) string {
@@ -329,28 +409,28 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	if shard == "" {
 		shard = "<null>"
 	}
-	return fmt.Sprintf("%v %v %v %v %v %v %v", ti.Alias, keyspace, shard, ti.Type, ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags))
+	return fmt.Sprintf("%v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, strings.ToLower(ti.Type.String()), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags))
 }
 
 func fmtAction(action *actionnode.ActionNode) string {
 	state := string(action.State)
 	// FIXME(msolomon) The default state should really just have the value "queued".
-	if action.State == actionnode.ACTION_STATE_QUEUED {
+	if action.State == actionnode.ActionStateQueued {
 		state = "queued"
 	}
 	return fmt.Sprintf("%v %v %v %v %v", action.Path, action.Action, state, action.ActionGuid, action.Error)
 }
 
-func listTabletsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
-	tabletAliases, err := topo.FindAllTabletAliasesInShard(wr.TopoServer(), keyspace, shard)
+func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) error {
+	tabletAliases, err := wr.TopoServer().FindAllTabletAliasesInShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
-	return dumpTablets(wr, tabletAliases)
+	return dumpTablets(ctx, wr, tabletAliases)
 }
 
-func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
-	tablets, err := topotools.GetAllTablets(wr.TopoServer(), zkVtPath)
+func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, zkVtPath string) error {
+	tablets, err := topotools.GetAllTablets(ctx, wr.TopoServer(), zkVtPath)
 	if err != nil {
 		return err
 	}
@@ -360,46 +440,18 @@ func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
 	return nil
 }
 
-func dumpTablets(wr *wrangler.Wrangler, tabletAliases []topo.TabletAlias) error {
-	tabletMap, err := topo.GetTabletMap(wr.TopoServer(), tabletAliases)
+func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*topodatapb.TabletAlias) error {
+	tabletMap, err := wr.TopoServer().GetTabletMap(ctx, tabletAliases)
 	if err != nil {
 		return err
 	}
 	for _, tabletAlias := range tabletAliases {
-		ti, ok := tabletMap[tabletAlias]
+		ti, ok := tabletMap[*tabletAlias]
 		if !ok {
 			log.Warningf("failed to load tablet %v", tabletAlias)
 		} else {
 			wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
 		}
-	}
-	return nil
-}
-
-func kquery(wr *wrangler.Wrangler, cell, keyspace, query string) error {
-	sconn, err := client2.Dial(wr.TopoServer(), cell, keyspace, "master", false, 5*time.Second)
-	if err != nil {
-		return err
-	}
-	rows, err := sconn.Exec(query, nil)
-	if err != nil {
-		return err
-	}
-	cols := rows.Columns()
-	wr.Logger().Printf("%v\n", strings.Join(cols, "\t"))
-
-	rowStrs := make([]string, len(cols)+1)
-	for row := rows.Next(); row != nil; row = rows.Next() {
-		for i, value := range row {
-			switch value.(type) {
-			case []byte:
-				rowStrs[i] = fmt.Sprintf("%q", value)
-			default:
-				rowStrs[i] = fmt.Sprintf("%v", value)
-			}
-		}
-
-		wr.Logger().Printf("%v\n", strings.Join(rowStrs, "\t"))
 	}
 	return nil
 }
@@ -424,45 +476,23 @@ func getFileParam(flag, flagFile, name string) (string, error) {
 	return string(data), nil
 }
 
-func keyspaceParamToKeyspace(param string) (string, error) {
-	if param[0] == '/' {
-		// old zookeeper path, convert to new-style string keyspace
-		zkPathParts := strings.Split(param, "/")
-		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[2] != "global" || zkPathParts[3] != "vt" || zkPathParts[4] != "keyspaces" {
-			return "", fmt.Errorf("Invalid keyspace path: %v", param)
-		}
-		return zkPathParts[5], nil
-	}
-	return param, nil
-}
-
 // keyspaceParamsToKeyspaces builds a list of keyspaces.
 // It supports topology-based wildcards, and plain wildcards.
 // For instance:
-// /zk/global/vt/keyspaces/one     // using plugin_zktopo
-// /zk/global/vt/keyspaces/*       // using plugin_zktopo
 // us*                             // using plain matching
 // *                               // using plain matching
-func keyspaceParamsToKeyspaces(wr *wrangler.Wrangler, params []string) ([]string, error) {
+func keyspaceParamsToKeyspaces(ctx context.Context, wr *wrangler.Wrangler, params []string) ([]string, error) {
 	result := make([]string, 0, len(params))
 	for _, param := range params {
 		if param[0] == '/' {
 			// this is a topology-specific path
-			zkPaths, err := resolveWildcards(wr, params)
-			if err != nil {
-				return nil, fmt.Errorf("Failed to resolve wildcard: %v", err)
-			}
-			for _, zkPath := range zkPaths {
-				subResult, err := keyspaceParamToKeyspace(zkPath)
-				if err != nil {
-					return nil, err
-				}
-				result = append(result, subResult)
+			for _, path := range params {
+				result = append(result, path)
 			}
 		} else {
 			// this is not a path, so assume a keyspace name,
 			// possibly with wildcards
-			keyspaces, err := topo.ResolveKeyspaceWildcard(wr.TopoServer(), param)
+			keyspaces, err := topo.ResolveKeyspaceWildcard(ctx, wr.TopoServer(), param)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to resolve keyspace wildcard %v: %v", param, err)
 			}
@@ -472,39 +502,18 @@ func keyspaceParamsToKeyspaces(wr *wrangler.Wrangler, params []string) ([]string
 	return result, nil
 }
 
-func shardParamToKeyspaceShard(param string) (string, string, error) {
-	if param[0] == '/' {
-		// old zookeeper path, convert to new-style
-		zkPathParts := strings.Split(param, "/")
-		if len(zkPathParts) != 8 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[2] != "global" || zkPathParts[3] != "vt" || zkPathParts[4] != "keyspaces" || zkPathParts[6] != "shards" {
-			return "", "", fmt.Errorf("Invalid shard path: %v", param)
-		}
-		return zkPathParts[5], zkPathParts[7], nil
-	}
-	zkPathParts := strings.Split(param, "/")
-	if len(zkPathParts) != 2 {
-		return "", "", fmt.Errorf("Invalid shard path: %v", param)
-	}
-	return zkPathParts[0], zkPathParts[1], nil
-}
-
 // shardParamsToKeyspaceShards builds a list of keyspace/shard pairs.
 // It supports topology-based wildcards, and plain wildcards.
 // For instance:
-// /zk/global/vt/keyspaces/*/shards/* // using plugin_zktopo
 // user/*                             // using plain matching
 // */0                                // using plain matching
-func shardParamsToKeyspaceShards(wr *wrangler.Wrangler, params []string) ([]topo.KeyspaceShard, error) {
+func shardParamsToKeyspaceShards(ctx context.Context, wr *wrangler.Wrangler, params []string) ([]topo.KeyspaceShard, error) {
 	result := make([]topo.KeyspaceShard, 0, len(params))
 	for _, param := range params {
 		if param[0] == '/' {
 			// this is a topology-specific path
-			zkPaths, err := resolveWildcards(wr, params)
-			if err != nil {
-				return nil, fmt.Errorf("Failed to resolve wildcard: %v", err)
-			}
-			for _, zkPath := range zkPaths {
-				keyspace, shard, err := shardParamToKeyspaceShard(zkPath)
+			for _, path := range params {
+				keyspace, shard, err := topoproto.ParseKeyspaceShard(path)
 				if err != nil {
 					return nil, err
 				}
@@ -513,7 +522,7 @@ func shardParamsToKeyspaceShards(wr *wrangler.Wrangler, params []string) ([]topo
 		} else {
 			// this is not a path, so assume a keyspace
 			// name / shard name, each possibly with wildcards
-			keyspaceShards, err := topo.ResolveShardWildcard(wr.TopoServer(), param)
+			keyspaceShards, err := topo.ResolveShardWildcard(ctx, wr.TopoServer(), param)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to resolve keyspace/shard wildcard %v: %v", param, err)
 			}
@@ -523,31 +532,13 @@ func shardParamsToKeyspaceShards(wr *wrangler.Wrangler, params []string) ([]topo
 	return result, nil
 }
 
-// tabletParamToTabletAlias takes either an old style ZK tablet path or a
-// new style tablet alias as a string, and returns a TabletAlias.
-func tabletParamToTabletAlias(param string) (topo.TabletAlias, error) {
-	if param[0] == '/' {
-		// old zookeeper path, convert to new-style string tablet alias
-		zkPathParts := strings.Split(param, "/")
-		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
-			return topo.TabletAlias{}, fmt.Errorf("Invalid tablet path: %v", param)
-		}
-		param = zkPathParts[2] + "-" + zkPathParts[5]
-	}
-	result, err := topo.ParseTabletAliasString(param)
-	if err != nil {
-		return topo.TabletAlias{}, fmt.Errorf("Invalid tablet alias %v: %v", param, err)
-	}
-	return result, nil
-}
-
 // tabletParamsToTabletAliases takes multiple params and converts them
 // to tablet aliases.
-func tabletParamsToTabletAliases(params []string) ([]topo.TabletAlias, error) {
-	result := make([]topo.TabletAlias, len(params))
+func tabletParamsToTabletAliases(params []string) ([]*topodatapb.TabletAlias, error) {
+	result := make([]*topodatapb.TabletAlias, len(params))
 	var err error
 	for i, param := range params {
-		result[i], err = tabletParamToTabletAlias(param)
+		result[i], err = topoproto.ParseTabletAlias(param)
 		if err != nil {
 			return nil, err
 		}
@@ -555,88 +546,68 @@ func tabletParamsToTabletAliases(params []string) ([]topo.TabletAlias, error) {
 	return result, nil
 }
 
-// tabletRepParamToTabletAlias takes either an old style ZK tablet replication
-// path or a new style tablet alias as a string, and returns a
-// TabletAlias.
-func tabletRepParamToTabletAlias(param string) (topo.TabletAlias, error) {
-	if param[0] == '/' {
-		// old zookeeper replication path, e.g.
-		// /zk/global/vt/keyspaces/ruser/shards/10-20/nyc-0000200278
-		// convert to new-style string tablet alias
-		zkPathParts := strings.Split(param, "/")
-		if len(zkPathParts) != 9 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[2] != "global" || zkPathParts[3] != "vt" || zkPathParts[4] != "keyspaces" || zkPathParts[6] != "shards" {
-			return topo.TabletAlias{}, fmt.Errorf("Invalid tablet replication path: %v", param)
-		}
-		param = zkPathParts[8]
-	}
-	result, err := topo.ParseTabletAliasString(param)
-	if err != nil {
-		return topo.TabletAlias{}, fmt.Errorf("Invalid tablet alias %v: %v", param, err)
-	}
-	return result, nil
-}
-
-// vtPathToCell takes either an old style ZK vt path /zk/<cell>/vt or
-// a new style cell and returns the cell name
-func vtPathToCell(param string) (string, error) {
-	if param[0] == '/' {
-		// old zookeeper replication path like /zk/<cell>/vt
-		zkPathParts := strings.Split(param, "/")
-		if len(zkPathParts) != 4 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" {
-			return "", fmt.Errorf("Invalid vt path: %v", param)
-		}
-		return zkPathParts[2], nil
-	}
-	return param, nil
-}
-
 // parseTabletType parses the string tablet type and verifies
 // it is an accepted one
-func parseTabletType(param string, types []topo.TabletType) (topo.TabletType, error) {
-	tabletType := topo.TabletType(param)
-	if !topo.IsTypeInList(tabletType, types) {
-		return "", fmt.Errorf("Type %v is not one of: %v", tabletType, strings.Join(topo.MakeStringTypeList(types), " "))
+func parseTabletType(param string, types []topodatapb.TabletType) (topodatapb.TabletType, error) {
+	tabletType, err := topoproto.ParseTabletType(param)
+	if err != nil {
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("invalid tablet type %v: %v", param, err)
+	}
+	if !topoproto.IsTypeInList(topodatapb.TabletType(tabletType), types) {
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("Type %v is not one of: %v", tabletType, strings.Join(topoproto.MakeStringTypeList(types), " "))
 	}
 	return tabletType, nil
 }
 
-func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	var (
-		dbNameOverride = subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
-		force          = subFlags.Bool("force", false, "will overwrite the node if it already exists")
-		parent         = subFlags.Bool("parent", false, "will create the parent shard and keyspace if they don't exist yet")
-		update         = subFlags.Bool("update", false, "perform update if a tablet with provided alias exists")
-		hostname       = subFlags.String("hostname", "", "server the tablet is running on")
-		mysqlPort      = subFlags.Int("mysql_port", 0, "mysql port for the mysql daemon")
-		port           = subFlags.Int("port", 0, "main port for the vttablet process")
-		vtsPort        = subFlags.Int("vts_port", 0, "encrypted port for the vttablet process")
-		keyspace       = subFlags.String("keyspace", "", "keyspace this tablet belongs to")
-		shard          = subFlags.String("shard", "", "shard this tablet belongs to")
-		parentAlias    = subFlags.String("parent_alias", "", "alias of the mysql parent tablet for this tablet")
-		tags           flagutil.StringMapValue
-	)
-	subFlags.Var(&tags, "tags", "comma separated list of key:value pairs used to tag the tablet")
+// parseServingTabletType3 parses the tablet type into the enum,
+// and makes sure the enum is of serving type (MASTER, REPLICA, RDONLY/BATCH)
+func parseServingTabletType3(param string) (topodatapb.TabletType, error) {
+	servedType, err := topoproto.ParseTabletType(param)
+	if err != nil {
+		return topodatapb.TabletType_UNKNOWN, err
+	}
+	if !topo.IsInServingGraph(servedType) {
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("served_type has to be in the serving graph, not %v", param)
+	}
+	return servedType, nil
+}
+
+func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	dbNameOverride := subFlags.String("db_name_override", "", "Overrides the name of the database that the vttablet uses")
+	allowUpdate := subFlags.Bool("allow_update", false, "Use this flag to force initialization if a tablet with the same name already exists. Use with caution.")
+	allowDifferentShard := subFlags.Bool("allow_different_shard", false, "Use this flag to force initialization if a tablet with the same name but a different keyspace/shard already exists. Use with caution.")
+	allowMasterOverride := subFlags.Bool("allow_master_override", false, "Use this flag to force initialization if a tablet is created as master, and a master for the keyspace/shard already exists. Use with caution.")
+	createShardAndKeyspace := subFlags.Bool("parent", false, "Creates the parent shard and keyspace if they don't yet exist")
+	hostname := subFlags.String("hostname", "", "The server on which the tablet is running")
+	mysqlPort := subFlags.Int("mysql_port", 0, "The mysql port for the mysql daemon")
+	port := subFlags.Int("port", 0, "The main port for the vttablet process")
+	grpcPort := subFlags.Int("grpc_port", 0, "The gRPC port for the vttablet process")
+	keyspace := subFlags.String("keyspace", "", "The keyspace to which this tablet belongs")
+	shard := subFlags.String("shard", "", "The shard to which this tablet belongs")
+
+	var tags flagutil.StringMapValue
+	subFlags.Var(&tags, "tags", "A comma-separated list of key:value pairs that are used to tag the tablet")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action InitTablet requires <tablet alias> <tablet type>")
+		return fmt.Errorf("The <tablet alias> and <tablet type> arguments are both required for the InitTablet command.")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletType, err := parseTabletType(subFlags.Arg(1), topo.AllTabletTypes)
+	tabletType, err := parseTabletType(subFlags.Arg(1), topoproto.AllTabletTypes)
 	if err != nil {
 		return err
 	}
 
 	// create tablet record
-	tablet := &topo.Tablet{
+	tablet := &topodatapb.Tablet{
 		Alias:          tabletAlias,
 		Hostname:       *hostname,
-		Portmap:        make(map[string]int),
+		PortMap:        make(map[string]int32),
 		Keyspace:       *keyspace,
 		Shard:          *shard,
 		Type:           tabletType,
@@ -644,112 +615,92 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 		Tags:           tags,
 	}
 	if *port != 0 {
-		tablet.Portmap["vt"] = *port
+		tablet.PortMap["vt"] = int32(*port)
 	}
 	if *mysqlPort != 0 {
-		tablet.Portmap["mysql"] = *mysqlPort
+		tablet.PortMap["mysql"] = int32(*mysqlPort)
 	}
-	if *vtsPort != 0 {
-		tablet.Portmap["vts"] = *vtsPort
-	}
-	if *parentAlias != "" {
-		tablet.Parent, err = tabletRepParamToTabletAlias(*parentAlias)
-		if err != nil {
-			return err
-		}
+	if *grpcPort != 0 {
+		tablet.PortMap["grpc"] = int32(*grpcPort)
 	}
 
-	return wr.InitTablet(tablet, *force, *parent, *update)
+	return wr.InitTablet(ctx, tablet, *allowMasterOverride, *allowDifferentShard, *createShardAndKeyspace, *allowUpdate)
 }
 
-func commandGetTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action GetTablet requires <tablet alias|zk tablet path>")
+		return fmt.Errorf("The <tablet alias> argument is required for the GetTablet command.")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJson(tabletInfo))
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, tabletInfo)
 }
 
-func commandUpdateTabletAddrs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	hostname := subFlags.String("hostname", "", "fully qualified host name")
+func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	hostname := subFlags.String("hostname", "", "The fully qualified host name of the server on which the tablet is running.")
 	ipAddr := subFlags.String("ip-addr", "", "IP address")
-	mysqlPort := subFlags.Int("mysql-port", 0, "mysql port")
-	vtPort := subFlags.Int("vt-port", 0, "vt port")
-	vtsPort := subFlags.Int("vts-port", 0, "vts port")
+	mysqlPort := subFlags.Int("mysql-port", 0, "The mysql port for the mysql daemon")
+	vtPort := subFlags.Int("vt-port", 0, "The main port for the vttablet process")
+	grpcPort := subFlags.Int("grpc-port", 0, "The gRPC port for the vttablet process")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action UpdateTabletAddrs requires <tablet alias|zk tablet path>")
+		return fmt.Errorf("The <tablet alias> argument is required for the UpdateTabletAddrs command.")
 	}
 	if *ipAddr != "" && net.ParseIP(*ipAddr) == nil {
 		return fmt.Errorf("malformed address: %v", *ipAddr)
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	return wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
+	_, err = wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if *hostname != "" {
 			tablet.Hostname = *hostname
 		}
 		if *ipAddr != "" {
-			tablet.IPAddr = *ipAddr
+			tablet.Ip = *ipAddr
 		}
-		if *vtPort != 0 || *vtsPort != 0 || *mysqlPort != 0 {
-			if tablet.Portmap == nil {
-				tablet.Portmap = make(map[string]int)
+		if *vtPort != 0 || *grpcPort != 0 || *mysqlPort != 0 {
+			if tablet.PortMap == nil {
+				tablet.PortMap = make(map[string]int32)
 			}
 			if *vtPort != 0 {
-				tablet.Portmap["vt"] = *vtPort
+				tablet.PortMap["vt"] = int32(*vtPort)
 			}
-			if *vtsPort != 0 {
-				tablet.Portmap["vts"] = *vtsPort
+			if *grpcPort != 0 {
+				tablet.PortMap["grpc"] = int32(*grpcPort)
 			}
 			if *mysqlPort != 0 {
-				tablet.Portmap["mysql"] = *mysqlPort
+				tablet.PortMap["mysql"] = int32(*mysqlPort)
 			}
 		}
 		return nil
 	})
+	return err
 }
 
-func commandScrapTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "writes the scrap state in to zk, no questions asked, if a tablet is offline")
-	skipRebuild := subFlags.Bool("skip-rebuild", false, "do not rebuild the shard and keyspace graph after scrapping")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ScrapTablet requires <tablet alias|zk tablet path>")
-	}
-
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	return wr.Scrap(tabletAlias, *force, *skipRebuild)
-}
-
-func commandDeleteTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	allowMaster := subFlags.Bool("allow_master", false, "Allows for the master tablet of a shard to be deleted. Use with caution.")
+	skipRebuild := subFlags.Bool("skip_rebuild", false, "Skips rebuilding the shard serving graph after deleting the tablet")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("action DeleteTablet requires at least one <tablet alias|zk tablet path> ...")
+		return fmt.Errorf("The <tablet alias> argument must be used to specify at least one tablet when calling the DeleteTablet command.")
 	}
 
 	tabletAliases, err := tabletParamsToTabletAliases(subFlags.Args())
@@ -757,76 +708,113 @@ func commandDeleteTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 		return err
 	}
 	for _, tabletAlias := range tabletAliases {
-		if err := wr.DeleteTablet(tabletAlias); err != nil {
+		if err := wr.DeleteTablet(ctx, tabletAlias, *allowMaster, *skipRebuild); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func commandSetReadOnly(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandSetReadOnly(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action SetReadOnly requires <tablet alias|zk tablet path>")
+		return fmt.Errorf("The <tablet alias> argument is required for the SetReadOnly command.")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	ti, err := wr.TopoServer().GetTablet(tabletAlias)
+	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadOnly(context.TODO(), ti, wr.ActionTimeout())
+	return wr.TabletManagerClient().SetReadOnly(ctx, ti)
 }
 
-func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action SetReadWrite requires <tablet alias|zk tablet path>")
+		return fmt.Errorf("The <tablet alias> argument is required for the SetReadWrite command.")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	ti, err := wr.TopoServer().GetTablet(tabletAlias)
+	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadWrite(context.TODO(), ti, wr.ActionTimeout())
+	return wr.TabletManagerClient().SetReadWrite(ctx, ti)
 }
 
-func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will change the type in zookeeper, and not run hooks")
-	dryRun := subFlags.Bool("dry-run", false, "just list the proposed change")
+func commandStartSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action StartSlave requires <tablet alias>")
+	}
+
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
+	}
+	return wr.TabletManagerClient().StartSlave(ctx, ti)
+}
+
+func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action StopSlave requires <tablet alias>")
+	}
+
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
+	}
+	return wr.TabletManagerClient().StopSlave(ctx, ti)
+}
+
+func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	dryRun := subFlags.Bool("dry-run", false, "Lists the proposed change without actually executing it")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action ChangeSlaveType requires <zk tablet path> <db type>")
+		return fmt.Errorf("The <tablet alias> and <db type> arguments are required for the ChangeSlaveType command.")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	newType, err := parseTabletType(subFlags.Arg(1), topo.AllTabletTypes)
+	newType, err := parseTabletType(subFlags.Arg(1), topoproto.AllTabletTypes)
 	if err != nil {
 		return err
 	}
 	if *dryRun {
-		ti, err := wr.TopoServer().GetTablet(tabletAlias)
+		ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 		if err != nil {
 			return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 		}
-		if !topo.IsTrivialTypeChange(ti.Type, newType) || !topo.IsValidTypeChange(ti.Type, newType) {
+		if !topo.IsTrivialTypeChange(ti.Type, newType) {
 			return fmt.Errorf("invalid type transition %v: %v -> %v", tabletAlias, ti.Type, newType)
 		}
 		wr.Logger().Printf("- %v\n", fmtTabletAwkable(ti))
@@ -834,89 +822,79 @@ func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args 
 		wr.Logger().Printf("+ %v\n", fmtTabletAwkable(ti))
 		return nil
 	}
-	return wr.ChangeType(tabletAlias, newType, *force)
+	return wr.ChangeSlaveType(ctx, tabletAlias, newType)
 }
 
-func commandPing(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action Ping requires <tablet alias|zk tablet path>")
+		return fmt.Errorf("The <tablet alias> argument is required for the Ping command.")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Ping(context.TODO(), tabletInfo, wr.ActionTimeout())
+	return wr.TabletManagerClient().Ping(ctx, tabletInfo)
 }
 
-func commandRefreshState(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action RefreshState requires <tablet alias|zk tablet path>")
+		return fmt.Errorf("The <tablet alias> argument is required for the RefreshState command.")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RefreshState(context.TODO(), tabletInfo, wr.ActionTimeout())
+	return wr.TabletManagerClient().RefreshState(ctx, tabletInfo)
 }
 
-func commandRunHealthCheck(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action RunHealthCheck requires <tablet alias> <target tablet type>")
+		return fmt.Errorf("The <tablet alias> and <target tablet type> arguments are required for the RunHealthCheck command.")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	servedType, err := parseTabletType(subFlags.Arg(1), []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RunHealthCheck(context.TODO(), tabletInfo, servedType, wr.ActionTimeout())
+	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
 }
 
-func commandQuery(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("action Query requires 3")
-	}
-	return kquery(wr, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2))
-}
-
-func commandSleep(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action Sleep requires <tablet alias|zk tablet path> <duration>")
+		return fmt.Errorf("The <tablet alias> and <duration> arguments are required for the Sleep command.")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	ti, err := wr.TopoServer().GetTablet(tabletAlias)
+	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -924,245 +902,101 @@ func commandSleep(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Sleep(context.TODO(), ti, duration, wr.ActionTimeout())
+	return wr.TabletManagerClient().Sleep(ctx, ti, duration)
 }
 
-func commandSnapshotSourceEnd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	slaveStartRequired := subFlags.Bool("slave-start", false, "will restart replication")
-	readWrite := subFlags.Bool("read-write", false, "will make the server read-write")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action SnapshotSourceEnd requires <tablet alias|zk tablet path> <original server type>")
-	}
-
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletType, err := parseTabletType(subFlags.Arg(1), topo.AllTabletTypes)
-	if err != nil {
-		return err
-	}
-	return wr.SnapshotSourceEnd(tabletAlias, *slaveStartRequired, !(*readWrite), tabletType)
-}
-
-func commandSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	serverMode := subFlags.Bool("server-mode", false, "will symlink the data files and leave mysqld stopped")
-	concurrency := subFlags.Int("concurrency", 4, "how many compression/checksum jobs to run simultaneously")
+func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action Snapshot requires <tablet alias|zk src tablet path>")
+		return fmt.Errorf("The Backup command requires the <tablet alias> argument.")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	sr, originalType, err := wr.Snapshot(tabletAlias, *force, *concurrency, *serverMode)
-	if err == nil {
-		log.Infof("Manifest: %v", sr.ManifestPath)
-		log.Infof("ParentAlias: %v", sr.ParentAlias)
-		if *serverMode {
-			log.Infof("SlaveStartRequired: %v", sr.SlaveStartRequired)
-			log.Infof("ReadOnly: %v", sr.ReadOnly)
-			log.Infof("OriginalType: %v", originalType)
-		}
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
 	}
-	return err
+	logStream, errFunc, err := wr.TabletManagerClient().Backup(ctx, tabletInfo, *concurrency)
+	if err != nil {
+		return err
+	}
+	for e := range logStream {
+		wr.Logger().Infof("%v", e)
+	}
+	return errFunc()
 }
 
-func commandRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	dontWaitForSlaveStart := subFlags.Bool("dont-wait-for-slave-start", false, "won't wait for replication to start (useful when restoring from snapshot source that is the replication master)")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 3 && subFlags.NArg() != 4 {
-		return fmt.Errorf("action Restore requires <src tablet alias|zk src tablet path> <src manifest path> <dst tablet alias|zk dst tablet path> [<zk new master path>]")
-	}
-	srcTabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	dstTabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(2))
-	if err != nil {
-		return err
-	}
-	parentAlias := srcTabletAlias
-	if subFlags.NArg() == 4 {
-		parentAlias, err = tabletParamToTabletAlias(subFlags.Arg(3))
-		if err != nil {
-			return err
-		}
-	}
-	return wr.Restore(srcTabletAlias, subFlags.Arg(1), dstTabletAlias, parentAlias, *fetchConcurrency, *fetchRetryCount, false, *dontWaitForSlaveStart)
-}
+func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	maxRows := subFlags.Int("max_rows", 10000, "Specifies the maximum number of rows to allow in reset")
+	disableBinlogs := subFlags.Bool("disable_binlogs", false, "Disables writing to binlogs during the query")
+	reloadSchema := subFlags.Bool("reload_schema", false, "Indicates whether the tablet schema will be reloaded after executing the SQL command. The default value is <code>false</code>, which indicates that the tablet schema will not be reloaded.")
 
-func commandClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	concurrency := subFlags.Int("concurrency", 4, "how many compression/checksum jobs to run simultaneously")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	serverMode := subFlags.Bool("server-mode", false, "will keep the snapshot server offline to serve DB files directly")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() < 2 {
-		return fmt.Errorf("action Clone requires <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> ...")
-	}
-
-	srcTabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	dstTabletAliases := make([]topo.TabletAlias, subFlags.NArg()-1)
-	for i := 1; i < subFlags.NArg(); i++ {
-		dstTabletAliases[i-1], err = tabletParamToTabletAlias(subFlags.Arg(i))
-		if err != nil {
-			return err
-		}
-	}
-	return wr.Clone(srcTabletAlias, dstTabletAliases, *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
-}
-
-func commandMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	concurrency := subFlags.Int("concurrency", 8, "how many concurrent jobs to run simultaneously")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
-	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many tables to load into a single destination table simultaneously")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -help' for more info")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() < 2 {
-		return fmt.Errorf("MultiRestore requires <dst tablet alias|destination zk path> <source tablet alias|source zk path>... %v", args)
-	}
-	destination, err := tabletParamToTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	sources := make([]topo.TabletAlias, subFlags.NArg()-1)
-	for i := 1; i < subFlags.NArg(); i++ {
-		sources[i-1], err = tabletParamToTabletAlias(subFlags.Arg(i))
-		if err != nil {
-			return err
-		}
-	}
-	return wr.MultiRestore(destination, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
-}
-
-func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	concurrency := subFlags.Int("concurrency", 8, "how many compression jobs to run simultaneously")
-	spec := subFlags.String("spec", "-", "shard specification")
-	tablesString := subFlags.String("tables", "", "dump only this comma separated list of table regexp")
-	excludeTablesString := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
-	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
-	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action MultiSnapshot requires <src tablet alias|zk src tablet path>")
-	}
-
-	shards, err := key.ParseShardingSpec(*spec)
-	if err != nil {
-		return fmt.Errorf("multisnapshot failed: %v", err)
-	}
-	var tables []string
-	if *tablesString != "" {
-		tables = strings.Split(*tablesString, ",")
-	}
-	var excludeTables []string
-	if *excludeTablesString != "" {
-		excludeTables = strings.Split(*excludeTablesString, ",")
-	}
-
-	source, err := tabletParamToTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	filenames, parentAlias, err := wr.MultiSnapshot(shards, source, *concurrency, tables, excludeTables, *force, *skipSlaveRestart, *maximumFilesize)
-
-	if err == nil {
-		log.Infof("manifest locations: %v", filenames)
-		log.Infof("ParentAlias: %v", parentAlias)
-	}
-	return err
-}
-
-func commandExecuteFetch(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	maxRows := subFlags.Int("max_rows", 10000, "maximum number of rows to allow in reset")
-	wantFields := subFlags.Bool("want_fields", false, "also get the field names")
-	disableBinlogs := subFlags.Bool("disable_binlogs", false, "disable writing to binlogs during the query")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action ExecuteFetch requires <tablet alias|zk tablet path> <sql command>")
+		return fmt.Errorf("The <tablet alias> and <sql command> arguments are required for the ExecuteFetchAsDba command.")
 	}
 
-	alias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	alias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
 	query := subFlags.Arg(1)
-	qr, err := wr.ExecuteFetch(alias, query, *maxRows, *wantFields, *disableBinlogs)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJson(qr))
+	qr, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *disableBinlogs, *reloadSchema)
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, qr)
 }
 
-func commandExecuteHook(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf("action ExecuteHook requires <tablet alias|zk tablet path> <hook name>")
+		return fmt.Errorf("The <tablet alias> and <hook name> arguments are required for the ExecuteHook command.")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
 	hook := &hk.Hook{Name: subFlags.Arg(1), Parameters: subFlags.Args()[2:]}
-	hr, err := wr.ExecuteHook(tabletAlias, hook)
-	if err == nil {
-		log.Infof(hr.String())
+	hr, err := wr.ExecuteHook(ctx, tabletAlias, hook)
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, hr)
 }
 
-func commandCreateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
-	parent := subFlags.Bool("parent", false, "creates the parent keyspace if it doesn't exist")
+func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	force := subFlags.Bool("force", false, "Proceeds with the command even if the keyspace already exists")
+	parent := subFlags.Bool("parent", false, "Creates the parent keyspace if it doesn't already exist")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action CreateShard requires <keyspace/shard|zk shard path>")
+		return fmt.Errorf("The <keyspace/shard> argument is required for the CreateShard command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
 	if *parent {
-		if err := wr.TopoServer().CreateKeyspace(keyspace, &topo.Keyspace{}); err != nil && err != topo.ErrNodeExists {
+		if err := wr.TopoServer().CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && err != topo.ErrNodeExists {
 			return err
 		}
 	}
 
-	err = topo.CreateShard(wr.TopoServer(), keyspace, shard)
+	err = topotools.CreateShard(ctx, wr.TopoServer(), keyspace, shard)
 	if *force && err == topo.ErrNodeExists {
 		log.Infof("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
 		err = nil
@@ -1170,32 +1004,32 @@ func commandCreateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	return err
 }
 
-func commandGetShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action GetShard requires <keyspace/shard|zk shard path>")
+		return fmt.Errorf("The <keyspace/shard> argument is required for the GetShard command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	shardInfo, err := wr.TopoServer().GetShard(keyspace, shard)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJson(shardInfo))
+	shardInfo, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, shardInfo)
 }
 
-func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cells := subFlags.String("cells", "", "comma separated list of cells to update")
+func commandRebuildShardGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cells := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("action RebuildShardGraph requires at least one <zk shard path>")
+		return fmt.Errorf("The <keyspace/shard> argument must be used to identify at least one keyspace and shard when calling the RebuildShardGraph command.")
 	}
 
 	var cellArray []string
@@ -1203,80 +1037,72 @@ func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 		cellArray = strings.Split(*cells, ",")
 	}
 
-	keyspaceShards, err := shardParamsToKeyspaceShards(wr, subFlags.Args())
+	keyspaceShards, err := shardParamsToKeyspaceShards(ctx, wr, subFlags.Args())
 	if err != nil {
 		return err
 	}
 	for _, ks := range keyspaceShards {
-		if _, err := wr.RebuildShardGraph(ks.Keyspace, ks.Shard, cellArray); err != nil {
+		if _, err := wr.RebuildShardGraph(ctx, ks.Keyspace, ks.Shard, cellArray); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	useRpc := subFlags.Bool("use_rpc", false, "send an RPC call to the new master instead of doing the operation internally")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action ShardExternallyReparented requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path>")
-	}
-
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(1))
-	if err != nil {
-		return err
-	}
-	if *useRpc {
-		ti, err := wr.TopoServer().GetTablet(tabletAlias)
-		if err != nil {
-			return err
-		}
-		return wr.TabletManagerClient().TabletExternallyReparented(context.TODO(), ti, "", wr.ActionTimeout())
-	}
-	return wr.ShardExternallyReparented(keyspace, shard, tabletAlias)
-}
-
-func commandValidateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	pingTablets := subFlags.Bool("ping-tablets", true, "ping all tablets during validate")
+func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ValidateShard requires <keyspace/shard|zk shard path>")
+		return fmt.Errorf("The <tablet alias> argument is required for the TabletExternallyReparented command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	return wr.ValidateShard(keyspace, shard, *pingTablets)
+	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+	return wr.TabletManagerClient().TabletExternallyReparented(ctx, ti, "")
 }
 
-func commandShardReplicationPositions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandValidateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	pingTablets := subFlags.Bool("ping-tablets", true, "Indicates whether all tablets should be pinged during the validation process")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ShardReplicationPositions requires <keyspace/shard|zk shard path>")
+		return fmt.Errorf("The <keyspace/shard> argument is required for the ValidateShard command.")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tablets, stats, err := wr.ShardReplicationStatuses(keyspace, shard)
+	return wr.ValidateShard(ctx, keyspace, shard, *pingTablets)
+}
+
+func commandShardReplicationPositions(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <keyspace/shard> argument is required for the ShardReplicationPositions command.")
+	}
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tablets, stats, err := wr.ShardReplicationStatuses(ctx, keyspace, shard)
 	if tablets == nil {
 		return err
 	}
 
 	lines := make([]string, 0, 24)
 	for _, rt := range sortReplicatingTablets(tablets, stats) {
-		status := rt.ReplicationStatus
+		status := rt.Status
 		ti := rt.TabletInfo
 		if status == nil {
 			lines = append(lines, fmtTabletAwkable(ti)+" <err> <err> <err>")
@@ -1290,34 +1116,35 @@ func commandShardReplicationPositions(wr *wrangler.Wrangler, subFlags *flag.Flag
 	return nil
 }
 
-func commandListShardTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandListShardTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ListShardTablets requires <keyspace/shard|zk shard path>")
+		return fmt.Errorf("The <keyspace/shard> argument is required for the ListShardTablets command.")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	return listTabletsByShard(wr, keyspace, shard)
+	return listTabletsByShard(ctx, wr, keyspace, shard)
 }
 
-func commandSetShardServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
-	remove := subFlags.Bool("remove", false, "will remove the served type")
+func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	remove := subFlags.Bool("remove", false, "Removes the served tablet type")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action SetShardServedTypes requires <keyspace/shard|zk shard path> <served type>")
+		return fmt.Errorf("The <keyspace/shard> and <served tablet type> arguments are both required for the SetShardServedTypes command.")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+
+	servedType, err := parseServingTabletType3(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1326,25 +1153,25 @@ func commandSetShardServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetShardServedTypes(keyspace, shard, cells, servedType, *remove)
+	return wr.SetShardServedTypes(ctx, keyspace, shard, cells, servedType, *remove)
 }
 
-func commandSetShardTabletControl(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
-	tablesStr := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
-	remove := subFlags.Bool("remove", false, "will remove cells for vertical splits (requires tables)")
-	disableQueryService := subFlags.Bool("disableQueryService", false, "will disable query service on the provided nodes")
+func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	tablesStr := subFlags.String("tables", "", "Specifies a comma-separated list of tables to replicate (used for vertical split)")
+	remove := subFlags.Bool("remove", false, "Removes cells for vertical splits. This flag requires the *tables* flag to also be set.")
+	disableQueryService := subFlags.Bool("disable_query_service", false, "Disables query service on the provided nodes")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action SetShardTabletControl requires <keyspace/shard|zk shard path> <tabletType>")
+		return fmt.Errorf("The <keyspace/shard> and <tablet type> arguments are both required for the SetShardTabletControl command.")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	tabletType, err := parseServingTabletType3(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1357,18 +1184,18 @@ func commandSetShardTabletControl(wr *wrangler.Wrangler, subFlags *flag.FlagSet,
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetShardTabletControl(keyspace, shard, tabletType, cells, *remove, *disableQueryService, tables)
+	return wr.SetShardTabletControl(ctx, keyspace, shard, tabletType, cells, *remove, *disableQueryService, tables)
 }
 
-func commandSourceShardDelete(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf("SourceShardDelete requires <keyspace/shard> <uid>")
+		return fmt.Errorf("The <keyspace/shard> and <uid> arguments are both required for the SourceShardDelete command.")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1376,19 +1203,19 @@ func commandSourceShardDelete(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	if err != nil {
 		return err
 	}
-	return wr.SourceShardDelete(keyspace, shard, uint32(uid))
+	return wr.SourceShardDelete(ctx, keyspace, shard, uint32(uid))
 }
 
-func commandSourceShardAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	keyRange := subFlags.String("key_range", "", "key range to use for the SourceShard")
-	tablesStr := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
+func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	keyRange := subFlags.String("key_range", "", "Identifies the key range to use for the SourceShard")
+	tablesStr := subFlags.String("tables", "", "Specifies a comma-separated list of tables to replicate (used for vertical split)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 3 {
-		return fmt.Errorf("SourceShardAdd requires <keyspace/shard> <uid> <source keyspace/shard")
+		return fmt.Errorf("The <keyspace/shard>, <uid>, and <source keyspace/shard> arguments are all required for the SourceShardAdd command.")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1396,7 +1223,7 @@ func commandSourceShardAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	if err != nil {
 		return err
 	}
-	skeyspace, sshard, err := shardParamToKeyspaceShard(subFlags.Arg(2))
+	skeyspace, sshard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(2))
 	if err != nil {
 		return err
 	}
@@ -1404,135 +1231,188 @@ func commandSourceShardAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	if *tablesStr != "" {
 		tables = strings.Split(*tablesStr, ",")
 	}
-	var kr key.KeyRange
+	var kr *topodatapb.KeyRange
 	if *keyRange != "" {
 		if _, kr, err = topo.ValidateShardName(*keyRange); err != nil {
 			return err
 		}
 	}
-	return wr.SourceShardAdd(keyspace, shard, uint32(uid), skeyspace, sshard, kr, tables)
+	return wr.SourceShardAdd(ctx, keyspace, shard, uint32(uid), skeyspace, sshard, kr, tables)
 }
 
-func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	concurrency := subFlags.Int("concurrency", 8, "how many concurrent jobs to run simultaneously")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
-	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many tables to load into a single destination table simultaneously")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -help' for more info")
-	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() < 2 {
-		return fmt.Errorf("ShardMultiRestore requires <keyspace/shard|zk shard path> <source tablet alias|source zk path>... %v", args)
-	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	sources := make([]topo.TabletAlias, subFlags.NArg()-1)
-	for i := 1; i < subFlags.NArg(); i++ {
-		sources[i-1], err = tabletParamToTabletAlias(subFlags.Arg(i))
-		if err != nil {
-			return err
-		}
-	}
-	var tableArray []string
-	if *tables != "" {
-		tableArray = strings.Split(*tables, ",")
-	}
-	return wr.ShardMultiRestore(keyspace, shard, sources, tableArray, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
-}
-
-func commandShardReplicationAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("action ShardReplicationAdd requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path> <parent tablet alias|zk parent tablet path>")
-	}
-
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(1))
-	if err != nil {
-		return err
-	}
-	parentAlias, err := tabletParamToTabletAlias(subFlags.Arg(2))
-	if err != nil {
-		return err
-	}
-	return topo.UpdateShardReplicationRecord(context.TODO(), wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
-}
-
-func commandShardReplicationRemove(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandShardReplicationAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action ShardReplicationRemove requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path>")
+		return fmt.Errorf("The <keyspace/shard> and <tablet alias> arguments are required for the ShardReplicationAdd command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(1))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
-	return topo.RemoveShardReplicationRecord(wr.TopoServer(), tabletAlias.Cell, keyspace, shard, tabletAlias)
+	return topo.UpdateShardReplicationRecord(ctx, wr.TopoServer(), keyspace, shard, tabletAlias)
 }
 
-func commandShardReplicationFix(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandShardReplicationRemove(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action ShardReplicationRemove requires <cell> <keyspace/shard|zk shard path>")
+		return fmt.Errorf("The <keyspace/shard> and <tablet alias> arguments are required for the ShardReplicationRemove command.")
+	}
+
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+	return topo.RemoveShardReplicationRecord(ctx, wr.TopoServer(), tabletAlias.Cell, keyspace, shard, tabletAlias)
+}
+
+func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("The <cell> and <keyspace/shard> arguments are required for the ShardReplicationRemove command.")
 	}
 
 	cell := subFlags.Arg(0)
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(1))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
-	return topo.FixShardReplication(wr.TopoServer(), wr.Logger(), cell, keyspace, shard)
+	return topo.FixShardReplication(ctx, wr.TopoServer(), wr.Logger(), cell, keyspace, shard)
 }
 
-func commandRemoveShardCell(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will keep going even we can't reach the cell's topology server to check for tablets")
+func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	maxDelay := subFlags.Duration("max_delay", 30*time.Second,
+		"Specifies the maximum delay, in seconds, the filtered replication of the"+
+			" given destination shard should lag behind the source shard. When"+
+			" higher, the command will block and wait for the delay to decrease.")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <keyspace/shard> argument is required for the WaitForFilteredReplication command.")
+	}
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	shardInfo, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return err
+	}
+	if len(shardInfo.SourceShards) == 0 {
+		return fmt.Errorf("shard %v/%v has no source shard", keyspace, shard)
+	}
+	if !shardInfo.HasMaster() {
+		return fmt.Errorf("shard %v/%v has no master", keyspace, shard)
+	}
+	alias := shardInfo.MasterAlias
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, alias)
+	if err != nil {
+		return err
+	}
+	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
+	if err != nil {
+		return fmt.Errorf("cannot get EndPoint for master tablet record: %v record: %v", err, tabletInfo)
+	}
+
+	// Always run an explicit healthcheck first to make sure we don't see any outdated values.
+	// This is especially true for tests and automation where there is no pause of multiple seconds
+	// between commands and the periodic healthcheck did not run again yet.
+	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, topodatapb.TabletType_REPLICA); err != nil {
+		return fmt.Errorf("failed to run explicit healthcheck on tablet: %v err: %v", tabletInfo, err)
+	}
+
+	// pass in a non-UNKNOWN tablet type to not use sessionId
+	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", topodatapb.TabletType_MASTER, 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
+	}
+
+	stream, errFunc, err := conn.StreamHealth(ctx)
+	if err != nil {
+		return fmt.Errorf("could not stream health records from tablet: %v err: %v", alias, err)
+	}
+	var lastSeenDelay int
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context was done before filtered replication did catch up. Last seen delay: %v context Error: %v", lastSeenDelay, ctx.Err())
+		case shr, ok := <-stream:
+			if !ok {
+				return fmt.Errorf("stream ended early: %v", errFunc())
+			}
+			stats := shr.RealtimeStats
+			if stats == nil {
+				return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
+			}
+			if stats.HealthError != "" {
+				return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
+			}
+			if stats.BinlogPlayersCount == 0 {
+				return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
+			}
+
+			delaySecs := stats.SecondsBehindMasterFilteredReplication
+			lastSeenDelay := time.Duration(delaySecs) * time.Second
+			if lastSeenDelay < 0 {
+				return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)
+			}
+			if lastSeenDelay <= *maxDelay {
+				wr.Logger().Printf("Filtered replication on tablet: %v has caught up. Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
+				return nil
+			}
+			wr.Logger().Printf("Waiting for filtered replication to catch up on tablet: %v Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
+		}
+	}
+}
+
+func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	force := subFlags.Bool("force", false, "Proceeds even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
+	recursive := subFlags.Bool("recursive", false, "Also delete all tablets in that cell belonging to the specified shard.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action RemoveShardCell requires <keyspace/shard|zk shard path> <cell>")
+		return fmt.Errorf("The <keyspace/shard> and <cell> arguments are required for the RemoveShardCell command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	return wr.RemoveShardCell(keyspace, shard, subFlags.Arg(1), *force)
+	return wr.RemoveShardCell(ctx, keyspace, shard, subFlags.Arg(1), *force, *recursive)
 }
 
-func commandDeleteShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	recursive := subFlags.Bool("recursive", false, "Also delete all tablets belonging to the shard.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("action DeleteShard requires <keyspace/shard|zk shard path> ...")
+		return fmt.Errorf("The <keyspace/shard> argument must be used to identify at least one keyspace and shard when calling the DeleteShard command.")
 	}
 
-	keyspaceShards, err := shardParamsToKeyspaceShards(wr, subFlags.Args())
+	keyspaceShards, err := shardParamsToKeyspaceShards(ctx, wr, subFlags.Args())
 	if err != nil {
 		return err
 	}
 	for _, ks := range keyspaceShards {
-		err := wr.DeleteShard(ks.Keyspace, ks.Shard)
+		err := wr.DeleteShard(ctx, ks.Keyspace, ks.Shard, *recursive)
 		switch err {
 		case nil:
 			// keep going
@@ -1545,46 +1425,43 @@ func commandDeleteShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	return nil
 }
 
-func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	shardingColumnName := subFlags.String("sharding_column_name", "", "column to use for sharding operations")
-	shardingColumnType := subFlags.String("sharding_column_type", "", "type of the column to use for sharding operations")
-	splitShardCount := subFlags.Int("split_shard_count", 0, "number of shards to use for data splits")
-	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
+func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	shardingColumnName := subFlags.String("sharding_column_name", "", "Specifies the column to use for sharding operations")
+	shardingColumnType := subFlags.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
+	splitShardCount := subFlags.Int("split_shard_count", 0, "Specifies the number of shards to use for data splits")
+	force := subFlags.Bool("force", false, "Proceeds even if the keyspace already exists")
 	var servedFrom flagutil.StringMapValue
-	subFlags.Var(&servedFrom, "served_from", "comma separated list of dbtype:keyspace pairs used to serve traffic")
+	subFlags.Var(&servedFrom, "served_from", "Specifies a comma-separated list of dbtype:keyspace pairs used to serve traffic")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action CreateKeyspace requires <keyspace name|zk keyspace path>")
+		return fmt.Errorf("The <keyspace name> argument is required for the CreateKeyspace command.")
 	}
 
-	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
+	keyspace := subFlags.Arg(0)
+	kit, err := key.ParseKeyspaceIDType(*shardingColumnType)
 	if err != nil {
 		return err
 	}
-	kit := key.KeyspaceIdType(*shardingColumnType)
-	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
-		return fmt.Errorf("invalid sharding_column_type")
-	}
-	ki := &topo.Keyspace{
+	ki := &topodatapb.Keyspace{
 		ShardingColumnName: *shardingColumnName,
 		ShardingColumnType: kit,
 		SplitShardCount:    int32(*splitShardCount),
 	}
 	if len(servedFrom) > 0 {
-		ki.ServedFromMap = make(map[topo.TabletType]*topo.KeyspaceServedFrom, len(servedFrom))
 		for name, value := range servedFrom {
-			tt := topo.TabletType(name)
-			if !topo.IsInServingGraph(tt) {
-				return fmt.Errorf("Cannot use tablet type that is not in serving graph: %v", tt)
+			tt, err := parseServingTabletType3(name)
+			if err != nil {
+				return err
 			}
-			ki.ServedFromMap[tt] = &topo.KeyspaceServedFrom{
-				Keyspace: value,
-			}
+			ki.ServedFroms = append(ki.ServedFroms, &topodatapb.Keyspace_ServedFrom{
+				TabletType: tt,
+				Keyspace:   value,
+			})
 		}
 	}
-	err = wr.TopoServer().CreateKeyspace(keyspace, ki)
+	err = wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
 	if *force && err == topo.ErrNodeExists {
 		log.Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil
@@ -1592,69 +1469,92 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	return err
 }
 
-func commandGetKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	recursive := subFlags.Bool("recursive", false, "Also recursively delete all shards in the keyspace.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action GetKeyspace requires <keyspace|zk keyspace path>")
+		return fmt.Errorf("Must specify the <keyspace> argument for DeleteKeyspace.")
 	}
 
-	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	keyspaceInfo, err := wr.TopoServer().GetKeyspace(keyspace)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJson(keyspaceInfo))
-	}
-	return err
+	return wr.DeleteKeyspace(ctx, subFlags.Arg(0), *recursive)
 }
 
-func commandSetKeyspaceShardingInfo(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will update the fields even if they're already set, use with care")
-	splitShardCount := subFlags.Int("split_shard_count", 0, "number of shards to use for data splits")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() > 3 || subFlags.NArg() < 1 {
-		return fmt.Errorf("action SetKeyspaceShardingInfo requires <keyspace name|zk keyspace path> [<column name>] [<column type>]")
-	}
-
-	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	columnName := ""
-	if subFlags.NArg() >= 2 {
-		columnName = subFlags.Arg(1)
-	}
-	kit := key.KIT_UNSET
-	if subFlags.NArg() >= 3 {
-		kit = key.KeyspaceIdType(subFlags.Arg(2))
-		if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
-			return fmt.Errorf("invalid sharding_column_type")
-		}
-	}
-
-	return wr.SetKeyspaceShardingInfo(keyspace, columnName, kit, int32(*splitShardCount), *force)
-}
-
-func commandSetKeyspaceServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	source := subFlags.String("source", "", "source keyspace name")
-	remove := subFlags.Bool("remove", false, "remove the served from record instead of adding it")
-	cellsStr := subFlags.String("cells", "", "comma separated list of cells to affect")
+func commandRemoveKeyspaceCell(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	force := subFlags.Bool("force", false, "Proceeds even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
+	recursive := subFlags.Bool("recursive", false, "Also delete all tablets in that cell belonging to the specified keyspace.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action SetKeyspaceServedFrom requires <keyspace name> <tablet type>")
+		return fmt.Errorf("The <keyspace> and <cell> arguments are required for the RemoveKeyspaceCell command.")
 	}
-	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
+
+	return wr.RemoveKeyspaceCell(ctx, subFlags.Arg(0), subFlags.Arg(1), *force, *recursive)
+}
+
+func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <keyspace> argument is required for the GetKeyspace command.")
+	}
+
+	keyspace := subFlags.Arg(0)
+	keyspaceInfo, err := wr.TopoServer().GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	return printJSON(wr, keyspaceInfo)
+}
+
+func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	force := subFlags.Bool("force", false, "Updates fields even if they are already set. Use caution before calling this command.")
+	splitShardCount := subFlags.Int("split_shard_count", 0, "Specifies the number of shards to use for data splits")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() > 3 || subFlags.NArg() < 1 {
+		return fmt.Errorf("The <keyspace name> argument is required for the SetKeyspaceShardingInfo command. The <column name> and <column type> arguments are both optional.")
+	}
+
+	keyspace := subFlags.Arg(0)
+	columnName := ""
+	if subFlags.NArg() >= 2 {
+		columnName = subFlags.Arg(1)
+	}
+	kit := topodatapb.KeyspaceIdType_UNSET
+	if subFlags.NArg() >= 3 {
+		var err error
+		kit, err = key.ParseKeyspaceIDType(subFlags.Arg(2))
+		if err != nil {
+			return err
+		}
+	}
+
+	keyspaceIDTypeSet := (kit != topodatapb.KeyspaceIdType_UNSET)
+	columnNameSet := (columnName != "")
+	if (keyspaceIDTypeSet && !columnNameSet) || (!keyspaceIDTypeSet && columnNameSet) {
+		return fmt.Errorf("Both <column name> and <column type> must be set, or both must be unset.")
+	}
+
+	return wr.SetKeyspaceShardingInfo(ctx, keyspace, columnName, kit, int32(*splitShardCount), *force)
+}
+
+func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	source := subFlags.String("source", "", "Specifies the source keyspace name")
+	remove := subFlags.Bool("remove", false, "Indicates whether to add (default) or remove the served from record")
+	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to affect")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("The <keyspace name> and <tablet type> arguments are required for the SetKeyspaceServedFrom command.")
+	}
+	keyspace := subFlags.Arg(0)
+	servedType, err := parseTabletType(subFlags.Arg(1), []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
@@ -1663,16 +1563,17 @@ func commandSetKeyspaceServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet,
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetKeyspaceServedFrom(keyspace, servedType, cells, *source, *remove)
+	return wr.SetKeyspaceServedFrom(ctx, keyspace, servedType, cells, *source, *remove)
 }
 
-func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cells := subFlags.String("cells", "", "comma separated list of cells to update")
+func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cells := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	rebuildSrvShards := subFlags.Bool("rebuild_srv_shards", false, "Indicates whether all SrvShard objects should also be rebuilt. The default value is <code>false</code>.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("action RebuildKeyspaceGraph requires at least one <zk keyspace path>")
+		return fmt.Errorf("The <keyspace> argument must be used to specify at least one keyspace when calling the RebuildKeyspaceGraph command.")
 	}
 
 	var cellArray []string
@@ -1680,78 +1581,77 @@ func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, 
 		cellArray = strings.Split(*cells, ",")
 	}
 
-	keyspaces, err := keyspaceParamsToKeyspaces(wr, subFlags.Args())
+	keyspaces, err := keyspaceParamsToKeyspaces(ctx, wr, subFlags.Args())
 	if err != nil {
 		return err
 	}
 	for _, keyspace := range keyspaces {
-		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray); err != nil {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, cellArray, *rebuildSrvShards); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func commandValidateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	pingTablets := subFlags.Bool("ping-tablets", false, "ping all tablets during validate")
+func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	pingTablets := subFlags.Bool("ping-tablets", false, "Specifies whether all tablets will be pinged during the validation process")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ValidateKeyspace requires <keyspace name|zk keyspace path>")
+		return fmt.Errorf("The <keyspace name> argument is required for the ValidateKeyspace command.")
 	}
 
-	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	return wr.ValidateKeyspace(keyspace, *pingTablets)
+	keyspace := subFlags.Arg(0)
+	return wr.ValidateKeyspace(ctx, keyspace, *pingTablets)
 }
 
-func commandMigrateServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
-	reverse := subFlags.Bool("reverse", false, "move the served type back instead of forward, use in case of trouble")
-	skipReFreshState := subFlags.Bool("skip-refresh-state", false, "do not refresh the state of the source tablets after the migration (will need to be done manually, replica and rdonly only)")
+func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward. Use in case of trouble")
+	skipReFreshState := subFlags.Bool("skip-refresh-state", false, "Skips refreshing the state of the source tablets after the migration, meaning that the refresh will need to be done manually, replica and rdonly only)")
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action MigrateServedTypes requires <source keyspace/shard|zk source shard path> <served type>")
+		return fmt.Errorf("The <source keyspace/shard> and <served tablet type> arguments are both required for the MigrateServedTypes command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	servedType, err := parseServingTabletType3(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
-	if servedType == topo.TYPE_MASTER && *skipReFreshState {
-		return fmt.Errorf("can only specify skip-refresh-state for non-master migrations")
+	if servedType == topodatapb.TabletType_MASTER && *skipReFreshState {
+		return fmt.Errorf("The skip-refresh-state flag can only be specified for non-master migrations.")
 	}
 	var cells []string
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.MigrateServedTypes(keyspace, shard, cells, servedType, *reverse, *skipReFreshState)
+	return wr.MigrateServedTypes(ctx, keyspace, shard, cells, servedType, *reverse, *skipReFreshState, *filteredReplicationWaitTime)
 }
 
-func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	reverse := subFlags.Bool("reverse", false, "move the served from back instead of forward, use in case of trouble")
-	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
+func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward. Use in case of trouble")
+	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action MigrateServedFrom requires <destination keyspace/shard|zk source shard path> <served type>")
+		return fmt.Errorf("The <destination keyspace/shard> and <served tablet type> arguments are both required for the MigrateServedFrom command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	servedType, err := parseTabletType(subFlags.Arg(1), []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
@@ -1759,43 +1659,27 @@ func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.MigrateServedFrom(keyspace, shard, servedType, cells, *reverse)
+	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
 }
 
-func commandResolve(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action Resolve requires <keyspace>.<shard>.<db type>:<port name>")
-	}
-	parts := strings.Split(subFlags.Arg(0), ":")
-	if len(parts) != 2 {
-		return fmt.Errorf("action Resolve requires <keyspace>.<shard>.<db type>:<port name>")
-	}
-	namedPort := parts[1]
-
-	parts = strings.Split(parts[0], ".")
-	if len(parts) != 3 {
-		return fmt.Errorf("action Resolve requires <keyspace>.<shard>.<db type>:<port name>")
+		return fmt.Errorf("The <keyspace> argument is required for the FindAllShardsInKeyspace command.")
 	}
 
-	tabletType, err := parseTabletType(parts[2], topo.AllTabletTypes)
+	keyspace := subFlags.Arg(0)
+	result, err := wr.TopoServer().FindAllShardsInKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}
-	addrs, err := topo.LookupVtName(wr.TopoServer(), "local", parts[0], parts[1], tabletType, namedPort)
-	if err != nil {
-		return err
-	}
-	for _, addr := range addrs {
-		wr.Logger().Printf("%v:%v\n", addr.Target, addr.Port)
-	}
-	return nil
+	return printJSON(wr, result)
 }
 
-func commandValidate(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	pingTablets := subFlags.Bool("ping-tablets", false, "ping all tablets during validate")
+func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	pingTablets := subFlags.Bool("ping-tablets", false, "Indicates whether all tablets should be pinged during the validation process")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1803,89 +1687,71 @@ func commandValidate(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []strin
 	if subFlags.NArg() != 0 {
 		log.Warningf("action Validate doesn't take any parameter any more")
 	}
-	return wr.Validate(*pingTablets)
+	return wr.Validate(ctx, *pingTablets)
 }
 
-func commandRebuildReplicationGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandRebuildReplicationGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	// This is sort of a nuclear option.
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf("action RebuildReplicationGraph requires <cell1>,<cell2>,... <keyspace1>,<keyspace2>...")
+		return fmt.Errorf("The <cell> and <keyspace> arguments are both required for the RebuildReplicationGraph command. To specify multiple cells, separate the cell names with commas. Similarly, to specify multiple keyspaces, separate the keyspace names with commas.")
 	}
 
-	cellParams := strings.Split(subFlags.Arg(0), ",")
-	resolvedCells, err := resolveWildcards(wr, cellParams)
-	if err != nil {
-		return err
-	}
-	cells := make([]string, 0, len(cellParams))
-	for _, cell := range resolvedCells {
-		c, err := vtPathToCell(cell)
-		if err != nil {
-			return err
-		}
-		cells = append(cells, c)
-	}
-
+	cells := strings.Split(subFlags.Arg(0), ",")
 	keyspaceParams := strings.Split(subFlags.Arg(1), ",")
-	keyspaces, err := keyspaceParamsToKeyspaces(wr, keyspaceParams)
+	keyspaces, err := keyspaceParamsToKeyspaces(ctx, wr, keyspaceParams)
 	if err != nil {
 		return err
 	}
-	return wr.RebuildReplicationGraph(cells, keyspaces)
+	return wr.RebuildReplicationGraph(ctx, cells, keyspaces)
 }
 
-func commandListAllTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ListAllTablets requires <cell name|zk vt path>")
+		return fmt.Errorf("The <cell name> argument is required for the ListAllTablets command.")
 	}
 
-	cell, err := vtPathToCell(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	return dumpAllTablets(wr, cell)
+	cell := subFlags.Arg(0)
+	return dumpAllTablets(ctx, wr, cell)
 }
 
-func commandListTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("action ListTablets requires <tablet alias|zk tablet path> ...")
+		return fmt.Errorf("The <tablet alias> argument is required for the ListTablets command.")
 	}
 
-	zkPaths, err := resolveWildcards(wr, subFlags.Args())
-	if err != nil {
-		return err
-	}
-	aliases := make([]topo.TabletAlias, len(zkPaths))
-	for i, zkPath := range zkPaths {
-		aliases[i], err = tabletParamToTabletAlias(zkPath)
+	paths := subFlags.Args()
+	aliases := make([]*topodatapb.TabletAlias, len(paths))
+	var err error
+	for i, path := range paths {
+		aliases[i], err = topoproto.ParseTabletAlias(path)
 		if err != nil {
 			return err
 		}
 	}
-	return dumpTablets(wr, aliases)
+	return dumpTablets(ctx, wr, aliases)
 }
 
-func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	tables := subFlags.String("tables", "", "comma separated list of regexps for tables to gather schema information for")
-	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
-	includeViews := subFlags.Bool("include-views", false, "include views in the output")
-	tableNamesOnly := subFlags.Bool("table_names_only", false, "only display the table names that match")
+func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	tables := subFlags.String("tables", "", "Specifies a comma-separated list of regular expressions for which tables should gather information")
+	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of regular expressions for tables to exclude")
+	includeViews := subFlags.Bool("include-views", false, "Includes views in the output")
+	tableNamesOnly := subFlags.Bool("table_names_only", false, "Only displays table names that match")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action GetSchema requires <tablet alias|zk tablet path>")
+		return fmt.Errorf("The <tablet alias> argument is required for the GetSchema command.")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1898,44 +1764,44 @@ func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
 
-	sd, err := wr.GetSchema(tabletAlias, tableArray, excludeTableArray, *includeViews)
-	if err == nil {
-		if *tableNamesOnly {
-			for _, td := range sd.TableDefinitions {
-				wr.Logger().Printf("%v\n", td.Name)
-			}
-		} else {
-			wr.Logger().Printf("%v\n", jscfg.ToJson(sd))
-		}
-	}
-	return err
-}
-
-func commandReloadSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ReloadSchema requires <tablet alias|zk tablet path>")
-	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	sd, err := wr.GetSchema(ctx, tabletAlias, tableArray, excludeTableArray, *includeViews)
 	if err != nil {
 		return err
 	}
-	return wr.ReloadSchema(tabletAlias)
+	if *tableNamesOnly {
+		for _, td := range sd.TableDefinitions {
+			wr.Logger().Printf("%v\n", td.Name)
+		}
+		return nil
+	}
+	return printJSON(wr, sd)
 }
 
-func commandValidateSchemaShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
-	includeViews := subFlags.Bool("include-views", false, "include views in the validation")
+func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ValidateSchemaShard requires <keyspace/shard|zk shard path>")
+		return fmt.Errorf("The <tablet alias> argument is required for the ReloadSchema command.")
+	}
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	return wr.ReloadSchema(ctx, tabletAlias)
+}
+
+func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of regular expressions for tables to exclude")
+	includeViews := subFlags.Bool("include-views", false, "Includes views in the validation")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <keyspace/shard> argument is required for the ValidateSchemaShard command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1943,269 +1809,217 @@ func commandValidateSchemaShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return wr.ValidateSchemaShard(keyspace, shard, excludeTableArray, *includeViews)
+	return wr.ValidateSchemaShard(ctx, keyspace, shard, excludeTableArray, *includeViews)
 }
 
-func commandValidateSchemaKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
-	includeViews := subFlags.Bool("include-views", false, "include views in the validation")
+func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of regular expressions for tables to exclude")
+	includeViews := subFlags.Bool("include-views", false, "Includes views in the validation")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ValidateSchemaKeyspace requires <keyspace name|zk keyspace path>")
+		return fmt.Errorf("The <keyspace name> argument is required for the ValidateSchemaKeyspace command.")
 	}
 
-	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
+	keyspace := subFlags.Arg(0)
+	var excludeTableArray []string
+	if *excludeTables != "" {
+		excludeTableArray = strings.Split(*excludeTables, ",")
+	}
+	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews)
+}
+
+func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	force := subFlags.Bool("force", false, "Applies the schema even if the preflight schema doesn't match")
+	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
+	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
+	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "The amount of time to wait for slaves to catch up during reparenting. The default value is 30 seconds.")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <keyspace> argument is required for the commandApplySchema command.")
+	}
+
+	keyspace := subFlags.Arg(0)
+	change, err := getFileParam(*sql, *sqlFile, "sql")
 	if err != nil {
 		return err
+	}
+	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, *force, *waitSlaveTimeout)
+	if err != nil {
+		return err
+	}
+	return printJSON(wr, scr)
+}
+
+func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	tables := subFlags.String("tables", "", "Specifies a comma-separated list of regular expressions for which tables  gather schema information for")
+	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of regular expressions for which tables to exclude")
+	includeViews := subFlags.Bool("include-views", true, "Includes views in the output")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("The <source keyspace/shard> and <destination keyspace/shard> arguments are both required for the CopySchemaShard command. Instead of the <source keyspace/shard> argument, you can also specify <tablet alias> which refers to a specific tablet of the shard in the source keyspace.")
+	}
+	var tableArray []string
+	if *tables != "" {
+		tableArray = strings.Split(*tables, ",")
 	}
 	var excludeTableArray []string
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return wr.ValidateSchemaKeyspace(keyspace, excludeTableArray, *includeViews)
-}
-
-func commandPreflightSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	sql := subFlags.String("sql", "", "sql command")
-	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action PreflightSchema requires <tablet alias|zk tablet path>")
-	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	destKeyspace, destShard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
-	change, err := getFileParam(*sql, *sqlFile, "sql")
-	if err != nil {
-		return err
-	}
-	scr, err := wr.PreflightSchema(tabletAlias, change)
+
+	sourceKeyspace, sourceShard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err == nil {
-		log.Infof(scr.String())
+		return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard)
+	}
+	sourceTabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err == nil {
+		return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard)
 	}
 	return err
 }
 
-func commandApplySchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will apply the schema even if preflight schema doesn't match")
-	sql := subFlags.String("sql", "", "sql command")
-	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
-	skipPreflight := subFlags.Bool("skip-preflight", false, "do not preflight the schema (use with care)")
-	stopReplication := subFlags.Bool("stop-replication", false, "stop replication before applying schema")
+func commandValidateVersionShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ApplySchema requires <tablet alias|zk tablet path>")
+		return fmt.Errorf("The <keyspace/shard> argument is requird for the ValidateVersionShard command.")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	change, err := getFileParam(*sql, *sqlFile, "sql")
-	if err != nil {
-		return err
-	}
-
-	sc := &myproto.SchemaChange{}
-	sc.Sql = change
-	sc.AllowReplication = !(*stopReplication)
-
-	// do the preflight to get before and after schema
-	if !(*skipPreflight) {
-		scr, err := wr.PreflightSchema(tabletAlias, sc.Sql)
-		if err != nil {
-			return fmt.Errorf("preflight failed: %v", err)
-		}
-		log.Infof("Preflight: " + scr.String())
-		sc.BeforeSchema = scr.BeforeSchema
-		sc.AfterSchema = scr.AfterSchema
-		sc.Force = *force
-	}
-
-	scr, err := wr.ApplySchema(tabletAlias, sc)
-	if err == nil {
-		log.Infof(scr.String())
-	}
-	return err
+	return wr.ValidateVersionShard(ctx, keyspace, shard)
 }
 
-func commandApplySchemaShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will apply the schema even if preflight schema doesn't match")
-	sql := subFlags.String("sql", "", "sql command")
-	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
-	simple := subFlags.Bool("simple", false, "just apply change on master and let replication do the rest")
-	newParent := subFlags.String("new-parent", "", "will reparent to this tablet after the change")
+func commandValidateVersionKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ApplySchemaShard requires <keyspace/shard|zk shard path>")
-	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	change, err := getFileParam(*sql, *sqlFile, "sql")
-	if err != nil {
-		return err
-	}
-	var newParentAlias topo.TabletAlias
-	if *newParent != "" {
-		newParentAlias, err = tabletParamToTabletAlias(*newParent)
-		if err != nil {
-			return err
-		}
+		return fmt.Errorf("The <keyspace name> argument is required for the ValidateVersionKeyspace command.")
 	}
 
-	if (*simple) && (*newParent != "") {
-		return fmt.Errorf("new_parent for action ApplySchemaShard can only be specified for complex schema upgrades")
-	}
-
-	scr, err := wr.ApplySchemaShard(keyspace, shard, change, newParentAlias, *simple, *force)
-	if err == nil {
-		log.Infof(scr.String())
-	}
-	return err
+	keyspace := subFlags.Arg(0)
+	return wr.ValidateVersionKeyspace(ctx, keyspace)
 }
 
-func commandApplySchemaKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will apply the schema even if preflight schema doesn't match")
-	sql := subFlags.String("sql", "", "sql command")
-	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
-	simple := subFlags.Bool("simple", false, "just apply change on master and let replication do the rest")
+func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ApplySchemaKeyspace requires <keyspace|zk keyspace path>")
+		return fmt.Errorf("The <tablet alias> argument is required for the GetPermissions command.")
 	}
-
-	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	change, err := getFileParam(*sql, *sqlFile, "sql")
-	if err != nil {
-		return err
-	}
-	scr, err := wr.ApplySchemaKeyspace(keyspace, change, *simple, *force)
-	if err == nil {
-		log.Infof(scr.String())
-	}
-	return err
-}
-
-func commandValidateVersionShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ValidateVersionShard requires <keyspace/shard|zk shard path>")
-	}
-
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	return wr.ValidateVersionShard(keyspace, shard)
-}
-
-func commandValidateVersionKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ValidateVersionKeyspace requires <keyspace name|zk keyspace path>")
-	}
-
-	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	return wr.ValidateVersionKeyspace(keyspace)
-}
-
-func commandGetPermissions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action GetPermissions requires <tablet alias|zk tablet path>")
-	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	p, err := wr.GetPermissions(tabletAlias)
+	p, err := wr.GetPermissions(ctx, tabletAlias)
 	if err == nil {
 		log.Infof("%v", p.String()) // they can contain '%'
 	}
 	return err
 }
 
-func commandValidatePermissionsShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandValidatePermissionsShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ValidatePermissionsShard requires <keyspace/shard|zk shard path>")
+		return fmt.Errorf("The <keyspace/shard> argument is required for the ValidatePermissionsShard command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	return wr.ValidatePermissionsShard(keyspace, shard)
+	return wr.ValidatePermissionsShard(ctx, keyspace, shard)
 }
 
-func commandValidatePermissionsKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandValidatePermissionsKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ValidatePermissionsKeyspace requires <keyspace name|zk keyspace path>")
+		return fmt.Errorf("The <keyspace name> argument is required for the ValidatePermissionsKeyspace command.")
 	}
 
-	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
+	keyspace := subFlags.Arg(0)
+	return wr.ValidatePermissionsKeyspace(ctx, keyspace)
+}
+
+func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 0 {
+		return fmt.Errorf("The GetVSchema command does not support any arguments.")
+	}
+	schema, err := wr.TopoServer().GetVSchema(ctx)
 	if err != nil {
 		return err
 	}
-	return wr.ValidatePermissionsKeyspace(keyspace)
+	wr.Logger().Printf("%s\n", schema)
+	return nil
 }
 
-func commandGetSrvKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	vschema := subFlags.String("vschema", "", "Identifies the VTGate routing schema")
+	vschemaFile := subFlags.String("vschema_file", "", "Identifies the VTGate routing schema file")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if (*vschema == "") == (*vschemaFile == "") {
+		return fmt.Errorf("Either the vschema or vschemaFile flag must be specified when calling the ApplyVSchema command.")
+	}
+	s := *vschema
+	if *vschemaFile != "" {
+		schema, err := ioutil.ReadFile(*vschemaFile)
+		if err != nil {
+			return err
+		}
+		s = string(schema)
+	}
+	return wr.TopoServer().SaveVSchema(ctx, s)
+}
+
+func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action GetSrvKeyspace requires <cell> <keyspace>")
+		return fmt.Errorf("The <cell> and <keyspace> arguments are required for the GetSrvKeyspace command.")
 	}
 
-	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(subFlags.Arg(0), subFlags.Arg(1))
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJson(srvKeyspace))
+	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(ctx, subFlags.Arg(0), subFlags.Arg(1))
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, srvKeyspace)
 }
 
-func commandGetSrvKeyspaceNames(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action GetSrvKeyspaceNames requires <cell>")
+		return fmt.Errorf("The <cell> argument is required for the GetSrvKeyspaceNames command.")
 	}
 
-	srvKeyspaceNames, err := wr.TopoServer().GetSrvKeyspaceNames(subFlags.Arg(0))
+	srvKeyspaceNames, err := wr.TopoServer().GetSrvKeyspaceNames(ctx, subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -2215,67 +2029,91 @@ func commandGetSrvKeyspaceNames(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	return nil
 }
 
-func commandGetSrvShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandGetSrvShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action GetSrvShard requires <cell> <keyspace/shard|zk shard path>")
+		return fmt.Errorf("The <cell> and <keyspace/shard> arguments are required for the GetSrvShard command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(1))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
-	srvShard, err := wr.TopoServer().GetSrvShard(subFlags.Arg(0), keyspace, shard)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJson(srvShard))
+	srvShard, err := wr.TopoServer().GetSrvShard(ctx, subFlags.Arg(0), keyspace, shard)
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, srvShard)
 }
 
-func commandGetEndPoints(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 3 {
-		return fmt.Errorf("action GetEndPoints requires <cell> <keyspace/shard|zk shard path> <tablet type>")
+		return fmt.Errorf("The <cell>, <keyspace/shard>, and <tablet type> arguments are required for the GetEndPoints command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(1))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
-	tabletType := topo.TabletType(subFlags.Arg(2))
-	endPoints, err := wr.TopoServer().GetEndPoints(subFlags.Arg(0), keyspace, shard, tabletType)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJson(endPoints))
+	tabletType, err := parseTabletType(subFlags.Arg(2), []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
+	if err != nil {
+		return err
 	}
-	return err
+	endPoints, _, err := wr.TopoServer().GetEndPoints(ctx, subFlags.Arg(0), keyspace, shard, tabletType)
+	if err != nil {
+		return err
+	}
+	return printJSON(wr, endPoints)
 }
 
-func commandGetShardReplication(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action GetShardReplication requires <cell> <keyspace/shard|zk shard path>")
+		return fmt.Errorf("The <cell> and <keyspace/shard> arguments are required for the GetShardReplication command.")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(1))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
-	shardReplication, err := wr.TopoServer().GetShardReplication(subFlags.Arg(0), keyspace, shard)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJson(shardReplication))
+	shardReplication, err := wr.TopoServer().GetShardReplication(ctx, subFlags.Arg(0), keyspace, shard)
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, shardReplication)
+}
+
+func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	switch subFlags.NArg() {
+	case 0:
+		wr.Logger().Printf("Available commands:\n\n")
+		PrintAllCommands(wr.Logger())
+	case 1:
+		RunCommand(ctx, wr, []string{subFlags.Arg(0), "--help"})
+	default:
+		return fmt.Errorf("When calling the Help command, either specify a single argument that identifies the name of the command to get help with or do not specify any additional arguments.")
+	}
+
+	return nil
+}
+
+func commandPanic(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	panic(fmt.Errorf("this command panics on purpose"))
 }
 
 type rTablet struct {
 	*topo.TabletInfo
-	*myproto.ReplicationStatus
+	*replicationdatapb.Status
 }
 
 type rTablets []*rTablet
@@ -2291,45 +2129,64 @@ func (rts rTablets) Less(i, j int) bool {
 	l, r := rts[j], rts[i]
 	// l or r ReplicationStatus would be nil if we failed to get
 	// the position (put them at the beginning of the list)
-	if l.ReplicationStatus == nil {
-		return r.ReplicationStatus != nil
+	if l.Status == nil {
+		return r.Status != nil
 	}
-	if r.ReplicationStatus == nil {
+	if r.Status == nil {
 		return false
 	}
-	var lTypeMaster, rTypeMaster int
-	if l.Type == topo.TYPE_MASTER {
-		lTypeMaster = 1
-	}
-	if r.Type == topo.TYPE_MASTER {
-		rTypeMaster = 1
-	}
-	if lTypeMaster < rTypeMaster {
+	// the type proto has MASTER first, so sort by that. Will show
+	// the MASTER first, then each slave type sorted by
+	// replication position.
+	if l.Type < r.Type {
 		return true
 	}
-	if lTypeMaster == rTypeMaster {
-		return !l.Position.AtLeast(r.Position)
+	if l.Type > r.Type {
+		return false
 	}
-	return false
+	// then compare replication positions
+	lpos, err := replication.DecodePosition(l.Position)
+	if err != nil {
+		return true
+	}
+	rpos, err := replication.DecodePosition(r.Position)
+	if err != nil {
+		return false
+	}
+	return !lpos.AtLeast(rpos)
 }
 
-func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*myproto.ReplicationStatus) []*rTablet {
+func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status) []*rTablet {
 	rtablets := make([]*rTablet, len(tablets))
 	for i, status := range stats {
-		rtablets[i] = &rTablet{TabletInfo: tablets[i], ReplicationStatus: status}
+		rtablets[i] = &rTablet{
+			TabletInfo: tablets[i],
+			Status:     status,
+		}
 	}
 	sort.Sort(rTablets(rtablets))
 	return rtablets
 }
 
+// printJSON will print the JSON version of the structure to the logger
+// console output, or an error to the logger's Error channel.
+func printJSON(wr *wrangler.Wrangler, val interface{}) error {
+	data, err := json.MarshalIndent(val, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cannot marshal data: %v", err)
+	}
+	wr.Logger().Printf("%v\n", string(data))
+	return nil
+}
+
 // RunCommand will execute the command using the provided wrangler.
 // It will return the actionPath to wait on for long remote actions if
 // applicable.
-func RunCommand(wr *wrangler.Wrangler, args []string) error {
+func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error {
 	if len(args) == 0 {
 		wr.Logger().Printf("No command specified. Please see the list below:\n\n")
 		PrintAllCommands(wr.Logger())
-		return fmt.Errorf("No command specified")
+		return fmt.Errorf("No command was specified.")
 	}
 
 	action := args[0]
@@ -2344,7 +2201,7 @@ func RunCommand(wr *wrangler.Wrangler, args []string) error {
 					wr.Logger().Printf("%s\n\n", cmd.help)
 					subFlags.PrintDefaults()
 				}
-				return cmd.method(wr, subFlags, args[1:])
+				return cmd.method(ctx, wr, subFlags, args[1:])
 			}
 		}
 	}

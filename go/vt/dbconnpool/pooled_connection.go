@@ -5,14 +5,16 @@
 package dbconnpool
 
 import (
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 )
 
 // PooledDBConnection re-exposes DBConnection as a PoolConnection
 type PooledDBConnection struct {
 	*DBConnection
-	pool *ConnectionPool
+	info       *sqldb.ConnParams
+	mysqlStats *stats.Timings
+	pool       *ConnectionPool
 }
 
 // Recycle implements PoolConnection's Recycle
@@ -22,6 +24,18 @@ func (pc *PooledDBConnection) Recycle() {
 	} else {
 		pc.pool.Put(pc)
 	}
+}
+
+// Reconnect replaces the existing underlying connection
+// with a new one.
+func (pc *PooledDBConnection) Reconnect() error {
+	pc.DBConnection.Close()
+	newConn, err := NewDBConnection(pc.info, pc.mysqlStats)
+	if err != nil {
+		return err
+	}
+	pc.DBConnection = newConn
+	return nil
 }
 
 // DBConnectionCreator is the wrapper function to use to create a pool
@@ -34,12 +48,17 @@ func (pc *PooledDBConnection) Recycle() {
 // ...
 // conn, err := pool.Get()
 // ...
-func DBConnectionCreator(info *mysql.ConnectionParams, mysqlStats *stats.Timings) CreateConnectionFunc {
+func DBConnectionCreator(info *sqldb.ConnParams, mysqlStats *stats.Timings) CreateConnectionFunc {
 	return func(pool *ConnectionPool) (PoolConnection, error) {
 		c, err := NewDBConnection(info, mysqlStats)
 		if err != nil {
 			return nil, err
 		}
-		return &PooledDBConnection{c, pool}, nil
+		return &PooledDBConnection{
+			DBConnection: c,
+			info:         info,
+			mysqlStats:   mysqlStats,
+			pool:         pool,
+		}, nil
 	}
 }

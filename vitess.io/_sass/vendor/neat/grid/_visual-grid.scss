@@ -1,0 +1,41 @@
+@mixin grid-column-gradient($values...) {
+  background-image: deprecated-webkit-gradient(linear, left top, left bottom, $values);
+  background-image:  -webkit-linear-gradient(left, $values);
+  background-image:     -moz-linear-gradient(left, $values);
+  background-image:      -ms-linear-gradient(left, $values);
+  background-image:       -o-linear-gradient(left, $values);
+  background-image: unquote("linear-gradient(left, #{$values})");
+}
+
+@if $visual-grid == true or $visual-grid == yes {
+  body:before {
+    content: '';
+    display: inline-block;
+    @include grid-column-gradient(gradient-stops($grid-columns));
+    height: 100%;
+    left: 0;
+    margin: 0 auto;
+    max-width: $max-width;
+    opacity: $visual-grid-opacity;
+    position: fixed;
+    right: 0;
+    width: 100%;
+    pointer-events: none;
+
+    @if $visual-grid-index == back {
+      z-index: -1;
+    }
+
+    @else if $visual-grid-index == front {
+      z-index: 9999;
+    }
+
+    @each $breakpoint in $visual-grid-breakpoints {
+      @if $breakpoint != nil {
+        @include media($breakpoint) {
+          @include grid-column-gradient(gradient-stops($grid-columns));
+        }
+      }
+    }
+  }
+}

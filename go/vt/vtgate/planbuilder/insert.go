@@ -77,13 +77,13 @@ func buildIndexPlan(ins *sqlparser.Insert, tablename string, colVindex *ColVinde
 	}
 	if pos == -1 {
 		pos = len(ins.Columns)
-		ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: []byte(colVindex.Col)}})
+		ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: sqlparser.SQLName(colVindex.Col)}})
 		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
 	row := ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple)
-	val, err := sqlparser.AsInterface(row[pos])
+	val, err := asInterface(row[pos])
 	if err != nil {
-		return fmt.Errorf("could not convert val: %s, pos: %d", row[pos], pos)
+		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
 	plan.Values = append(plan.Values.([]interface{}), val)
 	row[pos] = sqlparser.ValArg([]byte(fmt.Sprintf(":_%s", colVindex.Col)))

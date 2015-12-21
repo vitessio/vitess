@@ -1,0 +1,17 @@
+@mixin row($display: block, $direction: $default-layout-direction) {
+  @include clearfix;
+  $layout-direction: $direction !global;
+
+  @if $display == table {
+    display: table;
+    @include fill-parent;
+    table-layout: fixed;
+    $container-display-table: true !global;
+  }
+
+  @else {
+    display: block;
+    $container-display-table: false !global;
+  }
+}
+

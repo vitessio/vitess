@@ -6,28 +6,45 @@ package vtgate
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
+	"golang.org/x/net/context"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
+
+var danglingTabletConn = stats.NewInt("DanglingTabletConn")
 
 // ShardConn represents a load balanced connection to a group
 // of vttablets that belong to the same shard. ShardConn can
 // be concurrently used across goroutines. Such requests are
 // interleaved on the same underlying connection.
 type ShardConn struct {
-	keyspace   string
-	shard      string
-	tabletType topo.TabletType
-	retryDelay time.Duration
-	retryCount int
-	timeout    time.Duration
-	balancer   *Balancer
+	keyspace           string
+	shard              string
+	tabletType         topodatapb.TabletType
+	retryDelay         time.Duration
+	retryCount         int
+	connTimeoutTotal   time.Duration
+	connTimeoutPerConn time.Duration
+	connLife           time.Duration
+	balancer           *Balancer
+	consolidator       *sync2.Consolidator
+	ticker             *timer.RandTicker
+
+	connectTimings *stats.MultiTimings
 
 	// conn needs a mutex because it can change during the lifetime of ShardConn.
 	mu   sync.Mutex
@@ -37,39 +54,66 @@ type ShardConn struct {
 // NewShardConn creates a new ShardConn. It creates a Balancer using
 // serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
 // number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, timeout time.Duration) *ShardConn {
-	getAddresses := func() (*topo.EndPoints, error) {
-		endpoints, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
+func NewShardConn(ctx context.Context, serv topo.SrvTopoServer, cell, keyspace, shard string, tabletType topodatapb.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
+	getAddresses := func() (*topodatapb.EndPoints, error) {
+		endpoints, _, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
-			return nil, fmt.Errorf("endpoints fetch error: %v", err)
+			return nil, vterrors.NewVitessError(
+				vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
+				"endpoints fetch error: %v", err,
+			)
 		}
 		return endpoints, nil
 	}
 	blc := NewBalancer(getAddresses, retryDelay)
-	return &ShardConn{
-		keyspace:   keyspace,
-		shard:      shard,
-		tabletType: tabletType,
-		retryDelay: retryDelay,
-		retryCount: retryCount,
-		timeout:    timeout,
-		balancer:   blc,
+	var ticker *timer.RandTicker
+	if tabletType != topodatapb.TabletType_MASTER {
+		ticker = timer.NewRandTicker(connLife, connLife/2)
 	}
+	sdc := &ShardConn{
+		keyspace:           keyspace,
+		shard:              shard,
+		tabletType:         tabletType,
+		retryDelay:         retryDelay,
+		retryCount:         retryCount,
+		connTimeoutTotal:   connTimeoutTotal,
+		connTimeoutPerConn: connTimeoutPerConn,
+		connLife:           connLife,
+		balancer:           blc,
+		ticker:             ticker,
+		consolidator:       sync2.NewConsolidator(),
+		connectTimings:     tabletConnectTimings,
+	}
+	if ticker != nil {
+		go func() {
+			for range ticker.C {
+				sdc.closeCurrent()
+			}
+		}()
+	}
+	return sdc
 }
 
+// ShardConnError is the shard conn specific error.
 type ShardConnError struct {
 	Code            int
 	ShardIdentifier string
 	InTransaction   bool
-	Err             string
+	// Preserve the original error, so that we don't need to parse the error string.
+	Err error
+	// EndPointCode is the error code to use for all the endpoint errors in aggregate
+	EndPointCode vtrpcpb.ErrorCode
 }
 
 func (e *ShardConnError) Error() string {
 	if e.ShardIdentifier == "" {
-		return e.Err
+		return fmt.Sprintf("%v", e.Err)
 	}
 	return fmt.Sprintf("shard, host: %s, %v", e.ShardIdentifier, e.Err)
 }
+
+// VtErrorCode returns the underlying Vitess error code
+func (e *ShardConnError) VtErrorCode() vtrpcpb.ErrorCode { return e.EndPointCode }
 
 // Dial creates tablet connection and connects to the vttablet.
 // It is not necessary to call this function before serving queries,
@@ -83,7 +127,7 @@ func (sdc *ShardConn) Dial(ctx context.Context) error {
 // Execute executes a non-streaming query on vttablet. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
-func (sdc *ShardConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (qr *mproto.QueryResult, err error) {
+func (sdc *ShardConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (qr *sqltypes.Result, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		qr, innerErr = conn.Execute(ctx, query, bindVars, transactionID)
@@ -93,20 +137,20 @@ func (sdc *ShardConn) Execute(ctx context.Context, query string, bindVars map[st
 }
 
 // ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
-func (sdc *ShardConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (qrs *tproto.QueryResultList, err error) {
+func (sdc *ShardConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) (qrs []sqltypes.Result, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qrs, innerErr = conn.ExecuteBatch(ctx, queries, transactionID)
+		qrs, innerErr = conn.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 		return innerErr
 	}, transactionID, false)
 	return qrs, err
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
-func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc) {
 	var usedConn tabletconn.TabletConn
 	var erFunc tabletconn.ErrFunc
-	var results <-chan *mproto.QueryResult
+	var results <-chan *sqltypes.Result
 	err := sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var err error
 		results, erFunc, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
@@ -144,24 +188,38 @@ func (sdc *ShardConn) Rollback(ctx context.Context, transactionID int64) (err er
 	}, transactionID, false)
 }
 
-func (sdc *ShardConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) (queries []tproto.QuerySplit, err error) {
+// SplitQuery splits a query into sub queries. The retry rules are the same as Execute.
+func (sdc *ShardConn) SplitQuery(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		queries, innerErr = conn.SplitQuery(ctx, query, splitCount)
+		queries, innerErr = conn.SplitQuery(ctx, querytypes.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+		}, splitColumn, splitCount)
 		return innerErr
 	}, 0, false)
 	return
 }
 
-// Close closes the underlying TabletConn. ShardConn can be
-// reused after this because it opens connections on demand.
+// Close closes the underlying TabletConn.
 func (sdc *ShardConn) Close() {
+	if sdc.ticker != nil {
+		sdc.ticker.Stop()
+	}
+	sdc.closeCurrent()
+}
+
+func (sdc *ShardConn) closeCurrent() {
 	sdc.mu.Lock()
 	defer sdc.mu.Unlock()
 	if sdc.conn == nil {
 		return
 	}
-	sdc.conn.Close()
+	go func(conn tabletconn.TabletConn) {
+		danglingTabletConn.Add(1)
+		conn.Close()
+		danglingTabletConn.Add(-1)
+	}(sdc.conn)
 	sdc.conn = nil
 }
 
@@ -172,103 +230,173 @@ func (sdc *ShardConn) Close() {
 // re-resolve and retry.
 func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn.TabletConn) error, transactionID int64, isStreaming bool) error {
 	var conn tabletconn.TabletConn
-	var endPoint topo.EndPoint
+	var endPoint *topodatapb.EndPoint
 	var err error
-	var retry bool
+	var isTimeout bool
 	inTransaction := (transactionID != 0)
 	// execute the action at least once even without retrying
 	for i := 0; i < sdc.retryCount+1; i++ {
-		conn, endPoint, err, retry = sdc.getConn(ctx)
+		conn, endPoint, isTimeout, err = sdc.getConn(ctx)
 		if err != nil {
-			if retry {
-				continue
+			if isTimeout || i == sdc.retryCount {
+				break
 			}
-			return sdc.WrapError(err, endPoint, inTransaction)
-		}
-		// no timeout for streaming query
-		if isStreaming {
-			err = action(conn)
-		} else {
-			tmr := time.NewTimer(sdc.timeout)
-			done := make(chan int)
-			var errAction error
-			go func() {
-				errAction = action(conn)
-				close(done)
-			}()
-			select {
-			case <-tmr.C:
-				err = tabletconn.OperationalError("vttablet: call timeout")
-			case <-done:
-				err = errAction
-			}
-			tmr.Stop()
-		}
-		if sdc.canRetry(err, transactionID, conn) {
+			time.Sleep(sdc.retryDelay)
 			continue
 		}
-		return sdc.WrapError(err, endPoint, inTransaction)
+		err = action(conn)
+		if sdc.canRetry(ctx, err, transactionID, conn, isStreaming) {
+			continue
+		}
+		break
 	}
 	return sdc.WrapError(err, endPoint, inTransaction)
 }
 
-// getConn reuses an existing connection if possible. Otherwise
-// it returns a connection which it will save for future reuse.
-// If it returns an error, retry will tell you if getConn can be retried.
-// If the context has a deadline and exceeded, it returns error and no-retry immediately.
-func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint topo.EndPoint, err error, retry bool) {
-	sdc.mu.Lock()
-	defer sdc.mu.Unlock()
+type connectResult struct {
+	Conn      tabletconn.TabletConn
+	EndPoint  *topodatapb.EndPoint
+	IsTimeout bool
+}
 
-	// fail-fast if deadline exceeded
-	deadline, ok := ctx.Deadline()
+// getConn reuses an existing connection if possible.
+// If no connection is available,
+// it creates a new connection if no connection is being created.
+// Otherwise it waits for the connection to be created.
+func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint *topodatapb.EndPoint, isTimeout bool, err error) {
+	sdc.mu.Lock()
+	if sdc.conn != nil {
+		conn = sdc.conn
+		endPoint = conn.EndPoint()
+		sdc.mu.Unlock()
+		return conn, endPoint, false, nil
+	}
+
+	key := fmt.Sprintf("%s.%s.%s", sdc.keyspace, sdc.shard, strings.ToLower(sdc.tabletType.String()))
+	q, ok := sdc.consolidator.Create(key)
+	sdc.mu.Unlock()
 	if ok {
-		if time.Now().After(deadline) {
-			return nil, topo.EndPoint{}, tabletconn.OperationalError("vttablet: deadline exceeded"), false
+		defer q.Broadcast()
+		conn, endPoint, isTimeout, err := sdc.getNewConn(ctx)
+		q.Result = &connectResult{Conn: conn, EndPoint: endPoint, IsTimeout: isTimeout}
+		q.Err = err
+	} else {
+		q.Wait()
+	}
+
+	connResult := q.Result.(*connectResult)
+	return connResult.Conn, connResult.EndPoint, connResult.IsTimeout, q.Err
+}
+
+// getNewConn creates a new tablet connection with a separate per conn timeout.
+// It limits the overall timeout to connTimeoutTotal by checking elapsed time after each blocking call.
+func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint *topodatapb.EndPoint, isTimeout bool, err error) {
+	startTime := time.Now()
+
+	endPoints, err := sdc.balancer.Get()
+	if err != nil {
+		// Error when getting endpoint
+		return nil, nil, false, err
+	}
+	if len(endPoints) == 0 {
+		// No valid endpoint
+		return nil, nil, false, vterrors.FromError(
+			vtrpcpb.ErrorCode_INTERNAL_ERROR,
+			fmt.Errorf("no valid endpoint"),
+		)
+	}
+	if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {
+		return nil, nil, true, vterrors.FromError(
+			vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+			fmt.Errorf("timeout when getting endpoints"),
+		)
+	}
+
+	// Iterate through all endpoints to create a connection
+	perConnTimeout := sdc.getConnTimeoutPerConn(len(endPoints))
+	allErrors := new(concurrency.AllErrorRecorder)
+	for _, endPoint := range endPoints {
+		perConnStartTime := time.Now()
+		conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, topodatapb.TabletType_UNKNOWN, perConnTimeout)
+		if err == nil {
+			sdc.connectTimings.Record([]string{sdc.keyspace, sdc.shard, strings.ToLower(sdc.tabletType.String())}, perConnStartTime)
+			sdc.mu.Lock()
+			defer sdc.mu.Unlock()
+			sdc.conn = conn
+			return conn, endPoint, false, nil
+		}
+		// Markdown the endpoint if it failed to connect
+		sdc.balancer.MarkDown(endPoint.Uid, err.Error())
+		vtErr := vterrors.NewVitessError(
+			// TODO(aaijazi): what about OperationalErrors here?
+			vterrors.RecoverVtErrorCode(err), err,
+			"%v %+v", err, endPoint,
+		)
+		allErrors.RecordError(vtErr)
+		if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {
+			err = vterrors.FromError(
+				vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+				fmt.Errorf("timeout when connecting to %+v", endPoint),
+			)
+			allErrors.RecordError(err)
+			return nil, nil, true, allErrors.AggrError(AggregateVtGateErrors)
 		}
 	}
+	return nil, nil, false, allErrors.Error()
+}
 
-	if sdc.conn != nil {
-		return sdc.conn, sdc.conn.EndPoint(), nil, false
+// getConnTimeoutPerConn determines the appropriate timeout per connection.
+func (sdc *ShardConn) getConnTimeoutPerConn(endPointCount int) time.Duration {
+	if endPointCount <= 1 {
+		return sdc.connTimeoutTotal
 	}
-
-	endPoint, err = sdc.balancer.Get()
-	if err != nil {
-		return nil, topo.EndPoint{}, err, false
+	if sdc.connTimeoutPerConn > sdc.connTimeoutTotal {
+		return sdc.connTimeoutTotal
 	}
-	conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, sdc.timeout)
-	if err != nil {
-		sdc.balancer.MarkDown(endPoint.Uid, err.Error())
-		return nil, endPoint, err, true
-	}
-	sdc.conn = conn
-	return sdc.conn, endPoint, nil, false
+	return sdc.connTimeoutPerConn
 }
 
 // canRetry determines whether a query can be retried or not.
 // OperationalErrors like retry/fatal cause a reconnect and retry if query is not in a txn.
 // TxPoolFull causes a retry and all other errors are non-retry.
-func (sdc *ShardConn) canRetry(err error, transactionID int64, conn tabletconn.TabletConn) bool {
+func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int64, conn tabletconn.TabletConn, isStreaming bool) bool {
 	if err == nil {
 		return false
 	}
+	// Do not retry if ctx.Done() is closed.
+	select {
+	case <-ctx.Done():
+		return false
+	default:
+	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
 		switch serverError.Code {
-		case tabletconn.ERR_TX_POOL_FULL:
-			// Retry without reconnecting.
-			time.Sleep(sdc.retryDelay)
-			return true
-		case tabletconn.ERR_RETRY, tabletconn.ERR_FATAL:
-			// No-op: treat these errors as operational by breaking out of this switch
+		case tabletconn.ERR_FATAL:
+			// Do not retry on fatal error for streaming query.
+			// For streaming query, vttablet sends:
+			// - RETRY, if streaming is not started yet;
+			// - FATAL, if streaming is broken halfway.
+			// For non-streaming query, handle as ERR_RETRY.
+			if isStreaming {
+				return false
+			}
+			fallthrough
+		case tabletconn.ERR_RETRY:
+			// Retry on RETRY and FATAL if not in a transaction.
+			inTransaction := (transactionID != 0)
+			sdc.markDown(conn, err.Error())
+			return !inTransaction
 		default:
-			// Should not retry for normal server errors.
+			// Not retry for TX_POOL_FULL and normal server errors.
 			return false
 		}
 	}
-	// Non-server errors or fatal/retry errors. Retry if we're not in a transaction.
-	inTransaction := (transactionID != 0)
+	// Do not retry on operational error.
+	// TODO(liang): handle the case when VTGate is idle
+	// while vttablet is gracefully shutdown.
+	// We want to retry in that case.
 	sdc.markDown(conn, err.Error())
-	return !inTransaction
+	return false
 }
 
 // markDown closes conn and temporarily marks the associated
@@ -281,8 +409,11 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn, reason string) {
 	}
 	sdc.balancer.MarkDown(conn.EndPoint().Uid, reason)
 
-	// Launch as goroutine so we don't block
-	go sdc.conn.Close()
+	go func(conn tabletconn.TabletConn) {
+		danglingTabletConn.Add(1)
+		conn.Close()
+		danglingTabletConn.Add(-1)
+	}(sdc.conn)
 	sdc.conn = nil
 }
 
@@ -290,11 +421,11 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn, reason string) {
 // adds the connection context
 // and adds a bit to determine whether the keyspace/shard needs to be
 // re-resolved for a potential sharding event.
-func (sdc *ShardConn) WrapError(in error, endPoint topo.EndPoint, inTransaction bool) (wrapped error) {
+func (sdc *ShardConn) WrapError(in error, endPoint *topodatapb.EndPoint, inTransaction bool) (wrapped error) {
 	if in == nil {
 		return nil
 	}
-	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", sdc.keyspace, sdc.shard, sdc.tabletType, endPoint)
+	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", sdc.keyspace, sdc.shard, strings.ToLower(sdc.tabletType.String()), endPoint)
 	code := tabletconn.ERR_NORMAL
 	serverError, ok := in.(*tabletconn.ServerError)
 	if ok {
@@ -305,7 +436,8 @@ func (sdc *ShardConn) WrapError(in error, endPoint topo.EndPoint, inTransaction 
 		Code:            code,
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
-		Err:             in.Error(),
+		Err:             in,
+		EndPointCode:    vterrors.RecoverVtErrorCode(in),
 	}
 	return shardConnErr
 }
