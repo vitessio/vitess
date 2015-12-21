@@ -18,7 +18,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='binlogservice.proto',
   package='binlogservice',
   syntax='proto3',
-  serialized_pb=b'\n\x13\x62inlogservice.proto\x12\rbinlogservice\x1a\x10\x62inlogdata.proto2\x99\x02\n\x0cUpdateStream\x12U\n\x0cStreamUpdate\x12\x1f.binlogdata.StreamUpdateRequest\x1a .binlogdata.StreamUpdateResponse\"\x00\x30\x01\x12[\n\x0eStreamKeyRange\x12!.binlogdata.StreamKeyRangeRequest\x1a\".binlogdata.StreamKeyRangeResponse\"\x00\x30\x01\x12U\n\x0cStreamTables\x12\x1f.binlogdata.StreamTablesRequest\x1a .binlogdata.StreamTablesResponse\"\x00\x30\x01\x62\x06proto3'
+  serialized_pb=b'\n\x13\x62inlogservice.proto\x12\rbinlogservice\x1a\x10\x62inlogdata.proto2\x99\x02\n\x0cUpdateStream\x12U\n\x0cStreamUpdate\x12\x1f.binlogdata.StreamUpdateRequest\x1a .binlogdata.StreamUpdateResponse\"\x00\x30\x01\x12[\n\x0eStreamKeyRange\x12!.binlogdata.StreamKeyRangeRequest\x1a\".binlogdata.StreamKeyRangeResponse\"\x00\x30\x01\x12U\n\x0cStreamTables\x12\x1f.binlogdata.StreamTablesRequest\x1a .binlogdata.StreamTablesResponse\"\x00\x30\x01\x42\x11Z\x0f\x62inlogservicepbb\x06proto3'
   ,
   dependencies=[binlogdata__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -27,6 +27,8 @@ _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), b'Z\017binlogservicepb')
 import abc
 from grpc.beta import implementations as beta_implementations
 from grpc.early_adopter import implementations as early_adopter_implementations

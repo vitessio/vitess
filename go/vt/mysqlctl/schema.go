@@ -12,7 +12,8 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+
+	"github.com/youtube/vitess/go/vt/proto/tabletmanagerdatapb"
 )
 
 var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")

@@ -9,10 +9,12 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 var cacheStats = stats.NewTimings("Rowcache")

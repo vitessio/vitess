@@ -17,7 +17,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='replicationdata.proto',
   package='replicationdata',
   syntax='proto3',
-  serialized_pb=b'\n\x15replicationdata.proto\x12\x0freplicationdata\"\xb6\x01\n\x06Status\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x18\n\x10slave_io_running\x18\x02 \x01(\x08\x12\x19\n\x11slave_sql_running\x18\x03 \x01(\x08\x12\x1d\n\x15seconds_behind_master\x18\x04 \x01(\r\x12\x13\n\x0bmaster_host\x18\x05 \x01(\t\x12\x13\n\x0bmaster_port\x18\x06 \x01(\x05\x12\x1c\n\x14master_connect_retry\x18\x07 \x01(\x05\x62\x06proto3'
+  serialized_pb=b'\n\x15replicationdata.proto\x12\x0freplicationdata\"\xb6\x01\n\x06Status\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x18\n\x10slave_io_running\x18\x02 \x01(\x08\x12\x19\n\x11slave_sql_running\x18\x03 \x01(\x08\x12\x1d\n\x15seconds_behind_master\x18\x04 \x01(\r\x12\x13\n\x0bmaster_host\x18\x05 \x01(\t\x12\x13\n\x0bmaster_port\x18\x06 \x01(\x05\x12\x1c\n\x14master_connect_retry\x18\x07 \x01(\x05\x42\x13Z\x11replicationdatapbb\x06proto3'
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -106,6 +106,8 @@ Status = _reflection.GeneratedProtocolMessageType('Status', (_message.Message,),
 _sym_db.RegisterMessage(Status)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), b'Z\021replicationdatapb')
 import abc
 from grpc.beta import implementations as beta_implementations
 from grpc.early_adopter import implementations as early_adopter_implementations

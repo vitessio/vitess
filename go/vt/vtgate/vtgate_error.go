@@ -5,8 +5,9 @@
 package vtgate
 
 import (
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
+
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 // A list of all vtrpcpb.ErrorCodes, ordered by priority. These priorities are

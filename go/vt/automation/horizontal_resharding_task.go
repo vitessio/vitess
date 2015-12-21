@@ -7,7 +7,7 @@ package automation
 import (
 	"strings"
 
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	"github.com/youtube/vitess/go/vt/proto/automationpb"
 )
 
 // HorizontalReshardingTask is a cluster operation which allows to increase the number of shards.

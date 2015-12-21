@@ -9,16 +9,16 @@ import (
 	"reflect"
 	"sync"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/trace"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 const (

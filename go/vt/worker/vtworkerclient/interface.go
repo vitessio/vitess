@@ -13,7 +13,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	"github.com/youtube/vitess/go/vt/proto/logutilpb"
 )
 
 // protocol specifices which RPC client implementation should be used.

@@ -18,9 +18,9 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	queryservicepb "github.com/youtube/vitess/go/vt/proto/queryservice"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
+	"github.com/youtube/vitess/go/vt/proto/queryservicepb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 const protocolName = "grpc"

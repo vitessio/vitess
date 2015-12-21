@@ -17,8 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/worker"
 
-	vtworkerdatapb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
-	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
+	"github.com/youtube/vitess/go/vt/proto/vtworkerdatapb"
+	"github.com/youtube/vitess/go/vt/proto/vtworkerservicepb"
 )
 
 // VtworkerServer is our RPC server

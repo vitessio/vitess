@@ -9,10 +9,11 @@ import (
 	"fmt"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // CreateTablet implements topo.Server.

@@ -18,7 +18,7 @@ get all shards with "keyspace.*.db_type".
 In zk, this is in /zk/local/vt/ns/<keyspace>/<shard>/<db type>
 */
 
-import topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+import "github.com/youtube/vitess/go/vt/proto/topodatapb"
 
 const (
 	// DefaultPortName is the port named used by SrvEntries

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 func TestMemcacheStats(t *testing.T) {

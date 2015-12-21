@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
 )
 
 // fakeEvent implements replication.BinlogEvent.

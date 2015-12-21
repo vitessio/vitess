@@ -17,7 +17,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='mysqlctl.proto',
   package='mysqlctl',
   syntax='proto3',
-  serialized_pb=b'\n\x0emysqlctl.proto\x12\x08mysqlctl\"\x0e\n\x0cStartRequest\"\x0f\n\rStartResponse\"*\n\x0fShutdownRequest\x12\x17\n\x0fwait_for_mysqld\x18\x01 \x01(\x08\"\x12\n\x10ShutdownResponse\"\x18\n\x16RunMysqlUpgradeRequest\"\x19\n\x17RunMysqlUpgradeResponse2\xe5\x01\n\x08MysqlCtl\x12:\n\x05Start\x12\x16.mysqlctl.StartRequest\x1a\x17.mysqlctl.StartResponse\"\x00\x12\x43\n\x08Shutdown\x12\x19.mysqlctl.ShutdownRequest\x1a\x1a.mysqlctl.ShutdownResponse\"\x00\x12X\n\x0fRunMysqlUpgrade\x12 .mysqlctl.RunMysqlUpgradeRequest\x1a!.mysqlctl.RunMysqlUpgradeResponse\"\x00\x62\x06proto3'
+  serialized_pb=b'\n\x0emysqlctl.proto\x12\x08mysqlctl\"\x0e\n\x0cStartRequest\"\x0f\n\rStartResponse\"*\n\x0fShutdownRequest\x12\x17\n\x0fwait_for_mysqld\x18\x01 \x01(\x08\"\x12\n\x10ShutdownResponse\"\x18\n\x16RunMysqlUpgradeRequest\"\x19\n\x17RunMysqlUpgradeResponse2\xe5\x01\n\x08MysqlCtl\x12:\n\x05Start\x12\x16.mysqlctl.StartRequest\x1a\x17.mysqlctl.StartResponse\"\x00\x12\x43\n\x08Shutdown\x12\x19.mysqlctl.ShutdownRequest\x1a\x1a.mysqlctl.ShutdownResponse\"\x00\x12X\n\x0fRunMysqlUpgrade\x12 .mysqlctl.RunMysqlUpgradeRequest\x1a!.mysqlctl.RunMysqlUpgradeResponse\"\x00\x42\x0cZ\nmysqlctlpbb\x06proto3'
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -224,6 +224,8 @@ RunMysqlUpgradeResponse = _reflection.GeneratedProtocolMessageType('RunMysqlUpgr
 _sym_db.RegisterMessage(RunMysqlUpgradeResponse)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), b'Z\nmysqlctlpb')
 import abc
 from grpc.beta import implementations as beta_implementations
 from grpc.early_adopter import implementations as early_adopter_implementations

@@ -9,8 +9,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
+	"github.com/youtube/vitess/go/vt/proto/vtgatepb"
 )
 
 // successClient implements vtgateservice.VTGateService

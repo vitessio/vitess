@@ -10,8 +10,8 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/servenv"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	binlogservicepb "github.com/youtube/vitess/go/vt/proto/binlogservice"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
+	"github.com/youtube/vitess/go/vt/proto/binlogservicepb"
 )
 
 // UpdateStream is the gRPC UpdateStream server

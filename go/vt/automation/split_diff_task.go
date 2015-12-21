@@ -7,8 +7,9 @@ package automation
 import (
 	"fmt"
 
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/proto/automationpb"
 )
 
 // SplitDiffTask runs SplitDiff on a remote vtworker to compare the old shard against its new split shards.

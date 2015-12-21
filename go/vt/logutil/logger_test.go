@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	"github.com/youtube/vitess/go/vt/proto/logutilpb"
 )
 
 func TestLoggerEventFormat(t *testing.T) {

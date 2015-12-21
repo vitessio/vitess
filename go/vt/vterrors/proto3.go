@@ -7,7 +7,7 @@ package vterrors
 import (
 	"errors"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 // This files contains the necessary methods to send and receive errors

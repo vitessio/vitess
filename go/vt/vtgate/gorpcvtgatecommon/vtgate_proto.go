@@ -12,8 +12,8 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid/gorpccallerid"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
+	"github.com/youtube/vitess/go/vt/proto/vtgatepb"
 )
 
 // Query represents a keyspace agnostic query request.

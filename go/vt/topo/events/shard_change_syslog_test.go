@@ -4,7 +4,7 @@ import (
 	"log/syslog"
 	"testing"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 func TestShardChangeSyslog(t *testing.T) {

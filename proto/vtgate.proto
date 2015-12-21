@@ -4,6 +4,7 @@ syntax = "proto3";
 
 package vtgate;
 
+option go_package = "vtgatepb";
 option java_package="com.youtube.vitess.proto";
 
 import "query.proto";

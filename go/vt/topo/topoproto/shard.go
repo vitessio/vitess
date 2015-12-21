@@ -11,7 +11,8 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/vt/key"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // ParseKeyspaceShard parse a "keyspace/shard" string and extract

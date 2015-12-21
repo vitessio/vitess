@@ -8,10 +8,11 @@ package fakevtctlclient
 import (
 	"time"
 
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+
+	"github.com/youtube/vitess/go/vt/proto/logutilpb"
 )
 
 // FakeVtctlClient is a fake which implements the vtctlclient interface.

@@ -10,11 +10,12 @@ import (
 	"net"
 	"sync"
 
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // As with all distributed systems, things can skew. These functions

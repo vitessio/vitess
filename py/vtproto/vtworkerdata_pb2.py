@@ -18,7 +18,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtworkerdata.proto',
   package='vtworkerdata',
   syntax='proto3',
-  serialized_pb=b'\n\x12vtworkerdata.proto\x12\x0cvtworkerdata\x1a\rlogutil.proto\"-\n\x1d\x45xecuteVtworkerCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\"?\n\x1e\x45xecuteVtworkerCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Eventb\x06proto3'
+  serialized_pb=b'\n\x12vtworkerdata.proto\x12\x0cvtworkerdata\x1a\rlogutil.proto\"-\n\x1d\x45xecuteVtworkerCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\"?\n\x1e\x45xecuteVtworkerCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.EventB\x10Z\x0evtworkerdatapbb\x06proto3'
   ,
   dependencies=[logutil__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -106,6 +106,8 @@ ExecuteVtworkerCommandResponse = _reflection.GeneratedProtocolMessageType('Execu
 _sym_db.RegisterMessage(ExecuteVtworkerCommandResponse)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), b'Z\016vtworkerdatapb')
 import abc
 from grpc.beta import implementations as beta_implementations
 from grpc.early_adopter import implementations as early_adopter_implementations

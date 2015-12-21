@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"testing"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	"github.com/youtube/vitess/go/vt/proto/tabletmanagerdatapb"
 )
 
 var basicTable1 = &tabletmanagerdatapb.TableDefinition{

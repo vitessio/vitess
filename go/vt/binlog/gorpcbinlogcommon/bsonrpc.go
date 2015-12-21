@@ -7,8 +7,8 @@
 package gorpcbinlogcommon
 
 import (
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // UpdateStreamRequest is used to make a request for ServeUpdateStream.

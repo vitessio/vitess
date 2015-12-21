@@ -10,13 +10,12 @@ import (
 	"net"
 	"time"
 
-	"google.golang.org/grpc"
-
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlclient"
 
-	mysqlctlpb "github.com/youtube/vitess/go/vt/proto/mysqlctl"
+	"github.com/youtube/vitess/go/vt/proto/mysqlctlpb"
 )
 
 type client struct {

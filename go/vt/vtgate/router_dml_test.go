@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 func TestUpdateEqual(t *testing.T) {

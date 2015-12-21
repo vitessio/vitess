@@ -15,8 +15,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
-	automationservicepb "github.com/youtube/vitess/go/vt/proto/automationservice"
+	"github.com/youtube/vitess/go/vt/proto/automationpb"
+	"github.com/youtube/vitess/go/vt/proto/automationservicepb"
 )
 
 var (

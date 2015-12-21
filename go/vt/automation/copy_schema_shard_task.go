@@ -7,8 +7,9 @@ package automation
 import (
 	"fmt"
 
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/proto/automationpb"
 )
 
 // CopySchemaShardTask runs vtctl CopySchemaShard to copy the schema from one shard to another.

@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtctl/fakevtctlclient"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	"github.com/youtube/vitess/go/vt/proto/logutilpb"
 )
 
 // FakeVtworkerClient is a fake which implements the vtworkerclient interface.

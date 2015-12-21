@@ -9,9 +9,10 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 func TestBatchRead(t *testing.T) {

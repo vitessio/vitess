@@ -5,7 +5,7 @@
 package automation
 
 import (
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	"github.com/youtube/vitess/go/vt/proto/automationpb"
 )
 
 // Helper functions for "Task" protobuf message.

@@ -11,7 +11,8 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 // BSONField is a temporary struct for backward compatibility.

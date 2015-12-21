@@ -18,6 +18,7 @@ import (
 
 	log "github.com/golang/glog"
 	influxClient "github.com/influxdb/influxdb/client"
+
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/servenv"
 )

@@ -5,8 +5,8 @@
 package binlog
 
 import (
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // UpdateStream is the interface for the binlog server

@@ -9,15 +9,16 @@ import (
 	"testing"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+	"launchpad.net/gozk/zookeeper"
+
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
-	"golang.org/x/net/context"
-	"launchpad.net/gozk/zookeeper"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {

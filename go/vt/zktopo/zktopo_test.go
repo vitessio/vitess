@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"launchpad.net/gozk/zookeeper"
 
 	"github.com/youtube/vitess/go/vt/topo/test"
 	"github.com/youtube/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 func TestKeyspace(t *testing.T) {

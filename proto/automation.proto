@@ -5,6 +5,8 @@
 
 syntax = "proto3";
 
+option go_package = "automationpb";
+
 package automation;
 
 enum ClusterOperationState {

@@ -17,7 +17,8 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/hack"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 var (

@@ -6,9 +6,10 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+
+	"github.com/youtube/vitess/go/vt/proto/querypb"
 )
 
 // QuerySplitter splits a BoundQuery into equally sized smaller queries.

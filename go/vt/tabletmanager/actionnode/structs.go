@@ -4,7 +4,7 @@
 
 package actionnode
 
-import topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+import "github.com/youtube/vitess/go/vt/proto/topodatapb"
 
 /*
 This file defines all the payload structures for the ActionNode objects.

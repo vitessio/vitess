@@ -11,15 +11,16 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"google.golang.org/grpc"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
+
+	"github.com/youtube/vitess/go/vt/proto/vtrpcpb"
 )
 
 const (

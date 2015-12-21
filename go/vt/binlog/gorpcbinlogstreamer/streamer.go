@@ -9,7 +9,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/gorpcbinlogcommon"
 	"github.com/youtube/vitess/go/vt/servenv"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
 )
 
 // UpdateStream is the go rpc UpdateStream server

@@ -9,13 +9,14 @@ import (
 	"io"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
-	vtworkerdatapb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
-	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
+	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
+
+	"github.com/youtube/vitess/go/vt/proto/logutilpb"
+	"github.com/youtube/vitess/go/vt/proto/vtworkerdatapb"
+	"github.com/youtube/vitess/go/vt/proto/vtworkerservicepb"
 )
 
 type gRPCVtworkerClient struct {

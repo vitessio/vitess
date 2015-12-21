@@ -20,8 +20,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	vtctldatapb "github.com/youtube/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "github.com/youtube/vitess/go/vt/proto/vtctlservice"
+	"github.com/youtube/vitess/go/vt/proto/vtctldatapb"
+	"github.com/youtube/vitess/go/vt/proto/vtctlservicepb"
 )
 
 // VtctlServer is our RPC server

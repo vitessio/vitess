@@ -9,15 +9,14 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	binlogservicepb "github.com/youtube/vitess/go/vt/proto/binlogservice"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/binlogdatapb"
+	"github.com/youtube/vitess/go/vt/proto/binlogservicepb"
+	"github.com/youtube/vitess/go/vt/proto/topodatapb"
 )
 
 // client implements a Client over go rpc
