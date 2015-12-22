@@ -53,7 +53,7 @@ var (
 <br>
 <table>
   <tr>
-    <th colspan="5">EndPoints Cache</th>
+    <th colspan="5">EndPoints Cache (NOT USED for new endpoint implementation)</th>
   </tr>
   <tr>
     <th>Cell</th>
@@ -72,7 +72,7 @@ var (
   </tr>
   {{end}}
 </table>
-<small>This is just a cache, so some data may not be visible here yet.</small>
+<small>This is just a cache, so some data may not be visible here yet. It is empty if using new endpoint implementation.</small>
 `
 
 	statsTemplate = `
@@ -219,8 +219,8 @@ google.setOnLoadCallback(function() {
     <th>Address</th>
     <th>Query Sent</th>
     <th>Query Error</th>
-    <th>QPS</th>
-    <th>Latency (ms)</th>
+    <th>QPS (avg 1m)</th>
+    <th>Latency (ms) (avg 1m)</th>
   </tr>
   {{range $i, $status := .}}
   <tr>
