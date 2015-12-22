@@ -24,12 +24,20 @@ VTGATE_TEMPLATE=${VTGATE_TEMPLATE:-'vtgate-controller-benchmarking-template.yaml
 VTGATE_COUNT=${VTGATE_COUNT:-0}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 CELLS=${CELLS:-'test'}
+KEYSPACE=${KEYSPACE:-'test_keyspace'}
 
 cells=`echo $CELLS | tr ',' ' '`
 num_cells=`echo $cells | wc -w`
 
 # Get region from zone (everything to last dash)
 gke_region=`echo $GKE_ZONE | sed "s/-[^-]*$//"`
+
+num_shards=`echo $SHARDS | tr "," " " | wc -w`
+total_tablet_count=$(($num_shards*$TABLETS_PER_SHARD*$num_cells))
+vtgate_count=$VTGATE_COUNT
+if [ $vtgate_count -eq 0 ]; then
+  vtgate_count=$(($total_tablet_count/4>3?$total_tablet_count/4:3))
+fi
 
 # export for vttablet scripts
 export SHARDS=$SHARDS
@@ -38,7 +46,7 @@ export RDONLY_COUNT=$RDONLY_COUNT
 export VTDATAROOT_VOLUME=$VTDATAROOT_VOLUME
 export VTGATE_TEMPLATE=$VTGATE_TEMPLATE
 export VTTABLET_TEMPLATE=$VTTABLET_TEMPLATE
-export VTGATE_REPLICAS=$VTGATE_COUNT
+export VTGATE_REPLICAS=$vtgate_count
 
 function update_spinner_value () {
   spinner='-\|/'
@@ -84,12 +92,6 @@ fi
 
 export KUBECTL='kubectl'
 go get github.com/youtube/vitess/go/cmd/vtctlclient
-num_shards=`echo $SHARDS | tr "," " " | wc -w`
-total_tablet_count=$(($num_shards*$TABLETS_PER_SHARD*$num_cells))
-vtgate_count=$VTGATE_COUNT
-if [ $vtgate_count -eq 0 ]; then
-  vtgate_count=$(($total_tablet_count/4>3?$total_tablet_count/4:3))
-fi
 
 echo "****************************"
 echo "*Creating vitess cluster:"
@@ -108,26 +110,32 @@ for cell in $cells; do
 done
 
 echo 'Running vtctld-up.sh' && ./vtctld-up.sh
-echo 'Running vttablet-up.sh' && CELLS=$CELLS ./vttablet-up.sh
-echo 'Running vtgate-up.sh' && ./vtgate-up.sh
 
 wait_for_running_tasks vtctld 1
-wait_for_running_tasks vttablet $total_tablet_count
-wait_for_running_tasks vtgate $vtgate_count
-
 echo Creating firewall rule for vtctld...
 vtctld_port=30001
 gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtctld --allow tcp:$vtctld_port
-vtctld_ip=`$KUBECTL get -o yaml nodes | grep 'type: ExternalIP' -B 1 | head -1 | awk '{print $NF}'`
-vtctl_server="$vtctld_ip:$vtctld_port"
-kvtctl="$GOPATH/bin/vtctlclient -server $vtctl_server"
+kvtctl="./kvtctl.sh"
+
+if [ $num_shards -gt 0 ]
+then
+  echo Calling CreateKeyspace and SetKeyspaceShardingInfo
+  $kvtctl CreateKeyspace -force $KEYSPACE
+  $kvtctl SetKeyspaceShardingInfo -force -split_shard_count $num_shards $KEYSPACE keyspace_id uint64
+fi
+
+echo 'Running vttablet-up.sh' && CELLS=$CELLS ./vttablet-up.sh
+echo 'Running vtgate-up.sh' && ./vtgate-up.sh
+wait_for_running_tasks vttablet $total_tablet_count
+wait_for_running_tasks vtgate $vtgate_count
+
 
 echo Waiting for tablets to be visible in the topology
 counter=0
 while [ $counter -lt $MAX_VTTABLET_TOPO_WAIT_RETRIES ]; do
   num_tablets=0
   for cell in $cells; do
-    num_tablets=$(($num_tablets+`$kvtctl ListAllTablets $cell | wc -l`))
+    num_tablets=$(($num_tablets+`$kvtctl ListAllTablets $cell | grep $KEYSPACE | wc -l`))
   done
   echo -en "\r$num_tablets out of $total_tablet_count in topology..."
   if [ $num_tablets -eq $total_tablet_count ]
@@ -152,20 +160,20 @@ if [ $split_shard_count -eq 1 ]; then
 fi
 
 echo -n Setting Keyspace Sharding Info...
-$kvtctl SetKeyspaceShardingInfo -force -split_shard_count $split_shard_count test_keyspace keyspace_id uint64
+$kvtctl SetKeyspaceShardingInfo -force -split_shard_count $split_shard_count $KEYSPACE keyspace_id uint64
 echo Done
 echo -n Rebuilding Keyspace Graph...
-$kvtctl RebuildKeyspaceGraph test_keyspace
+$kvtctl RebuildKeyspaceGraph $KEYSPACE
 echo Done
 echo -n Reparenting...
 shard_num=1
 for shard in $(echo $SHARDS | tr "," " "); do
-  $kvtctl InitShardMaster -force test_keyspace/$shard `echo $cells | awk '{print $1}'`-0000000${shard_num}00
+  $kvtctl InitShardMaster -force $KEYSPACE/$shard `echo $cells | awk '{print $1}'`-0000000${shard_num}00
   let shard_num=shard_num+1
 done
 echo Done
 echo -n Applying Schema...
-$kvtctl ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
+$kvtctl ApplySchema -sql "$(cat create_test_table.sql)" $KEYSPACE
 echo Done
 
 echo Creating firewall rule for vtgate
@@ -189,8 +197,8 @@ fi
 
 echo "****************************"
 echo "* Complete!"
-echo "* Use the following line to make an alias to kvtctl:"
-echo "* alias kvtctl='\$GOPATH/bin/vtctlclient -server $vtctl_server'"
-echo "* vtctld: [http://${vtctl_server}]"
+echo "* Access the vtctld web UI by performing the following steps:"
+echo "*   $ kubectl proxy --port=8001"
+echo "*   Visit http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/"
 echo "* vtgate: $vtgate_server"
 echo "****************************"
