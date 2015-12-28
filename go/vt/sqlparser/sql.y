@@ -84,7 +84,7 @@ func forceEOF(yylex interface{}) {
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
-// it's better to have thesed listed in the correct order. Also, we don't
+// it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
 %left <empty> OR
 %left <empty> AND
