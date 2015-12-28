@@ -15,38 +15,82 @@ import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
+/**
+ * Type-converting wrapper around raw
+ * {@link com.youtube.vitess.proto.Query.Row} proto.
+ *
+ * <p>Usually you get Row objects from a {@link Cursor}, which builds
+ * them by combining {@link com.youtube.vitess.proto.Query.Row} with
+ * the list of {@link Field}s from the corresponding
+ * {@link com.youtube.vitess.proto.Query.QueryResult}.
+ */
 public class Row {
-  private Map<String, Integer> fieldMap;
-  private List<Field> fields;
+  private FieldMap fieldMap;
   private List<ByteString> values;
   private Query.Row rawRow;
 
-  public Row(List<Field> fields, Query.Row rawRow, Map<String, Integer> fieldMap) {
-    this.fields = fields;
-    this.rawRow = rawRow;
+  /**
+   * Construct a Row from {@link com.youtube.vitess.proto.Query.Row}
+   * proto with a pre-built {@link FieldMap}.
+   *
+   * <p>{@link Cursor} uses this to share a {@link FieldMap}
+   * among multiple rows.
+   */
+  public Row(FieldMap fieldMap, Query.Row rawRow) {
     this.fieldMap = fieldMap;
+    this.rawRow = rawRow;
     this.values = extractValues(rawRow.getLengthsList(), rawRow.getValues());
   }
 
+  /**
+   * Construct a Row from {@link com.youtube.vitess.proto.Query.Row} proto.
+   */
+  public Row(List<Field> fields, Query.Row rawRow) {
+    this.fieldMap = new FieldMap(fields);
+    this.rawRow = rawRow;
+    this.values = extractValues(rawRow.getLengthsList(), rawRow.getValues());
+  }
+
+  /**
+   * Construct a Row manually (not from proto).
+   *
+   * <p>The primary purpose of this Row class is to wrap the
+   * {@link com.youtube.vitess.proto.Query.Row} proto, which stores values
+   * in a packed format. However, when writing tests you may want to create
+   * a Row from unpacked data.
+   *
+   * <p>Note that {@link #getRowProto()} will return null in this case,
+   * so a Row created in this way can't be used with code that requires
+   * access to the raw row proto.
+   */
+  public Row(List<Field> fields, List<ByteString> values) {
+    this.fieldMap = new FieldMap(fields);
+    this.values = values;
+  }
+
+  public int size() {
+    return values.size();
+  }
+
   public List<Field> getFields() {
-    return fields;
+    return fieldMap.getList();
   }
 
   public Query.Row getRowProto() {
     return rawRow;
   }
 
-  public Map<String, Integer> getFieldMap() {
+  public FieldMap getFieldMap() {
     return fieldMap;
   }
 
   public int findColumn(String columnLabel) throws SQLException {
-    if (!fieldMap.containsKey(columnLabel)) {
+    Integer columnIndex = fieldMap.getIndex(columnLabel);
+    if (columnIndex == null) {
       throw new SQLDataException("column not found:" + columnLabel);
     }
-    return fieldMap.get(columnLabel);
+    return columnIndex;
   }
 
   public Object getObject(String columnLabel) throws SQLException {
@@ -57,7 +101,7 @@ public class Row {
     if (columnIndex >= values.size()) {
       throw new SQLDataException("invalid columnIndex: " + columnIndex);
     }
-    return convertFieldValue(fields.get(columnIndex), values.get(columnIndex));
+    return convertFieldValue(fieldMap.get(columnIndex), values.get(columnIndex));
   }
 
   public int getInt(String columnLabel) throws SQLException {
