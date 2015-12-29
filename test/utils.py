@@ -22,12 +22,9 @@ from mysql_flavor import mysql_flavor
 from mysql_flavor import set_mysql_flavor
 import MySQLdb
 from protocols_flavor import protocols_flavor
-from protocols_flavor import set_protocols_flavor
 from topo_flavor.server import set_topo_server_flavor
-from vtctl import gorpc_vtctl_client  # pylint: disable=unused-import, registers 'gorpc' vtctl_client.
 from vtctl import vtctl_client
 from vtdb import keyrange_constants
-from vtdb import vtgatev2  # pylint: disable=unused-import, registers 'gorpc' vtgate_client
 from vtgate_gateway_flavor.gateway import set_vtgate_gateway_flavor
 from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
 from vtproto import topodata_pb2
@@ -89,7 +86,7 @@ def add_options(parser):
       '--skip-teardown', action='store_true',
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
-  parser.add_option('--protocols-flavor')
+  parser.add_option('--protocols-flavor', default='gorpc')
   parser.add_option('--topo-server-flavor', default='zookeeper')
   parser.add_option('--vtgate-gateway-flavor', default='shardgateway')
 
@@ -99,7 +96,7 @@ def set_options(opts):
   options = opts
 
   set_mysql_flavor(options.mysql_flavor)
-  set_protocols_flavor(options.protocols_flavor)
+  environment.setup_protocol_flavor(options.protocols_flavor)
   set_topo_server_flavor(options.topo_server_flavor)
   set_vtgate_gateway_flavor(options.vtgate_gateway_flavor)
   environment.skip_build = options.skip_build
@@ -1105,9 +1102,6 @@ class Vtctld(object):
       protocol = protocols_flavor().vtctl_client_protocol()
     rpc_port = self.port
     if protocol == 'grpc':
-      # import the grpc vtctl client implementation, change the port
-      if python:
-        from vtctl import grpc_vtctl_client  # pylint: disable=g-import-not-at-top,unused-variable
       rpc_port = self.grpc_port
     return (protocol, '%s:%d' % (socket.getfqdn(), rpc_port))
 

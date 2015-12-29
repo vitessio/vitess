@@ -16,7 +16,6 @@ from protocols_flavor import protocols_flavor
 from vtdb import dbexceptions
 from vtdb import vtgate_cursor
 from vtdb import vtgate_client
-from vtdb import vtgatev2  # pylint: disable=unused-import
 
 shard_0_master = tablet.Tablet()
 shard_1_master = tablet.Tablet()

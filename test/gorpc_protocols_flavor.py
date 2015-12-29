@@ -5,6 +5,12 @@ from net import gorpc
 
 import protocols_flavor
 
+# Now imports all the implementations we need.
+# We will change this to explicit registration soon.
+from vtctl import gorpc_vtctl_client  # pylint: disable=unused-import
+from vtdb import gorpc_update_stream  # pylint: disable=unused-import
+from vtdb import vtgatev2  # pylint: disable=unused-import
+
 
 class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   """Overrides to use go rpc everywhere."""
@@ -60,6 +66,3 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def vttest_protocol(self):
     return 'gorpc'
-
-
-protocols_flavor.register_flavor('gorpc', GoRpcProtocolsFlavor)
