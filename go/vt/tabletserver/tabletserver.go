@@ -557,11 +557,11 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, sess
 		return 0, err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.BeginTimeout.Get())
-	defer func() {
-		tsv.qe.queryServiceStats.QueryStats.Record("BEGIN", time.Now())
+	defer func(start time.Time) {
+		tsv.qe.queryServiceStats.QueryStats.Record("BEGIN", start)
 		cancel()
 		tsv.endRequest(true)
-	}()
+	}(time.Now())
 
 	transactionID = tsv.qe.txPool.Begin(ctx)
 	logStats.TransactionID = transactionID
@@ -579,11 +579,11 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, ses
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
-	defer func() {
-		tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", time.Now())
+	defer func(start time.Time) {
+		tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", start)
 		cancel()
 		tsv.endRequest(false)
-	}()
+	}(time.Now())
 
 	tsv.qe.Commit(ctx, logStats, transactionID)
 	return nil
@@ -600,11 +600,11 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, s
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, tsv.QueryTimeout.Get())
-	defer func() {
-		tsv.qe.queryServiceStats.QueryStats.Record("ROLLBACK", time.Now())
+	defer func(start time.Time) {
+		tsv.qe.queryServiceStats.QueryStats.Record("ROLLBACK", start)
 		cancel()
 		tsv.endRequest(false)
-	}()
+	}(time.Now())
 
 	tsv.qe.txPool.Rollback(ctx, transactionID)
 	return nil
