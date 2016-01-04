@@ -320,20 +320,23 @@ func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardI
 // take a keyspace lock to do this.
 // first we will validate the Preflight works the same on all shard masters
 // and fail if not (unless force is specified)
-func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, change string, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace, change string, allowLongUnavailability bool, waitSlaveTimeout time.Duration) error {
 	actionNode := actionnode.ApplySchemaKeyspace(change)
 	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
+	executor := schemamanager.NewTabletExecutor(wr.tmc, wr.ts)
+	if allowLongUnavailability {
+		executor.AllowBigSchemaChange()
+	}
 	err = schemamanager.Run(
 		ctx,
 		schemamanager.NewPlainController(change, keyspace),
-		schemamanager.NewTabletExecutor(wr.tmc, wr.ts),
+		executor,
 	)
 
-	return nil, wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
+	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
 }
 
 // CopySchemaShardFromShard copies the schema from a source shard to the specified destination shard.

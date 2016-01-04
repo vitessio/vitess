@@ -67,13 +67,13 @@ func (controller *PlainController) OnReadFail(ctx context.Context, err error) er
 
 // OnValidationSuccess is called when schemamanager successfully validates all sql statements.
 func (controller *PlainController) OnValidationSuccess(ctx context.Context) error {
-	log.Info("Successfully validate all sqls.")
+	log.Info("Successfully validated all SQL statements.")
 	return nil
 }
 
 // OnValidationFail is called when schemamanager fails to validate sql statements.
 func (controller *PlainController) OnValidationFail(ctx context.Context, err error) error {
-	log.Errorf("Failed to validate sqls, error: %v\n", err)
+	log.Errorf("Failed to validate SQL statements, error: %v\n", err)
 	return err
 }
 

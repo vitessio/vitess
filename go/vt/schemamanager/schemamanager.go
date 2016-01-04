@@ -76,7 +76,7 @@ type ShardResult struct {
 	Result *querypb.QueryResult
 }
 
-// Run schema changes on Vitess through VtGate
+// Run applies schema changes on Vitess through VtGate.
 func Run(ctx context.Context, controller Controller, executor Executor) error {
 	if err := controller.Open(ctx); err != nil {
 		log.Errorf("failed to open data sourcer: %v", err)
