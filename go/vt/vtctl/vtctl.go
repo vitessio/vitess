@@ -1847,11 +1847,10 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, *allowLongUnavailability, *waitSlaveTimeout)
-	if err != nil {
+	if err := wr.ApplySchemaKeyspace(ctx, keyspace, change, *allowLongUnavailability, *waitSlaveTimeout); err != nil {
 		return err
 	}
-	return printJSON(wr, scr)
+	return nil
 }
 
 func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
