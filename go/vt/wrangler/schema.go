@@ -363,14 +363,12 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	}
 	destSd, err := wr.GetSchema(ctx, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
 	if err != nil {
-		destSd = nil
+		err
 	}
-	if destSd != nil {
-		diffs := tmutils.DiffSchemaToArray("source", sourceSd, "dest", destSd)
-		if diffs == nil {
-			// Return early because dest has already the same schema as source.
-			return nil
-		}
+	diffs := tmutils.DiffSchemaToArray("source", sourceSd, "dest", destSd)
+	if diffs == nil {
+		// Return early because dest has already the same schema as source.
+		return nil
 	}
 
 	createSQL := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
