@@ -75,6 +75,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	sourceMaster.FakeMysqlDaemon.Schema = schema
 	sourceRdonly.FakeMysqlDaemon.Schema = schema
 
+	changeToDb := "USE vt_ks"
 	createDb := "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"
 	createTable := "CREATE TABLE `vt_ks`.`table1` (\n" +
 		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n" +
@@ -90,7 +91,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		"  PRIMARY KEY (`id`),\n" +
 		"  KEY `by_msg` (`msg`)\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8"
-	db.AddQuery("USE vt_ks", &sqltypes.Result{})
+	db.AddQuery(changeToDb, &sqltypes.Result{})
 	db.AddQuery(createDb, &sqltypes.Result{})
 	db.AddQuery(createTable, &sqltypes.Result{})
 	db.AddQuery(createTableView, &sqltypes.Result{})
@@ -101,6 +102,9 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	}
 	if err := vp.Run([]string{"CopySchemaShard", "-include-views", source, "ks/-40"}); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
+	}
+	if count := db.GetQueryCalledNum(changeToDb); count != 3 {
+		t.Fatalf("CopySchemaShard did not change to the db exactly once. Query count: %v", count)
 	}
 	if count := db.GetQueryCalledNum(createDb); count != 1 {
 		t.Fatalf("CopySchemaShard did not create the db exactly once. Query count: %v", count)
