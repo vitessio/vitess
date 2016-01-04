@@ -442,6 +442,7 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 		if blm.state == BpmStateRunning {
 			bpc.Stop()
 		}
+		bpc.healthCheck.Close()
 		hadPlayers = true
 	}
 	blm.players = make(map[uint32]*BinlogPlayerController)
@@ -482,6 +483,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topodatapb.T
 	// remove all entries from toRemove
 	for source := range toRemove {
 		blm.players[source].Stop()
+		blm.players[source].healthCheck.Close()
 		delete(blm.players, source)
 	}
 
