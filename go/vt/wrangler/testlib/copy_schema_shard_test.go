@@ -5,7 +5,6 @@
 package testlib
 
 import (
-	"fmt"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -22,75 +21,6 @@ import (
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-type ExpectedExecuteFetch struct {
-	Query       string
-	MaxRows     int
-	WantFields  bool
-	QueryResult *sqltypes.Result
-	Error       error
-}
-
-// FakePoolConnection implements dbconnpool.PoolConnection
-type FakePoolConnection struct {
-	t      *testing.T
-	Closed bool
-
-	ExpectedExecuteFetch      []ExpectedExecuteFetch
-	ExpectedExecuteFetchIndex int
-}
-
-func NewFakePoolConnectionQuery(t *testing.T, query string) *FakePoolConnection {
-	return &FakePoolConnection{
-		t: t,
-		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			{
-				Query:       query,
-				QueryResult: &sqltypes.Result{},
-			},
-		},
-	}
-}
-
-func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	if fpc.ExpectedExecuteFetchIndex >= len(fpc.ExpectedExecuteFetch) {
-		fpc.t.Errorf("got unexpected out of bound fetch: %v >= %v", fpc.ExpectedExecuteFetchIndex, len(fpc.ExpectedExecuteFetch))
-		return nil, fmt.Errorf("unexpected out of bound fetch")
-	}
-	expected := fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].Query
-	if query != expected {
-		fpc.t.Errorf("got unexpected query: %v != %v", query, expected)
-		return nil, fmt.Errorf("unexpected query")
-	}
-	fpc.t.Logf("ExecuteFetch: %v", query)
-	defer func() {
-		fpc.ExpectedExecuteFetchIndex++
-	}()
-	return fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].QueryResult, nil
-}
-
-func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
-	return nil
-}
-
-func (fpc *FakePoolConnection) ID() int64 {
-	return 1
-}
-
-func (fpc *FakePoolConnection) Close() {
-	fpc.Closed = true
-}
-
-func (fpc *FakePoolConnection) IsClosed() bool {
-	return fpc.Closed
-}
-
-func (fpc *FakePoolConnection) Recycle() {
-}
-
-func (fpc *FakePoolConnection) Reconnect() error {
-	return nil
-}
 
 func TestCopySchemaShard_UseTabletAsSource(t *testing.T) {
 	copySchema(t, false /* useShardAsSource */)
