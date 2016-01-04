@@ -320,14 +320,14 @@ func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardI
 // take a keyspace lock to do this.
 // first we will validate the Preflight works the same on all shard masters
 // and fail if not (unless force is specified)
-func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, change string, force bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace, change string, allowLongUnavailability bool, waitSlaveTimeout time.Duration) (*tmutils.SchemaChangeResult, error) {
 	actionNode := actionnode.ApplySchemaKeyspace(change)
 	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
 	if err != nil {
 		return nil, err
 	}
 	executor := schemamanager.NewTabletExecutor(wr.tmc, wr.ts)
-	if force {
+	if allowLongUnavailability {
 		executor.AllowBigSchemaChange()
 	}
 	err = schemamanager.Run(

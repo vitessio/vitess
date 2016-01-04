@@ -39,19 +39,19 @@ func NewTabletExecutor(
 	}
 }
 
-// AllowBigSchemaChange skips big schema changes check and tablet executor will
-// send all schema changes to all VTTablets even for big changes.
+// AllowBigSchemaChange changes TabletExecutor such that big schema changes
+// will no longer be rejected.
 func (exec *TabletExecutor) AllowBigSchemaChange() {
 	exec.allowBigSchemaChange = true
 }
 
-// DisallowBigSchemaChange enforce big schema change check and will reject
-// certain schema changes.
+// DisallowBigSchemaChange enables the check for big schema changes such that
+// TabletExecutor will reject these.
 func (exec *TabletExecutor) DisallowBigSchemaChange() {
 	exec.allowBigSchemaChange = false
 }
 
-// Open opens a connection to the master for every shard
+// Open opens a connection to the master for every shard.
 func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 	if !exec.isClosed {
 		return nil
@@ -87,7 +87,7 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 	return nil
 }
 
-// Validate validates a list of sql statements
+// Validate validates a list of sql statements.
 func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	if exec.isClosed {
 		return fmt.Errorf("executor is closed")
@@ -104,18 +104,19 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 		}
 		parsedDDLs[i] = ddl
 	}
-	if exec.allowBigSchemaChange {
-		log.Warningf("skipped big schema check, this may cause visible MySQL downtime")
+	bigSchemaChange, err := exec.detectBigSchemaChanges(ctx, parsedDDLs)
+	if bigSchemaChange && exec.allowBigSchemaChange {
+		log.Warning("Processing big schema change. This may cause visible MySQL downtime.")
 		return nil
 	}
-	return exec.detectBigSchemaChanges(ctx, parsedDDLs)
+	return err
 }
 
 // a schema change that satisfies any following condition is considered
 // to be a big schema change and will be rejected.
 //   1. Alter more than 100,000 rows.
 //   2. Change a table with more than 2,000,000 rows (Drops are fine).
-func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []*sqlparser.DDL) error {
+func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []*sqlparser.DDL) (bool, error) {
 	// exec.tabletInfos is guaranteed to have at least one element;
 	// Otherwise, Open should fail and executor should fail.
 	masterTabletInfo := exec.tabletInfos[0]
@@ -123,7 +124,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	dbSchema, err := exec.tmClient.GetSchema(
 		ctx, masterTabletInfo, []string{}, []string{}, false)
 	if err != nil {
-		return fmt.Errorf("unable to get database schema, error: %v", err)
+		return false, fmt.Errorf("unable to get database schema, error: %v", err)
 	}
 	tableWithCount := make(map[string]uint64, len(dbSchema.TableDefinitions))
 	for _, tableSchema := range dbSchema.TableDefinitions {
@@ -136,16 +137,16 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		tableName := string(ddl.Table)
 		if rowCount, ok := tableWithCount[tableName]; ok {
 			if rowCount > 100000 && ddl.Action == sqlparser.AlterStr {
-				return fmt.Errorf(
-					"big schema change, ddl: %v alters a table with more than 100 thousand rows", ddl)
+				return true, fmt.Errorf(
+					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %v alters a table with more than 100 thousand rows", ddl)
 			}
 			if rowCount > 2000000 {
-				return fmt.Errorf(
-					"big schema change, ddl: %v changes a table with more than 2 million rows", ddl)
+				return true, fmt.Errorf(
+					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %v changes a table with more than 2 million rows", ddl)
 			}
 		}
 	}
-	return nil
+	return false, nil
 }
 
 func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
