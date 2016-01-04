@@ -271,5 +271,41 @@ class TestSchema(unittest.TestCase):
     finally:
       _teardown_shard_2()
 
+  def test_vtctl_copyschemashard_different_dbs_should_fail(self):
+    # Apply initial schema to the whole keyspace before creating shard 2.
+    self._apply_initial_schema()
+
+    _setup_shard_2()
+
+    try:
+      # InitShardMaster creates the db, but there shouldn't be any tables yet.
+      self._check_tables(shard_2_master, 0)
+      self._check_tables(shard_2_replica1, 0)
+
+      # Change the db charset on the destination shard from utf8 to latin1.
+      # This will make CopySchemaShard fail during its final diff.
+      # (The different charset won't be corrected on the destination shard
+      #  because we use "CREATE DATABASE IF NOT EXISTS" and this doesn't fail if
+      #  there are differences in the options e.g. the character set.)
+      shard_2_schema = self._get_schema(shard_2_master.tablet_alias)
+      self.assertIn('utf8', shard_2_schema['database_schema'])
+      utils.run_vtctl_json(
+          ['ExecuteFetchAsDba', shard_2_master.tablet_alias,
+           'ALTER DATABASE vt_test_keyspace CHARACTER SET latin1'])
+
+      _, stderr = utils.run_vtctl(['CopySchemaShard',
+                                   'test_keyspace/0',
+                                   'test_keyspace/2'],
+                                  expect_fail=True,
+                                  auto_log=True)
+      self.assertIn('source and dest don\'t agree on database creation command',
+                    stderr)
+
+      # shard_2_master should have the same number of tables. Only the db
+      # character set is different.
+      self._check_tables(shard_2_master, 4)
+    finally:
+      _teardown_shard_2()
+
 if __name__ == '__main__':
   utils.main()

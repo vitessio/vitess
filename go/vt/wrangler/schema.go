@@ -357,20 +357,19 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return err
 	}
 
-	sourceSd, err := wr.GetSchema(ctx, sourceTabletAlias, tables, excludeTables, includeViews)
+	diffs, err := wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
 	if err != nil {
-		return err
+		return fmt.Errorf("CopySchemaShard failed because schemas could not be compared initially: %v", err)
 	}
-	destSd, err := wr.GetSchema(ctx, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
-	if err != nil {
-		err
-	}
-	diffs := tmutils.DiffSchemaToArray("source", sourceSd, "dest", destSd)
 	if diffs == nil {
 		// Return early because dest has already the same schema as source.
 		return nil
 	}
 
+	sourceSd, err := wr.GetSchema(ctx, sourceTabletAlias, tables, excludeTables, includeViews)
+	if err != nil {
+		return err
+	}
 	createSQL := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
 	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.MasterAlias)
 	if err != nil {
@@ -382,7 +381,36 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 			return err
 		}
 	}
+
+	// Although the copy was successful, we have to verify it to catch the case
+	// where the database already existed on the destination, but with different
+	// options e.g. a different character set.
+	// In that case, MySQL would have skipped our CREATE DATABASE IF NOT EXISTS
+	// statement. We want to fail early in this case because vtworker SplitDiff
+	// fails in case of such an inconsistency as well.
+	diffs, err = wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
+	if err != nil {
+		return fmt.Errorf("CopySchemaShard failed because schemas could not be compared finally: %v", err)
+	}
+	if diffs != nil {
+		return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.MasterAlias, diffs)
+	}
 	return nil
+}
+
+// compareSchemas returns nil if the schema of the two tablets referenced by
+// "sourceAlias" and "destAlias" are identical. Otherwise, the difference is
+// returned as []string.
+func (wr *Wrangler) compareSchemas(ctx context.Context, sourceAlias, destAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool) ([]string, error) {
+	sourceSd, err := wr.GetSchema(ctx, sourceAlias, tables, excludeTables, includeViews)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", sourceAlias, err)
+	}
+	destSd, err := wr.GetSchema(ctx, destAlias, tables, excludeTables, includeViews)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", destAlias, err)
+	}
+	return tmutils.DiffSchemaToArray("source", sourceSd, "dest", destSd), nil
 }
 
 // applySQLShard applies a given SQL change on a given tablet alias. It allows executing arbitrary
