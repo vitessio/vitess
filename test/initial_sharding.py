@@ -384,6 +384,7 @@ index by_msg (msg)
                        shard_rdonly1.tablet_alias,
                        keyspace_shard],
                       auto_log=True)
+    utils.run_vtctl(['RunHealthCheck', shard_rdonly1.tablet_alias, 'rdonly'])
 
     utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
@@ -423,6 +424,8 @@ index by_msg (msg)
 
     # use vtworker to compare the data
     logging.debug('Running vtworker SplitDiff for -80')
+    for t in [shard_0_rdonly1, shard_1_rdonly1]:
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/-80'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],

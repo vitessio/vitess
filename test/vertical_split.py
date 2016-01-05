@@ -134,11 +134,11 @@ index by_msg (msg)
     conn.close()
     return result
 
-  def _check_values(self, tablet, dbname, table, first, count):
+  def _check_values(self, t, dbname, table, first, count):
     logging.debug(
         'Checking %d values from %s/%s starting at %d', count, dbname,
         table, first)
-    rows = tablet.mquery(
+    rows = t.mquery(
         dbname, 'select id, msg from %s where id>=%d order by id limit %d' %
         (table, first, count))
     self.assertEqual(count, len(rows), 'got wrong number of rows: %d != %d' %
@@ -150,11 +150,11 @@ index by_msg (msg)
                        "invalid msg[%d]: 'value %d' != '%s'" %
                        (i, first + i, rows[i][1]))
 
-  def _check_values_timeout(self, tablet, dbname, table, first, count,
+  def _check_values_timeout(self, t, dbname, table, first, count,
                             timeout=30):
     while True:
       try:
-        self._check_values(tablet, dbname, table, first, count)
+        self._check_values(t, dbname, table, first, count)
         return
       except:
         timeout -= 1
@@ -191,31 +191,31 @@ index by_msg (msg)
                      'Got a sharding_column_type in SrvKeyspace: %s' %
                      str(ks))
 
-  def _check_blacklisted_tables(self, tablet, expected):
-    status = tablet.get_status()
+  def _check_blacklisted_tables(self, t, expected):
+    status = t.get_status()
     if expected:
       self.assertIn('BlacklistedTables: %s' % ' '.join(expected), status)
     else:
       self.assertNotIn('BlacklistedTables', status)
 
     # check we can or cannot access the tables
-    for t in ['moving1', 'moving2']:
+    for table in ['moving1', 'moving2']:
       if expected and 'moving.*' in expected:
         # table is blacklisted, should get the error
         _, stderr = utils.run_vtctl(['VtTabletExecute',
-                                     '-keyspace', tablet.keyspace,
-                                     '-shard', tablet.shard,
-                                     tablet.tablet_alias,
-                                     'select count(1) from %s' % t],
+                                     '-keyspace', t.keyspace,
+                                     '-shard', t.shard,
+                                     t.tablet_alias,
+                                     'select count(1) from %s' % table],
                                     expect_fail=True)
         self.assertIn(
             'retry: Query disallowed due to rule: enforce blacklisted tables',
             stderr)
       else:
         # table is not blacklisted, should just work
-        qr = tablet.execute('select count(1) from %s' % t)
+        qr = t.execute('select count(1) from %s' % table)
         logging.debug('Got %s rows from table %s on tablet %s',
-                      qr['Rows'][0][0], t, tablet.tablet_alias)
+                      qr['Rows'][0][0], table, t.tablet_alias)
 
   def _check_client_conn_redirection(
       self, destination_ks, servedfrom_db_types,
@@ -336,7 +336,10 @@ index by_msg (msg)
                        moving1_first, 100)
 
     # run a health check on source replica so it responds to discovery
+    # (for binlog players) and on the source rdonlys (for workers)
     utils.run_vtctl(['RunHealthCheck', source_replica.tablet_alias, 'replica'])
+    for t in [source_rdonly1, source_rdonly2]:
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
 
     # the worker will do everything. We test with source_reader_count=10
     # (down from default=20) as connection pool is not big enough for 20.
@@ -381,6 +384,8 @@ index by_msg (msg)
                                'moving2', moving2_first_add1, 100)
 
     # use vtworker to compare the data
+    for t in [destination_rdonly1, destination_rdonly2]:
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
     logging.debug('Running vtworker VerticalSplitDiff')
     utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitDiff',
                         'destination_keyspace/0'], auto_log=True)
