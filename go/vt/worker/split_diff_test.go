@@ -34,6 +34,8 @@ type destinationTabletServer struct {
 	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
+	keyspace      string
+	shard         string
 }
 
 func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -85,11 +87,28 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 	return nil
 }
 
+func (sq *destinationTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
+}
+
 // sourceTabletServer is a local QueryService implementation to support the tests
 type sourceTabletServer struct {
 	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
+	keyspace      string
+	shard         string
 }
 
 func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -142,6 +161,21 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 		}
 	}
 	return nil
+}
+
+func (sq *sourceTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
 }
 
 // TODO(aaijazi): Create a test in which source and destination data does not match
@@ -233,10 +267,30 @@ func TestSplitDiff(t *testing.T) {
 		}
 	}
 
-	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationTabletServer{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationTabletServer{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceTabletServer{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceTabletServer{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationTabletServer{
+		t:             t,
+		excludedTable: excludedTable,
+		keyspace:      leftRdonly1.Tablet.Keyspace,
+		shard:         leftRdonly1.Tablet.Shard,
+	})
+	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationTabletServer{
+		t:             t,
+		excludedTable: excludedTable,
+		keyspace:      leftRdonly2.Tablet.Keyspace,
+		shard:         leftRdonly2.Tablet.Shard,
+	})
+	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceTabletServer{
+		t:             t,
+		excludedTable: excludedTable,
+		keyspace:      sourceRdonly1.Tablet.Keyspace,
+		shard:         sourceRdonly1.Tablet.Shard,
+	})
+	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceTabletServer{
+		t:             t,
+		excludedTable: excludedTable,
+		keyspace:      sourceRdonly2.Tablet.Keyspace,
+		shard:         sourceRdonly2.Tablet.Shard,
+	})
 
 	err = wrk.Run(ctx)
 	status := wrk.StatusAsText()

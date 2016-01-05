@@ -32,7 +32,9 @@ import (
 // testQueryService is a local QueryService implementation to support the tests
 type testQueryService struct {
 	queryservice.ErrorQueryService
-	t *testing.T
+	t        *testing.T
+	keyspace string
+	shard    string
 }
 
 func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -90,6 +92,21 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	}
 	// SELECT id, msg, keyspace_id FROM table1 WHERE id>=180 AND id<190 ORDER BY id
 	return nil
+}
+
+func (sq *testQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
 }
 
 type ExpectedExecuteFetch struct {
@@ -323,7 +340,11 @@ func testSplitClone(t *testing.T, strategy string) {
 			"STOP SLAVE",
 			"START SLAVE",
 		}
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &testQueryService{t: t})
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &testQueryService{
+			t:        t,
+			keyspace: sourceRdonly.Tablet.Keyspace,
+			shard:    sourceRdonly.Tablet.Shard,
+		})
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so
