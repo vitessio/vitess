@@ -22,6 +22,10 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+const _ = proto.ProtoPackageIsVersion1
+
 // Status is the replication status for MySQL (returned by 'show slave status'
 // and parsed into a Position and fields).
 type Status struct {
