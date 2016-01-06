@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -27,7 +27,7 @@ func compactJSON(in []byte) string {
 func TestAPI(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"cell1", "cell2"}
-	ts := zktopo.NewTestServer(t, cells)
+	ts := zktestserver.New(t, cells)
 	actionRepo := NewActionRepository(ts)
 	initAPI(ctx, ts, actionRepo)
 

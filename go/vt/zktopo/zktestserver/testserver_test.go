@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package zktopo
+package zktestserver
 
 import (
 	"testing"
@@ -17,7 +17,7 @@ import (
 // the name of our override to match.
 func TestHookLockSrvShardForAction(t *testing.T) {
 	cells := []string{"test_cell"}
-	ts := NewTestServer(t, cells)
+	ts := New(t, cells)
 
 	triggered := false
 	ts.Impl.(*TestServer).HookLockSrvShardForAction = func() {

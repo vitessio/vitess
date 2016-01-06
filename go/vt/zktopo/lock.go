@@ -110,7 +110,7 @@ func (zkts *Server) unlockForAction(lockPath, results string) error {
 func (zkts *Server) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
 	// Action paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
-	actionDir := path.Join(globalKeyspacesPath, keyspace, "action") + "/"
+	actionDir := path.Join(GlobalKeyspacesPath, keyspace, "action") + "/"
 	return zkts.lockForAction(ctx, actionDir, contents)
 }
 
@@ -123,7 +123,7 @@ func (zkts *Server) UnlockKeyspaceForAction(ctx context.Context, keyspace, lockP
 func (zkts *Server) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
 	// Action paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
-	actionDir := path.Join(globalKeyspacesPath, keyspace, "shards", shard, "action") + "/"
+	actionDir := path.Join(GlobalKeyspacesPath, keyspace, "shards", shard, "action") + "/"
 	return zkts.lockForAction(ctx, actionDir, contents)
 }
 

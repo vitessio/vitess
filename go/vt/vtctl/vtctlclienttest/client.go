@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -38,7 +38,7 @@ func init() {
 
 // CreateTopoServer returns the test topo server properly configured
 func CreateTopoServer(t *testing.T) topo.Server {
-	return zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	return zktestserver.New(t, []string{"cell1", "cell2"})
 }
 
 // TestSuite runs the test suite on the given topo server and client

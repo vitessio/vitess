@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 )
 
 func TestHandleExplorerRedirect(t *testing.T) {
 	ctx := context.Background()
 
-	ts := zktopo.NewTestServer(t, []string{"cell1"})
+	ts := zktestserver.New(t, []string{"cell1"})
 	if err := ts.CreateTablet(ctx, &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
