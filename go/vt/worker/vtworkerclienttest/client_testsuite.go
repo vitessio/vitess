@@ -21,8 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
-	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
 	// import the gRPC client implementation for tablet manager
@@ -37,7 +37,7 @@ func init() {
 
 // CreateWorkerInstance returns a properly configured vtworker instance.
 func CreateWorkerInstance(t *testing.T) *worker.Instance {
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	return worker.NewInstance(context.Background(), ts, "cell1", 1*time.Second)
 }
 

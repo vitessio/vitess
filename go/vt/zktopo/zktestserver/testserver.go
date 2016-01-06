@@ -1,10 +1,11 @@
-package zktopo
+package zktestserver
 
 import (
 	"fmt"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
 	"golang.org/x/net/context"
@@ -33,11 +34,11 @@ func newTestServer(t *testing.T, cells []string) topo.Impl {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
 	}
-	return &TestServer{Impl: &Server{zconn}, localCells: cells}
+	return &TestServer{Impl: zktopo.NewServer(zconn), localCells: cells}
 }
 
-// NewTestServer returns a new TestServer (with the required paths created)
-func NewTestServer(t *testing.T, cells []string) topo.Server {
+// New returns a new TestServer (with the required paths created)
+func New(t *testing.T, cells []string) topo.Server {
 	return topo.Server{Impl: newTestServer(t, cells)}
 }
 

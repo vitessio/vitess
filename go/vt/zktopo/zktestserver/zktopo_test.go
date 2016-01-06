@@ -1,4 +1,4 @@
-package zktopo
+package zktestserver
 
 import (
 	"path"
@@ -8,6 +8,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo/test"
+	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 
@@ -49,7 +50,7 @@ func TestServingGraph(t *testing.T) {
 }
 
 func TestWatchSrvKeyspace(t *testing.T) {
-	WatchSleepDuration = 2 * time.Millisecond
+	zktopo.WatchSleepDuration = 2 * time.Millisecond
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckWatchSrvKeyspace(context.Background(), t, ts)
@@ -101,13 +102,13 @@ func TestPurgeActions(t *testing.T) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	actionPath := path.Join(globalKeyspacesPath, "test_keyspace", "action")
-	zkts := ts.(*TestServer).Impl.(*Server)
+	actionPath := path.Join(zktopo.GlobalKeyspacesPath, "test_keyspace", "action")
+	zkts := ts.(*TestServer).Impl.(*zktopo.Server)
 
-	if _, err := zk.CreateRecursive(zkts.zconn, actionPath+"/topurge", "purgeme", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionPath+"/topurge", "purgeme", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
 		t.Fatalf("CreateRecursive(topurge): %v", err)
 	}
-	if _, err := zk.CreateRecursive(zkts.zconn, actionPath+"/tokeep", "keepme", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionPath+"/tokeep", "keepme", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
 		t.Fatalf("CreateRecursive(tokeep): %v", err)
 	}
 
@@ -117,7 +118,7 @@ func TestPurgeActions(t *testing.T) {
 		t.Fatalf("PurgeActions(tokeep): %v", err)
 	}
 
-	actions, _, err := zkts.zconn.Children(actionPath)
+	actions, _, err := zkts.GetZConn().Children(actionPath)
 	if err != nil || len(actions) != 1 || actions[0] != "tokeep" {
 		t.Errorf("PurgeActions kept the wrong things: %v %v", err, actions)
 	}
@@ -133,13 +134,13 @@ func TestPruneActionLogs(t *testing.T) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	actionLogPath := path.Join(globalKeyspacesPath, "test_keyspace", "actionlog")
-	zkts := ts.(*TestServer).Impl.(*Server)
+	actionLogPath := path.Join(zktopo.GlobalKeyspacesPath, "test_keyspace", "actionlog")
+	zkts := ts.(*TestServer).Impl.(*zktopo.Server)
 
-	if _, err := zk.CreateRecursive(zkts.zconn, actionLogPath+"/0", "first", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionLogPath+"/0", "first", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
 		t.Fatalf("CreateRecursive(stale): %v", err)
 	}
-	if _, err := zk.CreateRecursive(zkts.zconn, actionLogPath+"/1", "second", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zk.CreateRecursive(zkts.GetZConn(), actionLogPath+"/1", "second", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
 		t.Fatalf("CreateRecursive(fresh): %v", err)
 	}
 
@@ -147,7 +148,7 @@ func TestPruneActionLogs(t *testing.T) {
 		t.Fatalf("PruneActionLogs: %v %v", err, count)
 	}
 
-	actionLogs, _, err := zkts.zconn.Children(actionLogPath)
+	actionLogs, _, err := zkts.GetZConn().Children(actionLogPath)
 	if err != nil || len(actionLogs) != 1 || actionLogs[0] != "1" {
 		t.Errorf("PruneActionLogs kept the wrong things: %v %v", err, actionLogs)
 	}

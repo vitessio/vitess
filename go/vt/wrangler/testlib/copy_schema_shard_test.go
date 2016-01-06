@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -32,7 +32,7 @@ func TestCopySchemaShard_UseShardAsSource(t *testing.T) {
 
 func copySchema(t *testing.T, useShardAsSource bool) {
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()

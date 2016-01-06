@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -321,7 +321,7 @@ func checkBlpPositionList(t *testing.T, bpm *BinlogPlayerMap, vtClientSyncChanne
 }
 
 func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
-	ts := zktopo.NewTestServer(t, []string{"cell1"})
+	ts := zktestserver.New(t, []string{"cell1"})
 	ctx := context.Background()
 
 	// create the keyspace, a full set of covering shards,
@@ -497,7 +497,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 }
 
 func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
-	ts := zktopo.NewTestServer(t, []string{"cell1"})
+	ts := zktestserver.New(t, []string{"cell1"})
 	ctx := context.Background()
 
 	// create the keyspace, a full set of covering shards,
@@ -678,7 +678,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 }
 
 func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
-	ts := zktopo.NewTestServer(t, []string{"cell1"})
+	ts := zktestserver.New(t, []string{"cell1"})
 	ctx := context.Background()
 
 	// create the keyspaces, with one shard each

@@ -13,7 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	. "github.com/youtube/vitess/go/vt/topotools"
 
@@ -55,7 +55,7 @@ func TestRebuildShard(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	// Set up topology.
-	ts := zktopo.NewTestServer(t, cells)
+	ts := zktestserver.New(t, cells)
 	si, err := GetOrCreateShard(ctx, ts, testKeyspace, testShard)
 	if err != nil {
 		t.Fatalf("GetOrCreateShard: %v", err)
@@ -121,7 +121,7 @@ func TestUpdateTabletEndpoints(t *testing.T) {
 	cell := "test_cell"
 
 	// Set up topology.
-	ts := zktopo.NewTestServer(t, []string{cell})
+	ts := zktestserver.New(t, []string{cell})
 	si, err := GetOrCreateShard(ctx, ts, testKeyspace, testShard)
 	if err != nil {
 		t.Fatalf("GetOrCreateShard: %v", err)

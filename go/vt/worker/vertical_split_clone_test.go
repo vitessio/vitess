@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -245,7 +245,7 @@ func TestVerticalSplitClonePopulateBlpCheckpoint(t *testing.T) {
 
 func testVerticalSplitClone(t *testing.T, strategy string) {
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
