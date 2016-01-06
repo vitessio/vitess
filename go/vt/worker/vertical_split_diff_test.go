@@ -34,6 +34,8 @@ type verticalDiffTabletServer struct {
 	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
+	keyspace      string
+	shard         string
 }
 
 func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -77,6 +79,21 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *q
 		}
 	}
 	return nil
+}
+
+func (sq *verticalDiffTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
 }
 
 // TODO(aaijazi): Create a test in which source and destination data does not match
@@ -173,7 +190,12 @@ func TestVerticalSplitDiff(t *testing.T) {
 				},
 			},
 		}
-		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffTabletServer{t: t, excludedTable: excludedTable})
+		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffTabletServer{
+			t:             t,
+			excludedTable: excludedTable,
+			keyspace:      rdonly.Tablet.Keyspace,
+			shard:         rdonly.Tablet.Shard,
+		})
 	}
 
 	err = wrk.Run(ctx)

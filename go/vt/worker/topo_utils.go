@@ -10,8 +10,8 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -29,6 +29,10 @@ var (
 	// than -health_check_interval.
 	// (it is public for tests to override it)
 	WaitForHealthyEndPointsTimeout = flag.Duration("wait_for_healthy_rdonly_endpoints_timeout", 60*time.Second, "maximum time to wait if less than --min_healthy_rdonly_endpoints are available")
+
+	healthCheckTopologyRefresh = flag.Duration("worker_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology when filtered replication is running")
+	retryDelay                 = flag.Duration("worker_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck or a failed binlog connection")
+	healthCheckTimeout         = flag.Duration("worker_healthcheck_timeout", time.Minute, "the health check timeout period")
 )
 
 // FindHealthyRdonlyEndPoint returns a random healthy endpoint.
@@ -39,6 +43,15 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, *WaitForHealthyEndPointsTimeout)
 	defer busywaitCancel()
 
+	// create a discovery healthcheck, wait for it to have one rdonly
+	// endpoints at this point
+	healthCheck := discovery.NewHealthCheck(*remoteActionsTimeout, *retryDelay, *healthCheckTimeout)
+	discovery.NewShardReplicationWatcher(wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, 5 /*topoReadConcurrency*/)
+	defer healthCheck.Close()
+	if err := discovery.WaitForEndPoints(healthCheck, cell, keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_RDONLY}); err != nil {
+		return nil, fmt.Errorf("error waiting for rdonly endpoints for %v %v %v: %v", cell, keyspace, shard, err)
+	}
+
 	var healthyEndpoints []*topodatapb.EndPoint
 	for {
 		select {
@@ -47,22 +60,19 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 		default:
 		}
 
-		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		endPoints, _, err := wr.TopoServer().GetEndPoints(shortCtx, cell, keyspace, shard, topodatapb.TabletType_RDONLY)
-		cancel()
-		if err != nil {
-			if err == topo.ErrNoNode {
-				// If the node doesn't exist, count that as 0 available rdonly instances.
-				endPoints = &topodatapb.EndPoints{}
-			} else {
-				return nil, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
+		addrs := healthCheck.GetEndPointStatsFromTarget(keyspace, shard, topodatapb.TabletType_RDONLY)
+		healthyEndpoints = make([]*topodatapb.EndPoint, 0, len(addrs))
+		for _, addr := range addrs {
+			// Note we do not check the 'Serving' flag here.
+			// This is mainly to avoid the case where we run a
+			// Diff between a source and destination, and the source
+			// is not serving (disabled by TabletControl).
+			// When we switch the tablet to 'worker', it will
+			// go back to serving state.
+			if addr.Stats == nil || addr.Stats.HealthError != "" || addr.Stats.SecondsBehindMaster > 30 {
+				continue
 			}
-		}
-		healthyEndpoints = make([]*topodatapb.EndPoint, 0, len(endPoints.Entries))
-		for _, entry := range endPoints.Entries {
-			if len(entry.HealthMap) == 0 {
-				healthyEndpoints = append(healthyEndpoints, entry)
-			}
+			healthyEndpoints = append(healthyEndpoints, addr.EndPoint)
 		}
 		if len(healthyEndpoints) < *minHealthyEndPoints {
 			deadlineForLog, _ := busywaitCtx.Deadline()

@@ -32,7 +32,9 @@ import (
 // verticalTabletServer is a local QueryService implementation to support the tests
 type verticalTabletServer struct {
 	queryservice.ErrorQueryService
-	t *testing.T
+	t        *testing.T
+	keyspace string
+	shard    string
 }
 
 func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
@@ -83,6 +85,21 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *query
 		}
 	}
 	return nil
+}
+
+func (sq *verticalTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
 }
 
 // VerticalFakePoolConnection implements dbconnpool.PoolConnection
@@ -317,7 +334,11 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 			"STOP SLAVE",
 			"START SLAVE",
 		}
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalTabletServer{t: t})
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalTabletServer{
+			t:        t,
+			keyspace: sourceRdonly.Tablet.Keyspace,
+			shard:    sourceRdonly.Tablet.Shard,
+		})
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so
