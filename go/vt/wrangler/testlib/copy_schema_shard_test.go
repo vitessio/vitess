@@ -72,6 +72,10 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 			},
 		},
 	}
+	schemaEmptyDb := &tabletmanagerdatapb.SchemaDefinition{
+		DatabaseSchema:   "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{},
+	}
 	sourceMaster.FakeMysqlDaemon.Schema = schema
 	sourceRdonly.FakeMysqlDaemon.Schema = schema
 
@@ -95,6 +99,13 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	db.AddQuery(createDb, &sqltypes.Result{})
 	db.AddQuery(createTable, &sqltypes.Result{})
 	db.AddQuery(createTableView, &sqltypes.Result{})
+
+	destinationMaster.FakeMysqlDaemon.SchemaFunc = func() (*tabletmanagerdatapb.SchemaDefinition, error) {
+		if db.GetQueryCalledNum(createTableView) == 1 {
+			return schema, nil
+		}
+		return schemaEmptyDb, nil
+	}
 
 	source := topoproto.TabletAliasString(sourceRdonly.Tablet.Alias)
 	if useShardAsSource {
