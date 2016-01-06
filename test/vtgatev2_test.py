@@ -1161,32 +1161,6 @@ class TestFailures(BaseTestCase):
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
 
-    # The following test only holds for shardgateway and non-grpc.
-    # shardgateway relies on fail-and-retry mechanism,
-    # other gateway implementations detect tablet restarting,
-    # and actively reconnect.
-    if (protocols_flavor().tabletconn_protocol() != 'grpc'
-        and vtgate_gateway_flavor().flavor() == 'shardgateway'):
-      self.replica_tablet.kill_vttablet()
-      self.tablet_start(self.replica_tablet, 'replica')
-      self.replica_tablet.wait_for_vttablet_state('SERVING')
-      # TODO(liguo): delete after shardgateway is deprecated.
-      # until we can detect vttablet shuts down gracefully
-      # while VTGate is idle.
-      # NOTE: with grpc, it will reconnect, and not trigger an error.
-      try:
-        result = vtgate_conn._execute(
-            'select 1 from vt_insert_test', {},
-            KEYSPACE_NAME, 'replica',
-            keyranges=[self.keyrange])
-        self.fail(
-            'DatabaseError should have been raised, but got %s' % str(result))
-      except Exception, e:  # pylint: disable=broad-except
-        self.assertIsInstance(e, dbexceptions.DatabaseError)
-        self.assertNotIsInstance(e, dbexceptions.IntegrityError)
-        self.assertNotIsInstance(e, dbexceptions.OperationalError)
-        self.assertNotIsInstance(e, dbexceptions.TimeoutError)
-
     self.tablet_start(self.replica_tablet2, 'replica')
     if vtgate_gateway_flavor().flavor() != 'shardgateway':
       wait_for_vars(
