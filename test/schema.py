@@ -78,10 +78,10 @@ def setUpModule():
 
     # check after all tablets are here and replication is fixed
     utils.validate_topology(ping_tablets=True)
-  except Exception as setup_exception:
+  except Exception as setup_exception:  # pylint: disable=broad-except
     try:
       tearDownModule()
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
       logging.exception('Tearing down a failed setUpModule() failed: %s', e)
     raise setup_exception
 
