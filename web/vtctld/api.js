@@ -24,10 +24,6 @@ app.factory('tabletinfo', function($resource) {
   return $resource('../api/tablets/:tablet/:info');
 });
 
-app.factory('endpoints', function($resource) {
-  return $resource('../api/endpoints/:cell/:keyspace/:shard/:tabletType');
-});
-
 app.factory('topodata', function($resource) {
   return $resource('../api/topodata/:path');
 });

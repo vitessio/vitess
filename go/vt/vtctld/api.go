@@ -214,30 +214,6 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 		return ts.GetTablet(ctx, tabletAlias)
 	})
 
-	// EndPoints
-	handleCollection("endpoints", func(r *http.Request) (interface{}, error) {
-		// We expect cell/keyspace/shard/tabletType.
-		epPath := getItemPath(r.URL.Path)
-		parts := strings.Split(epPath, "/")
-		if len(parts) != 4 {
-			return nil, fmt.Errorf("invalid cell/keyspace/shard/tabletType: %q", epPath)
-		}
-
-		if parts[3] == "" {
-			// tabletType is empty, so list the tablet types.
-			return ts.GetSrvTabletTypesPerShard(ctx, parts[0], parts[1], parts[2])
-		}
-
-		tabletType, err := topoproto.ParseTabletType(parts[3])
-		if err != nil {
-			return nil, fmt.Errorf("invalid tablet type %v: %v", parts[3], err)
-		}
-
-		// Get the endpoints object for a specific type.
-		ep, _, err := ts.GetEndPoints(ctx, parts[0], parts[1], parts[2], tabletType)
-		return ep, err
-	})
-
 	// Schema Change
 	http.HandleFunc(apiPrefix+"schema/apply", func(w http.ResponseWriter, r *http.Request) {
 		req := struct{ Keyspace, SQL string }{}
