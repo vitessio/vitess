@@ -134,15 +134,6 @@ func TestAPI(t *testing.T) {
 				"Output": "TestTabletAction Result",
 				"Error": false
 			}`},
-
-		// EndPoints
-		{"GET", "endpoints/cell1/ks1/-80/", `[2]`},
-		{"GET", "endpoints/cell1/ks1/-80/replica", `{
-				"entries": [{
-						"uid": 100,
-						"port_map": {"vt": 100}
-					}]
-			}`},
 	}
 
 	for _, in := range table {
