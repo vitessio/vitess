@@ -345,7 +345,7 @@ func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface
 			if !ok {
 				return nil, fmt.Errorf("could not find bind var %s", val)
 			}
-			if ok, v := v.([]byte); ok {
+			if v, ok := v.([]byte); ok {
 				keys = append(keys, string(v))
 			} else {
 				keys = append(keys, v)
