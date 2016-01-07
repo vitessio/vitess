@@ -339,18 +339,16 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface{}) (keys []interface{}, err error) {
 	keys = make([]interface{}, 0, len(vals))
 	for _, val := range vals {
-		switch val := val.(type) {
-		case string:
-			v, ok := bindVars[val[1:]]
+		if v, ok := val.(string); ok {
+			val, ok = bindVars[v[1:]]
 			if !ok {
-				return nil, fmt.Errorf("could not find bind var %s", val)
+				return nil, fmt.Errorf("could not find bind var %s", v)
 			}
-			keys = append(keys, v)
-		case []byte:
-			keys = append(keys, string(val))
-		default:
-			keys = append(keys, val)
 		}
+		if v, ok := val.([]byte); ok {
+			val = string(v)
+		}
+		keys = append(keys, val)
 	}
 	return keys, nil
 }

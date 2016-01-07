@@ -123,6 +123,67 @@ func TestStreamUnshardedFail(t *testing.T) {
 	}
 }
 
+func TestSelectBindvars(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+
+	_, err := routerExec(router, "select * from user where id = :id", map[string]interface{}{
+		"id": 1,
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select * from user where id = :id",
+		BindVariables: map[string]interface{}{"id": 1},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+
+	sbc1.Queries = nil
+	_, err = routerExec(router, "select * from user where name in (:name1, :name2)", map[string]interface{}{
+		"name1": "foo1",
+		"name2": "foo2",
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "select * from user where name in ::_vals",
+		BindVariables: map[string]interface{}{
+			"name1": "foo1",
+			"name2": "foo2",
+			"_vals": []interface{}{"foo1", "foo2"},
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+
+	sbc1.Queries = nil
+	_, err = routerExec(router, "select * from user where name in (:name1, :name2)", map[string]interface{}{
+		"name1": []byte("foo1"),
+		"name2": []byte("foo2"),
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "select * from user where name in ::_vals",
+		BindVariables: map[string]interface{}{
+			"name1": []byte("foo1"),
+			"name2": []byte("foo2"),
+			"_vals": []interface{}{"foo1", "foo2"},
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+}
+
 func TestSelectEqual(t *testing.T) {
 	router, sbc1, sbc2, sbclookup := createRouterEnv()
 
