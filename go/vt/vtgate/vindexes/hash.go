@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
@@ -167,6 +168,11 @@ func (vind *HashAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, _ [
 }
 
 func getNumber(v interface{}) (int64, error) {
+	// Failsafe check: v will never be a []byte.
+	if val, ok := v.([]byte); ok {
+		v = string(val)
+	}
+
 	switch v := v.(type) {
 	case int:
 		return int64(v), nil
@@ -180,6 +186,16 @@ func getNumber(v interface{}) (int64, error) {
 		return int64(v), nil
 	case uint64:
 		return int64(v), nil
+	case string:
+		signed, err := strconv.ParseInt(v, 0, 64)
+		if err == nil {
+			return signed, nil
+		}
+		unsigned, err := strconv.ParseUint(v, 0, 64)
+		if err == nil {
+			return int64(unsigned), nil
+		}
+		return 0, fmt.Errorf("getNumber: %v", err)
 	}
 	return 0, fmt.Errorf("unexpected type for %v: %T", v, v)
 }
