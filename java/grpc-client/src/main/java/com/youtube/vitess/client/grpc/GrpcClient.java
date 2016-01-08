@@ -277,7 +277,7 @@ public class GrpcClient implements RpcClient {
           return new SQLTransientException(sre.toString(), sre);
         default: // Covers e.g. UNKNOWN.
           String advice = "";
-          if (e.getCause() != null && e.getCause() instanceof java.nio.channels.ClosedChannelException) {
+          if (e.getCause() instanceof java.nio.channels.ClosedChannelException) {
             advice = "Failed to connect to vtgate. Make sure that vtgate is running and you are using the correct address. Details: ";
           }
           return new SQLNonTransientException("gRPC StatusRuntimeException: " + advice + e.toString(), e);
