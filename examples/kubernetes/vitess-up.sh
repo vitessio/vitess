@@ -167,8 +167,11 @@ $kvtctl RebuildKeyspaceGraph $KEYSPACE
 echo Done
 echo -n Reparenting...
 shard_num=1
+master_cell=`echo $cells | awk '{print $1}'`
 for shard in $(echo $SHARDS | tr "," " "); do
-  $kvtctl InitShardMaster -force $KEYSPACE/$shard `echo $cells | awk '{print $1}'`-0100000${shard_num}00
+  [[ $num_cells -gt 1 ]] && cell_id=10 || cell_id=00
+  printf -v master_tablet_id '%s-%02d0000%02d00' $master_cell $cell_id $shard_num
+  $kvtctl InitShardMaster -force $KEYSPACE/$shard $master_tablet_id
   let shard_num=shard_num+1
 done
 echo Done
