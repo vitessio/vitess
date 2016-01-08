@@ -100,7 +100,7 @@ func TestUpdateEqualFail(t *testing.T) {
 	_, err = routerExec(router, "update user set a=2 where id = :id", map[string]interface{}{
 		"id": "aa",
 	})
-	want = "execUpdateEqual: hash.Map: unexpected type for aa: string"
+	want = `execUpdateEqual: hash.Map: getNumber: strconv.ParseUint: parsing "aa": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
@@ -230,7 +230,7 @@ func TestDeleteEqualFail(t *testing.T) {
 	_, err = routerExec(router, "delete from user where id = :id", map[string]interface{}{
 		"id": "aa",
 	})
-	want = "execDeleteEqual: hash.Map: unexpected type for aa: string"
+	want = `execDeleteEqual: hash.Map: getNumber: strconv.ParseUint: parsing "aa": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
@@ -565,7 +565,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 'aa')", nil)
-	want = "hash.Verify: unexpected type for aa: string"
+	want = `hash.Verify: getNumber: strconv.ParseUint: parsing "aa": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}

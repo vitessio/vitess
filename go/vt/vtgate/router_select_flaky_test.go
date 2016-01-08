@@ -142,8 +142,8 @@ func TestSelectBindvars(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
-
 	sbc1.Queries = nil
+
 	_, err = routerExec(router, "select * from user where name in (:name1, :name2)", map[string]interface{}{
 		"name1": "foo1",
 		"name2": "foo2",
@@ -162,8 +162,8 @@ func TestSelectBindvars(t *testing.T) {
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-
 	sbc1.Queries = nil
+
 	_, err = routerExec(router, "select * from user where name in (:name1, :name2)", map[string]interface{}{
 		"name1": []byte("foo1"),
 		"name2": []byte("foo2"),
@@ -201,8 +201,8 @@ func TestSelectEqual(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
-
 	sbc1.Queries = nil
+
 	_, err = routerExec(router, "select * from user where id = 3", nil)
 	if err != nil {
 		t.Error(err)
@@ -220,8 +220,27 @@ func TestSelectEqual(t *testing.T) {
 	if sbc1.Queries != nil {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
-
 	sbc2.Queries = nil
+
+	_, err = routerExec(router, "select * from user where id = '3'", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "select * from user where id = '3'",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
+	}
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+	sbc2.Queries = nil
+
 	_, err = routerExec(router, "select * from user where name = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
