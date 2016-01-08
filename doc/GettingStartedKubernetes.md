@@ -346,16 +346,16 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     vitess/examples/kubernetes$ ./vttablet-up.sh
     ### example output:
     # Creating test_keyspace.shard-0 pods in cell test...
-    # Creating pod for tablet test-0100000100...
-    # pod "vttablet-100000100" created
-    # Creating pod for tablet test-0100000101...
-    # pod "vttablet-100000101" created
-    # Creating pod for tablet test-0100000102...
-    # pod "vttablet-100000102" created
-    # Creating pod for tablet test-0100000103...
-    # pod "vttablet-100000103" created
-    # Creating pod for tablet test-0100000104...
-    # pod "vttablet-100000104" created
+    # Creating pod for tablet test-0000000100...
+    # pods/vttablet-100
+    # Creating pod for tablet test-0000000101...
+    # pods/vttablet-101
+    # Creating pod for tablet test-0000000102...
+    # pods/vttablet-102
+    # Creating pod for tablet test-0000000103...
+    # pods/vttablet-103
+    # Creating pod for tablet test-0000000104...
+    # pods/vttablet-104
     ```
 
     In the vtctld web UI, you should soon see a
@@ -374,11 +374,11 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ``` sh
     vitess/examples/kubernetes$ ./kvtctl.sh ListAllTablets test
     ### example output:
-    # test-0100000100 test_keyspace 0 spare 10.64.1.6:15002 10.64.1.6:3306 []
-    # test-0100000101 test_keyspace 0 spare 10.64.2.5:15002 10.64.2.5:3306 []
-    # test-0100000102 test_keyspace 0 spare 10.64.0.7:15002 10.64.0.7:3306 []
-    # test-0100000103 test_keyspace 0 spare 10.64.1.7:15002 10.64.1.7:3306 []
-    # test-0100000104 test_keyspace 0 spare 10.64.2.6:15002 10.64.2.6:3306 []
+    # test-0000000100 test_keyspace 0 spare 10.64.1.6:15002 10.64.1.6:3306 []
+    # test-0000000101 test_keyspace 0 spare 10.64.2.5:15002 10.64.2.5:3306 []
+    # test-0000000102 test_keyspace 0 spare 10.64.0.7:15002 10.64.0.7:3306 []
+    # test-0000000103 test_keyspace 0 spare 10.64.1.7:15002 10.64.1.7:3306 []
+    # test-0000000104 test_keyspace 0 spare 10.64.2.6:15002 10.64.2.6:3306 []
     ```
 
 1.  **Initialize MySQL databases**
@@ -399,10 +399,10 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     will be named `vt_test_keyspace`.
 
     ``` sh
-    vitess/examples/kubernetes$ ./kvtctl.sh InitShardMaster -force test_keyspace/0 test-0100000100
+    vitess/examples/kubernetes$ ./kvtctl.sh InitShardMaster -force test_keyspace/0 test-0000000100
     ### example output:
-    # master-elect tablet test-0100000100 is not the shard master, proceeding anyway as -force was used
-    # master-elect tablet test-0100000100 is not a master in the shard, proceeding anyway as -force was used
+    # master-elect tablet test-0000000100 is not the shard master, proceeding anyway as -force was used
+    # master-elect tablet test-0000000100 is not a master in the shard, proceeding anyway as -force was used
     ```
 
     **Note:** Since this is the first time the shard has been started, the
@@ -416,11 +416,11 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ``` sh
     vitess/examples/kubernetes$ ./kvtctl.sh ListAllTablets test
     ### example output:
-    # test-0100000100 test_keyspace 0 master 10.64.1.6:15002 10.64.1.6:3306 []
-    # test-0100000101 test_keyspace 0 replica 10.64.2.5:15002 10.64.2.5:3306 []
-    # test-0100000102 test_keyspace 0 replica 10.64.0.7:15002 10.64.0.7:3306 []
-    # test-0100000103 test_keyspace 0 rdonly 10.64.1.7:15002 10.64.1.7:3306 []
-    # test-0100000104 test_keyspace 0 rdonly 10.64.2.6:15002 10.64.2.6:3306 []
+    # test-0000000100 test_keyspace 0 master 10.64.1.6:15002 10.64.1.6:3306 []
+    # test-0000000101 test_keyspace 0 replica 10.64.2.5:15002 10.64.2.5:3306 []
+    # test-0000000102 test_keyspace 0 replica 10.64.0.7:15002 10.64.0.7:3306 []
+    # test-0000000103 test_keyspace 0 rdonly 10.64.1.7:15002 10.64.1.7:3306 []
+    # test-0000000104 test_keyspace 0 rdonly 10.64.2.6:15002 10.64.2.6:3306 []
     ```
 
     The **replica** tablets are used for serving live web traffic, while the
@@ -452,11 +452,11 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ```
 
     You can run this command to confirm that the schema was created
-    properly on a given tablet, where `test-0100000100`
+    properly on a given tablet, where `test-0000000100`
     is a tablet alias as shown by the `ListAllTablets` command:
 
     ``` sh
-    vitess/examples/kubernetes$ ./kvtctl.sh GetSchema test-0100000100
+    vitess/examples/kubernetes$ ./kvtctl.sh GetSchema test-0000000100
     ### example output:
     # {
     #   "DatabaseSchema": "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
@@ -583,7 +583,7 @@ that replication is working.
 You can also inspect the data stored by the app:
 
 ``` sh
-vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0100000100 "SELECT * FROM messages"
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
 ### example output:
 # {
 #   "Fields": [],
@@ -664,11 +664,11 @@ doesn't respond as expected, use the `kubectl logs`
 command to check the pod output:
 
 ``` sh
-# show logs for container 'vttablet' within pod 'vttablet-100000100'
-$ kubectl logs vttablet-10000100 vttablet
+# show logs for container 'vttablet' within pod 'vttablet-100'
+$ kubectl logs vttablet-100 vttablet
 
-# show logs for container 'mysql' within pod 'vttablet-10000100'
-$ kubectl logs vttablet-100000100 mysql
+# show logs for container 'mysql' within pod 'vttablet-100'
+$ kubectl logs vttablet-100 mysql
 ```
 
 Post the logs somewhere and send a link to the [Vitess
@@ -681,11 +681,11 @@ If you want to poke around inside a container, you can use `kubectl exec` to run
 a shell.
 
 For example, to launch a shell inside the `vttablet` container of the
-`vttablet-10000100` pod:
+`vttablet-100` pod:
 
 ``` sh
-$ kubectl exec vttablet-10000100 -c vttablet -t -i -- bash -il
-root@vttablet-10000100:/# ls /vt/vtdataroot/vt_0100000100
+$ kubectl exec vttablet-100 -c vttablet -t -i -- bash -il
+root@vttablet-100:/# ls /vt/vtdataroot/vt_0000000100
 ### example output:
 # bin-logs   innodb                  my.cnf      relay-logs
 # data       memcache.sock764383635  mysql.pid   slow-query.log
@@ -718,9 +718,9 @@ it will automatically link to the vttablets through that same proxy,
 giving you access from outside the cluster.
 
 You can also use the proxy to go directly to a tablet. For example,
-to see the status page for the tablet with ID `10000100`, you could navigate to:
+to see the status page for the tablet with ID `100`, you could navigate to:
 
-http://localhost:8001/api/v1/proxy/namespaces/default/pods/vttablet-10000100:15002/debug/status
+http://localhost:8001/api/v1/proxy/namespaces/default/pods/vttablet-100:15002/debug/status
 
 ### Direct connection to mysqld
 
@@ -732,8 +732,8 @@ If you want to check or manipulate the underlying mysqld, you can issue
 simple queries or commands through `vtctlclient` like this:
 
 ``` sh
-# Send a query to tablet 100000100 in cell 'test'.
-vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0100000100 "SELECT VERSION()"
+# Send a query to tablet 100 in cell 'test'.
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT VERSION()"
 ### example output:
 # {
 #   "Fields": null,
@@ -753,8 +753,8 @@ If you need a truly direct connection to mysqld, you can [launch a shell]
 command-line client:
 
 ``` sh
-$ kubectl exec vttablet-10000100 -c mysql -t -i -- bash -il
-root@vttablet-10000100:/# export TERM=ansi
-root@vttablet-10000100:/# mysql -S /vt/vtdataroot/vt_0100000100/mysql.sock -u vt_dba
+$ kubectl exec vttablet-100 -c mysql -t -i -- bash -il
+root@vttablet-100:/# export TERM=ansi
+root@vttablet-100:/# mysql -S /vt/vtdataroot/vt_0000000100/mysql.sock -u vt_dba
 ```
 
