@@ -275,8 +275,12 @@ public class GrpcClient implements RpcClient {
           return new SQLInvalidAuthorizationSpecException(sre.toString(), sre);
         case UNAVAILABLE:
           return new SQLTransientException(sre.toString(), sre);
-        default:
-          return new SQLNonTransientException("gRPC StatusRuntimeException: " + e.toString(), e);
+        default: // Covers e.g. UNKNOWN.
+          String advice = "";
+          if (e.getCause() != null && e.getCause() instanceof java.nio.channels.ClosedChannelException) {
+            advice = "Failed to connect to vtgate. Make sure that vtgate is running and you are using the correct address. Details: ";
+          }
+          return new SQLNonTransientException("gRPC StatusRuntimeException: " + advice + e.toString(), e);
       }
     }
     return new SQLNonTransientException("gRPC error: " + e.toString(), e);
