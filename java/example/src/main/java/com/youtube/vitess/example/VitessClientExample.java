@@ -26,8 +26,10 @@ import java.util.Map;
  *
  * Alternatively, load the schema examples/local/create_test_table.sql into your instance:
  *
+ * <pre>
  *   $VTROOT/bin/vtctlclient -server <vtctld-host:port> ApplySchema -sql \
  *   "$(cat create_test_table.sql)" test_keyspace
+ * </pre>
  */
 public class VitessClientExample {
   public static void main(String[] args) throws Exception {
@@ -39,8 +41,9 @@ public class VitessClientExample {
     // Connect to vtgate.
     HostAndPort hostAndPort = HostAndPort.fromString(args[0]);
     Context ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5 * 1000));
-    RpcClient client = new GrpcClientFactory().create(
-        ctx, new InetSocketAddress(hostAndPort.getHostText(), hostAndPort.getPort()));
+    RpcClient client =
+        new GrpcClientFactory().create(ctx, new InetSocketAddress(hostAndPort.getHostText(),
+            hostAndPort.getPort()));
     VTGateConn conn = new VTGateConn(client);
 
     String keyspace = "test_keyspace";
@@ -52,14 +55,14 @@ public class VitessClientExample {
     System.out.println("Inserting into master...");
     VTGateTx tx = conn.begin(ctx);
     tx.executeShards(ctx, "INSERT INTO test_table (msg) VALUES (:msg)", keyspace, shards, bindVars,
-        TabletType.MASTER,
-        /* notInTransaction (ignore this because we will soon remove it) */ false);
+        TabletType.MASTER, false /* notInTransaction (ignore this because we will soon remove it) */);
     tx.commit(ctx);
 
     // Read it back from the master.
     System.out.println("Reading from master...");
-    Cursor cursor = conn.executeShards(ctx, "SELECT id, msg FROM test_table", keyspace, shards,
-        /* bindVars */ null, TabletType.MASTER);
+    Cursor cursor =
+        conn.executeShards(ctx, "SELECT id, msg FROM test_table", keyspace, shards,
+            null /* bindVars */, TabletType.MASTER);
     Row row;
     while ((row = cursor.next()) != null) {
       long id = row.getLong("id");
