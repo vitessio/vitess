@@ -43,7 +43,7 @@ public class VitessClientExample {
         new InetSocketAddress(hostAndPort.getHostText(), hostAndPort.getPort());
     Context ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5 * 1000));
     try (RpcClient client = new GrpcClientFactory().create(ctx, addr);
-        VTGateConn conn = new VTGateConn(client);) {
+        VTGateConn conn = new VTGateConn(client)) {
       String keyspace = "test_keyspace";
       Iterable<String> shards = Arrays.asList("0");
       Map<String, Object> bindVars =
@@ -60,7 +60,7 @@ public class VitessClientExample {
       System.out.println("Reading from master...");
       try (Cursor cursor =
           conn.executeShards(ctx, "SELECT id, msg FROM test_table", keyspace, shards,
-              null /* bindVars */, TabletType.MASTER);) {
+              null /* bindVars */, TabletType.MASTER)) {
         Row row;
         while ((row = cursor.next()) != null) {
           long id = row.getLong("id");
