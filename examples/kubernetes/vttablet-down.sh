@@ -24,7 +24,7 @@ num_shards=`echo $SHARDS | tr "," " " | wc -w`
 uid_base=$UID_BASE
 
 for shard in `seq 1 $num_shards`; do
-  cell_index=0
+  cell_index=100000000
   for cell in `echo $CELLS | tr "," " "`; do
     for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
       uid=$[$uid_base + $uid_index + $cell_index]

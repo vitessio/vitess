@@ -27,9 +27,9 @@ fi
 uid_base=$UID_BASE
 indices=${TASKS:-`seq 0 $(($TABLETS_PER_SHARD-1))`}
 for shard in $(echo $SHARDS | tr "," " "); do
-  cell_index=0
+  cell_index=100000000
   for cell in `echo $CELLS | tr ',' ' '`; do
-    echo "Creating $keyspace.shard-$shard pods in cell $CELL..."
+    echo "Creating $keyspace.shard-$shard pods in cell $cell..."
     for uid_index in $indices; do
       uid=$[$uid_base + $uid_index + $cell_index]
       printf -v alias '%s-%010d' $cell $uid

@@ -168,7 +168,7 @@ echo Done
 echo -n Reparenting...
 shard_num=1
 for shard in $(echo $SHARDS | tr "," " "); do
-  $kvtctl InitShardMaster -force $KEYSPACE/$shard `echo $cells | awk '{print $1}'`-0000000${shard_num}00
+  $kvtctl InitShardMaster -force $KEYSPACE/$shard `echo $cells | awk '{print $1}'`-0100000${shard_num}00
   let shard_num=shard_num+1
 done
 echo Done
