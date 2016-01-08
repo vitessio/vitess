@@ -31,7 +31,7 @@ import com.youtube.vitess.proto.Topodata.TabletType;
  * </pre>
  */
 public class VitessClientExample {
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     if (args.length != 1) {
       System.out.println("usage: VitessClientExample <vtgate-host:port>");
       System.exit(1);
@@ -68,6 +68,10 @@ public class VitessClientExample {
           System.out.format("(%d, %s)\n", id, new String(msg));
         }
       }
+    } catch (Exception e) {
+      System.out.println("Vitess Java example failed.");
+      System.out.println("Error Details:");
+      e.printStackTrace();
     }
   }
 }
