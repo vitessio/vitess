@@ -119,3 +119,16 @@ func StringIn(str string, values ...string) bool {
 	}
 	return false
 }
+
+// ForUpdate converts a select statement for update
+// and returns itself as value.
+func ForUpdate(sel SelectStatement) SelectStatement {
+	switch stmt := sel.(type) {
+	case *Select:
+		stmt.Lock = ForUpdateStr
+	case *Union:
+		ForUpdate(stmt.Left)
+		ForUpdate(stmt.Right)
+	}
+	return sel
+}

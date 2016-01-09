@@ -751,7 +751,7 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* subquery */ into vitess_a(eid, name, foo) select eid, name, foo from vitess_c",
 					Rewritten: []string{
-						"select eid, name, foo from vitess_c limit 10001",
+						"select eid, name, foo from vitess_c limit 10001 for update",
 						"insert /* subquery */ into vitess_a(eid, name, foo) values (10, 'abcd', '20'), (11, 'bcde', '30') /* _stream vitess_a (eid id ) (10 1 ) (11 1 )",
 					},
 					RowsAffected: 2,
@@ -769,7 +769,7 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_e(id, name, foo) select eid, name, foo from vitess_c",
 					Rewritten: []string{
-						"select eid, name, foo from vitess_c limit 10001",
+						"select eid, name, foo from vitess_c limit 10001 for update",
 						"insert into vitess_e(id, name, foo) values (10, 'abcd', '20'), (11, 'bcde', '30') /* _stream vitess_e (eid id name ) (null 10 'YWJjZA==' ) (null 11 'YmNkZQ==' )",
 					},
 					RowsAffected: 2,
@@ -1434,7 +1434,7 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_ints select 2, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y from vitess_ints",
 					Rewritten: []string{
-						"select 2, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y from vitess_ints limit 10001",
+						"select 2, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y from vitess_ints limit 10001 for update",
 						"insert into vitess_ints values (2, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012) /* _stream vitess_ints (tiny ) (2 )",
 					},
 				},
@@ -1485,7 +1485,7 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_fracts select 2, deci, num, f, d from vitess_fracts",
 					Rewritten: []string{
-						"select 2, deci, num, f, d from vitess_fracts limit 10001",
+						"select 2, deci, num, f, d from vitess_fracts limit 10001 for update",
 						"insert into vitess_fracts values (2, 1.99, 2.99, 3.99, 4.99) /* _stream vitess_fracts (id ) (2 )",
 					},
 				},
@@ -1541,7 +1541,7 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_strings select 'b', c, vc, b, tb, bl, ttx, tx, en, s from vitess_strings",
 					Rewritten: []string{
-						"select 'b', c, vc, b, tb, bl, ttx, tx, en, s from vitess_strings limit 10001",
+						"select 'b', c, vc, b, tb, bl, ttx, tx, en, s from vitess_strings limit 10001 for update",
 						"insert into vitess_strings values ('b', 'b', 'c', 'd\\0\\0\\0', 'e', 'f', 'g', 'h', 'a', 'a,b') /* _stream vitess_strings (vb ) ('Yg==' )",
 					},
 				},
@@ -1590,9 +1590,9 @@ func TestNocacheCases(t *testing.T) {
 				},
 				framework.TestQuery("begin"),
 				&framework.TestCase{
-					Query: "insert into vitess_misc select 2, b, d, dt, t from vitess_misc",
+					Query: "insert into vitess_misc select 2, b, d, dt, t from vitess_misc for update",
 					Rewritten: []string{
-						"select 2, b, d, dt, t from vitess_misc limit 10001",
+						"select 2, b, d, dt, t from vitess_misc limit 10001 for update",
 						"insert into vitess_misc values (2, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') /* _stream vitess_misc (id ) (2 )",
 					},
 				},

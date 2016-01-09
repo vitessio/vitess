@@ -859,7 +859,7 @@
   "TableName": "b",
   "FullQuery": "insert into b(eid, id) select * from a",
   "OuterQuery": "insert into b(eid, id) values :#values",
-  "Subquery": "select * from a limit :#maxLimit",
+  "Subquery": "select * from a limit :#maxLimit for update",
   "ColumnNumbers": [0, 1],
   "SubqueryPKColumns": [0, 1]
 }
@@ -871,7 +871,7 @@
   "TableName": "b",
   "FullQuery": "insert into b select * from a",
   "OuterQuery": "insert into b values :#values",
-  "Subquery": "select * from a limit :#maxLimit",
+  "Subquery": "select * from a limit :#maxLimit for update",
   "ColumnNumbers": [0, 1],
   "SubqueryPKColumns": [0, 1]
 }

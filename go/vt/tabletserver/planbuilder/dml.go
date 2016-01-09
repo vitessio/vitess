@@ -397,7 +397,7 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		}
 		plan.PlanID = PlanInsertSubquery
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
-		plan.Subquery = GenerateSelectLimitQuery(sel)
+		plan.Subquery = GenerateSelectLimitQuery(sqlparser.ForUpdate(sel))
 		if len(ins.Columns) != 0 {
 			plan.ColumnNumbers, err = analyzeSelectExprs(sqlparser.SelectExprs(ins.Columns), tableInfo)
 			if err != nil {
