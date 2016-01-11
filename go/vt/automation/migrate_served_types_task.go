@@ -5,9 +5,8 @@
 package automation
 
 import (
-	"fmt"
-
 	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 )
 
@@ -18,8 +17,6 @@ type MigrateServedTypesTask struct {
 
 // Run is part of the Task interface.
 func (t *MigrateServedTypesTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
-	keyspaceAndShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
-
 	args := []string{"MigrateServedTypes"}
 	if cells := parameters["cells"]; cells != "" {
 		args = append(args, "--cells="+cells)
@@ -27,7 +24,9 @@ func (t *MigrateServedTypesTask) Run(parameters map[string]string) ([]*automatio
 	if reverse := parameters["reverse"]; reverse != "" {
 		args = append(args, "--reverse="+reverse)
 	}
-	args = append(args, keyspaceAndShard, parameters["type"])
+	args = append(args,
+		topoproto.KeyspaceShardString(parameters["keyspace"], parameters["source_shard"]),
+		parameters["type"])
 	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"], args)
 	return nil, output, err
 }
