@@ -226,17 +226,11 @@ limit 10
 The steps performed by the SQL engine are as follows:
 
 1. Scan t (FROM)
-
 2. Filter rows where c=10 (WHERE)
-
 3. Remove all columns other than a & b, and compute a+1 (SELECT)
-
 4. Count and group unique a+1, b values (GROUP BY)
-
 5. Filter counts that are > 10 (HAVING)
-
 6. order the rows by descending count (ORDER BY)
-
 7. Return the top 10 results (LIMIT)
 
 The one thing that’s not obvious in a SELECT is that the select list is not the first clause that’s executed. It’s the FROM.
@@ -245,25 +239,15 @@ The one thing that’s not obvious in a SELECT is that the select list is not th
 
 If a SELECT statement was used just to fetch results, things would be very simple. However, it can be used in other parts of a query, and can produce 5 kinds of values:
 
-1. A simple value:
+1. A simple value: `select * from t where id = (select 1 from dual)`
 
-`select * from t where id = (``_select 1 from dual_``)`
+2. A value tuple: multiple values of the same type: `select * from t1 where id in (select val from t2)`
 
-2. A value tuple: multiple values of the same type:
+3. A row tuple: multiple values of different types. A row tuple can also be used as a value: `select * from t1 where (a,b) = (select b,c from t2 where pk=1)`
 
-`select * from t1 where id in (``_select val from t2_``)`
+4. Rows: results of a regular query. Note that rows can be treated as a value tuple of row tuples. For example, this statement is valid: `select * from t1 where (a,b) in (select b,c from t2)`
 
-3. A row tuple: multiple values of different types. A row tuple can also be used as a value:
-
-`select * from t1 where (a,b) = (``_select b,c from t2 where pk=1_``)`
-
-4. Rows: results of a regular query. Note that rows can be treated as a value tuple of row tuples. For example, this statement is valid:
-
-`select * from t1 where (a,b) in (``_select b,c from t2_``)`
-
-5. A virtual table: If you don’t strip out the field info from the original query, then a select can act as a table, where the field names act as column names. For example, this statement is valid:
-
-`select * from (``_select a, b from t2_``) as t where t.a=1`
+5. A virtual table: If you don’t strip out the field info from the original query, then a select can act as a table, where the field names act as column names. For example, this statement is valid: `select * from (select a, b from t2) as t where t.a=1`
 
 This opens the door to some powerful expressibility, the other edge of the sword being indefinite complexity.
 
@@ -586,7 +570,7 @@ Now that all operators are defined, we have to see if they’re complete. Let’
 ```
 01: (select count(*), ta1.col+1, tb1.col 
 02: from ta1 join tb1 on ta1.id=tb1.id
-03: where ta1.``c``ol2=10 and ta1.col2 > any
+03: where ta1.col2=10 and ta1.col2 > any
 04:   (select c from tc1 where tc1.id=ta1.id)
 05: group by ta1.col+1, tb1.col
 06: having count(*) > 10
@@ -610,7 +594,7 @@ The above query can be represented as a single expression. But let’s start wit
 04: SubqueryCScanResult = Select(
       Filter(
         Scan(tc1),
-        tc1.id=``JoinResult1.ta1.id``,
+        tc1.id=JoinResult1.ta1.id,
       ),
       tc1.c)
 03: FilterResult1 = Filter(
@@ -628,7 +612,7 @@ The above query can be represented as a single expression. But let’s start wit
 10: SelectResult2 = Select(FilterResult2, (1, ta2.col+1, tb2.col))
 13: Result2 = Aggregate(SelectResult2, count(‘1’))
 // union
-09: UnionResult = ``Aggregate``(Merge(Result1, Result2), NULL)
+09: UnionResult = Aggregate(Merge(Result1, Result2), NULL)
 14: OrderResult = Sort(UnionResult, (‘1’ desc))
 15: Result = Limit(OrderResult, 0, 5)
 ```
@@ -646,7 +630,7 @@ Result = Limit(
               Aggregate(
                 Select(
                   Filter(
-                    ``JoinResult1`` = InnerJoin(
+                    JoinResult1 = InnerJoin(
                       Scan(ta1),
                       Scan(tb1),
                       ta1.id=tb1.id,
@@ -655,7 +639,7 @@ Result = Limit(
                       Select(
                         Filter(
                           Scan(tc1),
-                          tc1.id=``JoinResult1``.ta1.id,
+                          tc1.id=JoinResult1.ta1.id,
                         ),
                         tc1.c,
                       ),
@@ -1061,16 +1045,16 @@ Also, the inner query cannot access any columns of the outer t2 because it has i
 A corollary: since subquery nesting can have many levels, an inner query can still reference results from any of the outer scopes. For example, this is a valid query:
 
 ```
-select`` ``t1.a``, t1.b
+select t1.a, t1.b
 from t1
 where t1.id in (
-  ``select`` t2.id
+  select t2.id
   from t2
   where t2.id in (
     select t3.id
     from t3
-    where t3.id = ``t1.a
-    ``)
+    where t3.id = t1.a
+    )
   )
 ```
 
@@ -1086,7 +1070,7 @@ The result of such a subquery will be a new virtual table with its own vindex co
 select sq.a, t2.b
 from
   (select a from t1 where id = :id) as sq
-  join t2` on`` t2.b = sq.a
+  join t2 on t2.b = sq.a
 ```
 
 The main symbol table will look like this:
@@ -1120,11 +1104,11 @@ The symbol table for the `‘from t1’` subquery will be in its own scope. Its 
 *Conceptually speaking, there’s no strong reason to prevent the FROM clause from referencing columns of an outer query. MySQL probably disallows this because it leads to confusing scoping rules. Let’s take a look at this example:*
 
 ```
-select id from ``a`` where id in (
+select id from a where id in (
   select b.id, a.id
   from
-    (select id from b where b.id=``a.id``) b
-    join ``d as a`` on ``a.id``=b.id)
+    (select id from b where b.id=a.id) b
+    join d as a on a.id=b.id)
 ```
 
 *If we allowed an outer scope, then b.id=a.id becomes ambiguous. We don’t know if it should refer to the outer ‘a’, or the one that is yet to be created as part of the current scope. Needless to say, one shouldn’t be writing such unreadable queries.*
@@ -1133,11 +1117,11 @@ select id from ``a`` where id in (
 
 By the fact that the ON clause is part of a FROM clause, you cannot refer to an element of an outer query. This is an invalid query:
 
-`select id from a ``where id in (select b.id from b join c on b.id=``a.id``)`
+`select id from a where id in (select b.id from b join c on b.id=a.id)`
 
 But this is valid:
 
-`select id from a where id in (select b.id from b join c where b.id=``a.id``)`
+`select id from a where id in (select b.id from b join c where b.id=a.id)`
 
 Furthermore, you can only refer to elements that participate in the current JOIN. But the following query is still valid:
 
@@ -1147,7 +1131,7 @@ Because of associativity rules, c is actually joined with ‘a join b’.
 
 But this query is not valid:
 
-`select * from a join ``(b join c on c.id = a.id)`
+`select * from a join (b join c on c.id = a.id)`
 
 The ON clause participants are only b and c because of the parenthesis. So, you’re not allowed to reference a.id in that join. In other words, analysis of the ON clause requires a list of participants. The analyzer will need to check with this list before looking inside the symbol table, or we could exploit Go interfaces here by sending a subset symbol table that has the same interface as the original one.
 
@@ -1229,7 +1213,7 @@ For the sake of simplicity, we’ll not allow dependencies to use non-standard c
 
 This should instead be rewritten as:
 
-`select * from (select a, count(*) ``c`` from t1) t where ``t.c`` > 0`
+`select * from (select a, count(*) c from t1) t where t.c > 0`
 
 This way, we can build a bind variable like `‘:_t_c’` for the outer query if we have split the above query into two.
 
@@ -1421,11 +1405,11 @@ But left joins are slightly different, because the join condition is applied *to
 
 is same as:
 
-`a LeftJoin (b LeftJoin c where c.id=b.id) ``where c.id=a.id``)`
+`a LeftJoin (b LeftJoin c where c.id=b.id) where c.id=a.id)`
 
 But it’s not the same as:
 
-`a LeftJoin (b left join c where c.id=b.id ``and c.id=a.id``)`
+`a LeftJoin (b left join c where c.id=b.id and c.id=a.id)`
 
 If the above joins were normal joins, then all three would be equivalent.
 
@@ -1525,16 +1509,16 @@ At the end of the analysis, the output is a symbol table and a reduced tree repr
 
 Here’s an example:
 
-`a join b on b.id=a.id ``join c on c.id=b.id2 join d on d.id2=c.id2 ``join e on e.id=a.id`
+`a join b on b.id=a.id join c on c.id=b.id2 join d on d.id2=c.id2 join e on e.id=a.id`
 
 will be represented as:
 
 ```
-                        ``J2
+                        J2
                        /  \
-                      ``J1``   e ``_where e.id=a.id_
+                      J1   e where e.id=a.id
                      /  \    
-a join b on b.id=a.id    ``c join d on d.id2=c.id2 ``_where c.id=b.id2_
+a join b on b.id=a.id    c join d on d.id2=c.id2 where c.id=b.id2
 ```
 
 ### WHERE clause
@@ -1559,17 +1543,17 @@ the ON clause is processed, which is not until `LeftJoin` returns the results.
 
 *There are some practical use cases where you’d want to add conditions in the WHERE clause, typically for NULL checks. To support this in the future, we can use this technique that converts a LEFT JOIN into a normal JOIN:*
 
-`_from a left join b on b.id=a.id where b.id is NULL_`
+`from a left join b on b.id=a.id where b.id is NULL`
 
 *After split, the query on b should have become:*
 
-`_from b where b.id=a.id_`
+`from b where b.id=a.id`
 
 *We cannot push down the null check in the above case. But we can, if we rewrote it as:*
 
-`_from (select 1) as t left join b on b.id=a.id _``_where b.id is NULL_`
+`from (select 1) as t left join b on b.id=a.id where b.id is NULL`
 
-*The (select 1) acts as a fake driver row for the left join, which allows us to tack on the where clause and also change the` `*_LeftJoin_`* to a `*_Join_`*.*
+*The (select 1) acts as a fake driver row for the left join, which allows us to tack on the where clause and also change the `LeftJoin` to a `Join`.*
 
 ###### Subqueries
 
@@ -1588,9 +1572,9 @@ If a, b and c where in different groups, the output would be:
 ```
     J
    / \
-  J   c where (c.id=``b.id``) and ``(cond2(a.col, c.col))
+  J   c where (c.id=b.id) and (cond2(a.col, c.col))
  / \
-a   b where (b.id=``a.id``) and ``(cond1(a.col, b.col))
+a   b where (b.id=a.id) and (cond1(a.col, b.col))
 ```
 
 The cond2 expression gets pushed into the the where clause for table ‘c’ because it’s the right-most group that’s referenced by the condition. External references will be changed to appropriate bind variables by the rewiring phase.
@@ -1618,9 +1602,9 @@ If an expression references columns from more than one group, then the expressio
 *can be resolved with the following join*
 
 ```
-_select a.col, a.bar from a // produce _a_col & _a_bar_
-_Join_
-_select :_a_col+b.col from b where b.foo=:_a_bar_
+select a.col, a.bar from a // produce _a_col & _a_bar
+Join
+select :_a_col+b.col from b where b.foo=:_a_bar
 ```
 
 *However, such queries are not very efficient for VTTablet. It can’t cache field info, or use rowcache. Such push-downs don’t benefit MySQL either. So, it’s better to wait till VTGate implements the ability to evaluate expressions.*
@@ -1771,7 +1755,7 @@ In order to resolve dependencies correctly, we need the symbol tables that were 
 
 1. Change the external reference to the corresponding bind var name.
 
-2. If that column is not already in the SELECT list of the other group, we add it.
+2. If that column is not already in the select list of the other group, we add it.
 
 3. Mark the column number to be exported as the bind var name that we chose.
 
