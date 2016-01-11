@@ -336,6 +336,7 @@ index by_msg (msg)
         2
         , 'unexpected value for VttabletCall('
         'Execute.source_keyspace.0.replica) inside %s' % str(v))
+    # Verify master reads done by self._check_client_conn_redirection().
     self.assertEqual(
         v['VtgateApi']['Histograms'][
             'ExecuteKeyRanges.destination_keyspace.master']['Count'],
