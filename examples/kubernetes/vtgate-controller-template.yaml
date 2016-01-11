@@ -40,8 +40,9 @@ spec:
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
               -port 15001
+              -grpc_port 15991
               -tablet_protocol grpc
-              -service_map 'bsonrpc-vt-vtgateservice'
+              -service_map 'bsonrpc-vt-vtgateservice,grpc-vtgateservice'
               -cell test" vitess
       volumes:
         - name: syslog
