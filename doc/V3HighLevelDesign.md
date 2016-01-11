@@ -1,4 +1,4 @@
-V3 high level design
+# V3 high level design
 
 # Objectives
 
@@ -1255,7 +1255,7 @@ In terms of relational primitives, a scatter is a bunch of `Route` operations fo
 
 The rest of the analysis tries to push the subsequent operations into Route or RouteMerge. Whatever cannot be pushed down is the work that VTGate has to do by itself. The fact that we won’t try to flatten subqueries simplifies our analysis a little bit.
 
-*MySQL allows you to Sort and Limit the result of a UNION. This is something that the Vitess grammar doesn’t allow right now. We’ll eventually need to support this construct, which will add `*_Aggregate -> Sort -> Limit_`* as things that can further happen after the last `*_Merge_`*.*
+*MySQL allows you to Sort and Limit the result of a UNION. This is something that the Vitess grammar doesn’t allow right now. We’ll eventually need to support this construct, which will add `Aggregate -> Sort -> Limit` as things that can further happen after the last `Merge`.*
 
 The overall strategy is as follows:
 
@@ -1383,11 +1383,11 @@ The above rules work for both JOIN and LEFT JOIN nodes.
 
 *It’s easy to explain why grouping works for the simple case:*
 
-`_a left join b on b.id=a.id_`
+`a left join b on b.id=a.id`
 
 *In the above case, the only rows that are inspected in b are those where b.id=a.id. So, the join can be grouped. But what about this join:*
 
-`_(a left join b on a.id=b.id) join (c left join d on c.id=d.id) on b.id=d.id_`
+`(a left join b on a.id=b.id) join (c left join d on c.id=d.id) on b.id=d.id`
 
 *In the above case, rows from b or c could be NULL. Fortunately, in SQL, NULL != NULL. So, the outer-scope join will succeed only if rows from b and c are not NULL. If they’re not NULL, they’re guaranteed to be from the same shard. So, this makes them groupable. In fact, in the above case, the left joins in the inner scope are unnecessary. They could have just been normal joins. However, things would be very different if one had used the null-safe equal operator (<=>) for joins. But we’ll not treat null-safe equal as a valid join operator.*
 
@@ -1415,7 +1415,7 @@ If the above joins were normal joins, then all three would be equivalent.
 
 *The RHS-only rule for left joins has some non-intuitive repercussions. For example, this query will return all rows of table ‘a’:*
 
-`_select a.id, b.id from a left join b on (a.id=5 and b.id=a.id)_`
+`select a.id, b.id from a left join b on (a.id=5 and b.id=a.id)`
 
 *But b.id will be mostly null, except when a.id and b.id were 5.*
 
@@ -1509,16 +1509,16 @@ At the end of the analysis, the output is a symbol table and a reduced tree repr
 
 Here’s an example:
 
-`a join b on b.id=a.id join c on c.id=b.id2 join d on d.id2=c.id2 join e on e.id=a.id`
+`a join b on b.id=a.id join c on c.id=b.id2 join d on d.id=a.id`
 
 will be represented as:
 
 ```
                         J2
                        /  \
-                      J1   e where e.id=a.id
+                      J1   d where d.id=a.id
                      /  \    
-a join b on b.id=a.id    c join d on d.id2=c.id2 where c.id=b.id2
+a join b on b.id=a.id    c where c.id=b.id2
 ```
 
 ### WHERE clause
@@ -1597,7 +1597,7 @@ If an expression references columns from more than one group, then the expressio
 
 *It is possible to push-down combo expressions using the same technique we use for WHERE clauses. For example:*
 
-`_select a.col+b.col from a join b where b.foo=a.bar_`
+`select a.col+b.col from a join b where b.foo=a.bar`
 
 *can be resolved with the following join*
 
@@ -1681,11 +1681,11 @@ It is possible that a GROUP BY to be present while a SELECT doesn’t have aggre
 
 *As mentioned previously, MySQL analyzes the GROUP BY clause using the query’s scope. It also does not enforce that the GROUP BY columns are consistent with the SELECT. For example, this is valid in MySQL:*
 
-`_select a.col1, a.col2 from a group by a.col1_`
+`select a.col1, a.col2 from a group by a.col1`
 
 *This also valid:*
 
-`_select a.col1 from a group by a.col1, a.col2_`
+`select a.col1 from a group by a.col1, a.col2`
 
 *Both of the above constructs are invalid by SQL standards. We could piggy-back on this lax attitude and just pass-through the GROUP BY as is. After all, these are not very meaningful constructs. If MySQL allows them, why should we work against them?*
 
