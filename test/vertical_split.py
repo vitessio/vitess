@@ -91,6 +91,82 @@ class TestVerticalSplit(unittest.TestCase):
   def setUp(self):
     self.insert_index = 0
 
+    self._init_keyspaces_and_tablets()
+
+    # create the schema on the source keyspace, add some values
+    self._create_source_schema()
+    self._insert_initial_values()
+
+  def tearDown(self):
+    # kill everything
+    tablet.kill_tablets([source_master, source_replica, source_rdonly1,
+                         source_rdonly2, destination_master,
+                         destination_replica, destination_rdonly1,
+                         destination_rdonly2])
+
+  def _init_keyspaces_and_tablets(self):
+    utils.run_vtctl(['CreateKeyspace', 'source_keyspace'])
+    utils.run_vtctl(
+        ['CreateKeyspace', '--served_from',
+         'master:source_keyspace,replica:source_keyspace,rdonly:'
+         'source_keyspace',
+         'destination_keyspace'])
+    source_master.init_tablet('master', 'source_keyspace', '0')
+    source_replica.init_tablet('replica', 'source_keyspace', '0')
+    source_rdonly1.init_tablet('rdonly', 'source_keyspace', '0')
+    source_rdonly2.init_tablet('rdonly', 'source_keyspace', '0')
+
+    # rebuild destination keyspace to make sure there is a serving
+    # graph entry, even though there is no tablet yet.
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'destination_keyspace'],
+                    auto_log=True)
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
+                             'ServedFrom(rdonly): source_keyspace\n'
+                             'ServedFrom(replica): source_keyspace\n')
+
+    destination_master.init_tablet('master', 'destination_keyspace', '0')
+    destination_replica.init_tablet('replica', 'destination_keyspace', '0')
+    destination_rdonly1.init_tablet('rdonly', 'destination_keyspace', '0')
+    destination_rdonly2.init_tablet('rdonly', 'destination_keyspace', '0')
+
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'destination_keyspace'],
+                    auto_log=True)
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
+                             'ServedFrom(rdonly): source_keyspace\n'
+                             'ServedFrom(replica): source_keyspace\n')
+
+    # create databases so vttablet can start behaving normally
+    for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
+      t.create_db('vt_source_keyspace')
+      t.start_vttablet(wait_for_state=None)
+    destination_master.start_vttablet(wait_for_state=None,
+                                      target_tablet_type='replica')
+    destination_replica.start_vttablet(wait_for_state=None,
+                                       target_tablet_type='replica')
+    destination_rdonly1.start_vttablet(wait_for_state=None,
+                                       target_tablet_type='rdonly')
+    destination_rdonly2.start_vttablet(wait_for_state=None,
+                                       target_tablet_type='rdonly')
+
+    # wait for the tablets
+    for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
+      t.wait_for_vttablet_state('SERVING')
+    for t in [destination_master, destination_replica, destination_rdonly1,
+              destination_rdonly2]:
+      t.wait_for_vttablet_state('NOT_SERVING')
+
+    # reparent to make the tablets work
+    utils.run_vtctl(['InitShardMaster', 'source_keyspace/0',
+                     source_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['InitShardMaster', 'destination_keyspace/0',
+                     destination_master.tablet_alias], auto_log=True)
+
+    # run a health check on source replica so it responds to discovery
+    # (for binlog players) and on the source rdonlys (for workers)
+    utils.run_vtctl(['RunHealthCheck', source_replica.tablet_alias, 'replica'])
+    for t in [source_rdonly1, source_rdonly2]:
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
+
   def _create_source_schema(self):
     create_table_template = '''create table %s(
 id bigint not null,
@@ -111,6 +187,22 @@ index by_msg (msg)
                     auto_log=True)
     for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
       utils.run_vtctl(['ReloadSchema', t.tablet_alias])
+
+  def _insert_initial_values(self):
+    self.moving1_first = self._insert_values('moving1', 100)
+    self.moving2_first = self._insert_values('moving2', 100)
+    staying1_first = self._insert_values('staying1', 100)
+    staying2_first = self._insert_values('staying2', 100)
+    self._check_values(source_master, 'vt_source_keyspace', 'moving1',
+                       self.moving1_first, 100)
+    self._check_values(source_master, 'vt_source_keyspace', 'moving2',
+                       self.moving2_first, 100)
+    self._check_values(source_master, 'vt_source_keyspace', 'staying1',
+                       staying1_first, 100)
+    self._check_values(source_master, 'vt_source_keyspace', 'staying2',
+                       staying2_first, 100)
+    self._check_values(source_master, 'vt_source_keyspace', 'view1',
+                       self.moving1_first, 100)
 
   def _vtdb_conn(self):
     addr = utils.vtgate.rpc_endpoint()
@@ -266,81 +358,6 @@ index by_msg (msg)
         'unexpected EndPointDegradedResultCount inside %s' % str(v))
 
   def test_vertical_split(self):
-    utils.run_vtctl(['CreateKeyspace', 'source_keyspace'])
-    utils.run_vtctl(
-        ['CreateKeyspace', '--served_from',
-         'master:source_keyspace,replica:source_keyspace,rdonly:'
-         'source_keyspace',
-         'destination_keyspace'])
-    source_master.init_tablet('master', 'source_keyspace', '0')
-    source_replica.init_tablet('replica', 'source_keyspace', '0')
-    source_rdonly1.init_tablet('rdonly', 'source_keyspace', '0')
-    source_rdonly2.init_tablet('rdonly', 'source_keyspace', '0')
-
-    # rebuild destination keyspace to make sure there is a serving
-    # graph entry, even though there is no tablet yet.
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'destination_keyspace'],
-                    auto_log=True)
-    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
-                             'ServedFrom(rdonly): source_keyspace\n'
-                             'ServedFrom(replica): source_keyspace\n')
-
-    destination_master.init_tablet('master', 'destination_keyspace', '0')
-    destination_replica.init_tablet('replica', 'destination_keyspace', '0')
-    destination_rdonly1.init_tablet('rdonly', 'destination_keyspace', '0')
-    destination_rdonly2.init_tablet('rdonly', 'destination_keyspace', '0')
-
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'destination_keyspace'],
-                    auto_log=True)
-    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
-                             'ServedFrom(rdonly): source_keyspace\n'
-                             'ServedFrom(replica): source_keyspace\n')
-
-    # create databases so vttablet can start behaving normally
-    for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
-      t.create_db('vt_source_keyspace')
-      t.start_vttablet(wait_for_state=None)
-    destination_master.start_vttablet(wait_for_state=None,
-                                      target_tablet_type='replica')
-    for t in [destination_replica, destination_rdonly1, destination_rdonly2]:
-      t.start_vttablet(wait_for_state=None)
-
-    # wait for the tablets
-    for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
-      t.wait_for_vttablet_state('SERVING')
-    for t in [destination_master, destination_replica, destination_rdonly1,
-              destination_rdonly2]:
-      t.wait_for_vttablet_state('NOT_SERVING')
-
-    # reparent to make the tablets work
-    utils.run_vtctl(['InitShardMaster', 'source_keyspace/0',
-                     source_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['InitShardMaster', 'destination_keyspace/0',
-                     destination_master.tablet_alias], auto_log=True)
-
-    # create the schema on the source keyspace, add some values
-    self._create_source_schema()
-    moving1_first = self._insert_values('moving1', 100)
-    moving2_first = self._insert_values('moving2', 100)
-    staying1_first = self._insert_values('staying1', 100)
-    staying2_first = self._insert_values('staying2', 100)
-    self._check_values(source_master, 'vt_source_keyspace', 'moving1',
-                       moving1_first, 100)
-    self._check_values(source_master, 'vt_source_keyspace', 'moving2',
-                       moving2_first, 100)
-    self._check_values(source_master, 'vt_source_keyspace', 'staying1',
-                       staying1_first, 100)
-    self._check_values(source_master, 'vt_source_keyspace', 'staying2',
-                       staying2_first, 100)
-    self._check_values(source_master, 'vt_source_keyspace', 'view1',
-                       moving1_first, 100)
-
-    # run a health check on source replica so it responds to discovery
-    # (for binlog players) and on the source rdonlys (for workers)
-    utils.run_vtctl(['RunHealthCheck', source_replica.tablet_alias, 'replica'])
-    for t in [source_rdonly1, source_rdonly2]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
-
     # the worker will do everything. We test with source_reader_count=10
     # (down from default=20) as connection pool is not big enough for 20.
     # min_table_size_for_split is set to 1 as to force a split even on the
@@ -365,11 +382,11 @@ index by_msg (msg)
 
     # check values are present
     self._check_values(destination_master, 'vt_destination_keyspace', 'moving1',
-                       moving1_first, 100)
+                       self.moving1_first, 100)
     self._check_values(destination_master, 'vt_destination_keyspace', 'moving2',
-                       moving2_first, 100)
+                       self.moving2_first, 100)
     self._check_values(destination_master, 'vt_destination_keyspace', 'view1',
-                       moving1_first, 100)
+                       self.moving1_first, 100)
 
     # check the binlog players is running
     destination_master.wait_for_binlog_player_count(1)
@@ -551,11 +568,6 @@ index by_msg (msg)
     # check the stats are correct
     self._check_stats()
 
-    # kill everything
-    tablet.kill_tablets([source_master, source_replica, source_rdonly1,
-                         source_rdonly2, destination_master,
-                         destination_replica, destination_rdonly1,
-                         destination_rdonly2])
 
 if __name__ == '__main__':
   utils.main()
