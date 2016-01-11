@@ -1,20 +1,14 @@
 V3 high level design
 
-*Author: **[sougou@google.co*m](mailto:sougou@google.com)
-
-[[TOC]]
-
 # Objectives
 
 The goal of this document is to describe the guiding principles that will be used to implement the full SQL feature set of Vitess’s V3 API. We start off with the high level concepts on SQL and its features, and iterate our way into some concrete design proposals.
 
 ### Prerequisites
 
-Before reading this doc you must be familiar with [vindexes](http://go/vtgatev3design), which is used as foundation for the arguments presented here.
+Before reading this doc you must be familiar with [vindexes](https://github.com/youtube/vitess/blob/master/doc/V3VindexDesign.md), which is used as foundation for the arguments presented here.
 
 # Background
-
-This document is a more formal presentation of some [brainstorm ideas](https://docs.google.com/document/d/1QcEA2f3ZrtAXDftUrFl_bgv2gUQD47p2efcGvox0NpM/edit#heading=h.wyhvexts4y98).
 
 VTGate was initially conceived as a router that encapsulated the logic of deciding where to send the application’s queries. The primary objective was to isolate the application from maintenance events like reparenting, server restarts, and resharding. As of the V2 API, this problem is pretty much solved.
 
@@ -22,7 +16,7 @@ One drawback of the V2 API is that it requires the application to be aware of th
 
 The question was asked: could VTGate be changed to not require the sharding key in its API? Could VTGate make the sharded database look like a single database?
 
-This was how V3 was born. A working [proof of concept ](http://go/vtgatev3design)was developed. This showed that we can automatically route queries that targeted single shards. We could also route queries that targeted multiple shards as long as the results could be combined without any additional processing.
+This was how V3 was born. A working proof of concept was developed. This showed that we can automatically route queries that targeted single shards. We could also route queries that targeted multiple shards as long as the results could be combined without any additional processing.
 
 The next question was: Can we support more SQL constructs? How far can we go? Can we go all the way and support everything?
 
