@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
 // HorizontalReshardingTask is a cluster operation which allows to increase the number of shards.
@@ -31,10 +32,10 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automat
 	copySchemaTasks := NewTaskContainer()
 	for _, destShard := range destShards {
 		AddTask(copySchemaTasks, "CopySchemaShardTask", map[string]string{
-			"keyspace":        keyspace,
-			"source_shard":    sourceShards[0],
-			"dest_shard":      destShard,
-			"vtctld_endpoint": vtctldEndpoint,
+			"source_keyspace_and_shard": topoproto.KeyspaceShardString(keyspace, sourceShards[0]),
+			"dest_keyspace_and_shard":   topoproto.KeyspaceShardString(keyspace, destShard),
+			"exclude_tables":            parameters["exclude_tables"],
+			"vtctld_endpoint":           vtctldEndpoint,
 		})
 	}
 	newTasks = append(newTasks, copySchemaTasks)
