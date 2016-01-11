@@ -136,7 +136,8 @@ clusterOpLoop:
 				// Make sure all new tasks do not miss any required parameters.
 				err := s.validateTaskContainers(newTaskContainers)
 				if err != nil {
-					log.Errorf("Task: %v (%v/%v) emitted a new task which is not valid. Error: %v", taskProto.Name, clusterOp.Id, taskProto.Id, err)
+					err = fmt.Errorf("Task: %v (%v/%v) emitted a new task which is not valid. Error: %v", taskProto.Name, clusterOp.Id, taskProto.Id, err)
+					log.Error(err)
 					MarkTaskFailed(taskProto, output, err)
 					clusterOp.Error = err.Error()
 					break clusterOpLoop
