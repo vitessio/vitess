@@ -201,8 +201,8 @@ In addition, Vitess requires the software and libraries listed below.
 
     ``` sh
     export MYSQL_FLAVOR=MariaDB
-    or (mandatory for OS X)
-    export MYSQL_FLAVOR=MySQL56
+    # or (mandatory for OS X)
+    # export MYSQL_FLAVOR=MySQL56
     ```
 
 1.  If your selected database installed in a location other than `/usr/bin`,
@@ -213,8 +213,8 @@ In addition, Vitess requires the software and libraries listed below.
     ``` sh
     export VT_MYSQL_ROOT=/usr/local/mysql
     
-    on OS X, this is the correct value:
-    export VT_MYSQL_ROOT=/usr/local/opt/mysql56
+    # on OS X, this is the correct value:
+    # export VT_MYSQL_ROOT=/usr/local/opt/mysql56
     ```
 
     Note that the command indicates that the `mysql` executable should
