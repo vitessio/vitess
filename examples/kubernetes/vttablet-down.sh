@@ -22,10 +22,12 @@ UID_BASE=${UID_BASE:-100}
 
 num_shards=`echo $SHARDS | tr "," " " | wc -w`
 uid_base=$UID_BASE
+cells=`echo $CELLS | tr ',' ' '`
+num_cells=`echo $cells | wc -w`
 
 for shard in `seq 1 $num_shards`; do
-  cell_index=0
-  for cell in `echo $CELLS | tr "," " "`; do
+  [[ $num_cells -gt 1 ]] && cell_index=100000000 || cell_index=0
+  for cell in $cells; do
     for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
       uid=$[$uid_base + $uid_index + $cell_index]
       printf -v alias '%s-%010d' $cell $uid
