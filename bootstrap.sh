@@ -14,6 +14,15 @@ function fail() {
   exit 1
 }
 
+function zk_patch_mac() {
+  if [ `uname -s` == "Darwin" ]; then
+    cd zookeeper-$zk_ver && \
+    wget https://issues.apache.org/jira/secure/attachment/12673210/ZOOKEEPER-2049.noprefix.branch-3.4.patch && \
+    patch -p0 < ZOOKEEPER-2049.noprefix.branch-3.4.patch && \
+    cd ..
+  fi
+}
+
 [ -f bootstrap.sh ] || fail "bootstrap.sh must be run from its current directory"
 
 [ "$USER" != "root" ] || fail "Vitess cannot run as root. Please bootstrap with a non-root user."
@@ -37,6 +46,7 @@ else
   (cd $VTROOT/dist && \
     wget http://archive.apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
     tar -xzf zookeeper-$zk_ver.tar.gz && \
+    zk_patch_mac && \
     mkdir -p $zk_dist/lib && \
     cp zookeeper-$zk_ver/contrib/fatjar/zookeeper-$zk_ver-fatjar.jar $zk_dist/lib && \
     (cd zookeeper-$zk_ver/src/c && \
@@ -92,6 +102,7 @@ repos="github.com/golang/glog \
        google.golang.org/grpc \
        google.golang.org/cloud \
        google.golang.org/cloud/storage \
+       golang.org/x/crypto/ssh/terminal \
 "
 
 # Packages for uploading code coverage to coveralls.io (used by Travis CI).
@@ -187,6 +198,14 @@ fi
 # create pre-commit hooks
 echo "creating git pre-commit hooks"
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
+
+if [ `uname -s` == "Darwin" ]; then
+  echo "Setting up Apple System Integrity Protection (https://support.apple.com/en-us/HT204899)"
+  echo "A sudoer password is required in this step:"
+  sudo install_name_tool -change libgrpc.dylib $VTROOT/dist/grpc/lib/libgrpc.dylib $VTROOT/dist/grpc/lib/python2.7/site-packages/grpc/_adapter/_c.so
+  sudo install_name_tool -change libgpr.dylib $VTROOT/dist/grpc/lib/libgpr.dylib $VTROOT/dist/grpc/lib/python2.7/site-packages/grpc/_adapter/_c.so
+  sudo install_name_tool -change libgpr.dylib $VTROOT/dist/grpc/lib/libgpr.dylib $VTROOT/dist/grpc/lib/libgrpc.dylib
+fi
 
 echo
 echo "bootstrap finished - run 'source dev.env' in your shell before building."

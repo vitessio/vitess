@@ -67,6 +67,9 @@ Vitess without Docker.
 ### Install Dependencies
 
 We currently test Vitess regularly on Ubuntu 14.04 (Trusty) and Debian 8 (Jessie).
+OSX should work as well, the installation instructions are below.
+
+#### Ubuntu and Debian
 
 In addition, Vitess requires the software and libraries listed below.
 
@@ -122,6 +125,63 @@ In addition, Vitess requires the software and libraries listed below.
     ``` sh
     $ sudo apt-get install openjdk-7-jre
     ```
+    
+#### OSX
+
+1.  [Install Homebrew](http://brew.sh/).
+
+2.  On OSX, Mysql 5.6 has to be used, MariaDB doesn't work for some reason yet. It should be installed from Homebrew
+    (install steps are below).
+   
+3.  ZooKeeper is used as lock service.
+
+4.  Run the following commands:
+
+    ``` sh
+    $ brew install go automake libtool memcached python mercurial git bison curl wget homebrew/versions/mysql56
+    $ pip install --upgrade pip setuptools
+    $ pip install virtualenv
+    $ pip install MySQL-python
+    ```
+    
+5.  Install Java runtime from this URL: https://support.apple.com/kb/dl1572?locale=en_US
+    
+6.  The Vitess bootstrap script makes some checks for the go runtime, so it is recommended to have the following
+    commands in your ~/.profile or ~/.bashrc or ~/.zshrc:
+    
+    ``` sh
+    export PATH=/usr/local/opt/go/libexec/bin:$PATH
+    export GOROOT=/usr/local/opt/go/libexec
+    ```
+    
+7.  There is a problem with installing the enum34 Python package using pip, so the following file has to be edited:
+    ```
+    /usr/local/opt/python/Frameworks/Python.framework/Versions/2.7/lib/python2.7/distutils/distutils.cfg
+    ```
+    
+    and this line:
+    
+    ```
+    prefix=/usr/local
+    ```
+    
+    has to be commented out:
+    
+    ```
+    # prefix=/usr/local
+    ```
+    
+    After running the ./bootstrap.sh script from the next step, you can revert the change.
+    
+8.  For the Vitess hostname resolving functions to work correctly, a new entry has to be added into the /etc/hosts file
+    with the current LAN IP address of the computer (preferably IPv4) and the current hostname, which you get by
+    typing the 'hostname' command in the terminal.
+    
+    It is also a good idea to put the following line in your ~/.profile or ~/.bashrc or ~/.zshrc:
+    
+    ```
+    export GODEBUG=netdns=go
+    ```
 
 ### Build Vitess
 
@@ -140,7 +200,7 @@ In addition, Vitess requires the software and libraries listed below.
 
     ``` sh
     export MYSQL_FLAVOR=MariaDB
-    or
+    or (mandatory for OSX)
     export MYSQL_FLAVOR=MySQL56
     ```
 
@@ -151,6 +211,9 @@ In addition, Vitess requires the software and libraries listed below.
 
     ``` sh
     export VT_MYSQL_ROOT=/usr/local/mysql
+    
+    on OSX, this is the correct value:
+    export VT_MYSQL_ROOT=/usr/local/opt/mysql56
     ```
 
     Note that the command indicates that the `mysql` executable should
