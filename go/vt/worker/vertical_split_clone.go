@@ -330,7 +330,7 @@ func (vscw *VerticalSplitCloneWorker) findReloadTargets(ctx context.Context) err
 }
 
 // copy phase:
-//	- copy the data from source tablets to destination masters (wtih replication on)
+//	- copy the data from source tablets to destination masters (with replication on)
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
 func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
