@@ -63,6 +63,7 @@ type Scheduler struct {
 func NewScheduler() (*Scheduler, error) {
 	defaultClusterOperations := map[string]bool{
 		"HorizontalReshardingTask": true,
+		"VerticalSplitTask":        true,
 	}
 
 	s := &Scheduler{
@@ -206,8 +207,12 @@ func defaultTaskCreator(taskName string) Task {
 	switch taskName {
 	case "HorizontalReshardingTask":
 		return &HorizontalReshardingTask{}
+	case "VerticalSplitTask":
+		return &VerticalSplitTask{}
 	case "CopySchemaShardTask":
 		return &CopySchemaShardTask{}
+	case "MigrateServedFromTask":
+		return &MigrateServedFromTask{}
 	case "MigrateServedTypesTask":
 		return &MigrateServedTypesTask{}
 	case "RebuildKeyspaceGraph":
@@ -216,6 +221,10 @@ func defaultTaskCreator(taskName string) Task {
 		return &SplitCloneTask{}
 	case "SplitDiffTask":
 		return &SplitDiffTask{}
+	case "VerticalSplitCloneTask":
+		return &VerticalSplitCloneTask{}
+	case "VerticalSplitDiffTask":
+		return &VerticalSplitDiffTask{}
 	case "WaitForFilteredReplicationTask":
 		return &WaitForFilteredReplicationTask{}
 	default:
