@@ -104,7 +104,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 			}
 			entry, err := topo.TabletEndPoint(tablet.Tablet)
 			if err != nil {
-				log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.Alias, err)
+				log.Warningf("TabletEndPoint failed for tablet %v: %v", tablet.Alias, err)
 				continue
 			}
 			endpoints.Entries = append(endpoints.Entries, entry)
@@ -127,7 +127,6 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 					// This type didn't exist when we first checked.
 					// Try to create, but only if it still doesn't exist.
 					if err := ts.CreateEndPoints(ctx, cell, si.Keyspace(), si.ShardName(), tabletType, endpoints); err != nil {
-						log.Warningf("CreateEndPoints(%v, %v, %v) failed during rebuild: %v", cell, si, tabletType, err)
 						switch err {
 						case topo.ErrNodeExists:
 							retryErrs.RecordError(err)
@@ -140,7 +139,6 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 
 				// Update only if the version matches.
 				if err := ts.UpdateEndPoints(ctx, cell, si.Keyspace(), si.ShardName(), tabletType, endpoints, version); err != nil {
-					log.Warningf("UpdateEndPoints(%v, %v, %v) failed during rebuild: %v", cell, si, tabletType, err)
 					switch err {
 					case topo.ErrBadVersion, topo.ErrNoNode:
 						retryErrs.RecordError(err)
@@ -157,9 +155,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 				wg.Add(1)
 				go func(tabletType topodatapb.TabletType, version int64) {
 					defer wg.Done()
-					log.Infof("removing stale db type from serving graph: %v", tabletType)
 					if err := ts.DeleteEndPoints(ctx, cell, si.Keyspace(), si.ShardName(), tabletType, version); err != nil && err != topo.ErrNoNode {
-						log.Warningf("DeleteEndPoints(%v, %v, %v) failed during rebuild: %v", cell, si, tabletType, err)
 						switch err {
 						case topo.ErrNoNode:
 							// Someone else deleted it, which is fine.
