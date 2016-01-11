@@ -67,7 +67,7 @@ Vitess without Docker.
 ### Install Dependencies
 
 We currently test Vitess regularly on Ubuntu 14.04 (Trusty) and Debian 8 (Jessie).
-OSX should work as well, the installation instructions are below.
+OS X 10.11 (El Capitan) should work as well, the installation instructions are below.
 
 #### Ubuntu and Debian
 
@@ -126,11 +126,11 @@ In addition, Vitess requires the software and libraries listed below.
     $ sudo apt-get install openjdk-7-jre
     ```
     
-#### OSX
+#### OS X
 
 1.  [Install Homebrew](http://brew.sh/).
 
-2.  On OSX, Mysql 5.6 has to be used, MariaDB doesn't work for some reason yet. It should be installed from Homebrew
+2.  On OS X, MySQL 5.6 has to be used, MariaDB doesn't work for some reason yet. It should be installed from Homebrew
     (install steps are below).
    
 3.  ZooKeeper is used as lock service.
@@ -200,7 +200,7 @@ In addition, Vitess requires the software and libraries listed below.
 
     ``` sh
     export MYSQL_FLAVOR=MariaDB
-    or (mandatory for OSX)
+    or (mandatory for OS X)
     export MYSQL_FLAVOR=MySQL56
     ```
 
@@ -212,7 +212,7 @@ In addition, Vitess requires the software and libraries listed below.
     ``` sh
     export VT_MYSQL_ROOT=/usr/local/mysql
     
-    on OSX, this is the correct value:
+    on OS X, this is the correct value:
     export VT_MYSQL_ROOT=/usr/local/opt/mysql56
     ```
 
