@@ -138,10 +138,10 @@ In addition, Vitess requires the software and libraries listed below.
 4.  Run the following commands:
 
     ``` sh
-    $ brew install go automake libtool memcached python mercurial git bison curl wget homebrew/versions/mysql56
-    $ pip install --upgrade pip setuptools
-    $ pip install virtualenv
-    $ pip install MySQL-python
+    brew install go automake libtool memcached python mercurial git bison curl wget homebrew/versions/mysql56
+    pip install --upgrade pip setuptools
+    pip install virtualenv
+    pip install MySQL-python
     ```
     
 5.  Install Java runtime from this URL: https://support.apple.com/kb/dl1572?locale=en_US
@@ -177,7 +177,8 @@ In addition, Vitess requires the software and libraries listed below.
     with the current LAN IP address of the computer (preferably IPv4) and the current hostname, which you get by
     typing the 'hostname' command in the terminal.
     
-    It is also a good idea to put the following line in your ~/.profile or ~/.bashrc or ~/.zshrc:
+    It is also a good idea to put the following line to [force the Go DNS resolver](https://golang.org/doc/go1.5#net) 
+    in your ~/.profile or ~/.bashrc or ~/.zshrc:
     
     ```
     export GODEBUG=netdns=go
