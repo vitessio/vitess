@@ -1,4 +1,4 @@
-# VTGate V3 design
+# VTGate V3 Vindex design
 
 ## Objective
 
