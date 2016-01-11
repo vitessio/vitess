@@ -1271,7 +1271,7 @@ The overall strategy is as follows:
 
 In order to align ourselves with our priorities, we’ll start off with a limited set of primitives, and then we can expand from there.
 
-VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](#heading=h.mcoypc9twxih) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
+VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/youtube/vitess/blob/sugudoc/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
 
 * `Route`: Sends a query to a single shard or unsharded keyspace.
 
@@ -1531,7 +1531,7 @@ The first step here is to convert the parse tree into a list of conditions that 
 
 We look at the columns that each condition references, and we identify the rightmost group that the expression references and we push the where clause there. Any references outside of that group will later be changed to bind vars. By the fact that the where clause was pushed to the right most group gives us the guarantee that values will be available for the rest of the column references.
 
-Each time a WHERE clause gets successfully pushed into a Route or RouteMerge, we re-evaluate the routing plan to see if it can be improved. The rules for this are described in the [vindex document](http://go/vtgatev3design).
+Each time a WHERE clause gets successfully pushed into a Route or RouteMerge, we re-evaluate the routing plan to see if it can be improved. The rules for this are described in the vindex document.
 
 There are situations where we cannot push down:
 
