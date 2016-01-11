@@ -248,7 +248,7 @@ index by_msg (msg)
       try:
         self._check_values(t, dbname, table, first, count)
         return
-      except:
+      except Exception:  # pylint: disable=broad-except
         timeout -= 1
         if timeout == 0:
           raise
@@ -325,7 +325,7 @@ index by_msg (msg)
                   keyrange_constants.NON_PARTIAL_KEYRANGE)])
           logging.debug(
               'Select on %s.%s returned %d rows', db_type, tbl, len(rows))
-        except Exception, e:
+        except Exception, e:  # pylint: disable=broad-except
           self.fail('Execute failed w/ exception %s' % str(e))
 
   def _check_stats(self):
