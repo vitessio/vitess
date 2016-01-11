@@ -30,11 +30,11 @@ This section gives a preview of what this document tries to achieve.
 
 The current V3 functionality is capable of correctly serving simple SQL statements that reference a single table. For example, if id is the sharding column for a:
 
-**select a.col from a where a.id=:id** will get routed to the correct shard.
+`select a.col from a where a.id=:id` will get routed to the correct shard.
 
-**select a.col from a where a.id in ::list** will get broken out into shard-specific in statements and routed to those specific shards
+`select a.col from a where a.id in ::list` will get broken out into shard-specific in statements and routed to those specific shards
 
-**select a.col from a where a.col=:col** will get sent to all shards and results will be combined and returned
+`select a.col from a where a.col=:col` will get sent to all shards and results will be combined and returned
 
 The current V3 also supports simple DMLs. More complex SQLs like joins, aggregations and subqueries are not supported.
 
@@ -44,51 +44,54 @@ If the first phase of this document is implemented, VTGate will be able to suppo
 
 ### Joins
 
-**select a.col, b.col from a join b on b.id=a.id where a.id=:id** will get routed to the correct shard. Correspondingly, IN clauses will also will get correctly broken out and routed.
+`select a.col, b.col from a join b on b.id=a.id where a.id=:id` will get routed to the correct shard. Correspondingly, IN clauses will also will get correctly broken out and routed.
 
-**select a.col, b.col from a join b on b.id=a.id **will get sent to all shards.
+`select a.col, b.col from a join b on b.id=a.id `will get sent to all shards.
 
 If the data is on multiple shard, VTGate will perform the join:
 
-**select a.col, b.col from a join b on b.id2=a.id where a.id=:id**
+`select a.col, b.col from a join b on b.id2=a.id where a.id=:id`
 
 will get rewritten as two queries, one dependent on the other:
 
-**select a.col, a.id from a where a.id=:id -> yield "_a_id" from col 1**
-
-**select b.col from b where b.id2=:_a_id**
+```
+select a.col, a.id from a where a.id=:id -> yield "_a_id" from col 1
+select b.col from b where b.id2=:_a_id
+```
 
 Joins can group tables, as long as the order is correctly specified:
 
-**select a.col, b.col, c.col from a join b on b.id=a.id join c on c.id2=a.id where a.id=:id**
+`select a.col, b.col, c.col from a join b on b.id=a.id join c on c.id2=a.id where a.id=:id`
 
 will get rewritten as:
 
-**select a.col, b.col, a.id from a join b on b.id=a.id where a.id=:id**
-
-**select c.col from where c.id2=:_a_id**
+```
+select a.col, b.col, a.id from a join b on b.id=a.id where a.id=:id
+select c.col from where c.id2=:_a_id
+```
 
 Joins can also group other where clauses and wire-up cross-table dependencies:
 
-**select a.col, b.col from a join b on b.id2=a.id where a.id=:id and b.col > a.col**
+`select a.col, b.col from a join b on b.id2=a.id where a.id=:id and b.col > a.col`
 
 will get rewritten as:
 
-**select a.col, a.id from a where a.id=:id**
-
-**select b.col from b where b.id2=:_a_id and b.col > :_a_col**
+```
+select a.col, a.id from a where a.id=:id
+select b.col from b where b.id2=:_a_id and b.col > :_a_col
+```
 
 Joins can also be cascased:
 
-**select a.col, b.col, c.col from a join b on b.i2=a.id join c on c.id3=b.id2 where a.id=:id**
+`select a.col, b.col, c.col from a join b on b.i2=a.id join c on c.id3=b.id2 where a.id=:id`
 
 will get rewritten as:
 
-**select a.col, a.id from a where a.id=:id**
-
-**select b.col, b.id2 from b where b.id2=_a_id**
-
-**select c.col from c where c.id3=_b_id2**
+```
+select a.col, a.id from a where a.id=:id
+select b.col, b.id2 from b where b.id2=_a_id
+select c.col from c where c.id3=_b_id2
+```
 
 LEFT JOIN will also be supported for all the above constructs. However, WHERE clauses that add additional constraints to the nullable parts of a left join will not be supported; They cannot be pushed down.
 
@@ -96,19 +99,20 @@ LEFT JOIN will also be supported for all the above constructs. However, WHERE cl
 
 Correlated subqueries that can be executed as part of the main query will be supported:
 
-**select a.id from a where exists (select b.id from b where b.id=a.id) and a.id=:id** will get routed to the correct shard.
+`select a.id from a where exists (select b.id from b where b.id=a.id) and a.id=:id` will get routed to the correct shard.
 
 Correlated subqueries can also be sent as scatter queries, as long as the join constraints are met.
 
 Subqueries in the FROM clause can be joined with other tables:
 
-**select a.id, a.c, b.col from (select id, count(*) c from a) as a join b on b.id=a.id**
+`select a.id, a.c, b.col from (select id, count(*) c from a) as a join b on b.id=a.id`
 
 will get rewritten as:
 
-**select a.id, a.c from (select id, count(*) c from a) as a**
-
-**select b.col from b where b.id=:_a_id**
+```
+select a.id, a.c from (select id, count(*) c from a) as a
+select b.col from b where b.id=:_a_id
+```
 
 Subqueries in the WHERE clause and SELECT list will be supported only if they can be grouped. They will not be broken out.
 
@@ -118,19 +122,20 @@ Aggregation will be supported for single-shard queries, but they can contain joi
 
 You can also use aggregation for scatter queries if a unique vindex is in the list of result columns, like this one:
 
-**select id, count(*) from a**
+`select id, count(*) from a`
 
 ### Sorting
 
 Sorting will be supported as long as it can be meaningfully pushed down into the grouped parts. For example,
 
-**select a.col, b.col from a join be where b.id=a.id order by a.id, b.id**
+`select a.col, b.col from a join be where b.id=a.id order by a.id, b.id`
 
 will be rewritten as:
 
-**select a.col from a order by a.id order by a.id**
-
-**select b.col from b where b.id=:_a_id order by b.id**
+```
+select a.col from a order by a.id order by a.id
+select b.col from b where b.id=:_a_id order by b.id
+```
 
 ### All combinations
 
@@ -176,7 +181,7 @@ This coincidence is not accidental. For example, if you used a vindex to route a
 
 The foundation for these similarities comes from the fact that a table that was once in a single database is now partitioned out. So, the indexes for those tables have to also grow out of the original database.
 
-There is another strong parallel between a table and a database: A SELECT statement and a table are interchangeable. On one hand, all the data in table t can be represented as **‘select * from t’. **On the other hand, you can use a SELECT statement as stand-in for a table. So, many of the approaches used to optimize SQL for scanning tables can be re-used to orchestrate queries that span multiple shards or databases. The main difference is that you can treat bigger SQL chunks as tables, and can outsource that work to the database that hosts them.
+There is another strong parallel between a table and a database: A SELECT statement and a table are interchangeable. On one hand, all the data in table t can be represented as `‘select * from t’. `On the other hand, you can use a SELECT statement as stand-in for a table. So, many of the approaches used to optimize SQL for scanning tables can be re-used to orchestrate queries that span multiple shards or databases. The main difference is that you can treat bigger SQL chunks as tables, and can outsource that work to the database that hosts them.
 
 But then, there’s only so much you can outsource. As soon as a query exceeds a certain level of complexity, where the required data needs to be pulled from more than one database, then any subsequent work needs to be done by VTGate. If we want to support the full SQL syntax, VTGate will have to eventually become a full-fledged SQL engine.
 
@@ -208,19 +213,15 @@ An upfront clarification: we’ll be only focusing on SELECT statements in this 
 
 A single table SELECT is a relatively simple thing. Let’s dissect the following statement:
 
-**select count(*), a+1, b **
-
-**from t**
-
-**where c=10**
-
-**group by a+1, b**
-
-**having count(*) > 10**
-
-**order by count(*) desc**
-
-**limit 10**
+```
+select count(*), a+1, b
+from t
+where c=10
+group by a+1, b
+having count(*) > 10
+order by count(*) desc
+limit 10
+```
 
 The steps performed by the SQL engine are as follows:
 
@@ -246,23 +247,23 @@ If a SELECT statement was used just to fetch results, things would be very simpl
 
 1. A simple value:
 
-**select * from t where id = (****_select 1 from dual_****)**
+`select * from t where id = (``_select 1 from dual_``)`
 
 2. A value tuple: multiple values of the same type:
 
-**select * from t1 where id in (****_select val from t2_****)**
+`select * from t1 where id in (``_select val from t2_``)`
 
 3. A row tuple: multiple values of different types. A row tuple can also be used as a value:
 
-**select * from t1 where (a,b) = (****_select b,c from t2 where pk=1_****)**
+`select * from t1 where (a,b) = (``_select b,c from t2 where pk=1_``)`
 
 4. Rows: results of a regular query. Note that rows can be treated as a value tuple of row tuples. For example, this statement is valid:
 
-**select * from t1 where (a,b) in (****_select b,c from t2_****)**
+`select * from t1 where (a,b) in (``_select b,c from t2_``)`
 
 5. A virtual table: If you don’t strip out the field info from the original query, then a select can act as a table, where the field names act as column names. For example, this statement is valid:
 
-**select * from (****_select a, b from t2_****) as t where t.a=1**
+`select * from (``_select a, b from t2_``) as t where t.a=1`
 
 This opens the door to some powerful expressibility, the other edge of the sword being indefinite complexity.
 
@@ -356,7 +357,7 @@ Even the above primitives are fairly theoretical; One would rarely perform a Joi
 
 For a given SELECT statement, the order of these operators are fixed. They are as follows:
 
-**Scan <-> (Join & LeftJoin) -> Filter(where) -> Select -> Aggregate -> Filter(having) -> Sort -> Limit -> Merge**
+`Scan <-> (Join & LeftJoin) -> Filter(where) -> Select -> Aggregate -> Filter(having) -> Sort -> Limit -> Merge`
 
 However, following the above order is almost never optimal. This is where we have to study how these operators interact, and try to find ways to resequence them for higher efficiency.
 
@@ -368,11 +369,11 @@ Additionally, Filter and Select can perform their own scans (subqueries) as part
 
 This is the most basic operation: given a table name, the operation produces a result, which is a list of all the rows in the table, with field names:
 
-**Scan(tableName) -> Result**
+`Scan(tableName) -> Result`
 
 Rethinking this for VTGate, the corresponding operation would be to route a query that targets a single database, and the output would be the result.
 
-**Route(query, keyspace, shard) -> Result**
+`Route(query, keyspace, shard) -> Result`
 
 It’s implied that the query is the sql+bindvars.
 
@@ -388,7 +389,7 @@ The optimizer is likely to be very different, because its main task will be to f
 
 The filter operator removes rows from the Result based on a condition:
 
-**Filter(Result, condition) -> Result**
+`Filter(Result, condition) -> Result`
 
 A condition is a boolean expression. The operands can be:
 
@@ -428,11 +429,11 @@ It would have been nice if the Result was the only variable input to Filter. How
 
 *The first school of thought allows statements like this:*
 
-**select * from t where a**
+`select * from t where a`
 
 *The second school of thought requires you to rewrite it as:*
 
-**select * from t where a != 0**
+`select * from t where a != 0`
 
 *Vitess’s grammar currently doesn’t allow this interconversion, but MySQL does. From a practical perspective, this difference is not significant because it results in a minor syntactic inconvenience. One could argue that ‘a’ could be a boolean column. But boolean values are not common in databases, and there are other alternatives. So, Vitess doesn’t support boolean column types. It assumes that everything from a database (or Result) is a scalar.*
 
@@ -442,7 +443,7 @@ It would have been nice if the Result was the only variable input to Filter. How
 
 The Select operation produces a new Result by performing arithmetic operations to the input Result.
 
-**Select(Result, expression list) -> Result**
+`Select(Result, expression list) -> Result`
 
 An expression is a subset of a boolean expression. The operands can be:
 
@@ -476,7 +477,7 @@ Properties of a Select:
 
 Aggregate splits the Result column into two groups: the aggregate columns and the group by columns. It merges the rows whose group by columns are equal, and simultaneously applies aggregation functions to the aggregate columns.
 
-**Aggregate(Result, aggrExpressionList(columns)) -> Result**
+`Aggregate(Result, aggrExpressionList(columns)) -> Result`
 
 Any columns that are not in the aggregate expression list are implicitly in the group by list.
 
@@ -504,7 +505,7 @@ Properties of Aggregate:
 
 Sort reorders the rows of a Result based on a list of columns with ascending or descending properties.
 
-**Sort(Result, (columns asc/desc)) -> Result**
+`Sort(Result, (columns asc/desc)) -> Result`
 
 Properties:
 
@@ -520,7 +521,7 @@ Properties:
 
 Limit returns at the most N rows from the specified starting point.
 
-**Limit(Result, start, count) -> Result**
+`Limit(Result, start, count) -> Result`
 
 Limit has algebraic properties that are similar to Filter.
 
@@ -538,17 +539,17 @@ Properties:
 
 Join produces the cross-product of two Results.
 
-**Join(Result, Result) -> Result**
+`Join(Result, Result) -> Result`
 
 This primitive is too inefficient in most situations. Here are some practical composites:
 
-**InnerJoin(Result, Result, condition) ⇔ Filter(Join(Result, Result), condition)**
+`InnerJoin(Result, Result, condition) ⇔ Filter(Join(Result, Result), condition)`
 
 The use case for InnerJoin is easy to explain, because pushing down a condition usually leads to valuable efficiency improvements.
 
-**QueryJoin(query, query, condition) ⇔ Filter(Join(Scan(query), Scan(query)), condition)**
+`QueryJoin(query, query, condition) ⇔ Filter(Join(Scan(query), Scan(query)), condition)`
 
-The QueryJoin is relevant mainly because VTGate may not get good at performing joins for a long time. So, it may have to rely on sending nested loop queries to the underlying databases instead. However, there will be situations where a join will have to be performed on two Results. Such queries will be out of VTGate’s ability to execute until it implements the **Join(Result, Result)** primitive.
+The QueryJoin is relevant mainly because VTGate may not get good at performing joins for a long time. So, it may have to rely on sending nested loop queries to the underlying databases instead. However, there will be situations where a join will have to be performed on two Results. Such queries will be out of VTGate’s ability to execute until it implements the `Join(Result, Result)` primitive.
 
 Properties:
 
@@ -562,7 +563,7 @@ Properties:
 
 LeftJoin requires a join condition. If the condition is not satisfied, the left side of the Result is still produced, with NULL RHS values.
 
-**LeftJoin(LeftResult, RightResult, condition) -> Result**
+`LeftJoin(LeftResult, RightResult, condition) -> Result`
 
 It’s important to differentiate LeftJoin from Join because LeftJoin is not freely interchangeable with Filter or other Joins.
 
@@ -570,7 +571,7 @@ It’s important to differentiate LeftJoin from Join because LeftJoin is not fre
 
 Merge merges two results into one. There is no particular order in the rows.
 
-**Merge(Result, Result) -> Result**
+`Merge(Result, Result) -> Result`
 
 Properties:
 
@@ -582,199 +583,113 @@ Properties:
 
 Now that all operators are defined, we have to see if they’re complete. Let’s try this query:
 
-**01: (select count(*), ta1.col+1, tb1.col **
-
-**02: from ta1 join tb1 on ta1.id=tb1.id**
-
-**03: where ta1.****c****ol2=10 and ta1.col2 > any**
-
-**04:   (select c from tc1 where tc1.id=ta1.id)**
-
-**05: group by ta1.col+1, tb1.col**
-
-**06: having count(*) > 10**
-
-**07: order by count(*) desc**
-
-**08: limit 10)**
-
-**09:union**
-
-**10: (select count(*), ta2.col+1, tb2.col **
-
-**11: from ta2 join tb2 on ta2.id=tb2.id**
-
-**12: where ta2.col2=10**
-
-**13: group by ta2.col+1, tb2.col)**
-
-**14:order by count(*) desc**
-
-**15:limit 5**
+```
+01: (select count(*), ta1.col+1, tb1.col 
+02: from ta1 join tb1 on ta1.id=tb1.id
+03: where ta1.``c``ol2=10 and ta1.col2 > any
+04:   (select c from tc1 where tc1.id=ta1.id)
+05: group by ta1.col+1, tb1.col
+06: having count(*) > 10
+07: order by count(*) desc
+08: limit 10)
+09:union
+10: (select count(*), ta2.col+1, tb2.col 
+11: from ta2 join tb2 on ta2.id=tb2.id
+12: where ta2.col2=10
+13: group by ta2.col+1, tb2.col)
+14:order by count(*) desc
+15:limit 5
+```
 
 The above query can be represented as a single expression. But let’s start with something that has intermediate results first:
 
-**// query 1**
-
-**02: JoinResult1 = InnerJoin(Scan(ta1), Scan(tb1), ta1.id=tb1.id)**
-
-**// Note that the next operation is within the scope of JoinResult1, so its columns can be used. Nevertheless, it’s an external input.**
-
-**04: SubqueryCScanResult = Select(**
-
-**      Filter(**
-
-**        Scan(tc1),**
-
-**        tc1.id=****JoinResult1.ta1.id****,**
-
-**      ),**
-
-**      tc1.c)**
-
-**03: FilterResult1 = Filter(**
-
-**      JoinResult1,**
-
-**      ta1.col2=10 and ta1.col2 > any(SubqueryCScanResult),**
-
-**    )**
-
-**01: SelectResult1 = Select(FilterResult1, (1, ta1.col+1, tb1.col))**
-
-**05: GroupResult1 = Aggregate(SelectResult1, count(‘1’))**
-
-**06: HavingResult1 = Filter(GroupResult1, ‘1’ > 10)**
-
-**07: SortResult1 = Sort(HavingResult1, (‘1’ desc))**
-
-**08: Result1 = Limit(SortResult1, 0, 10)**
-
-**// query 2**
-
-**11: JoinResult2 = InnerJoin(Scan(ta2), Scan(tb2), ta2.id=tb2.id)**
-
-**12: FilterResult2 = Filter(JoinResult2, ta2.col2=10)**
-
-**10: SelectResult2 = Select(FilterResult2, (1, ta2.col+1, tb2.col))**
-
-**13: Result2 = Aggregate(SelectResult2, count(‘1’))**
-
-**// union**
-
-**09: UnionResult = ****Aggregate****(Merge(Result1, Result2), NULL)**
-
-**14: OrderResult = Sort(UnionResult, (‘1’ desc))**
-
-**15: Result = Limit(OrderResult, 0, 5)**
+```
+// query 1
+02: JoinResult1 = InnerJoin(Scan(ta1), Scan(tb1), ta1.id=tb1.id)
+// Note that the next operation is within the scope of JoinResult1, so its columns can be used. Nevertheless, it’s an external input.
+04: SubqueryCScanResult = Select(
+      Filter(
+        Scan(tc1),
+        tc1.id=``JoinResult1.ta1.id``,
+      ),
+      tc1.c)
+03: FilterResult1 = Filter(
+      JoinResult1,
+      ta1.col2=10 and ta1.col2 > any(SubqueryCScanResult),
+    )
+01: SelectResult1 = Select(FilterResult1, (1, ta1.col+1, tb1.col))
+05: GroupResult1 = Aggregate(SelectResult1, count(‘1’))
+06: HavingResult1 = Filter(GroupResult1, ‘1’ > 10)
+07: SortResult1 = Sort(HavingResult1, (‘1’ desc))
+08: Result1 = Limit(SortResult1, 0, 10)
+// query 2
+11: JoinResult2 = InnerJoin(Scan(ta2), Scan(tb2), ta2.id=tb2.id)
+12: FilterResult2 = Filter(JoinResult2, ta2.col2=10)
+10: SelectResult2 = Select(FilterResult2, (1, ta2.col+1, tb2.col))
+13: Result2 = Aggregate(SelectResult2, count(‘1’))
+// union
+09: UnionResult = ``Aggregate``(Merge(Result1, Result2), NULL)
+14: OrderResult = Sort(UnionResult, (‘1’ desc))
+15: Result = Limit(OrderResult, 0, 5)
+```
 
 Now, combine everything into one expression, and voila:
 
-**Result = Limit(**
-
-**  Sort(**
-
-**    Aggregate(**
-
-**      Merge(**
-
-**        Limit(**
-
-**          Sort(**
-
-**            Filter(**
-
-**              Aggregate(**
-
-**                Select(**
-
-**                  Filter(**
-
-**                    ****JoinResult1**** = InnerJoin(**
-
-**                      Scan(ta1),**
-
-**                      Scan(tb1),**
-
-**                      ta1.id=tb1.id,**
-
-**                    ),**
-
-**                    ta1.col=10 and ta1.col > any(**
-
-**                      Select(**
-
-**                        Filter(**
-
-**                          Scan(tc1),**
-
-**                          tc1.id=****JoinResult1****.ta1.id,**
-
-**                        ),**
-
-**                        tc1.c,**
-
-**                      ),**
-
-**                    ),**
-
-**                  ),**
-
-**                  (1, ta1.col+1, tb1.col),**
-
-**                ),**
-
-**                count(‘1’), // ‘1’ is column 1**
-
-**              ),**
-
-**              ‘1’ > 10,**
-
-**            ),**
-
-**            (‘1’ desc),**
-
-**          ),**
-
-**          0, 10,**
-
-**        ),**
-
-**        Aggregate(**
-
-**          Filter(**
-
-**            InnerJoin(**
-
-**              Scan(ta2),**
-
-**              Scan(tb2),**
-
-**              ta2.id=tb2.id,**
-
-**            ),**
-
-**            ta2.col=10,**
-
-**          ),**
-
-**          count(‘1’),**
-
-**        ),**
-
-**      ),**
-
-**      NULL,**
-
-**    ),**
-
-**    (‘1’ desc),**
-
-**  ),**
-
-**  0, 5,**
-
-**)**
+```
+Result = Limit(
+  Sort(
+    Aggregate(
+      Merge(
+        Limit(
+          Sort(
+            Filter(
+              Aggregate(
+                Select(
+                  Filter(
+                    ``JoinResult1`` = InnerJoin(
+                      Scan(ta1),
+                      Scan(tb1),
+                      ta1.id=tb1.id,
+                    ),
+                    ta1.col=10 and ta1.col > any(
+                      Select(
+                        Filter(
+                          Scan(tc1),
+                          tc1.id=``JoinResult1``.ta1.id,
+                        ),
+                        tc1.c,
+                      ),
+                    ),
+                  ),
+                  (1, ta1.col+1, tb1.col),
+                ),
+                count(‘1’), // ‘1’ is column 1
+              ),
+              ‘1’ > 10,
+            ),
+            (‘1’ desc),
+          ),
+          0, 10,
+        ),
+        Aggregate(
+          Filter(
+            InnerJoin(
+              Scan(ta2),
+              Scan(tb2),
+              ta2.id=tb2.id,
+            ),
+            ta2.col=10,
+          ),
+          count(‘1’),
+        ),
+      ),
+      NULL,
+    ),
+    (‘1’ desc),
+  ),
+  0, 5,
+)
+```
 
 There’s a lot of nesting, but the expressions are mostly straightforward by the fact that each result feeds into the other. The only exception is the correlated subquery that uses a value from JoinResult1 from the outer query to perform its operation. You can also see that the lowest level operations are all Scans.
 
@@ -800,23 +715,19 @@ All other operations are considered ‘cheap’ because they can be applied as t
 
 In the case of VTGate, the ‘Route’ operation is capable of performing all 9 functions, as long as all the rows needed to fulfil the query reside in a single database. However, those functions have to be expressed as an SQL query. Most often, the original query could just be passed-through to a single shard. So, the one important question is: If we converted a query to its relational representation, can we then convert it back to the original query? The answer is no, or at least not trivially; The relational operators don’t always map one-to-one with the constructs of an SQL statement. Here’s a specific example:
 
-**select count(*), a+1, b from t group by a+1, b**
+`select count(*), a+1, b from t group by a+1, b`
 
 This gets expressed as:
 
-**Aggregate(**
-
-**  Select(**
-
-**    Scan(t),**
-
-**    (1, a+1, b),**
-
-**  ),**
-
-**  Count(‘1’),  // ‘1’ is column 1**
-
-**)**
+```
+Aggregate(
+  Select(
+    Scan(t),
+    (1, a+1, b),
+  ),
+  Count(‘1’),  // ‘1’ is column 1
+)
+```
 
 So, it may not be a good idea to immediately convert the parsed query into the relational representation. When we analyze the query, we should try to retain the original text and see if they could be recombined without loss of readability.
 
@@ -856,17 +767,18 @@ The execution plan can be represented either using opcodes or as a tree. The opc
 
 Opcodes can be very flexible (turing complete). However, they require the introduction of intermediate variables. Let’s look at this example:
 
-**a - (b+c)**
+`a - (b+c)`
 
 The opcode approach would express the expression as:
 
-**temp = b+c**
-
-**result = a - temp**
+```
+temp = b+c
+result = a - temp
+```
 
 The tree approach would represent the action as:
 
-**Minus(a, Plus(b, c))**
+`Minus(a, Plus(b, c))`
 
 In the theory section, we classified SQL as a pushdown automaton, which means that a tree structure is sufficient to represent a statement.
 
@@ -916,7 +828,7 @@ The first option is going to be a maintenance problem. It introduces a dependenc
 
 SQL has many redundant constructs. There’s diminishing return in supporting all of them. So, the following constructs will not be supported:
 
-* **‘,’** join: This operator was the old way of joining tables. The newer SQL recommends using actual JOIN keywords. Allowing both forms of JOIN will be a big source of confusion because these operators also have different preferences.
+* `‘,’` join: This operator was the old way of joining tables. The newer SQL recommends using actual JOIN keywords. Allowing both forms of JOIN will be a big source of confusion because these operators also have different preferences.
 
 * RIGHT JOIN: This is same as a reversed LEFT JOIN, except it’s less readable.
 
@@ -995,7 +907,7 @@ Let’s start with the following vschema that has two tables t1 & t2. Here’s a
 
 For the following query:
 
-**select a, b from t1 where id = :id and c = 5**
+`select a, b from t1 where id = :id and c = 5`
 
 The starting symbol table will be identical to the vschema. However, as the query is analyzed, b and c will get added to t1 as additional columns:
 
@@ -1038,7 +950,7 @@ The bind vars section of the symbol table will contain an entry for id.
 
 For the following query (using the previous vschema):
 
-**select t1.a, t2.c from t1 join t1 as t2 where t2.a = t1.id**
+`select t1.a, t2.c from t1 join t1 as t2 where t2.a = t1.id`
 
 The symbol table will look like this:
 
@@ -1084,11 +996,11 @@ MySQL allows table names (or aliases) in subqueries to hide an outer name. Due t
 
 Let’s look at this intentionally confusing example:
 
-**select t1.a, t2.b from t1 join t2 where t2.t2id in (**
-
-**  select b from t1 as t2 where id = t1.c**
-
-**)**
+```
+select t1.a, t2.b from t1 join t2 where t2.t2id in (
+  select b from t1 as t2 where id = t1.c
+)
+```
 
 The outerscope symbol table will look like this:
 
@@ -1148,27 +1060,19 @@ Also, the inner query cannot access any columns of the outer t2 because it has i
 
 A corollary: since subquery nesting can have many levels, an inner query can still reference results from any of the outer scopes. For example, this is a valid query:
 
-**select**** ****t1.a****, t1.b**
-
-**from t1**
-
-**where t1.id in (**
-
-**  ****select**** t2.id**
-
-**  from t2**
-
-**  where t2.id in (**
-
-**    select t3.id**
-
-**    from t3**
-
-**    where t3.id = ****t1.a**
-
-**    ****)**
-
-**  )**
+```
+select`` ``t1.a``, t1.b
+from t1
+where t1.id in (
+  ``select`` t2.id
+  from t2
+  where t2.id in (
+    select t3.id
+    from t3
+    where t3.id = ``t1.a
+    ``)
+  )
+```
 
 ### The FROM clause
 
@@ -1178,13 +1082,12 @@ This means that subqueries in the FROM clause are not allowed to refer to elemen
 
 The result of such a subquery will be a new virtual table with its own vindex columns, etc. This is facilitated by the fact that the SQL syntax requires you to name the subquery with an alias. Figuring out possible vindexes for the new virtual table is useful because routing rules could be applied for other tables that may join with the subquery. Here’s an example:
 
-**select sq.a, t2.b**
-
-**from**
-
-**  (select a from t1 where id = :id) as sq**
-
-**  join t2**** on**** t2.b = sq.a**
+```
+select sq.a, t2.b
+from
+  (select a from t1 where id = :id) as sq
+  join t2` on`` t2.b = sq.a
+```
 
 The main symbol table will look like this:
 
@@ -1212,19 +1115,17 @@ The main symbol table will look like this:
 </table>
 
 
-The symbol table for the **‘from t1’** subquery will be in its own scope. Its analysis will yield a new virtual table sq, which will be the one added to the main symbol table. The analyzer should hopefully be smart enough to deduce that column ‘a’ of the subquery can be used for routing because it’s a faithful representation of the column in the underlying table t1.
+The symbol table for the `‘from t1’` subquery will be in its own scope. Its analysis will yield a new virtual table sq, which will be the one added to the main symbol table. The analyzer should hopefully be smart enough to deduce that column ‘a’ of the subquery can be used for routing because it’s a faithful representation of the column in the underlying table t1.
 
 *Conceptually speaking, there’s no strong reason to prevent the FROM clause from referencing columns of an outer query. MySQL probably disallows this because it leads to confusing scoping rules. Let’s take a look at this example:*
 
-**_select id from _****_a_****_ where id in (_**
-
-**_  select b.id, a.id_**
-
-**_  from_**
-
-**_    (select id from b where b.id=_****_a.id_****_) b_**
-
-**_    join _****_d as a_****_ on _****_a.id_****_=b.id)_**
+```
+select id from ``a`` where id in (
+  select b.id, a.id
+  from
+    (select id from b where b.id=``a.id``) b
+    join ``d as a`` on ``a.id``=b.id)
+```
 
 *If we allowed an outer scope, then b.id=a.id becomes ambiguous. We don’t know if it should refer to the outer ‘a’, or the one that is yet to be created as part of the current scope. Needless to say, one shouldn’t be writing such unreadable queries.*
 
@@ -1232,27 +1133,27 @@ The symbol table for the **‘from t1’** subquery will be in its own scope. It
 
 By the fact that the ON clause is part of a FROM clause, you cannot refer to an element of an outer query. This is an invalid query:
 
-**select id from a ****where id in (select b.id from b join c on b.id=****a.id****)**
+`select id from a ``where id in (select b.id from b join c on b.id=``a.id``)`
 
 But this is valid:
 
-**select id from a where id in (select b.id from b join c where b.id=****a.id****)**
+`select id from a where id in (select b.id from b join c where b.id=``a.id``)`
 
 Furthermore, you can only refer to elements that participate in the current JOIN. But the following query is still valid:
 
-**select * from a join b on b.id = a.id join c on c.id = a.id**
+`select * from a join b on b.id = a.id join c on c.id = a.id`
 
 Because of associativity rules, c is actually joined with ‘a join b’.
 
 But this query is not valid:
 
-**select * from a join ****(b join c on c.id = a.id)**
+`select * from a join ``(b join c on c.id = a.id)`
 
 The ON clause participants are only b and c because of the parenthesis. So, you’re not allowed to reference a.id in that join. In other words, analysis of the ON clause requires a list of participants. The analyzer will need to check with this list before looking inside the symbol table, or we could exploit Go interfaces here by sending a subset symbol table that has the same interface as the original one.
 
 ON clauses are allowed to have correlated subqueries, but only with tables that are the ON clause participants. This statement is valid:
 
-**select * from a join b on b.id in (select c.id from c where c.id=a.id)**
+`select * from a join b on b.id in (select c.id from c where c.id=a.id)`
 
 ### Naming result columns
 
@@ -1264,11 +1165,11 @@ Result columns get referenced in the following places:
 
 The WHERE clause is not allowed to reference them because it happens before the SELECT expressions are evaluated.
 
-Column names are usually built from the select expression itself. Therefore, ‘a+1’ is a valid column name. If such a column is in a FROM subquery, it can be addressed using back-quotes as **`a+1`**. However, you can reference such expressions directly in GROUP BY, HAVING and ORDER BY clauses. You can also reference a result by using its column number (starting with 1).
+Column names are usually built from the select expression itself. Therefore, ‘a+1’ is a valid column name. If such a column is in a FROM subquery, it can be addressed using back-quotes as ``a+1``. However, you can reference such expressions directly in GROUP BY, HAVING and ORDER BY clauses. You can also reference a result by using its column number (starting with 1).
 
 Conceptually, this is similar to the subquery column naming. GROUP BY, etc. are post-processing operations that are applied to the result of a query.
 
-*MySQL allows duplicate column names. Using such column names for joins and subqueries leads to unpredictable results. Because of this, we could go **either way**:*
+*MySQL allows duplicate column names. Using such column names for joins and subqueries leads to unpredictable results. Because of this, we could go `either way`:*
 
 * *Allow duplicates like MySQL and remain equally ambiguous*
 
@@ -1276,35 +1177,23 @@ Conceptually, this is similar to the subquery column naming. GROUP BY, etc. are 
 
 Here’s an example of how MySQL names columns:
 
-**> select id, (select val    from a), 3, 3, 3 as `4` from a;**
-
-**+------+------------------------+---+---+---+**
-
-**| id   | (select val    from a) | 3 | 3 | 4 |**
-
-**+------+------------------------+---+---+---+**
-
-**|    1 | a                      | 3 | 3 | 3 |**
-
-**+------+------------------------+---+---+---+**
-
-**MariaDB [a]> select `(select val    from a)` from (select id, (select val    from a), 3, 3, 3 as `4` from a) as t;**
-
-**+------------------------+**
-
-**| (select val    from a) |**
-
-**+------------------------+**
-
-**| a                      |**
-
-**+------------------------+**
-
-**1 row in set (0.00 sec)**
-
-**MariaDB [a]> select `(select val from a)` from (select id, (select val    from a), 3, 3, 3 as `4` from a) as t;**
-
-**ERROR 1054 (42S22): Unknown column '(select val from a)' in 'field list'**
+```
+> select id, (select val    from a), 3, 3, 3 as `4` from a;
++------+------------------------+---+---+---+
+| id   | (select val    from a) | 3 | 3 | 4 |
++------+------------------------+---+---+---+
+|    1 | a                      | 3 | 3 | 3 |
++------+------------------------+---+---+---+
+MariaDB [a]> select `(select val    from a)` from (select id, (select val    from a), 3, 3, 3 as `4` from a) as t;
++------------------------+
+| (select val    from a) |
++------------------------+
+| a                      |
++------------------------+
+1 row in set (0.00 sec)
+MariaDB [a]> select `(select val from a)` from (select id, (select val    from a), 3, 3, 3 as `4` from a) as t;
+ERROR 1054 (42S22): Unknown column '(select val from a)' in 'field list'
+```
 
 The select expression is produced verbatim as column name, and duplicates are allowed.
 
@@ -1316,19 +1205,19 @@ So, once the SELECT expression is analyzed, the symbol table (for that scope) wi
 
 When VTGate has to perform a join, it needs to use the results of one query to feed into the other. For example, let’s look at this query:
 
-**select t1.a, t2.b from t1 join t2 on t2.id = t1.id**
+`select t1.a, t2.b from t1 join t2 on t2.id = t1.id`
 
 If t1 and t2 are on different keyspaces, VTGate has to perform the following operations:
 
-**select t1.a from t1**
+`select t1.a from t1`
 
 For each row of this result, it then has to perform:
 
-**select t2.b from t2 where t2.id = :_t1_a**
+`select t2.b from t2 where t2.id = :_t1_a`
 
 The mechanism for this happens by generating a bind variable named ‘_t1_a1’ from the first result. The bind variable name can be generated using a functional algorithm:
 
-**‘_’ + tableAlias + ‘_’ + columnName**
+`‘_’ + tableAlias + ‘_’ + columnName`
 
 The scoping rule works in our favor here because this type of name generation correctly handles naming conflicts.
 
@@ -1336,37 +1225,37 @@ The scoping rule works in our favor here because this type of name generation co
 
 For the sake of simplicity, we’ll not allow dependencies to use non-standard column names. For example, we’ll fail a query like this:
 
-**select * from (select a, count(*) from t1) t where t.`count(*)` > 0**
+`select * from (select a, count(*) from t1) t where t.`count(*)` > 0`
 
 This should instead be rewritten as:
 
-**select * from (select a, count(*) ****c**** from t1) t where ****t.c**** > 0**
+`select * from (select a, count(*) ``c`` from t1) t where ``t.c`` > 0`
 
-This way, we can build a bind variable like **‘:_t_c’** for the outer query if we have split the above query into two.
+This way, we can build a bind variable like `‘:_t_c’` for the outer query if we have split the above query into two.
 
 There is a subtle difference between column names produced by a result vs. the column names in the symbol table. The WHERE clause constructs reference columns in the symbol table. It’s only the post-processing constructs like GROUP BY, etc. that reference column names produced by the result. This could pose a problem when a SELECT gets pushed down that defines a new alias that has the same column name as an underlying table. Will such a construct hide, and therefore, corrupt the meaning of a join? Let’s look at an example:
 
-**select a.col1 as col2, b.col1 from a join b on b.col2=a.col2**
+`select a.col1 as col2, b.col1 from a join b on b.col2=a.col2`
 
 Rewritten, this would become
 
-**select a.col1 as col2, a.col2 from a**
-
-**Join (by producing _a_col2 from column 2)**
-
-**select b.col1 from b where b.col2 = :_a_col2**
+```
+select a.col1 as col2, a.col2 from a
+Join (by producing _a_col2 from column 2)
+select b.col1 from b where b.col2 = :_a_col2
+```
 
 Because we reference column numbers from the first query, we bypass naming ambiguities. However, we still need to know the source column for each expression so we don’t have to unnecessarily fetch identical results. In other words, the following query:
 
-**select a.col2 as col2, b.col1 from a join b on b.col2=a.col2**
+`select a.col2 as col2, b.col1 from a join b on b.col2=a.col2`
 
 should become:
 
-**select a.col2 as col2 from a**
-
-**Join (by producing _a_col2 from column 1)**
-
-**select b.col1 from b where b.col2 = :_a_col2**
+```
+select a.col2 as col2 from a
+Join (by producing _a_col2 from column 1)
+select b.col1 from b where b.col2 = :_a_col2
+```
 
 This means that select expressions need to know if they’re a faithful reference of an underlying table column, and this information will be used for wiring up dependencies.
 
@@ -1376,13 +1265,13 @@ The other situation where result names interact with the symbol table is during 
 
 Pushdown is achieved by analyzing the query in the execution order and seeing if the next stage can be pushed down into the database. For VTGate, the execution order is slightly different from the standard one: Route replaces Scan, and also, the Route primitive can perform a scatter.
 
-In terms of relational primitives, a scatter is a bunch of **Route** operations followed by a **Merge**. We’ll call it  **RouteMerge**. So, what you can push down into a simple **Route** may not be allowed for a **RouteMerge**. Here’s the VTGate-specific order of operations:
+In terms of relational primitives, a scatter is a bunch of `Route` operations followed by a `Merge`. We’ll call it  `RouteMerge`. So, what you can push down into a simple `Route` may not be allowed for a `RouteMerge`. Here’s the VTGate-specific order of operations:
 
-**Route/RouteMerge <-> (Join & LeftJoin) -> Filter(where) -> Select -> Aggregate -> Filter(having) -> Sort -> Limit -> Merge**
+`Route/RouteMerge <-> (Join & LeftJoin) -> Filter(where) -> Select -> Aggregate -> Filter(having) -> Sort -> Limit -> Merge`
 
 The rest of the analysis tries to push the subsequent operations into Route or RouteMerge. Whatever cannot be pushed down is the work that VTGate has to do by itself. The fact that we won’t try to flatten subqueries simplifies our analysis a little bit.
 
-*MySQL allows you to Sort and Limit the result of a UNION. This is something that the Vitess grammar doesn’t allow right now. We’ll eventually need to support this construct, which will add ***_Aggregate -> Sort -> Limit_*** as things that can further happen after the last ***_Merge_***.*
+*MySQL allows you to Sort and Limit the result of a UNION. This is something that the Vitess grammar doesn’t allow right now. We’ll eventually need to support this construct, which will add `*_Aggregate -> Sort -> Limit_`* as things that can further happen after the last `*_Merge_`*.*
 
 The overall strategy is as follows:
 
@@ -1398,15 +1287,15 @@ The overall strategy is as follows:
 
 In order to align ourselves with our priorities, we’ll start off with a limited set of primitives, and then we can expand from there.
 
-VTGate already has **Route** and **RouteMerge** as primitives. To this list, let’s add **Join** and **LeftJoin**. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](#heading=h.mcoypc9twxih) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
+VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](#heading=h.mcoypc9twxih) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
 
-* **Route**: Sends a query to a single shard or unsharded keyspace.
+* `Route`: Sends a query to a single shard or unsharded keyspace.
 
-* **RouteMerge**: Sends a (mostly) identical query to multiple shards and returns the combined results in no particular order.
+* `RouteMerge`: Sends a (mostly) identical query to multiple shards and returns the combined results in no particular order.
 
-* **Join**: Executes the LHS operation, which could be any primitive. For each row returned, it builds additional bind vars using the result, and uses them to execute the RHS. For each row of the RHS, it builds a new row that combines both the results.
+* `Join`: Executes the LHS operation, which could be any primitive. For each row returned, it builds additional bind vars using the result, and uses them to execute the RHS. For each row of the RHS, it builds a new row that combines both the results.
 
-* **LeftJoin**: Same as Join, except that a row is returned even if the RHS fails to return a row.
+* `LeftJoin`: Same as Join, except that a row is returned even if the RHS fails to return a row.
 
 ### FROM clause
 
@@ -1414,15 +1303,15 @@ The first step of the pushdown algorithm is to identify tables that can stay tog
 
 The premise is as follows: A join can be pushed down if all the rows needed to satisfy a query are within the same database. If all the tables are in an unsharded keyspace, then this constraint is automatically true. If the tables are in a sharded keyspace, then the join condition must guarantee this. This is best explained with an example. Let’s start with a sharded keyspace with user and extra as tables, and analyze this query:
 
-**select user.name, extra.info from user join extra on extra.id=user.id**
+`select user.name, extra.info from user join extra on extra.id=user.id`
 
 The join algorithm will first scan user:
 
-**select user.name, user.id from user**
+`select user.name, user.id from user`
 
 Then for each user.id (:user_id), it will execute:
 
-**select extra.info from extra where extra.id = :user_id**
+`select extra.info from extra where extra.id = :user_id`
 
 If user and extra had the same vindex on id, and if it was unique, then we know that all the necessary rows to satisfy the second query belong to the same kesypace_id as the row that came from user. So, they will be in the same shard. This means that it’s safe to push down the join.
 
@@ -1434,55 +1323,37 @@ Given that the unsharded keyspace is an easy special case, we’ll focus mainly 
 
 Some examples of what kind of AST will be produced by joins:
 
-**a join b join c**
-
-**    J**
-
-**   / \**
-
-**  J   c**
-
-** / \**
-
-**a   b**
-
-**A join (b join c)**
-
-**  J**
-
-** / \**
-
-**a   J**
-
-**   / \**
-
-**  b   c**
-
-**a left join b on c1 left join c on c2**
-
-**    L:c2**
-
-**   / \**
-
-** L:c1 c**
-
-** / \**
-
-**a   b**
+```
+a join b join c
+    J
+   / \
+  J   c
+ / \
+a   b
+A join (b join c)
+  J
+ / \
+a   J
+   / \
+  b   c
+a left join b on c1 left join c on c2
+    L:c2
+   / \
+ L:c1 c
+ / \
+a   b
+```
 
 For left joins, the ON clause is mandatory and enforced by the grammar. Because of this, the placement of ON clauses can also dictate grouping, which is not the case for normal joins:
 
-**a left join b left join c on c1 on c2**
-
-**  L:c2**
-
-** / \**
-
-**a   L:c1**
-
-**   / \**
-
-**  b   c**
+```
+a left join b left join c on c1 on c2
+  L:c2
+ / \
+a   L:c1
+   / \
+  b   c
+```
 
 By looking at the above tree, we can deduce that c1 can reference b and c, while c2 can reference a, b and c.
 
@@ -1490,15 +1361,15 @@ As mentioned before, when the required data is in multiple shards or keyspaces, 
 
 For example:
 
-**from a join (b join c on c.id=b.id) on c.id=a.id**
+`from a join (b join c on c.id=b.id) on c.id=a.id`
 
 is likely better executed this way:
 
-**from a join c on c.id=a.id join b on b.id=c.id**
+`from a join c on c.id=a.id join b on b.id=c.id`
 
 or this way:
 
-**from b join c on c.id=b.id join a on a.id=c.id**
+`from b join c on c.id=b.id join a on a.id=c.id`
 
 But VTGate will not perform such reordering tricks.
 
@@ -1528,11 +1399,11 @@ The above rules work for both JOIN and LEFT JOIN nodes.
 
 *It’s easy to explain why grouping works for the simple case:*
 
-**_a left join b on b.id=a.id_**
+`_a left join b on b.id=a.id_`
 
 *In the above case, the only rows that are inspected in b are those where b.id=a.id. So, the join can be grouped. But what about this join:*
 
-**_(a left join b on a.id=b.id) join (c left join d on c.id=d.id) on b.id=d.id_**
+`_(a left join b on a.id=b.id) join (c left join d on c.id=d.id) on b.id=d.id_`
 
 *In the above case, rows from b or c could be NULL. Fortunately, in SQL, NULL != NULL. So, the outer-scope join will succeed only if rows from b and c are not NULL. If they’re not NULL, they’re guaranteed to be from the same shard. So, this makes them groupable. In fact, in the above case, the left joins in the inner scope are unnecessary. They could have just been normal joins. However, things would be very different if one had used the null-safe equal operator (<=>) for joins. But we’ll not treat null-safe equal as a valid join operator.*
 
@@ -1546,21 +1417,21 @@ If the grouping conditions are not met, then the node remains a join node. In th
 
 But left joins are slightly different, because the join condition is applied *to the RHS only*. Also, the condition cannot be further pushed into other nested left joins, because they will change the meaning of the statement. For example:
 
-**from a left join (b left join c on c.id=b.id) on c.id=a.id**
+`from a left join (b left join c on c.id=b.id) on c.id=a.id`
 
 is same as:
 
-**a LeftJoin (b LeftJoin c where c.id=b.id) ****where c.id=a.id****)**
+`a LeftJoin (b LeftJoin c where c.id=b.id) ``where c.id=a.id``)`
 
 But it’s not the same as:
 
-**a LeftJoin (b left join c where c.id=b.id ****and c.id=a.id****)**
+`a LeftJoin (b left join c where c.id=b.id ``and c.id=a.id``)`
 
 If the above joins were normal joins, then all three would be equivalent.
 
 *The RHS-only rule for left joins has some non-intuitive repercussions. For example, this query will return all rows of table ‘a’:*
 
-**_select a.id, b.id from a left join b on (a.id=5 and b.id=a.id)_**
+`_select a.id, b.id from a left join b on (a.id=5 and b.id=a.id)_`
 
 *But b.id will be mostly null, except when a.id and b.id were 5.*
 
@@ -1568,15 +1439,15 @@ An ON clause can contain other constraints that are not joins. If so, they’re 
 
 A subquery in the FROM clause can result in any of the four primitive node. If it’s a join node, then the ON clause cannot be pushed down because it depends on the result of the join. If it was a Route or RouteMerge, the ON clause is pushable. Here’s how:
 
-**from a join (select id, count(*) from b where b.id=1) t on t.id=a.id**
+`from a join (select id, count(*) from b where b.id=1) t on t.id=a.id`
 
 becomes
 
-**  J**
-
-** / \**
-
-**a   (select id, count(*) from b where b,id=1) t where t.id=a.id**
+```
+  J
+ / \
+a   (select id, count(*) from b where b,id=1) t where t.id=a.id
+```
 
 Here’s a tabular version of the above algorithm:
 
@@ -1654,19 +1525,17 @@ At the end of the analysis, the output is a symbol table and a reduced tree repr
 
 Here’s an example:
 
-**a join b on b.id=a.id ****join c on c.id=b.id2 join d on d.id2=c.id2 ****join e on e.id=a.id**
+`a join b on b.id=a.id ``join c on c.id=b.id2 join d on d.id2=c.id2 ``join e on e.id=a.id`
 
 will be represented as:
 
-**                        ****J2**
-
-**                       /  \**
-
-**                      ****J1****   e ****_where e.id=a.id_**
-
-**                     /  \    **
-
-**a join b on b.id=a.id    ****c join d on d.id2=c.id2 ****_where c.id=b.id2_**
+```
+                        ``J2
+                       /  \
+                      ``J1``   e ``_where e.id=a.id_
+                     /  \    
+a join b on b.id=a.id    ``c join d on d.id2=c.id2 ``_where c.id=b.id2_
+```
 
 ### WHERE clause
 
@@ -1686,21 +1555,21 @@ There are situations where we cannot push down:
 
 A WHERE clause cannot be pushed inside a LEFT JOIN, because it has to be applied after 
 
-the ON clause is processed, which is not until **LeftJoin** returns the results.
+the ON clause is processed, which is not until `LeftJoin` returns the results.
 
 *There are some practical use cases where you’d want to add conditions in the WHERE clause, typically for NULL checks. To support this in the future, we can use this technique that converts a LEFT JOIN into a normal JOIN:*
 
-**_from a left join b on b.id=a.id where b.id is NULL_**
+`_from a left join b on b.id=a.id where b.id is NULL_`
 
 *After split, the query on b should have become:*
 
-**_from b where b.id=a.id_**
+`_from b where b.id=a.id_`
 
 *We cannot push down the null check in the above case. But we can, if we rewrote it as:*
 
-**_from (select 1) as t left join b on b.id=a.id _****_where b.id is NULL_**
+`_from (select 1) as t left join b on b.id=a.id _``_where b.id is NULL_`
 
-*The (select 1) acts as a fake driver row for the left join, which allows us to tack on the where clause and also change the** ***_LeftJoin_*** to a ***_Join_***.*
+*The (select 1) acts as a fake driver row for the left join, which allows us to tack on the where clause and also change the` `*_LeftJoin_`* to a `*_Join_`*.*
 
 ###### Subqueries
 
@@ -1712,19 +1581,17 @@ When recombining WHERE clauses, additional parenthesis will be needed to prevent
 
 ###### An example
 
-**from a join b on b.id=a.id join c on c.id=b.id where cond1(a.col, b.col) and cond2(a.col, c.col)**
+`from a join b on b.id=a.id join c on c.id=b.id where cond1(a.col, b.col) and cond2(a.col, c.col)`
 
 If a, b and c where in different groups, the output would be:
 
-**    J**
-
-**   / \**
-
-**  J   c where (c.id=****b.id****) and ****(cond2(a.col, c.col))**
-
-** / \**
-
-**a   b where (b.id=****a.id****) and ****(cond1(a.col, b.col))**
+```
+    J
+   / \
+  J   c where (c.id=``b.id``) and ``(cond2(a.col, c.col))
+ / \
+a   b where (b.id=``a.id``) and ``(cond1(a.col, b.col))
+```
 
 The cond2 expression gets pushed into the the where clause for table ‘c’ because it’s the right-most group that’s referenced by the condition. External references will be changed to appropriate bind variables by the rewiring phase.
 
@@ -1746,15 +1613,15 @@ If an expression references columns from more than one group, then the expressio
 
 *It is possible to push-down combo expressions using the same technique we use for WHERE clauses. For example:*
 
-**_select a.col+b.col from a join b where b.foo=a.bar_**
+`_select a.col+b.col from a join b where b.foo=a.bar_`
 
 *can be resolved with the following join*
 
-**_select a.col, a.bar from a // produce _a_col & _a_bar_**
-
-**_Join_**
-
-**_select :_a_col+b.col from b where b.foo=:_a_bar_**
+```
+_select a.col, a.bar from a // produce _a_col & _a_bar_
+_Join_
+_select :_a_col+b.col from b where b.foo=:_a_bar_
+```
 
 *However, such queries are not very efficient for VTTablet. It can’t cache field info, or use rowcache. Such push-downs don’t benefit MySQL either. So, it’s better to wait till VTGate implements the ability to evaluate expressions.*
 
@@ -1774,19 +1641,17 @@ Note: This phase could be postponed till the time we do the wire-up.
 
 After the SELECT expressions are pushed down, we have to see if there are dependencies across joins that are still not addressed. If there are WHERE clause dependencies from one group to another that are not listed in the SELECT expression, we need to add those to the list of expressions. This is where we use the info for each select column to see if it already references a column we need for the RHS query. Here’s an example of the metadata in a Join primitive:
 
-**select a.col1, b.col1, a.col3 from a join b on b.col2=a.col2**
+`select a.col1, b.col1, a.col3 from a join b on b.col2=a.col2`
 
 will be represented as
 
-**Join:**
-
-**  LHS: select a.col1, a.col3, a.col2 from a**
-
-**  Bindvars: "_a_col2": 2 // Col 2 produces bind var _a_col2**
-
-**  RHS: select b.col1 from b where b.col2=:_a_col2**
-
-**  Select: [ LHS(0), RHS(0), LHS(1) ]**
+```
+Join:
+  LHS: select a.col1, a.col3, a.col2 from a
+  Bindvars: "_a_col2": 2 // Col 2 produces bind var _a_col2
+  RHS: select b.col1 from b where b.col2=:_a_col2
+  Select: [ LHS(0), RHS(0), LHS(1) ]
+```
 
 Consequently, this means that the lower level routes fetch columns that should not be returned in the result. This is the reason why a Join primitive has to also specify the columns that have to be returned in the final result.
 
@@ -1798,19 +1663,17 @@ Consequently, this means that the lower level routes fetch columns that should n
 
 The converse of the above rule is the case where the result references only columns from one side of a join. In such cases, the other side of the join doesn’t have a SELECT expression yet. For such situations, we create a dummy ‘select 1’ to make the query work. Example:
 
-**select a.col from a join b on b.col=a.col**
+`select a.col from a join b on b.col=a.col`
 
 will be represented as:
 
-**Join:**
-
-**  LHS: select a.col from a**
-
-**  Bindvars: "_a_col": 0**
-
-**  RHS: select 1 from b where b.col=:_a_col**
-
-**  Select: [LHS(0)]**
+```
+Join:
+  LHS: select a.col from a
+  Bindvars: "_a_col": 0
+  RHS: select 1 from b where b.col=:_a_col
+  Select: [LHS(0)]
+```
 
 ###### Pushing past Filter
 
@@ -1834,11 +1697,11 @@ It is possible that a GROUP BY to be present while a SELECT doesn’t have aggre
 
 *As mentioned previously, MySQL analyzes the GROUP BY clause using the query’s scope. It also does not enforce that the GROUP BY columns are consistent with the SELECT. For example, this is valid in MySQL:*
 
-**_select a.col1, a.col2 from a group by a.col1_**
+`_select a.col1, a.col2 from a group by a.col1_`
 
 *This also valid:*
 
-**_select a.col1 from a group by a.col1, a.col2_**
+`_select a.col1 from a group by a.col1, a.col2_`
 
 *Both of the above constructs are invalid by SQL standards. We could piggy-back on this lax attitude and just pass-through the GROUP BY as is. After all, these are not very meaningful constructs. If MySQL allows them, why should we work against them?*
 
@@ -1868,19 +1731,19 @@ If the underlying node is a RouteMerge, then it cannot be pushed down.
 
 If the underlying node is a join, then we perform the following analysis: Take each expression and identify the group it originates from. If it references more than one group, then we cannot push that expression down. If the group order is no less than the current group order, the expression can be pushed. We continue this until we reach an expression that is not pushable, or we successfully push everything. Here are two examples:
 
-**select a.col, b.col, c.col from a join b join c order by a.col, b.col, c.col**
+`select a.col, b.col, c.col from a join b join c order by a.col, b.col, c.col`
 
 This will produce:
 
-**select a.col from a order by a.col // group 1**
-
-**select b.col from b order by b.col // group 2**
-
-**select c.col from c order by c.col // group 3**
+```
+select a.col from a order by a.col // group 1
+select b.col from b order by b.col // group 2
+select c.col from c order by c.col // group 3
+```
 
 Example 2:
 
-**select a.col, b.col, c.col from a join b join c order by a.col, c.col, b.col**
+`select a.col, b.col, c.col from a join b join c order by a.col, c.col, b.col`
 
 For the above case, a.col is from group 1, c.col is from group 3, but b.col is from group 2, which is less than group 3. So, the last expression is not pushable.
 
@@ -1948,33 +1811,31 @@ Uncorrelated subqueries can be trivially ‘pulled out’ to be executed separat
 
 Here’s an example:
 
-**select * from a where col in (select col from lookaside)**
+`select * from a where col in (select col from lookaside)`
 
 This can be expressed as:
 
-**Subquery:**
-
-**  _lookaside: select col from lookaside**
-
-**  query: select * from a where col in ::_lookaside**
+```
+Subquery:
+  _lookaside: select col from lookaside
+  query: select * from a where col in ::_lookaside
+```
 
 ## Select & Filter
 
 If we built an expression engine, then we can do our own evaluation and filtering when something is not pushable. Adding support for this will automatically include correlated subqueries, because the result of the underlying query can be used to execute the subquery during the Select or Filter stage. Example:
 
-**select a.id from a where a.id = (select id from b where b.col=a.col)**
+`select a.id from a where a.id = (select id from b where b.col=a.col)`
 
 Plan:
 
-**Filter:**
-
-**  query: select a.id, a.col from a**
-
-**  bindvars: "_a_col": 1**
-
-**  constraint: a.id = ConvertVal: Route:**
-
-**    select id from b where b.col=:_a_col**
+```
+Filter:
+  query: select a.id, a.col from a
+  bindvars: "_a_col": 1
+  constraint: a.id = ConvertVal: Route:
+    select id from b where b.col=:_a_col
+```
 
 ## Other expensive primitives
 
