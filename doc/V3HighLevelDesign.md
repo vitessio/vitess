@@ -240,13 +240,9 @@ The one thing that’s not obvious in a SELECT is that the select list is not th
 If a SELECT statement was used just to fetch results, things would be very simple. However, it can be used in other parts of a query, and can produce 5 kinds of values:
 
 1. A simple value: `select * from t where id = (select 1 from dual)`
-
 2. A value tuple: multiple values of the same type: `select * from t1 where id in (select val from t2)`
-
 3. A row tuple: multiple values of different types. A row tuple can also be used as a value: `select * from t1 where (a,b) = (select b,c from t2 where pk=1)`
-
 4. Rows: results of a regular query. Note that rows can be treated as a value tuple of row tuples. For example, this statement is valid: `select * from t1 where (a,b) in (select b,c from t2)`
-
 5. A virtual table: If you don’t strip out the field info from the original query, then a select can act as a table, where the field names act as column names. For example, this statement is valid: `select * from (select a, b from t2) as t where t.a=1`
 
 This opens the door to some powerful expressibility, the other edge of the sword being indefinite complexity.
@@ -254,9 +250,7 @@ This opens the door to some powerful expressibility, the other edge of the sword
 Subqueries can be found in the following clauses:
 
 1. FROM
-
 2. SELECT list
-
 3. WHERE
 
 In a way, subqueries are brain-dead, including the correlated ones. You just execute your main query as specified by the sequence in the ‘Dissecting SELECT’ section. Any time you encounter a subquery, you just evaluate it as an expression on-the-fly and use the resulting value. The only complication of a correlated subquery is that it references a value from the outer Result to produce its own Result.
@@ -300,13 +294,9 @@ Specifically, a tree structure is sufficient to represent a PDA.
 This is the list of ‘values’ that a query engine deals with in order to satisfy a query:
 
 1. Result: This is the core data type that every operator deals with. It’s a complex data structure. Sometimes, the primitives may access only a part of the Result. So, the interchangeability rules of primitives will be different based on which parts of the Result each of them accesses.
-
 2. Value expression list: This is used in various places in a statement. Most notably, for converting a table scan into the list of values to be returned.
-
 3. Conditional expression: This is used to filter out results.
-
 4. Aggregate expression list: This has some similarities with a value expression list, but it’s worth differentiating.
-
 5. Scalar values: Used all over.
 
 The above operands are a simplified way of looking at things. For example, a conditional expression is a separate world that has its own set of operators and values, and they follow a different set of algebraic rules. But we need to divide and conquer.
@@ -318,21 +308,13 @@ You’ll see how these operands are used in the description of the operators.
 If one were to ask what are the minimal set of primitives needed to serve SQL queries, we can use [relational algebra](http://www.tutorialspoint.com/dbms/relational_algebra.htm) as starting point. But databases have extended beyond those basic operations. They allow duplicate tuples and ordering. So, here’s a more practical set:
 
 1. Scan (FROM).
-
 2. Join: Join two results as cross-product (JOIN).
-
 3. LeftJoin: The algebraic rules for an outer join are so different from a Join that this needs to be a separate operator (LEFT JOIN).
-
 4. Filter: Removing rows based on a conditional expression (WHERE, HAVING).
-
 5. Select: Evaluating new values based on a value expression list (SELECT list).
-
 6. Aggregate: Grouping rows based on an aggregate expression list (GROUP BY, UNION).
-
 7. Sort (ORDER BY).
-
 8. Limit (LIMIT).
-
 9. Merge: Merge two results into one (UNION ALL).
 
 Windowing functions are out of scope for this doc.
@@ -773,15 +755,10 @@ Using opcodes may still help us come up with better optimizations. However, give
 Since we have powerful databases underneath us, our first priority is to harness anything they can do first. The next priority will be to do things that VTGate can perform on-the-fly, without accumulating results. And finally, we’ll look at features that require complex memory management or intermediate file storage. The features will be implemented as follows:
 
 1. Single shard or single keyspace joins.
-
 2. Scatter joins that can be merged in any order.
-
 3. Cross-shard joins that don’t require post-processing.
-
 4. Sort, Aggregate and Limit, provided the results can be pre-sorted by the underlying database(s).
-
 5. Filter and Select expression engines.
-
 6. All other constructs.
 
 One hurdle to overcome with #4 is collation. Substantial work may have to be done to make the VTGate collation behavior match MySQL.
@@ -803,7 +780,6 @@ For the short term, we’ll maintain parity by only implementing operations that
 The vschema currently doesn’t know all the column names of the tables. VTGate cannot resolve joins if it doesn’t have this info. We have two options:
 
 1. Extend vschema to also contain the column names of tables.
-
 2. Require join queries to always qualify column names by the table.
 
 The first option is going to be a maintenance problem. It introduces a dependency that is hard to maintain. For now, we’ll go with option #2. It is a syntactic inconvenience, but let’s hope that users find this acceptable. We could allow exceptions for vindex columns, but that’s likely to be confusing. So, it’s better to require this for all columns. For subqueries (that are themselves not joins), we can make an exception and assume that unqualified column names are addressing the inner table. You’ll need to use qualified names only for addressing columns of an outer query.
@@ -1260,11 +1236,8 @@ The rest of the analysis tries to push the subsequent operations into Route or R
 The overall strategy is as follows:
 
 1. Identify groups: Form groups of tables (or subqueries) in the FROM clause that can stay together for Route operations.
-
 2. Pushdown higher-level operations into the various groups: This step uses the AST as input and produces an execution tree where the leaf nodes are all Route operations.
-
 3. Wire up dependencies: This step computes the dependencies between different routes, and potentially modifies the queries in the routes so that additional values are returned that may be needed by other routes.
-
 4. Produce the execution plan.
 
 ### Starting primitives
@@ -1754,9 +1727,7 @@ However, these parts would still be referring to each other. This section will d
 In order to resolve dependencies correctly, we need the symbol tables that were used for analyzing each context. With the symbol table at hand, we walk the AST for each group, and look up the referenced symbols in the symbol table. If the symbol belongs to the same group, then nothing needs to be done. If the reference is outside, we perform the following steps:
 
 1. Change the external reference to the corresponding bind var name.
-
 2. If that column is not already in the select list of the other group, we add it.
-
 3. Mark the column number to be exported as the bind var name that we chose.
 
 This step has a caveat: if the SELECT list contained an Aggregate, then we cannot add such a column. However, we’re currently protected by the constraint that Aggregate cannot be pushed into a join, and external dependencies can only happen for joins. But this is something to keep in mind as we add more primitives and flexibilities.
