@@ -7,7 +7,10 @@ metadata:
     app: vitess
 spec:
   ports:
-    - port: 15001
+    - name: web
+      port: 15001
+    - name: grpc
+      port: 15991
   selector:
     component: vtgate
     app: vitess
