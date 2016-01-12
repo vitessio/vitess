@@ -251,6 +251,9 @@ var commands = []commandGroup{
 			{"GetKeyspace", commandGetKeyspace,
 				"<keyspace>",
 				"Outputs a JSON structure that contains information about the Keyspace."},
+			{"GetKeyspaces", commandGetKeyspaces,
+				"",
+				"Outputs a sorted list of all keyspaces."},
 			{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
 				"[-force] [-split_shard_count=N] <keyspace name> [<column name>] [<column type>]",
 				"Updates the sharding information for a keyspace."},
@@ -1508,6 +1511,15 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	return printJSON(wr, keyspaceInfo)
+}
+
+func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
+	if err != nil {
+		return err
+	}
+	wr.Logger().Printf("%v\n", strings.Join(keyspaces, "\n"))
+	return nil
 }
 
 func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
