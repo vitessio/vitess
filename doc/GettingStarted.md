@@ -128,14 +128,28 @@ In addition, Vitess requires the software and libraries listed below.
     
 #### OS X
 
-1.  [Install Homebrew](http://brew.sh/).
+1.  [Install Homebrew](http://brew.sh/). If your /usr/local directory is not empty and you never used Homebrew before,
+    it will be 
+    [mandatory](https://github.com/Homebrew/homebrew/blob/master/share/doc/homebrew/El_Capitan_and_Homebrew.md) 
+    to run the following command:
+    
+    ``` sh
+    sudo chown -R $(whoami):admin /usr/local
+    ```
 
 2.  On OS X, MySQL 5.6 has to be used, MariaDB doesn't work for some reason yet. It should be installed from Homebrew
     (install steps are below).
+    
+3.  If Xcode is installed (with Console tools, which should be bundled automatically since the 7.1 version), all 
+    the dev dependencies should be satisfied in this step. If no Xcode is present, it is necessery to install pkg-config.
+     
+    ``` sh
+    brew install pkg-config
+    ```
    
-3.  ZooKeeper is used as lock service.
+4.  ZooKeeper is used as lock service.
 
-4.  Run the following commands:
+5.  Run the following commands:
 
     ``` sh
     brew install go automake libtool memcached python mercurial git bison curl wget homebrew/versions/mysql56
@@ -144,9 +158,11 @@ In addition, Vitess requires the software and libraries listed below.
     pip install MySQL-python
     ```
     
-5.  Install Java runtime from this URL: https://support.apple.com/kb/dl1572?locale=en_US
+6.  Install Java runtime from this URL: https://support.apple.com/kb/dl1572?locale=en_US
+    Apple only supports Java 6. If you need to install a never version, this link might be helpful:
+    [http://osxdaily.com/2015/10/17/how-to-install-java-in-os-x-el-capitan/](http://osxdaily.com/2015/10/17/how-to-install-java-in-os-x-el-capitan/)
     
-6.  The Vitess bootstrap script makes some checks for the go runtime, so it is recommended to have the following
+7.  The Vitess bootstrap script makes some checks for the go runtime, so it is recommended to have the following
     commands in your ~/.profile or ~/.bashrc or ~/.zshrc:
     
     ``` sh
@@ -154,7 +170,7 @@ In addition, Vitess requires the software and libraries listed below.
     export GOROOT=/usr/local/opt/go/libexec
     ```
     
-7.  There is a problem with installing the enum34 Python package using pip, so the following file has to be edited:
+8.  There is a problem with installing the enum34 Python package using pip, so the following file has to be edited:
     ```
     /usr/local/opt/python/Frameworks/Python.framework/Versions/2.7/lib/python2.7/distutils/distutils.cfg
     ```
@@ -173,7 +189,7 @@ In addition, Vitess requires the software and libraries listed below.
     
     After running the ./bootstrap.sh script from the next step, you can revert the change.
     
-8.  For the Vitess hostname resolving functions to work correctly, a new entry has to be added into the /etc/hosts file
+9.  For the Vitess hostname resolving functions to work correctly, a new entry has to be added into the /etc/hosts file
     with the current LAN IP address of the computer (preferably IPv4) and the current hostname, which you get by
     typing the 'hostname' command in the terminal.
     
