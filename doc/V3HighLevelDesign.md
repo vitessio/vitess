@@ -260,17 +260,13 @@ An immediate optimization: If a subquery is not correlated, we know that its val
 Based on the above properties, we can make some observations:
 
 * A subquery in a FROM clause cannot reference columns of the SELECT list. This is because of the execution order: the SELECT list depends on what comes out of the FROM clause, not the other way around. However, such a subquery can still reference columns from an outer SELECT. But MySQL is more restrictive, and prevents all correlation for subqueries in the FROM clause.
-
 * A subquery in a SELECT list cannot affect the original number of rows returned. All it can do is supply the value for the column it was meant to compute the result for. If there was no result, the value would be NULL. A subquery in a SELECT list must produce a single scalar value.
-
 * A subquery in a WHERE clause cannot change any values of the original result, or produce new rows. It can only cause rows to be eliminated.
 
 It’s easy to get lost in the world of subqueries, and it may get confusing when you start to think about how they interact with joins. But you can retain sanity by following these principles while analyzing a complex query:
 
 * Tables involved in a join are within the same scope, and can reference each other's columns.
-
 * Subqueries are in an inner scope. An inner query can use values from the outer query. Other than this, all it can do is produce a value.
-
 * Other parts of the outer query cannot reference anything about the subquery. It’s a black box in that respect.
 
 Correlated subqueries exhibit the properties of a join. So, there are situations where they could be converted to actual joins by the optimizer.
@@ -360,33 +356,23 @@ The filter operator removes rows from the Result based on a condition:
 A condition is a boolean expression. The operands can be:
 
 * A column of the Result
-
 * A column of an outer Result (to support correlated subqueries)
-
 * Boolean values or expressions
-
 * Scalar values or expressions
-
 * The result of a subquery
 
 The operators are:
 
 * Pure boolean operators like AND, OR, etc.
-
 * Comparison operators like =, <, etc.
-
 * Other complex operators and functions like IF, etc.
 
 Inferred properties of Filter:
 
 * The filter operation is applied to each row individually. There is no interaction between rows.
-
 * A row is never modified.
-
 * No new rows are produced.
-
 * It does not change the order of the rows in the Result. This is not a requirement, but it’s a property worth maintaining.
-
 * The AND clauses of a filter can be broken into parts and applied separately. This is useful for pushing down WHERE clauses into scans.
 
 It would have been nice if the Result was the only variable input to Filter. However, this is not true if one of the operands is a subquery.
@@ -414,29 +400,21 @@ The Select operation produces a new Result by performing arithmetic operations t
 An expression is a subset of a boolean expression. The operands can be:
 
 * A column of the Result
-
 * A column of an outer Result
-
 * Scalar values or expressions
-
 * The result of a subquery
 
 The operators can be:
 
 * Arithmetic operators like +, -
-
 * Functions and other complex expressions
 
 Properties of a Select:
 
 * A Select produces the same number of rows as the input
-
 * A Select may not produce the same columns as its input
-
 * The expressions are applied to each row individually. There is no interaction between rows.
-
 * The order of the result is not changed. This is not a requirement, but it’s a property worth maintaining.
-
 * The different items (columns) of a Select can be broken into parts and independently computed.
 
 ### Aggregate
@@ -450,7 +428,6 @@ Any columns that are not in the aggregate expression list are implicitly in the 
 There are two special cases:
 
 * There are no aggregate columns. In this case, the operation degenerates into a dedup (UNION).
-
 * There are no group by columns. In this case, one and only one row is produced.
 
 The SQL syntax allows expressions to be present in aggregate functions, but that can be broken down into Select->Aggregate.
@@ -458,13 +435,9 @@ The SQL syntax allows expressions to be present in aggregate functions, but that
 Properties of Aggregate:
 
 * It produces no more rows than the input.
-
 * It produces the same number of columns as the input.
-
 * Aggregate can be efficient if the rows are sorted by the group by columns. If so, it also retains the sort order.
-
 * Aggregate can also be efficient if there are no group by columns. Then only one row is produced in the Result.
-
 * The different items of an Aggregate cannot be independently computed.
 
 ### Sort
@@ -476,11 +449,8 @@ Sort reorders the rows of a Result based on a list of columns with ascending or 
 Properties:
 
 * The number of rows produced is the same as the input
-
 * No rows are changed
-
 * An outer Sort supersedes an inner Sort
-
 * Sorting can be broken into parts as long as the resulting row is built in the same order as the values referenced by the sort. For example, if we join a with b, and sorting is by a.col and b.col, then we can sort a by a.col and join with b by sorting b by b.col.
 
 ### Limit
@@ -494,11 +464,8 @@ Limit has algebraic properties that are similar to Filter.
 Properties:
 
 * A limit doesn’t change the rows
-
 * An outer limit supersedes an inner Limit
-
 * A Limit is not interchangeable with anything other than Select.
-
 * A Limit without a Sort has non-deterministic results.
 
 ### Join
@@ -520,9 +487,7 @@ The QueryJoin is relevant mainly because VTGate may not get good at performing j
 Properties:
 
 * Rows are not modified
-
 * Lots of rows can be produced
-
 * Interchangeable with Filter as long as the condition can be split properly. This will be a significant driving factor for the optimizer.
 
 ### LeftJoin
@@ -542,7 +507,6 @@ Merge merges two results into one. There is no particular order in the rows.
 Properties:
 
 * Rows are not modified
-
 * Number of rows is the sum of the two Results’ number of rows
 
 ## Example from hell
@@ -670,9 +634,7 @@ However, SQL engines are all about having limited CPU, memory and disk. So, they
 If you analyze the various operators, the expensive ones are:
 
 * Scan: you want to avoid full table scans, unless it’s a necessity. This is ironically the lowest level operation.
-
 * Sort: this is a potentially expensive operation if the result set is large.
-
 * Aggregation: is also potentially expensive
 
 All other operations are considered ‘cheap’ because they can be applied as the rows come. To optimize for the above three operations, databases combine the primitives. The most popular one is the index scan, which allows you to combine Scan, Filter and Sort, all as one operation. Aggregation can also benefit from an index scan if the GROUP BY columns are part of an index. If an index cannot be used, the database resorts to the more traditional approach of full table scans, file sorts, etc.
@@ -768,7 +730,6 @@ One hurdle to overcome with #4 is collation. Substantial work may have to be don
 VTGate has two query APIs:
 
 * Non-streaming API: This API has deadlines and row count limits. It collects all the results first and then returns them.
-
 * Streaming API: This API has no deadlines or row count limits. It streams the results as they come.
 
 This difference will eventually cause a divergence in what VTGate can do for streaming vs non-streaming queries. Since the entire result is available in-memory for non-streaming queries, we’ll be able to perform sorts and aggregations after obtaining the results. However, this will not be possible for streaming queries.
@@ -789,13 +750,9 @@ The first option is going to be a maintenance problem. It introduces a dependenc
 SQL has many redundant constructs. There’s diminishing return in supporting all of them. So, the following constructs will not be supported:
 
 * `‘,’` join: This operator was the old way of joining tables. The newer SQL recommends using actual JOIN keywords. Allowing both forms of JOIN will be a big source of confusion because these operators also have different preferences.
-
 * RIGHT JOIN: This is same as a reversed LEFT JOIN, except it’s less readable.
-
 * NATURAL joins: These are rarely used in practice because the join condition applies to all columns.
-
 * JOIN USING: This is just syntactic sugar for JOIN ON a.id=b.id
-
 * WHERE clause join condition: A JOIN without an ON clause is supposed to be a cross product of the two tables. However, old-style ‘,’ users have continued to specify join conditions in the WHERE clause. The initial version of VTGate will only use the ON clause to decide how to route parts of a query. This decision can be revisited if things are too inflexible.
 
 ## Limiting results
@@ -815,15 +772,10 @@ Note that this limit only applies to non-streaming queries. Streaming queries wi
 Recapitulating what we’ve covered so far:
 
 * The primary function of the optimizer is to push down as much of the query components as possible.
-
 * We’ll not support redundant constructs for joins.
-
 * If a query has to be split across multiple shards or keyspaces, we’ll expect the application to dictate the order of operations. This will be left to right, unless parentheses define a different order. 
-
 * For joins, all column names must be qualified by their table.
-
 * We’ll preserve the original representation of the query to the extent possible.
-
 * We’ll not attempt to flatten subqueries. However, they can still get pushed down with the outer query if they’re constrained by the same keyspace id.
 
 ## Symbol table and scoping rules
@@ -1120,7 +1072,6 @@ ON clauses are allowed to have correlated subqueries, but only with tables that 
 Result columns get referenced in the following places:
 
 * For addressing the results of a subquery in the FROM clause
-
 * GROUP BY, HAVING and ORDER BY clauses
 
 The WHERE clause is not allowed to reference them because it happens before the SELECT expressions are evaluated.
@@ -1132,7 +1083,6 @@ Conceptually, this is similar to the subquery column naming. GROUP BY, etc. are 
 *MySQL allows duplicate column names. Using such column names for joins and subqueries leads to unpredictable results. Because of this, we could go `either way`:*
 
 * *Allow duplicates like MySQL and remain equally ambiguous*
-
 * *Disallow duplicates*
 
 Here’s an example of how MySQL names columns:
@@ -1247,11 +1197,8 @@ In order to align ourselves with our priorities, we’ll start off with a limite
 VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/youtube/vitess/blob/sugudoc/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
 
 * `Route`: Sends a query to a single shard or unsharded keyspace.
-
 * `RouteMerge`: Sends a (mostly) identical query to multiple shards and returns the combined results in no particular order.
-
 * `Join`: Executes the LHS operation, which could be any primitive. For each row returned, it builds additional bind vars using the result, and uses them to execute the RHS. For each row of the RHS, it builds a new row that combines both the results.
-
 * `LeftJoin`: Same as Join, except that a row is returned even if the RHS fails to return a row.
 
 ### FROM clause
@@ -1337,15 +1284,10 @@ The lowest level node of a parse tree is a ‘table’. This could be a real tab
 When analyzing a join node, we first extract the ON clause conditions as a list, and we see if these requirements are satisfied:
 
 * The node types have to be Route or RouteMerge
-
 * They should be for the same keyspace (sharded)
-
 * There should be at least one join condition between the two nodes: left.col = right.col
-
 * The columns referenced in the join must use the same vindex
-
 * The vindex must be unique
-
 * Other conditions in the ON clause must also be executable under the new group. This basically means that if there are subqueries, they should be correlated in such a way that the required rows can all be found within the new group. The algorithm for this analysis is explained in the WHERE clause section.
 
 Two nodes can also be grouped (without a join condition) if they are both constrained by the same keyspace id (Route nodes).
@@ -1367,7 +1309,6 @@ The above rules work for both JOIN and LEFT JOIN nodes.
 When two nodes are grouped, the current join condition becomes the root of the new group, and it gets a routing property:
 
 * If it’s a JOIN, the new property is the more restrictive of the two nodes. So, if one of them is a Route, then the new node is also a Route.
-
 * For a LEFT JOIN, the new property is the same as the LHS node.
 
 If the grouping conditions are not met, then the node remains a join node. In this case, we have to see if the ON clause conditions can be pushed down into the left and/or right nodes. By the fact that the current join is split into two, the ON clause cannot be be pushed as is. Instead, we use associativity rules to our benefit and merge the ON clause conditions into the WHERE clauses of the underlying nodes. The rules are the same as the ones described for a normal WHERE clause.
@@ -1589,7 +1530,6 @@ SELECT can also contain subqueries. The same restriction as WHERE clauses can be
 Since VTGate does not know all the columns of a table, a ‘SELECT *’ may not be resolvable. We can consider disallowing it altogether. However, here are situations where we could allow it:
 
 * If the underlying primitive is a Route or RouteMerge, we could just push it down without knowing what it means.
-
 * If the underlying ‘table’ is a subquery, we know the full column list. In such cases, we know how to expand the ‘*’ into an actual list.
 
 ###### Additional expressions for joins
