@@ -4,6 +4,10 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+# "unittest" is used indirectly by importing "vertical_split", but pylint does
+# not grasp this.
+# Import it explicitly to make pylint happy and stop it complaining about
+# setUpModule, tearDownModule and the missing module docstring.
 import unittest  # pylint: disable=unused-import
 
 import environment
