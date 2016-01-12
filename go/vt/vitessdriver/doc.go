@@ -109,6 +109,6 @@ https://github.com/youtube/vitess/blob/master/examples/demo/schema/vschema.json
 
 The vtgate v3 design doc, which we will also update and simplify in the future,
 contains more details on the VSchema:
-https://github.com/youtube/vitess/blob/master/doc/VTGateV3Design.md
+https://github.com/youtube/vitess/blob/master/doc/V3VindexDesign.md
 */
 package vitessdriver
