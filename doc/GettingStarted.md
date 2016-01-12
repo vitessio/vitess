@@ -159,7 +159,7 @@ In addition, Vitess requires the software and libraries listed below.
     ```
     
 6.  Install Java runtime from this URL: https://support.apple.com/kb/dl1572?locale=en_US
-    Apple only supports Java 6. If you need to install a never version, this link might be helpful:
+    Apple only supports Java 6. If you need to install a newer version, this link might be helpful:
     [http://osxdaily.com/2015/10/17/how-to-install-java-in-os-x-el-capitan/](http://osxdaily.com/2015/10/17/how-to-install-java-in-os-x-el-capitan/)
     
 7.  The Vitess bootstrap script makes some checks for the go runtime, so it is recommended to have the following
