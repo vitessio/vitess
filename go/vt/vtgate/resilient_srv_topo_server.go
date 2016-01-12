@@ -48,7 +48,7 @@ type ResilientSrvTopoServer struct {
 
 	// mutex protects the cache map itself, not the individual
 	// values in the cache.
-	mutex                 sync.Mutex
+	mutex                 sync.RWMutex
 	srvKeyspaceNamesCache map[string]*srvKeyspaceNamesEntry
 	srvKeyspaceCache      map[string]*srvKeyspaceEntry
 	srvShardCache         map[string]*srvShardEntry
@@ -108,7 +108,7 @@ type srvKeyspaceEntry struct {
 	keyspace string
 
 	// the mutex protects any access to this structure (read or write)
-	mutex sync.Mutex
+	mutex sync.RWMutex
 
 	insertionTime time.Time
 	value         *topodatapb.SrvKeyspace
@@ -257,14 +257,19 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 	return result, err
 }
 
-// GetSrvKeyspace returns SrvKeyspace object for the given cell and keyspace.
-func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	server.counts.Add(queryCategory, 1)
-
+func (server *ResilientSrvTopoServer) getSrvKeyspaceEntry(cell, keyspace string) *srvKeyspaceEntry {
 	// find the entry in the cache, add it if not there
 	key := cell + "." + keyspace
-	server.mutex.Lock()
+	server.mutex.RLock()
 	entry, ok := server.srvKeyspaceCache[key]
+	if ok {
+		server.mutex.RUnlock()
+		return entry
+	}
+	server.mutex.RUnlock()
+
+	server.mutex.Lock()
+	entry, ok = server.srvKeyspaceCache[key]
 	if !ok {
 		entry = &srvKeyspaceEntry{
 			cell:     cell,
@@ -273,6 +278,23 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 		server.srvKeyspaceCache[key] = entry
 	}
 	server.mutex.Unlock()
+	return entry
+}
+
+// GetSrvKeyspace returns SrvKeyspace object for the given cell and keyspace.
+func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	server.counts.Add(queryCategory, 1)
+
+	entry := server.getSrvKeyspaceEntry(cell, keyspace)
+
+	// If the entry exists, return it
+	entry.mutex.RLock()
+	if !entry.insertionTime.IsZero() {
+		v, e := entry.value, entry.lastError
+		entry.mutex.RUnlock()
+		return v, e
+	}
+	entry.mutex.RUnlock()
 
 	// Lock the entry, and do everything holding the lock.  This
 	// means two concurrent requests will only issue one
@@ -280,33 +302,64 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
-	// If the entry is fresh enough, return it
-	if time.Now().Sub(entry.insertionTime) < server.cacheTTL {
+	// If the entry exists, return it
+	if !entry.insertionTime.IsZero() {
 		return entry.value, entry.lastError
 	}
 
-	// not in cache or too old, get the real value
+	// not in cache, get the real value
 	newCtx, cancel := context.WithTimeout(context.Background(), *srvTopoTimeout)
 	defer cancel()
 
-	result, err := server.topoServer.GetSrvKeyspace(newCtx, cell, keyspace)
+	// start watching
+	notifications, _, err := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
 	if err != nil {
+		// set error if there is no cached value
 		if entry.insertionTime.IsZero() {
-			server.counts.Add(errorCategory, 1)
-			log.Errorf("GetSrvKeyspace(%v, %v, %v) failed: %v (no cached value, caching and returning error)", newCtx, cell, keyspace, err)
-		} else {
-			server.counts.Add(cachedCategory, 1)
-			log.Warningf("GetSrvKeyspace(%v, %v, %v) failed: %v (returning cached value: %v %v)", newCtx, cell, keyspace, err, entry.value, entry.lastError)
-			return entry.value, entry.lastError
+			entry.lastError = err
+			entry.lastErrorCtx = newCtx
 		}
+		// return cached value if any
+		log.Errorf("WatchSrvKeyspace failed for %v/%v: %v, returning cached value: %+v, %v", cell, keyspace, err, entry.value, entry.lastError)
+		return entry.value, entry.lastError
+	}
+	sk, ok := <-notifications
+	if !ok {
+		// set error if there is no cached value
+		if entry.insertionTime.IsZero() {
+			entry.lastError = fmt.Errorf("failed to receive from channel: %v %v", sk, ok)
+			entry.lastErrorCtx = newCtx
+		}
+		// return cached value if any
+		log.Errorf("WatchSrvKeyspace first result failed for %v/%v: %v %v, returning cached value: %+v, %v", cell, keyspace, sk, ok, entry.value, entry.lastError)
+		return entry.value, entry.lastError
 	}
 
-	// save the value we got and the current time in the cache
+	// cache the first notification
 	entry.insertionTime = time.Now()
-	entry.value = result
-	entry.lastError = err
+	entry.value = sk
+	entry.lastError = nil
 	entry.lastErrorCtx = newCtx
-	return result, err
+
+	go func() {
+		for {
+			sk, ok := <-notifications
+			entry.mutex.Lock()
+			if !ok {
+				log.Errorf("failed to receive from channel: %v %v", sk, ok)
+				// reset entry so it retries watching in next call
+				entry.insertionTime = time.Time{}
+				entry.mutex.Unlock()
+				break
+			}
+			entry.insertionTime = time.Now()
+			entry.value = sk
+			entry.lastError = nil
+			entry.mutex.Unlock()
+		}
+	}()
+
+	return entry.value, entry.lastError
 }
 
 // GetSrvShard returns SrvShard object for the given cell, keyspace, and shard.
@@ -705,7 +758,7 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 	}
 
 	for _, entry := range server.srvKeyspaceCache {
-		entry.mutex.Lock()
+		entry.mutex.RLock()
 		result.SrvKeyspaces = append(result.SrvKeyspaces, &SrvKeyspaceCacheStatus{
 			Cell:         entry.cell,
 			Keyspace:     entry.keyspace,
@@ -713,7 +766,7 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 			LastError:    entry.lastError,
 			LastErrorCtx: entry.lastErrorCtx,
 		})
-		entry.mutex.Unlock()
+		entry.mutex.RUnlock()
 	}
 
 	for _, entry := range server.srvShardCache {

@@ -193,20 +193,35 @@ func TestFilterUnhealthy(t *testing.T) {
 // returns errors for everything, except the one keyspace.
 type fakeTopo struct {
 	faketopo.FakeTopo
-	keyspace  string
-	callCount int
+	keyspace      string
+	callCount     int
+	notifications chan *topodatapb.SrvKeyspace
+	stopWatching  chan struct{}
 }
 
 func (ft *fakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	return []string{ft.keyspace}, nil
 }
 
-func (ft *fakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+func (ft *fakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
 	ft.callCount++
 	if keyspace == ft.keyspace {
-		return &topodatapb.SrvKeyspace{}, nil
+		ft.notifications = make(chan *topodatapb.SrvKeyspace, 10)
+		ft.stopWatching = make(chan struct{})
+		ft.notifications <- &topodatapb.SrvKeyspace{}
+		return ft.notifications, ft.stopWatching, nil
 	}
-	return nil, fmt.Errorf("Unknown keyspace")
+	return nil, nil, fmt.Errorf("Unknown keyspace")
+}
+
+func (ft *fakeTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
+	ft.callCount++
+	if keyspace != ft.keyspace {
+		return nil, fmt.Errorf("Unknown keyspace")
+	}
+	return &topodatapb.SrvShard{
+		Name: shard,
+	}, nil
 }
 
 func (ft *fakeTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error) {
@@ -298,6 +313,33 @@ func TestCacheWithErrors(t *testing.T) {
 	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestCacheWithErrors")
 
 	// ask for the known keyspace, that populates the cache
+	_, err := rsts.GetSrvShard(context.Background(), "", "test_ks", "shard_0")
+	if err != nil {
+		t.Fatalf("GetSrvShard got unexpected error: %v", err)
+	}
+
+	// now make the topo server fail, and ask again, should get cached
+	// value, not even ask underlying guy
+	ft.keyspace = "another_test_ks"
+	_, err = rsts.GetSrvShard(context.Background(), "", "test_ks", "shard_0")
+	if err != nil {
+		t.Fatalf("GetSrvShard got unexpected error: %v", err)
+	}
+
+	// now reduce TTL to nothing, so we won't use cache, and ask again
+	rsts.cacheTTL = 0
+	_, err = rsts.GetSrvShard(context.Background(), "", "test_ks", "shard_0")
+	if err != nil {
+		t.Fatalf("GetSrvShard got unexpected error: %v", err)
+	}
+}
+
+// TestSrvKeyspaceCacheWithErrors will test we properly return cached errors for GetSrvKeyspace.
+func TestSrvKeyspaceCacheWithErrors(t *testing.T) {
+	ft := &fakeTopo{keyspace: "test_ks"}
+	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestSrvKeyspaceCacheWithErrors")
+
+	// ask for the known keyspace, that populates the cache
 	_, err := rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
 	if err != nil {
 		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
@@ -305,14 +347,7 @@ func TestCacheWithErrors(t *testing.T) {
 
 	// now make the topo server fail, and ask again, should get cached
 	// value, not even ask underlying guy
-	ft.keyspace = "another_test_ks"
-	_, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
-	}
-
-	// now reduce TTL to nothing, so we won't use cache, and ask again
-	rsts.cacheTTL = 0
+	close(ft.notifications)
 	_, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
 	if err != nil {
 		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
@@ -323,6 +358,40 @@ func TestCacheWithErrors(t *testing.T) {
 func TestCachedErrors(t *testing.T) {
 	ft := &fakeTopo{keyspace: "test_ks"}
 	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestCachedErrors")
+
+	// ask for an unknown keyspace, should get an error
+	_, err := rsts.GetSrvShard(context.Background(), "", "unknown_ks", "shard_0")
+	if err == nil {
+		t.Fatalf("First GetSrvShard didn't return an error")
+	}
+	if ft.callCount != 1 {
+		t.Fatalf("GetSrvShard didn't get called 1 but %v times", ft.callCount)
+	}
+
+	// ask again, should get an error and use cache
+	_, err = rsts.GetSrvShard(context.Background(), "", "unknown_ks", "shard_0")
+	if err == nil {
+		t.Fatalf("Second GetSrvShard didn't return an error")
+	}
+	if ft.callCount != 1 {
+		t.Fatalf("GetSrvShard was called again: %v times", ft.callCount)
+	}
+
+	// ask again after expired cache, should get an error
+	rsts.cacheTTL = 0
+	_, err = rsts.GetSrvShard(context.Background(), "", "unknown_ks", "shard_0")
+	if err == nil {
+		t.Fatalf("Third GetSrvShard didn't return an error")
+	}
+	if ft.callCount != 2 {
+		t.Fatalf("GetSrvShard was not called again: %v times", ft.callCount)
+	}
+}
+
+// TestSrvKeyspaceCachedErrors will test we properly return cached errors for SrvKeyspace.
+func TestSrvKeyspaceCachedErrors(t *testing.T) {
+	ft := &fakeTopo{keyspace: "test_ks"}
+	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestSrvKeyspaceCachedErrors")
 
 	// ask for an unknown keyspace, should get an error
 	_, err := rsts.GetSrvKeyspace(context.Background(), "", "unknown_ks")
@@ -337,16 +406,6 @@ func TestCachedErrors(t *testing.T) {
 	_, err = rsts.GetSrvKeyspace(context.Background(), "", "unknown_ks")
 	if err == nil {
 		t.Fatalf("Second GetSrvKeyspace didn't return an error")
-	}
-	if ft.callCount != 1 {
-		t.Fatalf("GetSrvKeyspace was called again: %v times", ft.callCount)
-	}
-
-	// ask again after expired cache, should get an error
-	rsts.cacheTTL = 0
-	_, err = rsts.GetSrvKeyspace(context.Background(), "", "unknown_ks")
-	if err == nil {
-		t.Fatalf("Third GetSrvKeyspace didn't return an error")
 	}
 	if ft.callCount != 2 {
 		t.Fatalf("GetSrvKeyspace was not called again: %v times", ft.callCount)
