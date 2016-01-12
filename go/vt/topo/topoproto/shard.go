@@ -14,6 +14,12 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+// KeyspaceShardString returns a "keyspace/shard" string taking
+// keyspace and shard as separate inputs.
+func KeyspaceShardString(keyspace, shard string) string {
+	return fmt.Sprintf("%v/%v", keyspace, shard)
+}
+
 // ParseKeyspaceShard parse a "keyspace/shard" string and extract
 // both keyspace and shard
 func ParseKeyspaceShard(param string) (string, string, error) {

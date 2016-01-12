@@ -63,6 +63,7 @@ type Scheduler struct {
 func NewScheduler() (*Scheduler, error) {
 	defaultClusterOperations := map[string]bool{
 		"HorizontalReshardingTask": true,
+		"VerticalSplitTask":        true,
 	}
 
 	s := &Scheduler{
@@ -136,7 +137,8 @@ clusterOpLoop:
 				// Make sure all new tasks do not miss any required parameters.
 				err := s.validateTaskContainers(newTaskContainers)
 				if err != nil {
-					log.Errorf("Task: %v (%v/%v) emitted a new task which is not valid. Error: %v", taskProto.Name, clusterOp.Id, taskProto.Id, err)
+					err = fmt.Errorf("Task: %v (%v/%v) emitted a new task which is not valid. Error: %v", taskProto.Name, clusterOp.Id, taskProto.Id, err)
+					log.Error(err)
 					MarkTaskFailed(taskProto, output, err)
 					clusterOp.Error = err.Error()
 					break clusterOpLoop
@@ -205,8 +207,12 @@ func defaultTaskCreator(taskName string) Task {
 	switch taskName {
 	case "HorizontalReshardingTask":
 		return &HorizontalReshardingTask{}
+	case "VerticalSplitTask":
+		return &VerticalSplitTask{}
 	case "CopySchemaShardTask":
 		return &CopySchemaShardTask{}
+	case "MigrateServedFromTask":
+		return &MigrateServedFromTask{}
 	case "MigrateServedTypesTask":
 		return &MigrateServedTypesTask{}
 	case "RebuildKeyspaceGraph":
@@ -215,6 +221,10 @@ func defaultTaskCreator(taskName string) Task {
 		return &SplitCloneTask{}
 	case "SplitDiffTask":
 		return &SplitDiffTask{}
+	case "VerticalSplitCloneTask":
+		return &VerticalSplitCloneTask{}
+	case "VerticalSplitDiffTask":
+		return &VerticalSplitDiffTask{}
 	case "WaitForFilteredReplicationTask":
 		return &WaitForFilteredReplicationTask{}
 	default:
