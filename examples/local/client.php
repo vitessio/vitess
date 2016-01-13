@@ -9,8 +9,7 @@
  * Then run:
  * vitess/examples/local$ php client.php --server=localhost:15991
  */
-require_once ('../../php/src/VTGateConn.php');
-require_once ('../../php/src/VTGrpcClient.php');
+require_once ('../../php/vendor/autoload.php');
 
 $opts = getopt('', array(
 		'server:' 

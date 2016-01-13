@@ -15,6 +15,12 @@
     "php": ">=5.5.0",
     "datto/protobuf-php": "dev-master",
     "google/auth": "dev-master",
-    "grpc/grpc": "dev-master"
+    "grpc/grpc": "dev-master#8a8a8760eb243fe758452a2e2bed6e2821b992f1"
+  },
+  "autoload": {
+    "files": [
+      "php/src/VTGateConn.php",
+      "php/src/VTGrpcClient.php"
+    ]
   }
 }
