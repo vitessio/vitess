@@ -217,7 +217,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	}
 	wantV := []interface{}{[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))}}
 	if !reflect.DeepEqual(v, wantV) {
-		t.Errorf("reslovePKValues: %#v, want %#v", v, wantV)
+		t.Errorf("resolvePKValues: %#v, want %#v", v, wantV)
 	}
 	// resolvePKValues should fail because of conversion error.
 	pkValues = make([]interface{}, 0, 10)
@@ -260,7 +260,7 @@ func TestCodexResolveListArg(t *testing.T) {
 	}
 	wantV := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))}
 	if !reflect.DeepEqual(v, wantV) {
-		t.Errorf("reslovePKValues: %#v, want %#v", v, wantV)
+		t.Errorf("resolvePKValues: %#v, want %#v", v, wantV)
 	}
 
 	bindVariables[key] = []interface{}{10}
