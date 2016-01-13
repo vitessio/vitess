@@ -108,6 +108,26 @@ func BuildValue(goval interface{}) (v Value, err error) {
 	return v, nil
 }
 
+// BuildConverted is like BuildValue except that it tries to
+// convert a string or []byte to an integral if the target type
+// is an integral. We don't perform other implicit conversions
+// because they're unsafe.
+func BuildConverted(typ querypb.Type, goval interface{}) (v Value, err error) {
+	if IsIntegral(typ) {
+		switch goval := goval.(type) {
+		case []byte:
+			return ValueFromBytes(typ, goval)
+		case string:
+			return ValueFromBytes(typ, []byte(goval))
+		case Value:
+			if goval.IsQuoted() {
+				return ValueFromBytes(typ, goval.Raw())
+			}
+		}
+	}
+	return BuildValue(goval)
+}
+
 // ValueFromBytes builds a Value using typ and val. It ensures that val
 // matches the requested type. If type is an integral it's converted to
 // a cannonical form. Otherwise, the original representation is preserved.

@@ -280,27 +280,33 @@ func TestCacheTypes(t *testing.T) {
 	badRequests := []struct {
 		query string
 		bv    map[string]interface{}
+		out   string
 	}{{
 		query: "select * from vitess_cached2 where eid = 'str' and bid = 'str'",
+		out:   "error: type mismatch",
 	}, {
 		query: "select * from vitess_cached2 where eid = :str and bid = :str",
 		bv:    map[string]interface{}{"str": "str"},
+		out:   "error: strconv.ParseInt",
 	}, {
 		query: "select * from vitess_cached2 where eid = 1 and bid = 1",
+		out:   "error: type mismatch",
 	}, {
 		query: "select * from vitess_cached2 where eid = :id and bid = :id",
 		bv:    map[string]interface{}{"id": 1},
+		out:   "error: type mismatch",
 	}, {
 		query: "select * from vitess_cached2 where eid = 1.2 and bid = 1.2",
+		out:   "error: type mismatch",
 	}, {
 		query: "select * from vitess_cached2 where eid = :fl and bid = :fl",
 		bv:    map[string]interface{}{"fl": 1.2},
+		out:   "error: type mismatch",
 	}}
-	want := "error: type mismatch"
-	for _, request := range badRequests {
-		_, err := client.Execute(request.query, request.bv)
-		if err == nil || !strings.HasPrefix(err.Error(), want) {
-			t.Errorf("Error: %v, want %s", err, want)
+	for _, tcase := range badRequests {
+		_, err := client.Execute(tcase.query, tcase.bv)
+		if err == nil || !strings.HasPrefix(err.Error(), tcase.out) {
+			t.Errorf("%s: %v, want %s", tcase.query, err, tcase.out)
 		}
 	}
 }

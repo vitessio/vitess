@@ -66,7 +66,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	// type mismatch int
 	bindVars["pk1"] = "str"
 	pkValues = []interface{}{":pk1"}
-	wantErr = "error: type mismatch, expecting numeric type for str"
+	wantErr = "error: strconv.ParseInt"
 
 	got, err = buildValueList(&tableInfo, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -210,12 +210,16 @@ func TestCodexResolvePKValues(t *testing.T) {
 
 	pkValues := make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
-	// resolvePKValues fail because type mismatch. pk column 0 has int type but
-	// list variables are strings.
-	_, _, err := resolvePKValues(&tableInfo, pkValues, bindVariables)
-	testUtils.checkTabletError(t, err, ErrFail, "type mismatch")
-	// pkValues is a list of sqltypes.Value and bypasses bind variables.
-	// But, the type mismatches, pk column 0 is int but variable is string.
+	// resolvePKValues should succeed for strings that can be converted to int.
+	v, _, err := resolvePKValues(&tableInfo, pkValues, bindVariables)
+	if err != nil {
+		t.Error(err)
+	}
+	wantV := []interface{}{[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))}}
+	if !reflect.DeepEqual(v, wantV) {
+		t.Errorf("reslovePKValues: %#v, want %#v", v, wantV)
+	}
+	// resolvePKValues should fail because of conversion error.
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, sqltypes.MakeString([]byte("type_mismatch")))
 	_, _, err = resolvePKValues(&tableInfo, pkValues, nil)
@@ -248,9 +252,16 @@ func TestCodexResolveListArg(t *testing.T) {
 	_, err := resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
 	testUtils.checkTabletError(t, err, ErrFail, "")
 
+	// This should successfully convert.
 	bindVariables[key] = []interface{}{"1"}
-	_, err = resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
-	testUtils.checkTabletError(t, err, ErrFail, "type mismatch")
+	v, err := resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
+	if err != nil {
+		t.Error(err)
+	}
+	wantV := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))}
+	if !reflect.DeepEqual(v, wantV) {
+		t.Errorf("reslovePKValues: %#v, want %#v", v, wantV)
+	}
 
 	bindVariables[key] = []interface{}{10}
 	result, err := resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
