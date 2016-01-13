@@ -98,7 +98,7 @@ func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]int
 	list := val.([]interface{})
 	resolved := make([]sqltypes.Value, len(list))
 	for i, v := range list {
-		sqlval, err := sqltypes.BuildValue(v)
+		sqlval, err := sqltypes.BuildConverted(col.Type, v)
 		if err != nil {
 			return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
 		}
@@ -139,7 +139,7 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 		if err != nil {
 			return result, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
 		}
-		sqlval, err := sqltypes.BuildValue(val)
+		sqlval, err := sqltypes.BuildConverted(col.Type, val)
 		if err != nil {
 			return result, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
 		}

@@ -393,46 +393,55 @@ func TestTypeLimits(t *testing.T) {
 		}
 	}
 
-	want := "error: type mismatch"
 	mismatchCases := []struct {
 		query string
 		bv    map[string]interface{}
+		out   string
 	}{{
 		query: "insert into vitess_ints(tiny) values('str')",
 		bv:    nil,
+		out:   "error: type mismatch",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:str)",
 		bv:    map[string]interface{}{"str": "str"},
+		out:   "error: strconv.ParseInt",
 	}, {
 		query: "insert into vitess_ints(tiny) values(1.2)",
 		bv:    nil,
+		out:   "error: type mismatch",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:fl)",
 		bv:    map[string]interface{}{"fl": 1.2},
+		out:   "error: type mismatch",
 	}, {
 		query: "insert into vitess_strings(vb) values(1)",
 		bv:    nil,
+		out:   "error: type mismatch",
 	}, {
 		query: "insert into vitess_strings(vb) values(:id)",
 		bv:    map[string]interface{}{"id": 1},
+		out:   "error: type mismatch",
 	}, {
 		query: "insert into vitess_strings(vb) select tiny from vitess_ints",
 		bv:    nil,
+		out:   "error: type mismatch",
 	}, {
 		query: "insert into vitess_ints(tiny) select num from vitess_fracts",
 		bv:    nil,
+		out:   "error: type mismatch",
 	}, {
 		query: "insert into vitess_ints(tiny) select vb from vitess_strings",
 		bv:    nil,
+		out:   "error: type mismatch",
 	}}
-	for _, request := range mismatchCases {
-		_, err := client.Execute(request.query, request.bv)
-		if err == nil || !strings.HasPrefix(err.Error(), want) {
-			t.Errorf("Error(%s): %v, want %s", request.query, err, want)
+	for _, tcase := range mismatchCases {
+		_, err := client.Execute(tcase.query, tcase.bv)
+		if err == nil || !strings.HasPrefix(err.Error(), tcase.out) {
+			t.Errorf("Error(%s): %v, want %s", tcase.query, err, tcase.out)
 		}
 	}
 
-	want = "error: Out of range"
+	want := "error: Out of range"
 	for _, query := range []string{
 		"insert into vitess_ints(tiny) values(-129)",
 		"insert into vitess_ints(tiny) select medium from vitess_ints",

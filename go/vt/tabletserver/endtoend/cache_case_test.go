@@ -44,6 +44,36 @@ func TestCacheCases1(t *testing.T) {
 			Table:        "vitess_cached1",
 			Hits:         1,
 		},
+		// (1)
+		&framework.TestCase{
+			Name:  "PK_IN int bind var",
+			Query: "select * from vitess_cached1 where eid = :eid",
+			BindVars: map[string]interface{}{
+				"eid": 1,
+			},
+			Result: [][]string{
+				{"1", "a", "abcd"},
+			},
+			RowsAffected: 1,
+			Plan:         "PK_IN",
+			Table:        "vitess_cached1",
+			Hits:         1,
+		},
+		// (1)
+		&framework.TestCase{
+			Name:  "PK_IN string bind var",
+			Query: "select * from vitess_cached1 where eid = :eid",
+			BindVars: map[string]interface{}{
+				"eid": "1",
+			},
+			Result: [][]string{
+				{"1", "a", "abcd"},
+			},
+			RowsAffected: 1,
+			Plan:         "PK_IN",
+			Table:        "vitess_cached1",
+			Hits:         1,
+		},
 		// (1, 3)
 		&framework.TestCase{
 			Name:  "PK_IN (empty cache)",
