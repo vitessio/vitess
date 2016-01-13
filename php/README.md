@@ -30,9 +30,9 @@ $ sudo pecl install grpc-beta
 To download the dependencies of the gRPC PHP library, run Composer:
 
 ``` sh
-$ cd vitess/php
-vitess/php$ curl -sS https://getcomposer.org/installer | php
-vitess/php$ php composer.phar install
+$ cd vitess
+vitess$ curl -sS https://getcomposer.org/installer | php
+vitess$ php composer.phar install
 ```
 
 ## Unit Tests
@@ -80,9 +80,9 @@ xdebug
 Then you can run a coverage check with PHPUnit:
 
 ``` sh
-vitess/php$ phpunit --coverage-html _test tests
+vitess$ phpunit --coverage-html php/_test
 
 # Open in browser.
-vitess/php$ xdg-open _test/index.html
+vitess$ xdg-open php/_test/index.html
 ```
 

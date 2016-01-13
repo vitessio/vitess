@@ -1,5 +1,5 @@
 <?php
-require_once (dirname(__FILE__) . '/../vendor/autoload.php');
+
 require_once (dirname(__FILE__) . '/proto/query.php');
 require_once (dirname(__FILE__) . '/proto/vtgate.php');
 require_once (dirname(__FILE__) . '/proto/topodata.php');

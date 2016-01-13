@@ -23,10 +23,10 @@ ver_file=$HOME/.phpenv/vendor/travis.ver
 if [[ -f $ver_file && "$(cat $ver_file)" == "$ver" ]]; then
   echo "Using cached php vendor dir version $ver"
 else
-  cd $HOME/gopath/src/github.com/youtube/vitess/php
+  cd $HOME/gopath/src/github.com/youtube/vitess
   composer install
   rm -rf $HOME/.phpenv/vendor
-  mv vendor $HOME/.phpenv/vendor
+  mv php/vendor $HOME/.phpenv/vendor
   echo "$ver" > $ver_file
 fi
 

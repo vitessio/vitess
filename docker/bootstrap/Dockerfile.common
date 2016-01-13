@@ -72,7 +72,7 @@ COPY config /vt/src/github.com/youtube/vitess/config
 COPY third_party /vt/src/github.com/youtube/vitess/third_party
 COPY tools /vt/src/github.com/youtube/vitess/tools
 COPY travis /vt/src/github.com/youtube/vitess/travis
-COPY php/composer.json php/composer.lock /vt/src/github.com/youtube/vitess/php/
+COPY composer.json composer.lock /vt/src/github.com/youtube/vitess/
 
 # Install gRPC and protobuf as root
 RUN $VTTOP/travis/install_protobuf.sh
@@ -81,7 +81,7 @@ RUN $VTTOP/travis/install_grpc.sh
 # Install gRPC PHP dependencies
 RUN pecl install grpc-beta && \
     echo 'extension=grpc.so' > /etc/php5/cli/conf.d/20-grpc.ini && \
-    cd /vt/src/github.com/youtube/vitess/php && \
+    cd /vt/src/github.com/youtube/vitess && \
     composer install
 
 # Create vitess user

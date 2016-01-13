@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    phpunit -c phpunit.xml
+-->
+<phpunit backupGlobals="false"
+         backupStaticAttributes="false"
+         colors="true"
+         convertErrorsToExceptions="true"
+         convertNoticesToExceptions="true"
+         convertWarningsToExceptions="true"
+         syntaxCheck="true"
+         forceCoversAnnotation="true"
+         bootstrap="./php/vendor/autoload.php">
+
+    <testsuites>
+        <testsuite name="unit">
+            <directory>./php/tests/</directory>
+        </testsuite>
+    </testsuites>
+
+    <filter>
+        <whitelist processUncoveredFilesFromWhitelist="true">
+            <directory suffix=".php">./php/src/</directory>
+        </whitelist>
+    </filter>
+
+</phpunit>

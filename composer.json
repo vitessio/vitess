@@ -8,6 +8,9 @@
   "name": "vitess/php-client",
   "description": "PHP client for Vitess",
   "minimum-stability": "dev",
+  "config": {
+    "vendor-dir": "php/vendor"
+  },
   "require": {
     "php": ">=5.5.0",
     "datto/protobuf-php": "dev-master",
