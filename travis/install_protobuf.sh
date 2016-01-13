@@ -11,8 +11,10 @@ if [ "$protobuf_dist" != "" ]; then
   cd $protobuf_dist
 fi
 
+# this is the default working beta version on Linux, beta-2 doesn't work here
 protobuf_beta_version=1
 
+# on OSX beta-1 doesn't work, it has to be built in version beta-2
 if [ `uname -s` == "Darwin" ]; then
   protobuf_beta_version=2
 fi
