@@ -1,9 +1,10 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: vtgate
+  name: vtgate-{{cell}}
   labels:
     component: vtgate
+    cell: {{cell}}
     app: vitess
 spec:
   ports:
@@ -13,5 +14,6 @@ spec:
       port: 15991
   selector:
     component: vtgate
+    cell: {{cell}}
     app: vitess
   type: LoadBalancer

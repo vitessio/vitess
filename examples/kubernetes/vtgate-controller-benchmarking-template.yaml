@@ -1,13 +1,14 @@
 kind: ReplicationController
 apiVersion: v1
 metadata:
-  name: vtgate
+  name: vtgate-{{cell}}
 spec:
   replicas: {{replicas}}
   template:
     metadata:
       labels:
         component: vtgate
+        cell: {{cell}}
         app: vitess
     spec:
       containers:
@@ -43,7 +44,7 @@ spec:
               -grpc_port 15991
               -tablet_protocol grpc
               -service_map 'bsonrpc-vt-vtgateservice,grpc-vtgateservice'
-              -cell test" vitess
+              -cell {{cell}}" vitess
           env:
             - name: GOMAXPROCS
               value: "16"
