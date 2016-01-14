@@ -133,23 +133,16 @@ func buildSecondaryList(tableInfo *TableInfo, pkList [][]sqltypes.Value, seconda
 }
 
 func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[string]interface{}) (result sqltypes.Value, err error) {
-	switch v := value.(type) {
-	case string:
-		val, _, err := sqlparser.FetchBindVar(v, bindVars)
+	if v, ok := value.(string); ok {
+		value, _, err = sqlparser.FetchBindVar(v, bindVars)
 		if err != nil {
 			return result, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
 		}
-		sqlval, err := sqltypes.BuildConverted(col.Type, val)
-		if err != nil {
-			return result, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
-		}
-		result = sqlval
-	case sqltypes.Value:
-		result = v
-	default:
-		return result, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "incompatible value type %v", v)
 	}
-
+	result, err = sqltypes.BuildConverted(col.Type, value)
+	if err != nil {
+		return result, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+	}
 	if err = validateValue(col, result); err != nil {
 		return result, err
 	}
