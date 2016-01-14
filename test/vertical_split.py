@@ -538,22 +538,30 @@ index by_msg (msg)
     # check the binlog player is gone now
     destination_master.wait_for_binlog_player_count(0)
 
+    # check the stats are correct
+    self._check_stats()
+
+    self._verify_vtctl_set_shard_tablet_control()
+
+  def _verify_vtctl_set_shard_tablet_control(self):
+    """Test that manually editing the blacklisted tables works correctly.
+
+    TODO(mberlin): This is more an integration test and should be moved to the
+    Go codebase eventually.
+    """
     # check 'vtctl SetShardTabletControl' command works as expected:
-    # clear the rdonly entry, re-add it, and then clear all entries.
+    # clear the rdonly entry:
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',
                      'rdonly'], auto_log=True)
-    shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
-    self.assertEqual(len(shard_json['tablet_controls']), 2)
-    for tc in shard_json['tablet_controls']:
-      self.assertIn(tc['tablet_type'], [topodata_pb2.MASTER,
-                                        topodata_pb2.REPLICA])
+    self._assert_tablet_controls([topodata_pb2.MASTER, topodata_pb2.REPLICA])
+
+    # re-add rdonly:
     utils.run_vtctl(['SetShardTabletControl', '--tables=moving.*,view1',
                      'source_keyspace/0', 'rdonly'], auto_log=True)
-    shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
-    for tc in shard_json['tablet_controls']:
-      if tc['tablet_type'] == topodata_pb2.RDONLY:
-        break
-    self.assertEqual(['moving.*', 'view1'], tc['blacklisted_tables'])
+    self._assert_tablet_controls([topodata_pb2.MASTER, topodata_pb2.REPLICA,
+                                  topodata_pb2.RDONLY])
+
+    # and then clear all entries:
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',
                      'rdonly'], auto_log=True)
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',
@@ -563,8 +571,17 @@ index by_msg (msg)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
     self.assertNotIn('tablet_controls', shard_json)
 
-    # check the stats are correct
-    self._check_stats()
+  def _assert_tablet_controls(self, expected_dbtypes):
+    shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
+    self.assertEqual(len(shard_json['tablet_controls']), len(expected_dbtypes))
+
+    expected_dbtypes_set = set(expected_dbtypes)
+    for tc in shard_json['tablet_controls']:
+      self.assertIn(tc['tablet_type'], expected_dbtypes_set)
+      self.assertEqual(['moving.*', 'view1'], tc['blacklisted_tables'])
+      expected_dbtypes_set.remove(tc['tablet_type'])
+    self.assertEqual(0, len(expected_dbtypes_set),
+                     'Not all expected db types were blacklisted')
 
 
 if __name__ == '__main__':
