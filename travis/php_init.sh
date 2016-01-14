@@ -13,11 +13,11 @@ fi
 
 eval "$(phpenv init -)"
 
-if [ -d $HOME/.phpenv/versions/$version ]; then
-  echo "Using cached php"
-else
-  PHP_BUILD_CONFIGURE_OPTS="--without-xmlrpc --without-xsl --without-curl --disable-dom --without-gd --without-mcrypt --without-readline --disable-soap --without-tidy" phpenv install $version
-fi
+#if [ -d $HOME/.phpenv/versions/$version ]; then
+#  echo "Using cached php"
+#else
+  PHP_BUILD_CONFIGURE_OPTS="--without-xmlrpc --without-xsl --without-curl --without-gd --without-mcrypt --without-readline --disable-soap --without-tidy" phpenv install $version
+#fi
 
 phpenv global $version
 phpenv rehash
