@@ -11,9 +11,18 @@ if [ "$protobuf_dist" != "" ]; then
   cd $protobuf_dist
 fi
 
-wget https://github.com/google/protobuf/archive/v3.0.0-beta-1.tar.gz
-tar -xvzf v3.0.0-beta-1.tar.gz
-cd protobuf-3.0.0-beta-1
+# this is the default working beta version on Linux, beta-2 doesn't work here
+protobuf_beta_version=1
+
+# on OSX beta-1 doesn't work, it has to be built in version beta-2
+if [ `uname -s` == "Darwin" ]; then
+  protobuf_beta_version=2
+fi
+
+wget https://github.com/google/protobuf/archive/v3.0.0-beta-$protobuf_beta_version.tar.gz
+tar -xvzf v3.0.0-beta-$protobuf_beta_version.tar.gz
+cd protobuf-3.0.0-beta-$protobuf_beta_version
+
 ./autogen.sh
 if [ "$protobuf_dist" != "" ]; then
   ./configure --prefix=$protobuf_dist
