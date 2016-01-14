@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
@@ -203,6 +205,14 @@ func (ft *fakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]str
 	return []string{ft.keyspace}, nil
 }
 
+func (ft *fakeTopo) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
+	if keyspace != ft.keyspace {
+		return fmt.Errorf("Unknown keyspace")
+	}
+	ft.notifications <- srvKeyspace
+	return nil
+}
+
 func (ft *fakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
 	ft.callCount++
 	if keyspace == ft.keyspace {
@@ -304,6 +314,41 @@ func TestRemoteMaster(t *testing.T) {
 	ep, _, err = rsts.GetEndPoints(context.Background(), "cell1", "test_ks", "1", topodatapb.TabletType_MASTER)
 	if ep.Entries[0].Uid != 0 {
 		t.Fatalf("GetEndPoints got %v want 0", ep.Entries[0].Uid)
+	}
+}
+
+// TestGetSrvKeyspace will test we properly return updated SrvKeyspace.
+func TestGetSrvKeyspace(t *testing.T) {
+	ft := &fakeTopo{keyspace: "test_ks"}
+	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestGetSrvKeyspace")
+
+	// ask for the known keyspace, that populates the cache
+	_, err := rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
+	if err != nil {
+		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
+	}
+
+	// update srvkeyspace with new value
+	want := &topodatapb.SrvKeyspace{
+		ShardingColumnName: "id",
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+	}
+	ft.UpdateSrvKeyspace(context.Background(), "", "test_ks", want)
+
+	var got *topodatapb.SrvKeyspace
+	expiry := time.Now().Add(5 * time.Second)
+	for i := time.Now(); i.Before(expiry); {
+		got, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
+		if err != nil {
+			t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
+		}
+		if proto.Equal(want, got) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !proto.Equal(want, got) {
+		t.Fatalf("GetSrvKeyspace() = %+v, want %+v", got, want)
 	}
 }
 
