@@ -287,9 +287,9 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 	// If the entry exists, return it
 	entry.mutex.RLock()
 	if entry.value != nil {
-		v, e := entry.value, entry.lastError
+		v := entry.value
 		entry.mutex.RUnlock()
-		return v, e
+		return v, nil
 	}
 	entry.mutex.RUnlock()
 
@@ -301,7 +301,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 
 	// If the entry exists, return it
 	if entry.value != nil {
-		return entry.value, entry.lastError
+		return entry.value, nil
 	}
 
 	// not in cache, get the real value
@@ -311,17 +311,15 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 	notifications, stopWatching, err := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
 	if err != nil {
 		entry.lastError = err
-		entry.lastErrorCtx = newCtx
-		// return cached value if any
+		entry.lastErrorCtx = ctx
 		log.Errorf("WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, err)
 		return nil, entry.lastError
 	}
 	sk, ok := <-notifications
 	if !ok {
-		entry.lastError = fmt.Errorf("failed to receive from channel: %v %v", sk, ok)
-		entry.lastErrorCtx = newCtx
-		// return cached value if any
-		log.Errorf("WatchSrvKeyspace first result failed for %v/%v: %v %v", cell, keyspace, sk, ok)
+		entry.lastError = fmt.Errorf("failed to receive from channel")
+		entry.lastErrorCtx = ctx
+		log.Errorf("WatchSrvKeyspace first result failed for %v/%v", cell, keyspace)
 		close(stopWatching)
 		return nil, entry.lastError
 	}
@@ -329,16 +327,15 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 	// cache the first notification
 	entry.value = sk
 	entry.lastError = nil
-	entry.lastErrorCtx = newCtx
+	entry.lastErrorCtx = nil
 
 	go func() {
 		for sk := range notifications {
 			entry.mutex.Lock()
 			entry.value = sk
-			entry.lastError = nil
 			entry.mutex.Unlock()
 		}
-		log.Errorf("failed to receive from channel: %v %v", sk, ok)
+		log.Errorf("failed to receive from channel")
 		close(stopWatching)
 	}()
 
