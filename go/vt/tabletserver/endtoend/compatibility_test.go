@@ -400,7 +400,7 @@ func TestTypeLimits(t *testing.T) {
 	}{{
 		query: "insert into vitess_ints(tiny) values('str')",
 		bv:    nil,
-		out:   "error: type mismatch",
+		out:   "error: strconv.ParseInt",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:str)",
 		bv:    map[string]interface{}{"str": "str"},

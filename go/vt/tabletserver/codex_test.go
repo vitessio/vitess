@@ -223,7 +223,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, sqltypes.MakeString([]byte("type_mismatch")))
 	_, _, err = resolvePKValues(&tableInfo, pkValues, nil)
-	testUtils.checkTabletError(t, err, ErrFail, "type mismatch")
+	testUtils.checkTabletError(t, err, ErrFail, "strconv.ParseInt")
 	// pkValues with different length
 	bindVariables = make(map[string]interface{})
 	bindVariables[key] = 1
@@ -324,16 +324,6 @@ func TestCodexBuildStreamComment(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("case 1 failed, got %v, want %v", got, want)
 	}
-}
-
-func TestCodexResolveValueWithIncompatibleValueType(t *testing.T) {
-	testUtils := newTestUtils()
-	tableInfo := createTableInfo("Table",
-		[]string{"pk1", "pk2", "col1"},
-		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
-		[]string{"pk1", "pk2"})
-	_, err := resolveValue(tableInfo.GetPKColumn(0), 0, nil)
-	testUtils.checkTabletError(t, err, ErrFail, "incompatible value type ")
 }
 
 func TestCodexValidateRow(t *testing.T) {

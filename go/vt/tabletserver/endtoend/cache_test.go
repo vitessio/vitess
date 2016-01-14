@@ -283,7 +283,7 @@ func TestCacheTypes(t *testing.T) {
 		out   string
 	}{{
 		query: "select * from vitess_cached2 where eid = 'str' and bid = 'str'",
-		out:   "error: type mismatch",
+		out:   "error: strconv.ParseInt",
 	}, {
 		query: "select * from vitess_cached2 where eid = :str and bid = :str",
 		bv:    map[string]interface{}{"str": "str"},
