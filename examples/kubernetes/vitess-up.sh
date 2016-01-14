@@ -25,7 +25,6 @@ VTGATE_COUNT=${VTGATE_COUNT:-0}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 CELLS=${CELLS:-'test'}
 KEYSPACE=${KEYSPACE:-'test_keyspace'}
-BACKUP_BUCKET=${BACKUP_BUCKET:-'my-backup-bucket'}
 TEST_MODE=${TEST_MODE:-'0'}
 
 cells=`echo $CELLS | tr ',' ' '`
@@ -104,9 +103,6 @@ echo "*  Rdonly per shard: $RDONLY_COUNT"
 echo "*  VTGate count: $vtgate_count"
 echo "*  Cells: $cells"
 echo "****************************"
-
-echo 'Generating config.sh'
-echo -e "\n\n$BACKUP_BUCKET" | ./configure.sh
 
 echo 'Running etcd-up.sh' && CELLS=$CELLS ./etcd-up.sh
 wait_for_running_tasks etcd-global 3
