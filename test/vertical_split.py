@@ -371,7 +371,6 @@ index by_msg (msg)
                         '--command_display_interval', '10ms',
                         'VerticalSplitClone',
                         '--tables', 'moving.*,view1',
-                        '--strategy=-populate_blp_checkpoint',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         'destination_keyspace/0'],

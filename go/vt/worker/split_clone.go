@@ -529,7 +529,9 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	}
 
 	// then create and populate the blp_checkpoint table
-	if scw.strategy.populateBlpCheckpoint {
+	if scw.strategy.skipPopulateBlpCheckpoint {
+		scw.wr.Logger().Infof("Skipping populating the blp_checkpoint table")
+	} else {
 		queries := make([]string, 0, 4)
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		flags := ""

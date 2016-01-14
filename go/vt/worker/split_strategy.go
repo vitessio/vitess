@@ -14,8 +14,8 @@ import (
 
 // splitStrategy is the configuration for a split clone.
 type splitStrategy struct {
-	// populateBlpCheckpoint will drive the population of the blp_checkpoint table
-	populateBlpCheckpoint bool
+	// skipPopulateBlpCheckpoint will skip the population of the blp_checkpoint table
+	skipPopulateBlpCheckpoint bool
 
 	// dontStartBinlogPlayer will delay starting the binlog replication
 	dontStartBinlogPlayer bool
@@ -35,7 +35,7 @@ func newSplitStrategy(logger logutil.Logger, argsStr string) (*splitStrategy, er
 		logger.Printf("Strategy flag has the following options:\n")
 		flagSet.PrintDefaults()
 	}
-	populateBlpCheckpoint := flagSet.Bool("populate_blp_checkpoint", false, "populates the blp checkpoint table")
+	skipPopulateBlpCheckpoint := flagSet.Bool("skip_populate_blp_checkpoint", false, "do not populate the blp checkpoint table")
 	dontStartBinlogPlayer := flagSet.Bool("dont_start_binlog_player", false, "do not start the binlog player after restore is complete")
 	skipSetSourceShards := flagSet.Bool("skip_set_source_shards", false, "do not set the SourceShar field on destination shards")
 	if err := flagSet.Parse(args); err != nil {
@@ -46,16 +46,16 @@ func newSplitStrategy(logger logutil.Logger, argsStr string) (*splitStrategy, er
 	}
 
 	return &splitStrategy{
-		populateBlpCheckpoint: *populateBlpCheckpoint,
-		dontStartBinlogPlayer: *dontStartBinlogPlayer,
-		skipSetSourceShards:   *skipSetSourceShards,
+		skipPopulateBlpCheckpoint: *skipPopulateBlpCheckpoint,
+		dontStartBinlogPlayer:     *dontStartBinlogPlayer,
+		skipSetSourceShards:       *skipSetSourceShards,
 	}, nil
 }
 
 func (strategy *splitStrategy) String() string {
 	var result []string
-	if strategy.populateBlpCheckpoint {
-		result = append(result, "-populate_blp_checkpoint")
+	if strategy.skipPopulateBlpCheckpoint {
+		result = append(result, "-skip_populate_blp_checkpoint")
 	}
 	if strategy.dontStartBinlogPlayer {
 		result = append(result, "-dont_start_binlog_player")

@@ -21,7 +21,7 @@ func (t *VerticalSplitCloneTask) Run(parameters map[string]string) ([]*automatio
 	//                        '--source_reader_count', '1',
 	//                        '--destination_pack_count', '1',
 	//                        '--destination_writer_count', '1',
-	args := []string{"VerticalSplitClone", "--strategy=-populate_blp_checkpoint"}
+	args := []string{"VerticalSplitClone"}
 	if tables := parameters["tables"]; tables != "" {
 		args = append(args, "--tables="+tables)
 	}

@@ -207,15 +207,14 @@ The following command starts the `vtworker`:
 
 ```
 vtworker -min_healthy_rdonly_endpoints 1 -cell=<cell name> \
-    SplitClone -strategy=-populate_blp_checkpoint \
-    <keyspace name>/<source shard name>
+    SplitClone <keyspace name>/<source shard name>
 ```
 
 For this example, run this command:
 
 ```
 vtworker -min_healthy_rdonly_endpoints 1 -cell=<cell name> \
-    SplitClone -strategy=-populate_blp_checkpoint user_keyspace/0
+    SplitClone user_keyspace/0
 ```
 
 The amount of time that the worker takes to complete will depend

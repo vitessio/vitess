@@ -20,8 +20,7 @@ func (t *SplitCloneTask) Run(parameters map[string]string) ([]*automationpb.Task
 	//                        '--source_reader_count', '1',
 	//                        '--destination_pack_count', '1',
 	//                        '--destination_writer_count', '1',
-	//                        '--strategy=-populate_blp_checkpoint',
-	args := []string{"SplitClone", "--strategy=-populate_blp_checkpoint"}
+	args := []string{"SplitClone"}
 	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
