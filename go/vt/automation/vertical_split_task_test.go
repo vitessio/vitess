@@ -33,7 +33,7 @@ func TestVerticalSplitTask(t *testing.T) {
 	vtctld.RegisterResult([]string{"CopySchemaShard", "--tables=table1,table2", "source_keyspace/0", "destination_keyspace/0"},
 		"",  // No output.
 		nil) // No error.
-	vtworker.RegisterResult([]string{"VerticalSplitClone", "--strategy=-populate_blp_checkpoint", "--tables=table1,table2", "destination_keyspace/0"}, "", nil)
+	vtworker.RegisterResult([]string{"VerticalSplitClone", "--tables=table1,table2", "destination_keyspace/0"}, "", nil)
 	vtctld.RegisterResult([]string{"WaitForFilteredReplication", "-max_delay", "30s", "destination_keyspace/0"}, "", nil)
 	vtworker.RegisterResult([]string{"VerticalSplitDiff", "destination_keyspace/0"}, "", nil)
 	vtctld.RegisterResult([]string{"MigrateServedFrom", "destination_keyspace/0", "rdonly"}, "", nil)

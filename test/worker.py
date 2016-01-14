@@ -430,7 +430,6 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
          '--source_reader_count', '1',
          '--destination_pack_count', '1',
          '--destination_writer_count', '1',
-         '--strategy=-populate_blp_checkpoint',
          'test_keyspace/0'],
         worker_rpc_port)
 

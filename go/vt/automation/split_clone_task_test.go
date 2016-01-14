@@ -17,7 +17,7 @@ func TestSplitCloneTask(t *testing.T) {
 	vtworkerclient.RegisterFactory("fake", fake.FakeVtworkerClientFactory)
 	defer vtworkerclient.UnregisterFactoryForTest("fake")
 	flag.Set("vtworker_client_protocol", "fake")
-	fake.RegisterResult([]string{"SplitClone", "--strategy=-populate_blp_checkpoint", "test_keyspace/0"},
+	fake.RegisterResult([]string{"SplitClone", "test_keyspace/0"},
 		"",  // No output.
 		nil) // No error.
 

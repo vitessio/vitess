@@ -110,7 +110,7 @@ single source to multiple destinations, routing each row based on its
 *keyspace_id*:
 
 ``` sh
-vitess/examples/kubernetes$ ./sharded-vtworker.sh SplitClone --strategy=-populate_blp_checkpoint test_keyspace/0
+vitess/examples/kubernetes$ ./sharded-vtworker.sh SplitClone test_keyspace/0
 ### example output:
 # Creating vtworker pod in cell test...
 # pods/vtworker

@@ -239,11 +239,7 @@ func VerticalDestinationsFactory(t *testing.T, insertCount int64) func() (dbconn
 	}
 }
 
-func TestVerticalSplitClonePopulateBlpCheckpoint(t *testing.T) {
-	testVerticalSplitClone(t, "-populate_blp_checkpoint")
-}
-
-func testVerticalSplitClone(t *testing.T, strategy string) {
+func TestVerticalSplitClone(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
@@ -296,7 +292,6 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	subFlags := flag.NewFlagSet("SplitClone", flag.ContinueOnError)
 	gwrk, err := commandVerticalSplitClone(wi, wi.wr, subFlags, []string{
 		"-tables", "moving.*,view1",
-		"-strategy", strategy,
 		"-source_reader_count", "10",
 		"-destination_pack_count", "4",
 		"-min_table_size_for_split", "1",

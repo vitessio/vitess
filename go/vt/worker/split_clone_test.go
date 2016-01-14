@@ -254,11 +254,7 @@ func DestinationsFactory(t *testing.T, insertCount int64) func() (dbconnpool.Poo
 	}
 }
 
-func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
-	testSplitClone(t, "-populate_blp_checkpoint")
-}
-
-func testSplitClone(t *testing.T, strategy string) {
+func TestSplitClone(t *testing.T) {
 	db := fakesqldb.Register()
 	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
@@ -306,7 +302,6 @@ func testSplitClone(t *testing.T, strategy string) {
 
 	subFlags := flag.NewFlagSet("SplitClone", flag.ContinueOnError)
 	gwrk, err := commandSplitClone(wi, wi.wr, subFlags, []string{
-		"-strategy", strategy,
 		"-source_reader_count", "10",
 		"-destination_pack_count", "4",
 		"-min_table_size_for_split", "1",

@@ -459,7 +459,9 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	}
 
 	// then create and populate the blp_checkpoint table
-	if vscw.strategy.populateBlpCheckpoint {
+	if vscw.strategy.skipPopulateBlpCheckpoint {
+		vscw.wr.Logger().Infof("Skipping populating the blp_checkpoint table")
+	} else {
 		// get the current position from the source
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet)
