@@ -18,7 +18,7 @@ fi
 
 # If you need to trigger a re-install of PHP dependencies,
 # increment this value.
-ver=2
+ver=3
 ver_file=$HOME/.phpenv/vendor/travis.ver
 if [[ -f $ver_file && "$(cat $ver_file)" == "$ver" ]]; then
   echo "Using cached php vendor dir version $ver"
