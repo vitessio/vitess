@@ -538,6 +538,9 @@ index by_msg (msg)
         'destination_keyspace',
         [], ['moving1', 'moving2'])
 
+    # check the binlog player is gone now
+    destination_master.wait_for_binlog_player_count(0)
+
     # check 'vtctl SetShardTabletControl' command works as expected:
     # clear the rdonly entry, re-add it, and then clear all entries.
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',
@@ -562,9 +565,6 @@ index by_msg (msg)
                      'master'], auto_log=True)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
     self.assertNotIn('tablet_controls', shard_json)
-
-    # check the binlog player is gone now
-    destination_master.wait_for_binlog_player_count(0)
 
     # check the stats are correct
     self._check_stats()
