@@ -1850,13 +1850,13 @@ Initializes a tablet in the topology.<br><br>Valid &lt;tablet type&gt; values ar
 
 #### Example
 
-<pre class="command-example">InitTablet [-force] [-parent] [-update] [-db-name-override=&lt;db name&gt;] [-hostname=&lt;hostname&gt;] [-mysql_port=&lt;port&gt;] [-port=&lt;port&gt;] [-grpc_port=&lt;port&gt;] [-keyspace=&lt;keyspace&gt;] [-shard=&lt;shard&gt;] [-parent_alias=&lt;parent alias&gt;] &lt;tablet alias&gt; &lt;tablet type&gt;</pre>
+<pre class="command-example">InitTablet [-force] [-parent] [-update] [-db_name_override=&lt;db name&gt;] [-hostname=&lt;hostname&gt;] [-mysql_port=&lt;port&gt;] [-port=&lt;port&gt;] [-grpc_port=&lt;port&gt;] [-keyspace=&lt;keyspace&gt;] [-shard=&lt;shard&gt;] [-parent_alias=&lt;parent alias&gt;] &lt;tablet alias&gt; &lt;tablet type&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| db-name-override | string | Overrides the name of the database that the vttablet uses |
+| db_name_override | string | Overrides the name of the database that the vttablet uses |
 | force | Boolean | Overwrites the node if the node already exists |
 | grpc_port | Int | The gRPC port for the vttablet process |
 | hostname | string | The server on which the tablet is running |
