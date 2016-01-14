@@ -379,7 +379,7 @@ def main(root_directory):
       elif get_commands:
         # This line precedes a command group's name, e.g. "Tablets" or "Shards."
         # Capture the group name on the next line.
-        if line.strip() == 'commandGroup{':
+        if line.strip() == '{':
           get_group_name = True
         # Capture the name of a command group.
         elif get_group_name:
@@ -449,8 +449,8 @@ def main(root_directory):
         # First line of a command. This contains the command name and the
         # function used to process the command. Line in code looks like:
         #   command{"ScrapTablet", commandScrapTablet,
-        elif re.search(r'^command{', line.strip()):
-          command_data = re.findall(r'command\s*\{\s*\"([^\"]+)\",\s*([^\,]+)\,',
+        elif re.search(r'^\{\s*\"[^\"]+\",\s*command[^\,]+\,', line.strip()):
+          command_data = re.findall(r'\{\s*\"([^\"]+)\",\s*([^\,]+)\,',
                                     line)
           if command_data:
             # Capture the command name and associate it with its function.
