@@ -534,9 +534,6 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_replica, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
-    self._check_client_conn_redirection(
-        'destination_keyspace',
-        [], ['moving1', 'moving2'])
 
     # check the binlog player is gone now
     destination_master.wait_for_binlog_player_count(0)
