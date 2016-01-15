@@ -27,7 +27,7 @@ for cell in $cells; do
   done
 
   echo "Creating vtgate service in cell $cell..."
-  cat vtgate-service.yaml | sed -e "$sed_script" | $KUBECTL create -f -
+  cat vtgate-service-template.yaml | sed -e "$sed_script" | $KUBECTL create -f -
 
   sed_script=""
   for var in replicas vtdataroot_volume cell; do

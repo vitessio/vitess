@@ -40,7 +40,9 @@ if [ $vtgate_count -eq 0 ]; then
   vtgate_count=$(($total_tablet_count/$num_cells/4>3?$total_tablet_count/$num_cells/4:3))
 fi
 
-# export for vttablet scripts
+VTCTLD_SERVICE_TYPE=`[[ $TEST_MODE -gt 0 ]] && echo 'LoadBalancer' || echo 'ClusterIP'`
+
+# export for other scripts
 export SHARDS=$SHARDS
 export TABLETS_PER_SHARD=$TABLETS_PER_SHARD
 export RDONLY_COUNT=$RDONLY_COUNT
@@ -48,6 +50,7 @@ export VTDATAROOT_VOLUME=$VTDATAROOT_VOLUME
 export VTGATE_TEMPLATE=$VTGATE_TEMPLATE
 export VTTABLET_TEMPLATE=$VTTABLET_TEMPLATE
 export VTGATE_REPLICAS=$vtgate_count
+export VTCTLD_SERVICE_TYPE=$VTCTLD_SERVICE_TYPE
 
 function update_spinner_value () {
   spinner='-\|/'
