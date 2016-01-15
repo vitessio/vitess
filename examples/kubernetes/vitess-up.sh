@@ -25,6 +25,7 @@ VTGATE_COUNT=${VTGATE_COUNT:-0}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 CELLS=${CELLS:-'test'}
 KEYSPACE=${KEYSPACE:-'test_keyspace'}
+TEST_MODE=${TEST_MODE:-'0'}
 
 cells=`echo $CELLS | tr ',' ' '`
 num_cells=`echo $cells | wc -w`
@@ -36,10 +37,12 @@ num_shards=`echo $SHARDS | tr "," " " | wc -w`
 total_tablet_count=$(($num_shards*$TABLETS_PER_SHARD*$num_cells))
 vtgate_count=$VTGATE_COUNT
 if [ $vtgate_count -eq 0 ]; then
-  vtgate_count=$(($total_tablet_count/4>3?$total_tablet_count/4:3))
+  vtgate_count=$(($total_tablet_count/$num_cells/4>3?$total_tablet_count/$num_cells/4:3))
 fi
 
-# export for vttablet scripts
+VTCTLD_SERVICE_TYPE=`[[ $TEST_MODE -gt 0 ]] && echo 'LoadBalancer' || echo 'ClusterIP'`
+
+# export for other scripts
 export SHARDS=$SHARDS
 export TABLETS_PER_SHARD=$TABLETS_PER_SHARD
 export RDONLY_COUNT=$RDONLY_COUNT
@@ -47,6 +50,7 @@ export VTDATAROOT_VOLUME=$VTDATAROOT_VOLUME
 export VTGATE_TEMPLATE=$VTGATE_TEMPLATE
 export VTTABLET_TEMPLATE=$VTTABLET_TEMPLATE
 export VTGATE_REPLICAS=$vtgate_count
+export VTCTLD_SERVICE_TYPE=$VTCTLD_SERVICE_TYPE
 
 function update_spinner_value () {
   spinner='-\|/'
@@ -112,9 +116,6 @@ done
 echo 'Running vtctld-up.sh' && ./vtctld-up.sh
 
 wait_for_running_tasks vtctld 1
-echo Creating firewall rule for vtctld...
-vtctld_port=30001
-gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtctld --allow tcp:$vtctld_port
 kvtctl="./kvtctl.sh"
 
 if [ $num_shards -gt 0 ]
@@ -127,7 +128,7 @@ fi
 echo 'Running vttablet-up.sh' && CELLS=$CELLS ./vttablet-up.sh
 echo 'Running vtgate-up.sh' && ./vtgate-up.sh
 wait_for_running_tasks vttablet $total_tablet_count
-wait_for_running_tasks vtgate $vtgate_count
+wait_for_running_tasks vtgate $(($vtgate_count*$num_cells))
 
 
 echo Waiting for tablets to be visible in the topology
@@ -179,12 +180,30 @@ echo -n Applying Schema...
 $kvtctl ApplySchema -sql "$(cat create_test_table.sql)" $KEYSPACE
 echo Done
 
-echo Creating firewall rule for vtgate
-vtgate_port=15001
-gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtgate --allow tcp:$vtgate_port
-vtgate_pool=`util/get_forwarded_pool.sh $GKE_CLUSTER_NAME $gke_region $vtgate_port`
-vtgate_ip=`gcloud compute forwarding-rules list | grep $vtgate_pool | awk '{print $3}'`
-vtgate_server="$vtgate_ip:$vtgate_port"
+if [ $TEST_MODE -gt 0 ]; then
+  echo Creating firewall rule for vtctld
+  vtctld_port=15000
+  gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtctld --allow tcp:$vtctld_port
+  vtctld_ip=''
+  until [ $vtctld_ip ]; do
+    vtctld_ip=`kubectl get -o template --template '{{if ge (len .status.loadBalancer) 1}}{{index (index .status.loadBalancer.ingress 0) "ip"}}{{end}}' service vtctld`
+    sleep 1
+  done
+  vtctld_server="$vtctld_ip:$vtctld_port"
+fi
+
+vtgate_servers=''
+for cell in $cells; do
+  echo Creating firewall rule for vtgate in cell $cell
+  vtgate_port=15001
+  gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtgate-$cell --allow tcp:$vtgate_port
+  vtgate_ip=''
+  until [ $vtgate_ip ]; do
+    vtgate_ip=`kubectl get -o template --template '{{if ge (len .status.loadBalancer) 1}}{{index (index .status.loadBalancer.ingress 0) "ip"}}{{end}}' service vtgate-$cell`
+    sleep 1
+  done
+  vtgate_servers+="vtgate-$cell: $vtgate_ip:$vtgate_port,"
+done
 
 if [ -n "$NEWRELIC_LICENSE_KEY" ]; then
   echo Setting up Newrelic monitoring
@@ -200,8 +219,12 @@ fi
 
 echo "****************************"
 echo "* Complete!"
-echo "* Access the vtctld web UI by performing the following steps:"
-echo "*   $ kubectl proxy --port=8001"
-echo "*   Visit http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/"
-echo "* vtgate: $vtgate_server"
+if [ $TEST_MODE -gt 0 ]; then
+  echo "* vtctld: $vtctld_server"
+else
+  echo "* Access the vtctld web UI by performing the following steps:"
+  echo "*   $ kubectl proxy --port=8001"
+  echo "*   Visit http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/"
+fi
+echo $vtgate_servers | awk -F',' '{for(i=1;i<NF;i++) print "* " $i}'
 echo "****************************"

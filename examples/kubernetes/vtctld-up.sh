@@ -7,8 +7,14 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-echo "Creating vtctld service..."
-$KUBECTL create -f vtctld-service.yaml
+service_type=${VTCTLD_SERVICE_TYPE:-'ClusterIP'}
+
+echo "Creating vtctld $service_type service..."
+sed_script=""
+for var in service_type; do
+  sed_script+="s,{{$var}},${!var},g;"
+done
+cat vtctld-service-template.yaml | sed -e "$sed_script" | $KUBECTL create -f -
 
 echo "Creating vtctld replicationcontroller..."
 # Expand template variables
