@@ -4,8 +4,8 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "a784e91e2f303c8c57bd97e23491cdb5",
-    "content-hash": "9da07ace233c8058c77f3e712be0f94d",
+    "hash": "fb96cb18b1701407c6256fbbfad8cc0b",
+    "content-hash": "94ad9afb70246d8d3944b2b0e0dcab5d",
     "packages": [
         {
             "name": "datto/protobuf-php",
@@ -17,7 +17,7 @@
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/stanley-cheung/Protobuf-PHP/zipball/c3831c8ef5053f7d9ff2a4f1d3d4082579f2de36",
+                "url": "https://api.github.com/repos/stanley-cheung/Protobuf-PHP/zipball/b0a40f3150e5cd5b002f1cb16c021f4a59e20d6d",
                 "reference": "c3831c8ef5053f7d9ff2a4f1d3d4082579f2de36",
                 "shasum": ""
             },
@@ -114,7 +114,7 @@
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/google/google-auth-library-php/zipball/b2d0e7bdcbe8ccdd0f83a7527ef23bcc202e331a",
+                "url": "https://api.github.com/repos/google/google-auth-library-php/zipball/eb4aaf0bad5b12ff273df618fcf281793f126c4a",
                 "reference": "b2d0e7bdcbe8ccdd0f83a7527ef23bcc202e331a",
                 "shasum": ""
             },
@@ -159,7 +159,7 @@
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/grpc/grpc/zipball/8a8a8760eb243fe758452a2e2bed6e2821b992f1",
+                "url": "https://api.github.com/repos/grpc/grpc/zipball/7593cff337629ca179302ddf6ce2cbedbbbcab73",
                 "reference": "8a8a8760eb243fe758452a2e2bed6e2821b992f1",
                 "shasum": ""
             },

@@ -9,11 +9,10 @@
  * Then run:
  * vitess/examples/local$ php client.php --server=localhost:15991
  */
-require_once ('../../php/src/VTGateConn.php');
-require_once ('../../php/src/VTGrpcClient.php');
+require_once (__DIR__ . '/../../php/vendor/autoload.php');
 
 $opts = getopt('', array(
-		'server:' 
+		'server:'
 ));
 
 $keyspace = 'test_keyspace';
@@ -21,7 +20,7 @@ $keyspace = 'test_keyspace';
 // An unsharded keyspace is the same as custom sharding (0, 1, 2, ...),
 // but with only a single shard (0).
 $shards = array(
-		'0' 
+		'0'
 );
 
 // Create a connection.
@@ -32,7 +31,7 @@ $conn = new VTGateConn(new VTGrpcClient($opts['server']));
 echo "Inserting into master...\n";
 $tx = $conn->begin($ctx);
 $tx->executeShards($ctx, 'INSERT INTO test_table (msg) VALUES (:msg)', $keyspace, $shards, array(
-		'msg' => 'V is for speed' 
+		'msg' => 'V is for speed'
 ));
 $tx->commit($ctx);
 
