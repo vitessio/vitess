@@ -174,7 +174,7 @@ class VTGateClient(object):
                keyspace_ids=None,
                keyranges=None,
                entity_keyspace_id_map=None, entity_column_name=None,
-               not_in_transaction=False, effective_caller_id=None):
+               not_in_transaction=False, effective_caller_id=None, **kwargs):
     """Executes the given sql.
 
     FIXME(alainjobart): should take the session in.
@@ -229,7 +229,7 @@ class VTGateClient(object):
   def _execute_batch(
       self, sql_list, bind_variables_list, tablet_type,
       keyspace_list=None, shards_list=None, keyspace_ids_list=None,
-      as_transaction=False, effective_caller_id=None):
+      as_transaction=False, effective_caller_id=None, **kwargs):
     """Executes a list of sql queries.
 
     These follow the same routing rules as _execute.
@@ -272,7 +272,7 @@ class VTGateClient(object):
 
   def _stream_execute(
       self, sql, bind_variables, tablet_type, keyspace=None, shards=None,
-      keyspace_ids=None, keyranges=None, effective_caller_id=None):
+      keyspace_ids=None, keyranges=None, effective_caller_id=None, **kwargs):
     """Executes the given sql, in streaming mode.
 
     FIXME(alainjobart): the return values are weird (historical reasons)
