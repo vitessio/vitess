@@ -64,16 +64,16 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     self.as_transaction = as_transaction
     self._clear_batch_state()
 
-  # pass kargs here in case higher level APIs need to push more data through
+  # pass kwargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
-  def execute(self, sql, bind_variables, **kargs):
+  def execute(self, sql, bind_variables, **kwargs):
     """Perform a query, return the number of rows affected."""
     self._clear_list_state()
     self._clear_batch_state()
     if self._handle_transaction_sql(sql):
       return
-    entity_keyspace_id_map = kargs.get('entity_keyspace_id_map')
-    entity_column_name = kargs.get('entity_column_name')
+    entity_keyspace_id_map = kwargs.pop('entity_keyspace_id_map', None)
+    entity_column_name = kwargs.pop('entity_column_name', None)
     write_query = bool(write_sql_pattern.match(sql))
     # NOTE: This check may also be done at higher layers but adding it
     # here for completion.
@@ -94,7 +94,8 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
             entity_keyspace_id_map=entity_keyspace_id_map,
             entity_column_name=entity_column_name,
             not_in_transaction=not self.is_writable(),
-            effective_caller_id=self.effective_caller_id))
+            effective_caller_id=self.effective_caller_id,
+            **kwargs))
     return self.rowcount
 
   def fetch_aggregate_function(self, func):
@@ -145,7 +146,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     super(VTGateCursor, self).close()
     self._clear_batch_state()
 
-  def executemany(self, sql, params_list):
+  def executemany(self, sql, params_list, **kwargs):
     """Execute multiple statements in one batch.
 
     This adds len(params_list) result_sets to self.result_sets.  Each
@@ -173,7 +174,8 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     self.result_sets = self.connection._execute_batch(  # pylint: disable=protected-access
         sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
         shards_list,
-        self.tablet_type, self.as_transaction, self.effective_caller_id)
+        self.tablet_type, self.as_transaction, self.effective_caller_id,
+        **kwargs)
     self.nextset()
 
   def nextset(self):
@@ -223,11 +225,10 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
   def is_writable(self):
     return self._writable
 
-  # pass kargs here in case higher level APIs need to push more data through
+  # pass kwargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
-  def execute(self, sql, bind_variables, **kargs):
+  def execute(self, sql, bind_variables, **kwargs):
     """Start a streaming query."""
-    _ = kargs
     if self._writable:
       raise dbexceptions.ProgrammingError('Streaming query cannot be writable')
     self._clear_stream_state()
@@ -239,7 +240,8 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
         keyspace_ids=self.keyspace_ids,
         keyranges=self.keyranges,
         not_in_transaction=not self.is_writable(),
-        effective_caller_id=self.effective_caller_id)
+        effective_caller_id=self.effective_caller_id,
+        **kwargs)
     return 0
 
 

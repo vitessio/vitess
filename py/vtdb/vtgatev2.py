@@ -249,7 +249,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self, sql, bind_variables, keyspace_name, tablet_type,
       keyspace_ids=None, keyranges=None,
       entity_keyspace_id_map=None, entity_column_name=None,
-      not_in_transaction=False, effective_caller_id=None):
+      not_in_transaction=False, effective_caller_id=None, **kwargs):
     """Execute query.
 
     Args:
@@ -341,7 +341,8 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
   def _execute_batch(
       self, sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
-      shards_list, tablet_type, as_transaction, effective_caller_id=None):
+      shards_list, tablet_type, as_transaction, effective_caller_id=None,
+      **kwargs):
     """Send multiple items in a batch.
 
     All lists must be the same length. This may make two calls if
@@ -447,7 +448,8 @@ class VTGateConnection(vtgate_client.VTGateClient):
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _stream_execute(
       self, sql, bind_variables, keyspace_name, tablet_type, keyspace_ids=None,
-      keyranges=None, not_in_transaction=False, effective_caller_id=None):
+      keyranges=None, not_in_transaction=False, effective_caller_id=None,
+      **kwargs):
     """Return a generator and the fields for the response.
 
     This method takes ownership of self.client, since multiple
