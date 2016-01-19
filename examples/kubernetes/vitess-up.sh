@@ -12,8 +12,7 @@
 # 7. Forward vtgate port
 
 # Customizable parameters
-GKE_ZONE=${GKE_ZONE:-'us-central1-b'}
-GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
+VITESS_NAME=${VITESS_NAME:-'vitess'}
 SHARDS=${SHARDS:-'-80,80-'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 RDONLY_COUNT=${RDONLY_COUNT:-0}
@@ -29,9 +28,6 @@ TEST_MODE=${TEST_MODE:-'0'}
 
 cells=`echo $CELLS | tr ',' ' '`
 num_cells=`echo $cells | wc -w`
-
-# Get region from zone (everything to last dash)
-gke_region=`echo $GKE_ZONE | sed "s/-[^-]*$//"`
 
 num_shards=`echo $SHARDS | tr "," " " | wc -w`
 total_tablet_count=$(($num_shards*$TABLETS_PER_SHARD*$num_cells))
@@ -51,6 +47,7 @@ export VTGATE_TEMPLATE=$VTGATE_TEMPLATE
 export VTTABLET_TEMPLATE=$VTTABLET_TEMPLATE
 export VTGATE_REPLICAS=$vtgate_count
 export VTCTLD_SERVICE_TYPE=$VTCTLD_SERVICE_TYPE
+export VITESS_NAME=$VITESS_NAME
 
 function update_spinner_value () {
   spinner='-\|/'
@@ -72,7 +69,7 @@ function wait_for_running_tasks () {
   while [ $counter -lt $MAX_TASK_WAIT_RETRIES ]; do
     # Get status column of pods with name starting with $task_name,
     # count how many are in state Running
-    num_running=`$KUBECTL get pods | grep ^$task_name | grep Running | wc -l`
+    num_running=`$KUBECTL get pods --namespace=$VITESS_NAME | grep ^$task_name | grep Running | wc -l`
 
     echo -en "\r$task_name: $num_running out of $num_tasks in state Running..."
     if [ $num_running -eq $num_tasks ]
@@ -106,6 +103,8 @@ echo "*  Rdonly per shard: $RDONLY_COUNT"
 echo "*  VTGate count: $vtgate_count"
 echo "*  Cells: $cells"
 echo "****************************"
+
+echo 'Running namespace-up.sh' && ./namespace-up.sh
 
 echo 'Running etcd-up.sh' && CELLS=$CELLS ./etcd-up.sh
 wait_for_running_tasks etcd-global 3
@@ -183,10 +182,10 @@ echo Done
 if [ $TEST_MODE -gt 0 ]; then
   echo Creating firewall rule for vtctld
   vtctld_port=15000
-  gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtctld --allow tcp:$vtctld_port
+  gcloud compute firewall-rules create ${VITESS_NAME}-vtctld --allow tcp:$vtctld_port
   vtctld_ip=''
   until [ $vtctld_ip ]; do
-    vtctld_ip=`kubectl get -o template --template '{{if ge (len .status.loadBalancer) 1}}{{index (index .status.loadBalancer.ingress 0) "ip"}}{{end}}' service vtctld`
+    vtctld_ip=`$KUBECTL get -o template --template '{{if ge (len .status.loadBalancer) 1}}{{index (index .status.loadBalancer.ingress 0) "ip"}}{{end}}' service vtctld --namespace=$VITESS_NAME`
     sleep 1
   done
   vtctld_server="$vtctld_ip:$vtctld_port"
@@ -196,10 +195,10 @@ vtgate_servers=''
 for cell in $cells; do
   echo Creating firewall rule for vtgate in cell $cell
   vtgate_port=15001
-  gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtgate-$cell --allow tcp:$vtgate_port
+  gcloud compute firewall-rules create ${VITESS_NAME}-vtgate-$cell --allow tcp:$vtgate_port
   vtgate_ip=''
   until [ $vtgate_ip ]; do
-    vtgate_ip=`kubectl get -o template --template '{{if ge (len .status.loadBalancer) 1}}{{index (index .status.loadBalancer.ingress 0) "ip"}}{{end}}' service vtgate-$cell`
+    vtgate_ip=`$KUBECTL get -o template --template '{{if ge (len .status.loadBalancer) 1}}{{index (index .status.loadBalancer.ingress 0) "ip"}}{{end}}' service vtgate-$cell --namespace=$VITESS_NAME`
     sleep 1
   done
   vtgate_servers+="vtgate-$cell: $vtgate_ip:$vtgate_port,"
@@ -208,7 +207,7 @@ done
 if [ -n "$NEWRELIC_LICENSE_KEY" ]; then
   echo Setting up Newrelic monitoring
   i=1
-  for nodename in `$KUBECTL get nodes --no-headers | awk '{print $1}'`; do
+  for nodename in `$KUBECTL get nodes --no-headers --namespace=$VITESS_NAME | awk '{print $1}'`; do
     gcloud compute copy-files newrelic.sh $nodename:~/
     gcloud compute copy-files newrelic_start_agent.sh $nodename:~/
     gcloud compute copy-files newrelic_start_mysql_plugin.sh $nodename:~/
