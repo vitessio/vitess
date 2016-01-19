@@ -441,6 +441,7 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 		if blm.state == BpmStateRunning {
 			bpc.Stop()
 		}
+		bpc.shardReplicationWatcher.Stop()
 		bpc.healthCheck.Close()
 		hadPlayers = true
 	}
