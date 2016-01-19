@@ -36,8 +36,10 @@ import (
 )
 
 var (
+	retryDelay = flag.Duration("binlog_player_retry_delay", 5*time.Second, "delay before retrying a failed binlog connection")
+
 	healthCheckTopologyRefresh = flag.Duration("binlog_player_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology when filtered replication is running")
-	retryDelay                 = flag.Duration("binlog_player_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck or a failed binlog connection")
+	healthcheckRetryDelay      = flag.Duration("binlog_player_healthcheck_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck")
 	healthCheckTimeout         = flag.Duration("binlog_player_healthcheck_timeout", time.Minute, "the health check timeout period")
 )
 
@@ -103,7 +105,7 @@ func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplay
 		dbName:            dbName,
 		sourceShard:       sourceShard,
 		binlogPlayerStats: binlogplayer.NewStats(),
-		healthCheck:       discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *retryDelay, *healthCheckTimeout),
+		healthCheck:       discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *healthcheckRetryDelay, *healthCheckTimeout),
 	}
 	blc.shardReplicationWatcher = discovery.NewShardReplicationWatcher(ts, blc.healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthCheckTopologyRefresh, 5)
 	return blc

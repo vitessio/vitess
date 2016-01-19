@@ -31,7 +31,7 @@ var (
 	WaitForHealthyEndPointsTimeout = flag.Duration("wait_for_healthy_rdonly_endpoints_timeout", 60*time.Second, "maximum time to wait if less than --min_healthy_rdonly_endpoints are available")
 
 	healthCheckTopologyRefresh = flag.Duration("worker_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology when filtered replication is running")
-	retryDelay                 = flag.Duration("worker_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck or a failed binlog connection")
+	healthcheckRetryDelay      = flag.Duration("worker_healthcheck_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck")
 	healthCheckTimeout         = flag.Duration("worker_healthcheck_timeout", time.Minute, "the health check timeout period")
 )
 
@@ -45,7 +45,7 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 
 	// create a discovery healthcheck, wait for it to have one rdonly
 	// endpoints at this point
-	healthCheck := discovery.NewHealthCheck(*remoteActionsTimeout, *retryDelay, *healthCheckTimeout)
+	healthCheck := discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
 	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, 5 /*topoReadConcurrency*/)
 	defer watcher.Stop()
 	defer healthCheck.Close()
