@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This is an example script that starts vtctld.
+# This is an example script that creates a namespace.
 
 set -e
 

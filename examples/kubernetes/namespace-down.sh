@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This is an example script that stops vtctld.
+# This is an example script that deletes a namespace.
 
 set -e
 
