@@ -18,6 +18,7 @@ UID_BASE=${UID_BASE:-100}
 VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 RDONLY_COUNT=${RDONLY_COUNT:-2}
+VITESS_NAME=${VITESS_NAME:-'default'}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
@@ -56,7 +57,7 @@ for shard in $(echo $SHARDS | tr "," " "); do
       done
 
       # Instantiate template and send to kubectl.
-      cat $VTTABLET_TEMPLATE | sed -e "$sed_script" | $KUBECTL create -f -
+      cat $VTTABLET_TEMPLATE | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
     done
     let cell_index=cell_index+100000000
   done
