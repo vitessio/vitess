@@ -4,7 +4,7 @@
 
 set -e
 
-VITESS_NAME=${VITESS_NAME='-default'}
+VITESS_NAME=${VITESS_NAME:-'default'}
 
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
