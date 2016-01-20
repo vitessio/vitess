@@ -291,6 +291,95 @@ func TestSetServingType(t *testing.T) {
 	checkTabletServerState(t, tsv, StateNotConnected)
 }
 
+func TestTabletServerSingleSchemaFailure(t *testing.T) {
+	db := setUpTabletServerTest()
+
+	want := &sqltypes.Result{
+		RowsAffected: 2,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeString([]byte("test_table")),
+				sqltypes.MakeString([]byte("USER TABLE")),
+				sqltypes.MakeString([]byte("1427325875")),
+				sqltypes.MakeString([]byte("")),
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("2")),
+				sqltypes.MakeString([]byte("3")),
+				sqltypes.MakeString([]byte("4")),
+			},
+			// Return a table that tabletserver can't access (the mock will reject all queries to it).
+			{
+				sqltypes.MakeString([]byte("rejected_table")),
+				sqltypes.MakeString([]byte("USER TABLE")),
+				sqltypes.MakeString([]byte("1427325876")),
+				sqltypes.MakeString([]byte("")),
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("2")),
+				sqltypes.MakeString([]byte("3")),
+				sqltypes.MakeString([]byte("4")),
+			},
+		},
+	}
+	db.AddQuery(baseShowTables, want)
+
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	defer tsv.StopService()
+	if err != nil {
+		t.Fatalf("TabletServer should successfully start even if a table's schema is unloadable, but got error: %v", err)
+	}
+	internalErrorCounts := tsv.qe.queryServiceStats.InternalErrors.Counts()
+	schemaErrors, ok := internalErrorCounts["Schema"]
+	if !ok || schemaErrors != 1 {
+		t.Errorf("InternalErrors.Schema should be 1; got InternalErrors as: %v", internalErrorCounts)
+	}
+}
+
+func TestTabletServerAllSchemaFailure(t *testing.T) {
+	db := setUpTabletServerTest()
+	// Return only tables that tabletserver can't access (the mock will reject all queries to them).
+	want := &sqltypes.Result{
+		RowsAffected: 2,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeString([]byte("rejected_table_1")),
+				sqltypes.MakeString([]byte("USER TABLE")),
+				sqltypes.MakeString([]byte("1427325875")),
+				sqltypes.MakeString([]byte("")),
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("2")),
+				sqltypes.MakeString([]byte("3")),
+				sqltypes.MakeString([]byte("4")),
+			},
+			{
+				sqltypes.MakeString([]byte("rejected_table_2")),
+				sqltypes.MakeString([]byte("USER TABLE")),
+				sqltypes.MakeString([]byte("1427325876")),
+				sqltypes.MakeString([]byte("")),
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("2")),
+				sqltypes.MakeString([]byte("3")),
+				sqltypes.MakeString([]byte("4")),
+			},
+		},
+	}
+	db.AddQuery(baseShowTables, want)
+
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	defer tsv.StopService()
+	// tabletsever shouldn't start if it can't access schema for any tables
+	testUtils.checkTabletError(t, err, ErrFail, "could not get schema for any tables")
+}
+
 func TestTabletServerCheckMysql(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
@@ -326,7 +415,7 @@ func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
 	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	if err != nil {
-		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
+		t.Fatalf("TabletServer.StartService should succeed, but got error: %v", err)
 	}
 	// make mysql conn fail
 	db.EnableConnFail()

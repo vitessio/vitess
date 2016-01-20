@@ -288,19 +288,20 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 			createTestTableBaseShowTable("test_table"),
 		},
 	})
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, true)
 	appParams := sqldb.ConnParams{Engine: db.Name}
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	schemaInfo.cachePool.Open()
 	defer schemaInfo.cachePool.Close()
-	defer handleAndVerifyTabletError(
-		t,
-		"CreateOrUpdateTable should fail because it could not tables from MySQL",
-		ErrFail,
-	)
 	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), false)
 	defer schemaInfo.Close()
+	// should silently fail: no errors returned, but increment a counter
 	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table")
+	internalErrorCounts := schemaInfo.queryServiceStats.InternalErrors.Counts()
+	schemaErrors, ok := internalErrorCounts["Schema"]
+	if !ok || schemaErrors != 1 {
+		t.Errorf("InternalErrors.Schema should be 1; got InternalErrors as: %v", internalErrorCounts)
+	}
 }
 
 func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {

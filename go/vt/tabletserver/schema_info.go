@@ -184,7 +184,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 		panic(PrefixTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: "))
 	}
 
-	tables := make(map[string]*TableInfo, len(tableData.Rows))
+	tables := make(map[string]*TableInfo, len(tableData.Rows)+1)
 	tables["dual"] = &TableInfo{Table: schema.NewTable("dual")}
 	for _, row := range tableData.Rows {
 		tableName := row[0].String()
@@ -196,10 +196,16 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 			si.cachePool,
 		)
 		if err != nil {
-			panic(PrefixTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err, fmt.Sprintf("Could not get load table %s: ", tableName)))
+			si.recordSchemaError(err, tableName)
+			// Skip over the table that had an error and move on to the next one
+			continue
 		}
 		tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
 		tables[tableName] = tableInfo
+	}
+	// Fail if we can't load the schema for any tables, but we know that some tables exist. This points to a configuration problem.
+	if len(tableData.Rows) != 0 && len(tables) == 1 { // len(tables) is always at least 1 because of the "dual" table
+		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not get schema for any tables"))
 	}
 	func() {
 		si.mu.Lock()
@@ -214,6 +220,14 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 	// Clear is not really needed. Doing it for good measure.
 	si.queries.Clear()
 	si.ticks.Start(si.Reload)
+}
+
+// Records an error that occurs when getting the schema for a table.
+func (si *SchemaInfo) recordSchemaError(err error, tableName string) {
+	terr := PrefixTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
+		fmt.Sprintf("Could not load schema for table %s: ", tableName))
+	log.Error(terr)
+	si.queryServiceStats.InternalErrors.Add("Schema", 1)
 }
 
 // override should be called with a lock on mu held.
@@ -350,7 +364,8 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 	defer conn.Recycle()
 	tableData, err := conn.Exec(ctx, fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName), 1, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, fmt.Sprintf("Error fetching table %s: ", tableName)))
+		si.recordSchemaError(err, tableName)
+		return
 	}
 	if len(tableData.Rows) != 1 {
 		// This can happen if DDLs race with each other.
