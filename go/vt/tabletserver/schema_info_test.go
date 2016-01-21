@@ -295,12 +295,14 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	defer schemaInfo.cachePool.Close()
 	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), false)
 	defer schemaInfo.Close()
+	originalSchemaErrorCount := schemaInfo.queryServiceStats.InternalErrors.Counts()["Schema"]
 	// should silently fail: no errors returned, but increment a counter
 	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table")
-	internalErrorCounts := schemaInfo.queryServiceStats.InternalErrors.Counts()
-	schemaErrors, ok := internalErrorCounts["Schema"]
-	if !ok || schemaErrors != 1 {
-		t.Errorf("InternalErrors.Schema should be 1; got InternalErrors as: %v", internalErrorCounts)
+
+	newSchemaErrorCount := schemaInfo.queryServiceStats.InternalErrors.Counts()["Schema"]
+	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
+	if schemaErrorDiff != 1 {
+		t.Errorf("InternalErrors.Schema counter should have increased by 1, instead got %v", schemaErrorDiff)
 	}
 }
 

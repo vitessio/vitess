@@ -327,15 +327,16 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	originalSchemaErrorCount := tsv.qe.queryServiceStats.InternalErrors.Counts()["Schema"]
 	err := tsv.StartService(target, dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	if err != nil {
 		t.Fatalf("TabletServer should successfully start even if a table's schema is unloadable, but got error: %v", err)
 	}
-	internalErrorCounts := tsv.qe.queryServiceStats.InternalErrors.Counts()
-	schemaErrors, ok := internalErrorCounts["Schema"]
-	if !ok || schemaErrors != 1 {
-		t.Errorf("InternalErrors.Schema should be 1; got InternalErrors as: %v", internalErrorCounts)
+	newSchemaErrorCount := tsv.qe.queryServiceStats.InternalErrors.Counts()["Schema"]
+	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
+	if schemaErrorDiff != 1 {
+		t.Errorf("InternalErrors.Schema counter should have increased by 1, instead got %v", schemaErrorDiff)
 	}
 }
 
