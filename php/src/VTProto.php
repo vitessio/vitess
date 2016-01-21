@@ -57,17 +57,17 @@ class VTProto {
 		$error = $response->getError();
 		if ($error) {
 			switch ($error->getCode()) {
-				case \vtrpc\ErrorCode::SUCCESS:
+				case Proto\Vtrpc\ErrorCode::SUCCESS:
 					break;
-				case \vtrpc\ErrorCode::BAD_INPUT:
+				case Proto\Vtrpc\ErrorCode::BAD_INPUT:
 					throw new VTBadInputError($error->getMessage());
-				case \vtrpc\ErrorCode::DEADLINE_EXCEEDED:
+				case Proto\Vtrpc\ErrorCode::DEADLINE_EXCEEDED:
 					throw new VTDeadlineExceededError($error->getMessage());
-				case \vtrpc\ErrorCode::INTEGRITY_ERROR:
+				case Proto\Vtrpc\ErrorCode::INTEGRITY_ERROR:
 					throw new VTIntegrityError($error->getMessage());
-				case \vtrpc\ErrorCode::TRANSIENT_ERROR:
+				case Proto\Vtrpc\ErrorCode::TRANSIENT_ERROR:
 					throw new VTTransientError($error->getMessage());
-				case \vtrpc\ErrorCode::UNAUTHENTICATED:
+				case Proto\Vtrpc\ErrorCode::UNAUTHENTICATED:
 					throw new VTUnauthenticatedError($error->getMessage());
 				default:
 					throw new VTException($error->getCode() . ': ' . $error->getMessage());
@@ -76,11 +76,11 @@ class VTProto {
 	}
 
 	public static function BoundQuery($query, $vars) {
-		$bound_query = new \query\BoundQuery();
+		$bound_query = new Proto\Query\BoundQuery();
 		$bound_query->setSql($query);
 		if ($vars) {
 			foreach ($vars as $key => $value) {
-				$entry = new \query\BoundQuery\BindVariablesEntry();
+				$entry = new Proto\Query\BoundQuery\BindVariablesEntry();
 				$entry->setKey($key);
 				$entry->setValue(self::BindVariable($value));
 				$bound_query->addBindVariables($entry);
@@ -90,18 +90,18 @@ class VTProto {
 	}
 
 	public static function BindVariable($value) {
-		$bind_var = new \query\BindVariable();
+		$bind_var = new Proto\Query\BindVariable();
 		
 		if (is_array($value)) {
 			if (count($value) == 0) {
 				throw new VTBadInputException('Empty list not allowed for list bind variable');
 			}
 			
-			$bind_var->setType(\query\Type::TUPLE);
+			$bind_var->setType(Proto\Query\Type::TUPLE);
 			
 			foreach ($value as $elem) {
 				list ( $type, $tval ) = self::TypedValue($elem);
-				$bind_var->addValues((new \query\Value())->setType($type)->setValue($tval));
+				$bind_var->addValues((new Proto\Query\Value())->setType($type)->setValue($tval));
 			}
 		} else {
 			list ( $type, $tval ) = self::TypedValue($value);
@@ -113,41 +113,41 @@ class VTProto {
 	}
 
 	/**
-	 * Returns a tuple of detected \query\Type and string value compatible with \query\Value.
+	 * Returns a tuple of detected Proto\Query\Type and string value compatible with Proto\Query\Value.
 	 */
 	protected static function TypedValue($value) {
 		if (is_null($value)) {
 			return array(
-					\query\Type::NULL_TYPE,
+					Proto\Query\Type::NULL_TYPE,
 					'' 
 			);
 		} else if (is_string($value)) {
 			return array(
-					\query\Type::VARBINARY,
+					Proto\Query\Type::VARBINARY,
 					$value 
 			);
 		} else if (is_int($value)) {
 			return array(
-					\query\Type::INT64,
+					Proto\Query\Type::INT64,
 					strval($value) 
 			);
 		} else if (is_float($value)) {
 			return array(
-					\query\Type::FLOAT64,
+					Proto\Query\Type::FLOAT64,
 					strval($value) 
 			);
 		} else if (is_object($value)) {
 			switch (get_class($value)) {
 				case 'VTUnsignedInt':
 					return array(
-							\query\Type::UINT64,
+							Proto\Query\Type::UINT64,
 							strval($value) 
 					);
 				default:
-					throw new VTBadInputException('Unknown \query\Value variable class: ' . get_class($value));
+					throw new VTBadInputException('Unknown Proto\Query\Value variable class: ' . get_class($value));
 			}
 		} else {
-			throw new VTBadInputException('Unknown type for \query\Value proto:' . gettype($value));
+			throw new VTBadInputException('Unknown type for Proto\Query\Value proto:' . gettype($value));
 		}
 	}
 
@@ -162,7 +162,7 @@ class VTProto {
 	}
 
 	public static function KeyRangeFromHex($start, $end) {
-		$value = new \topodata\KeyRange();
+		$value = new Proto\Topodata\KeyRange();
 		$value->setStart(self::KeyspaceIdFromHex($start));
 		$value->setEnd(self::KeyspaceIdFromHex($end));
 		return $value;
@@ -175,7 +175,7 @@ class VTProto {
 	}
 
 	public static function EntityId($keyspace_id, $value) {
-		$eid = new \vtgate\ExecuteEntityIdsRequest\EntityId();
+		$eid = new Proto\Vtgate\ExecuteEntityIdsRequest\EntityId();
 		$eid->setKeyspaceId($keyspace_id);
 		
 		list ( $type, $tval ) = self::TypedValue($value);
@@ -192,7 +192,7 @@ class VTProto {
 	}
 
 	public function BoundShardQuery($query, $bind_vars, $keyspace, $shards) {
-		$value = new \vtgate\BoundShardQuery();
+		$value = new Proto\Vtgate\BoundShardQuery();
 		$value->setQuery(self::BoundQuery($query, $bind_vars));
 		$value->setKeyspace($keyspace);
 		$value->setShards($shards);
@@ -200,7 +200,7 @@ class VTProto {
 	}
 
 	public function BoundKeyspaceIdQuery($query, $bind_vars, $keyspace, $keyspace_ids) {
-		$value = new \vtgate\BoundKeyspaceIdQuery();
+		$value = new Proto\Vtgate\BoundKeyspaceIdQuery();
 		$value->setQuery(self::BoundQuery($query, $bind_vars));
 		$value->setKeyspace($keyspace);
 		$value->setKeyspaceIds($keyspace_ids);

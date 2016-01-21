@@ -7,92 +7,92 @@ class VTGrpcClient implements VTRpcClient {
 	protected $stub;
 
 	public function __construct($addr, $opts = []) {
-		$this->stub = new \vtgateservice\VitessClient($addr, $opts);
+		$this->stub = new Proto\Vtgateservice\VitessClient($addr, $opts);
 	}
 
-	public function execute(VTContext $ctx, \vtgate\ExecuteRequest $request) {
+	public function execute(VTContext $ctx, Proto\Vtgate\ExecuteRequest $request) {
 		list ( $response, $status ) = $this->stub->Execute($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function executeShards(VTContext $ctx, \vtgate\ExecuteShardsRequest $request) {
+	public function executeShards(VTContext $ctx, Proto\Vtgate\ExecuteShardsRequest $request) {
 		list ( $response, $status ) = $this->stub->ExecuteShards($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function executeKeyspaceIds(VTContext $ctx, \vtgate\ExecuteKeyspaceIdsRequest $request) {
+	public function executeKeyspaceIds(VTContext $ctx, Proto\Vtgate\ExecuteKeyspaceIdsRequest $request) {
 		list ( $response, $status ) = $this->stub->ExecuteKeyspaceIds($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function executeKeyRanges(VTContext $ctx, \vtgate\ExecuteKeyRangesRequest $request) {
+	public function executeKeyRanges(VTContext $ctx, Proto\Vtgate\ExecuteKeyRangesRequest $request) {
 		list ( $response, $status ) = $this->stub->ExecuteKeyRanges($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function executeEntityIds(VTContext $ctx, \vtgate\ExecuteEntityIdsRequest $request) {
+	public function executeEntityIds(VTContext $ctx, Proto\Vtgate\ExecuteEntityIdsRequest $request) {
 		list ( $response, $status ) = $this->stub->ExecuteEntityIds($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function executeBatchShards(VTContext $ctx, \vtgate\ExecuteBatchShardsRequest $request) {
+	public function executeBatchShards(VTContext $ctx, Proto\Vtgate\ExecuteBatchShardsRequest $request) {
 		list ( $response, $status ) = $this->stub->ExecuteBatchShards($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function executeBatchKeyspaceIds(VTContext $ctx, \vtgate\ExecuteBatchKeyspaceIdsRequest $request) {
+	public function executeBatchKeyspaceIds(VTContext $ctx, Proto\Vtgate\ExecuteBatchKeyspaceIdsRequest $request) {
 		list ( $response, $status ) = $this->stub->ExecuteBatchKeyspaceIds($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function streamExecute(VTContext $ctx, \vtgate\StreamExecuteRequest $request) {
+	public function streamExecute(VTContext $ctx, Proto\Vtgate\StreamExecuteRequest $request) {
 		return new VTGrpcStreamResponse($this->stub->StreamExecute($request));
 	}
 
-	public function streamExecuteShards(VTContext $ctx, \vtgate\StreamExecuteShardsRequest $request) {
+	public function streamExecuteShards(VTContext $ctx, Proto\Vtgate\StreamExecuteShardsRequest $request) {
 		return new VTGrpcStreamResponse($this->stub->StreamExecuteShards($request));
 	}
 
-	public function streamExecuteKeyspaceIds(VTContext $ctx, \vtgate\StreamExecuteKeyspaceIdsRequest $request) {
+	public function streamExecuteKeyspaceIds(VTContext $ctx, Proto\Vtgate\StreamExecuteKeyspaceIdsRequest $request) {
 		return new VTGrpcStreamResponse($this->stub->StreamExecuteKeyspaceIds($request));
 	}
 
-	public function streamExecuteKeyRanges(VTContext $ctx, \vtgate\StreamExecuteKeyRangesRequest $request) {
+	public function streamExecuteKeyRanges(VTContext $ctx, Proto\Vtgate\StreamExecuteKeyRangesRequest $request) {
 		return new VTGrpcStreamResponse($this->stub->StreamExecuteKeyRanges($request));
 	}
 
-	public function begin(VTContext $ctx, \vtgate\BeginRequest $request) {
+	public function begin(VTContext $ctx, Proto\Vtgate\BeginRequest $request) {
 		list ( $response, $status ) = $this->stub->Begin($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function commit(VTContext $ctx, \vtgate\CommitRequest $request) {
+	public function commit(VTContext $ctx, Proto\Vtgate\CommitRequest $request) {
 		list ( $response, $status ) = $this->stub->Commit($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function rollback(VTContext $ctx, \vtgate\RollbackRequest $request) {
+	public function rollback(VTContext $ctx, Proto\Vtgate\RollbackRequest $request) {
 		list ( $response, $status ) = $this->stub->Rollback($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function getSrvKeyspace(VTContext $ctx, \vtgate\GetSrvKeyspaceRequest $request) {
+	public function getSrvKeyspace(VTContext $ctx, Proto\Vtgate\GetSrvKeyspaceRequest $request) {
 		list ( $response, $status ) = $this->stub->GetSrvKeyspace($request)->wait();
 		self::checkError($status);
 		return $response;
 	}
 
-	public function splitQuery(VTContext $ctx, \vtgate\SplitQueryRequest $request) {
+	public function splitQuery(VTContext $ctx, Proto\Vtgate\SplitQueryRequest $request) {
 		list ( $response, $status ) = $this->stub->SplitQuery($request)->wait();
 		self::checkError($status);
 		return $response;

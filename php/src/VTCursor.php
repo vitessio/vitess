@@ -7,7 +7,7 @@ class VTCursor {
 	private $pos = - 1;
 	private $rows;
 
-	public function __construct(\query\QueryResult $query_result) {
+	public function __construct(Proto\Query\QueryResult $query_result) {
 		$this->queryResult = $query_result;
 		if ($query_result->hasRows()) {
 			$this->rows = $query_result->getRowsList();
