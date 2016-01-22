@@ -56,24 +56,8 @@ else
   touch $zk_dist/.build_finished
 fi
 
-# install protoc and proto python libraries
-protobuf_dist=$VTROOT/dist/protobuf
-if [ $SKIP_ROOT_INSTALLS == "True" ]; then
-  echo "skipping protobuf build, as root version was already installed."
-elif [ -f $protobuf_dist/.build_finished ]; then
-  echo "skipping protobuf build. remove $protobuf_dist to force rebuild."
-else
-  rm -rf $protobuf_dist
-  mkdir -p $protobuf_dist/lib/python2.7/site-packages
-  # The directory may not have existed yet, so it may not have been
-  # picked up by dev.env yet, but the install needs it to exist first,
-  # and be in PYTHONPATH.
-  export PYTHONPATH=$(prepend_path $PYTHONPATH $protobuf_dist/lib/python2.7/site-packages)
-  ./travis/install_protobuf.sh $protobuf_dist || fail "protobuf build failed"
-  touch $protobuf_dist/.build_finished
-fi
-
-# install gRPC C++ base, so we can install the python adapters
+# install gRPC C++ base, so we can install the python adapters.
+# this also installs protobufs
 grpc_dist=$VTROOT/dist/grpc
 if [ $SKIP_ROOT_INSTALLS == "True" ]; then
   echo "skipping grpc build, as root version was already installed."
@@ -81,7 +65,14 @@ elif [ -f $grpc_dist/.build_finished ]; then
   echo "skipping gRPC build. remove $grpc_dist to force rebuild."
 else
   rm -rf $grpc_dist
-  mkdir -p $grpc_dist
+  mkdir -p $grpc_dist/usr/local/bin
+  mkdir -p $grpc_dist/usr/local/lib/python2.7/dist-packages
+  # The directory may not have existed yet, so it may not have been
+  # picked up by dev.env yet, but the install needs it to be in
+  # PYTHONPATH.
+  export PYTHONPATH=$(prepend_path $PYTHONPATH $grpc_dist/usr/local/lib/python2.7/dist-packages)
+  export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
+  export LD_LIBRARY_PATH=$(prepend_path $LD_LIBRARY_PATH $grpc_dist/usr/local/lib)
   ./travis/install_grpc.sh $grpc_dist || fail "gRPC build failed"
   touch $grpc_dist/.build_finished
 fi

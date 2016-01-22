@@ -11,19 +11,55 @@ if [ "$grpc_dist" != "" ]; then
   cd $grpc_dist
 fi
 
+# for python, we'll need the latest virtualenv and tox
+if [ "$grpc_dist" != "" ]; then
+  pip install --upgrade --root $grpc_dist virtualenv tox
+else
+  pip install --upgrade virtualenv tox
+fi
+
+# clone the repository, setup the submodules
 git clone https://github.com/grpc/grpc.git
 cd grpc
-git checkout 4831d02cc2341ec2233ff9d9ef66fb9a86138fb7 # Beta Release 0.11.1
+git checkout release-0_12_0
 git submodule update --init
+
+# build everything
 make
+
+# install protobuf side (it was already built by the 'make' earlier)
+cd third_party/protobuf
 if [ "$grpc_dist" != "" ]; then
-  make install prefix=$grpc_dist
+  make install prefix=$grpc_dist/usr/local
 else
   make install
 fi
-CONFIG=opt ./tools/run_tests/build_python.sh
+
+# build and install python protobuf side
+cd python
 if [ "$grpc_dist" != "" ]; then
-  CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/grpcio -t $grpc_dist/lib/python2.7/site-packages
+  python setup.py build --cpp_implementation
+  python setup.py install --cpp_implementation --root=$grpc_dist
+else
+  python setup.py build --cpp_implementation
+  python setup.py install --cpp_implementation
+fi
+
+# now install grpc itself
+cd ../../..
+if [ "$grpc_dist" != "" ]; then
+  make install prefix=$grpc_dist/usr/local
+else
+  make install
+fi
+
+# and now build and install gRPC python libraries
+# Note: running this twice as the first run exists
+# with 'build_data' not found error. Seems the python
+# libraries still work though.
+CONFIG=opt ./tools/run_tests/build_python.sh || CONFIG=opt ./tools/run_tests/build_python.sh
+if [ "$grpc_dist" != "" ]; then
+  CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/grpcio --root $grpc_dist
 else
   pip install src/python/grpcio
 fi
