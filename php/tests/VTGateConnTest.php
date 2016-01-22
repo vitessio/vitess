@@ -1,29 +1,29 @@
 <?php
-require_once (dirname(__FILE__) . '/VTTestUtils.php');
-require_once (dirname(__FILE__) . '/../src/VTProto.php');
-require_once (dirname(__FILE__) . '/../src/VTGateConn.php');
-require_once (dirname(__FILE__) . '/../src/VTGrpcClient.php');
+namespace Vitess;
 
-class VTGateConnTest extends PHPUnit_Framework_TestCase {
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/TestUtils.php';
+
+class VTGateConnTest extends \PHPUnit_Framework_TestCase {
 	private static $proc;
 	private static $client;
 	private static $ECHO_QUERY = 'echo://test query';
 	private static $ERROR_PREFIX = 'error://';
 	private static $PARTIAL_ERROR_PREFIX = 'partialerror://';
 	private static $EXECUTE_ERRORS = array(
-			'bad input' => 'VTBadInputError',
-			'deadline exceeded' => 'VTDeadlineExceededError',
-			'integrity error' => 'VTIntegrityError',
-			'transient error' => 'VTTransientError',
-			'unauthenticated' => 'VTUnauthenticatedError',
-			'unknown error' => 'VTException' 
+			'bad input' => 'Vitess\Error\BadInput',
+			'deadline exceeded' => 'Vitess\Error\DeadlineExceeded',
+			'integrity error' => 'Vitess\Error\Integrity',
+			'transient error' => 'Vitess\Error\Transient',
+			'unauthenticated' => 'Vitess\Error\Unauthenticated',
+			'unknown error' => 'Vitess\Exception' 
 	);
 	private static $BIND_VARS; // initialized in setUpBeforeClass()
 	private static $BIND_VARS_ECHO = 'map[bytes:[104 101 108 108 111] float:1.5 int:123 uint_from_int:18446744073709551493 uint_from_string:456]'; // 18446744073709551493 = uint64(-123)
 	private static $BIND_VARS_ECHO_P3 = 'map[bytes:type:VARBINARY value:"hello"  float:type:FLOAT64 value:"1.5"  int:type:INT64 value:"123"  uint_from_int:type:UINT64 value:"18446744073709551493"  uint_from_string:type:UINT64 value:"456" ]'; // 18446744073709551493 = uint64(-123)
 	private static $CALLER_ID; // initialized in setUpBeforeClass()
 	private static $CALLER_ID_ECHO = 'principal:"test_principal" component:"test_component" subcomponent:"test_subcomponent" ';
-	private static $TABLET_TYPE = \topodata\TabletType::REPLICA;
+	private static $TABLET_TYPE = Proto\Topodata\TabletType::REPLICA;
 	private static $TABLET_TYPE_ECHO = 'REPLICA';
 	private static $KEYSPACE = 'test_keyspace';
 	private static $SHARDS = array(
@@ -63,11 +63,11 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		self::$proc = $proc;
 		
 		// Wait for connection to be accepted.
-		$ctx = VTContext::getDefault()->withDeadlineAfter(5.0);
+		$ctx = Context::getDefault()->withDeadlineAfter(5.0);
 		$level = error_reporting(error_reporting() & ~ E_WARNING);
 		while (! $ctx->isCancelled()) {
 			try {
-				$client = new VTGrpcClient("$addr:$port");
+				$client = new Grpc\Client("$addr:$port");
 			} catch (Exception $e) {
 				usleep(100000);
 				continue;
@@ -81,35 +81,35 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		self::$BIND_VARS = array(
 				'bytes' => 'hello',
 				'int' => 123,
-				'uint_from_int' => new VTUnsignedInt(- 123),
-				'uint_from_string' => new VTUnsignedInt('456'),
+				'uint_from_int' => new UnsignedInt(- 123),
+				'uint_from_string' => new UnsignedInt('456'),
 				'float' => 1.5 
 		);
-		self::$CALLER_ID = new \vtrpc\CallerID();
+		self::$CALLER_ID = new Proto\Vtrpc\CallerID();
 		self::$CALLER_ID->setPrincipal('test_principal');
 		self::$CALLER_ID->setComponent('test_component');
 		self::$CALLER_ID->setSubcomponent('test_subcomponent');
 		self::$KEYSPACE_IDS = array(
-				VTProto::KeyspaceIdFromHex('8000000000000000'),
-				VTProto::KeyspaceIdFromHex('ff000000000000ef') 
+				ProtoUtils::KeyspaceIdFromHex('8000000000000000'),
+				ProtoUtils::KeyspaceIdFromHex('ff000000000000ef') 
 		);
 		self::$KEY_RANGES = array(
-				VTProto::KeyRangeFromHex('', '8000000000000000'),
-				VTProto::KeyRangeFromHex('8000000000000000', '') 
+				ProtoUtils::KeyRangeFromHex('', '8000000000000000'),
+				ProtoUtils::KeyRangeFromHex('8000000000000000', '') 
 		);
 		self::$ENTITY_KEYSPACE_IDS = array(
-				VTProto::KeyspaceIdFromHex('1234567800000002') => 'hello',
-				VTProto::KeyspaceIdFromHex('1234567800000000') => 123,
-				VTProto::KeyspaceIdFromHex('1234567800000001') => new VTUnsignedInt(456),
-				VTProto::KeyspaceIdFromHex('1234567800000002') => 1.5 
+				ProtoUtils::KeyspaceIdFromHex('1234567800000002') => 'hello',
+				ProtoUtils::KeyspaceIdFromHex('1234567800000000') => 123,
+				ProtoUtils::KeyspaceIdFromHex('1234567800000001') => new UnsignedInt(456),
+				ProtoUtils::KeyspaceIdFromHex('1234567800000002') => 1.5 
 		);
 	}
 
 	public static function tearDownAfterClass() {
 		if (self::$client) {
 			try {
-				$ctx = VTContext::getDefault()->withDeadlineAfter(5.0);
-				$conn = new VTGateconn(self::$client);
+				$ctx = Context::getDefault()->withDeadlineAfter(5.0);
+				$conn = new VTGateConn(self::$client);
 				$conn->execute($ctx, 'quit://', array(), 0);
 				self::$client->close();
 			} catch (Exception $e) {
@@ -123,8 +123,8 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 	private $conn;
 
 	public function setUp() {
-		$this->ctx = VTContext::getDefault()->withDeadlineAfter(5.0)->withCallerId(self::$CALLER_ID);
-		$this->conn = new VTGateconn(self::$client);
+		$this->ctx = Context::getDefault()->withDeadlineAfter(5.0)->withCallerId(self::$CALLER_ID);
+		$this->conn = new VTGateConn(self::$client);
 	}
 
 	private static function getEcho($result) {
@@ -185,7 +185,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 		
 		$results = $conn->executeBatchShards($ctx, array(
-				VTProto::BoundShardQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
+				ProtoUtils::BoundShardQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
 		), self::$TABLET_TYPE, TRUE);
 		$echo = self::getEcho($results[0]);
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
@@ -197,7 +197,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals('true', $echo['asTransaction']);
 		
 		$results = $conn->executeBatchKeyspaceIds($ctx, array(
-				VTProto::BoundKeyspaceIdQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS) 
+				ProtoUtils::BoundKeyspaceIdQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS) 
 		), self::$TABLET_TYPE, TRUE);
 		$echo = self::getEcho($results[0]);
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
@@ -303,7 +303,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$tx = $conn->begin($ctx);
 		
 		$results = $tx->executeBatchShards($ctx, array(
-				VTProto::BoundShardQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
+				ProtoUtils::BoundShardQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
 		), self::$TABLET_TYPE, TRUE);
 		$echo = self::getEcho($results[0]);
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
@@ -316,7 +316,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals('true', $echo['asTransaction']);
 		
 		$results = $tx->executeBatchKeyspaceIds($ctx, array(
-				VTProto::BoundKeyspaceIdQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS) 
+				ProtoUtils::BoundKeyspaceIdQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS) 
 		), self::$TABLET_TYPE, TRUE);
 		$echo = self::getEcho($results[0]);
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
@@ -339,8 +339,8 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 				'bytes' => 'hello',
 				'float' => 1.5,
 				'int' => 123,
-				'uint_from_int' => new VTUnsignedInt(345),
-				'uint_from_string' => new VTUnsignedInt('678') 
+				'uint_from_int' => new UnsignedInt(345),
+				'uint_from_string' => new UnsignedInt('678') 
 		);
 		
 		$splits = $conn->splitQuery($ctx, self::$KEYSPACE, self::$ECHO_QUERY, $input_bind_vars, 'split_column', 123);
@@ -358,7 +358,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		}
 		// Then check that all the expected values exist and are correct.
 		foreach ($input_bind_vars as $name => $value) {
-			$this->assertEquals(VTProto::BindVariable($value), $actual_bind_vars[$name]);
+			$this->assertEquals(ProtoUtils::BindVariable($value), $actual_bind_vars[$name]);
 		}
 	}
 
@@ -366,18 +366,18 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$ctx = $this->ctx;
 		$conn = $this->conn;
 		
-		$expected = new \topodata\SrvKeyspace();
-		$partition = new \topodata\SrvKeyspace\KeyspacePartition();
-		$partition->setServedType(\topodata\TabletType::REPLICA);
-		$shard_ref = new \topodata\ShardReference();
+		$expected = new Proto\Topodata\SrvKeyspace();
+		$partition = new Proto\Topodata\SrvKeyspace\KeyspacePartition();
+		$partition->setServedType(Proto\Topodata\TabletType::REPLICA);
+		$shard_ref = new Proto\Topodata\ShardReference();
 		$shard_ref->setName("shard0");
-		$shard_ref->setKeyRange(VTProto::KeyRangeFromHex('4000000000000000', '8000000000000000'));
+		$shard_ref->setKeyRange(ProtoUtils::KeyRangeFromHex('4000000000000000', '8000000000000000'));
 		$partition->addShardReferences($shard_ref);
 		$expected->addPartitions($partition);
 		$expected->setShardingColumnName('sharding_column_name');
-		$expected->setShardingColumnType(\topodata\KeyspaceIdType::UINT64);
-		$served_from = new \topodata\SrvKeyspace\ServedFrom();
-		$served_from->setTabletType(\topodata\TabletType::MASTER);
+		$expected->setShardingColumnType(Proto\Topodata\KeyspaceIdType::UINT64);
+		$served_from = new Proto\Topodata\SrvKeyspace\ServedFrom();
+		$served_from->setTabletType(Proto\Topodata\TabletType::MASTER);
 		$served_from->setKeyspace('other_keyspace');
 		$expected->addServedFrom($served_from);
 		$expected->setSplitShardCount(128);
@@ -445,7 +445,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 				$tx->rollback($this->ctx);
 				$this->fail("no exception thrown for rollback() after closed transaction");
 			} catch (Exception $e) {
-				$this->assertEquals('VTException', get_class($e), $e->getMessage());
+				$this->assertEquals('Vitess\Exception', get_class($e), $e->getMessage());
 				$this->assertEquals(TRUE, strpos($e->getMessage(), 'not in transaction') !== FALSE);
 			}
 		}
@@ -478,13 +478,13 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		
 		$this->checkExecuteErrors(function ($ctx, $conn, $query) {
 			$conn->executeBatchShards($ctx, array(
-					VTProto::BoundShardQuery($query, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
+					ProtoUtils::BoundShardQuery($query, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
 			), self::$TABLET_TYPE, TRUE);
 		});
 		
 		$this->checkExecuteErrors(function ($ctx, $conn, $query) {
 			$conn->executeBatchKeyspaceIds($ctx, array(
-					VTProto::BoundKeyspaceIdQuery($query, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS) 
+					ProtoUtils::BoundKeyspaceIdQuery($query, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS) 
 			), self::$TABLET_TYPE, TRUE);
 		});
 	}
@@ -512,13 +512,13 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		
 		$this->checkTransactionExecuteErrors(function ($ctx, $tx, $query) {
 			$tx->executeBatchShards($ctx, array(
-					VTProto::BoundShardQuery($query, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
+					ProtoUtils::BoundShardQuery($query, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
 			), self::$TABLET_TYPE, TRUE);
 		});
 		
 		$this->checkTransactionExecuteErrors(function ($ctx, $tx, $query) {
 			$tx->executeBatchKeyspaceIds($ctx, array(
-					VTProto::BoundKeyspaceIdQuery($query, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS) 
+					ProtoUtils::BoundKeyspaceIdQuery($query, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS) 
 			), self::$TABLET_TYPE, TRUE);
 		});
 	}

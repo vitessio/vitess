@@ -1,8 +1,5 @@
 <?php
-require_once (dirname(__FILE__) . '/VTProto.php');
-require_once (dirname(__FILE__) . '/VTContext.php');
-require_once (dirname(__FILE__) . '/VTCursor.php');
-require_once (dirname(__FILE__) . '/VTGateTx.php');
+namespace Vitess;
 
 class VTGateConn {
 	protected $client;
@@ -11,21 +8,21 @@ class VTGateConn {
 		$this->client = $client;
 	}
 
-	public function execute(VTContext $ctx, $query, array $bind_vars, $tablet_type) {
+	public function execute(Context $ctx, $query, array $bind_vars, $tablet_type) {
 		$request = new Proto\Vtgate\ExecuteRequest();
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		if ($ctx->getCallerId()) {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$response = $this->client->execute($ctx, $request);
-		VTProto::checkError($response);
-		return new VTCursor($response->getResult());
+		ProtoUtils::checkError($response);
+		return new Cursor($response->getResult());
 	}
 
-	public function executeShards(VTContext $ctx, $query, $keyspace, array $shards, array $bind_vars, $tablet_type) {
+	public function executeShards(Context $ctx, $query, $keyspace, array $shards, array $bind_vars, $tablet_type) {
 		$request = new Proto\Vtgate\ExecuteShardsRequest();
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		$request->setKeyspace($keyspace);
 		$request->setShards($shards);
@@ -33,13 +30,13 @@ class VTGateConn {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$response = $this->client->executeShards($ctx, $request);
-		VTProto::checkError($response);
-		return new VTCursor($response->getResult());
+		ProtoUtils::checkError($response);
+		return new Cursor($response->getResult());
 	}
 
-	public function executeKeyspaceIds(VTContext $ctx, $query, $keyspace, array $keyspace_ids, array $bind_vars, $tablet_type) {
+	public function executeKeyspaceIds(Context $ctx, $query, $keyspace, array $keyspace_ids, array $bind_vars, $tablet_type) {
 		$request = new Proto\Vtgate\ExecuteKeyspaceIdsRequest();
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		$request->setKeyspace($keyspace);
 		$request->setKeyspaceIds($keyspace_ids);
@@ -47,87 +44,87 @@ class VTGateConn {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$response = $this->client->executeKeyspaceIds($ctx, $request);
-		VTProto::checkError($response);
-		return new VTCursor($response->getResult());
+		ProtoUtils::checkError($response);
+		return new Cursor($response->getResult());
 	}
 
-	public function executeKeyRanges(VTContext $ctx, $query, $keyspace, array $key_ranges, array $bind_vars, $tablet_type) {
+	public function executeKeyRanges(Context $ctx, $query, $keyspace, array $key_ranges, array $bind_vars, $tablet_type) {
 		$request = new Proto\Vtgate\ExecuteKeyRangesRequest();
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		$request->setKeyspace($keyspace);
-		VTProto::addKeyRanges($request, $key_ranges);
+		ProtoUtils::addKeyRanges($request, $key_ranges);
 		if ($ctx->getCallerId()) {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$response = $this->client->executeKeyRanges($ctx, $request);
-		VTProto::checkError($response);
-		return new VTCursor($response->getResult());
+		ProtoUtils::checkError($response);
+		return new Cursor($response->getResult());
 	}
 
-	public function executeEntityIds(VTContext $ctx, $query, $keyspace, $entity_column_name, array $entity_keyspace_ids, array $bind_vars, $tablet_type) {
+	public function executeEntityIds(Context $ctx, $query, $keyspace, $entity_column_name, array $entity_keyspace_ids, array $bind_vars, $tablet_type) {
 		$request = new Proto\Vtgate\ExecuteEntityIdsRequest();
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		$request->setKeyspace($keyspace);
 		$request->setEntityColumnName($entity_column_name);
-		VTProto::addEntityKeyspaceIds($request, $entity_keyspace_ids);
+		ProtoUtils::addEntityKeyspaceIds($request, $entity_keyspace_ids);
 		if ($ctx->getCallerId()) {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$response = $this->client->executeEntityIds($ctx, $request);
-		VTProto::checkError($response);
-		return new VTCursor($response->getResult());
+		ProtoUtils::checkError($response);
+		return new Cursor($response->getResult());
 	}
 
-	public function executeBatchShards(VTContext $ctx, array $bound_shard_queries, $tablet_type, $as_transaction) {
+	public function executeBatchShards(Context $ctx, array $bound_shard_queries, $tablet_type, $as_transaction) {
 		$request = new Proto\Vtgate\ExecuteBatchShardsRequest();
-		VTProto::addQueries($request, $bound_shard_queries);
+		ProtoUtils::addQueries($request, $bound_shard_queries);
 		$request->setTabletType($tablet_type);
 		$request->setAsTransaction($as_transaction);
 		if ($ctx->getCallerId()) {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$response = $this->client->executeBatchShards($ctx, $request);
-		VTProto::checkError($response);
+		ProtoUtils::checkError($response);
 		$results = array();
 		foreach ($response->getResultsList() as $result) {
-			$results[] = new VTCursor($result);
+			$results[] = new Cursor($result);
 		}
 		return $results;
 	}
 
-	public function executeBatchKeyspaceIds(VTContext $ctx, array $bound_keyspace_id_queries, $tablet_type, $as_transaction) {
+	public function executeBatchKeyspaceIds(Context $ctx, array $bound_keyspace_id_queries, $tablet_type, $as_transaction) {
 		$request = new Proto\Vtgate\ExecuteBatchKeyspaceIdsRequest();
-		VTProto::addQueries($request, $bound_keyspace_id_queries);
+		ProtoUtils::addQueries($request, $bound_keyspace_id_queries);
 		$request->setTabletType($tablet_type);
 		$request->setAsTransaction($as_transaction);
 		if ($ctx->getCallerId()) {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$response = $this->client->executeBatchKeyspaceIds($ctx, $request);
-		VTProto::checkError($response);
+		ProtoUtils::checkError($response);
 		$results = array();
 		foreach ($response->getResultsList() as $result) {
-			$results[] = new VTCursor($result);
+			$results[] = new Cursor($result);
 		}
 		return $results;
 	}
 
-	public function streamExecute(VTContext $ctx, $query, array $bind_vars, $tablet_type) {
+	public function streamExecute(Context $ctx, $query, array $bind_vars, $tablet_type) {
 		$request = new Proto\Vtgate\StreamExecuteRequest();
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		if ($ctx->getCallerId()) {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$call = $this->client->streamExecute($ctx, $request);
-		return new VTStreamCursor($call);
+		return new StreamCursor($call);
 	}
 
-	public function streamExecuteShards(VTContext $ctx, $query, $keyspace, array $shards, array $bind_vars, $tablet_type) {
+	public function streamExecuteShards(Context $ctx, $query, $keyspace, array $shards, array $bind_vars, $tablet_type) {
 		$request = new Proto\Vtgate\StreamExecuteShardsRequest();
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setKeyspace($keyspace);
 		$request->setShards($shards);
 		$request->setTabletType($tablet_type);
@@ -135,12 +132,12 @@ class VTGateConn {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$call = $this->client->streamExecuteShards($ctx, $request);
-		return new VTStreamCursor($call);
+		return new StreamCursor($call);
 	}
 
-	public function streamExecuteKeyspaceIds(VTContext $ctx, $query, $keyspace, array $keyspace_ids, array $bind_vars, $tablet_type) {
+	public function streamExecuteKeyspaceIds(Context $ctx, $query, $keyspace, array $keyspace_ids, array $bind_vars, $tablet_type) {
 		$request = new Proto\Vtgate\StreamExecuteKeyspaceIdsRequest();
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setKeyspace($keyspace);
 		$request->setKeyspaceIds($keyspace_ids);
 		$request->setTabletType($tablet_type);
@@ -148,23 +145,23 @@ class VTGateConn {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$call = $this->client->streamExecuteKeyspaceIds($ctx, $request);
-		return new VTStreamCursor($call);
+		return new StreamCursor($call);
 	}
 
-	public function streamExecuteKeyRanges(VTContext $ctx, $query, $keyspace, array $key_ranges, array $bind_vars, $tablet_type) {
+	public function streamExecuteKeyRanges(Context $ctx, $query, $keyspace, array $key_ranges, array $bind_vars, $tablet_type) {
 		$request = new Proto\Vtgate\StreamExecuteKeyRangesRequest();
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setKeyspace($keyspace);
-		VTProto::addKeyRanges($request, $key_ranges);
+		ProtoUtils::addKeyRanges($request, $key_ranges);
 		$request->setTabletType($tablet_type);
 		if ($ctx->getCallerId()) {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$call = $this->client->streamExecuteKeyRanges($ctx, $request);
-		return new VTStreamCursor($call);
+		return new StreamCursor($call);
 	}
 
-	public function begin(VTContext $ctx) {
+	public function begin(Context $ctx) {
 		$request = new Proto\Vtgate\BeginRequest();
 		if ($ctx->getCallerId()) {
 			$request->setCallerId($ctx->getCallerId());
@@ -174,10 +171,10 @@ class VTGateConn {
 		return new VTGateTx($this->client, $response->getSession());
 	}
 
-	public function splitQuery(VTContext $ctx, $keyspace, $query, array $bind_vars, $split_column, $split_count) {
+	public function splitQuery(Context $ctx, $keyspace, $query, array $bind_vars, $split_column, $split_count) {
 		$request = new Proto\Vtgate\SplitQueryRequest();
 		$request->setKeyspace($keyspace);
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setSplitColumn($split_column);
 		$request->setSplitCount($split_count);
 		if ($ctx->getCallerId()) {
@@ -188,7 +185,7 @@ class VTGateConn {
 		return $response->getSplitsList();
 	}
 
-	public function getSrvKeyspace(VTContext $ctx, $keyspace) {
+	public function getSrvKeyspace(Context $ctx, $keyspace) {
 		$request = new Proto\Vtgate\GetSrvKeyspaceRequest();
 		$request->setKeyspace($keyspace);
 		$response = $this->client->getSrvKeyspace($ctx, $request);

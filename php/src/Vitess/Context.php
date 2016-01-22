@@ -1,17 +1,17 @@
 <?php
-require_once (dirname(__FILE__) . '/VTException.php');
+namespace Vitess;
 
 /**
- * VTContext is an immutable object carrying request-specific deadlines and
+ * Context is an immutable object carrying request-specific deadlines and
  * credentials (callerId).
  *
  * <p>Example usage:
  * <pre>
- * $ctx = VTContext::getDefault()->withDeadlineAfter(0.5); // 500ms timeout
+ * $ctx = Context::getDefault()->withDeadlineAfter(0.5); // 500ms timeout
  * $conn->doSomething($ctx, ...);
  * </pre>
  */
-class VTContext {
+class Context {
 	private $deadline;
 	private $callerId;
 
@@ -21,24 +21,24 @@ class VTContext {
 	}
 
 	public static function getDefault() {
-		return new VTContext(NULL, NULL);
+		return new Context(NULL, NULL);
 	}
 
 	/**
-	 * withDeadline returns a new VTContext with a sooner deadline.
+	 * withDeadline returns a new Context with a sooner deadline.
 	 *
 	 * @param float $deadline
 	 *        	UNIX timestamp, as from microtime(TRUE).
 	 */
 	public function withDeadline($deadline) {
 		if (isset($this->deadline) && $this->deadline > $deadline) {
-			return new VTContext($deadline, $this->callerId);
+			return new Context($deadline, $this->callerId);
 		}
 		return $this;
 	}
 
 	/**
-	 * withDeadlineAfter returns a new VTContext with a deadline based on the
+	 * withDeadlineAfter returns a new Context with a deadline based on the
 	 * current time.
 	 *
 	 * @param float $seconds
@@ -49,10 +49,10 @@ class VTContext {
 	}
 
 	/**
-	 * withCallerId returns a new VTContext with the given callerId.
+	 * withCallerId returns a new Context with the given callerId.
 	 */
 	public function withCallerId($callerId) {
-		return new VTContext($this->deadline, $callerId);
+		return new Context($this->deadline, $callerId);
 	}
 
 	public function getDeadline() {

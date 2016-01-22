@@ -1,57 +1,12 @@
 <?php
-
-require_once (dirname(__FILE__) . '/proto/query.php');
-require_once (dirname(__FILE__) . '/proto/vtgate.php');
-require_once (dirname(__FILE__) . '/proto/topodata.php');
-require_once (dirname(__FILE__) . '/proto/vtrpc.php');
+namespace Vitess;
 
 /*
  * This module contains helper functions and classes for interacting with the
  * Vitess protobufs.
  */
 
-/**
- * VTUnsignedInt is a wrapper used to tell the Vitess RPC layer that it should
- * encode as unsigned int.
- *
- * This is necessary because PHP doesn't have a real unsigned int type.
- *
- * You can pass in a signed int value, in which case the re-interpreted
- * 64-bit 2's complement value will be sent as an unsigned int.
- * For example:
- * new VTUnsignedInt(42) // will send 42
- * new VTUnsignedInt(-1) // will send 0xFFFFFFFFFFFFFFFF
- *
- * You can also pass in a string consisting of only decimal digits.
- * For example:
- * new VTUnsignedInt('12345') // will send 12345
- */
-class VTUnsignedInt {
-	private $value;
-
-	public function __construct($value) {
-		if (is_int($value)) {
-			$this->value = $value;
-		} else if (is_string($value)) {
-			if (! ctype_digit($value)) {
-				throw new VTBadInputException('Invalid string value given for VTUnsignedInt: ' . $value);
-			}
-			$this->value = $value;
-		} else {
-			throw new VTBadInputException('Unsupported type for VTUnsignedInt');
-		}
-	}
-
-	public function __toString() {
-		if (is_int($this->value)) {
-			return sprintf('%u', $this->value);
-		} else {
-			return strval($this->value);
-		}
-	}
-}
-
-class VTProto {
+class ProtoUtils {
 
 	public static function checkError($response) {
 		$error = $response->getError();
@@ -60,17 +15,17 @@ class VTProto {
 				case Proto\Vtrpc\ErrorCode::SUCCESS:
 					break;
 				case Proto\Vtrpc\ErrorCode::BAD_INPUT:
-					throw new VTBadInputError($error->getMessage());
+					throw new Error\BadInput($error->getMessage());
 				case Proto\Vtrpc\ErrorCode::DEADLINE_EXCEEDED:
-					throw new VTDeadlineExceededError($error->getMessage());
+					throw new Error\DeadlineExceeded($error->getMessage());
 				case Proto\Vtrpc\ErrorCode::INTEGRITY_ERROR:
-					throw new VTIntegrityError($error->getMessage());
+					throw new Error\Integrity($error->getMessage());
 				case Proto\Vtrpc\ErrorCode::TRANSIENT_ERROR:
-					throw new VTTransientError($error->getMessage());
+					throw new Error\Transient($error->getMessage());
 				case Proto\Vtrpc\ErrorCode::UNAUTHENTICATED:
-					throw new VTUnauthenticatedError($error->getMessage());
+					throw new Error\Unauthenticated($error->getMessage());
 				default:
-					throw new VTException($error->getCode() . ': ' . $error->getMessage());
+					throw new \Vitess\Exception($error->getCode() . ': ' . $error->getMessage());
 			}
 		}
 	}
@@ -94,7 +49,7 @@ class VTProto {
 		
 		if (is_array($value)) {
 			if (count($value) == 0) {
-				throw new VTBadInputException('Empty list not allowed for list bind variable');
+				throw new Error\BadInput('Empty list not allowed for list bind variable');
 			}
 			
 			$bind_var->setType(Proto\Query\Type::TUPLE);
@@ -138,16 +93,16 @@ class VTProto {
 			);
 		} else if (is_object($value)) {
 			switch (get_class($value)) {
-				case 'VTUnsignedInt':
+				case 'Vitess\UnsignedInt':
 					return array(
 							Proto\Query\Type::UINT64,
 							strval($value) 
 					);
 				default:
-					throw new VTBadInputException('Unknown Proto\Query\Value variable class: ' . get_class($value));
+					throw new Error\BadInput('Unknown Proto\Query\Value variable class: ' . get_class($value));
 			}
 		} else {
-			throw new VTBadInputException('Unknown type for Proto\Query\Value proto:' . gettype($value));
+			throw new Error\BadInput('Unknown type for Proto\Query\Value proto:' . gettype($value));
 		}
 	}
 
@@ -223,7 +178,7 @@ class VTProto {
 			} else {
 				$val = substr($buf, $start, $len);
 				if ($val === FALSE || strlen($val) != $len) {
-					throw new VTException('Index out of bounds while decoding Row values');
+					throw new \Vitess\Exception('Index out of bounds while decoding Row values');
 				}
 				$values[] = $val;
 				$start += $len;

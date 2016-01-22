@@ -1,4 +1,5 @@
 <?php
+namespace Vitess;
 
 class VTGateTx {
 	protected $client;
@@ -13,14 +14,14 @@ class VTGateTx {
 		return ! is_null($this->session) && $this->session->getInTransaction();
 	}
 
-	public function execute(VTContext $ctx, $query, array $bind_vars, $tablet_type = Proto\Topodata\TabletType::MASTER, $not_in_transaction = FALSE) {
+	public function execute(Context $ctx, $query, array $bind_vars, $tablet_type = Proto\Topodata\TabletType::MASTER, $not_in_transaction = FALSE) {
 		if (! $this->inTransaction()) {
-			throw new VTException('execute called while not in transaction.');
+			throw new \Vitess\Exception('execute called while not in transaction.');
 		}
 		
 		$request = new Proto\Vtgate\ExecuteRequest();
 		$request->setSession($this->session);
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		$request->setNotInTransaction($not_in_transaction);
 		if ($ctx->getCallerId()) {
@@ -28,18 +29,18 @@ class VTGateTx {
 		}
 		$response = $this->client->execute($ctx, $request);
 		$this->session = $response->getSession();
-		VTProto::checkError($response);
-		return new VTCursor($response->getResult());
+		ProtoUtils::checkError($response);
+		return new Cursor($response->getResult());
 	}
 
-	public function executeShards(VTContext $ctx, $query, $keyspace, array $shards, array $bind_vars, $tablet_type = Proto\Topodata\TabletType::MASTER, $not_in_transaction = FALSE) {
+	public function executeShards(Context $ctx, $query, $keyspace, array $shards, array $bind_vars, $tablet_type = Proto\Topodata\TabletType::MASTER, $not_in_transaction = FALSE) {
 		if (! $this->inTransaction()) {
-			throw new VTException('execute called while not in transaction.');
+			throw new \Vitess\Exception('execute called while not in transaction.');
 		}
 		
 		$request = new Proto\Vtgate\ExecuteShardsRequest();
 		$request->setSession($this->session);
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		$request->setNotInTransaction($not_in_transaction);
 		$request->setKeyspace($keyspace);
@@ -49,18 +50,18 @@ class VTGateTx {
 		}
 		$response = $this->client->executeShards($ctx, $request);
 		$this->session = $response->getSession();
-		VTProto::checkError($response);
-		return new VTCursor($response->getResult());
+		ProtoUtils::checkError($response);
+		return new Cursor($response->getResult());
 	}
 
-	public function executeKeyspaceIds(VTContext $ctx, $query, $keyspace, array $keyspace_ids, array $bind_vars, $tablet_type = Proto\Topodata\TabletType::MASTER, $not_in_transaction = FALSE) {
+	public function executeKeyspaceIds(Context $ctx, $query, $keyspace, array $keyspace_ids, array $bind_vars, $tablet_type = Proto\Topodata\TabletType::MASTER, $not_in_transaction = FALSE) {
 		if (! $this->inTransaction()) {
-			throw new VTException('execute called while not in transaction.');
+			throw new \Vitess\Exception('execute called while not in transaction.');
 		}
 		
 		$request = new Proto\Vtgate\ExecuteKeyspaceIdsRequest();
 		$request->setSession($this->session);
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		$request->setNotInTransaction($not_in_transaction);
 		$request->setKeyspace($keyspace);
@@ -70,61 +71,61 @@ class VTGateTx {
 		}
 		$response = $this->client->executeKeyspaceIds($ctx, $request);
 		$this->session = $response->getSession();
-		VTProto::checkError($response);
-		return new VTCursor($response->getResult());
+		ProtoUtils::checkError($response);
+		return new Cursor($response->getResult());
 	}
 
-	public function executeKeyRanges(VTContext $ctx, $query, $keyspace, array $key_ranges, array $bind_vars, $tablet_type = Proto\Topodata\TabletType::MASTER, $not_in_transaction = FALSE) {
+	public function executeKeyRanges(Context $ctx, $query, $keyspace, array $key_ranges, array $bind_vars, $tablet_type = Proto\Topodata\TabletType::MASTER, $not_in_transaction = FALSE) {
 		if (! $this->inTransaction()) {
-			throw new VTException('execute called while not in transaction.');
+			throw new \Vitess\Exception('execute called while not in transaction.');
 		}
 		
 		$request = new Proto\Vtgate\ExecuteKeyRangesRequest();
 		$request->setSession($this->session);
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		$request->setNotInTransaction($not_in_transaction);
 		$request->setKeyspace($keyspace);
-		VTProto::addKeyRanges($request, $key_ranges);
+		ProtoUtils::addKeyRanges($request, $key_ranges);
 		if ($ctx->getCallerId()) {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$response = $this->client->executeKeyRanges($ctx, $request);
 		$this->session = $response->getSession();
-		VTProto::checkError($response);
-		return new VTCursor($response->getResult());
+		ProtoUtils::checkError($response);
+		return new Cursor($response->getResult());
 	}
 
-	public function executeEntityIds(VTContext $ctx, $query, $keyspace, $entity_column_name, array $entity_keyspace_ids, array $bind_vars, $tablet_type = Proto\Topodata\TabletType::MASTER, $not_in_transaction = FALSE) {
+	public function executeEntityIds(Context $ctx, $query, $keyspace, $entity_column_name, array $entity_keyspace_ids, array $bind_vars, $tablet_type = Proto\Topodata\TabletType::MASTER, $not_in_transaction = FALSE) {
 		if (! $this->inTransaction()) {
-			throw new VTException('execute called while not in transaction.');
+			throw new \Vitess\Exception('execute called while not in transaction.');
 		}
 		
 		$request = new Proto\Vtgate\ExecuteEntityIdsRequest();
 		$request->setSession($this->session);
-		$request->setQuery(VTProto::BoundQuery($query, $bind_vars));
+		$request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
 		$request->setTabletType($tablet_type);
 		$request->setNotInTransaction($not_in_transaction);
 		$request->setKeyspace($keyspace);
 		$request->setEntityColumnName($entity_column_name);
-		VTProto::addEntityKeyspaceIds($request, $entity_keyspace_ids);
+		ProtoUtils::addEntityKeyspaceIds($request, $entity_keyspace_ids);
 		if ($ctx->getCallerId()) {
 			$request->setCallerId($ctx->getCallerId());
 		}
 		$response = $this->client->executeEntityIds($ctx, $request);
 		$this->session = $response->getSession();
-		VTProto::checkError($response);
-		return new VTCursor($response->getResult());
+		ProtoUtils::checkError($response);
+		return new Cursor($response->getResult());
 	}
 
-	public function executeBatchShards(VTContext $ctx, array $bound_shard_queries, $tablet_type = Proto\Topodata\TabletType::MASTER, $as_transaction = TRUE) {
+	public function executeBatchShards(Context $ctx, array $bound_shard_queries, $tablet_type = Proto\Topodata\TabletType::MASTER, $as_transaction = TRUE) {
 		if (! $this->inTransaction()) {
-			throw new VTException('execute called while not in transaction.');
+			throw new \Vitess\Exception('execute called while not in transaction.');
 		}
 		
 		$request = new Proto\Vtgate\ExecuteBatchShardsRequest();
 		$request->setSession($this->session);
-		VTProto::addQueries($request, $bound_shard_queries);
+		ProtoUtils::addQueries($request, $bound_shard_queries);
 		$request->setTabletType($tablet_type);
 		$request->setAsTransaction($as_transaction);
 		if ($ctx->getCallerId()) {
@@ -132,22 +133,22 @@ class VTGateTx {
 		}
 		$response = $this->client->executeBatchShards($ctx, $request);
 		$this->session = $response->getSession();
-		VTProto::checkError($response);
+		ProtoUtils::checkError($response);
 		$results = array();
 		foreach ($response->getResultsList() as $result) {
-			$results[] = new VTCursor($result);
+			$results[] = new Cursor($result);
 		}
 		return $results;
 	}
 
-	public function executeBatchKeyspaceIds(VTContext $ctx, array $bound_keyspace_id_queries, $tablet_type = Proto\Topodata\TabletType::MASTER, $as_transaction = TRUE) {
+	public function executeBatchKeyspaceIds(Context $ctx, array $bound_keyspace_id_queries, $tablet_type = Proto\Topodata\TabletType::MASTER, $as_transaction = TRUE) {
 		if (! $this->inTransaction()) {
-			throw new VTException('execute called while not in transaction.');
+			throw new \Vitess\Exception('execute called while not in transaction.');
 		}
 		
 		$request = new Proto\Vtgate\ExecuteBatchKeyspaceIdsRequest();
 		$request->setSession($this->session);
-		VTProto::addQueries($request, $bound_keyspace_id_queries);
+		ProtoUtils::addQueries($request, $bound_keyspace_id_queries);
 		$request->setTabletType($tablet_type);
 		$request->setAsTransaction($as_transaction);
 		if ($ctx->getCallerId()) {
@@ -155,17 +156,17 @@ class VTGateTx {
 		}
 		$response = $this->client->executeBatchKeyspaceIds($ctx, $request);
 		$this->session = $response->getSession();
-		VTProto::checkError($response);
+		ProtoUtils::checkError($response);
 		$results = array();
 		foreach ($response->getResultsList() as $result) {
-			$results[] = new VTCursor($result);
+			$results[] = new Cursor($result);
 		}
 		return $results;
 	}
 
-	public function commit(VTContext $ctx) {
+	public function commit(Context $ctx) {
 		if (! $this->inTransaction()) {
-			throw new VTException('commit called while not in transaction.');
+			throw new \Vitess\Exception('commit called while not in transaction.');
 		}
 		$request = new Proto\Vtgate\CommitRequest();
 		$request->setSession($this->session);
@@ -177,9 +178,9 @@ class VTGateTx {
 		$this->session = NULL;
 	}
 
-	public function rollback(VTContext $ctx) {
+	public function rollback(Context $ctx) {
 		if (! $this->inTransaction()) {
-			throw new VTException('rollback called while not in transaction.');
+			throw new \Vitess\Exception('rollback called while not in transaction.');
 		}
 		$request = new Proto\Vtgate\RollbackRequest();
 		$request->setSession($this->session);

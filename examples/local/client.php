@@ -9,7 +9,11 @@
  * Then run:
  * vitess/examples/local$ php client.php --server=localhost:15991
  */
-require_once (__DIR__ . '/../../php/vendor/autoload.php');
+require_once __DIR__ . '/../../php/vendor/autoload.php';
+
+use Vitess\Context;
+use Vitess\VTGateConn;
+use Vitess\Proto\Topodata\TabletType;
 
 $opts = getopt('', array(
 		'server:'
@@ -24,8 +28,8 @@ $shards = array(
 );
 
 // Create a connection.
-$ctx = VTContext::getDefault();
-$conn = new VTGateConn(new VTGrpcClient($opts['server']));
+$ctx = Context::getDefault();
+$conn = new VTGateConn(new \Vitess\Grpc\Client($opts['server']));
 
 // Insert something.
 echo "Inserting into master...\n";
@@ -37,7 +41,7 @@ $tx->commit($ctx);
 
 // Read it back from the master.
 echo "Reading from master...\n";
-$cursor = $conn->executeShards($ctx, 'SELECT * FROM test_table', $keyspace, $shards, array(), \topodata\TabletType::MASTER);
+$cursor = $conn->executeShards($ctx, 'SELECT * FROM test_table', $keyspace, $shards, array(), TabletType::MASTER);
 while (($row = $cursor->next()) !== FALSE) {
 	printf("(%s)\n", implode(', ', $row));
 }
@@ -45,7 +49,7 @@ while (($row = $cursor->next()) !== FALSE) {
 // Read from a replica.
 // Note that this may be behind master due to replication lag.
 echo "Reading from replica...\n";
-$cursor = $conn->executeShards($ctx, 'SELECT * FROM test_table', $keyspace, $shards, array(), \topodata\TabletType::REPLICA);
+$cursor = $conn->executeShards($ctx, 'SELECT * FROM test_table', $keyspace, $shards, array(), TabletType::REPLICA);
 while (($row = $cursor->next()) !== FALSE) {
 	printf("(%s)\n", implode(', ', $row));
 }
