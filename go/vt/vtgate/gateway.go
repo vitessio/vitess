@@ -1,4 +1,4 @@
-// Copyright 2015, Google Inc. All rights reserved.
+// Copyright 2016, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -126,7 +126,7 @@ type GatewayEndPointCacheStatus struct {
 	QueryCount uint64
 	QueryError uint64
 	QPS        uint64
-	AvgLatency uint64 // in milliseconds
+	AvgLatency float64 // in milliseconds
 }
 
 // NewGatewayEndPointStatusAggregator creates a GatewayEndPointStatusAggregator.
@@ -154,19 +154,22 @@ type GatewayEndPointStatusAggregator struct {
 	QueryCount uint64
 	QueryError uint64
 	// for QPS and latency (avg value over a minute)
+	tick               uint32
 	queryCountInMinute [60]uint64
 	latencyInMinute    [60]time.Duration
 }
 
 // UpdateQueryInfo updates the aggregator with the given information about a query.
-func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(tabletType topodatapb.TabletType, elapsed time.Duration, hasError bool) {
+func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(addr string, tabletType topodatapb.TabletType, elapsed time.Duration, hasError bool) {
 	gepsa.mu.Lock()
 	defer gepsa.mu.Unlock()
+	if addr != "" {
+		gepsa.Addr = addr
+	}
 	gepsa.TabletType = tabletType
-	idx := time.Now().Second() % 60
 	gepsa.QueryCount++
-	gepsa.queryCountInMinute[idx]++
-	gepsa.latencyInMinute[idx] += elapsed
+	gepsa.queryCountInMinute[gepsa.tick]++
+	gepsa.latencyInMinute[gepsa.tick] += elapsed
 	if hasError {
 		gepsa.QueryError++
 	}
@@ -175,14 +178,14 @@ func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(tabletType topodat
 // GetCacheStatus returns a GatewayEndPointCacheStatus representing the current gateway status.
 func (gepsa *GatewayEndPointStatusAggregator) GetCacheStatus() *GatewayEndPointCacheStatus {
 	status := &GatewayEndPointCacheStatus{
-		Keyspace:   gepsa.Keyspace,
-		Shard:      gepsa.Shard,
-		TabletType: gepsa.TabletType,
-		Name:       gepsa.Name,
-		Addr:       gepsa.Addr,
+		Keyspace: gepsa.Keyspace,
+		Shard:    gepsa.Shard,
+		Name:     gepsa.Name,
 	}
 	gepsa.mu.RLock()
 	defer gepsa.mu.RUnlock()
+	status.TabletType = gepsa.TabletType
+	status.Addr = gepsa.Addr
 	status.QueryCount = gepsa.QueryCount
 	status.QueryError = gepsa.QueryError
 	var totalQuery uint64
@@ -195,7 +198,7 @@ func (gepsa *GatewayEndPointStatusAggregator) GetCacheStatus() *GatewayEndPointC
 	}
 	status.QPS = totalQuery / 60
 	if totalQuery > 0 {
-		status.AvgLatency = uint64(totalLatency.Nanoseconds()) / totalQuery / 100000
+		status.AvgLatency = float64(totalLatency.Nanoseconds()) / float64(totalQuery) / 1000000
 	}
 	return status
 }
@@ -204,7 +207,7 @@ func (gepsa *GatewayEndPointStatusAggregator) GetCacheStatus() *GatewayEndPointC
 func (gepsa *GatewayEndPointStatusAggregator) resetNextSlot() {
 	gepsa.mu.Lock()
 	defer gepsa.mu.Unlock()
-	idx := (time.Now().Second() + 1) % 60
-	gepsa.queryCountInMinute[idx] = 0
-	gepsa.latencyInMinute[idx] = 0
+	gepsa.tick = (gepsa.tick + 1) % 60
+	gepsa.queryCountInMinute[gepsa.tick] = 0
+	gepsa.latencyInMinute[gepsa.tick] = time.Duration(0)
 }
