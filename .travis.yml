@@ -17,7 +17,6 @@ addons:
     - python-dev
     - python-mysqldb
     - python-pip
-    - python-virtualenv
     - libssl-dev
     - g++-4.8
     - gcc-4.8
