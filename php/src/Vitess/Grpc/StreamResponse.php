@@ -1,11 +1,15 @@
 <?php
 namespace Vitess\Grpc;
 
-class StreamResponse {
+class StreamResponse
+{
+
     private $call;
+
     private $iterator;
 
-    public function __construct($call) {
+    public function __construct($call)
+    {
         $this->call = $call;
         $this->iterator = $call->responses();
 
@@ -15,7 +19,8 @@ class StreamResponse {
         }
     }
 
-    public function next() {
+    public function next()
+    {
         if ($this->iterator->valid()) {
             $value = $this->iterator->current();
             $this->iterator->next();
@@ -28,7 +33,8 @@ class StreamResponse {
         }
     }
 
-    public function close() {
+    public function close()
+    {
         $this->call->cancel();
     }
 }

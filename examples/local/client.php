@@ -16,7 +16,7 @@ use Vitess\VTGateConn;
 use Vitess\Proto\Topodata\TabletType;
 
 $opts = getopt('', array(
-		'server:'
+    'server:'
 ));
 
 $keyspace = 'test_keyspace';
@@ -24,7 +24,7 @@ $keyspace = 'test_keyspace';
 // An unsharded keyspace is the same as custom sharding (0, 1, 2, ...),
 // but with only a single shard (0).
 $shards = array(
-		'0'
+    '0'
 );
 
 // Create a connection.
@@ -35,7 +35,7 @@ $conn = new VTGateConn(new \Vitess\Grpc\Client($opts['server']));
 echo "Inserting into master...\n";
 $tx = $conn->begin($ctx);
 $tx->executeShards($ctx, 'INSERT INTO test_table (msg) VALUES (:msg)', $keyspace, $shards, array(
-		'msg' => 'V is for speed'
+    'msg' => 'V is for speed'
 ));
 $tx->commit($ctx);
 
@@ -43,7 +43,7 @@ $tx->commit($ctx);
 echo "Reading from master...\n";
 $cursor = $conn->executeShards($ctx, 'SELECT * FROM test_table', $keyspace, $shards, array(), TabletType::MASTER);
 while (($row = $cursor->next()) !== FALSE) {
-	printf("(%s)\n", implode(', ', $row));
+    printf("(%s)\n", implode(', ', $row));
 }
 
 // Read from a replica.
@@ -51,7 +51,7 @@ while (($row = $cursor->next()) !== FALSE) {
 echo "Reading from replica...\n";
 $cursor = $conn->executeShards($ctx, 'SELECT * FROM test_table', $keyspace, $shards, array(), TabletType::REPLICA);
 while (($row = $cursor->next()) !== FALSE) {
-	printf("(%s)\n", implode(', ', $row));
+    printf("(%s)\n", implode(', ', $row));
 }
 
 $conn->close();

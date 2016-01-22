@@ -17,23 +17,28 @@ namespace Vitess;
  * For example:
  * new UnsignedInt('12345') // will send 12345
  */
-class UnsignedInt {
+class UnsignedInt
+{
+
     private $value;
 
-    public function __construct($value) {
+    public function __construct($value)
+    {
         if (is_int($value)) {
             $this->value = $value;
-        } else if (is_string($value)) {
-            if (! ctype_digit($value)) {
-                throw new Error\BadInput('Invalid string value given for UnsignedInt: ' . $value);
+        } else
+            if (is_string($value)) {
+                if (! ctype_digit($value)) {
+                    throw new Error\BadInput('Invalid string value given for UnsignedInt: ' . $value);
+                }
+                $this->value = $value;
+            } else {
+                throw new Error\BadInput('Unsupported type for UnsignedInt');
             }
-            $this->value = $value;
-        } else {
-            throw new Error\BadInput('Unsupported type for UnsignedInt');
-        }
     }
 
-    public function __toString() {
+    public function __toString()
+    {
         if (is_int($this->value)) {
             return sprintf('%u', $this->value);
         } else {

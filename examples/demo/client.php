@@ -16,7 +16,7 @@ use Vitess\VTGateConn;
 use Vitess\Proto\Topodata\TabletType;
 
 $opts = getopt('', array(
-		'server:' 
+    'server:'
 ));
 
 // Create a connection.
@@ -26,14 +26,14 @@ $conn = new VTGateConn(new \Vitess\Grpc\Client($opts['server']));
 // Insert something.
 $tx = $conn->begin($ctx);
 $tx->execute($ctx, 'INSERT INTO user (name) VALUES (:name)', array(
-		'name' => 'sugu' 
+    'name' => 'sugu'
 ));
 $tx->commit($ctx);
 
 // Read it back.
 $cursor = $conn->execute($ctx, 'SELECT * FROM user', array(), TabletType::MASTER);
 while (($row = $cursor->next()) !== FALSE) {
-	print_r($row);
+    print_r($row);
 }
 
 $conn->close();

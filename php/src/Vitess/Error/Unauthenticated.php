@@ -1,5 +1,6 @@
 <?php
 namespace Vitess\Error;
 
-class Unauthenticated extends \Vitess\Exception {
+class Unauthenticated extends \Vitess\Exception
+{
 }

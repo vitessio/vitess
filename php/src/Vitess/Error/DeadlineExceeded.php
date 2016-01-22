@@ -1,5 +1,6 @@
 <?php
 namespace Vitess\Error;
 
-class DeadlineExceeded extends Transient {
+class DeadlineExceeded extends Transient
+{
 }

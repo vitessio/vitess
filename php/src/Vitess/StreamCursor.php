@@ -1,17 +1,24 @@
 <?php
 namespace Vitess;
 
-class StreamCursor {
+class StreamCursor
+{
+
     private $pos = - 1;
+
     private $rows;
+
     private $fields;
+
     private $stream;
 
-    public function __construct($stream) {
+    public function __construct($stream)
+    {
         $this->stream = $stream;
     }
 
-    public function getFields() {
+    public function getFields()
+    {
         if ($this->fields === NULL) {
             // The first QueryResult should have the fields.
             if (! $this->nextQueryResult()) {
@@ -21,14 +28,16 @@ class StreamCursor {
         return $this->fields;
     }
 
-    public function close() {
+    public function close()
+    {
         if ($this->stream) {
             $this->stream->close();
             $this->stream = NULL;
         }
     }
 
-    public function next() {
+    public function next()
+    {
         // Get the next row from the current QueryResult.
         if ($this->rows && ++ $this->pos < count($this->rows)) {
             return ProtoUtils::RowValues($this->rows[$this->pos]);
@@ -46,12 +55,13 @@ class StreamCursor {
         return FALSE;
     }
 
-    private function nextQueryResult() {
+    private function nextQueryResult()
+    {
         if (($response = $this->stream->next()) !== FALSE) {
             $query_result = $response->getResult();
             $this->rows = $query_result->getRowsList();
             $this->pos = - 1;
-            	
+
             if ($this->fields === NULL) {
                 // The first QueryResult should have the fields.
                 $this->fields = $query_result->getFieldsList();
