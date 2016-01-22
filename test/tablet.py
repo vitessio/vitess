@@ -419,6 +419,7 @@ class Tablet(object):
                  protocols_flavor().tablet_manager_protocol()])
     args.extend(['-tablet_protocol', protocols_flavor().tabletconn_protocol()])
     args.extend(['-binlog_player_healthcheck_topology_refresh', '1s'])
+    args.extend(['-binlog_player_healthcheck_retry_delay', '1s'])
     args.extend(['-binlog_player_retry_delay', '1s'])
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
     if self.use_mysqlctld:
