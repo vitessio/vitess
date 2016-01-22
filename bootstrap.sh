@@ -59,11 +59,14 @@ fi
 # install gRPC C++ base, so we can install the python adapters.
 # this also installs protobufs
 grpc_dist=$VTROOT/dist/grpc
+grpc_ver=release-0_12_0
 if [ $SKIP_ROOT_INSTALLS == "True" ]; then
   echo "skipping grpc build, as root version was already installed."
-elif [ -f $grpc_dist/.build_finished ]; then
+elif [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
   echo "skipping gRPC build. remove $grpc_dist to force rebuild."
 else
+  # protobuf used to be a separate package, now we use the gRPC one
+  rm -rf $VTROOT/dist/protobuf
   rm -rf $grpc_dist
   mkdir -p $grpc_dist/usr/local/bin
   mkdir -p $grpc_dist/usr/local/lib/python2.7/dist-packages
@@ -74,7 +77,7 @@ else
   export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
   export LD_LIBRARY_PATH=$(prepend_path $LD_LIBRARY_PATH $grpc_dist/usr/local/lib)
   ./travis/install_grpc.sh $grpc_dist || fail "gRPC build failed"
-  touch $grpc_dist/.build_finished
+  echo "$grpc_ver" > $grpc_dist/.build_finished
 fi
 
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
@@ -188,6 +191,7 @@ fi
 
 # create pre-commit hooks
 echo "creating git pre-commit hooks"
+mkdir -p $VTTOP/.git/hooks
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 
 if [ `uname -s` == "Darwin" ]; then
