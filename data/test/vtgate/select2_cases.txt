@@ -1,0 +1,220 @@
+# Single table sharded scatter
+"select * from user"
+{
+  "From": "user",
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
+
+# Single table unsharded
+"select * from main1"
+{
+  "From": "main1",
+  "Route": {
+    "PlanID": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
+
+# Multi-table unsharded
+"select * from main1 as m1 join main1 as m2"
+{
+  "From": "main1 as m1 join main1 as m2",
+  "Route": {
+    "PlanID": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
+
+# Multi-table, multi-chunk
+"select * from user join music"
+{
+  "IsLeft": false,
+  "Left": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "From": "music",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  }
+}
+
+# Sharded & Unsharded join
+"select * from user join main1"
+{
+  "IsLeft": false,
+  "Left": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "From": "main1",
+    "Route": {
+      "PlanID": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      }
+    }
+  }
+}
+
+# Left join, single chunk
+"select * from main1 as m1 left join main1 as m2 on a=b"
+{
+  "From": "main1 as m1 left join main1 as m2 on a = b",
+  "Route": {
+    "PlanID": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
+
+# Left join , multi-chunk
+"select * from user left join main1 on a = b"
+{
+  "IsLeft": true,
+  "Left": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "From": "main1",
+    "Route": {
+      "PlanID": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      }
+    }
+  }
+}
+
+# Straight-join
+"select * from main1 as m1 straight_join main1 as m2"
+{
+  "From": "main1 as m1 straight_join main1 as m2",
+  "Route": {
+    "PlanID": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
+
+# Parenthesized, single chunk
+"select * from user join (main1 as m1 join main1 as m2)"
+{
+  "IsLeft": false,
+  "Left": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "From": "(main1 as m1 join main1 as m2)",
+    "Route": {
+      "PlanID": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      }
+    }
+  }
+}
+
+# Parenthesized, multi-chunk
+"select * from user join (user as u1 join main1)"
+{
+  "IsLeft": false,
+  "Left": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "IsLeft": false,
+    "Left": {
+      "From": "user as u1",
+      "Route": {
+        "PlanID": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        }
+      }
+    },
+    "Right": {
+      "From": "main1",
+      "Route": {
+        "PlanID": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        }
+      }
+    }
+  }
+}
+
+# ondex hints, make sure they're not stripped.
+"select * from user use index(a)"
+{
+  "From": "user use index (a)",
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
