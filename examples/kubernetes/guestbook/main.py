@@ -99,7 +99,7 @@ if __name__ == "__main__":
   timeout = 10 # connect timeout in seconds
 
   # Get vtgate service address from Kubernetes DNS.
-  addr = 'vtgate:15001'
+  addr = 'vtgate-test:15001'
 
   # Connect to vtgate.
   conn = vtgatev2.connect({'vt': [addr]}, timeout)

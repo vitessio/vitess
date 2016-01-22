@@ -4,11 +4,13 @@
 
 set -e
 
+VITESS_NAME=${VITESS_NAME:-'default'}
+
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 echo "Stopping guestbook replicationcontroller..."
-$KUBECTL stop replicationcontroller guestbook
+$KUBECTL stop replicationcontroller guestbook --namespace=$VITESS_NAME
 
 echo "Deleting guestbook service..."
-$KUBECTL delete service guestbook
+$KUBECTL delete service guestbook --namespace=$VITESS_NAME

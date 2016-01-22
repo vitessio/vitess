@@ -24,19 +24,19 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	ft := newFakeTopo(cellTablets)
 	fhc := newFakeHealthCheck()
 	t.Logf(`ft = FakeTopo(); fhc = FakeHealthCheck()`)
-	var ctw *TopologyWatcher
+	var tw *TopologyWatcher
 	if cellTablets {
-		ctw = NewCellTabletsWatcher(topo.Server{Impl: ft}, fhc, "aa", 10*time.Minute, 5)
-		t.Logf(`ctw = CellTabletsWatcher(topo.Server{ft}, fhc, "aa", 10ms, 5)`)
+		tw = NewCellTabletsWatcher(topo.Server{Impl: ft}, fhc, "aa", 10*time.Minute, 5)
+		t.Logf(`tw = CellTabletsWatcher(topo.Server{ft}, fhc, "aa", 10ms, 5)`)
 	} else {
-		ctw = NewShardReplicationWatcher(topo.Server{Impl: ft}, fhc, "aa", "keyspace", "shard", 10*time.Minute, 5)
-		t.Logf(`ctw = ShardReplicationWatcher(topo.Server{ft}, fhc, "aa", "keyspace", "shard", 10ms, 5)`)
+		tw = NewShardReplicationWatcher(topo.Server{Impl: ft}, fhc, "aa", "keyspace", "shard", 10*time.Minute, 5)
+		t.Logf(`tw = ShardReplicationWatcher(topo.Server{ft}, fhc, "aa", "keyspace", "shard", 10ms, 5)`)
 	}
 
 	// add a tablet to the topology
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 123})
-	ctw.loadTablets()
-	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 123}); ctw.loadTablets()`)
+	tw.loadTablets()
+	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 123}); tw.loadTablets()`)
 	want := &topodatapb.EndPoint{
 		Uid:     0,
 		Host:    "host1",
@@ -51,8 +51,8 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	// same tablet, different port, should update (previous
 	// one should go away, new one be added).
 	ft.AddTablet("aa", 0, "host1", map[string]int32{"vt": 456})
-	ctw.loadTablets()
-	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 456}); ctw.loadTablets()`)
+	tw.loadTablets()
+	t.Logf(`ft.AddTablet("aa", 0, "host1", {"vt": 456}); tw.loadTablets()`)
 	want = &topodatapb.EndPoint{
 		Uid:     0,
 		Host:    "host1",
@@ -64,7 +64,7 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 		t.Errorf("fhc.GetAllEndPoints() = %+v; want %+v", allEPs, want)
 	}
 
-	ctw.Stop()
+	tw.Stop()
 }
 
 func newFakeTopo(expectGetTabletsByCell bool) *fakeTopo {
