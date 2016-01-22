@@ -14,7 +14,7 @@ grpc_port_base=16100
 mysql_port_base=33100
 hostname=''
 
-if [ $TRAVIS==true ]; then
+if [[ "$TRAVIS" == "true" ]]; then
   hostname=`hostname -i`
 fi
 
