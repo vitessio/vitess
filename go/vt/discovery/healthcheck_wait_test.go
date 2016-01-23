@@ -113,7 +113,7 @@ func TestWaitForEndPoints(t *testing.T) {
 	input := make(chan *querypb.StreamHealthResponse)
 	createFakeConn(ep, input)
 
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, 1*time.Hour)
+	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, 1*time.Hour, "" /* statsSuffix */)
 	hc.AddEndPoint("cell", "", ep)
 
 	// this should time out
