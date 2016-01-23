@@ -17,7 +17,7 @@ hostname=''
 if [ "$TRAVIS" = true ]; then
   hostname=`hostname -i`
 fi
-
+echo $hostname
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
