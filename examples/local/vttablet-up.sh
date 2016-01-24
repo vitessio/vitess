@@ -14,6 +14,8 @@ grpc_port_base=16100
 mysql_port_base=33100
 tablet_hostname=''
 
+# Travis hostnames are too long for MySQL, so we use IP.
+# Otherwise, blank hostname means the tablet auto-detects FQDN.
 if [ "$TRAVIS" == true ]; then
   tablet_hostname=`hostname -i`
 fi
@@ -86,7 +88,7 @@ for uid_index in $uids; do
   $VTROOT/bin/vttablet \
     -log_dir $VTDATAROOT/tmp \
     -tablet-path $alias \
-    -tablet_hostname $tablet_hostname \
+    -tablet_hostname "$tablet_hostname" \
     -init_keyspace $keyspace \
     -init_shard $shard \
     -target_tablet_type $tablet_type \
