@@ -206,7 +206,7 @@
   }
 }
 
-# ondex hints, make sure they're not stripped.
+# index hints, make sure they're not stripped.
 "select * from user use index(a)"
 {
   "From": "user use index (a)",
@@ -215,6 +215,201 @@
     "Keyspace": {
       "Name": "user",
       "Sharded": true
+    }
+  }
+}
+
+# mergeable sharded join on unique vindex
+"select * from user join user_extra on user.id = user_extra.user_id"
+{
+  "From": "user join user_extra on user.id = user_extra.user_id",
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
+
+# mergeable sharded join on unique vindex, swapped operands
+"select * from user join user_extra on user_extra.user_id = user.id"
+{
+  "From": "user join user_extra on user_extra.user_id = user.id",
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
+
+# mergeable sharded join on unique vindex, and condition
+"select * from user join user_extra on user.id = 5 and user.id = user_extra.user_id"
+{
+  "From": "user join user_extra on user.id = 5 and user.id = user_extra.user_id",
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
+
+# sharded join on unique vindex, inequality
+"select * from user join user_extra on user.id < user_extra.user_id"
+{
+  "IsLeft": false,
+  "Left": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "From": "user_extra",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  }
+}
+
+# sharded join, non-col reference RHS
+"select * from user join user_extra on user.id = 5"
+{
+  "IsLeft": false,
+  "Left": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "From": "user_extra",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  }
+}
+
+# sharded join, non-col reference LHS
+"select * from user join user_extra on 5 = user.id"
+{
+  "IsLeft": false,
+  "Left": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "From": "user_extra",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  }
+}
+
+# sharded join, invalid table reference
+"select * from user join user_extra on notable.id = user_extra.user_id"
+{
+  "IsLeft": false,
+  "Left": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "From": "user_extra",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  }
+}
+
+# sharded join, non-vindex col
+"select * from user join user_extra on user.id = user_extra.col"
+{
+  "IsLeft": false,
+  "Left": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "From": "user_extra",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  }
+}
+
+# sharded join, non-unique vindex
+"select * from user_extra join user on user_extra.user_id = user.name"
+{
+  "IsLeft": false,
+  "Left": {
+    "From": "user_extra",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "From": "user",
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
     }
   }
 }
