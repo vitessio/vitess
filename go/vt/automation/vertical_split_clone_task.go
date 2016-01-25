@@ -22,9 +22,7 @@ func (t *VerticalSplitCloneTask) Run(parameters map[string]string) ([]*automatio
 	//                        '--destination_pack_count', '1',
 	//                        '--destination_writer_count', '1',
 	args := []string{"VerticalSplitClone"}
-	if tables := parameters["tables"]; tables != "" {
-		args = append(args, "--tables="+tables)
-	}
+	args = append(args, "--tables="+parameters["tables"])
 	args = append(args, topoproto.KeyspaceShardString(parameters["dest_keyspace"], parameters["shard"]))
 	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 
