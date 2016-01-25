@@ -17,6 +17,8 @@ addons:
     - python-dev
     - python-mysqldb
     - python-pip
+    # required by gRPC python files
+    - python-six
     - libssl-dev
     - g++-4.8
     - gcc-4.8
