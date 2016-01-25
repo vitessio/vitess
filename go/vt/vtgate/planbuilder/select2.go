@@ -21,7 +21,14 @@ import (
 // will mirror the same tree. Once all the plans are built,
 // the builder objects will be discarded, and only
 // the Plan objects will remain.
-type PlanBuilder interface{}
+type PlanBuilder interface {
+	// Order is a number that signifies execution order.
+	// A lower Order number Route is executed before a
+	// higher one. For a node that contains other nodes,
+	// the Order represents the highest order of the leaf
+	// nodes.
+	Order() int
+}
 
 // JoinBuilder is used to build a Join primitive.
 // It's used to buid a normal join or a left join
@@ -29,8 +36,32 @@ type PlanBuilder interface{}
 // TODO(sougou): struct is incomplete.
 type JoinBuilder struct {
 	// IsLeft is true if the operation is a left join.
-	IsLeft      bool
+	IsLeft bool
+	order  int
+	// Left and Right are the nodes for the join.
 	Left, Right PlanBuilder
+}
+
+// Order returns the order of the node.
+func (jb *JoinBuilder) Order() int {
+	return jb.order
+}
+
+// MarshalJSON marshals JoinBuilder into a readable form.
+// It's used for testing and diagnostics. The representation
+// cannot be used to reconstruct a JoinBuilder.
+func (jb *JoinBuilder) MarshalJSON() ([]byte, error) {
+	marshalJoin := struct {
+		IsLeft      bool
+		Order       int
+		Left, Right PlanBuilder
+	}{
+		IsLeft: jb.IsLeft,
+		Order:  jb.order,
+		Left:   jb.Left,
+		Right:  jb.Right,
+	}
+	return json.Marshal(marshalJoin)
 }
 
 // RouteBuilder is used to build a Route primitive.
@@ -41,10 +72,32 @@ type JoinBuilder struct {
 // TODO(sougou): struct is incomplete.
 type RouteBuilder struct {
 	// From points to the portion of the AST this route represents.
-	From sqlparser.TableExpr
+	From  sqlparser.TableExpr
+	order int
 	// Route is the plan object being built. It will contain all the
 	// information necessary to execute the route operation.
 	Route *Route
+}
+
+// Order returns the order of the node.
+func (rtb *RouteBuilder) Order() int {
+	return rtb.order
+}
+
+// MarshalJSON marshals RouteBuilder into a readable form.
+// It's used for testing and diagnostics. The representation
+// cannot be used to reconstruct a RouteBuilder.
+func (rtb *RouteBuilder) MarshalJSON() ([]byte, error) {
+	marshalRoute := struct {
+		From  string `json:",omitempty"`
+		Order int
+		Route *Route
+	}{
+		From:  sqlparser.String(rtb.From),
+		Order: rtb.order,
+		Route: rtb.Route,
+	}
+	return json.Marshal(marshalRoute)
 }
 
 // Route is a Plan object that represents a route.
@@ -71,20 +124,6 @@ type Route struct {
 	// be sent.
 	// TODO(sougou): explain contents of Values.
 	Values interface{} `json:",omitempty"`
-}
-
-// MarshalJSON marshals RouteBuilder into a readable form.
-// It's used for testing and diagnostics. The representation
-// is lossy and cannot be used to reconstruct a RouteBuilder.
-func (rtb *RouteBuilder) MarshalJSON() ([]byte, error) {
-	marshalRoute := struct {
-		From  string `json:",omitempty"`
-		Route *Route
-	}{
-		From:  sqlparser.String(rtb.From),
-		Route: rtb.Route,
-	}
-	return json.Marshal(marshalRoute)
 }
 
 // buildSelectPlan2 is the new function to build a Select plan.
@@ -132,6 +171,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, schema *Schema) 
 		}
 		planBuilder := &RouteBuilder{
 			From:  tableExpr,
+			order: 1,
 			Route: route,
 		}
 		alias := expr.Name
@@ -216,59 +256,74 @@ func makeJoinBuilder(lplanBuilder PlanBuilder, lsymbols *SymbolTable, rplanBuild
 	if join.Join == sqlparser.LeftJoinStr {
 		isLeft = true
 	}
+	assignOrder(rplanBuilder, lplanBuilder.Order())
 	return &JoinBuilder{
 		IsLeft: isLeft,
+		order:  rplanBuilder.Order(),
 		Left:   lplanBuilder,
 		Right:  rplanBuilder,
 	}, lsymbols, nil
 }
 
+// assignOrder sets the order for the nodes of the tree based on the
+// starting order.
+func assignOrder(planBuilder PlanBuilder, order int) {
+	switch planBuilder := planBuilder.(type) {
+	case *JoinBuilder:
+		assignOrder(planBuilder.Left, order)
+		assignOrder(planBuilder.Right, planBuilder.Left.Order())
+		planBuilder.order = planBuilder.Right.Order()
+	case *RouteBuilder:
+		planBuilder.order = order + 1
+	}
+}
+
 // joinRoutes attempts to join two RouteBuilder objects into one.
 // If it's possible, it produces a joined RouteBuilder.
 // Otherwise, it's a JoinBuilder.
-func joinRoutes(lplanBuilder *RouteBuilder, lsymbols *SymbolTable, rplanBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
-	if lplanBuilder.Route.Keyspace.Name != rplanBuilder.Route.Keyspace.Name {
-		return makeJoinBuilder(lplanBuilder, lsymbols, rplanBuilder, rsymbols, join)
+func joinRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
+	if lRouteBuilder.Route.Keyspace.Name != rRouteBuilder.Route.Keyspace.Name {
+		return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 	}
-	if lplanBuilder.Route.PlanID == SelectUnsharded {
-		if rplanBuilder.Route.PlanID == SelectUnsharded {
+	if lRouteBuilder.Route.PlanID == SelectUnsharded {
+		if rRouteBuilder.Route.PlanID == SelectUnsharded {
 			// Two Routes from the same unsharded keyspace can be merged.
-			return mergeRoutes(lplanBuilder, lsymbols, rsymbols, join)
+			return mergeRoutes(lRouteBuilder, lsymbols, rsymbols, join)
 		}
-		return makeJoinBuilder(lplanBuilder, lsymbols, rplanBuilder, rsymbols, join)
+		return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 	}
-	// lplanBuilder is a sharded route. It can't merge with an unsharded route.
-	if rplanBuilder.Route.PlanID == SelectUnsharded {
-		return makeJoinBuilder(lplanBuilder, lsymbols, rplanBuilder, rsymbols, join)
+	// lRouteBuilder is a sharded route. It can't merge with an unsharded route.
+	if rRouteBuilder.Route.PlanID == SelectUnsharded {
+		return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 	}
 	// TODO(sougou): Handle special case for SelectEqual and SelectKeyrange.
-	// Both planBuilders are sharded routes. Analyze join condition for merging.
-	return joinShardedRoutes(lplanBuilder, lsymbols, rplanBuilder, rsymbols, join)
+	// Both RouteBuilder are sharded routes. Analyze join condition for merging.
+	return joinShardedRoutes(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 }
 
 // mergeRoutes makes a new RouteBuilder by joining the left and right
 // nodes of a join. This is called if two routes can be merged.
-func mergeRoutes(lplanBuilder *RouteBuilder, lsymbols, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
-	lplanBuilder.From = join
-	err := lsymbols.Merge(rsymbols, lplanBuilder)
+func mergeRoutes(lRouteBuilder *RouteBuilder, lsymbols, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
+	lRouteBuilder.From = join
+	err := lsymbols.Merge(rsymbols, lRouteBuilder)
 	if err != nil {
 		return nil, nil, err
 	}
-	return lplanBuilder, lsymbols, nil
+	return lRouteBuilder, lsymbols, nil
 }
 
 // joinShardedRoutes tries to join two sharded routes into a RouteBuilder.
-// If a merge is possible, it builds one using lplanBuilder as the base route.
+// If a merge is possible, it builds one using lRouteBuilder as the base route.
 // If not, it builds a JoinBuilder instead.
-func joinShardedRoutes(lplanBuilder *RouteBuilder, lsymbols *SymbolTable, rplanBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
+func joinShardedRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
 	onFilters := appendFilters(nil, join.On)
 	for _, filter := range onFilters {
 		if !isSameRoute(filter, lsymbols, rsymbols) {
 			continue
 		}
-		return mergeRoutes(lplanBuilder, lsymbols, rsymbols, join)
+		return mergeRoutes(lRouteBuilder, lsymbols, rsymbols, join)
 	}
-	return makeJoinBuilder(lplanBuilder, lsymbols, rplanBuilder, rsymbols, join)
+	return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 }
 
 // isSameRoute returns true if the filter constraint causes the

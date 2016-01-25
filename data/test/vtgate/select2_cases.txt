@@ -2,6 +2,7 @@
 "select * from user"
 {
   "From": "user",
+  "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
     "Keyspace": {
@@ -15,6 +16,7 @@
 "select * from main1"
 {
   "From": "main1",
+  "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
     "Keyspace": {
@@ -28,6 +30,7 @@
 "select * from main1 as m1 join main1 as m2"
 {
   "From": "main1 as m1 join main1 as m2",
+  "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
     "Keyspace": {
@@ -41,8 +44,10 @@
 "select * from user join music"
 {
   "IsLeft": false,
+  "Order": 2,
   "Left": {
     "From": "user",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -53,6 +58,7 @@
   },
   "Right": {
     "From": "music",
+    "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -67,8 +73,10 @@
 "select * from user join main1"
 {
   "IsLeft": false,
+  "Order": 2,
   "Left": {
     "From": "user",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -79,6 +87,7 @@
   },
   "Right": {
     "From": "main1",
+    "Order": 2,
     "Route": {
       "PlanID": "SelectUnsharded",
       "Keyspace": {
@@ -93,6 +102,7 @@
 "select * from main1 as m1 left join main1 as m2 on a=b"
 {
   "From": "main1 as m1 left join main1 as m2 on a = b",
+  "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
     "Keyspace": {
@@ -106,8 +116,10 @@
 "select * from user left join main1 on a = b"
 {
   "IsLeft": true,
+  "Order": 2,
   "Left": {
     "From": "user",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -118,6 +130,7 @@
   },
   "Right": {
     "From": "main1",
+    "Order": 2,
     "Route": {
       "PlanID": "SelectUnsharded",
       "Keyspace": {
@@ -132,6 +145,7 @@
 "select * from main1 as m1 straight_join main1 as m2"
 {
   "From": "main1 as m1 straight_join main1 as m2",
+  "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
     "Keyspace": {
@@ -145,8 +159,10 @@
 "select * from user join (main1 as m1 join main1 as m2)"
 {
   "IsLeft": false,
+  "Order": 2,
   "Left": {
     "From": "user",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -157,6 +173,7 @@
   },
   "Right": {
     "From": "(main1 as m1 join main1 as m2)",
+    "Order": 2,
     "Route": {
       "PlanID": "SelectUnsharded",
       "Keyspace": {
@@ -171,8 +188,10 @@
 "select * from user join (user as u1 join main1)"
 {
   "IsLeft": false,
+  "Order": 3,
   "Left": {
     "From": "user",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -183,8 +202,10 @@
   },
   "Right": {
     "IsLeft": false,
+    "Order": 3,
     "Left": {
       "From": "user as u1",
+      "Order": 2,
       "Route": {
         "PlanID": "SelectScatter",
         "Keyspace": {
@@ -195,6 +216,7 @@
     },
     "Right": {
       "From": "main1",
+      "Order": 3,
       "Route": {
         "PlanID": "SelectUnsharded",
         "Keyspace": {
@@ -210,6 +232,7 @@
 "select * from user use index(a)"
 {
   "From": "user use index (a)",
+  "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
     "Keyspace": {
@@ -223,6 +246,7 @@
 "select * from user join user_extra on user.id = user_extra.user_id"
 {
   "From": "user join user_extra on user.id = user_extra.user_id",
+  "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
     "Keyspace": {
@@ -236,6 +260,7 @@
 "select * from user join user_extra on user_extra.user_id = user.id"
 {
   "From": "user join user_extra on user_extra.user_id = user.id",
+  "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
     "Keyspace": {
@@ -249,6 +274,7 @@
 "select * from user join user_extra on user.id = 5 and user.id = user_extra.user_id"
 {
   "From": "user join user_extra on user.id = 5 and user.id = user_extra.user_id",
+  "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
     "Keyspace": {
@@ -262,8 +288,10 @@
 "select * from user join user_extra on user.id < user_extra.user_id"
 {
   "IsLeft": false,
+  "Order": 2,
   "Left": {
     "From": "user",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -274,6 +302,7 @@
   },
   "Right": {
     "From": "user_extra",
+    "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -288,8 +317,10 @@
 "select * from user join user_extra on user.id = 5"
 {
   "IsLeft": false,
+  "Order": 2,
   "Left": {
     "From": "user",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -300,6 +331,7 @@
   },
   "Right": {
     "From": "user_extra",
+    "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -314,8 +346,10 @@
 "select * from user join user_extra on 5 = user.id"
 {
   "IsLeft": false,
+  "Order": 2,
   "Left": {
     "From": "user",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -326,6 +360,7 @@
   },
   "Right": {
     "From": "user_extra",
+    "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -340,8 +375,10 @@
 "select * from user join user_extra on notable.id = user_extra.user_id"
 {
   "IsLeft": false,
+  "Order": 2,
   "Left": {
     "From": "user",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -352,6 +389,7 @@
   },
   "Right": {
     "From": "user_extra",
+    "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -366,8 +404,10 @@
 "select * from user join user_extra on user.id = user_extra.col"
 {
   "IsLeft": false,
+  "Order": 2,
   "Left": {
     "From": "user",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -378,6 +418,7 @@
   },
   "Right": {
     "From": "user_extra",
+    "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -392,8 +433,10 @@
 "select * from user_extra join user on user_extra.user_id = user.name"
 {
   "IsLeft": false,
+  "Order": 2,
   "Left": {
     "From": "user_extra",
+    "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
@@ -404,6 +447,7 @@
   },
   "Right": {
     "From": "user",
+    "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
       "Keyspace": {
