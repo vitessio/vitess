@@ -44,14 +44,21 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
+                  .addFields(Field.newBuilder().setName("null").setType(type).build())
                   .addRows(
                       Query.Row.newBuilder()
                           .addLengths("12345".length())
+                          .addLengths(-1) // SQL NULL
                           .setValues(ByteString.copyFromUtf8("12345")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
         Assert.assertEquals(12345, row.getInt("col0"));
+        Assert.assertFalse(row.wasNull());
+        Assert.assertEquals(0, row.getInt("null"));
+        Assert.assertTrue(row.wasNull());
+        Assert.assertEquals(null, row.getObject("null", Integer.class));
+        Assert.assertTrue(row.wasNull());
       }
     }
   }
@@ -62,14 +69,19 @@ public class CursorTest {
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
                 .addFields(Field.newBuilder().setName("col0").setType(Query.Type.UINT64).build())
+                .addFields(Field.newBuilder().setName("null").setType(Query.Type.UINT64).build())
                 .addRows(
                     Query.Row.newBuilder()
                         .addLengths("18446744073709551615".length())
+                        .addLengths(-1) // SQL NULL
                         .setValues(ByteString.copyFromUtf8("18446744073709551615")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
       Assert.assertEquals(UnsignedLong.fromLongBits(-1), row.getULong("col0"));
+      Assert.assertFalse(row.wasNull());
+      Assert.assertEquals(null, row.getULong("null"));
+      Assert.assertTrue(row.wasNull());
     }
   }
 
@@ -81,14 +93,19 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
+                  .addFields(Field.newBuilder().setName("null").setType(type).build())
                   .addRows(
                       Query.Row.newBuilder()
                           .addLengths("val123".length())
+                          .addLengths(-1) // SQL NULL
                           .setValues(ByteString.copyFromUtf8("val123")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
         Assert.assertEquals("val123", row.getString("col0"));
+        Assert.assertFalse(row.wasNull());
+        Assert.assertEquals(null, row.getString("null"));
+        Assert.assertTrue(row.wasNull());
       }
     }
   }
@@ -101,14 +118,21 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
+                  .addFields(Field.newBuilder().setName("null").setType(type).build())
                   .addRows(
                       Query.Row.newBuilder()
                           .addLengths("12345".length())
+                          .addLengths(-1) // SQL NULL
                           .setValues(ByteString.copyFromUtf8("12345")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
         Assert.assertEquals(12345L, row.getLong("col0"));
+        Assert.assertFalse(row.wasNull());
+        Assert.assertEquals(0L, row.getLong("null"));
+        Assert.assertTrue(row.wasNull());
+        Assert.assertEquals(null, row.getObject("null", Long.class));
+        Assert.assertTrue(row.wasNull());
       }
     }
   }
@@ -119,14 +143,21 @@ public class CursorTest {
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
                 .addFields(Field.newBuilder().setName("col0").setType(Query.Type.FLOAT64).build())
+                .addFields(Field.newBuilder().setName("null").setType(Query.Type.FLOAT64).build())
                 .addRows(
                     Query.Row.newBuilder()
                         .addLengths("2.5".length())
+                        .addLengths(-1) // SQL NULL
                         .setValues(ByteString.copyFromUtf8("2.5")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
       Assert.assertEquals(2.5, row.getDouble("col0"), 0.01);
+      Assert.assertFalse(row.wasNull());
+      Assert.assertEquals(0.0, row.getDouble("null"), 0.0);
+      Assert.assertTrue(row.wasNull());
+      Assert.assertEquals(null, row.getObject("null", Double.class));
+      Assert.assertTrue(row.wasNull());
     }
   }
 
@@ -136,14 +167,21 @@ public class CursorTest {
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
                 .addFields(Field.newBuilder().setName("col0").setType(Query.Type.FLOAT32).build())
+                .addFields(Field.newBuilder().setName("null").setType(Query.Type.FLOAT32).build())
                 .addRows(
                     Query.Row.newBuilder()
                         .addLengths("2.5".length())
+                        .addLengths(-1) // SQL NULL
                         .setValues(ByteString.copyFromUtf8("2.5")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
       Assert.assertEquals(2.5f, row.getFloat("col0"), 0.01f);
+      Assert.assertFalse(row.wasNull());
+      Assert.assertEquals(0.0f, row.getFloat("null"), 0.0f);
+      Assert.assertTrue(row.wasNull());
+      Assert.assertEquals(null, row.getObject("null", Float.class));
+      Assert.assertTrue(row.wasNull());
     }
   }
 
@@ -155,14 +193,19 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
+                  .addFields(Field.newBuilder().setName("null").setType(type).build())
                   .addRows(
                       Query.Row.newBuilder()
                           .addLengths("2008-01-02 14:15:16".length())
+                          .addLengths(-1) // SQL NULL
                           .setValues(ByteString.copyFromUtf8("2008-01-02 14:15:16")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
         Assert.assertEquals(new DateTime(2008, 1, 2, 14, 15, 16), row.getDateTime("col0"));
+        Assert.assertFalse(row.wasNull());
+        Assert.assertEquals(null, row.getDateTime("null"));
+        Assert.assertTrue(row.wasNull());
       }
     }
 
@@ -172,14 +215,19 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
+                  .addFields(Field.newBuilder().setName("null").setType(type).build())
                   .addRows(
                       Query.Row.newBuilder()
                           .addLengths("2008-01-02".length())
+                          .addLengths(-1) // SQL NULL
                           .setValues(ByteString.copyFromUtf8("2008-01-02")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
         Assert.assertEquals(new DateTime(2008, 1, 2, 0, 0, 0), row.getDateTime("col0"));
+        Assert.assertFalse(row.wasNull());
+        Assert.assertEquals(null, row.getDateTime("null"));
+        Assert.assertTrue(row.wasNull());
       }
     }
 
@@ -187,14 +235,19 @@ public class CursorTest {
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
                 .addFields(Field.newBuilder().setName("col0").setType(Query.Type.TIME).build())
+                .addFields(Field.newBuilder().setName("null").setType(Query.Type.TIME).build())
                 .addRows(
                     Query.Row.newBuilder()
                         .addLengths("12:34:56".length())
+                        .addLengths(-1) // SQL NULL
                         .setValues(ByteString.copyFromUtf8("12:34:56")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
       Assert.assertEquals(new DateTime(1970, 1, 1, 12, 34, 56), row.getDateTime("col0"));
+      Assert.assertFalse(row.wasNull());
+      Assert.assertEquals(null, row.getDateTime("null"));
+      Assert.assertTrue(row.wasNull());
     }
   }
 
@@ -207,14 +260,19 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
+                  .addFields(Field.newBuilder().setName("null").setType(type).build())
                   .addRows(
                       Query.Row.newBuilder()
                           .addLengths("hello world".length())
+                          .addLengths(-1) // SQL NULL
                           .setValues(ByteString.copyFromUtf8("hello world")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
         Assert.assertArrayEquals("hello world".getBytes("UTF-8"), row.getBytes("col0"));
+        Assert.assertFalse(row.wasNull());
+        Assert.assertEquals(null, row.getBytes("null"));
+        Assert.assertTrue(row.wasNull());
       }
     }
   }
@@ -227,15 +285,20 @@ public class CursorTest {
           Cursor cursor = new SimpleCursor(
               QueryResult.newBuilder()
                   .addFields(Field.newBuilder().setName("col0").setType(type).build())
+                  .addFields(Field.newBuilder().setName("null").setType(type).build())
                   .addRows(
                       Query.Row.newBuilder()
                           .addLengths("1234.56789".length())
+                          .addLengths(-1) // SQL NULL
                           .setValues(ByteString.copyFromUtf8("1234.56789")))
                   .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
         Assert.assertEquals(
             new BigDecimal(BigInteger.valueOf(123456789), 5), row.getBigDecimal("col0"));
+        Assert.assertFalse(row.wasNull());
+        Assert.assertEquals(null, row.getBigDecimal("null"));
+        Assert.assertTrue(row.wasNull());
       }
     }
   }
@@ -246,14 +309,21 @@ public class CursorTest {
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
                 .addFields(Field.newBuilder().setName("col0").setType(Query.Type.YEAR).build())
+                .addFields(Field.newBuilder().setName("null").setType(Query.Type.YEAR).build())
                 .addRows(
                     Query.Row.newBuilder()
                         .addLengths("1234".length())
+                        .addLengths(-1) // SQL NULL
                         .setValues(ByteString.copyFromUtf8("1234")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
       Assert.assertEquals(1234, row.getShort("col0"));
+      Assert.assertFalse(row.wasNull());
+      Assert.assertEquals(0, row.getShort("null"));
+      Assert.assertTrue(row.wasNull());
+      Assert.assertEquals(null, row.getObject("null", Short.class));
+      Assert.assertTrue(row.wasNull());
     }
   }
 
@@ -263,14 +333,19 @@ public class CursorTest {
         Cursor cursor = new SimpleCursor(
             QueryResult.newBuilder()
                 .addFields(Field.newBuilder().setName("col0").setType(Query.Type.NULL_TYPE).build())
+                .addFields(Field.newBuilder().setName("null").setType(Query.Type.NULL_TYPE).build())
                 .addRows(
                     Query.Row.newBuilder()
                         .addLengths("1234".length())
+                        .addLengths(-1) // SQL NULL
                         .setValues(ByteString.copyFromUtf8("1234")))
                 .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
       Assert.assertEquals(null, row.getObject("col0"));
+      Assert.assertTrue(row.wasNull());
+      Assert.assertEquals(null, row.getObject("null"));
+      Assert.assertTrue(row.wasNull());
     }
   }
 }

@@ -29,6 +29,7 @@ public class Row {
   private FieldMap fieldMap;
   private List<ByteString> values;
   private Query.Row rawRow;
+  private boolean lastGetWasNull;
 
   /**
    * Construct a Row from {@link com.youtube.vitess.proto.Query.Row}
@@ -101,15 +102,30 @@ public class Row {
     if (columnIndex >= values.size()) {
       throw new SQLDataException("invalid columnIndex: " + columnIndex);
     }
-    return convertFieldValue(fieldMap.get(columnIndex), values.get(columnIndex));
+    Object value = convertFieldValue(fieldMap.get(columnIndex), values.get(columnIndex));
+    lastGetWasNull = (value == null);
+    return value;
   }
 
+  /**
+   * Returns the column value, or 0 if the value is SQL NULL.
+   *
+   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
+   * or {@link #getObject(String,Class)}.
+   */
   public int getInt(String columnLabel) throws SQLException {
     return getInt(findColumn(columnLabel));
   }
 
+  /**
+   * Returns the column value, or 0 if the value is SQL NULL.
+   *
+   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
+   * or {@link #getObject(int,Class)}.
+   */
   public int getInt(int columnIndex) throws SQLException {
-    return (Integer) getAndCheckType(columnIndex, Integer.class);
+    Integer value = getObject(columnIndex, Integer.class);
+    return value == null ? 0 : value;
   }
 
   public UnsignedLong getULong(String columnLabel) throws SQLException {
@@ -117,7 +133,7 @@ public class Row {
   }
 
   public UnsignedLong getULong(int columnIndex) throws SQLException {
-    return (UnsignedLong) getAndCheckType(columnIndex, UnsignedLong.class);
+    return getObject(columnIndex, UnsignedLong.class);
   }
 
   public String getString(String columnLabel) throws SQLException {
@@ -125,31 +141,70 @@ public class Row {
   }
 
   public String getString(int columnIndex) throws SQLException {
-    return (String) getAndCheckType(columnIndex, String.class);
+    return getObject(columnIndex, String.class);
   }
 
+  /**
+   * Returns the column value, or 0 if the value is SQL NULL.
+   *
+   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
+   * or {@link #getObject(String,Class)}.
+   */
   public long getLong(String columnLabel) throws SQLException {
     return getLong(findColumn(columnLabel));
   }
 
+  /**
+   * Returns the column value, or 0 if the value is SQL NULL.
+   *
+   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
+   * or {@link #getObject(int,Class)}.
+   */
   public long getLong(int columnIndex) throws SQLException {
-    return (Long) getAndCheckType(columnIndex, Long.class);
+    Long value = getObject(columnIndex, Long.class);
+    return value == null ? 0 : value;
   }
 
+  /**
+   * Returns the column value, or 0 if the value is SQL NULL.
+   *
+   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
+   * or {@link #getObject(String,Class)}.
+   */
   public double getDouble(String columnLabel) throws SQLException {
     return getDouble(findColumn(columnLabel));
   }
 
+  /**
+   * Returns the column value, or 0 if the value is SQL NULL.
+   *
+   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
+   * or {@link #getObject(int,Class)}.
+   */
   public double getDouble(int columnIndex) throws SQLException {
-    return (Double) getAndCheckType(columnIndex, Double.class);
+    Double value = getObject(columnIndex, Double.class);
+    return value == null ? 0 : value;
   }
 
+  /**
+   * Returns the column value, or 0 if the value is SQL NULL.
+   *
+   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
+   * or {@link #getObject(String,Class)}.
+   */
   public float getFloat(String columnLabel) throws SQLException {
     return getFloat(findColumn(columnLabel));
   }
 
+  /**
+   * Returns the column value, or 0 if the value is SQL NULL.
+   *
+   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
+   * or {@link #getObject(int,Class)}.
+   */
   public float getFloat(int columnIndex) throws SQLException {
-    return (Float) getAndCheckType(columnIndex, Float.class);
+    Float value = getObject(columnIndex, Float.class);
+    return value == null ? 0 : value;
   }
 
   public DateTime getDateTime(String columnLabel) throws SQLException {
@@ -157,7 +212,7 @@ public class Row {
   }
 
   public DateTime getDateTime(int columnIndex) throws SQLException {
-    return (DateTime) getAndCheckType(columnIndex, DateTime.class);
+    return getObject(columnIndex, DateTime.class);
   }
 
   public byte[] getBytes(String columnLabel) throws SQLException {
@@ -165,7 +220,7 @@ public class Row {
   }
 
   public byte[] getBytes(int columnIndex) throws SQLException {
-    return (byte[]) getAndCheckType(columnIndex, byte[].class);
+    return getObject(columnIndex, byte[].class);
   }
 
   public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
@@ -173,24 +228,97 @@ public class Row {
   }
 
   public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
-    return (BigDecimal) getAndCheckType(columnIndex, BigDecimal.class);
+    return getObject(columnIndex, BigDecimal.class);
   }
 
+  /**
+   * Returns the column value, or 0 if the value is SQL NULL.
+   *
+   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
+   * or {@link #getObject(String,Class)}.
+   */
   public short getShort(String columnLabel) throws SQLException {
     return getShort(findColumn(columnLabel));
   }
 
+  /**
+   * Returns the column value, or 0 if the value is SQL NULL.
+   *
+   * <p>To distinguish between 0 and SQL NULL, use either {@link #wasNull()}
+   * or {@link #getObject(int,Class)}.
+   */
   public short getShort(int columnIndex) throws SQLException {
-    return (Short) getAndCheckType(columnIndex, Short.class);
+    Short value = getObject(columnIndex, Short.class);
+    return value == null ? 0 : value;
   }
 
-  private Object getAndCheckType(int columnIndex, Class<?> cls) throws SQLException {
+  /**
+   * Returns the column value, cast to the specified type.
+   *
+   * <p>This can be used as an alternative to getters that return primitive
+   * types, if you need to distinguish between 0 and SQL NULL. For example:
+   *
+   * <blockquote><pre>
+   * Long value = row.getObject(0, Long.class);
+   * if (value == null) {
+   *   // The value was SQL NULL, not 0.
+   * }
+   * </pre></blockquote>
+   *
+   * @throws SQLDataException if the type doesn't match the actual value.
+   */
+  @SuppressWarnings("unchecked") // by runtime check
+  public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
     Object o = getObject(columnIndex);
-    if (o != null && !cls.isInstance(o)) {
+    if (o != null && !type.isInstance(o)) {
       throw new SQLDataException(
-          "type mismatch, expected:" + cls.getName() + ", actual: " + o.getClass().getName());
+          "type mismatch, expected:" + type.getName() + ", actual: " + o.getClass().getName());
     }
-    return o;
+    return (T) o;
+  }
+
+  /**
+   * Returns the column value, cast to the specified type.
+   *
+   * <p>This can be used as an alternative to getters that return primitive
+   * types, if you need to distinguish between 0 and SQL NULL. For example:
+   *
+   * <blockquote><pre>
+   * Long value = row.getObject("col0", Long.class);
+   * if (value == null) {
+   *   // The value was SQL NULL, not 0.
+   * }
+   * </pre></blockquote>
+   *
+   * @throws SQLDataException if the type doesn't match the actual value.
+   */
+  public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
+    return getObject(findColumn(columnLabel), type);
+  }
+
+  /**
+   * Reports whether the last column read had a value of SQL NULL.
+   *
+   * <p>Getter methods that return primitive types, such as {@link #getLong(int)},
+   * will return 0 if the value is SQL NULL. To distinguish 0 from SQL NULL,
+   * you can call {@code wasNull()} immediately after retrieving the value.
+   *
+   * <p>Note that this is not thread-safe: the value of {@code wasNull()} is only
+   * trustworthy if there are no concurrent calls on this {@code Row} between the
+   * call to {@code get*()} and the call to {@code wasNull()}.
+   *
+   * <p>As an alternative to {@code wasNull()}, you can use {@link #getObject(int,Class)}
+   * (e.g. {@code getObject(0, Long.class)} instead of {@code getLong(0)}) to get a
+   * wrapped {@code Long} value that will be {@code null} if the column value was SQL NULL.
+   *
+   * @throws SQLException
+   */
+  public boolean wasNull() throws SQLException {
+    // Note: lastGetWasNull is currently set only in getObject(int),
+    // which means this relies on the fact that all other get*() methods
+    // eventually call into getObject(int). The unit tests help to ensure
+    // this by checking wasNull() after each get*().
+    return lastGetWasNull;
   }
 
   private static Object convertFieldValue(Field field, ByteString value) throws SQLException {
