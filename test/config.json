@@ -63,7 +63,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -74,7 +74,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -88,7 +88,7 @@
 				"java_test"
 			],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -99,7 +99,7 @@
 				"test/keyrange_test.py"
 			],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -123,7 +123,7 @@
 				"test/local_example.sh"
 			],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -155,7 +155,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -164,7 +164,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -173,7 +173,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -184,7 +184,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -222,7 +222,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -233,7 +233,7 @@
 				"test/sql_builder_test.py"
 			],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -255,7 +255,7 @@
 				"tools/unit_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 2,
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -285,7 +285,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -305,7 +305,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -322,10 +322,12 @@
 		},
 		"vtgatev2_discovery": {
 			"File": "vtgatev2_test.py",
-			"Args": ["--vtgate-gateway-flavor=discoverygateway"],
+			"Args": [
+				"--vtgate-gateway-flavor=discoverygateway"
+			],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -345,7 +347,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},
