@@ -1,43 +1,70 @@
 <?php
+
 namespace Vitess;
 
-/*
+use Vitess\Proto\Vtrpc\ErrorCode;
+use Vitess\Proto\Query;
+use Vitess\Proto\Query\Type;
+use Vitess\Proto\Query\BoundQuery;
+use Vitess\Proto\Topodata\KeyRange;
+use Vitess\Proto\Vtgate\ExecuteEntityIdsRequest\EntityId;
+use Vitess\Proto\Vtgate\BoundShardQuery;
+use Vitess\Proto\Vtgate\BoundKeyspaceIdQuery;
+
+/**
  * This module contains helper functions and classes for interacting with the
  * Vitess protobufs.
  */
 class ProtoUtils
 {
 
+    /**
+     * @param $response
+     *
+     * @throws Error\BadInput
+     * @throws Error\DeadlineExceeded
+     * @throws Error\Integrity
+     * @throws Error\Transient
+     * @throws Error\Unauthenticated
+     * @throws Exception
+     */
     public static function checkError($response)
     {
         $error = $response->getError();
         if ($error) {
             switch ($error->getCode()) {
-                case Proto\Vtrpc\ErrorCode::SUCCESS:
+                case ErrorCode::SUCCESS:
                     break;
-                case Proto\Vtrpc\ErrorCode::BAD_INPUT:
+                case ErrorCode::BAD_INPUT:
                     throw new Error\BadInput($error->getMessage());
-                case Proto\Vtrpc\ErrorCode::DEADLINE_EXCEEDED:
+                case ErrorCode::DEADLINE_EXCEEDED:
                     throw new Error\DeadlineExceeded($error->getMessage());
-                case Proto\Vtrpc\ErrorCode::INTEGRITY_ERROR:
+                case ErrorCode::INTEGRITY_ERROR:
                     throw new Error\Integrity($error->getMessage());
-                case Proto\Vtrpc\ErrorCode::TRANSIENT_ERROR:
+                case ErrorCode::TRANSIENT_ERROR:
                     throw new Error\Transient($error->getMessage());
-                case Proto\Vtrpc\ErrorCode::UNAUTHENTICATED:
+                case ErrorCode::UNAUTHENTICATED:
                     throw new Error\Unauthenticated($error->getMessage());
                 default:
-                    throw new \Vitess\Exception($error->getCode() . ': ' . $error->getMessage());
+                    throw new Exception($error->getCode() . ': ' . $error->getMessage());
             }
         }
     }
 
-    public static function BoundQuery($query, $vars)
+    /**
+     * @param string $query
+     * @param array $vars
+     *
+     * @return BoundQuery
+     * @throws Error\BadInput
+     */
+    public static function BoundQuery($query, array $vars)
     {
-        $bound_query = new Proto\Query\BoundQuery();
+        $bound_query = new BoundQuery();
         $bound_query->setSql($query);
         if ($vars) {
             foreach ($vars as $key => $value) {
-                $entry = new Proto\Query\BoundQuery\BindVariablesEntry();
+                $entry = new BoundQuery\BindVariablesEntry();
                 $entry->setKey($key);
                 $entry->setValue(self::BindVariable($value));
                 $bound_query->addBindVariables($entry);
@@ -46,20 +73,26 @@ class ProtoUtils
         return $bound_query;
     }
 
+    /**
+     * @param mixed $value
+     *
+     * @return Query\BindVariable
+     * @throws Error\BadInput
+     */
     public static function BindVariable($value)
     {
-        $bind_var = new Proto\Query\BindVariable();
+        $bind_var = new Query\BindVariable();
 
         if (is_array($value)) {
             if (count($value) == 0) {
                 throw new Error\BadInput('Empty list not allowed for list bind variable');
             }
 
-            $bind_var->setType(Proto\Query\Type::TUPLE);
+            $bind_var->setType(Query\Type::TUPLE);
 
             foreach ($value as $elem) {
                 list ($type, $tval) = self::TypedValue($elem);
-                $bind_var->addValues((new Proto\Query\Value())->setType($type)
+                $bind_var->addValues((new Query\Value())->setType($type)
                     ->setValue($tval));
             }
         } else {
@@ -73,30 +106,35 @@ class ProtoUtils
 
     /**
      * Returns a tuple of detected Proto\Query\Type and string value compatible with Proto\Query\Value.
+     *
+     * @param mixed $value
+     *
+     * @return array
+     * @throws Error\BadInput
      */
     protected static function TypedValue($value)
     {
         if (is_null($value)) {
             return array(
-                Proto\Query\Type::NULL_TYPE,
+                Type::NULL_TYPE,
                 ''
             );
         } else
             if (is_string($value)) {
                 return array(
-                    Proto\Query\Type::VARBINARY,
+                    Type::VARBINARY,
                     $value
                 );
             } else
                 if (is_int($value)) {
                     return array(
-                        Proto\Query\Type::INT64,
+                        Type::INT64,
                         strval($value)
                     );
                 } else
                     if (is_float($value)) {
                         return array(
-                            Proto\Query\Type::FLOAT64,
+                            Type::FLOAT64,
                             strval($value)
                         );
                     } else
@@ -104,7 +142,7 @@ class ProtoUtils
                             switch (get_class($value)) {
                                 case 'Vitess\UnsignedInt':
                                     return array(
-                                        Proto\Query\Type::UINT64,
+                                        Type::UINT64,
                                         strval($value)
                                     );
                                 default:
@@ -115,36 +153,62 @@ class ProtoUtils
                         }
     }
 
-    public static function addQueries($proto, $queries)
+    /**
+     * @param mixed $proto
+     * @param array $queries
+     */
+    public static function addQueries($proto, array $queries)
     {
         foreach ($queries as $query) {
             $proto->addQueries($query);
         }
     }
 
+    /**
+     * @param string $hex
+     *
+     * @return string
+     */
     public static function KeyspaceIdFromHex($hex)
     {
         return pack('H*', $hex);
     }
 
+    /**
+     * @param string $start
+     * @param string $end
+     *
+     * @return KeyRange
+     */
     public static function KeyRangeFromHex($start, $end)
     {
-        $value = new Proto\Topodata\KeyRange();
+        $value = new KeyRange();
         $value->setStart(self::KeyspaceIdFromHex($start));
         $value->setEnd(self::KeyspaceIdFromHex($end));
         return $value;
     }
 
-    public static function addKeyRanges($proto, $key_ranges)
+    /**
+     * @param mixed $proto
+     * @param array $key_ranges
+     */
+    public static function addKeyRanges($proto, array $key_ranges)
     {
         foreach ($key_ranges as $key_range) {
             $proto->addKeyRanges($key_range);
         }
     }
 
+    /**
+     * @param string $keyspace_id
+     * @param mixed $value
+     *
+     * @return EntityId
+     * @throws Error\BadInput
+     */
     public static function EntityId($keyspace_id, $value)
     {
-        $eid = new Proto\Vtgate\ExecuteEntityIdsRequest\EntityId();
+        $eid = new EntityId();
         $eid->setKeyspaceId($keyspace_id);
 
         list ($type, $tval) = self::TypedValue($value);
@@ -154,32 +218,59 @@ class ProtoUtils
         return $eid;
     }
 
-    public static function addEntityKeyspaceIds($proto, $entity_keyspace_ids)
+    /**
+     * @param mixed $proto
+     * @param array $entity_keyspace_ids
+     */
+    public static function addEntityKeyspaceIds($proto, array $entity_keyspace_ids)
     {
         foreach ($entity_keyspace_ids as $keyspace_id => $entity_id) {
             $proto->addEntityKeyspaceIds(self::EntityId($keyspace_id, $entity_id));
         }
     }
 
+    /**
+     * @param string $query
+     * @param $bind_vars
+     * @param string $keyspace
+     * @param $shards
+     *
+     * @return BoundShardQuery
+     */
     public function BoundShardQuery($query, $bind_vars, $keyspace, $shards)
     {
-        $value = new Proto\Vtgate\BoundShardQuery();
+        $value = new BoundShardQuery();
         $value->setQuery(self::BoundQuery($query, $bind_vars));
         $value->setKeyspace($keyspace);
         $value->setShards($shards);
         return $value;
     }
 
+    /**
+     * @param string $query
+     * @param $bind_vars
+     * @param string $keyspace
+     * @param $keyspace_ids
+     *
+     * @return BoundKeyspaceIdQuery
+     */
     public function BoundKeyspaceIdQuery($query, $bind_vars, $keyspace, $keyspace_ids)
     {
-        $value = new Proto\Vtgate\BoundKeyspaceIdQuery();
+        $value = new BoundKeyspaceIdQuery();
         $value->setQuery(self::BoundQuery($query, $bind_vars));
         $value->setKeyspace($keyspace);
         $value->setKeyspaceIds($keyspace_ids);
         return $value;
     }
 
-    public function RowValues($row)
+    /**
+     * @param Query\Row $row
+     * @param Query\Field[] $fields
+     *
+     * @return array
+     * @throws Exception
+     */
+    public static function RowValues($row, array $fields)
     {
         $values = array();
 
@@ -188,19 +279,26 @@ class ProtoUtils
         $start = 0;
         $buf = $row->getValues();
         $lengths = $row->getLengths();
-        foreach ($lengths as $len) {
+
+        foreach ($lengths as $key => $len) {
+            $fieldKey = $fields[$key]->getName();
+            $val = null;
+
             if ($len < 0) {
                 // This indicates a MySQL NULL value,
                 // to distinguish it from a zero-length string.
-                $values[] = NULL;
+                $val = NULL;
             } else {
                 $val = substr($buf, $start, $len);
-                if ($val === FALSE || strlen($val) != $len) {
-                    throw new \Vitess\Exception('Index out of bounds while decoding Row values');
+                if ($val === FALSE || strlen($val) !== $len) {
+                    throw new Exception('Index out of bounds while decoding Row values');
                 }
-                $values[] = $val;
+
                 $start += $len;
             }
+
+            $values[$fieldKey] = $val;
+            $values[$key] = $val;
         }
 
         return $values;
