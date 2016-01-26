@@ -93,7 +93,9 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $level = error_reporting(error_reporting() & ~ E_WARNING);
         while (! $ctx->isCancelled()) {
             try {
-                $client = new Grpc\Client("$addr:$port");
+                $client = new Grpc\Client("$addr:$port", [
+                    'credentials' => \Grpc\ChannelCredentials::createInsecure()
+                ]);
             } catch (Exception $e) {
                 usleep(100000);
                 continue;

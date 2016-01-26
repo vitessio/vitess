@@ -92,7 +92,6 @@ before_install:
   - travis/php_init.sh
 install:
   - ./bootstrap.sh
-  - travis/php_grpc.sh
 before_script:
   - source dev.env
   # Travis only tests. Run only on the first shard.

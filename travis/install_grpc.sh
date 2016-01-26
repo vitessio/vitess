@@ -14,8 +14,8 @@ fi
 # for python, we'll need the latest virtualenv and tox.
 # running gRPC requires the six package, any version will do.
 if [ "$grpc_dist" != "" ]; then
-  pip install --upgrade --root $grpc_dist virtualenv tox
-  pip install --root $grpc_dist six
+  pip install --upgrade --root $grpc_dist --ignore-installed virtualenv tox
+  pip install --root $grpc_dist --ignore-installed six
 else
   pip install --upgrade virtualenv tox
   pip install six
@@ -65,4 +65,17 @@ if [ "$grpc_dist" != "" ]; then
   CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/grpcio --root $grpc_dist
 else
   pip install src/python/grpcio
+fi
+
+# Build PHP extension, only in Travis.
+if [ "$TRAVIS" == "true" ]; then
+  echo "Building gRPC PHP extension..."
+  eval "$(phpenv init -)"
+  cd $grpc_dist/grpc/src/php/ext/grpc
+  phpize
+  ./configure --enable-grpc=$grpc_dist/usr/local
+  make
+  mkdir -p $HOME/.phpenv/lib
+  mv modules/grpc.so $HOME/.phpenv/lib/
+  echo "extension=$HOME/.phpenv/lib/grpc.so" > ~/.phpenv/versions/$(phpenv global)/etc/conf.d/grpc.ini
 fi

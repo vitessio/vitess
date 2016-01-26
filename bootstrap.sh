@@ -9,6 +9,12 @@ if [ "$1" = "--skip_root_installs" ]; then
   SKIP_ROOT_INSTALLS=True
 fi
 
+# Run parallel make, based on number of cores available.
+NB_CORES=$(grep -c '^processor' /proc/cpuinfo)
+if [ -n "$NB_CORES" ]; then
+  export MAKEFLAGS="-j$((NB_CORES+1)) -l${NB_CORES}"
+fi
+
 function fail() {
   echo "ERROR: $1"
   exit 1
