@@ -44,7 +44,7 @@ class StreamCursor
     public function getFields()
     {
         // The first QueryResult should have the fields.
-        if ($this->fields === null || !$this->nextQueryResult()) {
+        if ($this->fields === null && !$this->nextQueryResult()) {
             throw new Exception('Stream ended before fields were received');
         }
 
