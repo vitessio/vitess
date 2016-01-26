@@ -72,7 +72,7 @@ class Cursor
     }
 
     /**
-     *
+     * @return void
      */
     public function close()
     {}
