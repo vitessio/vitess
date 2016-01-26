@@ -4,9 +4,12 @@ namespace Vitess;
 class VTGateConn
 {
 
+    /**
+     * @var RpcClient
+     */
     protected $client;
 
-    public function __construct($client)
+    public function __construct(RpcClient $client)
     {
         $this->client = $client;
     }
