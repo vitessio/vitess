@@ -14,8 +14,8 @@ fi
 # for python, we'll need the latest virtualenv and tox.
 # running gRPC requires the six package, any version will do.
 if [ "$grpc_dist" != "" ]; then
-  pip install --upgrade --root $grpc_dist virtualenv tox
-  pip install --root $grpc_dist six
+  pip install --upgrade --root $grpc_dist --ignore-installed virtualenv tox
+  pip install --root $grpc_dist --ignore-installed six
 else
   pip install --upgrade virtualenv tox
   pip install six
