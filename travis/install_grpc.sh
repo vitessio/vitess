@@ -66,3 +66,16 @@ if [ "$grpc_dist" != "" ]; then
 else
   pip install src/python/grpcio
 fi
+
+# Build PHP extension, only in Travis.
+if [ "$TRAVIS" == "true" ]; then
+  echo "Building gRPC PHP extension..."
+  eval "$(phpenv init -)"
+  cd $grpc_dist/grpc/src/php/ext/grpc
+  phpize
+  ./configure --enable-grpc=$grpc_dist/usr/local
+  make
+  mkdir -p $HOME/.phpenv/lib
+  mv modules/grpc.so $HOME/.phpenv/lib/
+  echo "extension=$HOME/.phpenv/lib/grpc.so" > ~/.phpenv/versions/$(phpenv global)/etc/conf.d/grpc.ini
+fi

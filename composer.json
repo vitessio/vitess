@@ -15,7 +15,7 @@
     "php": ">=5.5.0",
     "datto/protobuf-php": "dev-master",
     "google/auth": "dev-master",
-    "grpc/grpc": "dev-master#8a8a8760eb243fe758452a2e2bed6e2821b992f1"
+    "grpc/grpc": "dev-release-0_12"
   },
   "autoload": {
     "psr-4": {

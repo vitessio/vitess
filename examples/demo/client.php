@@ -21,7 +21,9 @@ $opts = getopt('', array(
 
 // Create a connection.
 $ctx = Context::getDefault();
-$conn = new VTGateConn(new \Vitess\Grpc\Client($opts['server']));
+$conn = new VTGateConn(new \Vitess\Grpc\Client($opts['server'], [
+    'credentials' => Grpc\ChannelCredentials::createInsecure()
+]));
 
 // Insert something.
 $tx = $conn->begin($ctx);
