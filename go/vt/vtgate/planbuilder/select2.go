@@ -324,7 +324,7 @@ func mergeRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuild
 // If a merge is possible, it builds one using lRouteBuilder as the base route.
 // If not, it builds a JoinBuilder instead.
 func joinShardedRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
-	onFilters := appendFilters(nil, join.On)
+	onFilters := splitAndExpression(nil, join.On)
 	for _, filter := range onFilters {
 		if isSameRoute(filter, lsymbols, rsymbols) {
 			return mergeRoutes(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)

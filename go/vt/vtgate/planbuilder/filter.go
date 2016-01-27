@@ -6,13 +6,13 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-// appendFilters breaks up the BoolExpr into AND-separated conditions
+// splitAndExpression breaks up the BoolExpr into AND-separated conditions
 // and appends them to filters, which can be shuffled and recombined
 // as needed.
-func appendFilters(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) []sqlparser.BoolExpr {
+func splitAndExpression(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) []sqlparser.BoolExpr {
 	if node, ok := node.(*sqlparser.AndExpr); ok {
-		filters = appendFilters(filters, node.Left)
-		return appendFilters(filters, node.Right)
+		filters = splitAndExpression(filters, node.Left)
+		return splitAndExpression(filters, node.Right)
 	}
 	return append(filters, node)
 }
