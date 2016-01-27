@@ -341,6 +341,7 @@ func (*JoinTableExpr) iTableExpr()    {}
 
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias or index hint.
+// If As is empty, no alias was used.
 type AliasedTableExpr struct {
 	Expr  SimpleTableExpr
 	As    SQLName
@@ -369,6 +370,9 @@ func (*TableName) iSimpleTableExpr() {}
 func (*Subquery) iSimpleTableExpr()  {}
 
 // TableName represents a table  name.
+// Qualifier, if specified, represents a database.
+// It's generally not supported because vitess has its own
+// rules about which database to send a query to.
 type TableName struct {
 	Name, Qualifier SQLName
 }

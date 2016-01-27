@@ -12,7 +12,7 @@ import (
 
 // SymbolTable contains the symbols for a SELECT
 // statement. If it's for a subquery, it points to
-// an outer scope.
+// an outer scope. For now, it only contains tables.
 type SymbolTable struct {
 	tables map[sqlparser.SQLName]*TableAlias
 	outer  *SymbolTable
@@ -20,13 +20,14 @@ type SymbolTable struct {
 
 // TableAlias is part of SymbolTable.
 // It represnts a table alias in a FROM clause.
+// TODO(sougou): Update comments after the struct is finalized.
 type TableAlias struct {
 	// Name represents the name of the alias.
 	Name sqlparser.SQLName
 	// Keyspace points to the keyspace to which this
 	// alias belongs.
 	Keyspace *Keyspace
-	// CoVindexes is the list of column Vindexes for this alisas.
+	// CoVindexes is the list of column Vindexes for this alias.
 	ColVindexes []*ColVindex
 	// Route points to the RouteBuilder object under which this alias
 	// was created.
@@ -49,7 +50,7 @@ func NewSymbolTable(alias sqlparser.SQLName, table *Table, route *RouteBuilder) 
 }
 
 // Add merges the new symbol table into the current one
-// without mergine their routes. This means that the new symbols
+// without merging their routes. This means that the new symbols
 // will belong to different routes
 func (smt *SymbolTable) Add(symbols *SymbolTable) error {
 	for k, v := range symbols.tables {
@@ -61,9 +62,8 @@ func (smt *SymbolTable) Add(symbols *SymbolTable) error {
 	return nil
 }
 
-// Merge merges the new symbol table into the current as part of
-// the same route. So, all symbols will be changed to point to the new
-// RouteBuilder.
+// Merge merges the new symbol table into the current one and makes
+// all the tables part of the specified RouteBuilder.
 func (smt *SymbolTable) Merge(symbols *SymbolTable, route *RouteBuilder) error {
 	for _, v := range smt.tables {
 		v.Route = route

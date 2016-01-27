@@ -11,6 +11,13 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+// This file contains routines for processing the FROM
+// clause. Functions in this file manipulate various data
+// structures. If they return an error, one should assume
+// that the data structures may be in an inconsistent state.
+// In general, the error should just be returned back to the
+// application.
+
 // PlanBuilder represents any object that's used to
 // build a plan. The top-level PlanBuilder will be a
 // tree that points to other PlanBuilder objects.
@@ -118,7 +125,7 @@ type Route struct {
 	// Vindex represents the vindex that will be used
 	// to resolve the route.
 	Vindex Vindex `json:",omitempty"`
-	// Values represents a single value or a list of
+	// Values can be a single value or a list of
 	// values that will be used as input to the Vindex
 	// to compute the target shard(s) where the query must
 	// be sent.
@@ -137,7 +144,7 @@ func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (PlanBuilder, *Symb
 func processTableExprs(tableExprs sqlparser.TableExprs, schema *Schema) (PlanBuilder, *SymbolTable, error) {
 	if len(tableExprs) != 1 {
 		// TODO(sougou): better error message.
-		return nil, nil, errors.New("no list")
+		return nil, nil, errors.New("lists are not supported")
 	}
 	return processTableExpr(tableExprs[0], schema)
 }
@@ -150,6 +157,9 @@ func processTableExpr(tableExpr sqlparser.TableExpr, schema *Schema) (PlanBuilde
 		return processAliasedTable(tableExpr, schema)
 	case *sqlparser.ParenTableExpr:
 		planBuilder, symbols, err := processTableExprs(tableExpr.Exprs, schema)
+		// We want to point to the higher level parenthesis because
+		// more routes can be merged with this one. If so, the order
+		// should be maintained as dictated by the parenthesis.
 		if route, ok := planBuilder.(*RouteBuilder); ok {
 			route.From = tableExpr
 		}
@@ -286,11 +296,8 @@ func joinRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilde
 		return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 	}
 	if lRouteBuilder.Route.PlanID == SelectUnsharded {
-		if rRouteBuilder.Route.PlanID == SelectUnsharded {
-			// Two Routes from the same unsharded keyspace can be merged.
-			return mergeRoutes(lRouteBuilder, lsymbols, rsymbols, join)
-		}
-		return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
+		// Two Routes from the same unsharded keyspace can be merged.
+		return mergeRoutes(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 	}
 	// lRouteBuilder is a sharded route. It can't merge with an unsharded route.
 	if rRouteBuilder.Route.PlanID == SelectUnsharded {
@@ -302,8 +309,9 @@ func joinRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilde
 }
 
 // mergeRoutes makes a new RouteBuilder by joining the left and right
-// nodes of a join. This is called if two routes can be merged.
-func mergeRoutes(lRouteBuilder *RouteBuilder, lsymbols, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
+// nodes of a join. The merged RouteBuilder inherits the plan of the
+// left Route. This function is called if two routes can be merged.
+func mergeRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
 	lRouteBuilder.From = join
 	err := lsymbols.Merge(rsymbols, lRouteBuilder)
 	if err != nil {
@@ -318,10 +326,9 @@ func mergeRoutes(lRouteBuilder *RouteBuilder, lsymbols, rsymbols *SymbolTable, j
 func joinShardedRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
 	onFilters := appendFilters(nil, join.On)
 	for _, filter := range onFilters {
-		if !isSameRoute(filter, lsymbols, rsymbols) {
-			continue
+		if isSameRoute(filter, lsymbols, rsymbols) {
+			return mergeRoutes(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 		}
-		return mergeRoutes(lRouteBuilder, lsymbols, rsymbols, join)
 	}
 	return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 }
