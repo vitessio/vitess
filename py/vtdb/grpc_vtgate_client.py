@@ -135,8 +135,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
         self._add_caller_id(request, effective_caller_id)
         self._add_session(request)
         _convert_bind_vars(bind_variables, request.query.bind_variables)
-
-        # TODO(alainjobart) add entity_keyspace_id_map
+        _convert_entity_ids(entity_keyspace_id_map, request.entity_keyspace_ids)
 
         response = self.stub.ExecuteEntityIds(request, self.timeout)
 
@@ -190,8 +189,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
 
         response = self.stub.Execute(request, self.timeout)
 
-      self._extract_rpc_error(exec_method, response.error)
       self.session = response.session
+      self._extract_rpc_error(exec_method, response.error)
       return self._get_rowset_from_query_result(response.result)
 
     except (face.AbortionError, vtgate_utils.VitessError) as e:
@@ -206,7 +205,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       **kwargs):
 
     try:
-      if keyspace_ids_list:
+      if keyspace_ids_list[0]:
         exec_method = 'ExecuteBatchKeyspaceIds'
         request = vtgate_pb2.ExecuteBatchKeyspaceIdsRequest(
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
@@ -243,13 +242,14 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
           query = request.queries.add()
           query.query.sql = sql
           query.keyspace = keyspace_name
-          query.shards = shards
+          for shard in shards:
+            query.shards.append(shard)
           _convert_bind_vars(bind_variables, query.query.bind_variables)
 
         response = self.stub.ExecuteBatchShards(request, self.timeout)
 
-      self._extract_rpc_error(exec_method, response.error)
       self.session = response.session
+      self._extract_rpc_error(exec_method, response.error)
 
       rowsets = []
       for result in response.results:
@@ -402,6 +402,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
     new_args = (type(exc).__name__,) + exc.args
     if isinstance(exc, vtgate_utils.VitessError):
       new_exc = exc.convert_to_dbexception(new_args)
+    elif isinstance(exc, face.ExpirationError):
+      new_exc = dbexceptions.TimeoutError(new_args)
     elif isinstance(exc, face.AbortionError):
       msg = exc.details
       if exc.code == interfaces.StatusCode.UNAVAILABLE:
@@ -425,40 +427,66 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
 def _convert_bind_vars(bind_variables, request_bind_variables):
   """Convert binding variables to ProtoBuffer."""
   for key, val in bind_variables.iteritems():
-    if isinstance(val, int):
-      request_bind_variables[key].type = query_pb2.INT64
-      request_bind_variables[key].value = str(val)
-    elif isinstance(val, long):
-      if val < INT_UPPERBOUND_PLUS_ONE:
-        request_bind_variables[key].type = query_pb2.INT64
-        request_bind_variables[key].value = str(val)
-      else:
-        request_bind_variables[key].type = query_pb2.UINT64
-        request_bind_variables[key].value = str(val)
-    elif isinstance(val, float):
-      request_bind_variables[key].type = query_pb2.FLOAT64
-      request_bind_variables[key].value = str(val)
-    elif hasattr(val, '__sql_literal__'):
-      request_bind_variables[key].type = query_pb2.VARCHAR
-      request_bind_variables[key].value = str(val.__sql_literal__())
-    elif isinstance(val, datetime.datetime):
-      request_bind_variables[key].type = query_pb2.VARCHAR
-      request_bind_variables[key].value = times.DateTimeToString(val)
-    elif isinstance(val, datetime.date):
-      request_bind_variables[key].type = query_pb2.VARCHAR
-      request_bind_variables[key].value = times.DateToString(val)
-    elif isinstance(val, str):
-      request_bind_variables[key].type = query_pb2.VARCHAR
-      request_bind_variables[key].value = val
-    elif isinstance(val, field_types.NoneType):
-      request_bind_variables[key].type = query_pb2.NULL_TYPE
-    elif isinstance(val, (set, tuple, list)):
-      list_val = list(val)
-      # FIXME(alainjobart) implement this
-      var = _create_list_type(list_val)
+    _convert_value(val, request_bind_variables[key], allow_lists=True)
+
+
+def _convert_value(value, proto_value, allow_lists=False):
+  """Convert a variable from python type to proto type+value."""
+  if isinstance(value, int):
+    proto_value.type = query_pb2.INT64
+    proto_value.value = str(value)
+  elif isinstance(value, long):
+    if value < INT_UPPERBOUND_PLUS_ONE:
+      proto_value.type = query_pb2.INT64
     else:
-      request_bind_variables[key].type = query_pb2.BindVariable.BINARY
-      request_bind_variables[key].value = str(val)
+      proto_value.type = query_pb2.UINT64
+    proto_value.value = str(value)
+  elif isinstance(value, float):
+    proto_value.type = query_pb2.FLOAT64
+    proto_value.value = str(value)
+  elif hasattr(value, '__sql_literal__'):
+    proto_value.type = query_pb2.VARCHAR
+    proto_value.value = str(value.__sql_literal__())
+  elif isinstance(value, datetime.datetime):
+    proto_value.type = query_pb2.VARCHAR
+    proto_value.value = times.DateTimeToString(value)
+  elif isinstance(value, datetime.date):
+    proto_value.type = query_pb2.VARCHAR
+    proto_value.value = times.DateToString(value)
+  elif isinstance(value, str):
+    proto_value.type = query_pb2.VARCHAR
+    proto_value.value = value
+  elif isinstance(value, field_types.NoneType):
+    proto_value.type = query_pb2.NULL_TYPE
+  elif allow_lists and isinstance(value, (set, tuple, list)):
+    # this only works for bind variables, not for entities.
+    proto_value.type = query_pb2.TUPLE
+    for v in list(value):
+      proto_v = proto_value.values.add()
+      _convert_value(v, proto_v)
+  else:
+    proto_value.type = query_pb2.BINARY
+    proto_value.value = str(value)
+
+
+def _convert_entity_ids(entity_keyspace_ids, request_eki):
+  """Convert external entity id map to ProtoBuffer.
+
+  Args:
+    entity_keyspace_ids: map of entity_keyspace_id.
+    request_eki: destination proto3 list.
+
+  Returns:
+    list of entity_keyspace_id as ProtoBuf.
+  """
+  for xid, kid in entity_keyspace_ids.iteritems():
+    eid = request_eki.add()
+    eid.keyspace_id = kid
+
+    value = query_pb2.Value()
+    _convert_value(xid, value, allow_lists=False)
+    eid.xid_type = value.type
+    eid.xid_value = value.value
 
 
 def _prune_integrity_error(msg, exc_args):

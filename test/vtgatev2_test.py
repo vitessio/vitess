@@ -465,17 +465,13 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.commit()
     kid_list = [pack_kid(kid) for kid in kid_list]
     cursor = vtgate_conn.cursor(keyspace=None, tablet_type='master')
+
     # Test ExecuteBatchKeyspaceIds
     params_list = [
         dict(sql='select msg, keyspace_id from vt_insert_test',
              bind_variables={},
              keyspace=KEYSPACE_NAME, keyspace_ids=kid_list,
              shards=None),
-        dict(sql='select eid, id, keyspace_id from vt_a',
-             bind_variables={},
-             keyspace=KEYSPACE_NAME,
-             keyspace_ids=None,
-             shards=[shard_name]),
         dict(sql='select eid + 100, id, keyspace_id from vt_a',
              bind_variables={},
              keyspace=KEYSPACE_NAME, keyspace_ids=kid_list,
@@ -487,6 +483,26 @@ class TestCoreVTGateFunctions(BaseTestCase):
     self.assertEqual(msg_0, 'test 0')
     self.assertEqual(msg_1, 'test 1')
     self.assertTrue(cursor.nextset())
+    eid_0_plus_100, eid_1_plus_100 = (
+        row[0] for row in sorted(cursor.fetchall())[:2])
+    self.assertEqual(eid_0_plus_100, 100)
+    self.assertEqual(eid_1_plus_100, 101)
+    self.assertFalse(cursor.nextset())
+
+    # Test ExecuteBatchShards
+    params_list = [
+        dict(sql='select eid, id, keyspace_id from vt_a',
+             bind_variables={},
+             keyspace=KEYSPACE_NAME,
+             keyspace_ids=None,
+             shards=[shard_name]),
+        dict(sql='select eid + 100, id, keyspace_id from vt_a',
+             bind_variables={},
+             keyspace=KEYSPACE_NAME,
+             keyspace_ids=None,
+             shards=[shard_name]),
+    ]
+    cursor.executemany(sql=None, params_list=params_list)
     self.assertEqual(cursor.rowcount, count)
     eid_0, eid_1 = (row[0] for row in sorted(cursor.fetchall())[:2])
     self.assertEqual(eid_0, 0)
@@ -1043,9 +1059,8 @@ class TestFailures(BaseTestCase):
     except dbexceptions.DatabaseError:
       # FIXME(alainjobart) add a method to get the session to vtgate_client,
       # instead of poking into it like this.
+      logging.info('Shard session: %s', vtgate_conn.session)
       if protocols_flavor().vtgate_python_protocol() == 'gorpc':
-        logging.info(
-            'SHARD SESSIONS: %s', vtgate_conn.session['ShardSessions'])
         transaction_id = (
             vtgate_conn.session['ShardSessions'][0]['TransactionId'])
       else:
