@@ -70,8 +70,11 @@ class TestPythonClientBase(unittest.TestCase):
 
   def setUp(self):
     super(TestPythonClientBase, self).setUp()
-    addr = 'localhost:%d' % vtgateclienttest_port
     protocol = protocols_flavor().vtgate_python_protocol()
+    if protocol == 'grpc':
+      addr = 'localhost:%d' % vtgateclienttest_grpc_port
+    else:
+      addr = 'localhost:%d' % vtgateclienttest_port
     self.conn = vtgate_client.connect(protocol, addr, 30.0)
     logging.info(
         'Start: %s, protocol %s.',

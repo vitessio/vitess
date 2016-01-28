@@ -577,9 +577,13 @@ class VtGate(object):
     """Returns the secure address of the vtgate process."""
     return 'localhost:%d' % self.secure_port
 
-  def rpc_endpoint(self):
+  def rpc_endpoint(self, python=False):
     """Returns the endpoint to use for RPCs."""
-    if protocols_flavor().vtgate_protocol() == 'grpc':
+    if python:
+      protocol = protocols_flavor().vtgate_python_protocol()
+    else:
+      protocol = protocols_flavor().vtgate_protocol()
+    if protocol == 'grpc':
       return 'localhost:%d' % self.grpc_port
     return self.addr()
 

@@ -86,12 +86,14 @@ class VTGateClient(object):
 
     If successful, call close() to close the connection.
     """
+    raise NotImplemented('Child class needs to implement this')
 
   def close(self):
     """Close the connection.
 
     This object may be re-used again by calling dial().
     """
+    raise NotImplemented('Child class needs to implement this')
 
   def is_closed(self):
     """Checks the connection status.
@@ -99,6 +101,7 @@ class VTGateClient(object):
     Returns:
       True if this connection is closed.
     """
+    raise NotImplemented('Child class needs to implement this')
 
   def cursor(self, *pargs, **kwargs):
     """Creates a cursor instance associated with this connection.
@@ -133,6 +136,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
+    raise NotImplemented('Child class needs to implement this')
 
   def commit(self):
     """Commits the current transaction.
@@ -150,6 +154,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
+    raise NotImplemented('Child class needs to implement this')
 
   def rollback(self):
     """Rolls the current transaction back.
@@ -167,6 +172,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
+    raise NotImplemented('Child class needs to implement this')
 
   def _execute(self, sql, bind_variables, tablet_type,
                keyspace=None,
@@ -178,6 +184,7 @@ class VTGateClient(object):
     """Executes the given sql.
 
     FIXME(alainjobart): should take the session in.
+    FIXME(alainjobart): implementations have keyspace before tablet_type!
 
     Args:
       sql: query to execute.
@@ -225,6 +232,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
+    raise NotImplemented('Child class needs to implement this')
 
   def _execute_batch(
       self, sql_list, bind_variables_list, tablet_type,
@@ -269,6 +277,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
+    raise NotImplemented('Child class needs to implement this')
 
   def _stream_execute(
       self, sql, bind_variables, tablet_type, keyspace=None, shards=None,
@@ -311,6 +320,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
+    raise NotImplemented('Child class needs to implement this')
 
   def get_srv_keyspace(self, keyspace):
     """Returns a SrvKeyspace object.
@@ -324,3 +334,4 @@ class VTGateClient(object):
     Raises:
       TBD
     """
+    raise NotImplemented('Child class needs to implement this')

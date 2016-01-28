@@ -7,7 +7,7 @@
 This currently supports both vtgatev2 and vtgatev3.
 """
 
-# TODO(dumbunny): Rename module, class, and tests to vtgate_gorpc_client.
+# TODO(dumbunny): Rename module, class, and tests to gorpc_vtgate_client.
 
 from itertools import izip
 import logging
@@ -273,6 +273,9 @@ class VTGateConnection(vtgate_client.VTGateClient):
       The (results, rowcount, lastrowid, fields) tuple.
     """
 
+    # FIXME(alainjobart): keyspace should be in routing_kwargs,
+    # as it's not used for v3.
+
     routing_kwargs = {}
     exec_method = None
     req = None
@@ -367,6 +370,10 @@ class VTGateConnection(vtgate_client.VTGateClient):
       gorpc.AppError: Error returned from vtgate server.
       dbexceptions.ProgrammingError: On bad input.
     """
+
+    # FIXME(alainjobart): this is very confusing: we have either
+    # ExecuteBatchShards or ExecuteBatchKeyspaceIds, so all queries
+    # have to be one style or another. It is *not* a per query choice.
 
     def build_query_list():
       """Create a query dict list from parameters."""
@@ -575,7 +582,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       # we need to make it back to what keyspace.Keyspace expects
       return keyspace.Keyspace(
           name,
-          keyrange_constants.srv_keyspace_proto3_to_old(response.reply))
+          keyrange_constants.srv_keyspace_bson_proto3_to_old(response.reply))
     except gorpc.GoRpcError as e:
       raise self._convert_exception(e, keyspace=name)
     except:

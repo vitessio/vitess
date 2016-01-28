@@ -237,7 +237,8 @@ def setup_tablets():
 def get_connection(timeout=10.0):
   protocol = protocols_flavor().vtgate_python_protocol()
   try:
-    return vtgate_client.connect(protocol, utils.vtgate.addr(), timeout)
+    return vtgate_client.connect(protocol, utils.vtgate.rpc_endpoint(True),
+                                 timeout)
   except Exception:
     logging.exception('Connection to vtgate (timeout=%s) failed.', timeout)
     raise
