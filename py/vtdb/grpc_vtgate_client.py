@@ -6,6 +6,7 @@
 """
 
 import datetime
+import logging
 import re
 from urlparse import urlparse
 
@@ -17,13 +18,14 @@ from vtproto import query_pb2
 from vtproto import topodata_pb2
 from vtproto import vtgate_pb2
 from vtproto import vtgateservice_pb2
-from vtproto import vtrpc_pb2
 
 from vtdb import dbapi
 from vtdb import dbexceptions
+from vtdb import field_types
 from vtdb import field_types_proto3
 from vtdb import keyrange_constants
 from vtdb import keyspace
+from vtdb import times
 from vtdb import vtdb_logger
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
@@ -99,7 +101,6 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       self.session = None
       self.effective_caller_id = None
 
-
   def _execute(self, sql, bind_variables, keyspace_name, tablet_type,
                shards=None,
                keyspace_ids=None,
@@ -110,16 +111,19 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
     # FIXME(alainjobart): keyspace should be in routing_kwargs,
     # as it's not used for v3.
 
+    # FIXME(alainjobart): the v3 part doesn't take the ptyhon-style queries
+    # for bind variables (the %(xxx)s), but our style (the :xxx).
+    # this is not consistent with the rest.
+
     try:
       routing_kwargs = {}
       exec_method = None
-
-      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
 
       if entity_keyspace_id_map is not None:
         routing_kwargs['entity_keyspace_id_map'] = entity_keyspace_id_map
         routing_kwargs['entity_column_name'] = entity_column_name
         exec_method = 'ExecuteEntityIds'
+        sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
 
         request = vtgate_pb2.ExecuteEntityIdsRequest(
             query=query_pb2.BoundQuery(sql=sql),
@@ -139,6 +143,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       elif keyspace_ids is not None:
         routing_kwargs['keyspace_ids'] = keyspace_ids
         exec_method = 'ExecuteKeyspaceIds'
+        sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
 
         request = vtgate_pb2.ExecuteKeyspaceIdsRequest(
             query=query_pb2.BoundQuery(sql=sql),
@@ -156,6 +161,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       elif keyranges is not None:
         routing_kwargs['keyranges'] = keyranges
         exec_method = 'ExecuteKeyRanges'
+        sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
 
         request = vtgate_pb2.ExecuteKeyRangesRequest(
             query=query_pb2.BoundQuery(sql=sql),
@@ -209,12 +215,13 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
         self._add_caller_id(request, effective_caller_id)
         self._add_session(request)
 
-        for sql, bind_variables, keyspace, keyspace_ids in zip(
+        for sql, bind_variables, keyspace_name, keyspace_ids in zip(
             sql_list, bind_variables_list, keyspace_list, keyspace_ids_list):
-          sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
+          sql, bind_variables = dbapi.prepare_query_bind_vars(sql,
+                                                              bind_variables)
           query = request.queries.add()
           query.query.sql = sql
-          query.keyspace = keyspace
+          query.keyspace = keyspace_name
           self._add_keyspace_ids(query, keyspace_ids)
           _convert_bind_vars(bind_variables, query.query.bind_variables)
 
@@ -229,12 +236,13 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
         self._add_caller_id(request, effective_caller_id)
         self._add_session(request)
 
-        for sql, bind_variables, keyspace, shards in zip(
+        for sql, bind_variables, keyspace_name, shards in zip(
             sql_list, bind_variables_list, keyspace_list, shards_list):
-          sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
+          sql, bind_variables = dbapi.prepare_query_bind_vars(sql,
+                                                              bind_variables)
           query = request.queries.add()
           query.query.sql = sql
-          query.keyspace = keyspace
+          query.keyspace = keyspace_name
           query.shards = shards
           _convert_bind_vars(bind_variables, query.query.bind_variables)
 
@@ -243,10 +251,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       self._extract_rpc_error(exec_method, response.error)
       self.session = response.session
 
-      print 'AAAAAAAAAAAAA', response.results
       rowsets = []
       for result in response.results:
-        print 'BBBBBBBBBBB', result
         rowset = self._get_rowset_from_query_result(result)
         rowsets.append(rowset)
       return rowsets
@@ -263,10 +269,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
 
     try:
       sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-      exec_method = None
 
       if keyspace_ids is not None:
-        exec_method = 'StreamExecuteKeyspaceIds'
         request = vtgate_pb2.StreamExecuteKeyspaceIdsRequest(
             query=query_pb2.BoundQuery(sql=sql),
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
@@ -278,7 +282,6 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
         it = self.stub.StreamExecuteKeyspaceIds(request, self.timeout)
 
       elif keyranges is not None:
-        exec_method = 'StreamExecuteKeyRanges'
         request = vtgate_pb2.StreamExecuteKeyRangesRequest(
             query=query_pb2.BoundQuery(sql=sql),
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
@@ -290,7 +293,6 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
         it = self.stub.StreamExecuteKeyRanges(request, self.timeout)
 
       else:
-        exec_method = 'StreamExecute'
         request = vtgate_pb2.StreamExecuteRequest(
             query=query_pb2.BoundQuery(sql=sql),
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
@@ -315,7 +317,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
     def row_generator():
       try:
         for response in it:
-          yield tuple(_make_row(response.result, conversions))
+          for row in response.result.rows:
+            yield tuple(_make_row(row, conversions))
       except Exception:
         logging.exception('gRPC low-level error')
         raise
@@ -421,7 +424,6 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
 
 def _convert_bind_vars(bind_variables, request_bind_variables):
   """Convert binding variables to ProtoBuffer."""
-  new_vars = []
   for key, val in bind_variables.iteritems():
     if isinstance(val, int):
       request_bind_variables[key].type = query_pb2.INT64
