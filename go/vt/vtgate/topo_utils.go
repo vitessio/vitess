@@ -104,7 +104,7 @@ func mapEntityIdsToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell
 		if err != nil {
 			return "", nil, err
 		}
-		v, err := sqltypes.ValueFromBytes(eid.XidType, eid.XidValue)
+		v, err := sqltypes.ValueFromBytes(eid.Type, eid.Value)
 		if err != nil {
 			return "", nil, err
 		}

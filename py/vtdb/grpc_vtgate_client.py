@@ -494,11 +494,7 @@ def _convert_entity_ids(entity_keyspace_ids, request_eki):
   for xid, kid in entity_keyspace_ids.iteritems():
     eid = request_eki.add()
     eid.keyspace_id = kid
-
-    value = query_pb2.Value()
-    _convert_value(xid, value, allow_lists=False)
-    eid.xid_type = value.type
-    eid.xid_value = value.value
+    _convert_value(xid, eid, allow_lists=False)
 
 
 def _prune_integrity_error(msg, exc_args):
