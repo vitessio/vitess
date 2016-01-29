@@ -636,8 +636,9 @@ class VtGate(object):
 
   def split_query(self, sql, keyspace, split_count, bindvars=None):
     """Uses 'vtctl VtGateSplitQuery' to cut a query up in chunks."""
+    _, addr = self.rpc_endpoint()
     args = ['VtGateSplitQuery',
-            '-server', self.rpc_endpoint(),
+            '-server', addr,
             '-keyspace', keyspace,
             '-split_count', str(split_count)]
     if bindvars:
