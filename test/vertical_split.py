@@ -17,7 +17,6 @@ from vtdb import vtgate_client
 import environment
 import tablet
 import utils
-from protocols_flavor import protocols_flavor
 
 # source keyspace, with 4 tables
 source_master = tablet.Tablet()
@@ -205,8 +204,7 @@ index by_msg (msg)
                        self.moving1_first, 100)
 
   def _vtdb_conn(self):
-    addr = utils.vtgate.rpc_endpoint()
-    protocol = protocols_flavor().vtgate_python_protocol()
+    protocol, addr = utils.vtgate.rpc_endpoint()
     return vtgate_client.connect(protocol, addr, 30.0)
 
   # insert some values in the source master db, return the first id used

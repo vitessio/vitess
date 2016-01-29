@@ -502,7 +502,6 @@ class VtGate(object):
     self.port = port or environment.reserve_ports(1)
     if protocols_flavor().vtgate_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
-    self.secure_port = None
     self.proc = None
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
@@ -538,10 +537,7 @@ class VtGate(object):
       args.extend(extra_args)
 
     self.proc = run_bg(args)
-    if self.secure_port:
-      wait_for_vars('vtgate', self.port, 'SecureConnections')
-    else:
-      wait_for_vars('vtgate', self.port)
+    wait_for_vars('vtgate', self.port)
 
     global vtgate
     if not vtgate:
@@ -570,22 +566,18 @@ class VtGate(object):
       vtgate = None
 
   def addr(self):
-    """Returns the address of the vtgate process."""
+    """Returns the address of the vtgate process, for web access."""
     return 'localhost:%d' % self.port
 
-  def secure_addr(self):
-    """Returns the secure address of the vtgate process."""
-    return 'localhost:%d' % self.secure_port
-
   def rpc_endpoint(self, python=False):
-    """Returns the endpoint to use for RPCs."""
+    """Returns the protocol and endpoint to use for RPCs."""
     if python:
       protocol = protocols_flavor().vtgate_python_protocol()
     else:
       protocol = protocols_flavor().vtgate_protocol()
     if protocol == 'grpc':
-      return 'localhost:%d' % self.grpc_port
-    return self.addr()
+      return protocol, 'localhost:%d' % self.grpc_port
+    return protocol, self.addr()
 
   def get_status(self):
     """Returns the status page for this process."""

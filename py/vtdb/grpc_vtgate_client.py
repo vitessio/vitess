@@ -70,21 +70,21 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
   def begin(self, effective_caller_id=None):
     try:
       request = vtgate_pb2.BeginRequest()
-      self._add_caller_id(request, effective_caller_id)
+      _add_caller_id(request, effective_caller_id)
       response = self.stub.Begin(request, self.timeout)
       self.effective_caller_id = effective_caller_id
       self.session = response.session
     except (face.AbortionError, vtgate_utils.VitessError) as e:
-      raise self._convert_exception(e)
+      raise _convert_exception(e)
 
   def commit(self):
     try:
       request = vtgate_pb2.CommitRequest()
-      self._add_caller_id(request, self.effective_caller_id)
+      _add_caller_id(request, self.effective_caller_id)
       self._add_session(request)
       self.stub.Commit(request, self.timeout)
     except (face.AbortionError, vtgate_utils.VitessError) as e:
-      raise self._convert_exception(e)
+      raise _convert_exception(e)
     finally:
       self.session = None
       self.effective_caller_id = None
@@ -92,11 +92,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
   def rollback(self):
     try:
       request = vtgate_pb2.RollbackRequest()
-      self._add_caller_id(request, self.effective_caller_id)
+      _add_caller_id(request, self.effective_caller_id)
       self._add_session(request)
       self.stub.Rollback(request, self.timeout)
     except (face.AbortionError, vtgate_utils.VitessError) as e:
-      raise self._convert_exception(e)
+      raise _convert_exception(e)
     finally:
       self.session = None
       self.effective_caller_id = None
@@ -132,7 +132,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
             entity_column_name=entity_column_name,
             not_in_transaction=not_in_transaction,
         )
-        self._add_caller_id(request, effective_caller_id)
+        _add_caller_id(request, effective_caller_id)
         self._add_session(request)
         _convert_bind_vars(bind_variables, request.query.bind_variables)
         _convert_entity_ids(entity_keyspace_id_map, request.entity_keyspace_ids)
@@ -150,9 +150,9 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
             keyspace=keyspace_name,
             not_in_transaction=not_in_transaction,
         )
-        self._add_caller_id(request, effective_caller_id)
+        _add_caller_id(request, effective_caller_id)
         self._add_session(request)
-        self._add_keyspace_ids(request, keyspace_ids)
+        request.keyspace_ids.extend(keyspace_ids)
         _convert_bind_vars(bind_variables, request.query.bind_variables)
 
         response = self.stub.ExecuteKeyspaceIds(request, self.timeout)
@@ -168,9 +168,9 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
             keyspace=keyspace_name,
             not_in_transaction=not_in_transaction,
         )
-        self._add_caller_id(request, effective_caller_id)
+        _add_caller_id(request, effective_caller_id)
         self._add_session(request)
-        self._add_key_ranges(request, keyranges)
+        _add_key_ranges(request, keyranges)
         _convert_bind_vars(bind_variables, request.query.bind_variables)
 
         response = self.stub.ExecuteKeyRanges(request, self.timeout)
@@ -183,19 +183,19 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
             not_in_transaction=not_in_transaction,
         )
-        self._add_caller_id(request, effective_caller_id)
+        _add_caller_id(request, effective_caller_id)
         self._add_session(request)
         _convert_bind_vars(bind_variables, request.query.bind_variables)
 
         response = self.stub.Execute(request, self.timeout)
 
       self.session = response.session
-      self._extract_rpc_error(exec_method, response.error)
-      return self._get_rowset_from_query_result(response.result)
+      _extract_rpc_error(exec_method, response.error)
+      return _get_rowset_from_query_result(response.result)
 
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
-      raise self._convert_exception(
+      raise _convert_exception(
           e, sql, keyspace=keyspace_name, tablet_type=tablet_type,
           **routing_kwargs)
 
@@ -211,7 +211,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
             as_transaction=as_transaction,
         )
-        self._add_caller_id(request, effective_caller_id)
+        _add_caller_id(request, effective_caller_id)
         self._add_session(request)
 
         for sql, bind_variables, keyspace_name, keyspace_ids in zip(
@@ -221,7 +221,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
           query = request.queries.add()
           query.query.sql = sql
           query.keyspace = keyspace_name
-          self._add_keyspace_ids(query, keyspace_ids)
+          query.keyspace_ids.extend(keyspace_ids)
           _convert_bind_vars(bind_variables, query.query.bind_variables)
 
         response = self.stub.ExecuteBatchKeyspaceIds(request, self.timeout)
@@ -232,7 +232,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
             as_transaction=as_transaction,
         )
-        self._add_caller_id(request, effective_caller_id)
+        _add_caller_id(request, effective_caller_id)
         self._add_session(request)
 
         for sql, bind_variables, keyspace_name, shards in zip(
@@ -242,24 +242,23 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
           query = request.queries.add()
           query.query.sql = sql
           query.keyspace = keyspace_name
-          for shard in shards:
-            query.shards.append(shard)
+          query.shards.extend(shards)
           _convert_bind_vars(bind_variables, query.query.bind_variables)
 
         response = self.stub.ExecuteBatchShards(request, self.timeout)
 
       self.session = response.session
-      self._extract_rpc_error(exec_method, response.error)
+      _extract_rpc_error(exec_method, response.error)
 
       rowsets = []
       for result in response.results:
-        rowset = self._get_rowset_from_query_result(result)
+        rowset = _get_rowset_from_query_result(result)
         rowsets.append(rowset)
       return rowsets
 
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables_list)
-      raise self._convert_exception(
+      raise _convert_exception(
           e, sql_list, exec_method, keyspace='', tablet_type=tablet_type)
 
   def _stream_execute(
@@ -276,8 +275,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
             keyspace=keyspace_name,
         )
-        self._add_caller_id(request, effective_caller_id)
-        self._add_keyspace_ids(request, keyspace_ids)
+        _add_caller_id(request, effective_caller_id)
+        request.keyspace_ids.extend(keyspace_ids)
         _convert_bind_vars(bind_variables, request.query.bind_variables)
         it = self.stub.StreamExecuteKeyspaceIds(request, self.timeout)
 
@@ -287,8 +286,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
             keyspace=keyspace_name,
         )
-        self._add_caller_id(request, effective_caller_id)
-        self._add_key_ranges(request, keyranges)
+        _add_caller_id(request, effective_caller_id)
+        _add_key_ranges(request, keyranges)
         _convert_bind_vars(bind_variables, request.query.bind_variables)
         it = self.stub.StreamExecuteKeyRanges(request, self.timeout)
 
@@ -297,14 +296,14 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
             query=query_pb2.BoundQuery(sql=sql),
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
         )
-        self._add_caller_id(request, effective_caller_id)
+        _add_caller_id(request, effective_caller_id)
         _convert_bind_vars(bind_variables, request.query.bind_variables)
         it = self.stub.StreamExecute(request, self.timeout)
 
       first_response = it.next()
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
-      raise self._convert_exception(
+      raise _convert_exception(
           e, sql, keyspace_ids, keyranges,
           keyspace=keyspace_name, tablet_type=tablet_type)
 
@@ -336,92 +335,105 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
           keyrange_constants.srv_keyspace_proto3_to_old(response.srv_keyspace))
 
     except (face.AbortionError, vtgate_utils.VitessError) as e:
-      raise self._convert_exception(e, keyspace=name)
-
-  def _add_caller_id(self, request, caller_id):
-    if caller_id:
-      if caller_id.principal:
-        request.caller_id.principal = caller_id.principal
-      if caller_id.component:
-        request.caller_id.component = caller_id.component
-      if caller_id.subcomponent:
-        request.caller_id.subcomponent = caller_id.subcomponent
+      raise _convert_exception(e, keyspace=name)
 
   def _add_session(self, request):
     if self.session:
       request.session.CopyFrom(self.session)
 
-  def _add_keyspace_ids(self, request, keyspace_ids):
-    request.keyspace_ids.extend(keyspace_ids)
 
-  def _add_key_ranges(self, request, keyranges):
-    for kr in keyranges:
-      encoded_kr = request.key_ranges.add()
-      encoded_kr.start = kr.Start
-      encoded_kr.end = kr.End
+def _add_caller_id(request, caller_id):
+  if caller_id:
+    if caller_id.principal:
+      request.caller_id.principal = caller_id.principal
+    if caller_id.component:
+      request.caller_id.component = caller_id.component
+    if caller_id.subcomponent:
+      request.caller_id.subcomponent = caller_id.subcomponent
 
-  def _extract_rpc_error(self, exec_method, error):
-    if error.code:
-      raise vtgate_utils.VitessError(exec_method, {
-          'Code': error.code,
-          'Message': error.message,
-      })
 
-  def _get_rowset_from_query_result(self, query_result):
-    if not query_result:
-      return [], 0, 0, []
-    fields = []
-    conversions = []
-    results = []
-    for field in query_result.fields:
-      fields.append((field.name, field.type))
-      conversions.append(field_types_proto3.conversions.get(field.type))
-    for row in query_result.rows:
-      results.append(tuple(_make_row(row, conversions)))
-    rowcount = query_result.rows_affected
-    lastrowid = query_result.insert_id
-    return results, rowcount, lastrowid, fields
+def _add_key_ranges(request, keyranges):
+  for kr in keyranges:
+    encoded_kr = request.key_ranges.add()
+    encoded_kr.start = kr.Start
+    encoded_kr.end = kr.End
 
-  def _convert_exception(self, exc, *args, **kwargs):
-    """This parses the protocol exceptions to the api interface exceptions.
 
-    This also logs the exception and increments the appropriate error counters.
+def _extract_rpc_error(exec_method, error):
+  if error.code:
+    raise vtgate_utils.VitessError(exec_method, {
+        'Code': error.code,
+        'Message': error.message,
+    })
 
-    Args:
-      exc: raw protocol exception.
-      *args: additional args from the raising site.
-      **kwargs: additional keyword args from the raising site.
 
-    Returns:
-      Api interface exceptions - dbexceptions with new args.
-    """
-    kwargs_as_str = vtgate_utils.convert_exception_kwargs(kwargs)
-    exc.args += args
-    if kwargs_as_str:
-      exc.args += kwargs_as_str,
-    new_args = (type(exc).__name__,) + exc.args
-    if isinstance(exc, vtgate_utils.VitessError):
-      new_exc = exc.convert_to_dbexception(new_args)
-    elif isinstance(exc, face.ExpirationError):
-      new_exc = dbexceptions.TimeoutError(new_args)
-    elif isinstance(exc, face.AbortionError):
-      msg = exc.details
-      if exc.code == interfaces.StatusCode.UNAVAILABLE:
-        if _throttler_err_pattern.search(msg):
-          return dbexceptions.ThrottledError(new_args)
-        else:
-          return dbexceptions.TransientError(new_args)
-      elif exc.code == interfaces.StatusCode.ALREADY_EXISTS:
-        new_exc = _prune_integrity_error(msg, new_args)
+def _get_rowset_from_query_result(query_result):
+  """Builds a python rowset from proto3 response.
+
+  Args:
+    query_result: proto3 query result.
+
+  Returns:
+    Array of rows
+    Number of modified rows
+    Last insert ID
+    Fields array of (name, type) tuples.
+  """
+  if not query_result:
+    return [], 0, 0, []
+  fields = []
+  conversions = []
+  results = []
+  for field in query_result.fields:
+    fields.append((field.name, field.type))
+    conversions.append(field_types_proto3.conversions.get(field.type))
+  for row in query_result.rows:
+    results.append(tuple(_make_row(row, conversions)))
+  rowcount = query_result.rows_affected
+  lastrowid = query_result.insert_id
+  return results, rowcount, lastrowid, fields
+
+
+def _convert_exception(exc, *args, **kwargs):
+  """This parses the protocol exceptions to the api interface exceptions.
+
+  This also logs the exception and increments the appropriate error counters.
+
+  Args:
+    exc: raw protocol exception.
+    *args: additional args from the raising site.
+    **kwargs: additional keyword args from the raising site.
+
+  Returns:
+    Api interface exceptions - dbexceptions with new args.
+  """
+  kwargs_as_str = vtgate_utils.convert_exception_kwargs(kwargs)
+  exc.args += args
+  if kwargs_as_str:
+    exc.args += kwargs_as_str,
+  new_args = (type(exc).__name__,) + exc.args
+  if isinstance(exc, vtgate_utils.VitessError):
+    new_exc = exc.convert_to_dbexception(new_args)
+  elif isinstance(exc, face.ExpirationError):
+    new_exc = dbexceptions.TimeoutError(new_args)
+  elif isinstance(exc, face.AbortionError):
+    msg = exc.details
+    if exc.code == interfaces.StatusCode.UNAVAILABLE:
+      if _throttler_err_pattern.search(msg):
+        return dbexceptions.ThrottledError(new_args)
       else:
-        # Unhandled RPC application error
-        new_exc = dbexceptions.DatabaseError(new_args + (msg,))
+        return dbexceptions.TransientError(new_args)
+    elif exc.code == interfaces.StatusCode.ALREADY_EXISTS:
+      new_exc = _prune_integrity_error(msg, new_args)
     else:
-      new_exc = exc
-    vtgate_utils.log_exception(
-        new_exc,
-        keyspace=kwargs.get('keyspace'), tablet_type=kwargs.get('tablet_type'))
-    return new_exc
+      # Unhandled RPC application error
+      new_exc = dbexceptions.DatabaseError(new_args + (msg,))
+  else:
+    new_exc = exc
+  vtgate_utils.log_exception(
+      new_exc,
+      keyspace=kwargs.get('keyspace'), tablet_type=kwargs.get('tablet_type'))
+  return new_exc
 
 
 def _convert_bind_vars(bind_variables, request_bind_variables):
@@ -498,7 +510,15 @@ def _prune_integrity_error(msg, exc_args):
 
 
 def _make_row(row, conversions):
-  """Builds a python native row from proto3 row."""
+  """Builds a python native row from proto3 row.
+
+  Args:
+    row: proto3 row
+    conversions: conversion function array
+
+  Returns:
+    an array of converted rows.
+  """
   converted_row = []
   offset = 0
   for i, l in enumerate(row.lengths):

@@ -237,10 +237,9 @@ def tearDownModule():
 
 
 def get_connection(timeout=10.0):
-  protocol = protocols_flavor().vtgate_python_protocol()
+  protocol, endpoint = utils.vtgate.rpc_endpoint(True)
   try:
-    return vtgate_client.connect(protocol, utils.vtgate.rpc_endpoint(True),
-                                 timeout)
+    return vtgate_client.connect(protocol, endpoint, timeout)
   except Exception:
     logging.exception('Connection to vtgate (timeout=%s) failed.', timeout)
     raise

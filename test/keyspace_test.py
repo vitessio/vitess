@@ -11,7 +11,6 @@ from vtdb import vtgate_client
 import environment
 import tablet
 import utils
-from protocols_flavor import protocols_flavor
 
 SHARDED_KEYSPACE = 'TEST_KEYSPACE_SHARDED'
 UNSHARDED_KEYSPACE = 'TEST_KEYSPACE_UNSHARDED'
@@ -175,8 +174,7 @@ ALL_DB_TYPES = ['master', 'rdonly', 'replica']
 class TestKeyspace(unittest.TestCase):
 
   def _read_srv_keyspace(self, keyspace_name):
-    addr = utils.vtgate.rpc_endpoint()
-    protocol = protocols_flavor().vtgate_python_protocol()
+    protocol, addr = utils.vtgate.rpc_endpoint()
     conn = vtgate_client.connect(protocol, addr, 30.0)
     result = conn.get_srv_keyspace(keyspace_name)
     conn.close()
