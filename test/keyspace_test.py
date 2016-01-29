@@ -344,18 +344,22 @@ class TestKeyspace(unittest.TestCase):
       self.assertEqual(unsharded_ks.get_shard_names(db_type), ['0'])
 
   def test_keyspace_id_to_shard_name(self):
+    # test all keyspace_id in a sharded keyspace go to the right shard
     sharded_ks = self._read_srv_keyspace(SHARDED_KEYSPACE)
     for _, sn in enumerate(shard_names):
       for keyspace_id in shard_kid_map[sn]:
         self.assertEqual(
             sharded_ks.keyspace_id_to_shard_name_for_db_type(keyspace_id,
                                                              'master'), sn)
+
+    # take all keyspace_ids, make sure for unsharded they stay on'0'
     unsharded_ks = self._read_srv_keyspace(UNSHARDED_KEYSPACE)
-    for keyspace_id in shard_kid_map[sn]:
-      self.assertEqual(
-          unsharded_ks.keyspace_id_to_shard_name_for_db_type(
-              keyspace_id, 'master'),
-          '0')
+    for _, sn in enumerate(shard_names):
+      for keyspace_id in shard_kid_map[sn]:
+        self.assertEqual(
+            unsharded_ks.keyspace_id_to_shard_name_for_db_type(
+                keyspace_id, 'master'),
+            '0')
 
   def test_get_srv_keyspace_names(self):
     stdout, _ = utils.run_vtctl(['GetSrvKeyspaceNames', 'test_nj'],
