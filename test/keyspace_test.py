@@ -174,7 +174,7 @@ ALL_DB_TYPES = ['master', 'rdonly', 'replica']
 class TestKeyspace(unittest.TestCase):
 
   def _read_srv_keyspace(self, keyspace_name):
-    protocol, addr = utils.vtgate.rpc_endpoint()
+    protocol, addr = utils.vtgate.rpc_endpoint(python=True)
     conn = vtgate_client.connect(protocol, addr, 30.0)
     result = conn.get_srv_keyspace(keyspace_name)
     conn.close()

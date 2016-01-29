@@ -204,7 +204,7 @@ index by_msg (msg)
                        self.moving1_first, 100)
 
   def _vtdb_conn(self):
-    protocol, addr = utils.vtgate.rpc_endpoint()
+    protocol, addr = utils.vtgate.rpc_endpoint(python=True)
     return vtgate_client.connect(protocol, addr, 30.0)
 
   # insert some values in the source master db, return the first id used
