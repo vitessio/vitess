@@ -323,8 +323,8 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		"kid",
 		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 			{
-				XidType:    sqltypes.VarBinary,
-				XidValue:   []byte("id1"),
+				Type:       sqltypes.VarBinary,
+				Value:      []byte("id1"),
 				KeyspaceId: []byte{0x10},
 			},
 		},
@@ -352,8 +352,8 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		"kid",
 		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 			{
-				XidType:    sqltypes.VarBinary,
-				XidValue:   []byte("id1"),
+				Type:       sqltypes.VarBinary,
+				Value:      []byte("id1"),
 				KeyspaceId: []byte{0x10},
 			},
 		},
@@ -386,13 +386,13 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		"kid",
 		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 			{
-				XidType:    sqltypes.VarBinary,
-				XidValue:   []byte("id1"),
+				Type:       sqltypes.VarBinary,
+				Value:      []byte("id1"),
 				KeyspaceId: []byte{0x10},
 			},
 			{
-				XidType:    sqltypes.VarBinary,
-				XidValue:   []byte("id2"),
+				Type:       sqltypes.VarBinary,
+				Value:      []byte("id2"),
 				KeyspaceId: []byte{0x30},
 			},
 		},
@@ -845,13 +845,13 @@ func TestAnnotatingExecuteEntityIds(t *testing.T) {
 		"entity_column_name",
 		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 			{
-				XidType:    sqltypes.Int64,
-				XidValue:   []byte("0"),
+				Type:       sqltypes.Int64,
+				Value:      []byte("0"),
 				KeyspaceId: []byte{0x10}, // First shard.
 			},
 			{
-				XidType:    sqltypes.Int64,
-				XidValue:   []byte("1"),
+				Type:       sqltypes.Int64,
+				Value:      []byte("1"),
 				KeyspaceId: []byte{0x25}, // Second shard.
 			},
 		},

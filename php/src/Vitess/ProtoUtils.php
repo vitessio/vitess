@@ -212,8 +212,8 @@ class ProtoUtils
         $eid->setKeyspaceId($keyspace_id);
 
         list ($type, $tval) = self::TypedValue($value);
-        $eid->setXidType($type);
-        $eid->setXidValue($tval);
+        $eid->setType($type);
+        $eid->setValue($tval);
 
         return $eid;
     }

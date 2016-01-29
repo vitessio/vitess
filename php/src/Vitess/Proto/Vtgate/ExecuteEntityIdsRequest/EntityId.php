@@ -8,10 +8,10 @@ namespace Vitess\Proto\Vtgate\ExecuteEntityIdsRequest {
   class EntityId extends \DrSlump\Protobuf\Message {
 
     /**  @var int - \Vitess\Proto\Query\Type */
-    public $xid_type = null;
+    public $type = null;
     
     /**  @var string */
-    public $xid_value = null;
+    public $value = null;
     
     /**  @var string */
     public $keyspace_id = null;
@@ -24,19 +24,19 @@ namespace Vitess\Proto\Vtgate\ExecuteEntityIdsRequest {
     {
       $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'vtgate.ExecuteEntityIdsRequest.EntityId');
 
-      // OPTIONAL ENUM xid_type = 1
+      // OPTIONAL ENUM type = 1
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 1;
-      $f->name      = "xid_type";
+      $f->name      = "type";
       $f->type      = \DrSlump\Protobuf::TYPE_ENUM;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $f->reference = '\Vitess\Proto\Query\Type';
       $descriptor->addField($f);
 
-      // OPTIONAL BYTES xid_value = 2
+      // OPTIONAL BYTES value = 2
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 2;
-      $f->name      = "xid_value";
+      $f->name      = "value";
       $f->type      = \DrSlump\Protobuf::TYPE_BYTES;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
@@ -57,76 +57,76 @@ namespace Vitess\Proto\Vtgate\ExecuteEntityIdsRequest {
     }
 
     /**
-     * Check if <xid_type> has a value
+     * Check if <type> has a value
      *
      * @return boolean
      */
-    public function hasXidType(){
+    public function hasType(){
       return $this->_has(1);
     }
     
     /**
-     * Clear <xid_type> value
+     * Clear <type> value
      *
      * @return \Vitess\Proto\Vtgate\ExecuteEntityIdsRequest\EntityId
      */
-    public function clearXidType(){
+    public function clearType(){
       return $this->_clear(1);
     }
     
     /**
-     * Get <xid_type> value
+     * Get <type> value
      *
      * @return int - \Vitess\Proto\Query\Type
      */
-    public function getXidType(){
+    public function getType(){
       return $this->_get(1);
     }
     
     /**
-     * Set <xid_type> value
+     * Set <type> value
      *
      * @param int - \Vitess\Proto\Query\Type $value
      * @return \Vitess\Proto\Vtgate\ExecuteEntityIdsRequest\EntityId
      */
-    public function setXidType( $value){
+    public function setType( $value){
       return $this->_set(1, $value);
     }
     
     /**
-     * Check if <xid_value> has a value
+     * Check if <value> has a value
      *
      * @return boolean
      */
-    public function hasXidValue(){
+    public function hasValue(){
       return $this->_has(2);
     }
     
     /**
-     * Clear <xid_value> value
+     * Clear <value> value
      *
      * @return \Vitess\Proto\Vtgate\ExecuteEntityIdsRequest\EntityId
      */
-    public function clearXidValue(){
+    public function clearValue(){
       return $this->_clear(2);
     }
     
     /**
-     * Get <xid_value> value
+     * Get <value> value
      *
      * @return string
      */
-    public function getXidValue(){
+    public function getValue(){
       return $this->_get(2);
     }
     
     /**
-     * Set <xid_value> value
+     * Set <value> value
      *
      * @param string $value
      * @return \Vitess\Proto\Vtgate\ExecuteEntityIdsRequest\EntityId
      */
-    public function setXidValue( $value){
+    public function setValue( $value){
       return $this->_set(2, $value);
     }
     
