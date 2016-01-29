@@ -1,7 +1,7 @@
 # Single table sharded scatter
 "select * from user"
 {
-  "From": "user",
+  "Select": "select  from user",
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
@@ -15,7 +15,7 @@
 # Single table unsharded
 "select * from main1"
 {
-  "From": "main1",
+  "Select": "select  from main1",
   "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
@@ -29,7 +29,7 @@
 # Multi-table unsharded
 "select * from main1 as m1 join main1 as m2"
 {
-  "From": "main1 as m1 join main1 as m2",
+  "Select": "select  from main1 as m1 join main1 as m2",
   "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
@@ -46,7 +46,7 @@
   "IsLeft": false,
   "Order": 2,
   "Left": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -57,7 +57,7 @@
     }
   },
   "Right": {
-    "From": "music",
+    "Select": "select  from music",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
@@ -75,7 +75,7 @@
   "IsLeft": false,
   "Order": 2,
   "Left": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -86,7 +86,7 @@
     }
   },
   "Right": {
-    "From": "main1",
+    "Select": "select  from main1",
     "Order": 2,
     "Route": {
       "PlanID": "SelectUnsharded",
@@ -101,7 +101,7 @@
 # Left join, single chunk
 "select * from main1 as m1 left join main1 as m2 on a=b"
 {
-  "From": "main1 as m1 left join main1 as m2 on a = b",
+  "Select": "select  from main1 as m1 left join main1 as m2 on a = b",
   "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
@@ -118,7 +118,7 @@
   "IsLeft": true,
   "Order": 2,
   "Left": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -129,7 +129,7 @@
     }
   },
   "Right": {
-    "From": "main1",
+    "Select": "select  from main1",
     "Order": 2,
     "Route": {
       "PlanID": "SelectUnsharded",
@@ -144,7 +144,7 @@
 # Straight-join
 "select * from main1 as m1 straight_join main1 as m2"
 {
-  "From": "main1 as m1 straight_join main1 as m2",
+  "Select": "select  from main1 as m1 straight_join main1 as m2",
   "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
@@ -161,7 +161,7 @@
   "IsLeft": false,
   "Order": 2,
   "Left": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -172,7 +172,7 @@
     }
   },
   "Right": {
-    "From": "(main1 as m1 join main1 as m2)",
+    "Select": "select  from (main1 as m1 join main1 as m2)",
     "Order": 2,
     "Route": {
       "PlanID": "SelectUnsharded",
@@ -190,7 +190,7 @@
   "IsLeft": false,
   "Order": 3,
   "Left": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -204,7 +204,7 @@
     "IsLeft": false,
     "Order": 3,
     "Left": {
-      "From": "user as u1",
+      "Select": "select  from user as u1",
       "Order": 2,
       "Route": {
         "PlanID": "SelectScatter",
@@ -215,7 +215,7 @@
       }
     },
     "Right": {
-      "From": "main1",
+      "Select": "select  from main1",
       "Order": 3,
       "Route": {
         "PlanID": "SelectUnsharded",
@@ -231,7 +231,7 @@
 # index hints, make sure they're not stripped.
 "select * from user use index(a)"
 {
-  "From": "user use index (a)",
+  "Select": "select  from user use index (a)",
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
@@ -245,7 +245,7 @@
 # mergeable sharded join on unique vindex
 "select * from user join user_extra on user.id = user_extra.user_id"
 {
-  "From": "user join user_extra on user.id = user_extra.user_id",
+  "Select": "select  from user join user_extra on user.id = user_extra.user_id",
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
@@ -259,7 +259,7 @@
 # mergeable sharded join on unique vindex, swapped operands
 "select * from user join user_extra on user_extra.user_id = user.id"
 {
-  "From": "user join user_extra on user_extra.user_id = user.id",
+  "Select": "select  from user join user_extra on user_extra.user_id = user.id",
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
@@ -273,7 +273,7 @@
 # mergeable sharded join on unique vindex, and condition
 "select * from user join user_extra on user.id = 5 and user.id = user_extra.user_id"
 {
-  "From": "user join user_extra on user.id = 5 and user.id = user_extra.user_id",
+  "Select": "select  from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
@@ -290,7 +290,7 @@
   "IsLeft": false,
   "Order": 2,
   "Left": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -301,7 +301,7 @@
     }
   },
   "Right": {
-    "From": "user_extra",
+    "Select": "select  from user_extra",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
@@ -319,7 +319,7 @@
   "IsLeft": false,
   "Order": 2,
   "Left": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -330,7 +330,7 @@
     }
   },
   "Right": {
-    "From": "user_extra",
+    "Select": "select  from user_extra",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
@@ -348,7 +348,7 @@
   "IsLeft": false,
   "Order": 2,
   "Left": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -359,7 +359,7 @@
     }
   },
   "Right": {
-    "From": "user_extra",
+    "Select": "select  from user_extra",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
@@ -377,7 +377,7 @@
   "IsLeft": false,
   "Order": 2,
   "Left": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -388,7 +388,7 @@
     }
   },
   "Right": {
-    "From": "user_extra",
+    "Select": "select  from user_extra",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
@@ -406,7 +406,7 @@
   "IsLeft": false,
   "Order": 2,
   "Left": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -417,7 +417,7 @@
     }
   },
   "Right": {
-    "From": "user_extra",
+    "Select": "select  from user_extra",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
@@ -435,7 +435,7 @@
   "IsLeft": false,
   "Order": 2,
   "Left": {
-    "From": "user_extra",
+    "Select": "select  from user_extra",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -446,7 +446,7 @@
     }
   },
   "Right": {
-    "From": "user",
+    "Select": "select  from user",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",

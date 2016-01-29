@@ -78,9 +78,10 @@ func (jb *JoinBuilder) MarshalJSON() ([]byte, error) {
 // the final SQL for this route.
 // TODO(sougou): struct is incomplete.
 type RouteBuilder struct {
-	// From points to the portion of the AST this route represents.
-	From  sqlparser.TableExpr
-	order int
+	// Select is the AST for the query fragment that will be
+	// executed by this route.
+	Select sqlparser.Select
+	order  int
 	// Route is the plan object being built. It will contain all the
 	// information necessary to execute the route operation.
 	Route *Route
@@ -96,13 +97,13 @@ func (rtb *RouteBuilder) Order() int {
 // cannot be used to reconstruct a RouteBuilder.
 func (rtb *RouteBuilder) MarshalJSON() ([]byte, error) {
 	marshalRoute := struct {
-		From  string `json:",omitempty"`
-		Order int
-		Route *Route
+		Select string `json:",omitempty"`
+		Order  int
+		Route  *Route
 	}{
-		From:  sqlparser.String(rtb.From),
-		Order: rtb.order,
-		Route: rtb.Route,
+		Select: sqlparser.String(&rtb.Select),
+		Order:  rtb.order,
+		Route:  rtb.Route,
 	}
 	return json.Marshal(marshalRoute)
 }
@@ -161,7 +162,7 @@ func processTableExpr(tableExpr sqlparser.TableExpr, schema *Schema) (PlanBuilde
 		// more routes can be merged with this one. If so, the order
 		// should be maintained as dictated by the parenthesis.
 		if route, ok := planBuilder.(*RouteBuilder); ok {
-			route.From = tableExpr
+			route.Select.From = sqlparser.TableExprs{tableExpr}
 		}
 		return planBuilder, symbols, err
 	case *sqlparser.JoinTableExpr:
@@ -180,9 +181,9 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, schema *Schema) 
 			return nil, nil, err
 		}
 		planBuilder := &RouteBuilder{
-			From:  tableExpr,
-			order: 1,
-			Route: route,
+			Select: sqlparser.Select{From: sqlparser.TableExprs{tableExpr}},
+			order:  1,
+			Route:  route,
 		}
 		alias := expr.Name
 		if tableExpr.As != "" {
@@ -312,7 +313,7 @@ func joinRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilde
 // nodes of a join. The merged RouteBuilder inherits the plan of the
 // left Route. This function is called if two routes can be merged.
 func mergeRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
-	lRouteBuilder.From = join
+	lRouteBuilder.Select.From = sqlparser.TableExprs{join}
 	err := lsymbols.Merge(rsymbols, lRouteBuilder)
 	if err != nil {
 		return nil, nil, err
