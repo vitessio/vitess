@@ -164,6 +164,29 @@ func (node *Select) WalkSubtree(visit Visit) error {
 	)
 }
 
+// AddWhere adds the boolean expression to the
+// Where clause as an AND condition. If the expression
+// is an OR clause, it parenthesizes it. Currently,
+// the OR operator is the only one that's lower precedence
+// than AND.
+func (node *Select) AddWhere(expr BoolExpr) {
+	if _, ok := expr.(*OrExpr); ok {
+		expr = &ParenBoolExpr{Expr: expr}
+	}
+	if node.Where == nil {
+		node.Where = &Where{
+			Type: WhereStr,
+			Expr: expr,
+		}
+		return
+	}
+	node.Where.Expr = &AndExpr{
+		Left:  node.Where.Expr,
+		Right: expr,
+	}
+	return
+}
+
 // Union represents a UNION statement.
 type Union struct {
 	Type        string

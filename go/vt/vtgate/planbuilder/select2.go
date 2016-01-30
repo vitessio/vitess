@@ -59,7 +59,7 @@ func (jb *JoinBuilder) Order() int {
 // cannot be used to reconstruct a JoinBuilder.
 func (jb *JoinBuilder) MarshalJSON() ([]byte, error) {
 	marshalJoin := struct {
-		IsLeft      bool
+		IsLeft      bool `json:",omitempty"`
 		Order       int
 		Left, Right PlanBuilder
 	}{
@@ -78,6 +78,9 @@ func (jb *JoinBuilder) MarshalJSON() ([]byte, error) {
 // the final SQL for this route.
 // TODO(sougou): struct is incomplete.
 type RouteBuilder struct {
+	// IsRHS is true if the RouteBuilder is the RHS of a
+	// LEFT JOIN. If so, many restrictions come into play.
+	IsRHS bool
 	// Select is the AST for the query fragment that will be
 	// executed by this route.
 	Select sqlparser.Select
@@ -97,10 +100,12 @@ func (rtb *RouteBuilder) Order() int {
 // cannot be used to reconstruct a RouteBuilder.
 func (rtb *RouteBuilder) MarshalJSON() ([]byte, error) {
 	marshalRoute := struct {
+		IsRHS  bool   `json:",omitempty"`
 		Select string `json:",omitempty"`
 		Order  int
 		Route  *Route
 	}{
+		IsRHS:  rtb.IsRHS,
 		Select: sqlparser.String(&rtb.Select),
 		Order:  rtb.order,
 		Route:  rtb.Route,
@@ -263,11 +268,12 @@ func makeJoinBuilder(lplanBuilder PlanBuilder, lsymbols *SymbolTable, rplanBuild
 	if err != nil {
 		return nil, nil, err
 	}
+	assignOrder(rplanBuilder, lplanBuilder.Order())
 	isLeft := false
 	if join.Join == sqlparser.LeftJoinStr {
 		isLeft = true
+		setRHS(rplanBuilder)
 	}
-	assignOrder(rplanBuilder, lplanBuilder.Order())
 	return &JoinBuilder{
 		IsLeft: isLeft,
 		order:  rplanBuilder.Order(),
@@ -286,6 +292,18 @@ func assignOrder(planBuilder PlanBuilder, order int) {
 		planBuilder.order = planBuilder.Right.Order()
 	case *RouteBuilder:
 		planBuilder.order = order + 1
+	}
+}
+
+// setRHS sets the order for the nodes of the tree based on the
+// starting order.
+func setRHS(planBuilder PlanBuilder) {
+	switch planBuilder := planBuilder.(type) {
+	case *JoinBuilder:
+		setRHS(planBuilder.Left)
+		setRHS(planBuilder.Right)
+	case *RouteBuilder:
+		planBuilder.IsRHS = true
 	}
 }
 
@@ -314,6 +332,9 @@ func joinRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilde
 // left Route. This function is called if two routes can be merged.
 func mergeRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
 	lRouteBuilder.Select.From = sqlparser.TableExprs{join}
+	if join.Join == sqlparser.LeftJoinStr {
+		rsymbols.SetRHS()
+	}
 	err := lsymbols.Merge(rsymbols, lRouteBuilder)
 	if err != nil {
 		return nil, nil, err

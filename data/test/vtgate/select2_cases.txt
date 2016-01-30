@@ -43,7 +43,6 @@
 # Multi-table, multi-chunk
 "select * from user join music"
 {
-  "IsLeft": false,
   "Order": 2,
   "Left": {
     "Select": "select  from user",
@@ -72,7 +71,6 @@
 # Sharded & Unsharded join
 "select * from user join main1"
 {
-  "IsLeft": false,
   "Order": 2,
   "Left": {
     "Select": "select  from user",
@@ -129,6 +127,7 @@
     }
   },
   "Right": {
+    "IsRHS": true,
     "Select": "select  from main1",
     "Order": 2,
     "Route": {
@@ -158,7 +157,6 @@
 # Parenthesized, single chunk
 "select * from user join (main1 as m1 join main1 as m2)"
 {
-  "IsLeft": false,
   "Order": 2,
   "Left": {
     "Select": "select  from user",
@@ -187,7 +185,6 @@
 # Parenthesized, multi-chunk
 "select * from user join (user as u1 join main1)"
 {
-  "IsLeft": false,
   "Order": 3,
   "Left": {
     "Select": "select  from user",
@@ -201,7 +198,6 @@
     }
   },
   "Right": {
-    "IsLeft": false,
     "Order": 3,
     "Left": {
       "Select": "select  from user as u1",
@@ -287,7 +283,6 @@
 # sharded join on unique vindex, inequality
 "select * from user join user_extra on user.id < user_extra.user_id"
 {
-  "IsLeft": false,
   "Order": 2,
   "Left": {
     "Select": "select  from user",
@@ -316,7 +311,6 @@
 # sharded join, non-col reference RHS
 "select * from user join user_extra on user.id = 5"
 {
-  "IsLeft": false,
   "Order": 2,
   "Left": {
     "Select": "select  from user",
@@ -345,7 +339,6 @@
 # sharded join, non-col reference LHS
 "select * from user join user_extra on 5 = user.id"
 {
-  "IsLeft": false,
   "Order": 2,
   "Left": {
     "Select": "select  from user",
@@ -374,7 +367,6 @@
 # sharded join, invalid table reference
 "select * from user join user_extra on notable.id = user_extra.user_id"
 {
-  "IsLeft": false,
   "Order": 2,
   "Left": {
     "Select": "select  from user",
@@ -403,7 +395,6 @@
 # sharded join, non-vindex col
 "select * from user join user_extra on user.id = user_extra.col"
 {
-  "IsLeft": false,
   "Order": 2,
   "Left": {
     "Select": "select  from user",
@@ -432,7 +423,6 @@
 # sharded join, non-unique vindex
 "select * from user_extra join user on user_extra.user_id = user.name"
 {
-  "IsLeft": false,
   "Order": 2,
   "Left": {
     "Select": "select  from user_extra",

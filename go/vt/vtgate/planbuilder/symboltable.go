@@ -11,17 +11,19 @@ import (
 )
 
 // SymbolTable contains the symbols for a SELECT
-// statement. If it's for a subquery, it points to
-// an outer scope. For now, it only contains tables.
+// statement.
 type SymbolTable struct {
-	tables map[sqlparser.SQLName]*TableAlias
-	outer  *SymbolTable
+	tables     map[sqlparser.SQLName]*TableAlias
+	FirstRoute *RouteBuilder
 }
 
 // TableAlias is part of SymbolTable.
 // It represnts a table alias in a FROM clause.
 // TODO(sougou): Update comments after the struct is finalized.
 type TableAlias struct {
+	// IsRHS is true if the Tablealias is the RHS of a
+	// LEFT JOIN. If so, many restrictions come into play.
+	IsRHS bool
 	// Name represents the name of the alias.
 	Name sqlparser.SQLName
 	// Keyspace points to the keyspace to which this
@@ -46,6 +48,7 @@ func NewSymbolTable(alias sqlparser.SQLName, table *Table, route *RouteBuilder) 
 				Route:       route,
 			},
 		},
+		FirstRoute: route,
 	}
 }
 
@@ -76,6 +79,14 @@ func (smt *SymbolTable) Merge(symbols *SymbolTable, route *RouteBuilder) error {
 		v.Route = route
 	}
 	return nil
+}
+
+// SetRHS sets the IsRHS flag for all aliases, signifying that
+// they're the RHS of a LEFT JOIN.
+func (smt *SymbolTable) SetRHS() {
+	for _, v := range smt.tables {
+		v.IsRHS = true
+	}
 }
 
 // FindColumn identifies the table referenced in the column expression.
