@@ -47,7 +47,8 @@ then
     diskname=$GKE_CLUSTER_NAME-vt-ssd-$i
     gcloud compute disks create $diskname --type=pd-ssd --size=${GKE_SSD_SIZE_GB}GB
     gcloud compute instances attach-disk $nodename --disk $diskname
-    gcloud compute ssh $nodename --zone=$GKE_ZONE --command "sudo mkdir /ssd; sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -F\" /dev/disk/by-id/google-persistent-disk-1 ${VTDATAROOT_VOLUME} &"
+    gcloud compute ssh $nodename --zone=$GKE_ZONE --command "sudo mkdir ${VTDATAROOT_VOLUME}; sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -o noatime -F\" /dev/disk/by-id/google-persistent-disk-1 ${VTDATAROOT_VOLUME} &"
+    gcloud compute ssh $nodename --zone=$GKE_ZONE --command "echo '/dev/disk/by-id/google-persistent-disk-1 /ssd ext4 defaults,noatime 0 0' | sudo tee --append /etc/fstab > /dev/null"
     let i=i+1
   done
 fi
