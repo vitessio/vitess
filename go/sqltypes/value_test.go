@@ -585,7 +585,7 @@ func TestParseNumbers(t *testing.T) {
 		t.Error(err)
 	}
 	if fval != 1 {
-		t.Errorf("v.ParseInt64 = %d, want 1", fval)
+		t.Errorf("v.ParseInt64 = %f, want 1", fval)
 	}
 }
 
