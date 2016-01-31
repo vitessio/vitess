@@ -7,6 +7,7 @@ package planbuilder
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -130,19 +131,55 @@ type Route struct {
 	Keyspace *Keyspace
 	// Vindex represents the vindex that will be used
 	// to resolve the route.
-	Vindex Vindex `json:",omitempty"`
+	Vindex Vindex
 	// Values can be a single value or a list of
 	// values that will be used as input to the Vindex
 	// to compute the target shard(s) where the query must
 	// be sent.
 	// TODO(sougou): explain contents of Values.
-	Values interface{} `json:",omitempty"`
+	Values interface{}
+}
+
+// MarshalJSON marshals Route into a readable form.
+// It's used for testing and diagnostics. The representation
+// cannot be used to reconstruct a Route.
+func (rt *Route) MarshalJSON() ([]byte, error) {
+	var vindex string
+	if rt.Vindex != nil {
+		vindex = fmt.Sprintf("%T", rt.Vindex)
+	}
+	marshalRoute := struct {
+		PlanID   PlanID      `json:",omitempty"`
+		Keyspace *Keyspace   `json:",omitempty"`
+		Vindex   string      `json:",omitempty"`
+		Values   interface{} `json:",omitempty"`
+	}{
+		PlanID:   rt.PlanID,
+		Keyspace: rt.Keyspace,
+		Vindex:   vindex,
+	}
+	return json.Marshal(marshalRoute)
+}
+
+// SetPlan updates the plan info for the route.
+func (rt *Route) SetPlan(planID PlanID, vindex Vindex, values interface{}) {
+	rt.PlanID = planID
+	rt.Vindex = vindex
+	rt.Values = values
 }
 
 // buildSelectPlan2 is the new function to build a Select plan.
 // TODO(sougou): rename after deprecating old one.
 func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (PlanBuilder, *SymbolTable, error) {
-	return processTableExprs(sel.From, schema)
+	planBuilder, symbolTable, err := processTableExprs(sel.From, schema)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = processWhere(sel.Where, symbolTable)
+	if err != nil {
+		return nil, nil, err
+	}
+	return planBuilder, symbolTable, nil
 }
 
 // processTableExprs analyzes the FROM clause. It produces a PlanBuilder
@@ -322,7 +359,7 @@ func joinRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilde
 	if rRouteBuilder.Route.PlanID == SelectUnsharded {
 		return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 	}
-	// TODO(sougou): Handle special case for SelectEqual and SelectKeyrange.
+	// TODO(sougou): Handle special case for SelectEqual
 	// Both RouteBuilder are sharded routes. Analyze join condition for merging.
 	return joinShardedRoutes(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
 }
@@ -369,23 +406,17 @@ func isSameRoute(filter sqlparser.BoolExpr, lsymbols, rsymbols *SymbolTable) boo
 	if comparison.Operator != sqlparser.EqualStr {
 		return false
 	}
-	lcol, ok := comparison.Left.(*sqlparser.ColName)
-	if !ok {
-		return false
-	}
-	rcol, ok := comparison.Right.(*sqlparser.ColName)
-	if !ok {
-		return false
-	}
-	_, lColVindex := lsymbols.FindColumn(lcol, false)
+	left := comparison.Left
+	right := comparison.Right
+	_, lColVindex := lsymbols.FindColumn(left, nil, false)
 	if lColVindex == nil {
-		lcol, rcol = rcol, lcol
-		_, lColVindex = lsymbols.FindColumn(lcol, false)
+		left, right = right, left
+		_, lColVindex = lsymbols.FindColumn(left, nil, false)
 	}
 	if lColVindex == nil || !IsUnique(lColVindex.Vindex) {
 		return false
 	}
-	_, rColVindex := rsymbols.FindColumn(rcol, false)
+	_, rColVindex := rsymbols.FindColumn(right, nil, false)
 	if rColVindex == nil {
 		return false
 	}

@@ -21,9 +21,6 @@ type SymbolTable struct {
 // It represnts a table alias in a FROM clause.
 // TODO(sougou): Update comments after the struct is finalized.
 type TableAlias struct {
-	// IsRHS is true if the Tablealias is the RHS of a
-	// LEFT JOIN. If so, many restrictions come into play.
-	IsRHS bool
 	// Name represents the name of the alias.
 	Name sqlparser.SQLName
 	// Keyspace points to the keyspace to which this
@@ -81,21 +78,28 @@ func (smt *SymbolTable) Merge(symbols *SymbolTable, route *RouteBuilder) error {
 	return nil
 }
 
-// SetRHS sets the IsRHS flag for all aliases, signifying that
-// they're the RHS of a LEFT JOIN.
+// SetRHS removes the ColVindexes from the aliases signifying
+// that they cannot be used to make routing decisions. This is
+// called if the table is in the RHS of a LEFT JOIN.
 func (smt *SymbolTable) SetRHS() {
 	for _, v := range smt.tables {
-		v.IsRHS = true
+		v.ColVindexes = nil
 	}
 }
 
 // FindColumn identifies the table referenced in the column expression.
-// It also returns the ColVindex if one exists for the column. If autoResolve
-// is true, and there is only one table in the symbol table, then
-// an unqualified reference is assumed to be implicitly against that table.
-// The table info doesn't contain the full list of columns. So, any
-// column reference is presumed valid until execution time.
-func (smt *SymbolTable) FindColumn(col *sqlparser.ColName, autoResolve bool) (*TableAlias, *ColVindex) {
+// It also returns the ColVindex if one exists for the column.
+// If a scope is specified, then the search is done only within
+// that route builder's scope. Otherwise, it's the global scope.
+// If autoResolve is true, and there is only one table in the symbol table,
+// then an unqualified reference is assumed to be implicitly against
+// that table.  The table info doesn't contain the full list of columns.
+// So, any column reference is presumed valid until execution time.
+func (smt *SymbolTable) FindColumn(expr sqlparser.ValExpr, scope *RouteBuilder, autoResolve bool) (*TableAlias, *ColVindex) {
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return nil, nil
+	}
 	qualifier := col.Qualifier
 	if qualifier == "" && autoResolve {
 		if len(smt.tables) != 1 {
@@ -110,10 +114,31 @@ func (smt *SymbolTable) FindColumn(col *sqlparser.ColName, autoResolve bool) (*T
 	if !ok {
 		return nil, nil
 	}
+	if scope != nil && scope != alias.Route {
+		return nil, nil
+	}
 	for _, colVindex := range alias.ColVindexes {
 		if string(col.Name) == colVindex.Col {
 			return alias, colVindex
 		}
 	}
 	return alias, nil
+}
+
+// IsValue returns true if the expression can be treated as a value
+// for the current scope.
+// Unresolved references are treated as value
+func (smt *SymbolTable) IsValue(expr sqlparser.ValExpr, scope *RouteBuilder) bool {
+	switch node := expr.(type) {
+	case *sqlparser.ColName:
+		alias, _ := smt.FindColumn(node, scope, true)
+		// It's a valid column reference. So, it can't be treated as value.
+		if alias != nil {
+			return false
+		}
+		return true
+	case sqlparser.ValArg, sqlparser.StrVal, sqlparser.NumVal:
+		return true
+	}
+	return false
 }

@@ -12,12 +12,12 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func TestSelect2(t *testing.T) {
+func TestFilter(t *testing.T) {
 	schema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for tcase := range iterateExecFile("select2_cases.txt") {
+	for tcase := range iterateExecFile("filter_cases.txt") {
 		statement, err := sqlparser.Parse(tcase.input)
 		if err != nil {
 			t.Error(err)
@@ -28,7 +28,7 @@ func TestSelect2(t *testing.T) {
 			t.Errorf("unexpected type: %T", statement)
 			continue
 		}
-		plan, _, err := processTableExprs(sel.From, schema)
+		plan, _, err := buildSelectPlan2(sel, schema)
 		if err != nil {
 			t.Error(err)
 			continue

@@ -1,0 +1,14 @@
+# Single table sharded scatter
+"select * from user where user.id = 5"
+{
+  "Select": "select  from user where user.id = 5",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "*planbuilder.hashIndex"
+  }
+}

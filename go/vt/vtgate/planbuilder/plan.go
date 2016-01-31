@@ -18,6 +18,7 @@ type PlanID int
 const (
 	NoPlan = PlanID(iota)
 	SelectUnsharded
+	SelectEqualUnique
 	SelectEqual
 	SelectIN
 	SelectKeyrange
@@ -35,6 +36,7 @@ const (
 var planName = [NumPlans]string{
 	"NoPlan",
 	"SelectUnsharded",
+	"SelectEqualUnique",
 	"SelectEqual",
 	"SelectIN",
 	"SelectKeyrange",
