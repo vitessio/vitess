@@ -7,7 +7,6 @@ package planbuilder
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -144,9 +143,9 @@ type Route struct {
 // It's used for testing and diagnostics. The representation
 // cannot be used to reconstruct a Route.
 func (rt *Route) MarshalJSON() ([]byte, error) {
-	var vindex string
+	var vindexName string
 	if rt.Vindex != nil {
-		vindex = fmt.Sprintf("%T", rt.Vindex)
+		vindexName = rt.Vindex.String()
 	}
 	marshalRoute := struct {
 		PlanID   PlanID      `json:",omitempty"`
@@ -156,7 +155,7 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 	}{
 		PlanID:   rt.PlanID,
 		Keyspace: rt.Keyspace,
-		Vindex:   vindex,
+		Vindex:   vindexName,
 	}
 	return json.Marshal(marshalRoute)
 }

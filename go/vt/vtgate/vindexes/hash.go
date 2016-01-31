@@ -21,14 +21,20 @@ import (
 // by using null-key 3DES hash. It's Unique, Reversible and
 // Functional.
 type Hash struct {
-	hv HashAuto
+	name string
+	hv   HashAuto
 }
 
 // NewHash creates a new Hash.
-func NewHash(m map[string]interface{}) (planbuilder.Vindex, error) {
-	h := &Hash{}
+func NewHash(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
+	h := &Hash{name: name}
 	h.hv.Init(m)
 	return h, nil
+}
+
+// String returns the name of the vindex.
+func (vind *Hash) String() string {
+	return vind.name
 }
 
 // Cost returns the cost of this index as 1.
@@ -67,15 +73,21 @@ func (vind *Hash) Delete(vcursor planbuilder.VCursor, ids []interface{}, _ []byt
 // because it's capable of generating new values from a vindex table
 // with a single unique autoinc column.
 type HashAuto struct {
+	name          string
 	Table, Column string
 	ins, del      string
 }
 
 // NewHashAuto creates a new HashAuto.
-func NewHashAuto(m map[string]interface{}) (planbuilder.Vindex, error) {
-	hva := &HashAuto{}
+func NewHashAuto(name string, m map[string]interface{}) (planbuilder.Vindex, error) {
+	hva := &HashAuto{name: name}
 	hva.Init(m)
 	return hva, nil
+}
+
+// String returns the name of the vindex.
+func (vind *HashAuto) String() string {
+	return vind.name
 }
 
 // Init initializes HashAuto.

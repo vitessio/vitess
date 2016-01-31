@@ -20,9 +20,10 @@ import (
 )
 
 // hashIndex satisfies Functional, Unique.
-type hashIndex struct{}
+type hashIndex struct{ name string }
 
-func (*hashIndex) Cost() int { return 1 }
+func (v *hashIndex) String() string { return v.name }
+func (*hashIndex) Cost() int        { return 1 }
 func (*hashIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
 	return false, nil
 }
@@ -30,12 +31,15 @@ func (*hashIndex) Map(VCursor, []interface{}) ([][]byte, error) { return nil, ni
 func (*hashIndex) Create(VCursor, interface{}) error            { return nil }
 func (*hashIndex) Delete(VCursor, []interface{}, []byte) error  { return nil }
 
-func newHashIndex(map[string]interface{}) (Vindex, error) { return &hashIndex{}, nil }
+func newHashIndex(name string, _ map[string]interface{}) (Vindex, error) {
+	return &hashIndex{name: name}, nil
+}
 
 // lookupIndex satisfies Lookup, Unique.
-type lookupIndex struct{}
+type lookupIndex struct{ name string }
 
-func (*lookupIndex) Cost() int { return 2 }
+func (v *lookupIndex) String() string { return v.name }
+func (*lookupIndex) Cost() int        { return 2 }
 func (*lookupIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
 	return false, nil
 }
@@ -43,12 +47,15 @@ func (*lookupIndex) Map(VCursor, []interface{}) ([][]byte, error) { return nil, 
 func (*lookupIndex) Create(VCursor, interface{}, []byte) error    { return nil }
 func (*lookupIndex) Delete(VCursor, []interface{}, []byte) error  { return nil }
 
-func newLookupIndex(map[string]interface{}) (Vindex, error) { return &lookupIndex{}, nil }
+func newLookupIndex(name string, _ map[string]interface{}) (Vindex, error) {
+	return &lookupIndex{name: name}, nil
+}
 
 // multiIndex satisfies Lookup, NonUnique.
-type multiIndex struct{}
+type multiIndex struct{ name string }
 
-func (*multiIndex) Cost() int { return 3 }
+func (v *multiIndex) String() string { return v.name }
+func (*multiIndex) Cost() int        { return 3 }
 func (*multiIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
 	return false, nil
 }
@@ -56,7 +63,9 @@ func (*multiIndex) Map(VCursor, []interface{}) ([][][]byte, error) { return nil,
 func (*multiIndex) Create(VCursor, interface{}, []byte) error      { return nil }
 func (*multiIndex) Delete(VCursor, []interface{}, []byte) error    { return nil }
 
-func newMultiIndex(map[string]interface{}) (Vindex, error) { return &multiIndex{}, nil }
+func newMultiIndex(name string, _ map[string]interface{}) (Vindex, error) {
+	return &multiIndex{name: name}, nil
+}
 
 func init() {
 	Register("hash", newHashIndex)

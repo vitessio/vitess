@@ -12,59 +12,67 @@ import (
 
 // stFU satisfies Functional, Unique.
 type stFU struct {
+	name   string
 	Params map[string]interface{}
 }
 
+func (v *stFU) String() string                                  { return v.name }
 func (*stFU) Cost() int                                         { return 1 }
 func (*stFU) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
 func (*stFU) Map(VCursor, []interface{}) ([][]byte, error)      { return nil, nil }
 func (*stFU) Create(VCursor, interface{}) error                 { return nil }
 func (*stFU) Delete(VCursor, []interface{}, []byte) error       { return nil }
 
-func NewSTFU(params map[string]interface{}) (Vindex, error) {
-	return &stFU{Params: params}, nil
+func NewSTFU(name string, params map[string]interface{}) (Vindex, error) {
+	return &stFU{name: name, Params: params}, nil
 }
 
 // stF satisfies Functional, but no Map. Invalid vindex.
 type stF struct {
+	name   string
 	Params map[string]interface{}
 }
 
+func (v *stF) String() string                                  { return v.name }
 func (*stF) Cost() int                                         { return 0 }
 func (*stF) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
 
-func NewSTF(params map[string]interface{}) (Vindex, error) {
-	return &stF{Params: params}, nil
+func NewSTF(name string, params map[string]interface{}) (Vindex, error) {
+	return &stF{name: name, Params: params}, nil
 }
 
 // stLN satisfies Lookup, NonUnique.
 type stLN struct {
+	name   string
 	Params map[string]interface{}
 }
 
+func (v *stLN) String() string                                  { return v.name }
 func (*stLN) Cost() int                                         { return 0 }
 func (*stLN) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
 func (*stLN) Map(VCursor, []interface{}) ([][][]byte, error)    { return nil, nil }
 func (*stLN) Create(VCursor, interface{}, []byte) error         { return nil }
 func (*stLN) Delete(VCursor, []interface{}, []byte) error       { return nil }
 
-func NewSTLN(params map[string]interface{}) (Vindex, error) {
-	return &stLN{Params: params}, nil
+func NewSTLN(name string, params map[string]interface{}) (Vindex, error) {
+	return &stLN{name: name, Params: params}, nil
 }
 
 // stLU satisfies Lookup, Unique.
 type stLU struct {
+	name   string
 	Params map[string]interface{}
 }
 
+func (v *stLU) String() string                                  { return v.name }
 func (*stLU) Cost() int                                         { return 2 }
 func (*stLU) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
 func (*stLU) Map(VCursor, []interface{}) ([][]byte, error)      { return nil, nil }
 func (*stLU) Create(VCursor, interface{}, []byte) error         { return nil }
 func (*stLU) Delete(VCursor, []interface{}, []byte) error       { return nil }
 
-func NewSTLU(params map[string]interface{}) (Vindex, error) {
-	return &stLU{Params: params}, nil
+func NewSTLU(name string, params map[string]interface{}) (Vindex, error) {
+	return &stLU{name: name, Params: params}, nil
 }
 
 func init() {
@@ -160,6 +168,7 @@ func TestShardedSchemaOwned(t *testing.T) {
 						Name:  "stfu1",
 						Owned: true,
 						Vindex: &stFU{
+							name: "stfu1",
 							Params: map[string]interface{}{
 								"stfu1": 1,
 							},
@@ -170,7 +179,7 @@ func TestShardedSchemaOwned(t *testing.T) {
 						Type:   "stln",
 						Name:   "stln1",
 						Owned:  true,
-						Vindex: &stLN{},
+						Vindex: &stLN{name: "stln1"},
 					},
 				},
 			},
@@ -238,14 +247,14 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 						Type:   "stlu",
 						Name:   "stlu1",
 						Owned:  false,
-						Vindex: &stLU{},
+						Vindex: &stLU{name: "stlu1"},
 					},
 					{
 						Col:    "c2",
 						Type:   "stfu",
 						Name:   "stfu1",
 						Owned:  false,
-						Vindex: &stFU{},
+						Vindex: &stFU{name: "stfu1"},
 					},
 				},
 			},

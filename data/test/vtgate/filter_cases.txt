@@ -9,6 +9,6 @@
       "Name": "user",
       "Sharded": true
     },
-    "Vindex": "*planbuilder.hashIndex"
+    "Vindex": "user_index"
   }
 }

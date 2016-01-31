@@ -14,7 +14,7 @@ import (
 var numeric planbuilder.Vindex
 
 func init() {
-	numeric, _ = planbuilder.CreateVindex("numeric", nil)
+	numeric, _ = planbuilder.CreateVindex("numeric", "nn", nil)
 }
 
 func TestNumericCost(t *testing.T) {

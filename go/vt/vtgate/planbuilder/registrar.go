@@ -24,6 +24,11 @@ type VCursor interface {
 // Additional to these functions, a vindex also needs
 // to satisfy the Unique or NonUnique interface.
 type Vindex interface {
+	// String returns the name of the Vindex instance.
+	// It's used for testing and diagnostics. Use pointer
+	// comparison to see if two objects refer to the same
+	// Vindex.
+	String() string
 	// Cost is used by planbuilder to prioritize vindexes.
 	// The cost can be 0 if the id is basically a keyspace id.
 	// The cost can be 1 if the id can be hashed to a keyspace id.
@@ -109,7 +114,7 @@ type LookupGenerator interface {
 // A NewVindexFunc is a function that creates a Vindex based on the
 // properties specified in the input map. Every vindex must
 // register a NewVindexFunc under a unique vindexType.
-type NewVindexFunc func(map[string]interface{}) (Vindex, error)
+type NewVindexFunc func(string, map[string]interface{}) (Vindex, error)
 
 var registry = make(map[string]NewVindexFunc)
 
@@ -126,10 +131,10 @@ func Register(vindexType string, newVindexFunc NewVindexFunc) {
 
 // CreateVindex creates a vindex of the specified type using the
 // supplied params. The type must have been previously registered.
-func CreateVindex(vindexType string, params map[string]interface{}) (Vindex, error) {
+func CreateVindex(vindexType, name string, params map[string]interface{}) (Vindex, error) {
 	f, ok := registry[vindexType]
 	if !ok {
 		return nil, fmt.Errorf("vindexType %s not found", vindexType)
 	}
-	return f(params)
+	return f(name, params)
 }

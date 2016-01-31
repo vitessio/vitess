@@ -21,7 +21,7 @@ import (
 var hashAuto planbuilder.Vindex
 
 func init() {
-	hv, err := planbuilder.CreateVindex("hash_autoinc", map[string]interface{}{"Table": "t", "Column": "c"})
+	hv, err := planbuilder.CreateVindex("hash_autoinc", "nn", map[string]interface{}{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
