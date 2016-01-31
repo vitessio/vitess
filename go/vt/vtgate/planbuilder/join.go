@@ -44,15 +44,15 @@ type PlanBuilder interface {
 // TODO(sougou): struct is incomplete.
 type JoinBuilder struct {
 	// IsLeft is true if the operation is a left join.
-	IsLeft bool
-	order  int
+	IsLeft                bool
+	LeftOrder, RightOrder int
 	// Left and Right are the nodes for the join.
 	Left, Right PlanBuilder
 }
 
 // Order returns the order of the node.
 func (jb *JoinBuilder) Order() int {
-	return jb.order
+	return jb.RightOrder
 }
 
 // MarshalJSON marshals JoinBuilder into a readable form.
@@ -61,13 +61,15 @@ func (jb *JoinBuilder) Order() int {
 func (jb *JoinBuilder) MarshalJSON() ([]byte, error) {
 	marshalJoin := struct {
 		IsLeft      bool `json:",omitempty"`
-		Order       int
+		LeftOrder   int
+		RightOrder  int
 		Left, Right PlanBuilder
 	}{
-		IsLeft: jb.IsLeft,
-		Order:  jb.order,
-		Left:   jb.Left,
-		Right:  jb.Right,
+		IsLeft:     jb.IsLeft,
+		LeftOrder:  jb.LeftOrder,
+		RightOrder: jb.RightOrder,
+		Left:       jb.Left,
+		Right:      jb.Right,
 	}
 	return json.Marshal(marshalJoin)
 }
@@ -327,10 +329,11 @@ func makeJoinBuilder(lplanBuilder PlanBuilder, lsymbols *SymbolTable, rplanBuild
 		setRHS(rplanBuilder)
 	}
 	return &JoinBuilder{
-		IsLeft: isLeft,
-		order:  rplanBuilder.Order(),
-		Left:   lplanBuilder,
-		Right:  rplanBuilder,
+		IsLeft:     isLeft,
+		LeftOrder:  lplanBuilder.Order(),
+		RightOrder: rplanBuilder.Order(),
+		Left:       lplanBuilder,
+		Right:      rplanBuilder,
 	}, lsymbols, nil
 }
 
@@ -340,8 +343,9 @@ func assignOrder(planBuilder PlanBuilder, order int) {
 	switch planBuilder := planBuilder.(type) {
 	case *JoinBuilder:
 		assignOrder(planBuilder.Left, order)
+		planBuilder.LeftOrder = planBuilder.Left.Order()
 		assignOrder(planBuilder.Right, planBuilder.Left.Order())
-		planBuilder.order = planBuilder.Right.Order()
+		planBuilder.RightOrder = planBuilder.Right.Order()
 	case *RouteBuilder:
 		planBuilder.order = order + 1
 	}

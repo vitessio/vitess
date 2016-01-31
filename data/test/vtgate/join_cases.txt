@@ -43,7 +43,8 @@
 # Multi-table, multi-chunk
 "select * from user join music"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -71,7 +72,8 @@
 # Sharded & Unsharded join
 "select * from user join main1"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -114,7 +116,8 @@
 "select * from user left join main1 on a = b"
 {
   "IsLeft": true,
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -157,7 +160,8 @@
 # Parenthesized, single chunk
 "select * from user join (main1 as m1 join main1 as m2)"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -185,7 +189,8 @@
 # Parenthesized, multi-chunk
 "select * from user join (user as u1 join main1)"
 {
-  "Order": 3,
+  "LeftOrder": 1,
+  "RightOrder": 3,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -198,7 +203,8 @@
     }
   },
   "Right": {
-    "Order": 3,
+    "LeftOrder": 2,
+    "RightOrder": 3,
     "Left": {
       "Select": "select  from user as u1",
       "Order": 2,
@@ -283,7 +289,8 @@
 # sharded join on unique vindex, inequality
 "select * from user join user_extra on user.id < user_extra.user_id"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -311,7 +318,8 @@
 # sharded join, non-col reference RHS
 "select * from user join user_extra on user.id = 5"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -339,7 +347,8 @@
 # sharded join, non-col reference LHS
 "select * from user join user_extra on 5 = user.id"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -367,7 +376,8 @@
 # sharded join, invalid table reference
 "select * from user join user_extra on notable.id = user_extra.user_id"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -395,7 +405,8 @@
 # sharded join, non-vindex col
 "select * from user join user_extra on user.id = user_extra.col"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -423,7 +434,8 @@
 # sharded join, non-unique vindex
 "select * from user_extra join user on user_extra.user_id = user.name"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user_extra",
     "Order": 1,

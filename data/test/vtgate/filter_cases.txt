@@ -93,7 +93,8 @@
 # Multi-route unique vindex constraint
 "select * from user join user_extra on user.col = user_extra.col where user.id = 5"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user where user.id = 5",
     "Order": 1,
@@ -123,7 +124,8 @@
 # Multi-route unique vindex route on both routes
 "select * from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user where user.id = 5",
     "Order": 1,
@@ -155,7 +157,8 @@
 # Multi-route with cross-route constraint
 "select * from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
@@ -185,7 +188,8 @@
 # Multi-route with non-route constraint, should use first route.
 "select * from user join user_extra on user.col = user_extra.col where 1 = 1"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user where 1 = 1",
     "Order": 1,
@@ -291,7 +295,8 @@
 # Unsharded route
 "select * from user join main1 where main1.id = user.id"
 {
-  "Order": 2,
+  "LeftOrder": 1,
+  "RightOrder": 2,
   "Left": {
     "Select": "select  from user",
     "Order": 1,
