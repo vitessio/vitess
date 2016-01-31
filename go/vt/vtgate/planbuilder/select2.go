@@ -7,6 +7,7 @@ package planbuilder
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -148,14 +149,15 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		vindexName = rt.Vindex.String()
 	}
 	marshalRoute := struct {
-		PlanID   PlanID      `json:",omitempty"`
-		Keyspace *Keyspace   `json:",omitempty"`
-		Vindex   string      `json:",omitempty"`
-		Values   interface{} `json:",omitempty"`
+		PlanID   PlanID    `json:",omitempty"`
+		Keyspace *Keyspace `json:",omitempty"`
+		Vindex   string    `json:",omitempty"`
+		Values   string    `json:",omitempty"`
 	}{
 		PlanID:   rt.PlanID,
 		Keyspace: rt.Keyspace,
 		Vindex:   vindexName,
+		Values:   prettyValue(rt.Values),
 	}
 	return json.Marshal(marshalRoute)
 }
@@ -165,6 +167,20 @@ func (rt *Route) SetPlan(planID PlanID, vindex Vindex, values interface{}) {
 	rt.PlanID = planID
 	rt.Vindex = vindex
 	rt.Values = values
+}
+
+// prettyValue converts the Values to a readable form.
+// This function is used for testing and diagnostics.
+func prettyValue(value interface{}) string {
+	switch value := value.(type) {
+	case nil:
+		return ""
+	case sqlparser.SQLNode:
+		return sqlparser.String(value)
+	case []byte:
+		return string(value)
+	}
+	return fmt.Sprintf("%v", value)
 }
 
 // buildSelectPlan2 is the new function to build a Select plan.

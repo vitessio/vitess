@@ -1,4 +1,18 @@
-# Single table sharded scatter
+# No where clause
+"select * from user"
+{
+  "Select": "select  from user",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
+
+# Single table unique vindex route
 "select * from user where user.id = 5"
 {
   "Select": "select  from user where user.id = 5",
@@ -9,6 +23,295 @@
       "Name": "user",
       "Sharded": true
     },
-    "Vindex": "user_index"
+    "Vindex": "user_index",
+    "Values": "5"
+  }
+}
+
+# Multi-table unique vindex constraint
+"select * from user join user_extra on user.id = user_extra.user_id where user.id = 5"
+{
+  "Select": "select  from user join user_extra on user.id = user_extra.user_id where user.id = 5",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "user_index",
+    "Values": "5"
+  }
+}
+
+# Multi-table unique vindex constraint on right table
+"select * from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
+{
+  "Select": "select  from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "user_index",
+    "Values": "5"
+  }
+}
+
+# Multi-table unique vindex constraint on left table of left join
+"select * from user left join user_extra on user.id = user_extra.user_id where user.id = 5"
+{
+  "Select": "select  from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "user_index",
+    "Values": "5"
+  }
+}
+
+# Multi-table unique vindex constraint on left-joined right table
+"select * from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
+{
+  "Select": "select  from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
+
+# Multi-route unique vindex constraint
+"select * from user join user_extra on user.col = user_extra.col where user.id = 5"
+{
+  "Order": 2,
+  "Left": {
+    "Select": "select  from user where user.id = 5",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Vindex": "user_index",
+      "Values": "5"
+    }
+  },
+  "Right": {
+    "Select": "select  from user_extra",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  }
+}
+
+# Multi-route unique vindex route on both routes
+"select * from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5"
+{
+  "Order": 2,
+  "Left": {
+    "Select": "select  from user where user.id = 5",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Vindex": "user_index",
+      "Values": "5"
+    }
+  },
+  "Right": {
+    "Select": "select  from user_extra where user_extra.user_id = 5",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Vindex": "user_index",
+      "Values": "5"
+    }
+  }
+}
+
+# Multi-route with cross-route constraint
+"select * from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col"
+{
+  "Order": 2,
+  "Left": {
+    "Select": "select  from user",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "Select": "select  from user_extra where user_extra.user_id = user.col",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Vindex": "user_index",
+      "Values": "user.col"
+    }
+  }
+}
+
+# Multi-route with non-route constraint, should use first route.
+"select * from user join user_extra on user.col = user_extra.col where 1 = 1"
+{
+  "Order": 2,
+  "Left": {
+    "Select": "select  from user where 1 = 1",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "Select": "select  from user_extra",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  }
+}
+
+# Route with multiple route constraints, SelectIN is the best constraint.
+"select * from user where user.col = 5 and user.id in (1, 2)"
+{
+  "Select": "select  from user where user.col = 5 and user.id in (1, 2)",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectIN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "user_index",
+    "Values": "user.id in (1, 2)"
+  }
+}
+
+# Route with multiple route constraints, SelectEqual is the best constraint.
+"select * from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'"
+{
+  "Select": "select  from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "name_user_map",
+    "Values": "'aa'"
+  }
+}
+
+# Route with multiple route constraints, SelectEqualUnique is the best constraint.
+"select * from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1"
+{
+  "Select": "select  from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "user_index",
+    "Values": "1"
+  }
+}
+
+# Route with multiple route constraints, SelectEqualUnique is the best constraint, order reversed.
+"select * from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5"
+{
+  "Select": "select  from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "user_index",
+    "Values": "1"
+  }
+}
+
+# Route with OR and AND clause, must parenthesize correctly.
+"select * from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)"
+{
+  "Select": "select  from user where (user.id = 1 or user.name = 'aa' and user.id in (1, 2))",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
+
+# Unsharded route
+"select * from user join main1 where main1.id = user.id"
+{
+  "Order": 2,
+  "Left": {
+    "Select": "select  from user",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "Select": "select  from main1 where main1.id = user.id",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      }
+    }
   }
 }
