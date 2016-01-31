@@ -109,7 +109,7 @@
     }
   },
   "Right": {
-    "Select": "select  from user_extra",
+    "Select": "select  from user_extra where user.col = user_extra.col",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
@@ -140,7 +140,7 @@
     }
   },
   "Right": {
-    "Select": "select  from user_extra where user_extra.user_id = 5",
+    "Select": "select  from user_extra where user.col = user_extra.col and user_extra.user_id = 5",
     "Order": 2,
     "Route": {
       "PlanID": "SelectEqualUnique",
@@ -171,7 +171,7 @@
     }
   },
   "Right": {
-    "Select": "select  from user_extra where user_extra.user_id = user.col",
+    "Select": "select  from user_extra where user.col = user_extra.col and user_extra.user_id = user.col",
     "Order": 2,
     "Route": {
       "PlanID": "SelectEqualUnique",
@@ -202,7 +202,7 @@
     }
   },
   "Right": {
-    "Select": "select  from user_extra",
+    "Select": "select  from user_extra where user.col = user_extra.col",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",

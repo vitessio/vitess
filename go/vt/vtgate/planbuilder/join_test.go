@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func TestSelect2(t *testing.T) {
+func TestJoin(t *testing.T) {
 	schema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)

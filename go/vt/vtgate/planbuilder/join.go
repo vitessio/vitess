@@ -318,15 +318,29 @@ func processJoin(join *sqlparser.JoinTableExpr, schema *Schema) (PlanBuilder, *S
 // This function is called when the two builders cannot be part of
 // the same route.
 func makeJoinBuilder(lplanBuilder PlanBuilder, lsymbols *SymbolTable, rplanBuilder PlanBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
+	// For LEFT JOIN, you have to push the ON clause into the RHS first.
+	isLeft := false
+	if join.Join == sqlparser.LeftJoinStr {
+		isLeft = true
+		err := processBoolExpr(join.On, rsymbols)
+		if err != nil {
+			return nil, nil, err
+		}
+		setRHS(rplanBuilder)
+	}
+
 	err := lsymbols.Add(rsymbols)
 	if err != nil {
 		return nil, nil, err
 	}
 	assignOrder(rplanBuilder, lplanBuilder.Order())
-	isLeft := false
-	if join.Join == sqlparser.LeftJoinStr {
-		isLeft = true
-		setRHS(rplanBuilder)
+	// For normal joins, the ON clause can go to both sides.
+	// The push has to happen after the order is assigned.
+	if !isLeft {
+		err := processBoolExpr(join.On, lsymbols)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	return &JoinBuilder{
 		IsLeft:     isLeft,
@@ -394,6 +408,9 @@ func mergeRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuild
 	err := lsymbols.Merge(rsymbols, lRouteBuilder)
 	if err != nil {
 		return nil, nil, err
+	}
+	for _, filter := range splitAndExpression(nil, join.On) {
+		updateRoute(lRouteBuilder, lsymbols, filter)
 	}
 	return lRouteBuilder, lsymbols, nil
 }

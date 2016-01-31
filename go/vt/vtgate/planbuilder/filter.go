@@ -14,7 +14,11 @@ func processWhere(where *sqlparser.Where, symbolTable *SymbolTable) error {
 	if where == nil {
 		return nil
 	}
-	filters := splitAndExpression(nil, where.Expr)
+	return processBoolExpr(where.Expr, symbolTable)
+}
+
+func processBoolExpr(boolExpr sqlparser.BoolExpr, symbolTable *SymbolTable) error {
+	filters := splitAndExpression(nil, boolExpr)
 	for _, filter := range filters {
 		err := processFilter(filter, symbolTable)
 		if err != nil {

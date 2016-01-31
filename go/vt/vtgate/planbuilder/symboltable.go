@@ -93,9 +93,9 @@ func (smt *SymbolTable) SetRHS() {
 // that route builder's scope. Otherwise, it's the global scope.
 // If autoResolve is true, and there is only one table in the symbol table,
 // then an unqualified reference is assumed to be implicitly against
-// that table.  The table info doesn't contain the full list of columns.
+// that table. The table info doesn't contain the full list of columns.
 // So, any column reference is presumed valid until execution time.
-func (smt *SymbolTable) FindColumn(expr sqlparser.ValExpr, scope *RouteBuilder, autoResolve bool) (*TableAlias, *ColVindex) {
+func (smt *SymbolTable) FindColumn(expr sqlparser.Expr, scope *RouteBuilder, autoResolve bool) (*TableAlias, *ColVindex) {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return nil, nil

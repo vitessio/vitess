@@ -131,7 +131,7 @@
   },
   "Right": {
     "IsRHS": true,
-    "Select": "select  from main1",
+    "Select": "select  from main1 where a = b",
     "Order": 2,
     "Route": {
       "PlanID": "SelectUnsharded",
@@ -278,11 +278,13 @@
   "Select": "select  from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
   "Order": 1,
   "Route": {
-    "PlanID": "SelectScatter",
+    "PlanID": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
-    }
+    },
+    "Vindex": "user_index",
+    "Values": "5"
   }
 }
 
@@ -303,7 +305,7 @@
     }
   },
   "Right": {
-    "Select": "select  from user_extra",
+    "Select": "select  from user_extra where user.id \u003c user_extra.user_id",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
@@ -321,14 +323,16 @@
   "LeftOrder": 1,
   "RightOrder": 2,
   "Left": {
-    "Select": "select  from user",
+    "Select": "select  from user where user.id = 5",
     "Order": 1,
     "Route": {
-      "PlanID": "SelectScatter",
+      "PlanID": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
-      }
+      },
+      "Vindex": "user_index",
+      "Values": "5"
     }
   },
   "Right": {
@@ -350,14 +354,16 @@
   "LeftOrder": 1,
   "RightOrder": 2,
   "Left": {
-    "Select": "select  from user",
+    "Select": "select  from user where 5 = user.id",
     "Order": 1,
     "Route": {
-      "PlanID": "SelectScatter",
+      "PlanID": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
-      }
+      },
+      "Vindex": "user_index",
+      "Values": "5"
     }
   },
   "Right": {
@@ -390,14 +396,16 @@
     }
   },
   "Right": {
-    "Select": "select  from user_extra",
+    "Select": "select  from user_extra where notable.id = user_extra.user_id",
     "Order": 2,
     "Route": {
-      "PlanID": "SelectScatter",
+      "PlanID": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
-      }
+      },
+      "Vindex": "user_index",
+      "Values": "notable.id"
     }
   }
 }
@@ -419,7 +427,7 @@
     }
   },
   "Right": {
-    "Select": "select  from user_extra",
+    "Select": "select  from user_extra where user.id = user_extra.col",
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
@@ -448,14 +456,16 @@
     }
   },
   "Right": {
-    "Select": "select  from user",
+    "Select": "select  from user where user_extra.user_id = user.name",
     "Order": 2,
     "Route": {
-      "PlanID": "SelectScatter",
+      "PlanID": "SelectEqual",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
-      }
+      },
+      "Vindex": "name_user_map",
+      "Values": "user_extra.user_id"
     }
   }
 }
