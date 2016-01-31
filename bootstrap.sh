@@ -71,6 +71,10 @@ if [ $SKIP_ROOT_INSTALLS == "True" ]; then
 elif [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
   echo "skipping gRPC build. remove $grpc_dist to force rebuild."
 else
+  # unlink homebrew's protobuf, to be able to compile the downloaded protobuf package
+  if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
+    brew unlink grpc/grpc/google-protobuf
+  fi
   # protobuf used to be a separate package, now we use the gRPC one
   rm -rf $VTROOT/dist/protobuf
   rm -rf $grpc_dist
@@ -90,6 +94,11 @@ else
 
   ./travis/install_grpc.sh $grpc_dist || fail "gRPC build failed"
   echo "$grpc_ver" > $grpc_dist/.build_finished
+
+  # link homebrew's protobuf back
+  if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
+    brew link grpc/grpc/google-protobuf
+  fi
 fi
 
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src

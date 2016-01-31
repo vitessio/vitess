@@ -247,14 +247,6 @@ In addition, Vitess requires the software and libraries listed below.
     to set the usual environment variables (e.g. `http_proxy`,
     `https_proxy`, `no_proxy`).
     
-    Note:
-        On OS X, if you have already installed grpc and protobuf using homebrew, you need to unlink protobuf while the ./bootstrap.sh
-        script is running.
-        
-        ```sh
-        brew unlink grpc/grpc/google-protobuf 
-        ```
-    
     Run the boostrap.sh script:
 
     ``` sh
@@ -273,13 +265,6 @@ In addition, Vitess requires the software and libraries listed below.
     # Remaining commands to build Vitess
     . ./dev.env
     make build
-    ```
-    
-    Note:
-        On OS X, if you can link the protobuf library back.
-        
-    ```sh
-    brew link grpc/grpc/google-protobuf
     ```
 
 ### Run Tests
