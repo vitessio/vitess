@@ -156,6 +156,7 @@ In addition, Vitess requires the software and libraries listed below.
     pip install --upgrade pip setuptools
     pip install virtualenv
     pip install MySQL-python
+    pip install tox
     ```
     
 6.  Install Java runtime from this URL: https://support.apple.com/kb/dl1572?locale=en_US
@@ -245,6 +246,16 @@ In addition, Vitess requires the software and libraries listed below.
     If your machine requires a proxy to access the Internet, you will need
     to set the usual environment variables (e.g. `http_proxy`,
     `https_proxy`, `no_proxy`).
+    
+    Note:
+        On OS X, if you have already installed grpc and protobuf using homebrew, you need to unlink protobuf while the ./bootstrap.sh
+        script is running.
+        
+        ```sh
+        brew unlink grpc/grpc/google-protobuf 
+        ```
+    
+    Run the boostrap.sh script:
 
     ``` sh
     ./bootstrap.sh
@@ -262,6 +273,13 @@ In addition, Vitess requires the software and libraries listed below.
     # Remaining commands to build Vitess
     . ./dev.env
     make build
+    ```
+    
+    Note:
+        On OS X, if you can link the protobuf library back.
+        
+    ```sh
+    brew link grpc/grpc/google-protobuf
     ```
 
 ### Run Tests
