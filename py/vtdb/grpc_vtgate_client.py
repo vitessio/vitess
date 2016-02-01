@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-"""A simple, direct connection to the vttablet query server, using gRPC.
+"""A simple, direct connection to the vtgate proxy server, using gRPC.
 """
 
 import datetime
@@ -58,6 +58,13 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
     self.stub = vtgateservice_pb2.beta_create_Vitess_stub(channel)
 
   def close(self):
+    """close closes the server connection and frees up associated resources.
+
+    The stub object is managed by the gRPC library, removing references
+    to it will just close the channel.
+    """
+    if self.session:
+      self.rollback()
     self.stub = None
 
   def is_closed(self):
@@ -72,6 +79,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       request = vtgate_pb2.BeginRequest()
       _add_caller_id(request, effective_caller_id)
       response = self.stub.Begin(request, self.timeout)
+      # we're saving effective_caller_id to re-use it for commit and rollback.
       self.effective_caller_id = effective_caller_id
       self.session = response.session
     except (face.AbortionError, vtgate_utils.VitessError) as e:
@@ -415,8 +423,13 @@ def _convert_exception(exc, *args, **kwargs):
   if isinstance(exc, vtgate_utils.VitessError):
     new_exc = exc.convert_to_dbexception(new_args)
   elif isinstance(exc, face.ExpirationError):
+    # face.ExpirationError is returned by the gRPC library when
+    # a request times out. Note it is a subclass of face.AbortionError
+    # so we have to test for it before.
     new_exc = dbexceptions.TimeoutError(new_args)
   elif isinstance(exc, face.AbortionError):
+    # face.AbortionError is the toplevel error returned by gRPC for any
+    # RPC that finishes earlier than expected.
     msg = exc.details
     if exc.code == interfaces.StatusCode.UNAVAILABLE:
       if _throttler_err_pattern.search(msg):
