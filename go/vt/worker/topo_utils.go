@@ -75,18 +75,19 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 			}
 			healthyEndpoints = append(healthyEndpoints, addr.EndPoint)
 		}
-		if len(healthyEndpoints) < *minHealthyEndPoints {
-			deadlineForLog, _ := busywaitCtx.Deadline()
-			wr.Logger().Infof("Waiting for enough endpoints to become available. available: %v required: %v Waiting up to %.1f more seconds.", len(healthyEndpoints), *minHealthyEndPoints, deadlineForLog.Sub(time.Now()).Seconds())
-			// Block for 1 second because 2 seconds is the -health_check_interval flag value in integration tests.
-			timer := time.NewTimer(1 * time.Second)
-			select {
-			case <-busywaitCtx.Done():
-				timer.Stop()
-			case <-timer.C:
-			}
-		} else {
+
+		if len(healthyEndpoints) >= *minHealthyEndPoints {
 			break
+		}
+
+		deadlineForLog, _ := busywaitCtx.Deadline()
+		wr.Logger().Infof("Waiting for enough endpoints to become available. available: %v required: %v Waiting up to %.1f more seconds.", len(healthyEndpoints), *minHealthyEndPoints, deadlineForLog.Sub(time.Now()).Seconds())
+		// Block for 1 second because 2 seconds is the -health_check_interval flag value in integration tests.
+		timer := time.NewTimer(1 * time.Second)
+		select {
+		case <-busywaitCtx.Done():
+			timer.Stop()
+		case <-timer.C:
 		}
 	}
 
