@@ -531,6 +531,11 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
 }
 
+// QueryServiceStats returns the QueryServiceStats instance of the TabletServer's QueryEngine.
+func (tsv *TabletServer) QueryServiceStats() *QueryServiceStats {
+	return tsv.qe.queryServiceStats
+}
+
 // GetSessionId returns a sessionInfo response if the state is StateServing.
 func (tsv *TabletServer) GetSessionId(keyspace, shard string) (int64, error) {
 	tsv.mu.Lock()

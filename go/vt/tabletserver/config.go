@@ -225,6 +225,8 @@ type Controller interface {
 	// QueryService returns the QueryService object used by this Controller
 	QueryService() queryservice.QueryService
 
+	QueryServiceStats() *QueryServiceStats
+
 	// BroadcastHealth sends the current health to all listeners
 	BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats)
 }
