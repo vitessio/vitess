@@ -412,7 +412,7 @@ class TestTabletManager(unittest.TestCase):
         health['realtime_stats']['health_error'])
     self.assertNotIn('serving', health)
 
-    # then restart replication, and write data, make sure we go back to healthy
+    # then restart replication, make sure we go back to healthy
     utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
     utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'replica')
 
@@ -441,6 +441,24 @@ class TestTabletManager(unittest.TestCase):
       self.assertEqual('test_keyspace', data['target']['keyspace'])
       self.assertEqual('0', data['target']['shard'])
       self.assertEqual(topodata_pb2.REPLICA, data['target']['tablet_type'])
+
+    # Test that VtTabletStreamHealth reports a QPS >0.0.
+    # Therefore, issue several reads first.
+    # NOTE: This may be potentially flaky because we'll observe a QPS >0.0
+    #       exactly "once" for the duration of one sampling interval (5s) and
+    #       after that we'll see 0.0 QPS rates again. If this becomes actually
+    #       flaky, we need to read continuously in a separate thread.
+    for _ in range(10):
+      tablet_62044.execute('select 1 from dual')
+    # This may take up to 5 seconds to become true because we sample the query
+    # counts for the rates only every 5 seconds (see query_service_stats.go).
+    timeout = 10
+    while True:
+      health = utils.run_vtctl_json(['VtTabletStreamHealth', '-count', '1',
+                                     tablet_62044.tablet_alias])
+      if health['realtime_stats'].get('qps', 0.0) > 0.0:
+        break
+      timeout = utils.wait_step('QPS >0.0 seen', timeout)
 
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])
