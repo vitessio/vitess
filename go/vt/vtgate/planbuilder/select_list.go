@@ -50,16 +50,14 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, s
 					if selectSymbols[colnum].Alias == "" {
 						selectSymbols[colnum].Alias = sqlparser.SQLName(sqlparser.String(col))
 					}
-					if _, cv := symbolTable.FindColumn(col, nil, true); cv != nil {
-						selectSymbols[colnum].Vindex = cv.Vindex
-					}
+					_, selectSymbols[colnum].Vindex = symbolTable.FindColumn(col, nil, true)
 				}
 			case *sqlparser.ColName:
-				tableAlias, _ := symbolTable.FindColumn(node, nil, true)
-				if tableAlias != nil {
+				routeBuilder, _ := symbolTable.FindColumn(node, nil, true)
+				if routeBuilder != nil {
 					if selectSymbols[colnum].Route == nil {
-						selectSymbols[colnum].Route = tableAlias.Route
-					} else if selectSymbols[colnum].Route != tableAlias.Route {
+						selectSymbols[colnum].Route = routeBuilder
+					} else if selectSymbols[colnum].Route != routeBuilder {
 						// TODO(sougou): better error.
 						return false, errors.New("select expression is too complex")
 					}
@@ -98,8 +96,8 @@ func checkAllowAggregates(selectExprs sqlparser.SelectExprs, planBuilder PlanBui
 	for _, selectExpr := range selectExprs {
 		switch selectExpr := selectExpr.(type) {
 		case *sqlparser.NonStarExpr:
-			_, colVindex := symbolTable.FindColumn(selectExpr.Expr, nil, true)
-			if colVindex != nil && IsUnique(colVindex.Vindex) {
+			_, vindex := symbolTable.FindColumn(selectExpr.Expr, nil, true)
+			if vindex != nil && IsUnique(vindex) {
 				return true
 			}
 		}

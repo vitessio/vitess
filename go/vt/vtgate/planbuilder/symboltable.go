@@ -103,10 +103,21 @@ func (smt *SymbolTable) SetRHS() {
 // then an unqualified reference is assumed to be implicitly against
 // that table. The table info doesn't contain the full list of columns.
 // So, any column reference is presumed valid until execution time.
-func (smt *SymbolTable) FindColumn(expr sqlparser.Expr, scope *RouteBuilder, autoResolve bool) (*TableAlias, *ColVindex) {
+func (smt *SymbolTable) FindColumn(expr sqlparser.Expr, scope *RouteBuilder, autoResolve bool) (*RouteBuilder, Vindex) {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return nil, nil
+	}
+	if len(smt.SelectSymbols) != 0 {
+		name := sqlparser.SQLName(sqlparser.String(col))
+		for _, selectSymbol := range smt.SelectSymbols {
+			if name == selectSymbol.Alias {
+				if scope != nil && scope != selectSymbol.Route {
+					return nil, nil
+				}
+				return selectSymbol.Route, selectSymbol.Vindex
+			}
+		}
 	}
 	qualifier := col.Qualifier
 	if qualifier == "" && autoResolve {
@@ -127,10 +138,10 @@ func (smt *SymbolTable) FindColumn(expr sqlparser.Expr, scope *RouteBuilder, aut
 	}
 	for _, colVindex := range alias.ColVindexes {
 		if string(col.Name) == colVindex.Col {
-			return alias, colVindex
+			return alias.Route, colVindex.Vindex
 		}
 	}
-	return alias, nil
+	return alias.Route, nil
 }
 
 // IsValue returns true if the expression can be treated as a value
@@ -139,9 +150,8 @@ func (smt *SymbolTable) FindColumn(expr sqlparser.Expr, scope *RouteBuilder, aut
 func (smt *SymbolTable) IsValue(expr sqlparser.ValExpr, scope *RouteBuilder) bool {
 	switch node := expr.(type) {
 	case *sqlparser.ColName:
-		alias, _ := smt.FindColumn(node, scope, true)
-		// It's a valid column reference. So, it can't be treated as value.
-		if alias != nil {
+		// If it's a valid column reference, it can't be treated as value.
+		if route, _ := smt.FindColumn(node, scope, true); route != nil {
 			return false
 		}
 		return true

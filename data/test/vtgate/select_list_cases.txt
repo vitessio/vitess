@@ -83,6 +83,43 @@
   }
 }
 
+# Expression with single-route reference
+"select user.col, user_extra.id + user_extra.col from user join user_extra"
+{
+  "LeftOrder": 1,
+  "RightOrder": 2,
+  "Left": {
+    "Select": "select user.col from user",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "Select": "select user_extra.id + user_extra.col from user_extra",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Join": {
+    "LeftCols": [
+      0
+    ],
+    "RightCols": [
+      1
+    ]
+  }
+}
+
 # Jumbled references
 "select user.col, user_extra.id, user.col2 from user join user_extra"
 {
@@ -155,6 +192,20 @@
 "select count(1), id from user"
 {
   "Select": "select count(1), id from user",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
+
+# Non-aggregate function on sharded with no colvindex
+"select fun(1), col from user"
+{
+  "Select": "select fun(1), col from user",
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",

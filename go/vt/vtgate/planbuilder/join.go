@@ -460,19 +460,19 @@ func isSameRoute(filter sqlparser.BoolExpr, lsymbols, rsymbols *SymbolTable) boo
 	}
 	left := comparison.Left
 	right := comparison.Right
-	_, lColVindex := lsymbols.FindColumn(left, nil, false)
-	if lColVindex == nil {
+	_, lVindex := lsymbols.FindColumn(left, nil, false)
+	if lVindex == nil {
 		left, right = right, left
-		_, lColVindex = lsymbols.FindColumn(left, nil, false)
+		_, lVindex = lsymbols.FindColumn(left, nil, false)
 	}
-	if lColVindex == nil || !IsUnique(lColVindex.Vindex) {
+	if lVindex == nil || !IsUnique(lVindex) {
 		return false
 	}
-	_, rColVindex := rsymbols.FindColumn(right, nil, false)
-	if rColVindex == nil {
+	_, rVindex := rsymbols.FindColumn(right, nil, false)
+	if rVindex == nil {
 		return false
 	}
-	if rColVindex.Vindex != lColVindex.Vindex {
+	if rVindex != lVindex {
 		return false
 	}
 	return true

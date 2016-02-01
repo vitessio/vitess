@@ -47,13 +47,13 @@ func findRoute(filter sqlparser.BoolExpr, symbolTable *SymbolTable) (routeBuilde
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			tableAlias, _ := symbolTable.FindColumn(node, nil, true)
-			if tableAlias == nil {
+			newRoute, _ := symbolTable.FindColumn(node, nil, true)
+			if newRoute == nil {
 				// Skip unresolved references.
 				return true, nil
 			}
-			if tableAlias.Route.Order() > highestRoute.Order() {
-				highestRoute = tableAlias.Route
+			if newRoute.Order() > highestRoute.Order() {
+				highestRoute = newRoute
 			}
 		case *sqlparser.Subquery:
 			// TODO(sougou): implement.
@@ -119,26 +119,26 @@ func computePlan(routeBuilder *RouteBuilder, symbolTable *SymbolTable, filter sq
 func computeEqualPlan(routeBuilder *RouteBuilder, symbolTable *SymbolTable, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
 	left := comparison.Left
 	right := comparison.Right
-	_, colVindex := symbolTable.FindColumn(left, routeBuilder, true)
-	if colVindex == nil {
+	_, vindex = symbolTable.FindColumn(left, routeBuilder, true)
+	if vindex == nil {
 		left, right = right, left
-		_, colVindex = symbolTable.FindColumn(left, routeBuilder, false)
-		if colVindex == nil {
+		_, vindex = symbolTable.FindColumn(left, routeBuilder, false)
+		if vindex == nil {
 			return SelectScatter, nil, nil
 		}
 	}
 	if !symbolTable.IsValue(right, routeBuilder) {
 		return SelectScatter, nil, nil
 	}
-	if IsUnique(colVindex.Vindex) {
-		return SelectEqualUnique, colVindex.Vindex, right
+	if IsUnique(vindex) {
+		return SelectEqualUnique, vindex, right
 	}
-	return SelectEqual, colVindex.Vindex, right
+	return SelectEqual, vindex, right
 }
 
 func computeINPlan(routeBuilder *RouteBuilder, symbolTable *SymbolTable, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
-	_, colVindex := symbolTable.FindColumn(comparison.Left, routeBuilder, true)
-	if colVindex == nil {
+	_, vindex = symbolTable.FindColumn(comparison.Left, routeBuilder, true)
+	if vindex == nil {
 		return SelectScatter, nil, nil
 	}
 	switch node := comparison.Right.(type) {
@@ -148,9 +148,9 @@ func computeINPlan(routeBuilder *RouteBuilder, symbolTable *SymbolTable, compari
 				return SelectScatter, nil, nil
 			}
 		}
-		return SelectIN, colVindex.Vindex, comparison
+		return SelectIN, vindex, comparison
 	case sqlparser.ListArg:
-		return SelectIN, colVindex.Vindex, comparison
+		return SelectIN, vindex, comparison
 	}
 	return SelectScatter, nil, nil
 }
