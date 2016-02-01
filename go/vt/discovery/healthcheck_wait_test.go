@@ -105,7 +105,8 @@ func TestFindAllKeyspaceShards(t *testing.T) {
 }
 
 func TestWaitForEndPoints(t *testing.T) {
-	waitAvailableEndPointPeriod = 10 * time.Millisecond
+	shortCtx, shortCancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer shortCancel()
 	waitAvailableEndPointInterval = 20 * time.Millisecond
 
 	ep := topo.NewEndPoint(0, "a")
@@ -117,7 +118,7 @@ func TestWaitForEndPoints(t *testing.T) {
 	hc.AddEndPoint("cell", "", ep)
 
 	// this should time out
-	if err := WaitForEndPoints(hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != ErrWaitForEndPointsTimeout {
+	if err := WaitForEndPoints(shortCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != ErrWaitForEndPointsTimeout {
 		t.Errorf("got wrong error: %v", err)
 	}
 
@@ -134,9 +135,10 @@ func TestWaitForEndPoints(t *testing.T) {
 	input <- shr
 
 	// and ask again, with longer time outs so it's not flaky
-	waitAvailableEndPointPeriod = 10 * time.Second
+	longCtx, longCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer longCancel()
 	waitAvailableEndPointInterval = 10 * time.Millisecond
-	if err := WaitForEndPoints(hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
+	if err := WaitForEndPoints(longCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
 		t.Errorf("got error: %v", err)
 	}
 }

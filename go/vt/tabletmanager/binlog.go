@@ -261,7 +261,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// wait for the endpoint set (usefull for the first run at least, fast for next runs)
-	if err := discovery.WaitForEndPoints(bpc.healthCheck, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
+	if err := discovery.WaitForEndPoints(bpc.ctx, bpc.healthCheck, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
 		return fmt.Errorf("error waiting for endpoints for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA, err)
 	}
 

@@ -19,9 +19,6 @@ var (
 	// ErrWaitForEndPointsTimeout is returned if we cannot get the endpoints in time
 	ErrWaitForEndPointsTimeout = errors.New("timeout waiting for endpoints")
 
-	// the period to wait for endpoint availability
-	waitAvailableEndPointPeriod = 30 * time.Second
-
 	// how much to sleep between each check
 	waitAvailableEndPointInterval = 100 * time.Millisecond
 )
@@ -34,14 +31,14 @@ type keyspaceShard struct {
 
 // WaitForEndPoints waits for at least one endpoint in the given cell /
 // keyspace / shard before returning.
-func WaitForEndPoints(hc HealthCheck, cell, keyspace, shard string, types []topodatapb.TabletType) error {
+func WaitForEndPoints(ctx context.Context, hc HealthCheck, cell, keyspace, shard string, types []topodatapb.TabletType) error {
 	keyspaceShards := map[keyspaceShard]bool{
 		keyspaceShard{
 			keyspace: keyspace,
 			shard:    shard,
 		}: true,
 	}
-	return waitForEndPoints(hc, keyspaceShards, types)
+	return waitForEndPoints(ctx, hc, keyspaceShards, types)
 }
 
 // WaitForAllEndPoints waits for at least one endpoint in the given cell
@@ -52,7 +49,7 @@ func WaitForAllEndPoints(ctx context.Context, hc HealthCheck, ts topo.SrvTopoSer
 		return err
 	}
 
-	return waitForEndPoints(hc, keyspaceShards, types)
+	return waitForEndPoints(ctx, hc, keyspaceShards, types)
 }
 
 // findAllKeyspaceShards goes through all serving shards in the topology
@@ -100,9 +97,16 @@ func findAllKeyspaceShards(ctx context.Context, ts topo.SrvTopoServer, cell stri
 }
 
 // waitForEndPoints is the internal method that polls for endpoints
-func waitForEndPoints(hc HealthCheck, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType) error {
-	expiry := time.Now().Add(waitAvailableEndPointPeriod)
-	for expiry.After(time.Now()) {
+func waitForEndPoints(ctx context.Context, hc HealthCheck, keyspaceShards map[keyspaceShard]bool, types []topodatapb.TabletType) error {
+RetryLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			break RetryLoop
+		default:
+			// Context is still valid. Move on.
+		}
+
 		for ks := range keyspaceShards {
 			allPresent := true
 			for _, tt := range types {
@@ -122,8 +126,16 @@ func waitForEndPoints(hc HealthCheck, keyspaceShards map[keyspaceShard]bool, typ
 			// we found everything we needed
 			return nil
 		}
-		time.Sleep(waitAvailableEndPointInterval)
+
+		// Unblock after the sleep or when the context has expired.
+		timer := time.NewTimer(waitAvailableEndPointInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+		case <-timer.C:
+		}
 	}
+
 	log.Warningf("waitForEndPoints timeout for %v", keyspaceShards)
 	return ErrWaitForEndPointsTimeout
 }

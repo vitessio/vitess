@@ -49,8 +49,8 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, 5 /*topoReadConcurrency*/)
 	defer watcher.Stop()
 	defer healthCheck.Close()
-	if err := discovery.WaitForEndPoints(healthCheck, cell, keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_RDONLY}); err != nil {
-		return nil, fmt.Errorf("error waiting for rdonly endpoints for %v %v %v: %v", cell, keyspace, shard, err)
+	if err := discovery.WaitForEndPoints(ctx, healthCheck, cell, keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_RDONLY}); err != nil {
+		return nil, fmt.Errorf("error waiting for rdonly endpoints for (%v,%v/%v): %v", cell, keyspace, shard, err)
 	}
 
 	var healthyEndpoints []*topodatapb.EndPoint
