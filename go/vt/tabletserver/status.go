@@ -25,6 +25,7 @@ var queryserviceStatusTemplate = `
   </tr>
   {{end}}
 </table>
+<!-- The div in the next line will be overwritten by the JavaScript graph. -->
 <div id="qps_chart">QPS: {{.CurrentQPS}}</div>
 <script type="text/javascript" src="https://www.google.com/jsapi"></script>
 <script type="text/javascript">
