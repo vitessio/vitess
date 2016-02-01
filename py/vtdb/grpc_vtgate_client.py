@@ -63,7 +63,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
     The stub object is managed by the gRPC library, removing references
     to it will just close the channel.
     """
-    if self.session:
+    if self.session and self.session.in_transaction:
       self.rollback()
     self.stub = None
 
@@ -109,6 +109,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       self.session = None
       self.effective_caller_id = None
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _execute(self, sql, bind_variables, keyspace_name, tablet_type,
                shards=None,
                keyspace_ids=None,
@@ -207,6 +208,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
           e, sql, keyspace=keyspace_name, tablet_type=tablet_type,
           **routing_kwargs)
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _execute_batch(
       self, sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
       shards_list, tablet_type, as_transaction, effective_caller_id=None,
@@ -269,6 +271,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       raise _convert_exception(
           e, sql_list, exec_method, keyspace='', tablet_type=tablet_type)
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _stream_execute(
       self, sql, bind_variables, keyspace_name, tablet_type, keyspace_ids=None,
       keyranges=None, not_in_transaction=False, effective_caller_id=None,
@@ -470,16 +473,16 @@ def _convert_value(value, proto_value, allow_lists=False):
     proto_value.type = query_pb2.FLOAT64
     proto_value.value = str(value)
   elif hasattr(value, '__sql_literal__'):
-    proto_value.type = query_pb2.VARCHAR
+    proto_value.type = query_pb2.VARBINARY
     proto_value.value = str(value.__sql_literal__())
   elif isinstance(value, datetime.datetime):
-    proto_value.type = query_pb2.VARCHAR
+    proto_value.type = query_pb2.VARBINARY
     proto_value.value = times.DateTimeToString(value)
   elif isinstance(value, datetime.date):
-    proto_value.type = query_pb2.VARCHAR
+    proto_value.type = query_pb2.VARBINARY
     proto_value.value = times.DateToString(value)
   elif isinstance(value, str):
-    proto_value.type = query_pb2.VARCHAR
+    proto_value.type = query_pb2.VARBINARY
     proto_value.value = value
   elif isinstance(value, field_types.NoneType):
     proto_value.type = query_pb2.NULL_TYPE
@@ -490,7 +493,7 @@ def _convert_value(value, proto_value, allow_lists=False):
       proto_v = proto_value.values.add()
       _convert_value(v, proto_v)
   else:
-    proto_value.type = query_pb2.BINARY
+    proto_value.type = query_pb2.VARBINARY
     proto_value.value = str(value)
 
 
