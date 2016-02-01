@@ -76,9 +76,13 @@ function drawQPSChart() {
       for (var i = 0; i < 15*60/5; i++) {
         var datum = [sampleDate(now, i)];
         for (var j = 0; j < planTypes.length; j++) {
-          if (i < qps.All.length) {
-            datum.push(+qps[planTypes[j]][i].toFixed(2));
+          if (i < qps[planTypes[j]].length) {
+          	// Rates are ordered from least recent to most recent.
+          	// Therefore, we have to start reading from the end of the array.
+          	var idx = qps[planTypes[j]].length - i - 1;
+            datum.push(+qps[planTypes[j]][idx].toFixed(2));
           } else {
+            // Assume 0.0 QPS for older, non-existant data points.
             datum.push(0);
           }
         }
