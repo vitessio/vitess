@@ -22,26 +22,26 @@ func TestRates(t *testing.T) {
 	c.Add("tag1", 0)
 	c.Add("tag2", 0)
 	time.Sleep(1 * time.Second)
-	want := `{"tag1":[0],"tag2":[0]}`
-	if r.String() != want {
-		t.Errorf("want %s, got %s", want, r.String())
-	}
+	checkRates(t, r, "after 1s", 0.0, `{"tag1":[0],"tag2":[0]}`)
+
 	c.Add("tag1", 10)
 	c.Add("tag2", 20)
 	time.Sleep(1 * time.Second)
-	want = `{"tag1":[0,10],"tag2":[0,20]}`
-	if r.String() != want {
-		t.Errorf("want %s, got %s", want, r.String())
-	}
+	checkRates(t, r, "after 2s", 30.0, `{"tag1":[0,10],"tag2":[0,20]}`)
+
 	time.Sleep(1 * time.Second)
-	want = `{"tag1":[0,10,0],"tag2":[0,20,0]}`
-	if r.String() != want {
-		t.Errorf("want %s, got %s", want, r.String())
-	}
+	checkRates(t, r, "after 3s", 0.0, `{"tag1":[0,10,0],"tag2":[0,20,0]}`)
+
 	time.Sleep(1 * time.Second)
-	want = `{"tag1":[10,0,0],"tag2":[20,0,0]}`
-	if r.String() != want {
-		t.Errorf("want %s, got %s", want, r.String())
+	checkRates(t, r, "after 4s", 0.0, `{"tag1":[10,0,0],"tag2":[20,0,0]}`)
+}
+
+func checkRates(t *testing.T, r *Rates, desc string, wantRate float64, wantRateMap string) {
+	if got := r.String(); got != wantRateMap {
+		t.Errorf("%v: want %s, got %s", desc, wantRateMap, got)
+	}
+	if got := r.TotalRate(); got != wantRate {
+		t.Errorf("%v: want rate %v, got rate %v", desc, wantRate, got)
 	}
 }
 
