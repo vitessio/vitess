@@ -28,6 +28,10 @@ func processSelectExprs(sel *sqlparser.Select, planBuilder PlanBuilder, symbolTa
 		pushSelect(selectExpr, planBuilder, selectSymbols[i].Route.Order())
 	}
 	symbolTable.SelectSymbols = selectSymbols
+	err = processGroupBy(sel.GroupBy, planBuilder, symbolTable)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -87,10 +91,9 @@ func checkAllowAggregates(selectExprs sqlparser.SelectExprs, planBuilder PlanBui
 	if !ok {
 		return false
 	}
-	if routeBuilder.Route.PlanID == SelectUnsharded || routeBuilder.Route.PlanID == SelectEqualUnique {
+	if routeBuilder.IsSingle() {
 		return true
 	}
-
 	// It's a scatter route. We can allow aggregates if there is a unique
 	// vindex in the select list.
 	for _, selectExpr := range selectExprs {
@@ -122,4 +125,45 @@ func pushSelect(selectExpr sqlparser.SelectExpr, planBuilder PlanBuilder, routeN
 		}
 		planBuilder.Select.SelectExprs = append(planBuilder.Select.SelectExprs, selectExpr)
 	}
+}
+
+func processGroupBy(groupBy sqlparser.GroupBy, planBuilder PlanBuilder, symbolTable *SymbolTable) error {
+	if groupBy == nil {
+		return nil
+	}
+	routeBuilder, ok := planBuilder.(*RouteBuilder)
+	if !ok {
+		return errors.New("query is too complex to allow aggregates")
+	}
+	if hasSubqueries(groupBy) {
+		return errors.New("subqueries not supported in group by")
+	}
+	if routeBuilder.IsSingle() {
+		routeBuilder.Select.GroupBy = groupBy
+		return nil
+	}
+	// It's a scatter route. We can allow group by if it references a
+	// column with a unique vindex.
+	for _, expr := range groupBy {
+		_, vindex := symbolTable.FindColumn(expr, nil, true)
+		if vindex != nil && IsUnique(vindex) {
+			routeBuilder.Select.GroupBy = groupBy
+			return nil
+		}
+	}
+	return errors.New("query is too complex to allow aggregates")
+}
+
+func hasSubqueries(node sqlparser.SQLNode) bool {
+	has := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.Subquery:
+			has = true
+			// TODO(sougou): better error.
+			return false, errors.New("dummy")
+		}
+		return true, nil
+	}, node)
+	return has
 }

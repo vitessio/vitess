@@ -131,6 +131,11 @@ func (rtb *RouteBuilder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(marshalRoute)
 }
 
+// IsSingle returns true if the route targets only one database.
+func (rtb *RouteBuilder) IsSingle() bool {
+	return rtb.Route.PlanID == SelectUnsharded || rtb.Route.PlanID == SelectEqualUnique
+}
+
 // Route is a Plan object that represents a route.
 // It can be any one of the Select primitives from PlanID.
 // Some plan ids correspond to a multi-shard query,

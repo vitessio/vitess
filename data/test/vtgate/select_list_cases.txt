@@ -229,3 +229,47 @@
     }
   }
 }
+
+# Group by unsharded
+"select col1 from main1 group by col2"
+{
+  "Select": "select col1 from main1 group by col2",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
+
+# Group by on unique sharded
+"select col1 from user where id = 1 group by col2"
+{
+  "Select": "select col1 from user where id = 1 group by col2",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "user_index",
+    "Values": "1"
+  }
+}
+
+# Group  by on unique vindex
+"select col1 from user group by id"
+{
+  "Select": "select col1 from user group by id",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
