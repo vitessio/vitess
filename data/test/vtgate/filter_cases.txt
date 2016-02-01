@@ -118,7 +118,8 @@
         "Sharded": true
       }
     }
-  }
+  },
+  "Join": {}
 }
 
 # Multi-route unique vindex route on both routes
@@ -151,7 +152,8 @@
       "Vindex": "user_index",
       "Values": "5"
     }
-  }
+  },
+  "Join": {}
 }
 
 # Multi-route with cross-route constraint
@@ -182,7 +184,8 @@
       "Vindex": "user_index",
       "Values": "user.col"
     }
-  }
+  },
+  "Join": {}
 }
 
 # Multi-route with non-route constraint, should use first route.
@@ -211,7 +214,8 @@
         "Sharded": true
       }
     }
-  }
+  },
+  "Join": {}
 }
 
 # Route with multiple route constraints, SelectIN is the best constraint.
@@ -318,5 +322,6 @@
         "Sharded": false
       }
     }
-  }
+  },
+  "Join": {}
 }

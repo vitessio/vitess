@@ -1,0 +1,180 @@
+# No column referenced
+"select 1 from user"
+{
+  "Select": "select 1 from user",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
+
+# RHS route referenced
+"select user_extra.id from user join user_extra"
+{
+  "LeftOrder": 1,
+  "RightOrder": 2,
+  "Left": {
+    "Select": "select  from user",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "Select": "select user_extra.id from user_extra",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Join": {
+    "RightCols": [
+      0
+    ]
+  }
+}
+
+# Both routes referenced
+"select user.col, user_extra.id from user join user_extra"
+{
+  "LeftOrder": 1,
+  "RightOrder": 2,
+  "Left": {
+    "Select": "select user.col from user",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "Select": "select user_extra.id from user_extra",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Join": {
+    "LeftCols": [
+      0
+    ],
+    "RightCols": [
+      1
+    ]
+  }
+}
+
+# Jumbled references
+"select user.col, user_extra.id, user.col2 from user join user_extra"
+{
+  "LeftOrder": 1,
+  "RightOrder": 2,
+  "Left": {
+    "Select": "select user.col, user.col2 from user",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "Select": "select user_extra.id from user_extra",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Join": {
+    "LeftCols": [
+      0,
+      2
+    ],
+    "RightCols": [
+      1
+    ]
+  }
+}
+
+# Aggregate on unsharded
+"select count(1), col from main1"
+{
+  "Select": "select count(1), col from main1",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
+
+# Aggregate on unique sharded
+"select count(1), col from user where id = 1"
+{
+  "Select": "select count(1), col from user where id = 1",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "user_index",
+    "Values": "1"
+  }
+}
+
+# Aggregate on sharded with colvindex
+"select count(1), id from user"
+{
+  "Select": "select count(1), id from user",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}
+
+# Distinct
+"select distinct col, id from user"
+{
+  "Select": "select distinct col, id from user",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    }
+  }
+}

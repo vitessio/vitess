@@ -66,7 +66,8 @@
         "Sharded": true
       }
     }
-  }
+  },
+  "Join": {}
 }
 
 # Sharded & Unsharded join
@@ -95,7 +96,8 @@
         "Sharded": false
       }
     }
-  }
+  },
+  "Join": {}
 }
 
 # Left join, single chunk
@@ -140,7 +142,8 @@
         "Sharded": false
       }
     }
-  }
+  },
+  "Join": {}
 }
 
 # Straight-join
@@ -183,7 +186,8 @@
         "Sharded": false
       }
     }
-  }
+  },
+  "Join": {}
 }
 
 # Parenthesized, multi-chunk
@@ -226,8 +230,10 @@
           "Sharded": false
         }
       }
-    }
-  }
+    },
+		"Join": {}
+  },
+  "Join": {}
 }
 
 # index hints, make sure they're not stripped.
@@ -314,7 +320,8 @@
         "Sharded": true
       }
     }
-  }
+  },
+  "Join": {}
 }
 
 # sharded join, non-col reference RHS
@@ -345,7 +352,8 @@
         "Sharded": true
       }
     }
-  }
+  },
+  "Join": {}
 }
 
 # sharded join, non-col reference LHS
@@ -376,7 +384,8 @@
         "Sharded": true
       }
     }
-  }
+  },
+  "Join": {}
 }
 
 # sharded join, invalid table reference
@@ -407,7 +416,8 @@
       "Vindex": "user_index",
       "Values": "notable.id"
     }
-  }
+  },
+  "Join": {}
 }
 
 # sharded join, non-vindex col
@@ -436,7 +446,8 @@
         "Sharded": true
       }
     }
-  }
+  },
+  "Join": {}
 }
 
 # sharded join, non-unique vindex
@@ -467,5 +478,6 @@
       "Vindex": "name_user_map",
       "Values": "user_extra.user_id"
     }
-  }
+  },
+  "Join": {}
 }

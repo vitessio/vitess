@@ -13,8 +13,16 @@ import (
 // SymbolTable contains the symbols for a SELECT
 // statement.
 type SymbolTable struct {
-	tables     map[sqlparser.SQLName]*TableAlias
-	FirstRoute *RouteBuilder
+	tables        map[sqlparser.SQLName]*TableAlias
+	SelectSymbols []SelectSymbol
+	FirstRoute    *RouteBuilder
+}
+
+// SelectSymbol contains symbol info about a select expression.
+type SelectSymbol struct {
+	Alias  sqlparser.SQLName
+	Route  *RouteBuilder
+	Vindex Vindex
 }
 
 // TableAlias is part of SymbolTable.

@@ -12,12 +12,12 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func TestFilter(t *testing.T) {
+func TestSelectList(t *testing.T) {
 	schema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for tcase := range iterateExecFile("filter_cases.txt") {
+	for tcase := range iterateExecFile("select_list_cases.txt") {
 		statement, err := sqlparser.Parse(tcase.input)
 		if err != nil {
 			t.Error(err)
@@ -38,6 +38,11 @@ func TestFilter(t *testing.T) {
 			t.Error(err)
 			continue
 		}
+		err = processSelectExprs(sel, plan, symbolTable)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
 		bout, err := json.Marshal(plan)
 		if err != nil {
 			panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
@@ -46,8 +51,8 @@ func TestFilter(t *testing.T) {
 		if out != tcase.output {
 			t.Errorf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out)
 			// Comment these line out to see the expected outputs
-			// bout, err = json.MarshalIndent(plan, "", "  ")
-			// fmt.Printf("%s\n", bout)
+			bout, err = json.MarshalIndent(plan, "", "  ")
+			fmt.Printf("%s\n", bout)
 		}
 	}
 }

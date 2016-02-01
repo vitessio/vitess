@@ -48,6 +48,8 @@ type JoinBuilder struct {
 	LeftOrder, RightOrder int
 	// Left and Right are the nodes for the join.
 	Left, Right PlanBuilder
+	// Join is the join plan.
+	Join *Join
 }
 
 // Order returns the order of the node.
@@ -64,14 +66,27 @@ func (jb *JoinBuilder) MarshalJSON() ([]byte, error) {
 		LeftOrder   int
 		RightOrder  int
 		Left, Right PlanBuilder
+		Join        *Join
 	}{
 		IsLeft:     jb.IsLeft,
 		LeftOrder:  jb.LeftOrder,
 		RightOrder: jb.RightOrder,
 		Left:       jb.Left,
 		Right:      jb.Right,
+		Join:       jb.Join,
 	}
 	return json.Marshal(marshalJoin)
+}
+
+// Join is the join plan.
+type Join struct {
+	Left, Right         interface{} `json:",omitempty"`
+	LeftCols, RightCols []int       `json:",omitempty"`
+}
+
+// Len returns the number of columns in the join
+func (jn *Join) Len() int {
+	return len(jn.LeftCols) + len(jn.RightCols)
 }
 
 // RouteBuilder is used to build a Route primitive.
@@ -348,6 +363,7 @@ func makeJoinBuilder(lplanBuilder PlanBuilder, lsymbols *SymbolTable, rplanBuild
 		RightOrder: rplanBuilder.Order(),
 		Left:       lplanBuilder,
 		Right:      rplanBuilder,
+		Join:       &Join{},
 	}, lsymbols, nil
 }
 
