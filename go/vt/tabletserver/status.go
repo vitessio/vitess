@@ -32,9 +32,9 @@ var queryserviceStatusTemplate = `
 google.load("jquery", "1.4.0");
 google.load("visualization", "1", {packages:["corechart"]});
 
-function minutesAgo(d, i) {
+function sampleDate(d, i) {
   var copy = new Date(d);
-  copy.setTime(copy.getTime() - i*60*1000);
+  copy.setTime(copy.getTime() - i*60/5*1000);
   return copy
 }
 
@@ -70,8 +70,11 @@ function drawQPSChart() {
 
       var data = [["Time"].concat(planTypes)];
 
-      for (var i = 0; i < 15; i++) {
-        var datum = [minutesAgo(now, i)];
+      // Create data points, starting with the most recent timestamp.
+      // (On the graph this means going from right to left.)
+      // Time span: 15 minutes in 5 second intervals.
+      for (var i = 0; i < 15*60/5; i++) {
+        var datum = [sampleDate(now, i)];
         for (var j = 0; j < planTypes.length; j++) {
           if (i < qps.All.length) {
             datum.push(+qps[planTypes[j]][i].toFixed(2));
@@ -87,8 +90,8 @@ function drawQPSChart() {
 
   redraw();
 
-  // redraw every 30 seconds.
-  window.setInterval(redraw, 30000);
+  // redraw every 2.5 seconds.
+  window.setInterval(redraw, 2500);
 }
 google.setOnLoadCallback(drawQPSChart);
 </script>
@@ -111,7 +114,6 @@ func (tsv *TabletServer) AddStatusPart() {
 		rates := tsv.qe.queryServiceStats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
-
 		}
 		return status
 	})
