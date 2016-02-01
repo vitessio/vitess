@@ -28,17 +28,7 @@ func TestSelectList(t *testing.T) {
 			t.Errorf("unexpected type: %T", statement)
 			continue
 		}
-		plan, symbolTable, err := processTableExprs(sel.From, schema)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
-		err = processWhere(sel.Where, symbolTable)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
-		err = processSelectExprs(sel, plan, symbolTable)
+		plan, _, err := buildSelectPlan2(sel, schema)
 		if err != nil {
 			t.Error(err)
 			continue

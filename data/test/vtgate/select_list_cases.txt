@@ -260,7 +260,7 @@
   }
 }
 
-# Group  by on unique vindex
+# Group by on unique vindex
 "select col1 from user group by id"
 {
   "Select": "select col1 from user group by id",
@@ -271,5 +271,97 @@
       "Name": "user",
       "Sharded": true
     }
+  }
+}
+
+# HAVING multi-route
+"select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1"
+{
+  "LeftOrder": 1,
+  "RightOrder": 2,
+  "Left": {
+    "Select": "select user.col1 as a, user.col2 from user having 1 = 1 and a = 1 and a = user.col2",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "Select": "select user_extra.col3 from user_extra having user_extra.col3 = 1",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Join": {
+    "LeftCols": [
+      0,
+      1
+    ],
+    "RightCols": [
+      2
+    ]
+  }
+}
+
+# ORDER BY
+"select user.col1 as a, user.col2, user_extra.col3 from user join user_extra order by a asc, user.col2 desc, user_extra.col3 asc"
+{
+  "LeftOrder": 1,
+  "RightOrder": 2,
+  "Left": {
+    "Select": "select user.col1 as a, user.col2 from user order by a asc, user.col2 desc",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "Select": "select user_extra.col3 from user_extra order by user_extra.col3 asc",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Join": {
+    "LeftCols": [
+      0,
+      1
+    ],
+    "RightCols": [
+      2
+    ]
+  }
+}
+
+# LIMIT
+"select col1 from user where id = 1 limit 1"
+{
+  "Select": "select col1 from user where id = 1 limit 1",
+  "Order": 1,
+  "Route": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Vindex": "user_index",
+    "Values": "1"
   }
 }

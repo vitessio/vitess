@@ -216,6 +216,22 @@ func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (PlanBuilder, *Symb
 	if err != nil {
 		return nil, nil, err
 	}
+	err = processSelectExprs(sel, planBuilder, symbolTable)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = processHaving(sel.Having, symbolTable)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = processOrderBy(sel.OrderBy, symbolTable)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = processLimit(sel.Limit, planBuilder)
+	if err != nil {
+		return nil, nil, err
+	}
 	return planBuilder, symbolTable, nil
 }
 

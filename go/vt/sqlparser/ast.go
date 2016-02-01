@@ -165,7 +165,7 @@ func (node *Select) WalkSubtree(visit Visit) error {
 }
 
 // AddWhere adds the boolean expression to the
-// Where clause as an AND condition. If the expression
+// WHERE clause as an AND condition. If the expression
 // is an OR clause, it parenthesizes it. Currently,
 // the OR operator is the only one that's lower precedence
 // than AND.
@@ -182,6 +182,29 @@ func (node *Select) AddWhere(expr BoolExpr) {
 	}
 	node.Where.Expr = &AndExpr{
 		Left:  node.Where.Expr,
+		Right: expr,
+	}
+	return
+}
+
+// AddHaving adds the boolean expression to the
+// HAVING clause as an AND condition. If the expression
+// is an OR clause, it parenthesizes it. Currently,
+// the OR operator is the only one that's lower precedence
+// than AND.
+func (node *Select) AddHaving(expr BoolExpr) {
+	if _, ok := expr.(*OrExpr); ok {
+		expr = &ParenBoolExpr{Expr: expr}
+	}
+	if node.Having == nil {
+		node.Having = &Where{
+			Type: HavingStr,
+			Expr: expr,
+		}
+		return
+	}
+	node.Having.Expr = &AndExpr{
+		Left:  node.Having.Expr,
 		Right: expr,
 	}
 	return

@@ -86,6 +86,25 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, s
 	return selectSymbols, nil
 }
 
+func pushSelect(selectExpr sqlparser.SelectExpr, planBuilder PlanBuilder, routeNumber int) {
+	switch planBuilder := planBuilder.(type) {
+	case *JoinBuilder:
+		if routeNumber <= planBuilder.LeftOrder {
+			pushSelect(selectExpr, planBuilder.Left, routeNumber)
+			planBuilder.Join.LeftCols = append(planBuilder.Join.LeftCols, planBuilder.Join.Len())
+			return
+		}
+		pushSelect(selectExpr, planBuilder.Right, routeNumber)
+		planBuilder.Join.RightCols = append(planBuilder.Join.RightCols, planBuilder.Join.Len())
+	case *RouteBuilder:
+		if routeNumber != planBuilder.Order() {
+			// TODO(sougou): remove after testing
+			panic("unexpcted values")
+		}
+		planBuilder.Select.SelectExprs = append(planBuilder.Select.SelectExprs, selectExpr)
+	}
+}
+
 func checkAllowAggregates(selectExprs sqlparser.SelectExprs, planBuilder PlanBuilder, symbolTable *SymbolTable) bool {
 	routeBuilder, ok := planBuilder.(*RouteBuilder)
 	if !ok {
@@ -106,25 +125,6 @@ func checkAllowAggregates(selectExprs sqlparser.SelectExprs, planBuilder PlanBui
 		}
 	}
 	return false
-}
-
-func pushSelect(selectExpr sqlparser.SelectExpr, planBuilder PlanBuilder, routeNumber int) {
-	switch planBuilder := planBuilder.(type) {
-	case *JoinBuilder:
-		if routeNumber <= planBuilder.LeftOrder {
-			pushSelect(selectExpr, planBuilder.Left, routeNumber)
-			planBuilder.Join.LeftCols = append(planBuilder.Join.LeftCols, planBuilder.Join.Len())
-			return
-		}
-		pushSelect(selectExpr, planBuilder.Right, routeNumber)
-		planBuilder.Join.RightCols = append(planBuilder.Join.RightCols, planBuilder.Join.Len())
-	case *RouteBuilder:
-		if routeNumber != planBuilder.Order() {
-			// TODO(sougou): remove after testing
-			panic("unexpcted values")
-		}
-		planBuilder.Select.SelectExprs = append(planBuilder.Select.SelectExprs, selectExpr)
-	}
 }
 
 func processGroupBy(groupBy sqlparser.GroupBy, planBuilder PlanBuilder, symbolTable *SymbolTable) error {
