@@ -2,9 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-"""A simple, direct connection to the vttablet query server.
-
-This currently supports both vtgatev2 and vtgatev3.
+"""A simple, direct connection to the vtgate proxy server.
 """
 
 # TODO(dumbunny): Rename module, class, and tests to gorpc_vtgate_client.

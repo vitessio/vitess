@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-"""A simple, direct connection to the vttablet query server, using gRPC.
+"""A simple, direct connection to the vtgate proxy server, using gRPC.
 """
 
 import datetime
@@ -58,6 +58,13 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
     self.stub = vtgateservice_pb2.beta_create_Vitess_stub(channel)
 
   def close(self):
+    """close closes the server connection and frees up associated resources.
+
+    The stub object is managed by the gRPC library, removing references
+    to it will just close the channel.
+    """
+    if self.session and self.session.in_transaction:
+      self.rollback()
     self.stub = None
 
   def is_closed(self):
@@ -72,6 +79,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       request = vtgate_pb2.BeginRequest()
       _add_caller_id(request, effective_caller_id)
       response = self.stub.Begin(request, self.timeout)
+      # we're saving effective_caller_id to re-use it for commit and rollback.
       self.effective_caller_id = effective_caller_id
       self.session = response.session
     except (face.AbortionError, vtgate_utils.VitessError) as e:
@@ -101,6 +109,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       self.session = None
       self.effective_caller_id = None
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _execute(self, sql, bind_variables, keyspace_name, tablet_type,
                shards=None,
                keyspace_ids=None,
@@ -199,6 +208,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
           e, sql, keyspace=keyspace_name, tablet_type=tablet_type,
           **routing_kwargs)
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _execute_batch(
       self, sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
       shards_list, tablet_type, as_transaction, effective_caller_id=None,
@@ -261,6 +271,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       raise _convert_exception(
           e, sql_list, exec_method, keyspace='', tablet_type=tablet_type)
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _stream_execute(
       self, sql, bind_variables, keyspace_name, tablet_type, keyspace_ids=None,
       keyranges=None, not_in_transaction=False, effective_caller_id=None,
@@ -415,8 +426,13 @@ def _convert_exception(exc, *args, **kwargs):
   if isinstance(exc, vtgate_utils.VitessError):
     new_exc = exc.convert_to_dbexception(new_args)
   elif isinstance(exc, face.ExpirationError):
+    # face.ExpirationError is returned by the gRPC library when
+    # a request times out. Note it is a subclass of face.AbortionError
+    # so we have to test for it before.
     new_exc = dbexceptions.TimeoutError(new_args)
   elif isinstance(exc, face.AbortionError):
+    # face.AbortionError is the toplevel error returned by gRPC for any
+    # RPC that finishes earlier than expected.
     msg = exc.details
     if exc.code == interfaces.StatusCode.UNAVAILABLE:
       if _throttler_err_pattern.search(msg):
@@ -457,16 +473,16 @@ def _convert_value(value, proto_value, allow_lists=False):
     proto_value.type = query_pb2.FLOAT64
     proto_value.value = str(value)
   elif hasattr(value, '__sql_literal__'):
-    proto_value.type = query_pb2.VARCHAR
+    proto_value.type = query_pb2.VARBINARY
     proto_value.value = str(value.__sql_literal__())
   elif isinstance(value, datetime.datetime):
-    proto_value.type = query_pb2.VARCHAR
+    proto_value.type = query_pb2.VARBINARY
     proto_value.value = times.DateTimeToString(value)
   elif isinstance(value, datetime.date):
-    proto_value.type = query_pb2.VARCHAR
+    proto_value.type = query_pb2.VARBINARY
     proto_value.value = times.DateToString(value)
   elif isinstance(value, str):
-    proto_value.type = query_pb2.VARCHAR
+    proto_value.type = query_pb2.VARBINARY
     proto_value.value = value
   elif isinstance(value, field_types.NoneType):
     proto_value.type = query_pb2.NULL_TYPE
@@ -477,7 +493,7 @@ def _convert_value(value, proto_value, allow_lists=False):
       proto_v = proto_value.values.add()
       _convert_value(v, proto_v)
   else:
-    proto_value.type = query_pb2.BINARY
+    proto_value.type = query_pb2.VARBINARY
     proto_value.value = str(value)
 
 
