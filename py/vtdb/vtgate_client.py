@@ -86,14 +86,14 @@ class VTGateClient(object):
 
     If successful, call close() to close the connection.
     """
-    raise NotImplemented('Child class needs to implement this')
+    raise NotImplementedError('Child class needs to implement this')
 
   def close(self):
     """Close the connection.
 
     This object may be re-used again by calling dial().
     """
-    raise NotImplemented('Child class needs to implement this')
+    raise NotImplementedError('Child class needs to implement this')
 
   def is_closed(self):
     """Checks the connection status.
@@ -101,7 +101,7 @@ class VTGateClient(object):
     Returns:
       True if this connection is closed.
     """
-    raise NotImplemented('Child class needs to implement this')
+    raise NotImplementedError('Child class needs to implement this')
 
   def cursor(self, *pargs, **kwargs):
     """Creates a cursor instance associated with this connection.
@@ -136,7 +136,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    raise NotImplemented('Child class needs to implement this')
+    raise NotImplementedError('Child class needs to implement this')
 
   def commit(self):
     """Commits the current transaction.
@@ -154,7 +154,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    raise NotImplemented('Child class needs to implement this')
+    raise NotImplementedError('Child class needs to implement this')
 
   def rollback(self):
     """Rolls the current transaction back.
@@ -172,7 +172,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    raise NotImplemented('Child class needs to implement this')
+    raise NotImplementedError('Child class needs to implement this')
 
   def _execute(self, sql, bind_variables, tablet_type,
                keyspace=None,
@@ -214,6 +214,7 @@ class VTGateClient(object):
       not_in_transaction: force this execute to be outside the current
         transaction, if any.
       effective_caller_id: CallerID object.
+      **kwargs: implementation specific parameters.
 
     Returns:
       results: list of rows.
@@ -232,7 +233,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    raise NotImplemented('Child class needs to implement this')
+    raise NotImplementedError('Child class needs to implement this')
 
   def _execute_batch(
       self, sql_list, bind_variables_list, tablet_type,
@@ -261,6 +262,7 @@ class VTGateClient(object):
         Requires keyspace_list.
       as_transaction: starts and commits a transaction around the statements.
       effective_caller_id: CallerID object.
+      **kwargs: implementation specific parameters.
 
     Returns:
       results: an array of (results, rowcount, lastrowid, fields) tuples,
@@ -277,7 +279,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    raise NotImplemented('Child class needs to implement this')
+    raise NotImplementedError('Child class needs to implement this')
 
   def _stream_execute(
       self, sql, bind_variables, tablet_type, keyspace=None, shards=None,
@@ -305,6 +307,7 @@ class VTGateClient(object):
         Incompatible with shards, keyspace_ids.
         Requires keyspace.
       effective_caller_id: CallerID object.
+      **kwargs: implementation specific parameters.
 
     Returns:
       A (row generator, fields) pair.
@@ -320,7 +323,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    raise NotImplemented('Child class needs to implement this')
+    raise NotImplementedError('Child class needs to implement this')
 
   def get_srv_keyspace(self, keyspace):
     """Returns a SrvKeyspace object.
@@ -334,4 +337,4 @@ class VTGateClient(object):
     Raises:
       TBD
     """
-    raise NotImplemented('Child class needs to implement this')
+    raise NotImplementedError('Child class needs to implement this')
