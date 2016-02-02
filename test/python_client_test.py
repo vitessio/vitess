@@ -86,6 +86,10 @@ class TestPythonClientBase(unittest.TestCase):
   def _open_v3_cursor(self):
     return self.conn.cursor(keyspace=None, tablet_type='master')
 
+  def _open_shards_cursor(self):
+    return self.conn.cursor(
+        'keyspace', 'master', shards=['-80'])
+
   def _open_keyspace_ids_cursor(self):
     return self.conn.cursor(
         'keyspace', 'master', keyspace_ids=[self.KEYSPACE_ID_0X80])
@@ -102,15 +106,20 @@ class TestPythonClientBase(unittest.TestCase):
         keyspace=None, tablet_type='master',
         cursorclass=vtgate_cursor.StreamVTGateCursor)
 
-  def _open_stream_keyranges_cursor(self):
-    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
+  def _open_stream_shards_cursor(self):
     return self.conn.cursor(
-        'keyspace', 'master', keyranges=[kr],
+        'keyspace', 'master', shards=['-80'],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
 
   def _open_stream_keyspace_ids_cursor(self):
     return self.conn.cursor(
         'keyspace', 'master', keyspace_ids=[self.KEYSPACE_ID_0X80],
+        cursorclass=vtgate_cursor.StreamVTGateCursor)
+
+  def _open_stream_keyranges_cursor(self):
+    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
+    return self.conn.cursor(
+        'keyspace', 'master', keyranges=[kr],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
 
 
@@ -145,7 +154,11 @@ class TestErrors(TestPythonClientBase):
       cursor.execute(query, {})
     cursor.close()
 
-    # FIXME(alainjobart) ExecuteShards test
+    # ExecuteShards test
+    cursor = self._open_shards_cursor()
+    with self.assertRaises(exception):
+      cursor.execute(query, {})
+    cursor.close()
 
     # ExecuteKeyspaceIds test
     cursor = self._open_keyspace_ids_cursor()
@@ -207,7 +220,11 @@ class TestErrors(TestPythonClientBase):
       cursor.execute(query, {})
     cursor.close()
 
-    # FIXME(alainjobart) StreamExecuteShards test
+    # StreamExecuteShards test
+    cursor = self._open_stream_shards_cursor()
+    with self.assertRaises(exception):
+      cursor.execute(query, {})
+    cursor.close()
 
     # StreamExecuteKeyspaceIds test
     cursor = self._open_stream_keyspace_ids_cursor()
@@ -341,7 +358,12 @@ class TestCallerId(TestPythonClientBase):
     check_good_and_bad_effective_caller_ids(
         self._open_v3_cursor(), cursor_execute_method)
 
-    # FIMXE(alainjobart) test ExecuteShards
+    # test ExecuteShards
+    def cursor_execute_shards_method(cursor):
+      cursor.execute(effective_caller_id_test_query, {})
+
+    check_good_and_bad_effective_caller_ids(
+        self._open_shards_cursor(), cursor_execute_shards_method)
 
     # test ExecuteKeyspaceIds
     def cursor_execute_keyspace_ids_method(cursor):
@@ -400,7 +422,13 @@ class TestCallerId(TestPythonClientBase):
         self._open_stream_v3_cursor(),
         cursor_stream_execute_v3_method)
 
-    # FIXME(alainjobart) test StreamExecuteShards
+    # test StreamExecuteShards
+    def cursor_stream_execute_shards_method(cursor):
+      cursor.execute(sql=effective_caller_id_test_query, bind_variables={})
+
+    check_good_and_bad_effective_caller_ids(
+        self._open_stream_shards_cursor(),
+        cursor_stream_execute_shards_method)
 
     # test StreamExecuteKeyspaceIds
     def cursor_stream_execute_keyspace_ids_method(cursor):
@@ -489,7 +517,21 @@ class TestEcho(TestPythonClientBase):
     })
     cursor.close()
 
-    # FIXME(alainjobart) ExecuteShards
+    # ExecuteShards
+    cursor = self.conn.cursor(keyspace=self.keyspace,
+                              tablet_type=self.tablet_type,
+                              shards=self.shards)
+    cursor.set_effective_caller_id(self.caller_id)
+    cursor.execute(self.echo_prefix+self.query, self.bind_variables)
+    self._check_echo(cursor, {
+        'callerId': self.caller_id_echo,
+        'query': self.echo_prefix+self.query_echo,
+        'keyspace': self.keyspace,
+        'shards': self.shards_echo,
+        'bindVars': self.bind_variables_echo,
+        'tabletType': self.tablet_type_echo,
+    })
+    cursor.close()
 
     # ExecuteKeyspaceIds
     cursor = self.conn.cursor(keyspace=self.keyspace,
