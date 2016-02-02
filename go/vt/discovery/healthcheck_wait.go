@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -136,6 +137,11 @@ RetryLoop:
 		}
 	}
 
-	log.Warningf("waitForEndPoints timeout for %v", keyspaceShards)
-	return ErrWaitForEndPointsTimeout
+	if ctx.Err() == context.DeadlineExceeded {
+		log.Warningf("waitForEndPoints timeout for %v (context error: %v)", keyspaceShards, ctx.Err())
+		return ErrWaitForEndPointsTimeout
+	}
+	err := fmt.Errorf("waitForEndPoints failed for %v (context error: %v)", keyspaceShards, ctx.Err())
+	log.Error(err)
+	return err
 }

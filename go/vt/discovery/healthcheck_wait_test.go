@@ -122,6 +122,13 @@ func TestWaitForEndPoints(t *testing.T) {
 		t.Errorf("got wrong error: %v", err)
 	}
 
+	// this should fail, but return a non-timeout error
+	cancelledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := WaitForEndPoints(cancelledCtx, hc, "cell", "keyspace", "shard", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err == nil || err == ErrWaitForEndPointsTimeout {
+		t.Errorf("want: non-timeout error, got: %v", err)
+	}
+
 	// send the endpoint in
 	shr := &querypb.StreamHealthResponse{
 		Target: &querypb.Target{

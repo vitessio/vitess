@@ -235,6 +235,17 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		}
 	}()
 
+	// Check if the context is still good.
+	select {
+	case <-bpc.ctx.Done():
+		if bpc.ctx.Err() == context.Canceled {
+			// We were stopped. Break out of Loop().
+			return nil
+		}
+		return fmt.Errorf("giving up since the context is done: %v", bpc.ctx.Err())
+	default:
+	}
+
 	// Apply any special settings necessary for playback of binlogs.
 	// We do it on every iteration to be sure, in case MySQL was restarted.
 	if err := bpc.mysqld.EnableBinlogPlayback(); err != nil {
