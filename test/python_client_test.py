@@ -597,7 +597,8 @@ class TestEcho(TestPythonClientBase):
   def _check_echo(self, cursor, values):
     got = self._get_echo(cursor)
     for k, v in values.iteritems():
-      self.assertEqual(got[k], v)
+      self.assertEqual(got[k], v, 'item %s is different in result: got %s'
+                       ' expected %s' % (k, got[k], v))
 
     # Check NULL and empty string.
     self.assertEqual(got['null'], None)
