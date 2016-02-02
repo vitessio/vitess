@@ -10,25 +10,25 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-// SymbolTable contains the symbols for a SELECT
+// symtab contains the symbols for a SELECT
 // statement.
-type SymbolTable struct {
-	tables        map[sqlparser.SQLName]*TableAlias
-	SelectSymbols []SelectSymbol
-	FirstRoute    *RouteBuilder
+type symtab struct {
+	tables     map[sqlparser.SQLName]*tableAlias
+	Colsyms    []colSym
+	FirstRoute *routeBuilder
 }
 
-// SelectSymbol contains symbol info about a select expression.
-type SelectSymbol struct {
+// colSym contains symbol info about a select expression.
+type colSym struct {
 	Alias  sqlparser.SQLName
-	Route  *RouteBuilder
+	Route  *routeBuilder
 	Vindex Vindex
 }
 
-// TableAlias is part of SymbolTable.
+// tableAlias is part of symtab.
 // It represnts a table alias in a FROM clause.
 // TODO(sougou): Update comments after the struct is finalized.
-type TableAlias struct {
+type tableAlias struct {
 	// Name represents the name of the alias.
 	Name sqlparser.SQLName
 	// Keyspace points to the keyspace to which this
@@ -36,16 +36,16 @@ type TableAlias struct {
 	Keyspace *Keyspace
 	// CoVindexes is the list of column Vindexes for this alias.
 	ColVindexes []*ColVindex
-	// Route points to the RouteBuilder object under which this alias
+	// Route points to the routeBuilder object under which this alias
 	// was created.
-	Route *RouteBuilder
+	Route *routeBuilder
 }
 
-// NewSymbolTable creates a new SymbolTable initialized
+// newSymtab creates a new symtab initialized
 // to contain the provided table alias.
-func NewSymbolTable(alias sqlparser.SQLName, table *Table, route *RouteBuilder) *SymbolTable {
-	return &SymbolTable{
-		tables: map[sqlparser.SQLName]*TableAlias{
+func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder) *symtab {
+	return &symtab{
+		tables: map[sqlparser.SQLName]*tableAlias{
 			alias: {
 				Name:        alias,
 				Keyspace:    table.Keyspace,
@@ -60,27 +60,27 @@ func NewSymbolTable(alias sqlparser.SQLName, table *Table, route *RouteBuilder) 
 // Add merges the new symbol table into the current one
 // without merging their routes. This means that the new symbols
 // will belong to different routes
-func (smt *SymbolTable) Add(symbols *SymbolTable) error {
-	for k, v := range symbols.tables {
-		if _, found := smt.tables[k]; found {
+func (st *symtab) Add(newsyms *symtab) error {
+	for k, v := range newsyms.tables {
+		if _, found := st.tables[k]; found {
 			return errors.New("duplicate symbols")
 		}
-		smt.tables[k] = v
+		st.tables[k] = v
 	}
 	return nil
 }
 
 // Merge merges the new symbol table into the current one and makes
-// all the tables part of the specified RouteBuilder.
-func (smt *SymbolTable) Merge(symbols *SymbolTable, route *RouteBuilder) error {
-	for _, v := range smt.tables {
+// all the tables part of the specified routeBuilder.
+func (st *symtab) Merge(newsyms *symtab, route *routeBuilder) error {
+	for _, v := range st.tables {
 		v.Route = route
 	}
-	for k, v := range symbols.tables {
-		if _, found := smt.tables[k]; found {
+	for k, v := range newsyms.tables {
+		if _, found := st.tables[k]; found {
 			return errors.New("duplicate symbols")
 		}
-		smt.tables[k] = v
+		st.tables[k] = v
 		v.Route = route
 	}
 	return nil
@@ -89,8 +89,8 @@ func (smt *SymbolTable) Merge(symbols *SymbolTable, route *RouteBuilder) error {
 // SetRHS removes the ColVindexes from the aliases signifying
 // that they cannot be used to make routing decisions. This is
 // called if the table is in the RHS of a LEFT JOIN.
-func (smt *SymbolTable) SetRHS() {
-	for _, v := range smt.tables {
+func (st *symtab) SetRHS() {
+	for _, v := range st.tables {
 		v.ColVindexes = nil
 	}
 }
@@ -103,33 +103,33 @@ func (smt *SymbolTable) SetRHS() {
 // then an unqualified reference is assumed to be implicitly against
 // that table. The table info doesn't contain the full list of columns.
 // So, any column reference is presumed valid until execution time.
-func (smt *SymbolTable) FindColumn(expr sqlparser.Expr, scope *RouteBuilder, autoResolve bool) (*RouteBuilder, Vindex) {
+func (st *symtab) FindColumn(expr sqlparser.Expr, scope *routeBuilder, autoResolve bool) (*routeBuilder, Vindex) {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return nil, nil
 	}
-	if len(smt.SelectSymbols) != 0 {
+	if len(st.Colsyms) != 0 {
 		name := sqlparser.SQLName(sqlparser.String(col))
-		for _, selectSymbol := range smt.SelectSymbols {
-			if name == selectSymbol.Alias {
-				if scope != nil && scope != selectSymbol.Route {
+		for _, col := range st.Colsyms {
+			if name == col.Alias {
+				if scope != nil && scope != col.Route {
 					return nil, nil
 				}
-				return selectSymbol.Route, selectSymbol.Vindex
+				return col.Route, col.Vindex
 			}
 		}
 	}
 	qualifier := col.Qualifier
 	if qualifier == "" && autoResolve {
-		if len(smt.tables) != 1 {
+		if len(st.tables) != 1 {
 			return nil, nil
 		}
-		for k := range smt.tables {
+		for k := range st.tables {
 			qualifier = k
 			break
 		}
 	}
-	alias, ok := smt.tables[qualifier]
+	alias, ok := st.tables[qualifier]
 	if !ok {
 		return nil, nil
 	}
@@ -147,11 +147,11 @@ func (smt *SymbolTable) FindColumn(expr sqlparser.Expr, scope *RouteBuilder, aut
 // IsValue returns true if the expression can be treated as a value
 // for the current scope.
 // Unresolved references are treated as value
-func (smt *SymbolTable) IsValue(expr sqlparser.ValExpr, scope *RouteBuilder) bool {
+func (st *symtab) IsValue(expr sqlparser.ValExpr, scope *routeBuilder) bool {
 	switch node := expr.(type) {
 	case *sqlparser.ColName:
 		// If it's a valid column reference, it can't be treated as value.
-		if route, _ := smt.FindColumn(node, scope, true); route != nil {
+		if route, _ := st.FindColumn(node, scope, true); route != nil {
 			return false
 		}
 		return true

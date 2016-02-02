@@ -10,17 +10,17 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func processWhere(where *sqlparser.Where, symbolTable *SymbolTable) error {
+func processWhere(where *sqlparser.Where, syms *symtab) error {
 	if where == nil {
 		return nil
 	}
-	return processBoolExpr(where.Expr, symbolTable)
+	return processBoolExpr(where.Expr, syms)
 }
 
-func processBoolExpr(boolExpr sqlparser.BoolExpr, symbolTable *SymbolTable) error {
+func processBoolExpr(boolExpr sqlparser.BoolExpr, syms *symtab) error {
 	filters := splitAndExpression(nil, boolExpr)
 	for _, filter := range filters {
-		err := processFilter(filter, symbolTable)
+		err := processFilter(filter, syms)
 		if err != nil {
 			return err
 		}
@@ -28,26 +28,26 @@ func processBoolExpr(boolExpr sqlparser.BoolExpr, symbolTable *SymbolTable) erro
 	return nil
 }
 
-func processFilter(filter sqlparser.BoolExpr, symbolTable *SymbolTable) error {
-	routeBuilder, err := findRoute(filter, symbolTable)
+func processFilter(filter sqlparser.BoolExpr, syms *symtab) error {
+	route, err := findRoute(filter, syms)
 	if err != nil {
 		return err
 	}
-	if routeBuilder.IsRHS {
+	if route.IsRHS {
 		// TODO(sougou): improve error.
 		return errors.New("cannot push where clause into a LEFT JOIN route")
 	}
-	routeBuilder.Select.AddWhere(filter)
-	updateRoute(routeBuilder, symbolTable, filter)
+	route.Select.AddWhere(filter)
+	updateRoute(route, syms, filter)
 	return nil
 }
 
-func findRoute(filter sqlparser.BoolExpr, symbolTable *SymbolTable) (routeBuilder *RouteBuilder, err error) {
-	highestRoute := symbolTable.FirstRoute
+func findRoute(filter sqlparser.BoolExpr, syms *symtab) (route *routeBuilder, err error) {
+	highestRoute := syms.FirstRoute
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			newRoute, _ := symbolTable.FindColumn(node, nil, true)
+			newRoute, _ := syms.FindColumn(node, nil, true)
 			if newRoute == nil {
 				// Skip unresolved references.
 				return true, nil
@@ -67,67 +67,67 @@ func findRoute(filter sqlparser.BoolExpr, symbolTable *SymbolTable) (routeBuilde
 	return highestRoute, nil
 }
 
-func updateRoute(routeBuilder *RouteBuilder, symbolTable *SymbolTable, filter sqlparser.BoolExpr) {
-	planID, vindex, values := computePlan(routeBuilder, symbolTable, filter)
+func updateRoute(route *routeBuilder, syms *symtab, filter sqlparser.BoolExpr) {
+	planID, vindex, values := computePlan(route, syms, filter)
 	if planID == SelectScatter {
 		return
 	}
-	switch routeBuilder.Route.PlanID {
+	switch route.Route.PlanID {
 	case SelectEqualUnique:
-		if planID == SelectEqualUnique && vindex.Cost() < routeBuilder.Route.Vindex.Cost() {
-			routeBuilder.Route.SetPlan(planID, vindex, values)
+		if planID == SelectEqualUnique && vindex.Cost() < route.Route.Vindex.Cost() {
+			route.Route.SetPlan(planID, vindex, values)
 		}
 	case SelectEqual:
 		switch planID {
 		case SelectEqualUnique:
-			routeBuilder.Route.SetPlan(planID, vindex, values)
+			route.Route.SetPlan(planID, vindex, values)
 		case SelectEqual:
-			if vindex.Cost() < routeBuilder.Route.Vindex.Cost() {
-				routeBuilder.Route.SetPlan(planID, vindex, values)
+			if vindex.Cost() < route.Route.Vindex.Cost() {
+				route.Route.SetPlan(planID, vindex, values)
 			}
 		}
 	case SelectIN:
 		switch planID {
 		case SelectEqualUnique, SelectEqual:
-			routeBuilder.Route.SetPlan(planID, vindex, values)
+			route.Route.SetPlan(planID, vindex, values)
 		case SelectIN:
-			if vindex.Cost() < routeBuilder.Route.Vindex.Cost() {
-				routeBuilder.Route.SetPlan(planID, vindex, values)
+			if vindex.Cost() < route.Route.Vindex.Cost() {
+				route.Route.SetPlan(planID, vindex, values)
 			}
 		}
 	case SelectScatter:
 		switch planID {
 		case SelectEqualUnique, SelectEqual, SelectIN:
-			routeBuilder.Route.SetPlan(planID, vindex, values)
+			route.Route.SetPlan(planID, vindex, values)
 		}
 	}
 }
 
-func computePlan(routeBuilder *RouteBuilder, symbolTable *SymbolTable, filter sqlparser.BoolExpr) (planID PlanID, vindex Vindex, values interface{}) {
+func computePlan(route *routeBuilder, syms *symtab, filter sqlparser.BoolExpr) (planID PlanID, vindex Vindex, values interface{}) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
 		case sqlparser.EqualStr:
-			return computeEqualPlan(routeBuilder, symbolTable, node)
+			return computeEqualPlan(route, syms, node)
 		case sqlparser.InStr:
-			return computeINPlan(routeBuilder, symbolTable, node)
+			return computeINPlan(route, syms, node)
 		}
 	}
 	return SelectScatter, nil, nil
 }
 
-func computeEqualPlan(routeBuilder *RouteBuilder, symbolTable *SymbolTable, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
+func computeEqualPlan(route *routeBuilder, syms *symtab, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
 	left := comparison.Left
 	right := comparison.Right
-	_, vindex = symbolTable.FindColumn(left, routeBuilder, true)
+	_, vindex = syms.FindColumn(left, route, true)
 	if vindex == nil {
 		left, right = right, left
-		_, vindex = symbolTable.FindColumn(left, routeBuilder, false)
+		_, vindex = syms.FindColumn(left, route, false)
 		if vindex == nil {
 			return SelectScatter, nil, nil
 		}
 	}
-	if !symbolTable.IsValue(right, routeBuilder) {
+	if !syms.IsValue(right, route) {
 		return SelectScatter, nil, nil
 	}
 	if IsUnique(vindex) {
@@ -136,15 +136,15 @@ func computeEqualPlan(routeBuilder *RouteBuilder, symbolTable *SymbolTable, comp
 	return SelectEqual, vindex, right
 }
 
-func computeINPlan(routeBuilder *RouteBuilder, symbolTable *SymbolTable, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
-	_, vindex = symbolTable.FindColumn(comparison.Left, routeBuilder, true)
+func computeINPlan(route *routeBuilder, syms *symtab, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
+	_, vindex = syms.FindColumn(comparison.Left, route, true)
 	if vindex == nil {
 		return SelectScatter, nil, nil
 	}
 	switch node := comparison.Right.(type) {
 	case sqlparser.ValTuple:
 		for _, n := range node {
-			if !symbolTable.IsValue(n, routeBuilder) {
+			if !syms.IsValue(n, route) {
 				return SelectScatter, nil, nil
 			}
 		}

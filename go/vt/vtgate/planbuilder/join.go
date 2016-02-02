@@ -19,17 +19,17 @@ import (
 // In general, the error should just be returned back to the
 // application.
 
-// PlanBuilder represents any object that's used to
-// build a plan. The top-level PlanBuilder will be a
-// tree that points to other PlanBuilder objects.
-// Currently, JoinBuilder and RouteBuilder are the
-// only two supported PlanBuilder objects. More will be
+// planBuilder represents any object that's used to
+// build a plan. The top-level planBuilder will be a
+// tree that points to other planBuilder objects.
+// Currently, joinBuilder and routeBuilder are the
+// only two supported planBuilder objects. More will be
 // added as we extend the functionality.
 // Each Builder object builds a Plan object, and they
 // will mirror the same tree. Once all the plans are built,
 // the builder objects will be discarded, and only
 // the Plan objects will remain.
-type PlanBuilder interface {
+type planBuilder interface {
 	// Order is a number that signifies execution order.
 	// A lower Order number Route is executed before a
 	// higher one. For a node that contains other nodes,
@@ -38,34 +38,34 @@ type PlanBuilder interface {
 	Order() int
 }
 
-// JoinBuilder is used to build a Join primitive.
+// joinBuilder is used to build a Join primitive.
 // It's used to buid a normal join or a left join
 // operation.
 // TODO(sougou): struct is incomplete.
-type JoinBuilder struct {
+type joinBuilder struct {
 	// IsLeft is true if the operation is a left join.
 	IsLeft                bool
 	LeftOrder, RightOrder int
 	// Left and Right are the nodes for the join.
-	Left, Right PlanBuilder
+	Left, Right planBuilder
 	// Join is the join plan.
 	Join *Join
 }
 
 // Order returns the order of the node.
-func (jb *JoinBuilder) Order() int {
+func (jb *joinBuilder) Order() int {
 	return jb.RightOrder
 }
 
-// MarshalJSON marshals JoinBuilder into a readable form.
+// MarshalJSON marshals joinBuilder into a readable form.
 // It's used for testing and diagnostics. The representation
-// cannot be used to reconstruct a JoinBuilder.
-func (jb *JoinBuilder) MarshalJSON() ([]byte, error) {
+// cannot be used to reconstruct a joinBuilder.
+func (jb *joinBuilder) MarshalJSON() ([]byte, error) {
 	marshalJoin := struct {
 		IsLeft      bool `json:",omitempty"`
 		LeftOrder   int
 		RightOrder  int
-		Left, Right PlanBuilder
+		Left, Right planBuilder
 		Join        *Join
 	}{
 		IsLeft:     jb.IsLeft,
@@ -89,14 +89,14 @@ func (jn *Join) Len() int {
 	return len(jn.LeftCols) + len(jn.RightCols)
 }
 
-// RouteBuilder is used to build a Route primitive.
+// routeBuilder is used to build a Route primitive.
 // It's used to build one of the Select routes like
 // SelectScatter, etc. Portions of the original Select AST
 // are moved into this node, which will be used to build
 // the final SQL for this route.
 // TODO(sougou): struct is incomplete.
-type RouteBuilder struct {
-	// IsRHS is true if the RouteBuilder is the RHS of a
+type routeBuilder struct {
+	// IsRHS is true if the routeBuilder is the RHS of a
 	// LEFT JOIN. If so, many restrictions come into play.
 	IsRHS bool
 	// Select is the AST for the query fragment that will be
@@ -109,14 +109,14 @@ type RouteBuilder struct {
 }
 
 // Order returns the order of the node.
-func (rtb *RouteBuilder) Order() int {
+func (rtb *routeBuilder) Order() int {
 	return rtb.order
 }
 
-// MarshalJSON marshals RouteBuilder into a readable form.
+// MarshalJSON marshals routeBuilder into a readable form.
 // It's used for testing and diagnostics. The representation
-// cannot be used to reconstruct a RouteBuilder.
-func (rtb *RouteBuilder) MarshalJSON() ([]byte, error) {
+// cannot be used to reconstruct a routeBuilder.
+func (rtb *routeBuilder) MarshalJSON() ([]byte, error) {
 	marshalRoute := struct {
 		IsRHS  bool   `json:",omitempty"`
 		Select string `json:",omitempty"`
@@ -132,7 +132,7 @@ func (rtb *RouteBuilder) MarshalJSON() ([]byte, error) {
 }
 
 // IsSingle returns true if the route targets only one database.
-func (rtb *RouteBuilder) IsSingle() bool {
+func (rtb *routeBuilder) IsSingle() bool {
 	return rtb.Route.PlanID == SelectUnsharded || rtb.Route.PlanID == SelectEqualUnique
 }
 
@@ -207,37 +207,37 @@ func prettyValue(value interface{}) string {
 
 // buildSelectPlan2 is the new function to build a Select plan.
 // TODO(sougou): rename after deprecating old one.
-func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (PlanBuilder, *SymbolTable, error) {
-	planBuilder, symbolTable, err := processTableExprs(sel.From, schema)
+func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (planBuilder, *symtab, error) {
+	plan, syms, err := processTableExprs(sel.From, schema)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = processWhere(sel.Where, symbolTable)
+	err = processWhere(sel.Where, syms)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = processSelectExprs(sel, planBuilder, symbolTable)
+	err = processSelectExprs(sel, plan, syms)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = processHaving(sel.Having, symbolTable)
+	err = processHaving(sel.Having, syms)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = processOrderBy(sel.OrderBy, symbolTable)
+	err = processOrderBy(sel.OrderBy, syms)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = processLimit(sel.Limit, planBuilder)
+	err = processLimit(sel.Limit, plan)
 	if err != nil {
 		return nil, nil, err
 	}
-	return planBuilder, symbolTable, nil
+	return plan, syms, nil
 }
 
-// processTableExprs analyzes the FROM clause. It produces a PlanBuilder
-// and the associated SymbolTable with all the routes identified.
-func processTableExprs(tableExprs sqlparser.TableExprs, schema *Schema) (PlanBuilder, *SymbolTable, error) {
+// processTableExprs analyzes the FROM clause. It produces a planBuilder
+// and the associated symtab with all the routes identified.
+func processTableExprs(tableExprs sqlparser.TableExprs, schema *Schema) (planBuilder, *symtab, error) {
 	if len(tableExprs) != 1 {
 		// TODO(sougou): better error message.
 		return nil, nil, errors.New("lists are not supported")
@@ -245,37 +245,37 @@ func processTableExprs(tableExprs sqlparser.TableExprs, schema *Schema) (PlanBui
 	return processTableExpr(tableExprs[0], schema)
 }
 
-// processTableExpr produces a PlanBuilder subtree and SymbolTable
+// processTableExpr produces a planBuilder subtree and symtab
 // for the given TableExpr.
-func processTableExpr(tableExpr sqlparser.TableExpr, schema *Schema) (PlanBuilder, *SymbolTable, error) {
+func processTableExpr(tableExpr sqlparser.TableExpr, schema *Schema) (planBuilder, *symtab, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return processAliasedTable(tableExpr, schema)
 	case *sqlparser.ParenTableExpr:
-		planBuilder, symbols, err := processTableExprs(tableExpr.Exprs, schema)
+		plan, syms, err := processTableExprs(tableExpr.Exprs, schema)
 		// We want to point to the higher level parenthesis because
 		// more routes can be merged with this one. If so, the order
 		// should be maintained as dictated by the parenthesis.
-		if route, ok := planBuilder.(*RouteBuilder); ok {
+		if route, ok := plan.(*routeBuilder); ok {
 			route.Select.From = sqlparser.TableExprs{tableExpr}
 		}
-		return planBuilder, symbols, err
+		return plan, syms, err
 	case *sqlparser.JoinTableExpr:
 		return processJoin(tableExpr, schema)
 	}
 	panic("unreachable")
 }
 
-// processAliasedTable produces a PlanBuilder subtree and SymbolTable
+// processAliasedTable produces a planBuilder subtree and symtab
 // for the given AliasedTableExpr.
-func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, schema *Schema) (PlanBuilder, *SymbolTable, error) {
+func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, schema *Schema) (planBuilder, *symtab, error) {
 	switch expr := tableExpr.Expr.(type) {
 	case *sqlparser.TableName:
 		route, table, err := getTablePlan(expr, schema)
 		if err != nil {
 			return nil, nil, err
 		}
-		planBuilder := &RouteBuilder{
+		plan := &routeBuilder{
 			Select: sqlparser.Select{From: sqlparser.TableExprs{tableExpr}},
 			order:  1,
 			Route:  route,
@@ -284,8 +284,8 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, schema *Schema) 
 		if tableExpr.As != "" {
 			alias = tableExpr.As
 		}
-		symbols := NewSymbolTable(alias, table, planBuilder)
-		return planBuilder, symbols, nil
+		syms := newSymtab(alias, table, plan)
+		return plan, syms, nil
 	case *sqlparser.Subquery:
 		// TODO(sougou): implement.
 		return nil, nil, errors.New("no subqueries")
@@ -317,152 +317,141 @@ func getTablePlan(tableName *sqlparser.TableName, schema *Schema) (*Route, *Tabl
 	}, table, nil
 }
 
-// processJoin produces a PlanBuilder subtree and SymbolTable
+// processJoin produces a planBuilder subtree and symtab
 // for the given Join. If the left and right nodes can be part
-// of the same route, then it's a RouteBuilder. Otherwise,
-// it's a JoinBuilder.
-func processJoin(join *sqlparser.JoinTableExpr, schema *Schema) (PlanBuilder, *SymbolTable, error) {
+// of the same route, then it's a routeBuilder. Otherwise,
+// it's a joinBuilder.
+func processJoin(join *sqlparser.JoinTableExpr, schema *Schema) (planBuilder, *symtab, error) {
 	switch join.Join {
 	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
 	default:
 		// TODO(sougou): better error message.
 		return nil, nil, errors.New("unsupported join")
 	}
-	lplanBuilder, lsymbols, err := processTableExpr(join.LeftExpr, schema)
+	lplan, lsyms, err := processTableExpr(join.LeftExpr, schema)
 	if err != nil {
 		return nil, nil, err
 	}
-	rplanBuilder, rsymbols, err := processTableExpr(join.RightExpr, schema)
+	rplan, rsyms, err := processTableExpr(join.RightExpr, schema)
 	if err != nil {
 		return nil, nil, err
 	}
-	switch lplanBuilder := lplanBuilder.(type) {
-	case *JoinBuilder:
-		return makeJoinBuilder(lplanBuilder, lsymbols, rplanBuilder, rsymbols, join)
-	case *RouteBuilder:
-		switch rplanBuilder := rplanBuilder.(type) {
-		case *JoinBuilder:
-			return makeJoinBuilder(lplanBuilder, lsymbols, rplanBuilder, rsymbols, join)
-		case *RouteBuilder:
-			return joinRoutes(lplanBuilder, lsymbols, rplanBuilder, rsymbols, join)
+	switch lplan := lplan.(type) {
+	case *joinBuilder:
+		return makejoinBuilder(lplan, lsyms, rplan, rsyms, join)
+	case *routeBuilder:
+		switch rplan := rplan.(type) {
+		case *joinBuilder:
+			return makejoinBuilder(lplan, lsyms, rplan, rsyms, join)
+		case *routeBuilder:
+			return joinRoutes(lplan, lsyms, rplan, rsyms, join)
 		}
 	}
 	panic("unreachable")
 }
 
-// makeJoinBuilder creates a new JoinBuilder node out of the two builders.
+// makejoinBuilder creates a new joinBuilder node out of the two builders.
 // This function is called when the two builders cannot be part of
 // the same route.
-func makeJoinBuilder(lplanBuilder PlanBuilder, lsymbols *SymbolTable, rplanBuilder PlanBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
+func makejoinBuilder(lplan planBuilder, lsyms *symtab, rplan planBuilder, rsyms *symtab, join *sqlparser.JoinTableExpr) (planBuilder, *symtab, error) {
 	// For LEFT JOIN, you have to push the ON clause into the RHS first.
 	isLeft := false
 	if join.Join == sqlparser.LeftJoinStr {
 		isLeft = true
-		err := processBoolExpr(join.On, rsymbols)
+		err := processBoolExpr(join.On, rsyms)
 		if err != nil {
 			return nil, nil, err
 		}
-		setRHS(rplanBuilder)
+		setRHS(rplan)
 	}
 
-	err := lsymbols.Add(rsymbols)
+	err := lsyms.Add(rsyms)
 	if err != nil {
 		return nil, nil, err
 	}
-	assignOrder(rplanBuilder, lplanBuilder.Order())
+	assignOrder(rplan, lplan.Order())
 	// For normal joins, the ON clause can go to both sides.
 	// The push has to happen after the order is assigned.
 	if !isLeft {
-		err := processBoolExpr(join.On, lsymbols)
+		err := processBoolExpr(join.On, lsyms)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
-	return &JoinBuilder{
+	return &joinBuilder{
 		IsLeft:     isLeft,
-		LeftOrder:  lplanBuilder.Order(),
-		RightOrder: rplanBuilder.Order(),
-		Left:       lplanBuilder,
-		Right:      rplanBuilder,
+		LeftOrder:  lplan.Order(),
+		RightOrder: rplan.Order(),
+		Left:       lplan,
+		Right:      rplan,
 		Join:       &Join{},
-	}, lsymbols, nil
+	}, lsyms, nil
 }
 
 // assignOrder sets the order for the nodes of the tree based on the
 // starting order.
-func assignOrder(planBuilder PlanBuilder, order int) {
-	switch planBuilder := planBuilder.(type) {
-	case *JoinBuilder:
-		assignOrder(planBuilder.Left, order)
-		planBuilder.LeftOrder = planBuilder.Left.Order()
-		assignOrder(planBuilder.Right, planBuilder.Left.Order())
-		planBuilder.RightOrder = planBuilder.Right.Order()
-	case *RouteBuilder:
-		planBuilder.order = order + 1
+func assignOrder(plan planBuilder, order int) {
+	switch plan := plan.(type) {
+	case *joinBuilder:
+		assignOrder(plan.Left, order)
+		plan.LeftOrder = plan.Left.Order()
+		assignOrder(plan.Right, plan.Left.Order())
+		plan.RightOrder = plan.Right.Order()
+	case *routeBuilder:
+		plan.order = order + 1
 	}
 }
 
-// setRHS sets the order for the nodes of the tree based on the
-// starting order.
-func setRHS(planBuilder PlanBuilder) {
-	switch planBuilder := planBuilder.(type) {
-	case *JoinBuilder:
-		setRHS(planBuilder.Left)
-		setRHS(planBuilder.Right)
-	case *RouteBuilder:
-		planBuilder.IsRHS = true
+// setRHS marks all routes under the plan as RHS of a left join.
+func setRHS(plan planBuilder) {
+	switch plan := plan.(type) {
+	case *joinBuilder:
+		setRHS(plan.Left)
+		setRHS(plan.Right)
+	case *routeBuilder:
+		plan.IsRHS = true
 	}
 }
 
-// joinRoutes attempts to join two RouteBuilder objects into one.
-// If it's possible, it produces a joined RouteBuilder.
-// Otherwise, it's a JoinBuilder.
-func joinRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
-	if lRouteBuilder.Route.Keyspace.Name != rRouteBuilder.Route.Keyspace.Name {
-		return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
+// joinRoutes attempts to join two routeBuilder objects into one.
+// If it's possible, it produces a joined routeBuilder.
+// Otherwise, it's a joinBuilder.
+func joinRoutes(lRoute *routeBuilder, lsyms *symtab, rRoute *routeBuilder, rsyms *symtab, join *sqlparser.JoinTableExpr) (planBuilder, *symtab, error) {
+	if lRoute.Route.Keyspace.Name != rRoute.Route.Keyspace.Name {
+		return makejoinBuilder(lRoute, lsyms, rRoute, rsyms, join)
 	}
-	if lRouteBuilder.Route.PlanID == SelectUnsharded {
+	if lRoute.Route.PlanID == SelectUnsharded {
 		// Two Routes from the same unsharded keyspace can be merged.
-		return mergeRoutes(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
+		return mergeRoutes(lRoute, lsyms, rRoute, rsyms, join)
 	}
-	// lRouteBuilder is a sharded route. It can't merge with an unsharded route.
-	if rRouteBuilder.Route.PlanID == SelectUnsharded {
-		return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
-	}
+
 	// TODO(sougou): Handle special case for SelectEqual
-	// Both RouteBuilder are sharded routes. Analyze join condition for merging.
-	return joinShardedRoutes(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
+
+	// Both routeBuilder are sharded routes. Analyze join condition for merging.
+	for _, filter := range splitAndExpression(nil, join.On) {
+		if isSameRoute(filter, lsyms, rsyms) {
+			return mergeRoutes(lRoute, lsyms, rRoute, rsyms, join)
+		}
+	}
+	return makejoinBuilder(lRoute, lsyms, rRoute, rsyms, join)
 }
 
-// mergeRoutes makes a new RouteBuilder by joining the left and right
-// nodes of a join. The merged RouteBuilder inherits the plan of the
+// mergeRoutes makes a new routeBuilder by joining the left and right
+// nodes of a join. The merged routeBuilder inherits the plan of the
 // left Route. This function is called if two routes can be merged.
-func mergeRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
-	lRouteBuilder.Select.From = sqlparser.TableExprs{join}
+func mergeRoutes(lRoute *routeBuilder, lsyms *symtab, rRoute *routeBuilder, rsyms *symtab, join *sqlparser.JoinTableExpr) (planBuilder, *symtab, error) {
+	lRoute.Select.From = sqlparser.TableExprs{join}
 	if join.Join == sqlparser.LeftJoinStr {
-		rsymbols.SetRHS()
+		rsyms.SetRHS()
 	}
-	err := lsymbols.Merge(rsymbols, lRouteBuilder)
+	err := lsyms.Merge(rsyms, lRoute)
 	if err != nil {
 		return nil, nil, err
 	}
 	for _, filter := range splitAndExpression(nil, join.On) {
-		updateRoute(lRouteBuilder, lsymbols, filter)
+		updateRoute(lRoute, lsyms, filter)
 	}
-	return lRouteBuilder, lsymbols, nil
-}
-
-// joinShardedRoutes tries to join two sharded routes into a RouteBuilder.
-// If a merge is possible, it builds one using lRouteBuilder as the base route.
-// If not, it builds a JoinBuilder instead.
-func joinShardedRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRouteBuilder *RouteBuilder, rsymbols *SymbolTable, join *sqlparser.JoinTableExpr) (PlanBuilder, *SymbolTable, error) {
-	onFilters := splitAndExpression(nil, join.On)
-	for _, filter := range onFilters {
-		if isSameRoute(filter, lsymbols, rsymbols) {
-			return mergeRoutes(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
-		}
-	}
-	return makeJoinBuilder(lRouteBuilder, lsymbols, rRouteBuilder, rsymbols, join)
+	return lRoute, lsyms, nil
 }
 
 // isSameRoute returns true if the filter constraint causes the
@@ -471,7 +460,7 @@ func joinShardedRoutes(lRouteBuilder *RouteBuilder, lsymbols *SymbolTable, rRout
 // one should address a table from the left side, the other from the
 // right, the referenced columns have to be the same Vindex, and the
 // Vindex must be unique.
-func isSameRoute(filter sqlparser.BoolExpr, lsymbols, rsymbols *SymbolTable) bool {
+func isSameRoute(filter sqlparser.BoolExpr, lsyms, rsyms *symtab) bool {
 	comparison, ok := filter.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
@@ -481,15 +470,15 @@ func isSameRoute(filter sqlparser.BoolExpr, lsymbols, rsymbols *SymbolTable) boo
 	}
 	left := comparison.Left
 	right := comparison.Right
-	_, lVindex := lsymbols.FindColumn(left, nil, false)
+	_, lVindex := lsyms.FindColumn(left, nil, false)
 	if lVindex == nil {
 		left, right = right, left
-		_, lVindex = lsymbols.FindColumn(left, nil, false)
+		_, lVindex = lsyms.FindColumn(left, nil, false)
 	}
 	if lVindex == nil || !IsUnique(lVindex) {
 		return false
 	}
-	_, rVindex := rsymbols.FindColumn(right, nil, false)
+	_, rVindex := rsyms.FindColumn(right, nil, false)
 	if rVindex == nil {
 		return false
 	}

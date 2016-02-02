@@ -11,23 +11,23 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func processHaving(having *sqlparser.Where, symbolTable *SymbolTable) error {
+func processHaving(having *sqlparser.Where, syms *symtab) error {
 	if having == nil {
 		return nil
 	}
 	for _, filter := range splitAndExpression(nil, having.Expr) {
-		var routeBuilder *RouteBuilder
+		var route *routeBuilder
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.Subquery:
 				// TODO(sougou): better error.
 				return false, errors.New("subqueries not supported")
 			case *sqlparser.ColName:
-				newRoute, _ := symbolTable.FindColumn(node, nil, true)
+				newRoute, _ := syms.FindColumn(node, nil, true)
 				if newRoute != nil {
-					if routeBuilder == nil {
-						routeBuilder = newRoute
-					} else if routeBuilder != newRoute {
+					if route == nil {
+						route = newRoute
+					} else if route != newRoute {
 						// TODO(sougou): better error.
 						return false, errors.New("having clause is too complex")
 					}
@@ -38,35 +38,35 @@ func processHaving(having *sqlparser.Where, symbolTable *SymbolTable) error {
 		if err != nil {
 			return err
 		}
-		if routeBuilder == nil {
-			routeBuilder = symbolTable.FirstRoute
+		if route == nil {
+			route = syms.FirstRoute
 		}
-		routeBuilder.Select.AddHaving(filter)
+		route.Select.AddHaving(filter)
 	}
 	return nil
 }
 
-func processOrderBy(orderBy sqlparser.OrderBy, symbolTable *SymbolTable) error {
+func processOrderBy(orderBy sqlparser.OrderBy, syms *symtab) error {
 	if orderBy == nil {
 		return nil
 	}
 	routeNumber := 0
 	for _, order := range orderBy {
-		var route *RouteBuilder
+		var route *routeBuilder
 		switch node := order.Expr.(type) {
 		case *sqlparser.ColName:
-			route, _ = symbolTable.FindColumn(node, nil, true)
+			route, _ = syms.FindColumn(node, nil, true)
 		case sqlparser.NumVal:
 			num, err := strconv.ParseInt(string(node), 0, 64)
 			if err != nil {
 				// TODO(sougou): better error.
 				return errors.New("error parsing order by clause")
 			}
-			if num < 1 || num > int64(len(symbolTable.SelectSymbols)) {
+			if num < 1 || num > int64(len(syms.Colsyms)) {
 				// TODO(sougou): better error.
 				return errors.New("order by column number out of range")
 			}
-			route = symbolTable.SelectSymbols[num-1].Route
+			route = syms.Colsyms[num-1].Route
 		default:
 			// TODO(sougou): better error.
 			return errors.New("order by clause is too complex")
@@ -81,17 +81,17 @@ func processOrderBy(orderBy sqlparser.OrderBy, symbolTable *SymbolTable) error {
 	return nil
 }
 
-func processLimit(limit *sqlparser.Limit, planBuilder PlanBuilder) error {
+func processLimit(limit *sqlparser.Limit, plan planBuilder) error {
 	if limit == nil {
 		return nil
 	}
-	routeBuilder, ok := planBuilder.(*RouteBuilder)
+	route, ok := plan.(*routeBuilder)
 	if !ok {
 		return errors.New("query is too complex to allow limits")
 	}
-	if !routeBuilder.IsSingle() {
+	if !route.IsSingle() {
 		return errors.New("query is too complex to allow limits")
 	}
-	routeBuilder.Select.Limit = limit
+	route.Select.Limit = limit
 	return nil
 }
