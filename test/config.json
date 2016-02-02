@@ -162,7 +162,7 @@
 		"python_client_grpc": {
 			"File": "python_client_test.py",
 			"Args": [
-			  "--protocols-flavor=gprc"
+			  "--protocols-flavor=grpc"
 			],
 			"Command": [],
 			"Manual": false,
