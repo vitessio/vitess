@@ -6,11 +6,13 @@ package wrangler
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -445,6 +447,127 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 
 	event.DispatchUpdate(ev, "finished")
 	return nil
+}
+
+// WaitForDrain blocks until the selected tablets (cells/keyspace/shard/tablet_type)
+// have reported a QPS rate of 0.0.
+// NOTE: This is just an observation of one point in time and no guarantee that
+// the tablet was actually drained. At later times, a QPS rate > 0.0 could still
+// be observed.
+func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, shard string, servedType topodatapb.TabletType,
+	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout time.Duration) error {
+	if len(cells) == 0 {
+		// Retrieve list of cells for the shard from the topology.
+		shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve list of all cells. GetShard() failed: %v", err)
+		}
+		cells = shardInfo.Cells
+	}
+
+	// Check all cells in parallel.
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for _, cell := range cells {
+		wg.Add(1)
+		go func(cell string) {
+			defer wg.Done()
+			rec.RecordError(wr.waitForDrainInCell(ctx, cell, keyspace, shard, servedType,
+				retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout))
+		}(cell)
+	}
+	wg.Wait()
+
+	return rec.Error()
+}
+
+func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shard string, servedType topodatapb.TabletType,
+	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout time.Duration) error {
+	hc := discovery.NewHealthCheck(healthCheckTimeout /* connectTimeout */, healthcheckRetryDelay, healthCheckTimeout, cell)
+	defer hc.Close()
+	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, 5 /* topoReadConcurrency */)
+	defer watcher.Stop()
+
+	if err := discovery.WaitForEndPoints(ctx, hc, cell, keyspace, shard, []topodatapb.TabletType{servedType}); err != nil {
+		return fmt.Errorf("%v: error waiting for initial %v endpoints for %v/%v: %v", cell, servedType, keyspace, shard, err)
+	}
+
+	wr.Logger().Infof("%v: Waiting for %.1f seconds to make sure that the discovery module retrieves healthcheck information from all tablets.",
+		cell, healthCheckTimeout.Seconds())
+	// Wait at least for -vtctl_healthcheck_timeout to elapse to make sure that we
+	// see all healthy tablets. Otherwise, we might miss some tablets.
+	// It's safe to wait not longer for this because we would only miss slow
+	// tablets and vtgate would not serve from such tablets anyway.
+	time.Sleep(healthCheckTimeout)
+
+	// Now check the QPS rate of all tablets until the timeout expires.
+	startTime := time.Now()
+	for {
+		healthyTabletsCount := 0
+		// map key: tablet uid
+		drainedHealthyTablets := make(map[uint32]*discovery.EndPointStats)
+		notDrainedHealtyTablets := make(map[uint32]*discovery.EndPointStats)
+
+		addrs := hc.GetEndPointStatsFromTarget(keyspace, shard, servedType)
+		healthyTabletsCount = 0
+		for _, addr := range addrs {
+			// TODO(mberlin): Move this health check logic into a common function
+			// because other code uses it as well e.g. go/vt/worker/topo_utils.go.
+			if addr.Stats == nil || addr.Stats.HealthError != "" || addr.Stats.SecondsBehindMaster > 30 {
+				// not healthy
+				continue
+			}
+
+			healthyTabletsCount++
+			if addr.Stats.Qps == 0.0 {
+				drainedHealthyTablets[addr.EndPoint.Uid] = addr
+			} else {
+				notDrainedHealtyTablets[addr.EndPoint.Uid] = addr
+			}
+		}
+
+		if len(drainedHealthyTablets) == healthyTabletsCount {
+			wr.Logger().Infof("%v: All %d healthy tablets were drained after %.1f seconds (not counting %.1f seconds for the initial wait).",
+				cell, healthyTabletsCount, time.Now().Sub(startTime).Seconds(), healthCheckTimeout.Seconds())
+			break
+		}
+
+		// Continue waiting, sleep in between.
+		deadlineString := ""
+		if d, ok := ctx.Deadline(); ok {
+			deadlineString = fmt.Sprintf(" up to %.1f more seconds", d.Sub(time.Now()).Seconds())
+		}
+		wr.Logger().Infof("%v: Waiting%v for all healthy tablets to be drained (%d/%d done).",
+			cell, deadlineString, len(drainedHealthyTablets), healthyTabletsCount)
+
+		timer := time.NewTimer(retryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+
+			var l []string
+			for _, eps := range notDrainedHealtyTablets {
+				l = append(l, formatEndpointStats(eps))
+			}
+			return fmt.Errorf("%v: WaitForDrain failed for %v tablets in %v/%v. Only %d/%d tablets were drained. err: %v List of tablets which were not drained:\n%v",
+				cell, servedType, keyspace, shard, len(drainedHealthyTablets), healthyTabletsCount, ctx.Err(), strings.Join(l, "\n"))
+		case <-timer.C:
+		}
+	}
+
+	return nil
+}
+
+func formatEndpointStats(eps *discovery.EndPointStats) string {
+	webURL := "unknown http port"
+	if webPort, ok := eps.EndPoint.PortMap["vt"]; ok {
+		webURL = fmt.Sprintf("http://%v:%d/", eps.EndPoint.Host, webPort)
+	}
+	alias := &topodatapb.TabletAlias{
+		Cell: eps.Cell,
+		Uid:  eps.EndPoint.Uid,
+	}
+	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(alias), webURL, eps.Stats)
 }
 
 // MigrateServedFrom is used during vertical splits to migrate a

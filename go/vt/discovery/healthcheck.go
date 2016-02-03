@@ -65,7 +65,7 @@ type HealthCheck interface {
 }
 
 // NewHealthCheck creates a new HealthCheck object.
-func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthCheckTimeout time.Duration) HealthCheck {
+func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthCheckTimeout time.Duration, statsSuffix string) HealthCheck {
 	hc := &HealthCheckImpl{
 		addrToConns:        make(map[string]*healthCheckConn),
 		targetToEPs:        make(map[string]map[string]map[topodatapb.TabletType][]*topodatapb.EndPoint),
@@ -75,7 +75,7 @@ func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthC
 		closeChan:          make(chan struct{}),
 	}
 	if hcConnCounters == nil {
-		hcConnCounters = stats.NewMultiCountersFunc("HealthcheckConnections", []string{"keyspace", "shardname", "tablettype"}, hc.servingConnStats)
+		hcConnCounters = stats.NewMultiCountersFunc("HealthcheckConnections"+statsSuffix, []string{"keyspace", "shardname", "tablettype"}, hc.servingConnStats)
 	}
 	go func() {
 		// Start another go routine to check timeout.
