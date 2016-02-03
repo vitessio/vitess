@@ -13,16 +13,17 @@ import (
 // symtab contains the symbols for a SELECT
 // statement.
 type symtab struct {
-	tables     map[sqlparser.SQLName]*tableAlias
-	Colsyms    []colSym
+	tables     []*tableAlias
+	Colsyms    []*colsym
 	FirstRoute *routeBuilder
 }
 
-// colSym contains symbol info about a select expression.
-type colSym struct {
-	Alias  sqlparser.SQLName
-	Route  *routeBuilder
-	Vindex Vindex
+// colsym contains symbol info about a select expression.
+type colsym struct {
+	Alias      sqlparser.SQLName
+	Underlying sqlparser.ColName
+	Route      *routeBuilder
+	Vindex     Vindex
 }
 
 // tableAlias is part of symtab.
@@ -45,14 +46,12 @@ type tableAlias struct {
 // to contain the provided table alias.
 func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder) *symtab {
 	return &symtab{
-		tables: map[sqlparser.SQLName]*tableAlias{
-			alias: {
-				Name:        alias,
-				Keyspace:    table.Keyspace,
-				ColVindexes: table.ColVindexes,
-				Route:       route,
-			},
-		},
+		tables: []*tableAlias{{
+			Name:        alias,
+			Keyspace:    table.Keyspace,
+			ColVindexes: table.ColVindexes,
+			Route:       route,
+		}},
 		FirstRoute: route,
 	}
 }
@@ -61,11 +60,20 @@ func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder) *symt
 // without merging their routes. This means that the new symbols
 // will belong to different routes
 func (st *symtab) Add(newsyms *symtab) error {
-	for k, v := range newsyms.tables {
-		if _, found := st.tables[k]; found {
+	for _, t := range newsyms.tables {
+		if found := st.find(t.Name); found != nil {
 			return errors.New("duplicate symbols")
 		}
-		st.tables[k] = v
+		st.tables = append(st.tables, t)
+	}
+	return nil
+}
+
+func (st *symtab) find(alias sqlparser.SQLName) *tableAlias {
+	for i, t := range st.tables {
+		if t.Name == alias {
+			return st.tables[i]
+		}
 	}
 	return nil
 }
@@ -73,15 +81,15 @@ func (st *symtab) Add(newsyms *symtab) error {
 // Merge merges the new symbol table into the current one and makes
 // all the tables part of the specified routeBuilder.
 func (st *symtab) Merge(newsyms *symtab, route *routeBuilder) error {
-	for _, v := range st.tables {
-		v.Route = route
+	for _, t := range st.tables {
+		t.Route = route
 	}
-	for k, v := range newsyms.tables {
-		if _, found := st.tables[k]; found {
+	for _, t := range newsyms.tables {
+		if found := st.find(t.Name); found != nil {
 			return errors.New("duplicate symbols")
 		}
-		st.tables[k] = v
-		v.Route = route
+		t.Route = route
+		st.tables = append(st.tables, t)
 	}
 	return nil
 }
@@ -90,8 +98,8 @@ func (st *symtab) Merge(newsyms *symtab, route *routeBuilder) error {
 // that they cannot be used to make routing decisions. This is
 // called if the table is in the RHS of a LEFT JOIN.
 func (st *symtab) SetRHS() {
-	for _, v := range st.tables {
-		v.ColVindexes = nil
+	for _, t := range st.tables {
+		t.ColVindexes = nil
 	}
 }
 
@@ -124,13 +132,13 @@ func (st *symtab) FindColumn(expr sqlparser.Expr, scope *routeBuilder, autoResol
 		if len(st.tables) != 1 {
 			return nil, nil
 		}
-		for k := range st.tables {
-			qualifier = k
+		for _, t := range st.tables {
+			qualifier = t.Name
 			break
 		}
 	}
-	alias, ok := st.tables[qualifier]
-	if !ok {
+	alias := st.find(qualifier)
+	if alias == nil {
 		return nil, nil
 	}
 	if scope != nil && scope != alias.Route {

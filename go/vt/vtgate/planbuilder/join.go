@@ -47,7 +47,8 @@ type joinBuilder struct {
 	IsLeft                bool
 	LeftOrder, RightOrder int
 	// Left and Right are the nodes for the join.
-	Left, Right planBuilder
+	Left, Right      planBuilder
+	LColsym, RColsym []*colsym
 	// Join is the join plan.
 	Join *Join
 }
@@ -80,8 +81,9 @@ func (jb *joinBuilder) MarshalJSON() ([]byte, error) {
 
 // Join is the join plan.
 type Join struct {
-	Left, Right         interface{} `json:",omitempty"`
-	LeftCols, RightCols []int       `json:",omitempty"`
+	Left, Right         interface{}    `json:",omitempty"`
+	LeftCols, RightCols []int          `json:",omitempty"`
+	Vars                map[string]int `json:",omitempty"`
 }
 
 // Len returns the number of columns in the join
@@ -103,6 +105,7 @@ type routeBuilder struct {
 	// executed by this route.
 	Select sqlparser.Select
 	order  int
+	Colsym []*colsym
 	// Route is the plan object being built. It will contain all the
 	// information necessary to execute the route operation.
 	Route *Route

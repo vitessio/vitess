@@ -48,11 +48,7 @@ func findRoute(filter sqlparser.BoolExpr, syms *symtab) (route *routeBuilder, er
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			newRoute, _ := syms.FindColumn(node, nil, true)
-			if newRoute == nil {
-				// Skip unresolved references.
-				return true, nil
-			}
-			if newRoute.Order() > highestRoute.Order() {
+			if newRoute != nil && newRoute.Order() > highestRoute.Order() {
 				highestRoute = newRoute
 			}
 		case *sqlparser.Subquery:

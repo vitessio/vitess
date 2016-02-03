@@ -25,7 +25,7 @@ func processSelectExprs(sel *sqlparser.Select, plan planBuilder, syms *symtab) e
 		return err
 	}
 	for i, selectExpr := range sel.SelectExprs {
-		pushSelect(selectExpr, plan, colsyms[i].Route.Order())
+		pushSelect(selectExpr, plan, colsyms[i])
 	}
 	syms.Colsyms = colsyms
 	err = processGroupBy(sel.GroupBy, plan, syms)
@@ -35,9 +35,10 @@ func processSelectExprs(sel *sqlparser.Select, plan planBuilder, syms *symtab) e
 	return nil
 }
 
-func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, syms *symtab) ([]colSym, error) {
-	colsyms := make([]colSym, len(selectExprs))
-	for colnum, selectExpr := range selectExprs {
+func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, syms *symtab) ([]*colsym, error) {
+	colsyms := make([]*colsym, len(selectExprs))
+	for i, selectExpr := range selectExprs {
+		colsyms[i] = &colsym{Route: syms.FirstRoute}
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.StarExpr:
@@ -47,24 +48,28 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, s
 				return false, errors.New("subqueries not supported yet")
 			case *sqlparser.NonStarExpr:
 				if node.As != "" {
-					colsyms[colnum].Alias = node.As
+					colsyms[i].Alias = node.As
 				}
 				col, ok := node.Expr.(*sqlparser.ColName)
-				if ok {
-					if colsyms[colnum].Alias == "" {
-						colsyms[colnum].Alias = sqlparser.SQLName(sqlparser.String(col))
-					}
-					_, colsyms[colnum].Vindex = syms.FindColumn(col, nil, true)
+				if !ok {
+					break
 				}
-			case *sqlparser.ColName:
-				route, _ := syms.FindColumn(node, nil, true)
-				if route != nil {
-					if colsyms[colnum].Route == nil {
-						colsyms[colnum].Route = route
-					} else if colsyms[colnum].Route != route {
-						// TODO(sougou): better error.
-						return false, errors.New("select expression is too complex")
+				if colsyms[i].Alias == "" {
+					colsyms[i].Alias = sqlparser.SQLName(sqlparser.String(col))
+				}
+				var newRoute *routeBuilder
+				newRoute, colsyms[i].Vindex = syms.FindColumn(col, nil, true)
+				if newRoute != nil {
+					colsyms[i].Underlying = *col
+					if newRoute.Order() > colsyms[i].Route.Order() {
+						colsyms[i].Route = newRoute
 					}
+				}
+				return false, nil
+			case *sqlparser.ColName:
+				newRoute, _ := syms.FindColumn(node, nil, true)
+				if newRoute != nil && newRoute.Order() > colsyms[i].Route.Order() {
+					colsyms[i].Route = newRoute
 				}
 			case *sqlparser.FuncExpr:
 				if node.IsAggregate() {
@@ -79,29 +84,33 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, s
 		if err != nil {
 			return nil, err
 		}
-		if colsyms[colnum].Route == nil {
-			colsyms[colnum].Route = syms.FirstRoute
+		if colsyms[i].Route == nil {
+			colsyms[i].Route = syms.FirstRoute
 		}
 	}
 	return colsyms, nil
 }
 
-func pushSelect(selectExpr sqlparser.SelectExpr, plan planBuilder, routeNumber int) {
+func pushSelect(selectExpr sqlparser.SelectExpr, plan planBuilder, colsym *colsym) {
+	routeNumber := colsym.Route.Order()
 	switch plan := plan.(type) {
 	case *joinBuilder:
 		if routeNumber <= plan.LeftOrder {
-			pushSelect(selectExpr, plan.Left, routeNumber)
+			pushSelect(selectExpr, plan.Left, colsym)
 			plan.Join.LeftCols = append(plan.Join.LeftCols, plan.Join.Len())
+			plan.LColsym = append(plan.LColsym, colsym)
 			return
 		}
-		pushSelect(selectExpr, plan.Right, routeNumber)
+		pushSelect(selectExpr, plan.Right, colsym)
 		plan.Join.RightCols = append(plan.Join.RightCols, plan.Join.Len())
+		plan.RColsym = append(plan.RColsym, colsym)
 	case *routeBuilder:
 		if routeNumber != plan.Order() {
 			// TODO(sougou): remove after testing
 			panic("unexpcted values")
 		}
 		plan.Select.SelectExprs = append(plan.Select.SelectExprs, selectExpr)
+		plan.Colsym = append(plan.Colsym, colsym)
 	}
 }
 
