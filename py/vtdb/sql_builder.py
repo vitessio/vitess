@@ -956,25 +956,25 @@ class Flags(BaseUpdateValueExpr, BaseWhereExpr):
     return clause, bind_vars
 
 
-class AfterPrevValues(BaseWhereExpr):
+class TupleCompare(BaseWhereExpr):
   """Create SQL for an after clause in a multi-dimensional scan.
 
-  Example: If reading values ordered by columns (x, y, z) starting at
+  Example: If reading values ordered by columns (x, y, z) starting after
   the point (3, 5, 7), build the SQL:
 
-    "x = 3 AND (y = 5 AND z > 7 OR y > 5) OR x > 3".
+    "(x, y, z) > (3, 5, 7)".
   """
 
-  def __init__(self, prev_value_pairs, asc=True, inclusive=False):
+  def __init__(self, starting_point, asc=True, inclusive=False):
     """Constructor.
 
     Args:
-      prev_value_pairs: Ordered list of (column, prev_value) pairs.
+      starting_point: Ordered list of (column, start_value) pairs.
         Example - [('x', 3), ('y', 5), ('z', 7)].
       asc: If True, scan forward.
       inclusive: If True, also include starting point.
     """
-    self.prev_value_pairs = prev_value_pairs
+    self.starting_point = starting_point
     self.asc = asc
     self.inclusive = inclusive
 
@@ -994,32 +994,80 @@ class AfterPrevValues(BaseWhereExpr):
     """
     if column_name:
       raise ValueError('column_name should be None.')
-    where_clause = None
-    is_complex = False
     bind_vars = {}
-    for column, prev_value in reversed(self.prev_value_pairs):
-      bind_name = choose_bind_name(column, counter)
-      if isinstance(prev_value, (list, tuple, set)):
+    column_list = []
+    token_list = []
+    for column, value in self.starting_point:
+      column_list.append(column)
+      bind_var = choose_bind_name(column, counter)
+      update_bind_vars(bind_vars, {bind_var: value})
+      if isinstance(value, (list, tuple, set)):
         raise ValueError(
             'Column=%s value=%s should be a single value.' %
-            (column, prev_value))
-      update_bind_vars(bind_vars, {bind_name: prev_value})
-      eq_part = '%s = %%(%s)s' % (column, bind_name)
-      if where_clause is None and self.inclusive:
-        op = '>=' if self.asc else '<='
-      else:
-        op = '>' if self.asc else '<'
-      ineq_part = '%s %s %%(%s)s' % (column, op, bind_name)
-      if where_clause:
-        if is_complex:
-          where_clause = '%s AND (%s) OR %s' % (
-              eq_part, where_clause, ineq_part)
-        else:
-          where_clause = '%s AND %s OR %s' % (eq_part, where_clause, ineq_part)
-          is_complex = True
-      else:
-        where_clause = ineq_part
+            (column, value))
+      token_list.append('%%(%s)s' % (bind_var,))
+
+    parts = ['(%s)' % ', '.join(column_list)]
+    if self.asc:
+      op = '>=' if self.inclusive else '>'
+    else:
+      op = '<=' if self.inclusive else '<'
+    parts.append(op)
+    parts.append('(%s)' % ', '.join(token for token in token_list))
+    where_clause = ' '.join(parts)
     return where_clause, bind_vars
+
+
+class TupleGreater(TupleCompare):
+  """WHERE expr for tuple > values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) > (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleGreater, self).__init__(
+        starting_point, asc=True, inclusive=False)
+
+
+class TupleGreaterEqual(TupleCompare):
+  """WHERE expr for tuple >= values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) >= (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleGreaterEqual, self).__init__(
+        starting_point, asc=True, inclusive=True)
+
+
+class TupleLess(TupleCompare):
+  """WHERE expr for tuple < values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) < (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleLess, self).__init__(
+        starting_point, asc=False, inclusive=False)
+
+
+class TupleLessEqual(TupleCompare):
+  """WHERE expr for tuple <= values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) <= (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleLessEqual, self).__init__(
+        starting_point, asc=False, inclusive=True)
 
 
 def make_flags(flag_mask, value):
