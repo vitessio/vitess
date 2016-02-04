@@ -388,38 +388,6 @@
   "Join": {}
 }
 
-# sharded join, invalid table reference
-"select * from user join user_extra on notable.id = user_extra.user_id"
-{
-  "LeftOrder": 1,
-  "RightOrder": 2,
-  "Left": {
-    "Select": "select  from user",
-    "Order": 1,
-    "Route": {
-      "PlanID": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      }
-    }
-  },
-  "Right": {
-    "Select": "select  from user_extra where notable.id = user_extra.user_id",
-    "Order": 2,
-    "Route": {
-      "PlanID": "SelectEqualUnique",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Vindex": "user_index",
-      "Values": "notable.id"
-    }
-  },
-  "Join": {}
-}
-
 # sharded join, non-vindex col
 "select * from user join user_extra on user.id = user_extra.col"
 {

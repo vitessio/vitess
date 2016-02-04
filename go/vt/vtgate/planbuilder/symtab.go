@@ -43,6 +43,16 @@ type tableAlias struct {
 	Route *routeBuilder
 }
 
+// FindVindex returns the vindex if one was found for the column.
+func (t *tableAlias) FindVindex(name sqlparser.SQLName) Vindex {
+	for _, colVindex := range t.ColVindexes {
+		if string(name) == colVindex.Col {
+			return colVindex.Vindex
+		}
+	}
+	return nil
+}
+
 // newSymtab creates a new symtab initialized
 // to contain the provided table alias.
 func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder) *symtab {
@@ -114,27 +124,11 @@ func (st *symtab) SetRHS() {
 // then an unqualified reference is assumed to be implicitly against
 // that table. The table info doesn't contain the full list of columns.
 // So, any column reference is presumed valid until execution time.
-func (st *symtab) Find(expr sqlparser.Expr, scope *routeBuilder, autoResolve bool) (*routeBuilder, Vindex) {
-	col, ok := expr.(*sqlparser.ColName)
-	if !ok {
-		return nil, nil
-	}
-	// TODO(sougou): reduce code duplication.
+func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (*routeBuilder, error) {
 	switch meta := col.Metadata.(type) {
 	case *colsym:
-		if scope != nil && scope != meta.Route {
-			return nil, nil
-		}
-		return meta.Route, meta.Vindex
+		return meta.Route, nil
 	case *tableAlias:
-		if scope != nil && scope != meta.Route {
-			return nil, nil
-		}
-		for _, colVindex := range meta.ColVindexes {
-			if string(col.Name) == colVindex.Col {
-				return meta.Route, colVindex.Vindex
-			}
-		}
 		return meta.Route, nil
 	}
 	if len(st.Colsyms) != 0 {
@@ -142,22 +136,19 @@ func (st *symtab) Find(expr sqlparser.Expr, scope *routeBuilder, autoResolve boo
 		for _, colsym := range st.Colsyms {
 			if name == colsym.Alias {
 				col.Metadata = colsym
-				if scope != nil && scope != colsym.Route {
-					return nil, nil
-				}
-				return colsym.Route, colsym.Vindex
+				return colsym.Route, nil
 			}
 		}
 		if st.outer != nil {
 			// autoResolve only allowed for innermost scope.
-			return st.outer.Find(col, scope, false)
+			return st.outer.Find(col, false)
 		}
-		return nil, nil
+		return nil, errors.New("symbol not found")
 	}
 	qualifier := col.Qualifier
 	if qualifier == "" && autoResolve {
 		if len(st.tables) != 1 {
-			return nil, nil
+			return nil, errors.New("symbol not found")
 		}
 		for _, t := range st.tables {
 			qualifier = t.Name
@@ -168,20 +159,40 @@ func (st *symtab) Find(expr sqlparser.Expr, scope *routeBuilder, autoResolve boo
 	if alias == nil {
 		if st.outer != nil {
 			// autoResolve only allowed for innermost scope.
-			return st.outer.Find(col, scope, false)
+			return st.outer.Find(col, false)
 		}
-		return nil, nil
+		return nil, errors.New("symbol not found")
 	}
 	col.Metadata = alias
-	if scope != nil && scope != alias.Route {
-		return nil, nil
+	return alias.Route, nil
+}
+
+// Vindex returns the vindex if the expression has an
+// associated Vindex.
+func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve bool) Vindex {
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return nil
 	}
-	for _, colVindex := range alias.ColVindexes {
-		if string(col.Name) == colVindex.Col {
-			return alias.Route, colVindex.Vindex
+	if col.Metadata == nil {
+		_, err := st.Find(col, autoResolve)
+		if err != nil {
+			return nil
 		}
 	}
-	return alias.Route, nil
+	switch meta := col.Metadata.(type) {
+	case *colsym:
+		if scope != nil && scope != meta.Route {
+			return nil
+		}
+		return meta.Vindex
+	case *tableAlias:
+		if scope != nil && scope != meta.Route {
+			return nil
+		}
+		return meta.FindVindex(col.Name)
+	}
+	return nil
 }
 
 // IsValue returns true if the expression can be treated as a value
@@ -190,9 +201,9 @@ func (st *symtab) Find(expr sqlparser.Expr, scope *routeBuilder, autoResolve boo
 func (st *symtab) IsValue(expr sqlparser.ValExpr, scope *routeBuilder) bool {
 	switch node := expr.(type) {
 	case *sqlparser.ColName:
-		// If it's a valid column reference, it can't be treated as value.
-		if route, _ := st.Find(node, scope, true); route != nil {
-			return false
+		// If route is in scope, it's a local column ref, not a value.
+		if route, _ := st.Find(node, true); route != nil {
+			return route != scope
 		}
 		return true
 	case sqlparser.ValArg, sqlparser.StrVal, sqlparser.NumVal:

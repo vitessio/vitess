@@ -47,7 +47,10 @@ func findRoute(filter sqlparser.BoolExpr, syms *symtab) (route *routeBuilder, er
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			newRoute, _ := syms.Find(node, nil, true)
+			newRoute, err := syms.Find(node, true)
+			if err != nil {
+				return false, err
+			}
 			if newRoute != nil && newRoute.Order() > highestRoute.Order() {
 				highestRoute = newRoute
 			}
@@ -115,10 +118,10 @@ func computePlan(route *routeBuilder, syms *symtab, filter sqlparser.BoolExpr) (
 func computeEqualPlan(route *routeBuilder, syms *symtab, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
 	left := comparison.Left
 	right := comparison.Right
-	_, vindex = syms.Find(left, route, true)
+	vindex = syms.Vindex(left, route, true)
 	if vindex == nil {
 		left, right = right, left
-		_, vindex = syms.Find(left, route, false)
+		vindex = syms.Vindex(left, route, true)
 		if vindex == nil {
 			return SelectScatter, nil, nil
 		}
@@ -133,7 +136,7 @@ func computeEqualPlan(route *routeBuilder, syms *symtab, comparison *sqlparser.C
 }
 
 func computeINPlan(route *routeBuilder, syms *symtab, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
-	_, vindex = syms.Find(comparison.Left, route, true)
+	vindex = syms.Vindex(comparison.Left, route, true)
 	if vindex == nil {
 		return SelectScatter, nil, nil
 	}
