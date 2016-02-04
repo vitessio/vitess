@@ -261,9 +261,9 @@
 }
 
 # Group by on unique vindex
-"select col1 from user group by id"
+"select col1, id from user group by id"
 {
-  "Select": "select col1 from user group by id",
+  "Select": "select col1, id from user group by id",
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",

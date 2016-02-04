@@ -23,7 +23,7 @@ func processHaving(having *sqlparser.Where, syms *symtab) error {
 				// TODO(sougou): better error.
 				return false, errors.New("subqueries not supported")
 			case *sqlparser.ColName:
-				newRoute, _ := syms.FindColumn(node, nil, true)
+				newRoute, _ := syms.Find(node, nil, true)
 				if newRoute != nil {
 					if route == nil {
 						route = newRoute
@@ -55,7 +55,7 @@ func processOrderBy(orderBy sqlparser.OrderBy, syms *symtab) error {
 		var route *routeBuilder
 		switch node := order.Expr.(type) {
 		case *sqlparser.ColName:
-			route, _ = syms.FindColumn(node, nil, true)
+			route, _ = syms.Find(node, nil, true)
 		case sqlparser.NumVal:
 			num, err := strconv.ParseInt(string(node), 0, 64)
 			if err != nil {

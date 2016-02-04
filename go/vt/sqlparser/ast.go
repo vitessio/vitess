@@ -817,35 +817,6 @@ func (*UnaryExpr) iExpr()      {}
 func (*FuncExpr) iExpr()       {}
 func (*CaseExpr) iExpr()       {}
 
-// AllExprs must contain one variable for each
-// AST type that satisfies Expr. This allows
-// for external packages to verify
-// that they're not missing on any types.
-var AllExprs = []Expr{
-	&AndExpr{},
-	&OrExpr{},
-	&NotExpr{},
-	&ParenBoolExpr{},
-	&ComparisonExpr{},
-	&RangeCond{},
-	&IsExpr{},
-	&ExistsExpr{},
-	&KeyrangeExpr{},
-	StrVal(""),
-	NumVal(""),
-	ValArg(""),
-	&NullVal{},
-	BoolVal(false),
-	&ColName{},
-	ValTuple{},
-	&Subquery{},
-	ListArg(""),
-	&BinaryExpr{},
-	&UnaryExpr{},
-	&FuncExpr{},
-	&CaseExpr{},
-}
-
 // BoolExpr represents a boolean expression.
 type BoolExpr interface {
 	iBoolExpr()
@@ -1186,6 +1157,11 @@ func (node BoolVal) WalkSubtree(visit Visit) error {
 
 // ColName represents a column name.
 type ColName struct {
+	// Metadata is not populated by the parser.
+	// It's a placeholder for analyzers to store
+	// additional data, typically info about which
+	// table or column this node references.
+	Metadata  interface{}
 	Name      SQLName
 	Qualifier SQLName
 }

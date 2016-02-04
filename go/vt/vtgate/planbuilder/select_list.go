@@ -58,7 +58,7 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, s
 					colsyms[i].Alias = sqlparser.SQLName(sqlparser.String(col))
 				}
 				var newRoute *routeBuilder
-				newRoute, colsyms[i].Vindex = syms.FindColumn(col, nil, true)
+				newRoute, colsyms[i].Vindex = syms.Find(col, nil, true)
 				if newRoute != nil {
 					colsyms[i].Underlying = *col
 					if newRoute.Order() > colsyms[i].Route.Order() {
@@ -67,7 +67,7 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, s
 				}
 				return false, nil
 			case *sqlparser.ColName:
-				newRoute, _ := syms.FindColumn(node, nil, true)
+				newRoute, _ := syms.Find(node, nil, true)
 				if newRoute != nil && newRoute.Order() > colsyms[i].Route.Order() {
 					colsyms[i].Route = newRoute
 				}
@@ -127,7 +127,7 @@ func checkAllowAggregates(selectExprs sqlparser.SelectExprs, plan planBuilder, s
 	for _, selectExpr := range selectExprs {
 		switch selectExpr := selectExpr.(type) {
 		case *sqlparser.NonStarExpr:
-			_, vindex := syms.FindColumn(selectExpr.Expr, nil, true)
+			_, vindex := syms.Find(selectExpr.Expr, nil, true)
 			if vindex != nil && IsUnique(vindex) {
 				return true
 			}
@@ -154,7 +154,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder, syms *symtab) e
 	// It's a scatter route. We can allow group by if it references a
 	// column with a unique vindex.
 	for _, expr := range groupBy {
-		_, vindex := syms.FindColumn(expr, nil, true)
+		_, vindex := syms.Find(expr, nil, true)
 		if vindex != nil && IsUnique(vindex) {
 			route.Select.GroupBy = groupBy
 			return nil

@@ -16,7 +16,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // hashIndex satisfies Functional, Unique.
@@ -192,12 +191,4 @@ func locateFile(name string) string {
 		return name
 	}
 	return testfiles.Locate("vtgate/" + name)
-}
-
-// TestCompleteness ensures that we're covering all Expr types.
-func TestCompleteness(t *testing.T) {
-	for _, expr := range sqlparser.AllExprs {
-		exprHasAggregates(expr)
-		hasSubquery(expr)
-	}
 }

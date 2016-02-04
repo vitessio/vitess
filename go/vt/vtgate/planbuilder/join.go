@@ -473,15 +473,15 @@ func isSameRoute(filter sqlparser.BoolExpr, lsyms, rsyms *symtab) bool {
 	}
 	left := comparison.Left
 	right := comparison.Right
-	_, lVindex := lsyms.FindColumn(left, nil, false)
+	_, lVindex := lsyms.Find(left, nil, false)
 	if lVindex == nil {
 		left, right = right, left
-		_, lVindex = lsyms.FindColumn(left, nil, false)
+		_, lVindex = lsyms.Find(left, nil, false)
 	}
 	if lVindex == nil || !IsUnique(lVindex) {
 		return false
 	}
-	_, rVindex := rsyms.FindColumn(right, nil, false)
+	_, rVindex := rsyms.Find(right, nil, false)
 	if rVindex == nil {
 		return false
 	}
