@@ -9,7 +9,6 @@ import protocols_flavor
 # We will change this to explicit registration soon.
 from vtctl import grpc_vtctl_client  # pylint: disable=unused-import
 from vtdb import grpc_update_stream  # pylint: disable=unused-import
-from vtdb import vtgatev2  # pylint: disable=unused-import
 from vtdb import grpc_vtgate_client  # pylint: disable=unused-import
 
 

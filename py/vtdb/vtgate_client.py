@@ -80,6 +80,11 @@ class VTGateClient(object):
       addr: server address. Can be protocol dependent.
       timeout: connection timeout (float, in seconds).
     """
+    self.addr = addr
+    self.timeout = timeout
+    # self.session is used by vtgate_utils.exponential_backoff_retry.
+    # implementations should use it to store the session object.
+    self.session = None
 
   def dial(self):
     """Dial to the server.

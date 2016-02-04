@@ -43,10 +43,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
   """
 
   def __init__(self, addr, timeout):
-    self.addr = addr
-    self.timeout = timeout
+    super(GRPCVTGateConnection, self).__init__(addr, timeout)
     self.stub = None
-    self.session = None
     self.logger_object = vtdb_logger.get_logger()
 
   def dial(self):
