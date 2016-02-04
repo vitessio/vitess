@@ -61,9 +61,9 @@ def main():
                     default=None)
   utils.add_options(parser)
   global _options
-  _options, _ = parser.parse_args()
+  _options, args = parser.parse_args()
   del sys.argv[1:]
 
   utils.set_log_level(_options.verbose)
-  environment.setup_protocol_flavor(_options.protocols_flavor)
+  utils.set_options(_options)
   unittest.main()
