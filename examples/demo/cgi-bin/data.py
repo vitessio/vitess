@@ -12,14 +12,21 @@ import subprocess
 import threading
 import time
 
+from vtdb import keyrange
 from vtdb import vtgate_client
 
 # implementations
 from vtdb import grpc_vtgate_client  # pylint: disable=unused-import
-from vtdb import vtgatev2  # pylint: disable=unused-import
 
 
-def exec_query(cursor, title, query, response):
+def exec_query(conn, title, query, response, keyspace=None, kr=None):
+  if kr:
+    # v2 cursor to address individual shards directly, for debug display
+    cursor = conn.cursor(keyspace, "master", keyranges=[keyrange.KeyRange(kr)])
+  else:
+    # v3 cursor is automated
+    cursor = conn.cursor(keyspace, "master", writable=True)
+
   try:
     if not query or query == "undefined":
       return
@@ -36,6 +43,7 @@ def exec_query(cursor, title, query, response):
         "lastrowid": cursor.lastrowid,
         "results": cursor.results,
         }
+    cursor.close()
   except Exception as e:
     response[title] = {
         "title": title,
@@ -62,9 +70,7 @@ def capture_log(port, queries):
 def main():
   print "Content-Type: application/json\n"
   try:
-    # conn = vtgate_client.connect("grpc", "localhost:12346", 10.0)
-    conn = vtgate_client.connect("gorpc", "localhost:12345", 10.0)
-    cursor = conn.cursor(None, "master", writable=True)
+    conn = vtgate_client.connect("grpc", "localhost:12346", 10.0)
 
     args = cgi.FieldStorage()
     query = args.getvalue("query")
@@ -74,45 +80,55 @@ def main():
       queries = []
       stats = capture_log(12345, queries)
       time.sleep(0.25)
-      exec_query(cursor, "result", query, response)
+      exec_query(conn, "result", query, response)
     finally:
       stats.terminate()
       time.sleep(0.25)
       response["queries"] = queries
 
+    # user table
     exec_query(
-        cursor, "user0",
-        "select * from user where keyrange('','\x80')", response)
+        conn, "user0",
+        "select * from user", response, keyspace="user", kr="-80")
     exec_query(
-        cursor, "user1",
-        "select * from user where keyrange('\x80', '')", response)
-    exec_query(
-        cursor, "user_extra0",
-        "select * from user_extra where keyrange('','\x80')", response)
-    exec_query(
-        cursor, "user_extra1",
-        "select * from user_extra where keyrange('\x80', '')", response)
+        conn, "user1",
+        "select * from user", response, keyspace="user", kr="80-")
 
+    # user_extra table
     exec_query(
-        cursor, "music0",
-        "select * from music where keyrange('','\x80')", response)
+        conn, "user_extra0",
+        "select * from user_extra", response, keyspace="user", kr="-80")
     exec_query(
-        cursor, "music1",
-        "select * from music where keyrange('\x80', '')", response)
-    exec_query(
-        cursor, "music_extra0",
-        "select * from music_extra where keyrange('','\x80')", response)
-    exec_query(
-        cursor, "music_extra1",
-        "select * from music_extra where keyrange('\x80', '')", response)
+        conn, "user_extra1",
+        "select * from user_extra", response, keyspace="user", kr="80-")
 
+    # music table
     exec_query(
-        cursor, "user_idx", "select * from user_idx", response)
+        conn, "music0",
+        "select * from music", response, keyspace="user", kr="-80")
     exec_query(
-        cursor, "name_user_idx", "select * from name_user_idx", response)
+        conn, "music1",
+        "select * from music", response, keyspace="user", kr="80-")
+
+    # music_extra table
     exec_query(
-        cursor, "music_user_idx",
-        "select * from music_user_idx", response)
+        conn, "music_extra0",
+        "select * from music_extra", response, keyspace="user", kr="-80")
+    exec_query(
+        conn, "music_extra1",
+        "select * from music_extra", response, keyspace="user", kr="80-")
+
+    # lookup tables
+    exec_query(
+        conn, "user_idx", "select * from user_idx", response,
+        keyspace="lookup", kr="-")
+    exec_query(
+        conn, "name_user_idx", "select * from name_user_idx", response,
+        keyspace="lookup", kr="-")
+    exec_query(
+        conn, "music_user_idx",
+        "select * from music_user_idx", response,
+        keyspace="lookup", kr="-")
 
     print json.dumps(response)
   except Exception as e:
