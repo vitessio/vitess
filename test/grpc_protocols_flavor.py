@@ -63,4 +63,4 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
         ]
 
   def vttest_protocol(self):
-    return 'gorpc'
+    return 'grpc'

@@ -12,7 +12,11 @@ import subprocess
 import threading
 import time
 
-from vtdb import vtgatev2
+from vtdb import vtgate_client
+
+# implementations
+from vtdb import grpc_vtgate_client  # pylint: disable=unused-import
+from vtdb import vtgatev2  # pylint: disable=unused-import
 
 
 def exec_query(cursor, title, query, response):
@@ -58,7 +62,8 @@ def capture_log(port, queries):
 def main():
   print "Content-Type: application/json\n"
   try:
-    conn = vtgatev2.connect(["localhost:12345"], 10.0)
+    # conn = vtgate_client.connect("grpc", "localhost:12346", 10.0)
+    conn = vtgate_client.connect("gorpc", "localhost:12345", 10.0)
     cursor = conn.cursor(None, "master", writable=True)
 
     args = cgi.FieldStorage()
