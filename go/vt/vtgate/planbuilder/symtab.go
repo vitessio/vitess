@@ -140,32 +140,33 @@ func (st *symtab) SetRHS() {
 // then an unqualified reference is assumed to be implicitly against
 // that table. The table info doesn't contain the full list of columns.
 // So, any column reference is presumed valid until execution time.
-func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (*routeBuilder, error) {
+func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBuilder, isLocal bool, err error) {
 	switch meta := col.Metadata.(type) {
 	case *colsym:
-		return meta.Route, nil
+		return meta.Route, meta.Symtab == st, nil
 	case *tableAlias:
-		return meta.Route, nil
+		return meta.Route, meta.Symtab == st, nil
 	}
 	if len(st.Colsyms) != 0 {
 		name := sqlparser.SQLName(sqlparser.String(col))
 		for _, colsym := range st.Colsyms {
 			if name == colsym.Alias {
 				col.Metadata = colsym
-				return colsym.Route, nil
+				return colsym.Route, true, nil
 			}
 		}
 		st.Externs = append(st.Externs, col)
 		if st.Outer != nil {
 			// autoResolve only allowed for innermost scope.
-			return st.Outer.Find(col, false)
+			route, _, err = st.Outer.Find(col, false)
+			return route, false, err
 		}
-		return nil, errors.New("symbol not found")
+		return nil, false, errors.New("symbol not found")
 	}
 	qualifier := col.Qualifier
 	if qualifier == "" && autoResolve {
 		if len(st.tables) != 1 {
-			return nil, errors.New("symbol not found")
+			return nil, false, errors.New("symbol not found")
 		}
 		for _, t := range st.tables {
 			qualifier = t.Name
@@ -177,35 +178,37 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (*routeBuilder,
 		st.Externs = append(st.Externs, col)
 		if st.Outer != nil {
 			// autoResolve only allowed for innermost scope.
-			return st.Outer.Find(col, false)
+			route, _, err = st.Outer.Find(col, false)
+			return route, false, err
 		}
-		return nil, errors.New("symbol not found")
+		return nil, false, errors.New("symbol not found")
 	}
 	col.Metadata = alias
-	return alias.Route, nil
+	return alias.Route, true, nil
 }
 
-// Vindex returns the vindex if the expression has an
-// associated Vindex.
+// Vindex returns the vindex if the expression has an associated Vindex,
+// but only if it's within the scope of routeBuilder. Because of this
+// restriction, this function can be used to make push decisions.
 func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve bool) Vindex {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return nil
 	}
 	if col.Metadata == nil {
-		_, err := st.Find(col, autoResolve)
+		_, _, err := st.Find(col, autoResolve)
 		if err != nil {
 			return nil
 		}
 	}
 	switch meta := col.Metadata.(type) {
 	case *colsym:
-		if scope != nil && scope != meta.Route {
+		if scope != meta.Route {
 			return nil
 		}
 		return meta.Vindex
 	case *tableAlias:
-		if scope != nil && scope != meta.Route {
+		if scope != meta.Route {
 			return nil
 		}
 		return meta.FindVindex(col.Name)
@@ -214,13 +217,12 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve b
 }
 
 // IsValue returns true if the expression can be treated as a value
-// for the current scope.
-// Unresolved references are treated as value
+// for the current route. External references are treated as value.
 func (st *symtab) IsValue(expr sqlparser.ValExpr, scope *routeBuilder) bool {
 	switch node := expr.(type) {
 	case *sqlparser.ColName:
 		// If route is in scope, it's a local column ref, not a value.
-		if route, _ := st.Find(node, true); route != nil {
+		if route, _, _ := st.Find(node, true); route != nil {
 			return route != scope
 		}
 		return true
@@ -228,28 +230,6 @@ func (st *symtab) IsValue(expr sqlparser.ValExpr, scope *routeBuilder) bool {
 		return true
 	}
 	return false
-}
-
-// InScope returns true if the column reference is in scope of the
-// current symbol table.
-func (st *symtab) InScopeRoute(col *sqlparser.ColName) *routeBuilder {
-	if col.Metadata == nil {
-		_, err := st.Find(col, false)
-		if err != nil {
-			return nil
-		}
-	}
-	switch meta := col.Metadata.(type) {
-	case *colsym:
-		if meta.Symtab == st {
-			return meta.Route
-		}
-	case *tableAlias:
-		if meta.Symtab == st {
-			return meta.Route
-		}
-	}
-	return nil
 }
 
 // Reroute re-points the specified route to the new one.

@@ -443,7 +443,7 @@ func joinRoutes(lRoute *routeBuilder, lsyms *symtab, rRoute *routeBuilder, rsyms
 
 	// Both routeBuilder are sharded routes. Analyze join condition for merging.
 	for _, filter := range splitAndExpression(nil, join.On) {
-		if isSameRoute(filter, lsyms, rsyms) {
+		if isSameRoute(lRoute, lsyms, rRoute, rsyms, filter) {
 			return mergeRoutes(lRoute, lsyms, rRoute, rsyms, join)
 		}
 	}
@@ -480,7 +480,7 @@ func mergeRoutes(lRoute *routeBuilder, lsyms *symtab, rRoute *routeBuilder, rsym
 // one should address a table from the left side, the other from the
 // right, the referenced columns have to be the same Vindex, and the
 // Vindex must be unique.
-func isSameRoute(filter sqlparser.BoolExpr, lsyms, rsyms *symtab) bool {
+func isSameRoute(lRoute *routeBuilder, lsyms *symtab, rRoute *routeBuilder, rsyms *symtab, filter sqlparser.BoolExpr) bool {
 	comparison, ok := filter.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
@@ -490,15 +490,15 @@ func isSameRoute(filter sqlparser.BoolExpr, lsyms, rsyms *symtab) bool {
 	}
 	left := comparison.Left
 	right := comparison.Right
-	lVindex := lsyms.Vindex(left, nil, false)
+	lVindex := lsyms.Vindex(left, lRoute, false)
 	if lVindex == nil {
 		left, right = right, left
-		lVindex = lsyms.Vindex(left, nil, false)
+		lVindex = lsyms.Vindex(left, lRoute, false)
 	}
 	if lVindex == nil || !IsUnique(lVindex) {
 		return false
 	}
-	rVindex := rsyms.Vindex(right, nil, false)
+	rVindex := rsyms.Vindex(right, rRoute, false)
 	if rVindex == nil {
 		return false
 	}

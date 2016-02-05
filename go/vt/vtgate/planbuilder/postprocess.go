@@ -22,9 +22,13 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder, syms *symtab) e
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			_, err := syms.Find(node, true)
+			_, isLocal, err := syms.Find(node, true)
 			if err != nil {
 				return false, err
+			}
+			if !isLocal {
+				// TODO(sougou): better error.
+				return false, errors.New("unsupported: subquery references outer query in group by")
 			}
 		case *sqlparser.Subquery:
 			// TODO(sougou): better error.
@@ -58,12 +62,17 @@ func processOrderBy(orderBy sqlparser.OrderBy, syms *symtab) error {
 	routeNumber := 0
 	for _, order := range orderBy {
 		var route *routeBuilder
-		var err error
 		switch node := order.Expr.(type) {
 		case *sqlparser.ColName:
-			route, err = syms.Find(node, true)
+			var isLocal bool
+			var err error
+			route, isLocal, err = syms.Find(node, true)
 			if err != nil {
 				return err
+			}
+			if !isLocal {
+				// TODO(sougou): better error.
+				return errors.New("unsupported: subquery references outer query in order by")
 			}
 		case sqlparser.NumVal:
 			num, err := strconv.ParseInt(string(node), 0, 64)
@@ -80,7 +89,7 @@ func processOrderBy(orderBy sqlparser.OrderBy, syms *symtab) error {
 			// TODO(sougou): better error.
 			return errors.New("order by clause is too complex")
 		}
-		if route == nil || route.Order() < routeNumber {
+		if route.Order() < routeNumber {
 			// TODO(sougou): better error.
 			return errors.New("order by clause is too complex")
 		}

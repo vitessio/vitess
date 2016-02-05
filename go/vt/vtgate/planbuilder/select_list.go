@@ -94,7 +94,9 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, syms *symtab) ([]*colsy
 				colsyms[i].Alias = sqlparser.SQLName(sqlparser.String(col))
 			}
 			colsyms[i].Vindex = syms.Vindex(col, colsyms[i].Route, true)
-			colsyms[i].Underlying = *col
+			if _, isLocal, _ := syms.Find(col, true); isLocal {
+				colsyms[i].Underlying = *col
+			}
 		}
 	}
 	return colsyms, nil

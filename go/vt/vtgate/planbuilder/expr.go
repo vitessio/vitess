@@ -17,12 +17,11 @@ func findRoute(expr sqlparser.Expr, syms *symtab) (route *routeBuilder, err erro
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			newRoute, err := syms.Find(node, true)
+			newRoute, isLocal, err := syms.Find(node, true)
 			if err != nil {
 				return false, err
 			}
-			newRoute = syms.InScopeRoute(node)
-			if newRoute != nil && newRoute.Order() > highestRoute.Order() {
+			if isLocal && newRoute.Order() > highestRoute.Order() {
 				highestRoute = newRoute
 			}
 		case *sqlparser.Subquery:
@@ -39,8 +38,11 @@ func findRoute(expr sqlparser.Expr, syms *symtab) (route *routeBuilder, err erro
 				return false, errors.New("subquery is too complex")
 			}
 			for _, extern := range subsyms.Externs {
-				newRoute := syms.InScopeRoute(extern)
-				if newRoute != nil && newRoute.Order() > highestRoute.Order() {
+				newRoute, isLocal, err := syms.Find(extern, false)
+				if err != nil {
+					return false, err
+				}
+				if isLocal && newRoute.Order() > highestRoute.Order() {
 					highestRoute = newRoute
 				}
 			}
@@ -78,9 +80,9 @@ func subqueryCanMerge(outer, inner *routeBuilder, outersyms *symtab) error {
 	// TODO(sougou): check other cases.
 	switch vals := inner.Route.Values.(type) {
 	case *sqlparser.ColName:
-		mergeRoute, _ := outersyms.Find(vals, false)
+		mergeRoute, _, _ := outersyms.Find(vals, false)
 		if mergeRoute != outer {
-			return errors.New("subquery references don't match parent route")
+			return errors.New("subquery dependency doesn't match parent route")
 		}
 	}
 	return nil

@@ -41,8 +41,8 @@ func TestJoin(t *testing.T) {
 		if out != tcase.output {
 			t.Errorf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out)
 			// Comment these line out to see the expected outputs
-			// bout, err = json.MarshalIndent(plan, "", "  ")
-			// fmt.Printf("%s\n", bout)
+			bout, err = json.MarshalIndent(plan, "", "  ")
+			fmt.Printf("%s\n", bout)
 		}
 	}
 }
