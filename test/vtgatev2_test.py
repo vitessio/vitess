@@ -1210,20 +1210,10 @@ class TestFailures(BaseTestCase):
       t.wait_for_vttablet_state('SERVING')
     self.replica_tablet2.kill_vttablet()
     replica_tablet_proc = self.replica_tablet.kill_vttablet(wait=False)
-    time.sleep(0.1)
+    if vtgate_gateway_flavor().flavor() == 'shardgateway':
+      time.sleep(1)  # skip the vttablet waiting period
     # send query while vttablet is in lameduck, should fail as no vttablet
-    try:
-      vtgate_conn._execute(
-          'select 1 from vt_insert_test', {},
-          KEYSPACE_NAME, 'replica',
-          keyranges=[self.keyrange])
-      self.fail('DatabaseError should have been raised')
-    except Exception, e:  # pylint: disable=broad-except
-      self.assertIsInstance(e, dbexceptions.DatabaseError)
-      self.assertNotIsInstance(e, dbexceptions.IntegrityError)
-      self.assertNotIsInstance(e, dbexceptions.OperationalError)
-      self.assertNotIsInstance(e, dbexceptions.TimeoutError)
-    # send another query, should also fail
+    time.sleep(0.1)  # wait a short while so vtgate gets the health check
     try:
       vtgate_conn._execute(
           'select 1 from vt_insert_test', {},
