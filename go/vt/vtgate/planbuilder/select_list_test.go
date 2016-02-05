@@ -28,7 +28,7 @@ func TestSelectList(t *testing.T) {
 			t.Errorf("unexpected type: %T", statement)
 			continue
 		}
-		plan, _, err := buildSelectPlan2(sel, schema)
+		plan, _, err := buildSelectPlan2(sel, schema, nil)
 		if err != nil {
 			t.Error(err)
 			continue

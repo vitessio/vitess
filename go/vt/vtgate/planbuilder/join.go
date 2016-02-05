@@ -210,11 +210,12 @@ func prettyValue(value interface{}) string {
 
 // buildSelectPlan2 is the new function to build a Select plan.
 // TODO(sougou): rename after deprecating old one.
-func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (planBuilder, *symtab, error) {
+func buildSelectPlan2(sel *sqlparser.Select, schema *Schema, outer *symtab) (planBuilder, *symtab, error) {
 	plan, syms, err := processTableExprs(sel.From, schema)
 	if err != nil {
 		return nil, nil, err
 	}
+	syms.Outer = outer
 	if sel.Where != nil {
 		err = processBoolExpr(sel.Where.Expr, syms, sqlparser.WhereStr)
 		if err != nil {
@@ -291,7 +292,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, schema *Schema) 
 		if tableExpr.As != "" {
 			alias = tableExpr.As
 		}
-		syms := newSymtab(alias, table, plan)
+		syms := newSymtab(alias, table, plan, schema)
 		return plan, syms, nil
 	case *sqlparser.Subquery:
 		// TODO(sougou): implement.

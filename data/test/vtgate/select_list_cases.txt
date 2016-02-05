@@ -365,3 +365,39 @@
     "Values": "1"
   }
 }
+
+# subquery
+"select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id=5"
+{
+  "LeftOrder": 1,
+  "RightOrder": 2,
+  "Left": {
+    "Select": "select  from user_extra",
+    "Order": 1,
+    "Route": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      }
+    }
+  },
+  "Right": {
+    "Select": "select u.m from user as u where u.id in (select m2 from user where user.id = u.id) and u.id = 5",
+    "Order": 2,
+    "Route": {
+      "PlanID": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Vindex": "user_index",
+      "Values": "5"
+    }
+  },
+  "Join": {
+    "RightCols": [
+      0
+    ]
+  }
+}

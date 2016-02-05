@@ -17,7 +17,8 @@ type symtab struct {
 	Colsyms    []*colsym
 	FirstRoute *routeBuilder
 	Externs    []*sqlparser.ColName
-	outer      *symtab
+	Outer      *symtab
+	Schema     *Schema
 }
 
 // colsym contains symbol info about a select expression.
@@ -65,9 +66,10 @@ func (t *tableAlias) FindVindex(name sqlparser.SQLName) Vindex {
 
 // newSymtab creates a new symtab initialized
 // to contain the provided table alias.
-func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder) *symtab {
+func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder, schema *Schema) *symtab {
 	st := &symtab{
 		FirstRoute: route,
+		Schema:     schema,
 	}
 	st.tables = []*tableAlias{{
 		Name:        alias,
@@ -154,9 +156,9 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (*routeBuilder,
 			}
 		}
 		st.Externs = append(st.Externs, col)
-		if st.outer != nil {
+		if st.Outer != nil {
 			// autoResolve only allowed for innermost scope.
-			return st.outer.Find(col, false)
+			return st.Outer.Find(col, false)
 		}
 		return nil, errors.New("symbol not found")
 	}
@@ -173,9 +175,9 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (*routeBuilder,
 	alias := st.findTable(qualifier)
 	if alias == nil {
 		st.Externs = append(st.Externs, col)
-		if st.outer != nil {
+		if st.Outer != nil {
 			// autoResolve only allowed for innermost scope.
-			return st.outer.Find(col, false)
+			return st.Outer.Find(col, false)
 		}
 		return nil, errors.New("symbol not found")
 	}
@@ -226,4 +228,40 @@ func (st *symtab) IsValue(expr sqlparser.ValExpr, scope *routeBuilder) bool {
 		return true
 	}
 	return false
+}
+
+// InScope returns true if the column reference is in scope of the
+// current symbol table.
+func (st *symtab) InScopeRoute(col *sqlparser.ColName) *routeBuilder {
+	if col.Metadata == nil {
+		_, err := st.Find(col, false)
+		if err != nil {
+			return nil
+		}
+	}
+	switch meta := col.Metadata.(type) {
+	case *colsym:
+		if meta.Symtab == st {
+			return meta.Route
+		}
+	case *tableAlias:
+		if meta.Symtab == st {
+			return meta.Route
+		}
+	}
+	return nil
+}
+
+// Reroute re-points the specified route to the new one.
+func (st *symtab) Reroute(o, n *routeBuilder) {
+	for _, t := range st.tables {
+		if t.Route == o {
+			t.Route = n
+		}
+	}
+	for _, c := range st.Colsyms {
+		if c.Route == o {
+			c.Route = n
+		}
+	}
 }
