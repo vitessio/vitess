@@ -23,6 +23,7 @@ for uid_index in $uids; do
   echo "Stopping vttablet for $alias..."
   pid=`cat $VTDATAROOT/$tablet_dir/vttablet.pid`
   kill $pid
+  while ps -p $pid > /dev/null; do sleep 1; done
 
   echo "Stopping MySQL for tablet $alias..."
   $VTROOT/bin/mysqlctl \

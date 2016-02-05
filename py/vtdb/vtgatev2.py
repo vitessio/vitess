@@ -152,13 +152,11 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
   def __init__(self, addr, timeout, user=None, password=None,
                keyfile=None, certfile=None):
-    self.session = None
-    self.addr = addr
+    super(VTGateConnection, self).__init__(addr, timeout)
     self.user = user
     self.password = password
     self.keyfile = keyfile
     self.certfile = certfile
-    self.timeout = timeout
     self.client = self._create_client()
     self.logger_object = vtdb_logger.get_logger()
 

@@ -57,7 +57,7 @@ done
 echo "Run Python client script..."
 # Retry until vtgate is ready.
 start=`date +%s`
-until ./client.sh; do
+until ./client.sh --server=localhost:15991 ; do
   retry_with_timeout
 done
 
