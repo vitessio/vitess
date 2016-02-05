@@ -7,10 +7,10 @@ import hashlib
 from flask import Flask
 app = Flask(__name__)
 
-from vtdb import keyrange
-from vtdb import keyrange_constants
-from vtdb import vtgatev2
-from vtdb import vtgate_cursor
+from vtdb import vtgate_client
+
+# Register gRPC protocol.
+from vtdb import grpc_vtgate_client # pylint: disable=unused-import
 
 # conn is the connection to vtgate.
 conn = None
@@ -99,9 +99,9 @@ if __name__ == "__main__":
   timeout = 10 # connect timeout in seconds
 
   # Get vtgate service address from Kubernetes DNS.
-  addr = 'vtgate-test:15001'
+  addr = 'vtgate-test:15991'
 
   # Connect to vtgate.
-  conn = vtgatev2.connect({'vt': [addr]}, timeout)
+  conn = vtgate_client.connect('grpc', addr, timeout)
 
   app.run(host='0.0.0.0', port=8080, debug=True)

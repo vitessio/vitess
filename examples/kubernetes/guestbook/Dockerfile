@@ -25,5 +25,5 @@ ENTRYPOINT ["/env/bin/python", "main.py"]
 ADD tmp/pkg /app/pkg
 ADD tmp/lib /app/lib
 ENV LD_LIBRARY_PATH /app/lib
-ENV PYTHONPATH /app/pkg/py-vtdb:/app/pkg/py-vt-bson-0.3.2/lib/python2.7/site-packages:/app/pkg/py-mock-1.0.1/lib/python2.7/site-packages:/app/pkg/dist-packages
+ENV PYTHONPATH /app/pkg/py-vtdb:/app/pkg/py-mock-1.0.1/lib/python2.7/site-packages:/app/pkg/dist-packages
 
