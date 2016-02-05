@@ -51,28 +51,6 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder, syms *symtab) e
 	return errors.New("query is too complex to allow aggregates")
 }
 
-func checkAllowAggregates(selectExprs sqlparser.SelectExprs, plan planBuilder, syms *symtab) bool {
-	route, ok := plan.(*routeBuilder)
-	if !ok {
-		return false
-	}
-	if route.IsSingle() {
-		return true
-	}
-	// It's a scatter route. We can allow aggregates if there is a unique
-	// vindex in the select list.
-	for _, selectExpr := range selectExprs {
-		switch selectExpr := selectExpr.(type) {
-		case *sqlparser.NonStarExpr:
-			vindex := syms.Vindex(selectExpr.Expr, route, true)
-			if vindex != nil && IsUnique(vindex) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func processOrderBy(orderBy sqlparser.OrderBy, syms *symtab) error {
 	if orderBy == nil {
 		return nil

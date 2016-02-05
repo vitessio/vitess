@@ -40,30 +40,6 @@ func processFilter(filter sqlparser.BoolExpr, syms *symtab, whereType string) er
 	return nil
 }
 
-func findRoute(filter sqlparser.BoolExpr, syms *symtab) (route *routeBuilder, err error) {
-	highestRoute := syms.FirstRoute
-	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.ColName:
-			newRoute, err := syms.Find(node, true)
-			if err != nil {
-				return false, err
-			}
-			if newRoute != nil && newRoute.Order() > highestRoute.Order() {
-				highestRoute = newRoute
-			}
-		case *sqlparser.Subquery:
-			// TODO(sougou): implement.
-			return false, errors.New("subqueries not supported yet")
-		}
-		return true, nil
-	}, filter)
-	if err != nil {
-		return nil, err
-	}
-	return highestRoute, nil
-}
-
 func updateRoute(route *routeBuilder, syms *symtab, filter sqlparser.BoolExpr) {
 	planID, vindex, values := computePlan(route, syms, filter)
 	if planID == SelectScatter {

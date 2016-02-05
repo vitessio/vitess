@@ -16,6 +16,7 @@ type symtab struct {
 	tables     []*tableAlias
 	Colsyms    []*colsym
 	FirstRoute *routeBuilder
+	Externs    []*sqlparser.ColName
 	outer      *symtab
 }
 
@@ -25,6 +26,14 @@ type colsym struct {
 	Underlying sqlparser.ColName
 	Route      *routeBuilder
 	Vindex     Vindex
+	Symtab     *symtab
+}
+
+func newColsym(st *symtab) *colsym {
+	return &colsym{
+		Route:  st.FirstRoute,
+		Symtab: st,
+	}
 }
 
 // tableAlias is part of symtab.
@@ -40,7 +49,8 @@ type tableAlias struct {
 	ColVindexes []*ColVindex
 	// Route points to the routeBuilder object under which this alias
 	// was created.
-	Route *routeBuilder
+	Route  *routeBuilder
+	Symtab *symtab
 }
 
 // FindVindex returns the vindex if one was found for the column.
@@ -56,15 +66,17 @@ func (t *tableAlias) FindVindex(name sqlparser.SQLName) Vindex {
 // newSymtab creates a new symtab initialized
 // to contain the provided table alias.
 func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder) *symtab {
-	return &symtab{
-		tables: []*tableAlias{{
-			Name:        alias,
-			Keyspace:    table.Keyspace,
-			ColVindexes: table.ColVindexes,
-			Route:       route,
-		}},
+	st := &symtab{
 		FirstRoute: route,
 	}
+	st.tables = []*tableAlias{{
+		Name:        alias,
+		Keyspace:    table.Keyspace,
+		ColVindexes: table.ColVindexes,
+		Route:       route,
+		Symtab:      st,
+	}}
+	return st
 }
 
 // Add merges the new symbol table into the current one
@@ -75,6 +87,7 @@ func (st *symtab) Add(newsyms *symtab) error {
 		if found := st.findTable(t.Name); found != nil {
 			return errors.New("duplicate symbols")
 		}
+		t.Symtab = st
 		st.tables = append(st.tables, t)
 	}
 	return nil
@@ -100,6 +113,7 @@ func (st *symtab) Merge(newsyms *symtab, route *routeBuilder) error {
 			return errors.New("duplicate symbols")
 		}
 		t.Route = route
+		t.Symtab = st
 		st.tables = append(st.tables, t)
 	}
 	return nil
@@ -139,6 +153,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (*routeBuilder,
 				return colsym.Route, nil
 			}
 		}
+		st.Externs = append(st.Externs, col)
 		if st.outer != nil {
 			// autoResolve only allowed for innermost scope.
 			return st.outer.Find(col, false)
@@ -157,6 +172,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (*routeBuilder,
 	}
 	alias := st.findTable(qualifier)
 	if alias == nil {
+		st.Externs = append(st.Externs, col)
 		if st.outer != nil {
 			// autoResolve only allowed for innermost scope.
 			return st.outer.Find(col, false)
