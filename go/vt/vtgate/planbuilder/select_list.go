@@ -37,40 +37,36 @@ func processSelectExprs(sel *sqlparser.Select, plan planBuilder, syms *symtab) e
 
 func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, syms *symtab) ([]*colsym, error) {
 	colsyms := make([]*colsym, len(selectExprs))
-	for i, selectExpr := range selectExprs {
+	for i, node := range selectExprs {
 		colsyms[i] = &colsym{Route: syms.FirstRoute}
+		node, ok := node.(*sqlparser.NonStarExpr)
+		if !ok {
+			return nil, errors.New("* expressions not allowed")
+		}
+		if node.As != "" {
+			colsyms[i].Alias = node.As
+		}
+		col, ok := node.Expr.(*sqlparser.ColName)
+		if ok {
+			if colsyms[i].Alias == "" {
+				colsyms[i].Alias = sqlparser.SQLName(sqlparser.String(col))
+			}
+			var newRoute *routeBuilder
+			var err error
+			newRoute, err = syms.Find(col, true)
+			if err != nil {
+				return nil, err
+			}
+			if newRoute != nil {
+				colsyms[i].Vindex = syms.Vindex(col, newRoute, true)
+				colsyms[i].Underlying = *col
+				if newRoute.Order() > colsyms[i].Route.Order() {
+					colsyms[i].Route = newRoute
+				}
+			}
+		}
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
-			case *sqlparser.StarExpr:
-				return false, errors.New("* expressions not allowed")
-			case *sqlparser.Subquery:
-				// TODO(sougou): implement.
-				return false, errors.New("subqueries not supported yet")
-			case *sqlparser.NonStarExpr:
-				if node.As != "" {
-					colsyms[i].Alias = node.As
-				}
-				col, ok := node.Expr.(*sqlparser.ColName)
-				if !ok {
-					break
-				}
-				if colsyms[i].Alias == "" {
-					colsyms[i].Alias = sqlparser.SQLName(sqlparser.String(col))
-				}
-				var newRoute *routeBuilder
-				var err error
-				newRoute, err = syms.Find(col, true)
-				if err != nil {
-					return false, err
-				}
-				if newRoute != nil {
-					colsyms[i].Vindex = syms.Vindex(col, newRoute, true)
-					colsyms[i].Underlying = *col
-					if newRoute.Order() > colsyms[i].Route.Order() {
-						colsyms[i].Route = newRoute
-					}
-				}
-				return false, nil
 			case *sqlparser.ColName:
 				newRoute, err := syms.Find(node, true)
 				if err != nil {
@@ -79,6 +75,9 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, s
 				if newRoute != nil && newRoute.Order() > colsyms[i].Route.Order() {
 					colsyms[i].Route = newRoute
 				}
+			case *sqlparser.Subquery:
+				// TODO(sougou): implement.
+				return false, errors.New("subqueries not supported yet")
 			case *sqlparser.FuncExpr:
 				if node.IsAggregate() {
 					if !allowAggregates {
@@ -88,7 +87,7 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, allowAggregates bool, s
 				}
 			}
 			return true, nil
-		}, selectExpr)
+		}, node)
 		if err != nil {
 			return nil, err
 		}
@@ -120,67 +119,4 @@ func pushSelect(selectExpr sqlparser.SelectExpr, plan planBuilder, colsym *colsy
 		plan.Select.SelectExprs = append(plan.Select.SelectExprs, selectExpr)
 		plan.Colsym = append(plan.Colsym, colsym)
 	}
-}
-
-func checkAllowAggregates(selectExprs sqlparser.SelectExprs, plan planBuilder, syms *symtab) bool {
-	route, ok := plan.(*routeBuilder)
-	if !ok {
-		return false
-	}
-	if route.IsSingle() {
-		return true
-	}
-	// It's a scatter route. We can allow aggregates if there is a unique
-	// vindex in the select list.
-	for _, selectExpr := range selectExprs {
-		switch selectExpr := selectExpr.(type) {
-		case *sqlparser.NonStarExpr:
-			vindex := syms.Vindex(selectExpr.Expr, route, true)
-			if vindex != nil && IsUnique(vindex) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder, syms *symtab) error {
-	if groupBy == nil {
-		return nil
-	}
-	route, ok := plan.(*routeBuilder)
-	if !ok {
-		return errors.New("query is too complex to allow aggregates")
-	}
-	if hasSubqueries(groupBy) {
-		return errors.New("subqueries not supported in group by")
-	}
-	if route.IsSingle() {
-		route.Select.GroupBy = groupBy
-		return nil
-	}
-	// It's a scatter route. We can allow group by if it references a
-	// column with a unique vindex.
-	for _, expr := range groupBy {
-		vindex := syms.Vindex(expr, route, true)
-		if vindex != nil && IsUnique(vindex) {
-			route.Select.GroupBy = groupBy
-			return nil
-		}
-	}
-	return errors.New("query is too complex to allow aggregates")
-}
-
-func hasSubqueries(node sqlparser.SQLNode) bool {
-	has := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node.(type) {
-		case *sqlparser.Subquery:
-			has = true
-			// TODO(sougou): better error.
-			return false, errors.New("dummy")
-		}
-		return true, nil
-	}, node)
-	return has
 }

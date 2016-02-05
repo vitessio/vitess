@@ -33,10 +33,12 @@ func TestFilter(t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		err = processWhere(sel.Where, symbolTable)
-		if err != nil {
-			t.Error(err)
-			continue
+		if sel.Where != nil {
+			err = processBoolExpr(sel.Where.Expr, symbolTable, sqlparser.WhereStr)
+			if err != nil {
+				t.Error(err)
+				continue
+			}
 		}
 		bout, err := json.Marshal(plan)
 		if err != nil {

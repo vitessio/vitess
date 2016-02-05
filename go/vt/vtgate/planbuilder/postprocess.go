@@ -11,42 +11,66 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func processHaving(having *sqlparser.Where, syms *symtab) error {
-	if having == nil {
+func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder, syms *symtab) error {
+	if groupBy == nil {
 		return nil
 	}
-	for _, filter := range splitAndExpression(nil, having.Expr) {
-		var route *routeBuilder
-		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			switch node := node.(type) {
-			case *sqlparser.Subquery:
-				// TODO(sougou): better error.
-				return false, errors.New("subqueries not supported")
-			case *sqlparser.ColName:
-				newRoute, err := syms.Find(node, true)
-				if err != nil {
-					return false, err
-				}
-				if newRoute != nil {
-					if route == nil {
-						route = newRoute
-					} else if route != newRoute {
-						// TODO(sougou): better error.
-						return false, errors.New("having clause is too complex")
-					}
-				}
-			}
-			return true, nil
-		}, filter)
-		if err != nil {
-			return err
-		}
-		if route == nil {
-			route = syms.FirstRoute
-		}
-		route.Select.AddHaving(filter)
+	route, ok := plan.(*routeBuilder)
+	if !ok {
+		return errors.New("query is too complex to allow aggregates")
 	}
-	return nil
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ColName:
+			_, err := syms.Find(node, true)
+			if err != nil {
+				return false, err
+			}
+		case *sqlparser.Subquery:
+			// TODO(sougou): better error.
+			return false, errors.New("subqueries not supported in group by")
+		}
+		return true, nil
+	}, groupBy)
+	if err != nil {
+		return err
+	}
+	if route.IsSingle() {
+		route.Select.GroupBy = groupBy
+		return nil
+	}
+	// It's a scatter route. We can allow group by if it references a
+	// column with a unique vindex.
+	for _, expr := range groupBy {
+		vindex := syms.Vindex(expr, route, true)
+		if vindex != nil && IsUnique(vindex) {
+			route.Select.GroupBy = groupBy
+			return nil
+		}
+	}
+	return errors.New("query is too complex to allow aggregates")
+}
+
+func checkAllowAggregates(selectExprs sqlparser.SelectExprs, plan planBuilder, syms *symtab) bool {
+	route, ok := plan.(*routeBuilder)
+	if !ok {
+		return false
+	}
+	if route.IsSingle() {
+		return true
+	}
+	// It's a scatter route. We can allow aggregates if there is a unique
+	// vindex in the select list.
+	for _, selectExpr := range selectExprs {
+		switch selectExpr := selectExpr.(type) {
+		case *sqlparser.NonStarExpr:
+			vindex := syms.Vindex(selectExpr.Expr, route, true)
+			if vindex != nil && IsUnique(vindex) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func processOrderBy(orderBy sqlparser.OrderBy, syms *symtab) error {

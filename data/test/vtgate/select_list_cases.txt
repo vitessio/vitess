@@ -159,9 +159,9 @@
 }
 
 # Aggregate on unsharded
-"select count(1), col from main1"
+"select count(*), col from main1"
 {
-  "Select": "select count(1), col from main1",
+  "Select": "select count(*), col from main1",
   "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
@@ -173,9 +173,9 @@
 }
 
 # Aggregate on unique sharded
-"select count(1), col from user where id = 1"
+"select count(*), col from user where id = 1"
 {
-  "Select": "select count(1), col from user where id = 1",
+  "Select": "select count(*), col from user where id = 1",
   "Order": 1,
   "Route": {
     "PlanID": "SelectEqualUnique",
@@ -189,9 +189,9 @@
 }
 
 # Aggregate on sharded with colvindex
-"select count(1), id from user"
+"select count(*), id from user"
 {
-  "Select": "select count(1), id from user",
+  "Select": "select count(*), id from user",
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
@@ -231,9 +231,9 @@
 }
 
 # Group by unsharded
-"select col1 from main1 group by col2"
+"select col1, col2 from main1 group by col2"
 {
-  "Select": "select col1 from main1 group by col2",
+  "Select": "select col1, col2 from main1 group by col2",
   "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
@@ -245,9 +245,9 @@
 }
 
 # Group by on unique sharded
-"select col1 from user where id = 1 group by col2"
+"select col1, col2 from user where id = 1 group by col2"
 {
-  "Select": "select col1 from user where id = 1 group by col2",
+  "Select": "select col1, col2 from user where id = 1 group by col2",
   "Order": 1,
   "Route": {
     "PlanID": "SelectEqualUnique",

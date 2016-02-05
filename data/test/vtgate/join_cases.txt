@@ -101,9 +101,9 @@
 }
 
 # Left join, single chunk
-"select * from main1 as m1 left join main1 as m2 on a=b"
+"select * from main1 as m1 left join main1 as m2 on m1.a=m2.b"
 {
-  "Select": "select  from main1 as m1 left join main1 as m2 on a = b",
+  "Select": "select  from main1 as m1 left join main1 as m2 on m1.a = m2.b",
   "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",

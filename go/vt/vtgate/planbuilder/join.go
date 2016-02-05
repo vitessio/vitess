@@ -215,17 +215,21 @@ func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (planBuilder, *symt
 	if err != nil {
 		return nil, nil, err
 	}
-	err = processWhere(sel.Where, syms)
-	if err != nil {
-		return nil, nil, err
+	if sel.Where != nil {
+		err = processBoolExpr(sel.Where.Expr, syms, sqlparser.WhereStr)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	err = processSelectExprs(sel, plan, syms)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = processHaving(sel.Having, syms)
-	if err != nil {
-		return nil, nil, err
+	if sel.Having != nil {
+		err = processBoolExpr(sel.Having.Expr, syms, sqlparser.HavingStr)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	err = processOrderBy(sel.OrderBy, syms)
 	if err != nil {
@@ -357,11 +361,17 @@ func processJoin(join *sqlparser.JoinTableExpr, schema *Schema) (planBuilder, *s
 // This function is called when the two builders cannot be part of
 // the same route.
 func makejoinBuilder(lplan planBuilder, lsyms *symtab, rplan planBuilder, rsyms *symtab, join *sqlparser.JoinTableExpr) (planBuilder, *symtab, error) {
+	// This function converts ON clauses to WHERE clauses. The WHERE clause
+	// scope can see all tables, whereas the ON clause can only see the
+	// participants of the JOIN. However, since the ON clause doesn't allow
+	// external references, and the FROM clause doesn't allow duplicates,
+	// it's safe to perform this conversion and still expect the same behavior.
+
 	// For LEFT JOIN, you have to push the ON clause into the RHS first.
 	isLeft := false
 	if join.Join == sqlparser.LeftJoinStr {
 		isLeft = true
-		err := processBoolExpr(join.On, rsyms)
+		err := processBoolExpr(join.On, rsyms, sqlparser.WhereStr)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -376,7 +386,7 @@ func makejoinBuilder(lplan planBuilder, lsyms *symtab, rplan planBuilder, rsyms 
 	// For normal joins, the ON clause can go to both sides.
 	// The push has to happen after the order is assigned.
 	if !isLeft {
-		err := processBoolExpr(join.On, lsyms)
+		err := processBoolExpr(join.On, lsyms, sqlparser.WhereStr)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -452,6 +462,12 @@ func mergeRoutes(lRoute *routeBuilder, lsyms *symtab, rRoute *routeBuilder, rsym
 		return nil, nil, err
 	}
 	for _, filter := range splitAndExpression(nil, join.On) {
+		// If VTGate evolves, this section should be rewritten
+		// to use processBoolExpr.
+		_, err = findRoute(filter, lsyms)
+		if err != nil {
+			return nil, nil, err
+		}
 		updateRoute(lRoute, lsyms, filter)
 	}
 	return lRoute, lsyms, nil

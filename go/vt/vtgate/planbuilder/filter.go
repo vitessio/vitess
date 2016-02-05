@@ -10,17 +10,10 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func processWhere(where *sqlparser.Where, syms *symtab) error {
-	if where == nil {
-		return nil
-	}
-	return processBoolExpr(where.Expr, syms)
-}
-
-func processBoolExpr(boolExpr sqlparser.BoolExpr, syms *symtab) error {
+func processBoolExpr(boolExpr sqlparser.BoolExpr, syms *symtab, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	for _, filter := range filters {
-		err := processFilter(filter, syms)
+		err := processFilter(filter, syms, whereType)
 		if err != nil {
 			return err
 		}
@@ -28,7 +21,7 @@ func processBoolExpr(boolExpr sqlparser.BoolExpr, syms *symtab) error {
 	return nil
 }
 
-func processFilter(filter sqlparser.BoolExpr, syms *symtab) error {
+func processFilter(filter sqlparser.BoolExpr, syms *symtab, whereType string) error {
 	route, err := findRoute(filter, syms)
 	if err != nil {
 		return err
@@ -37,7 +30,12 @@ func processFilter(filter sqlparser.BoolExpr, syms *symtab) error {
 		// TODO(sougou): improve error.
 		return errors.New("cannot push where clause into a LEFT JOIN route")
 	}
-	route.Select.AddWhere(filter)
+	switch whereType {
+	case sqlparser.WhereStr:
+		route.Select.AddWhere(filter)
+	case sqlparser.HavingStr:
+		route.Select.AddHaving(filter)
+	}
 	updateRoute(route, syms, filter)
 	return nil
 }
