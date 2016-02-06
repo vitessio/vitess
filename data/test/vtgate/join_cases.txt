@@ -117,7 +117,6 @@
 # Left join , multi-chunk
 "select * from user left join main1 on a = b"
 {
-  "IsLeft": true,
   "LeftOrder": 1,
   "RightOrder": 2,
   "Left": {
@@ -143,7 +142,9 @@
       }
     }
   },
-  "Join": {}
+  "Join": {
+    "IsLeft": true
+  }
 }
 
 # Straight-join

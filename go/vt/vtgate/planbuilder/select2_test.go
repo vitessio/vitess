@@ -17,7 +17,7 @@ func TestSelectList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for tcase := range iterateExecFile("select_list_cases.txt") {
+	for tcase := range iterateExecFile("select2_cases.txt") {
 		statement, err := sqlparser.Parse(tcase.input)
 		if err != nil {
 			t.Error(err)

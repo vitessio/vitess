@@ -43,8 +43,6 @@ type planBuilder interface {
 // operation.
 // TODO(sougou): struct is incomplete.
 type joinBuilder struct {
-	// IsLeft is true if the operation is a left join.
-	IsLeft                bool
 	LeftOrder, RightOrder int
 	// Left and Right are the nodes for the join.
 	Left, Right planBuilder
@@ -62,24 +60,27 @@ func (jb *joinBuilder) Order() int {
 // cannot be used to reconstruct a joinBuilder.
 func (jb *joinBuilder) MarshalJSON() ([]byte, error) {
 	marshalJoin := struct {
-		IsLeft      bool `json:",omitempty"`
 		LeftOrder   int
 		RightOrder  int
 		Left, Right planBuilder
 		Join        *Join
 	}{
-		IsLeft:     jb.IsLeft,
 		LeftOrder:  jb.LeftOrder,
 		RightOrder: jb.RightOrder,
 		Left:       jb.Left,
 		Right:      jb.Right,
-		Join:       jb.Join,
+		Join: &Join{
+			IsLeft:    jb.Join.IsLeft,
+			LeftCols:  jb.Join.LeftCols,
+			RightCols: jb.Join.RightCols,
+		},
 	}
 	return json.Marshal(marshalJoin)
 }
 
 // Join is the join plan.
 type Join struct {
+	IsLeft              bool        `json:",omitempty"`
 	Left, Right         interface{} `json:",omitempty"`
 	LeftCols, RightCols []int       `json:",omitempty"`
 }
@@ -254,20 +255,20 @@ func prettyValue(value interface{}) string {
 
 // buildSelectPlan2 is the new function to build a Select plan.
 // TODO(sougou): rename after deprecating old one.
-func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (planBuilder, error) {
-	plan, _, err := processQuery(sel, schema, nil)
+func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (plan interface{}, err error) {
+	builder, _, err := processSelect(sel, schema, nil)
 	if err != nil {
 		return nil, err
 	}
-	newGenerator().Generate(plan)
+	newGenerator().Generate(builder)
 	if err != nil {
 		return nil, err
 	}
-	return plan, nil
+	return getUnderlyingPlan(builder), nil
 }
 
 // processQuery builds a plan for the given query or subquery.
-func processQuery(sel *sqlparser.Select, schema *Schema, outer *symtab) (planBuilder, *symtab, error) {
+func processSelect(sel *sqlparser.Select, schema *Schema, outer *symtab) (planBuilder, *symtab, error) {
 	plan, syms, err := processTableExprs(sel.From, schema)
 	if err != nil {
 		return nil, nil, err
@@ -455,13 +456,26 @@ func makejoinBuilder(lplan planBuilder, lsyms *symtab, rplan planBuilder, rsyms 
 		}
 	}
 	return &joinBuilder{
-		IsLeft:     isLeft,
 		LeftOrder:  lplan.Order(),
 		RightOrder: rplan.Order(),
 		Left:       lplan,
 		Right:      rplan,
-		Join:       &Join{},
+		Join: &Join{
+			IsLeft: isLeft,
+			Left:   getUnderlyingPlan(lplan),
+			Right:  getUnderlyingPlan(rplan),
+		},
 	}, lsyms, nil
+}
+
+func getUnderlyingPlan(plan planBuilder) interface{} {
+	switch plan := plan.(type) {
+	case *joinBuilder:
+		return plan.Join
+	case *routeBuilder:
+		return plan.Route
+	}
+	panic("unreachable")
 }
 
 // assignOrder sets the order for the nodes of the tree based on the

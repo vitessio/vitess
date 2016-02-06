@@ -29,7 +29,7 @@ func findRoute(expr sqlparser.Expr, syms *symtab) (route *routeBuilder, err erro
 			if !ok {
 				return false, errors.New("complex selects not allowd in subqueries")
 			}
-			subplan, subsyms, err := processQuery(sel, syms.Schema, syms)
+			subplan, subsyms, err := processSelect(sel, syms.Schema, syms)
 			if err != nil {
 				return false, err
 			}
