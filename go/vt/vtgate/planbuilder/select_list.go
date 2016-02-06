@@ -95,7 +95,7 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, syms *symtab) ([]*colsy
 			}
 			colsyms[i].Vindex = syms.Vindex(col, colsyms[i].Route, true)
 			if _, isLocal, _ := syms.Find(col, true); isLocal {
-				colsyms[i].Underlying = *col
+				colsyms[i].Underlying = col
 			}
 		}
 	}
@@ -109,12 +109,10 @@ func pushSelect(selectExpr sqlparser.SelectExpr, plan planBuilder, colsym *colsy
 		if routeNumber <= plan.LeftOrder {
 			pushSelect(selectExpr, plan.Left, colsym)
 			plan.Join.LeftCols = append(plan.Join.LeftCols, plan.Join.Len())
-			plan.LColsym = append(plan.LColsym, colsym)
 			return
 		}
 		pushSelect(selectExpr, plan.Right, colsym)
 		plan.Join.RightCols = append(plan.Join.RightCols, plan.Join.Len())
-		plan.RColsym = append(plan.RColsym, colsym)
 	case *routeBuilder:
 		if routeNumber != plan.Order() {
 			// TODO(sougou): remove after testing

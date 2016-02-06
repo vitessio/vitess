@@ -47,8 +47,7 @@ type joinBuilder struct {
 	IsLeft                bool
 	LeftOrder, RightOrder int
 	// Left and Right are the nodes for the join.
-	Left, Right      planBuilder
-	LColsym, RColsym []*colsym
+	Left, Right planBuilder
 	// Join is the join plan.
 	Join *Join
 }
@@ -116,6 +115,43 @@ func (rtb *routeBuilder) Order() int {
 	return rtb.order
 }
 
+func (rtb *routeBuilder) SupplyJoinVar(col *sqlparser.ColName, varname string) {
+	switch meta := col.Metadata.(type) {
+	case *colsym:
+		for i, colsym := range rtb.Colsym {
+			if meta == colsym {
+				rtb.Route.SupplyVars[varname] = i
+				return
+			}
+		}
+		panic("unexpected")
+	case *tableAlias:
+		for i, colsym := range rtb.Colsym {
+			if colsym.Underlying != nil {
+				if colsym.Underlying.Metadata == col.Metadata && colsym.Underlying.Name == col.Name {
+					rtb.Route.SupplyVars[varname] = i
+					return
+				}
+			}
+		}
+		rtb.Route.SupplyVars[varname] = len(rtb.Colsym)
+		rtb.Colsym = append(rtb.Colsym, &colsym{
+			Alias:      sqlparser.SQLName(sqlparser.String(col)),
+			Underlying: col,
+		})
+		rtb.Select.SelectExprs = append(
+			rtb.Select.SelectExprs,
+			&sqlparser.NonStarExpr{
+				Expr: &sqlparser.ColName{
+					Metadata:  col.Metadata,
+					Qualifier: meta.Alias,
+					Name:      col.Name,
+				},
+			},
+		)
+	}
+}
+
 // MarshalJSON marshals routeBuilder into a readable form.
 // It's used for testing and diagnostics. The representation
 // cannot be used to reconstruct a routeBuilder.
@@ -151,6 +187,7 @@ func (rtb *routeBuilder) IsSingle() bool {
 type Route struct {
 	// PlanID will be one of the Select IDs from PlanID.
 	PlanID PlanID
+	Query  string
 	// Keypsace represents the keyspace to which
 	// the query will be sent.
 	Keyspace *Keyspace
@@ -162,7 +199,9 @@ type Route struct {
 	// to compute the target shard(s) where the query must
 	// be sent.
 	// TODO(sougou): explain contents of Values.
-	Values interface{}
+	Values     interface{}
+	UseVars    map[string]struct{}
+	SupplyVars map[string]int
 }
 
 // MarshalJSON marshals Route into a readable form.
@@ -174,15 +213,21 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		vindexName = rt.Vindex.String()
 	}
 	marshalRoute := struct {
-		PlanID   PlanID    `json:",omitempty"`
-		Keyspace *Keyspace `json:",omitempty"`
-		Vindex   string    `json:",omitempty"`
-		Values   string    `json:",omitempty"`
+		PlanID     PlanID              `json:",omitempty"`
+		Query      string              `json:",omitempty"`
+		Keyspace   *Keyspace           `json:",omitempty"`
+		Vindex     string              `json:",omitempty"`
+		Values     string              `json:",omitempty"`
+		UseVars    map[string]struct{} `json:",omitempty"`
+		SupplyVars map[string]int      `json:",omitempty"`
 	}{
-		PlanID:   rt.PlanID,
-		Keyspace: rt.Keyspace,
-		Vindex:   vindexName,
-		Values:   prettyValue(rt.Values),
+		PlanID:     rt.PlanID,
+		Query:      rt.Query,
+		Keyspace:   rt.Keyspace,
+		Vindex:     vindexName,
+		Values:     prettyValue(rt.Values),
+		UseVars:    rt.UseVars,
+		SupplyVars: rt.SupplyVars,
 	}
 	return json.Marshal(marshalRoute)
 }
@@ -315,13 +360,17 @@ func getTablePlan(tableName *sqlparser.TableName, schema *Schema) (*Route, *Tabl
 	}
 	if table.Keyspace.Sharded {
 		return &Route{
-			PlanID:   SelectScatter,
-			Keyspace: table.Keyspace,
+			PlanID:     SelectScatter,
+			Keyspace:   table.Keyspace,
+			UseVars:    make(map[string]struct{}),
+			SupplyVars: make(map[string]int),
 		}, table, nil
 	}
 	return &Route{
-		PlanID:   SelectUnsharded,
-		Keyspace: table.Keyspace,
+		PlanID:     SelectUnsharded,
+		Keyspace:   table.Keyspace,
+		UseVars:    make(map[string]struct{}),
+		SupplyVars: make(map[string]int),
 	}, table, nil
 }
 

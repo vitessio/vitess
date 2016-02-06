@@ -48,6 +48,7 @@ func findRoute(expr sqlparser.Expr, syms *symtab) (route *routeBuilder, err erro
 			}
 			subroutes = append(subroutes, subroute)
 			subsymslist = append(subsymslist, subsyms)
+			return false, nil
 		}
 		return true, nil
 	}, expr)

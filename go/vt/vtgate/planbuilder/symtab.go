@@ -24,10 +24,10 @@ type symtab struct {
 // colsym contains symbol info about a select expression.
 type colsym struct {
 	Alias      sqlparser.SQLName
-	Underlying sqlparser.ColName
 	Route      *routeBuilder
-	Vindex     Vindex
 	Symtab     *symtab
+	Underlying *sqlparser.ColName
+	Vindex     Vindex
 }
 
 func newColsym(st *symtab) *colsym {
@@ -41,17 +41,14 @@ func newColsym(st *symtab) *colsym {
 // It represnts a table alias in a FROM clause.
 // TODO(sougou): Update comments after the struct is finalized.
 type tableAlias struct {
-	// Name represents the name of the alias.
-	Name sqlparser.SQLName
+	Alias  sqlparser.SQLName
+	Route  *routeBuilder
+	Symtab *symtab
 	// Keyspace points to the keyspace to which this
 	// alias belongs.
 	Keyspace *Keyspace
 	// CoVindexes is the list of column Vindexes for this alias.
 	ColVindexes []*ColVindex
-	// Route points to the routeBuilder object under which this alias
-	// was created.
-	Route  *routeBuilder
-	Symtab *symtab
 }
 
 // FindVindex returns the vindex if one was found for the column.
@@ -72,11 +69,11 @@ func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder, schem
 		Schema:     schema,
 	}
 	st.tables = []*tableAlias{{
-		Name:        alias,
-		Keyspace:    table.Keyspace,
-		ColVindexes: table.ColVindexes,
+		Alias:       alias,
 		Route:       route,
 		Symtab:      st,
+		Keyspace:    table.Keyspace,
+		ColVindexes: table.ColVindexes,
 	}}
 	return st
 }
@@ -86,7 +83,7 @@ func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder, schem
 // will belong to different routes
 func (st *symtab) Add(newsyms *symtab) error {
 	for _, t := range newsyms.tables {
-		if found := st.findTable(t.Name); found != nil {
+		if found := st.findTable(t.Alias); found != nil {
 			return errors.New("duplicate symbols")
 		}
 		t.Symtab = st
@@ -97,7 +94,7 @@ func (st *symtab) Add(newsyms *symtab) error {
 
 func (st *symtab) findTable(alias sqlparser.SQLName) *tableAlias {
 	for i, t := range st.tables {
-		if t.Name == alias {
+		if t.Alias == alias {
 			return st.tables[i]
 		}
 	}
@@ -111,7 +108,7 @@ func (st *symtab) Merge(newsyms *symtab, route *routeBuilder) error {
 		t.Route = route
 	}
 	for _, t := range newsyms.tables {
-		if found := st.findTable(t.Name); found != nil {
+		if found := st.findTable(t.Alias); found != nil {
 			return errors.New("duplicate symbols")
 		}
 		t.Route = route
@@ -130,22 +127,25 @@ func (st *symtab) SetRHS() {
 	}
 }
 
-// Find identifies the table referenced in the column expression.
+// Find returns the routeBuilder for the symbol referenced by col.
 // If a reference is found, the column's Metadata is set to point
 // it. Subsequent searches will reuse this meatadata.
-// Find also returns the ColVindex if one exists for the column.
-// If a scope is specified, then the search is done only within
-// that route builder's scope. Otherwise, it's the global scope.
 // If autoResolve is true, and there is only one table in the symbol table,
 // then an unqualified reference is assumed to be implicitly against
 // that table. The table info doesn't contain the full list of columns.
-// So, any column reference is presumed valid until execution time.
+// So, any column reference is presumed valid. If a Colsyms scope is
+// present, then the table scope is not searched. If a symbol is found
+// in the current symtab, then isLocal is set to true. Otherwise, the
+// search is continued in the outer symtab. If so, isLocal will be set
+// to false. If the symbol was not found, an error is returned.
+// isLocal must be checked before you can push-down (or pull-out)
+// a construct.
 func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBuilder, isLocal bool, err error) {
-	switch meta := col.Metadata.(type) {
+	switch m := col.Metadata.(type) {
 	case *colsym:
-		return meta.Route, meta.Symtab == st, nil
+		return m.Route, m.Symtab == st, nil
 	case *tableAlias:
-		return meta.Route, meta.Symtab == st, nil
+		return m.Route, m.Symtab == st, nil
 	}
 	if len(st.Colsyms) != 0 {
 		name := sqlparser.SQLName(sqlparser.String(col))
@@ -169,7 +169,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 			return nil, false, errors.New("symbol not found")
 		}
 		for _, t := range st.tables {
-			qualifier = t.Name
+			qualifier = t.Alias
 			break
 		}
 	}
