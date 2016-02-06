@@ -5,6 +5,7 @@
 package planbuilder
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -27,9 +28,10 @@ func newGenerator() *generator {
 	}
 }
 
-func (gen *generator) Generate(plan planBuilder) {
+func (gen *generator) Generate(plan planBuilder) error {
 	gen.wireup(plan)
-	gen.generateQueries(plan)
+	gen.fixupSelect(plan)
+	return gen.generateQueries(plan)
 }
 
 func (gen *generator) wireup(plan planBuilder) {
@@ -42,13 +44,45 @@ func (gen *generator) wireup(plan planBuilder) {
 	}
 }
 
-func (gen *generator) generateQueries(plan planBuilder) {
+func (gen *generator) generateQueries(plan planBuilder) error {
 	switch plan := plan.(type) {
 	case *joinBuilder:
-		gen.generateQueries(plan.Left)
-		gen.generateQueries(plan.Right)
+		err := gen.generateQueries(plan.Left)
+		if err != nil {
+			return err
+		}
+		return gen.generateQueries(plan.Right)
 	case *routeBuilder:
-		gen.generateQuery(plan)
+		return gen.generateQuery(plan)
+	}
+	return nil
+}
+
+func (gen *generator) fixupSelect(plan planBuilder) {
+	switch plan := plan.(type) {
+	case *joinBuilder:
+		gen.fixupSelect(plan.Left)
+		gen.fixupSelect(plan.Right)
+	case *routeBuilder:
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			switch node := node.(type) {
+			case *sqlparser.Select:
+				if len(node.SelectExprs) == 0 {
+					node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
+						&sqlparser.NonStarExpr{
+							Expr: sqlparser.NumVal([]byte{'1'}),
+						},
+					})
+				}
+			case *sqlparser.ComparisonExpr:
+				if node.Operator == sqlparser.EqualStr {
+					if exprIsValue(node.Left, plan) && !exprIsValue(node.Right, plan) {
+						node.Left, node.Right = node.Right, node.Left
+					}
+				}
+			}
+			return true, nil
+		}, &plan.Select)
 	}
 }
 
@@ -110,8 +144,32 @@ func (gen *generator) join(fromRoute *routeBuilder, col *sqlparser.ColName, toRo
 	toRoute.Route.UseVars[joinVar] = struct{}{}
 }
 
-func (gen *generator) generateQuery(route *routeBuilder) {
-	buf := sqlparser.NewTrackedBuffer(func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+func (gen *generator) generateQuery(route *routeBuilder) error {
+	var err error
+	switch vals := route.Route.Values.(type) {
+	case *sqlparser.ComparisonExpr:
+		// It's an IN clause.
+		route.Route.Values, err = gen.convert(route, vals.Right)
+		if err != nil {
+			return err
+		}
+		vals.Right = sqlparser.ListArg("::" + ListVarName)
+	default:
+		route.Route.Values, err = gen.convert(route, vals)
+		if err != nil {
+			return err
+		}
+	}
+	query, err := gen.convert(route, &route.Select)
+	if err != nil {
+		return err
+	}
+	route.Route.Query = query.(string)
+	return nil
+}
+
+func (gen *generator) convert(route *routeBuilder, val interface{}) (interface{}, error) {
+	varFormatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			fromRoute, joinVar := gen.lookup(node)
@@ -121,7 +179,41 @@ func (gen *generator) generateQuery(route *routeBuilder) {
 			}
 		}
 		node.Format(buf)
-	})
-	route.Select.Format(buf)
-	route.Route.Query = buf.ParsedQuery().Query
+	}
+	buf := sqlparser.NewTrackedBuffer(varFormatter)
+	switch val := val.(type) {
+	case nil:
+		return nil, nil
+	case *sqlparser.Select, *sqlparser.ColName:
+		varFormatter(buf, val.(sqlparser.SQLNode))
+		return buf.ParsedQuery().Query, nil
+	case sqlparser.ValTuple:
+		vals := make([]interface{}, 0, len(val))
+		for _, val := range val {
+			v, err := gen.convert(route, val)
+			if err != nil {
+				return nil, err
+			}
+			vals = append(vals, v)
+		}
+		return vals, nil
+	case sqlparser.ValArg:
+		return string(val), nil
+	case sqlparser.ListArg:
+		return string(val), nil
+	case sqlparser.StrVal:
+		return []byte(val), nil
+	case sqlparser.NumVal:
+		numVal := string(val)
+		signed, err := strconv.ParseInt(numVal, 0, 64)
+		if err == nil {
+			return signed, nil
+		}
+		unsigned, err := strconv.ParseUint(numVal, 0, 64)
+		if err == nil {
+			return unsigned, nil
+		}
+		return nil, err
+	}
+	return nil, errors.New("unrecognized symbol")
 }

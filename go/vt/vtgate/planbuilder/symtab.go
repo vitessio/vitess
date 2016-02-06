@@ -216,22 +216,6 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve b
 	return nil
 }
 
-// IsValue returns true if the expression can be treated as a value
-// for the current route. External references are treated as value.
-func (st *symtab) IsValue(expr sqlparser.ValExpr, scope *routeBuilder) bool {
-	switch node := expr.(type) {
-	case *sqlparser.ColName:
-		// If route is in scope, it's a local column ref, not a value.
-		if route, _, _ := st.Find(node, true); route != nil {
-			return route != scope
-		}
-		return true
-	case sqlparser.ValArg, sqlparser.StrVal, sqlparser.NumVal:
-		return true
-	}
-	return false
-}
-
 // Reroute re-points the specified route to the new one.
 func (st *symtab) Reroute(o, n *routeBuilder) {
 	for _, t := range st.tables {

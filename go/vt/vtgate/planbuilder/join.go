@@ -80,9 +80,8 @@ func (jb *joinBuilder) MarshalJSON() ([]byte, error) {
 
 // Join is the join plan.
 type Join struct {
-	Left, Right         interface{}    `json:",omitempty"`
-	LeftCols, RightCols []int          `json:",omitempty"`
-	Vars                map[string]int `json:",omitempty"`
+	Left, Right         interface{} `json:",omitempty"`
+	LeftCols, RightCols []int       `json:",omitempty"`
 }
 
 // Len returns the number of columns in the join
@@ -255,7 +254,20 @@ func prettyValue(value interface{}) string {
 
 // buildSelectPlan2 is the new function to build a Select plan.
 // TODO(sougou): rename after deprecating old one.
-func buildSelectPlan2(sel *sqlparser.Select, schema *Schema, outer *symtab) (planBuilder, *symtab, error) {
+func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (planBuilder, error) {
+	plan, _, err := processQuery(sel, schema, nil)
+	if err != nil {
+		return nil, err
+	}
+	newGenerator().Generate(plan)
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
+}
+
+// processQuery builds a plan for the given query or subquery.
+func processQuery(sel *sqlparser.Select, schema *Schema, outer *symtab) (planBuilder, *symtab, error) {
 	plan, syms, err := processTableExprs(sel.From, schema)
 	if err != nil {
 		return nil, nil, err
@@ -285,6 +297,7 @@ func buildSelectPlan2(sel *sqlparser.Select, schema *Schema, outer *symtab) (pla
 	if err != nil {
 		return nil, nil, err
 	}
+	processMisc(sel, plan)
 	return plan, syms, nil
 }
 

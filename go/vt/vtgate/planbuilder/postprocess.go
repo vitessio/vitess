@@ -113,3 +113,14 @@ func processLimit(limit *sqlparser.Limit, plan planBuilder) error {
 	route.Select.Limit = limit
 	return nil
 }
+
+func processMisc(sel *sqlparser.Select, plan planBuilder) {
+	switch plan := plan.(type) {
+	case *joinBuilder:
+		processMisc(sel, plan.Left)
+		processMisc(sel, plan.Right)
+	case *routeBuilder:
+		plan.Select.Comments = sel.Comments
+		plan.Select.Lock = sel.Lock
+	}
+}

@@ -100,7 +100,7 @@ func computeEqualPlan(route *routeBuilder, syms *symtab, comparison *sqlparser.C
 			return SelectScatter, nil, nil
 		}
 	}
-	if !syms.IsValue(right, route) {
+	if !exprIsValue(right, route) {
 		return SelectScatter, nil, nil
 	}
 	if IsUnique(vindex) {
@@ -117,7 +117,7 @@ func computeINPlan(route *routeBuilder, syms *symtab, comparison *sqlparser.Comp
 	switch node := comparison.Right.(type) {
 	case sqlparser.ValTuple:
 		for _, n := range node {
-			if !syms.IsValue(n, route) {
+			if !exprIsValue(n, route) {
 				return SelectScatter, nil, nil
 			}
 		}

@@ -29,7 +29,7 @@ func findRoute(expr sqlparser.Expr, syms *symtab) (route *routeBuilder, err erro
 			if !ok {
 				return false, errors.New("complex selects not allowd in subqueries")
 			}
-			subplan, subsyms, err := buildSelectPlan2(sel, syms.Schema, syms)
+			subplan, subsyms, err := processQuery(sel, syms.Schema, syms)
 			if err != nil {
 				return false, err
 			}
@@ -87,4 +87,22 @@ func subqueryCanMerge(outer, inner *routeBuilder, outersyms *symtab) error {
 		}
 	}
 	return nil
+}
+
+// colIsValue returns true if the expression can be treated as a value
+// for the current route. External references are treated as value.
+func exprIsValue(expr sqlparser.ValExpr, route *routeBuilder) bool {
+	switch node := expr.(type) {
+	case *sqlparser.ColName:
+		switch meta := node.Metadata.(type) {
+		case *colsym:
+			return meta.Route != route
+		case *tableAlias:
+			return meta.Route != route
+		}
+		panic("unreachable")
+	case sqlparser.ValArg, sqlparser.StrVal, sqlparser.NumVal:
+		return true
+	}
+	return false
 }

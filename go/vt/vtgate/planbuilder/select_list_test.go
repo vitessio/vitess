@@ -28,7 +28,7 @@ func TestSelectList(t *testing.T) {
 			t.Errorf("unexpected type: %T", statement)
 			continue
 		}
-		plan, _, err := buildSelectPlan2(sel, schema, nil)
+		plan, err := buildSelectPlan2(sel, schema)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -39,7 +39,7 @@ func TestSelectList(t *testing.T) {
 		}
 		out := string(bout)
 		if out != tcase.output {
-			t.Errorf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out)
+			t.Errorf("Line:%v: %s\n%s\n%s", tcase.lineno, tcase.input, tcase.output, out)
 			// Comment these line out to see the expected outputs
 			bout, err = json.MarshalIndent(plan, "", "  ")
 			fmt.Printf("%s\n", bout)

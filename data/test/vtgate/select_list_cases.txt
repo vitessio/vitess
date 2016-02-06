@@ -5,6 +5,7 @@
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
+    "Query": "select 1 from user",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -18,10 +19,11 @@
   "LeftOrder": 1,
   "RightOrder": 2,
   "Left": {
-    "Select": "select  from user",
+    "Select": "select 1 from user",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select 1 from user",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -33,6 +35,7 @@
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user_extra.id from user_extra",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -56,6 +59,7 @@
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user.col from user",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -67,6 +71,7 @@
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user_extra.id from user_extra",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -93,6 +98,7 @@
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user.col from user",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -104,6 +110,7 @@
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user_extra.id + user_extra.col from user_extra",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -130,6 +137,7 @@
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user.col, user.col2 from user",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -141,6 +149,7 @@
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user_extra.id from user_extra",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -165,6 +174,7 @@
   "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
+    "Query": "select count(*), col from main1",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -179,6 +189,7 @@
   "Order": 1,
   "Route": {
     "PlanID": "SelectEqualUnique",
+    "Query": "select count(*), col from user where id = 1",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -195,6 +206,7 @@
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
+    "Query": "select count(*), id from user",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -209,6 +221,7 @@
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
+    "Query": "select fun(1), col from user",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -223,6 +236,7 @@
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
+    "Query": "select distinct col, id from user",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -237,6 +251,7 @@
   "Order": 1,
   "Route": {
     "PlanID": "SelectUnsharded",
+    "Query": "select col1, col2 from main1 group by col2",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -251,6 +266,7 @@
   "Order": 1,
   "Route": {
     "PlanID": "SelectEqualUnique",
+    "Query": "select col1, col2 from user where id = 1 group by col2",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -267,6 +283,7 @@
   "Order": 1,
   "Route": {
     "PlanID": "SelectScatter",
+    "Query": "select col1, id from user group by id",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -284,6 +301,7 @@
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user.col1 as a, user.col2 from user having 1 = 1 and a = 1 and a = user.col2",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -295,6 +313,7 @@
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user_extra.col3 from user_extra having user_extra.col3 = 1",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -322,6 +341,7 @@
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user.col1 as a, user.col2 from user order by a asc, user.col2 desc",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -333,6 +353,7 @@
     "Order": 2,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user_extra.col3 from user_extra order by user_extra.col3 asc",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -357,6 +378,7 @@
   "Order": 1,
   "Route": {
     "PlanID": "SelectEqualUnique",
+    "Query": "select col1 from user where id = 1 limit 1",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -367,32 +389,40 @@
 }
 
 # subquery
-"select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id=5"
+"select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)"
 {
   "LeftOrder": 1,
   "RightOrder": 2,
   "Left": {
-    "Select": "select  from user_extra",
+    "Select": "select user_extra.col from user_extra",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
+      "Query": "select user_extra.col from user_extra",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
+      },
+      "SupplyVars": {
+        "col": 0
       }
     }
   },
   "Right": {
-    "Select": "select u.m from user as u where u.id in (select m2 from user where user.id = u.id) and u.id = 5",
+    "Select": "select u.m from user as u where u.id in (select m2 from user where user.id = u.id and user.col = user_extra.col) and u.id in ::_vals",
     "Order": 2,
     "Route": {
-      "PlanID": "SelectEqualUnique",
+      "PlanID": "SelectIN",
+      "Query": "select u.m from user as u where u.id in (select m2 from user where user.id = u.id and user.col = :col) and u.id in ::_vals",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
       },
       "Vindex": "user_index",
-      "Values": "5"
+      "Values": "[:col 1]",
+      "UseVars": {
+        "col": {}
+      }
     }
   },
   "Join": {
