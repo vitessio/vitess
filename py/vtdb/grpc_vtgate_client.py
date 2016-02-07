@@ -43,10 +43,8 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
   """
 
   def __init__(self, addr, timeout):
-    self.addr = addr
-    self.timeout = timeout
+    super(GRPCVTGateConnection, self).__init__(addr, timeout)
     self.stub = None
-    self.session = None
     self.logger_object = vtdb_logger.get_logger()
 
   def dial(self):
@@ -128,25 +126,23 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       routing_kwargs = {}
       exec_method = None
 
-      if entity_keyspace_id_map is not None:
-        routing_kwargs['entity_keyspace_id_map'] = entity_keyspace_id_map
-        routing_kwargs['entity_column_name'] = entity_column_name
-        exec_method = 'ExecuteEntityIds'
+      if shards is not None:
+        routing_kwargs['shards'] = shards
+        exec_method = 'ExecuteShards'
         sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
 
-        request = vtgate_pb2.ExecuteEntityIdsRequest(
+        request = vtgate_pb2.ExecuteShardsRequest(
             query=query_pb2.BoundQuery(sql=sql),
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
             keyspace=keyspace_name,
-            entity_column_name=entity_column_name,
             not_in_transaction=not_in_transaction,
         )
         _add_caller_id(request, effective_caller_id)
         self._add_session(request)
+        request.shards.extend(shards)
         _convert_bind_vars(bind_variables, request.query.bind_variables)
-        _convert_entity_ids(entity_keyspace_id_map, request.entity_keyspace_ids)
 
-        response = self.stub.ExecuteEntityIds(request, self.timeout)
+        response = self.stub.ExecuteShards(request, self.timeout)
 
       elif keyspace_ids is not None:
         routing_kwargs['keyspace_ids'] = keyspace_ids
@@ -183,6 +179,26 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
         _convert_bind_vars(bind_variables, request.query.bind_variables)
 
         response = self.stub.ExecuteKeyRanges(request, self.timeout)
+
+      elif entity_keyspace_id_map is not None:
+        routing_kwargs['entity_keyspace_id_map'] = entity_keyspace_id_map
+        routing_kwargs['entity_column_name'] = entity_column_name
+        exec_method = 'ExecuteEntityIds'
+        sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
+
+        request = vtgate_pb2.ExecuteEntityIdsRequest(
+            query=query_pb2.BoundQuery(sql=sql),
+            tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
+            keyspace=keyspace_name,
+            entity_column_name=entity_column_name,
+            not_in_transaction=not_in_transaction,
+        )
+        _add_caller_id(request, effective_caller_id)
+        self._add_session(request)
+        _convert_bind_vars(bind_variables, request.query.bind_variables)
+        _convert_entity_ids(entity_keyspace_id_map, request.entity_keyspace_ids)
+
+        response = self.stub.ExecuteEntityIds(request, self.timeout)
 
       else:
         exec_method = 'Execute'
@@ -273,14 +289,26 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _stream_execute(
-      self, sql, bind_variables, keyspace_name, tablet_type, keyspace_ids=None,
-      keyranges=None, not_in_transaction=False, effective_caller_id=None,
+      self, sql, bind_variables, keyspace_name, tablet_type,
+      shards=None, keyspace_ids=None, keyranges=None,
+      not_in_transaction=False, effective_caller_id=None,
       **kwargs):
 
     try:
       sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
 
-      if keyspace_ids is not None:
+      if shards is not None:
+        request = vtgate_pb2.StreamExecuteShardsRequest(
+            query=query_pb2.BoundQuery(sql=sql),
+            tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
+            keyspace=keyspace_name,
+        )
+        _add_caller_id(request, effective_caller_id)
+        request.shards.extend(shards)
+        _convert_bind_vars(bind_variables, request.query.bind_variables)
+        it = self.stub.StreamExecuteShards(request, self.timeout)
+
+      elif keyspace_ids is not None:
         request = vtgate_pb2.StreamExecuteKeyspaceIdsRequest(
             query=query_pb2.BoundQuery(sql=sql),
             tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),

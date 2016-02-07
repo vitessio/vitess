@@ -105,7 +105,7 @@ func newBinlogPlayerController(ts topo.Server, vtClientFactory func() binlogplay
 		dbName:            dbName,
 		sourceShard:       sourceShard,
 		binlogPlayerStats: binlogplayer.NewStats(),
-		healthCheck:       discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *healthcheckRetryDelay, *healthCheckTimeout),
+		healthCheck:       discovery.NewHealthCheck(*binlogplayer.BinlogPlayerConnTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */),
 	}
 	blc.shardReplicationWatcher = discovery.NewShardReplicationWatcher(ts, blc.healthCheck, cell, sourceShard.Keyspace, sourceShard.Shard, *healthCheckTopologyRefresh, 5)
 	return blc
@@ -235,6 +235,17 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		}
 	}()
 
+	// Check if the context is still good.
+	select {
+	case <-bpc.ctx.Done():
+		if bpc.ctx.Err() == context.Canceled {
+			// We were stopped. Break out of Loop().
+			return nil
+		}
+		return fmt.Errorf("giving up since the context is done: %v", bpc.ctx.Err())
+	default:
+	}
+
 	// Apply any special settings necessary for playback of binlogs.
 	// We do it on every iteration to be sure, in case MySQL was restarted.
 	if err := bpc.mysqld.EnableBinlogPlayback(); err != nil {
@@ -261,7 +272,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// wait for the endpoint set (usefull for the first run at least, fast for next runs)
-	if err := discovery.WaitForEndPoints(bpc.healthCheck, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
+	if err := discovery.WaitForEndPoints(bpc.ctx, bpc.healthCheck, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, []topodatapb.TabletType{topodatapb.TabletType_REPLICA}); err != nil {
 		return fmt.Errorf("error waiting for endpoints for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topodatapb.TabletType_REPLICA, err)
 	}
 

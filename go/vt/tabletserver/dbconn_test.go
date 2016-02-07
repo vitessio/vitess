@@ -67,12 +67,12 @@ func TestDBConnKill(t *testing.T) {
 	db.AddQuery(query, &sqltypes.Result{})
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
-	err = dbConn.Kill()
+	err = dbConn.Kill("test kill")
 	testUtils.checkTabletError(t, err, ErrFail, "Failed to get conn from dba pool")
 	db.DisableConnFail()
 
 	// Kill succeed
-	err = dbConn.Kill()
+	err = dbConn.Kill("test kill")
 	if err != nil {
 		t.Fatalf("kill should succeed, but got error: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestDBConnKill(t *testing.T) {
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errRejected)
-	err = dbConn.Kill()
+	err = dbConn.Kill("test kill")
 	testUtils.checkTabletError(t, err, ErrFail, "Could not kill query")
 
 }

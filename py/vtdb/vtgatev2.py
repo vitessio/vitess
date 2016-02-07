@@ -27,6 +27,37 @@ from vtdb import vtgate_cursor
 from vtdb import vtgate_utils
 
 
+def _create_v2_request_with_shards(
+    sql, new_binds, keyspace_name, tablet_type, shards,
+    not_in_transaction):
+  """Make a request dict from arguments.
+
+  Args:
+    sql: Str sql with format tokens.
+    new_binds: Dict of bind variables.
+    keyspace_name: Str keyspace name.
+    tablet_type: Str tablet_type.
+    shards: String list of shards.
+    not_in_transaction: Bool True if a transaction should not be started
+      (generally used when sql is not a write).
+
+  Returns:
+    A (str: value) dict.
+  """
+  # keyspace_ids are Keyspace Ids packed to byte[]
+  sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
+  new_binds = field_types.convert_bind_vars(new_binds)
+  req = {
+      'Sql': sql,
+      'BindVariables': new_binds,
+      'Keyspace': keyspace_name,
+      'TabletType': topodata_pb2.TabletType.Value(tablet_type.upper()),
+      'Shards': shards,
+      'NotInTransaction': not_in_transaction,
+  }
+  return req
+
+
 def _create_v2_request_with_keyspace_ids(
     sql, new_binds, keyspace_name, tablet_type, keyspace_ids,
     not_in_transaction):
@@ -121,13 +152,11 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
   def __init__(self, addr, timeout, user=None, password=None,
                keyfile=None, certfile=None):
-    self.session = None
-    self.addr = addr
+    super(VTGateConnection, self).__init__(addr, timeout)
     self.user = user
     self.password = password
     self.keyfile = keyfile
     self.certfile = certfile
-    self.timeout = timeout
     self.client = self._create_client()
     self.logger_object = vtdb_logger.get_logger()
 
@@ -245,7 +274,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _execute(
       self, sql, bind_variables, keyspace_name, tablet_type,
-      keyspace_ids=None, keyranges=None,
+      shards=None, keyspace_ids=None, keyranges=None,
       entity_keyspace_id_map=None, entity_column_name=None,
       not_in_transaction=False, effective_caller_id=None, **kwargs):
     """Execute query.
@@ -256,6 +285,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
         to sql %(format)s tokens.
       keyspace_name: Str name of keyspace.
       tablet_type: Str tablet type (e.g. master, rdonly, replica).
+      shards: list of shard names as strings.
       keyspace_ids: bytes list of keyspace ID lists.
       keyranges: KeyRange objects.
       entity_keyspace_id_map: (column value: bytes) map from a column
@@ -266,6 +296,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
         entity_keyspace_id_map.
       not_in_transaction: bool.
       effective_caller_id: CallerID object.
+      **kwargs: ignored??
 
     Returns:
       The (results, rowcount, lastrowid, fields) tuple.
@@ -277,7 +308,32 @@ class VTGateConnection(vtgate_client.VTGateClient):
     routing_kwargs = {}
     exec_method = None
     req = None
-    if entity_keyspace_id_map is not None:
+
+    if shards is not None:
+      routing_kwargs['shards'] = shards
+      req = _create_v2_request_with_shards(
+          sql, bind_variables, keyspace_name, tablet_type, shards,
+          not_in_transaction)
+      exec_method = 'VTGate.ExecuteShard'
+
+    elif keyspace_ids is not None:
+      if keyranges is not None:
+        raise dbexceptions.ProgrammingError(
+            '_execute called with keyspace_ids and keyranges both defined')
+      routing_kwargs['keyspace_ids'] = keyspace_ids
+      req = _create_v2_request_with_keyspace_ids(
+          sql, bind_variables, keyspace_name, tablet_type, keyspace_ids,
+          not_in_transaction)
+      exec_method = 'VTGate.ExecuteKeyspaceIds'
+
+    elif keyranges is not None:
+      routing_kwargs['keyranges'] = keyranges
+      req = _create_v2_request_with_keyranges(
+          sql, bind_variables, keyspace_name, tablet_type, keyranges,
+          not_in_transaction)
+      exec_method = 'VTGate.ExecuteKeyRanges'
+
+    elif entity_keyspace_id_map is not None:
       # This supercedes keyspace_ids and keyranges.
       routing_kwargs['entity_keyspace_id_map'] = entity_keyspace_id_map
       routing_kwargs['entity_column_name'] = entity_column_name
@@ -299,21 +355,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
           'NotInTransaction': not_in_transaction,
       }
       exec_method = 'VTGate.ExecuteEntityIds'
-    elif keyspace_ids is not None:
-      if keyranges is not None:
-        raise dbexceptions.ProgrammingError(
-            '_execute called with keyspace_ids and keyranges both defined')
-      routing_kwargs['keyspace_ids'] = keyspace_ids
-      req = _create_v2_request_with_keyspace_ids(
-          sql, bind_variables, keyspace_name, tablet_type, keyspace_ids,
-          not_in_transaction)
-      exec_method = 'VTGate.ExecuteKeyspaceIds'
-    elif keyranges is not None:
-      routing_kwargs['keyranges'] = keyranges
-      req = _create_v2_request_with_keyranges(
-          sql, bind_variables, keyspace_name, tablet_type, keyranges,
-          not_in_transaction)
-      exec_method = 'VTGate.ExecuteKeyRanges'
+
     else:
       req = _create_v3_request(
           sql, bind_variables, tablet_type, not_in_transaction)
@@ -360,6 +402,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       tablet_type: Str tablet type (e.g. master, rdonly replica).
       as_transaction: Bool True if in transaction.
       effective_caller_id: CallerID.
+      **kwargs: ignored??
 
     Returns:
       Rowset list.
@@ -452,8 +495,9 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _stream_execute(
-      self, sql, bind_variables, keyspace_name, tablet_type, keyspace_ids=None,
-      keyranges=None, not_in_transaction=False, effective_caller_id=None,
+      self, sql, bind_variables, keyspace_name, tablet_type,
+      shards=None, keyspace_ids=None, keyranges=None,
+      not_in_transaction=False, effective_caller_id=None,
       **kwargs):
     """Return a generator and the fields for the response.
 
@@ -465,10 +509,12 @@ class VTGateConnection(vtgate_client.VTGateClient):
       bind_variables: A (str: value) dict.
       keyspace_name: Str keyspace name.
       tablet_type: Str tablet_type.
+      shards: List of strings.
       keyspace_ids: List of uint64 or bytes keyspace_ids.
       keyranges: KeyRange objects.
       not_in_transaction: bool.
       effective_caller_id: CallerID.
+      **kwargs: ignored??
 
     Returns:
       Generator, fields pair.
@@ -478,20 +524,29 @@ class VTGateConnection(vtgate_client.VTGateClient):
     """
     exec_method = None
     req = None
-    if keyspace_ids is not None:
+
+    if shards is not None:
+      req = _create_v2_request_with_shards(
+          sql, bind_variables, keyspace_name, tablet_type, shards,
+          not_in_transaction)
+      exec_method = 'VTGate.StreamExecuteShard2'
+
+    elif keyspace_ids is not None:
       req = _create_v2_request_with_keyspace_ids(
           sql, bind_variables, keyspace_name, tablet_type, keyspace_ids,
           not_in_transaction)
       exec_method = 'VTGate.StreamExecuteKeyspaceIds2'
+
     elif keyranges is not None:
       req = _create_v2_request_with_keyranges(
           sql, bind_variables, keyspace_name, tablet_type, keyranges,
           not_in_transaction)
       exec_method = 'VTGate.StreamExecuteKeyRanges2'
+
     else:
       if keyspace_name:
         raise dbexceptions.ProgrammingError(
-            'keyspace_name should only be provided if keyspace_ids or '
+            'keyspace_name should only be provided if shards, keyspace_ids or '
             'keyranges is provided.')
       req = _create_v3_request(
           sql, bind_variables, tablet_type, not_in_transaction)

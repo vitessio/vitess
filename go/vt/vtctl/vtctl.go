@@ -110,6 +110,12 @@ var (
 	ErrUnknownCommand = errors.New("unknown command")
 )
 
+var (
+	healthCheckTopologyRefresh = flag.Duration("vtctl_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
+	healthcheckRetryDelay      = flag.Duration("vtctl_healthcheck_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck")
+	healthCheckTimeout         = flag.Duration("vtctl_healthcheck_timeout", time.Minute, "the health check timeout period")
+)
+
 type command struct {
 	name   string
 	method func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error
@@ -275,6 +281,11 @@ var commands = []commandGroup{
 			{"FindAllShardsInKeyspace", commandFindAllShardsInKeyspace,
 				"<keyspace>",
 				"Displays all of the shards in the specified keyspace."},
+			{"WaitForDrain", commandWaitForDrain,
+				"[-timeout <duration>] <keyspace/shard> <served tablet type>",
+				"Blocks until no new queries were observed on all tablets with the given tablet type in the specifed keyspace. " +
+					" This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes " +
+					" and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached."},
 		},
 	},
 	{
@@ -884,6 +895,37 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
+}
+
+func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	var cells flagutil.StringListValue
+	subFlags.Var(&cells, "cells", "Specifies a comma-separated list of cells to look for tablets")
+	timeout := subFlags.Duration("timeout", 0*time.Second, "Timeout after which the command fails")
+	retryDelay := subFlags.Duration("retry_delay", 1*time.Second, "Time to wait between two checks")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("The <keyspace/shard> and <tablet type> arguments are both required for the WaitForDrain command.")
+	}
+	if *timeout != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, *timeout)
+		defer cancel()
+	}
+
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	servedType, err := parseServingTabletType3(subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+
+	return wr.WaitForDrain(ctx, cells, keyspace, shard, servedType,
+		*retryDelay, *healthCheckTopologyRefresh, *healthcheckRetryDelay, *healthCheckTimeout)
 }
 
 func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
