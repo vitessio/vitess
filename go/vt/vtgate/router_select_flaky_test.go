@@ -19,12 +19,12 @@ import (
 func TestUnsharded(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 
-	_, err := routerExec(router, "select * from music_user_map where id = 1", nil)
+	_, err := routerExec(router, "select id from music_user_map where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql:           "select * from music_user_map where id = 1",
+		Sql:           "select id from music_user_map where id = 1",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -36,7 +36,7 @@ func TestUnsharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select * from music_user_map where id = 1",
+		Sql:           "select id from music_user_map where id = 1",
 		BindVariables: map[string]interface{}{},
 	}, {
 		Sql:           "update music_user_map set id = 1",
@@ -76,7 +76,7 @@ func TestUnsharded(t *testing.T) {
 func TestStreamUnsharded(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
-	sql := "select * from music_user_map where id = 1"
+	sql := "select id from music_user_map where id = 1"
 	result, err := routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
@@ -91,13 +91,13 @@ func TestUnshardedFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
 	getSandbox(KsTestUnsharded).SrvKeyspaceMustFail = 1
-	_, err := routerExec(router, "select * from music_user_map where id = 1", nil)
+	_, err := routerExec(router, "select id from music_user_map where id = 1", nil)
 	want := "paramsUnsharded: keyspace TestUnsharded fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	_, err = routerExec(router, "select * from sharded_table where id = 1", nil)
+	_, err = routerExec(router, "select id from sharded_table where id = 1", nil)
 	want = "unsharded keyspace TestBadSharding has multiple shards"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
@@ -108,7 +108,7 @@ func TestStreamUnshardedFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
 	getSandbox(KsTestUnsharded).SrvKeyspaceMustFail = 1
-	sql := "select * from music_user_map where id = 1"
+	sql := "select id from music_user_map where id = 1"
 	_, err := routerStream(router, sql)
 	want := "paramsUnsharded: keyspace TestUnsharded fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
@@ -126,14 +126,14 @@ func TestStreamUnshardedFail(t *testing.T) {
 func TestSelectBindvars(t *testing.T) {
 	router, sbc1, sbc2, _ := createRouterEnv()
 
-	_, err := routerExec(router, "select * from user where id = :id", map[string]interface{}{
+	_, err := routerExec(router, "select id from user where id = :id", map[string]interface{}{
 		"id": 1,
 	})
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql:           "select * from user where id = :id",
+		Sql:           "select id from user where id = :id",
 		BindVariables: map[string]interface{}{"id": 1},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -144,7 +144,7 @@ func TestSelectBindvars(t *testing.T) {
 	}
 	sbc1.Queries = nil
 
-	_, err = routerExec(router, "select * from user where name in (:name1, :name2)", map[string]interface{}{
+	_, err = routerExec(router, "select id from user where name in (:name1, :name2)", map[string]interface{}{
 		"name1": "foo1",
 		"name2": "foo2",
 	})
@@ -152,7 +152,7 @@ func TestSelectBindvars(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "select * from user where name in ::_vals",
+		Sql: "select id from user where name in ::_vals",
 		BindVariables: map[string]interface{}{
 			"name1": "foo1",
 			"name2": "foo2",
@@ -164,7 +164,7 @@ func TestSelectBindvars(t *testing.T) {
 	}
 	sbc1.Queries = nil
 
-	_, err = routerExec(router, "select * from user where name in (:name1, :name2)", map[string]interface{}{
+	_, err = routerExec(router, "select id from user where name in (:name1, :name2)", map[string]interface{}{
 		"name1": []byte("foo1"),
 		"name2": []byte("foo2"),
 	})
@@ -172,7 +172,7 @@ func TestSelectBindvars(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "select * from user where name in ::_vals",
+		Sql: "select id from user where name in ::_vals",
 		BindVariables: map[string]interface{}{
 			"name1": []byte("foo1"),
 			"name2": []byte("foo2"),
@@ -187,12 +187,12 @@ func TestSelectBindvars(t *testing.T) {
 func TestSelectEqual(t *testing.T) {
 	router, sbc1, sbc2, sbclookup := createRouterEnv()
 
-	_, err := routerExec(router, "select * from user where id = 1", nil)
+	_, err := routerExec(router, "select id from user where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql:           "select * from user where id = 1",
+		Sql:           "select id from user where id = 1",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -203,12 +203,12 @@ func TestSelectEqual(t *testing.T) {
 	}
 	sbc1.Queries = nil
 
-	_, err = routerExec(router, "select * from user where id = 3", nil)
+	_, err = routerExec(router, "select id from user where id = 3", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select * from user where id = 3",
+		Sql:           "select id from user where id = 3",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -222,12 +222,12 @@ func TestSelectEqual(t *testing.T) {
 	}
 	sbc2.Queries = nil
 
-	_, err = routerExec(router, "select * from user where id = '3'", nil)
+	_, err = routerExec(router, "select id from user where id = '3'", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select * from user where id = '3'",
+		Sql:           "select id from user where id = '3'",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -241,12 +241,12 @@ func TestSelectEqual(t *testing.T) {
 	}
 	sbc2.Queries = nil
 
-	_, err = routerExec(router, "select * from user where name = 'foo'", nil)
+	_, err = routerExec(router, "select id from user where name = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select * from user where name = 'foo'",
+		Sql:           "select id from user where name = 'foo'",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -267,7 +267,7 @@ func TestSelectEqualNotFound(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 
 	sbclookup.setResults([]*sqltypes.Result{{}})
-	result, err := routerExec(router, "select * from music where id = 1", nil)
+	result, err := routerExec(router, "select id from music where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -277,7 +277,7 @@ func TestSelectEqualNotFound(t *testing.T) {
 	}
 
 	sbclookup.setResults([]*sqltypes.Result{{}})
-	result, err = routerExec(router, "select * from user where name = 'foo'", nil)
+	result, err = routerExec(router, "select id from user where name = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -290,7 +290,7 @@ func TestSelectEqualNotFound(t *testing.T) {
 func TestStreamSelectEqual(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
-	sql := "select * from user where id = 1"
+	sql := "select id from user where id = 1"
 	result, err := routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
@@ -305,34 +305,34 @@ func TestSelectEqualFail(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 	s := getSandbox("TestRouter")
 
-	_, err := routerExec(router, "select * from user where id = (select count(*) from music)", nil)
-	want := "cannot route query: select * from user where id = (select count(*) from music): has subquery"
-	if err == nil || err.Error() != want {
-		t.Errorf("routerExec: %v, want %v", err, want)
+	_, err := routerExec(router, "select id from user where id = (select count(*) from music)", nil)
+	want := "cannot route query"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, must start with %v", err, want)
 	}
 
-	_, err = routerExec(router, "select * from user where id = :aa", nil)
+	_, err = routerExec(router, "select id from user where id = :aa", nil)
 	want = "paramsSelectEqual: could not find bind var :aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	s.SrvKeyspaceMustFail = 1
-	_, err = routerExec(router, "select * from user where id = 1", nil)
+	_, err = routerExec(router, "select id from user where id = 1", nil)
 	want = "paramsSelectEqual: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	sbclookup.mustFailServer = 1
-	_, err = routerExec(router, "select * from music where id = 1", nil)
+	_, err = routerExec(router, "select id from music where id = 1", nil)
 	want = "paramsSelectEqual: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	s.ShardSpec = "80-"
-	_, err = routerExec(router, "select * from user where id = 1", nil)
+	_, err = routerExec(router, "select id from user where id = 1", nil)
 	want = "paramsSelectEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
@@ -340,14 +340,14 @@ func TestSelectEqualFail(t *testing.T) {
 	s.ShardSpec = DefaultShardSpec
 
 	sbclookup.mustFailServer = 1
-	_, err = routerExec(router, "select * from user where name = 'foo'", nil)
+	_, err = routerExec(router, "select id from user where name = 'foo'", nil)
 	want = "paramsSelectEqual: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	s.ShardSpec = "80-"
-	_, err = routerExec(router, "select * from user where name = 'foo'", nil)
+	_, err = routerExec(router, "select id from user where name = 'foo'", nil)
 	want = "paramsSelectEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
@@ -358,12 +358,12 @@ func TestSelectEqualFail(t *testing.T) {
 func TestSelectIN(t *testing.T) {
 	router, sbc1, sbc2, sbclookup := createRouterEnv()
 
-	_, err := routerExec(router, "select * from user where id in (1)", nil)
+	_, err := routerExec(router, "select id from user where id in (1)", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "select * from user where id in ::_vals",
+		Sql: "select id from user where id in ::_vals",
 		BindVariables: map[string]interface{}{
 			"_vals": []interface{}{int64(1)},
 		},
@@ -376,12 +376,12 @@ func TestSelectIN(t *testing.T) {
 	}
 
 	sbc1.Queries = nil
-	_, err = routerExec(router, "select * from user where id in (1, 3)", nil)
+	_, err = routerExec(router, "select id from user where id in (1, 3)", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "select * from user where id in ::_vals",
+		Sql: "select id from user where id in ::_vals",
 		BindVariables: map[string]interface{}{
 			"_vals": []interface{}{int64(1)},
 		},
@@ -390,7 +390,7 @@ func TestSelectIN(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "select * from user where id in ::_vals",
+		Sql: "select id from user where id in ::_vals",
 		BindVariables: map[string]interface{}{
 			"_vals": []interface{}{int64(3)},
 		},
@@ -401,12 +401,12 @@ func TestSelectIN(t *testing.T) {
 
 	sbc1.Queries = nil
 	sbc2.Queries = nil
-	_, err = routerExec(router, "select * from user where name = 'foo'", nil)
+	_, err = routerExec(router, "select id from user where name = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select * from user where name = 'foo'",
+		Sql:           "select id from user where name = 'foo'",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -426,7 +426,7 @@ func TestSelectIN(t *testing.T) {
 func TestStreamSelectIN(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 
-	sql := "select * from user where id in (1)"
+	sql := "select id from user where id in (1)"
 	result, err := routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
@@ -436,7 +436,7 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	sql = "select * from user where id in (1, 3)"
+	sql = "select id from user where id in (1, 3)"
 	result, err = routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
@@ -453,7 +453,7 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	sql = "select * from user where name = 'foo'"
+	sql = "select id from user where name = 'foo'"
 	result, err = routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
@@ -477,108 +477,15 @@ func TestStreamSelectIN(t *testing.T) {
 func TestSelectINFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
-	_, err := routerExec(router, "select * from user where id in (:aa)", nil)
+	_, err := routerExec(router, "select id from user where id in (:aa)", nil)
 	want := "paramsSelectIN: could not find bind var :aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	getSandbox("TestRouter").SrvKeyspaceMustFail = 1
-	_, err = routerExec(router, "select * from user where id in (1)", nil)
+	_, err = routerExec(router, "select id from user where id in (1)", nil)
 	want = "paramsSelectEqual: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("routerExec: %v, want %v", err, want)
-	}
-}
-
-func TestSelectKeyrange(t *testing.T) {
-	router, sbc1, sbc2, _ := createRouterEnv()
-
-	_, err := routerExec(router, "select * from user where keyrange('', '\x20')", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries := []querytypes.BoundQuery{{
-		Sql:           "select * from user",
-		BindVariables: map[string]interface{}{},
-	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
-	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
-	}
-
-	sbc1.Queries = nil
-	_, err = routerExec(router, "select * from user where keyrange('\x40', '\x60')", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select * from user",
-		BindVariables: map[string]interface{}{},
-	}}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
-	if sbc1.Queries != nil {
-		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
-	}
-}
-
-func TestStreamSelectKeyrange(t *testing.T) {
-	router, _, _, _ := createRouterEnv()
-
-	sql := "select * from user where keyrange('', '\x20')"
-	result, err := routerStream(router, sql)
-	if err != nil {
-		t.Error(err)
-	}
-	wantResult := singleRowResult
-	if !reflect.DeepEqual(result, wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
-
-	sql = "select * from user where keyrange('\x40', '\x60')"
-	result, err = routerStream(router, sql)
-	if err != nil {
-		t.Error(err)
-	}
-	wantResult = singleRowResult
-	if !reflect.DeepEqual(result, wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
-}
-
-func TestSelectKeyrangeFail(t *testing.T) {
-	router, _, _, _ := createRouterEnv()
-
-	_, err := routerExec(router, "select * from user where keyrange('', :aa)", nil)
-	want := "paramsSelectKeyrange: could not find bind var :aa"
-	if err == nil || err.Error() != want {
-		t.Errorf("routerExec: %v, want %v", err, want)
-	}
-
-	_, err = routerExec(router, "select * from user where keyrange('', :aa)", map[string]interface{}{
-		"aa": 1,
-	})
-	want = "paramsSelectKeyrange: expecting strings for keyrange: [ 1]"
-	if err == nil || err.Error() != want {
-		t.Errorf("routerExec: %v, want %v", err, want)
-	}
-
-	_, err = routerExec(router, "select * from user where keyrange('', :aa)", map[string]interface{}{
-		"aa": "\x21",
-	})
-	want = "paramsSelectKeyrange: keyrange -21 does not exactly match shards"
-	if err == nil || err.Error() != want {
-		t.Errorf("routerExec: %v, want %v", err, want)
-	}
-
-	_, err = routerExec(router, "select * from user where keyrange('', :aa)", map[string]interface{}{
-		"aa": "\x40",
-	})
-	want = "keyrange must match exactly one shard: [ @]"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
@@ -598,12 +505,12 @@ func TestSelectScatter(t *testing.T) {
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
-	_, err := routerExec(router, "select * from user", nil)
+	_, err := routerExec(router, "select id from user", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql:           "select * from user",
+		Sql:           "select id from user",
 		BindVariables: map[string]interface{}{},
 	}}
 	for _, conn := range conns {
@@ -627,7 +534,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
-	sql := "select * from user"
+	sql := "select id from user"
 	result, err := routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
@@ -666,7 +573,7 @@ func TestSelectScatterFail(t *testing.T) {
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
-	_, err := routerExec(router, "select * from user", nil)
+	_, err := routerExec(router, "select id from user", nil)
 	want := "paramsSelectScatter: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)

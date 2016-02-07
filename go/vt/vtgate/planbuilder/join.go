@@ -260,7 +260,7 @@ func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (plan interface{}, 
 	if err != nil {
 		return nil, err
 	}
-	newGenerator().Generate(builder)
+	err = newGenerator().Generate(builder)
 	if err != nil {
 		return nil, err
 	}

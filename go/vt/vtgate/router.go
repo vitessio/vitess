@@ -69,6 +69,8 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[st
 	plan := rtr.planner.GetPlan(sql)
 
 	switch plan.ID {
+	case planbuilder.NewSelect:
+		return rtr.Execute2(vcursor, plan.Values)
 	case planbuilder.UpdateEqual:
 		return rtr.execUpdateEqual(vcursor, plan)
 	case planbuilder.DeleteEqual:
@@ -119,6 +121,8 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVariables 
 	var err error
 	var params *scatterParams
 	switch plan.ID {
+	case planbuilder.NewSelect:
+		return rtr.StreamExecute2(vcursor, plan.Values, sendReply)
 	case planbuilder.SelectUnsharded:
 		params, err = rtr.paramsUnsharded(vcursor, plan)
 	case planbuilder.SelectEqual:

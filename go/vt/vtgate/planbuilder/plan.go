@@ -29,6 +29,7 @@ const (
 	DeleteEqual
 	InsertUnsharded
 	InsertSharded
+	NewSelect
 	NumPlans
 )
 
@@ -47,6 +48,7 @@ var planName = [NumPlans]string{
 	"DeleteEqual",
 	"InsertUnsharded",
 	"InsertSharded",
+	"NewSelect",
 }
 
 // Plan represents the routing strategy for a given query.
@@ -163,6 +165,18 @@ func BuildPlan(query string, schema *Schema) *Plan {
 	switch statement := statement.(type) {
 	case *sqlparser.Select:
 		plan = buildSelectPlan(statement, schema)
+		/*
+			planb, err := buildSelectPlan2(statement, schema)
+			if err != nil {
+				return &Plan{
+					Reason: err.Error(),
+				}
+			}
+			plan = &Plan{
+				ID:     NewSelect,
+				Values: planb,
+			}
+		*/
 	case *sqlparser.Insert:
 		plan = buildInsertPlan(statement, schema)
 	case *sqlparser.Update:
