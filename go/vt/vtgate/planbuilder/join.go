@@ -36,6 +36,7 @@ type planBuilder interface {
 	// the Order represents the highest order of the leaf
 	// nodes.
 	Order() int
+	SupplyColumn(col *sqlparser.ColName) int
 }
 
 // joinBuilder is used to build a Join primitive.
@@ -46,6 +47,7 @@ type joinBuilder struct {
 	LeftOrder, RightOrder int
 	// Left and Right are the nodes for the join.
 	Left, Right planBuilder
+	Colsyms     []*colsym
 	// Join is the join plan.
 	Join *Join
 }
@@ -53,6 +55,61 @@ type joinBuilder struct {
 // Order returns the order of the node.
 func (jb *joinBuilder) Order() int {
 	return jb.RightOrder
+}
+
+func (jb *joinBuilder) SupplyVar(col *sqlparser.ColName, varname string) {
+	switch meta := col.Metadata.(type) {
+	case *colsym:
+		for i, colsym := range jb.Colsyms {
+			if jb.Join.Cols[i] > 0 {
+				continue
+			}
+			if meta == colsym {
+				jb.Join.Vars[varname] = -jb.Join.Cols[i] - 1
+				return
+			}
+		}
+		panic("unexpected")
+	case *tableAlias:
+		ref := newColref(col)
+		for i, colsym := range jb.Colsyms {
+			if jb.Join.Cols[i] > 0 {
+				continue
+			}
+			if colsym.Underlying == ref {
+				jb.Join.Vars[varname] = -jb.Join.Cols[i] - 1
+				return
+			}
+		}
+		jb.Join.Vars[varname] = jb.Left.SupplyColumn(col)
+		return
+	}
+	panic("unexpected")
+}
+
+func (jb *joinBuilder) SupplyColumn(col *sqlparser.ColName) int {
+	switch meta := col.Metadata.(type) {
+	case *colsym:
+		panic("unexpected")
+	case *tableAlias:
+		ref := newColref(col)
+		for i, colsym := range jb.Colsyms {
+			if colsym.Underlying == ref {
+				return i
+			}
+		}
+		routeNumber := meta.Route.Order()
+		jb.Colsyms = append(jb.Colsyms, &colsym{Underlying: ref})
+		if routeNumber <= jb.LeftOrder {
+			ret := jb.Left.SupplyColumn(col)
+			jb.Join.Cols = append(jb.Join.Cols, -ret-1)
+		} else {
+			ret := jb.Right.SupplyColumn(col)
+			jb.Join.Cols = append(jb.Join.Cols, ret+1)
+		}
+		return len(jb.Join.Cols) - 1
+	}
+	panic("unexpected")
 }
 
 // MarshalJSON marshals joinBuilder into a readable form.
@@ -70,9 +127,9 @@ func (jb *joinBuilder) MarshalJSON() ([]byte, error) {
 		Left:       jb.Left,
 		Right:      jb.Right,
 		Join: &Join{
-			IsLeft:    jb.Join.IsLeft,
-			LeftCols:  jb.Join.LeftCols,
-			RightCols: jb.Join.RightCols,
+			IsLeft: jb.Join.IsLeft,
+			Cols:   jb.Join.Cols,
+			Vars:   jb.Join.Vars,
 		},
 	}
 	return json.Marshal(marshalJoin)
@@ -80,14 +137,10 @@ func (jb *joinBuilder) MarshalJSON() ([]byte, error) {
 
 // Join is the join plan.
 type Join struct {
-	IsLeft              bool        `json:",omitempty"`
-	Left, Right         interface{} `json:",omitempty"`
-	LeftCols, RightCols []int       `json:",omitempty"`
-}
-
-// Len returns the number of columns in the join
-func (jn *Join) Len() int {
-	return len(jn.LeftCols) + len(jn.RightCols)
+	IsLeft      bool           `json:",omitempty"`
+	Left, Right interface{}    `json:",omitempty"`
+	Cols        []int          `json:",omitempty"`
+	Vars        map[string]int `json:",omitempty"`
 }
 
 // routeBuilder is used to build a Route primitive.
@@ -102,9 +155,9 @@ type routeBuilder struct {
 	IsRHS bool
 	// Select is the AST for the query fragment that will be
 	// executed by this route.
-	Select sqlparser.Select
-	order  int
-	Colsym []*colsym
+	Select  sqlparser.Select
+	order   int
+	Colsyms []*colsym
 	// Route is the plan object being built. It will contain all the
 	// information necessary to execute the route operation.
 	Route *Route
@@ -115,29 +168,25 @@ func (rtb *routeBuilder) Order() int {
 	return rtb.order
 }
 
-func (rtb *routeBuilder) SupplyJoinVar(col *sqlparser.ColName, varname string) {
+func (rtb *routeBuilder) SupplyColumn(col *sqlparser.ColName) int {
 	switch meta := col.Metadata.(type) {
 	case *colsym:
-		for i, colsym := range rtb.Colsym {
+		for i, colsym := range rtb.Colsyms {
 			if meta == colsym {
-				rtb.Route.SupplyVars[varname] = i
-				return
+				return i
 			}
 		}
 		panic("unexpected")
 	case *tableAlias:
-		for i, colsym := range rtb.Colsym {
-			if colsym.Underlying != nil {
-				if colsym.Underlying.Metadata == col.Metadata && colsym.Underlying.Name == col.Name {
-					rtb.Route.SupplyVars[varname] = i
-					return
-				}
+		ref := newColref(col)
+		for i, colsym := range rtb.Colsyms {
+			if colsym.Underlying == ref {
+				return i
 			}
 		}
-		rtb.Route.SupplyVars[varname] = len(rtb.Colsym)
-		rtb.Colsym = append(rtb.Colsym, &colsym{
+		rtb.Colsyms = append(rtb.Colsyms, &colsym{
 			Alias:      sqlparser.SQLName(sqlparser.String(col)),
-			Underlying: col,
+			Underlying: ref,
 		})
 		rtb.Select.SelectExprs = append(
 			rtb.Select.SelectExprs,
@@ -149,7 +198,9 @@ func (rtb *routeBuilder) SupplyJoinVar(col *sqlparser.ColName, varname string) {
 				},
 			},
 		)
+		return len(rtb.Colsyms) - 1
 	}
+	panic("unexpected")
 }
 
 // MarshalJSON marshals routeBuilder into a readable form.
@@ -199,9 +250,8 @@ type Route struct {
 	// to compute the target shard(s) where the query must
 	// be sent.
 	// TODO(sougou): explain contents of Values.
-	Values     interface{}
-	UseVars    map[string]struct{}
-	SupplyVars map[string]int
+	Values  interface{}
+	UseVars map[string]struct{}
 }
 
 // MarshalJSON marshals Route into a readable form.
@@ -213,21 +263,19 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		vindexName = rt.Vindex.String()
 	}
 	marshalRoute := struct {
-		PlanID     PlanID              `json:",omitempty"`
-		Query      string              `json:",omitempty"`
-		Keyspace   *Keyspace           `json:",omitempty"`
-		Vindex     string              `json:",omitempty"`
-		Values     string              `json:",omitempty"`
-		UseVars    map[string]struct{} `json:",omitempty"`
-		SupplyVars map[string]int      `json:",omitempty"`
+		PlanID   PlanID              `json:",omitempty"`
+		Query    string              `json:",omitempty"`
+		Keyspace *Keyspace           `json:",omitempty"`
+		Vindex   string              `json:",omitempty"`
+		Values   string              `json:",omitempty"`
+		UseVars  map[string]struct{} `json:",omitempty"`
 	}{
-		PlanID:     rt.PlanID,
-		Query:      rt.Query,
-		Keyspace:   rt.Keyspace,
-		Vindex:     vindexName,
-		Values:     prettyValue(rt.Values),
-		UseVars:    rt.UseVars,
-		SupplyVars: rt.SupplyVars,
+		PlanID:   rt.PlanID,
+		Query:    rt.Query,
+		Keyspace: rt.Keyspace,
+		Vindex:   vindexName,
+		Values:   prettyValue(rt.Values),
+		UseVars:  rt.UseVars,
 	}
 	return json.Marshal(marshalRoute)
 }
@@ -260,7 +308,7 @@ func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (plan interface{}, 
 	if err != nil {
 		return nil, err
 	}
-	err = newGenerator().Generate(builder)
+	err = newGenerator(builder).Generate()
 	if err != nil {
 		return nil, err
 	}
@@ -374,17 +422,15 @@ func getTablePlan(tableName *sqlparser.TableName, schema *Schema) (*Route, *Tabl
 	}
 	if table.Keyspace.Sharded {
 		return &Route{
-			PlanID:     SelectScatter,
-			Keyspace:   table.Keyspace,
-			UseVars:    make(map[string]struct{}),
-			SupplyVars: make(map[string]int),
+			PlanID:   SelectScatter,
+			Keyspace: table.Keyspace,
+			UseVars:  make(map[string]struct{}),
 		}, table, nil
 	}
 	return &Route{
-		PlanID:     SelectUnsharded,
-		Keyspace:   table.Keyspace,
-		UseVars:    make(map[string]struct{}),
-		SupplyVars: make(map[string]int),
+		PlanID:   SelectUnsharded,
+		Keyspace: table.Keyspace,
+		UseVars:  make(map[string]struct{}),
 	}, table, nil
 }
 
@@ -464,6 +510,7 @@ func makejoinBuilder(lplan planBuilder, lsyms *symtab, rplan planBuilder, rsyms 
 			IsLeft: isLeft,
 			Left:   getUnderlyingPlan(lplan),
 			Right:  getUnderlyingPlan(rplan),
+			Vars:   make(map[string]int),
 		},
 	}, lsyms, nil
 }

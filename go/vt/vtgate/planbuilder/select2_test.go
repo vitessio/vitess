@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func TestSelectList(t *testing.T) {
+func TestSelect2(t *testing.T) {
 	schema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +41,7 @@ func TestSelectList(t *testing.T) {
 		if out != tcase.output {
 			t.Errorf("Line:%v: %s\n%s\n%s", tcase.lineno, tcase.input, tcase.output, out)
 			// Comment these line out to see the expected outputs
+			fmt.Printf("%s\n", tcase.input)
 			bout, err = json.MarshalIndent(plan, "", "  ")
 			fmt.Printf("%s\n", bout)
 		}

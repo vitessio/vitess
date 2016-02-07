@@ -28,8 +28,8 @@
       "Sharded": true
     }
   },
-  "RightCols": [
-    0
+  "Cols": [
+    1
   ]
 }
 
@@ -52,10 +52,8 @@
       "Sharded": true
     }
   },
-  "LeftCols": [
-    0
-  ],
-  "RightCols": [
+  "Cols": [
+    -1,
     1
   ]
 }
@@ -79,10 +77,8 @@
       "Sharded": true
     }
   },
-  "LeftCols": [
-    0
-  ],
-  "RightCols": [
+  "Cols": [
+    -1,
     1
   ]
 }
@@ -106,12 +102,10 @@
       "Sharded": true
     }
   },
-  "LeftCols": [
-    0,
-    2
-  ],
-  "RightCols": [
-    1
+  "Cols": [
+    -1,
+    1,
+    -2
   ]
 }
 
@@ -226,12 +220,10 @@
       "Sharded": true
     }
   },
-  "LeftCols": [
-    0,
+  "Cols": [
+    -1,
+    -2,
     1
-  ],
-  "RightCols": [
-    2
   ]
 }
 
@@ -254,12 +246,10 @@
       "Sharded": true
     }
   },
-  "LeftCols": [
-    0,
+  "Cols": [
+    -1,
+    -2,
     1
-  ],
-  "RightCols": [
-    2
   ]
 }
 
@@ -285,9 +275,6 @@
     "Keyspace": {
       "Name": "user",
       "Sharded": true
-    },
-    "SupplyVars": {
-      "col": 0
     }
   },
   "Right": {
@@ -303,7 +290,11 @@
       "col": {}
     }
   },
-  "RightCols": [
-    0
-  ]
+  "Cols": [
+    1
+  ],
+  "Vars": {
+    "col": 0
+  }
 }
+

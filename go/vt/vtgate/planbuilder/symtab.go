@@ -26,7 +26,7 @@ type colsym struct {
 	Alias      sqlparser.SQLName
 	Route      *routeBuilder
 	Symtab     *symtab
-	Underlying *sqlparser.ColName
+	Underlying colref
 	Vindex     Vindex
 }
 
@@ -49,6 +49,22 @@ type tableAlias struct {
 	Keyspace *Keyspace
 	// CoVindexes is the list of column Vindexes for this alias.
 	ColVindexes []*ColVindex
+}
+
+// colref uniquely identifies a column reference.
+type colref struct {
+	metadata interface{}
+	name     sqlparser.SQLName
+}
+
+func newColref(col *sqlparser.ColName) colref {
+	if col.Metadata == nil {
+		panic("unexpected")
+	}
+	return colref{
+		metadata: col.Metadata,
+		name:     col.Name,
+	}
 }
 
 // FindVindex returns the vindex if one was found for the column.

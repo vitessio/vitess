@@ -14,24 +14,21 @@ import (
 type generator struct {
 	refs map[colref]string
 	vars map[string]struct{}
+	plan planBuilder
 }
 
-type colref struct {
-	metadata interface{}
-	name     sqlparser.SQLName
-}
-
-func newGenerator() *generator {
+func newGenerator(plan planBuilder) *generator {
 	return &generator{
 		refs: make(map[colref]string),
 		vars: make(map[string]struct{}),
+		plan: plan,
 	}
 }
 
-func (gen *generator) Generate(plan planBuilder) error {
-	gen.wireup(plan)
-	gen.fixupSelect(plan)
-	return gen.generateQueries(plan)
+func (gen *generator) Generate() error {
+	gen.wireup(gen.plan)
+	gen.fixupSelect(gen.plan)
+	return gen.generateQueries(gen.plan)
 }
 
 func (gen *generator) wireup(plan planBuilder) {
@@ -109,10 +106,7 @@ func (gen *generator) resolve(col *sqlparser.ColName, toRoute *routeBuilder) {
 }
 
 func (gen *generator) lookup(col *sqlparser.ColName) (route *routeBuilder, joinVar string) {
-	ref := colref{
-		metadata: col.Metadata,
-		name:     col.Name,
-	}
+	ref := newColref(col)
 	switch meta := col.Metadata.(type) {
 	case *colsym:
 		return meta.Route, gen.refs[ref]
@@ -135,13 +129,26 @@ func (gen *generator) join(fromRoute *routeBuilder, col *sqlparser.ColName, toRo
 		suffix = strconv.Itoa(i)
 	}
 	gen.vars[joinVar] = struct{}{}
-	ref := colref{
-		metadata: col.Metadata,
-		name:     col.Name,
-	}
-	gen.refs[ref] = joinVar
-	fromRoute.SupplyJoinVar(col, joinVar)
+	gen.refs[newColref(col)] = joinVar
+	gen.commonJoin(fromRoute, toRoute).SupplyVar(col, joinVar)
 	toRoute.Route.UseVars[joinVar] = struct{}{}
+}
+
+func (gen *generator) commonJoin(fromRoute *routeBuilder, toRoute *routeBuilder) *joinBuilder {
+	node := gen.plan.(*joinBuilder)
+	from := fromRoute.Order()
+	to := toRoute.Order()
+	for {
+		if from > node.LeftOrder {
+			node = node.Right.(*joinBuilder)
+			continue
+		}
+		if to <= node.LeftOrder {
+			node = node.Left.(*joinBuilder)
+			continue
+		}
+		return node
+	}
 }
 
 func (gen *generator) generateQuery(route *routeBuilder) error {

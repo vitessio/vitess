@@ -95,30 +95,33 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, syms *symtab) ([]*colsy
 			}
 			colsyms[i].Vindex = syms.Vindex(col, colsyms[i].Route, true)
 			if _, isLocal, _ := syms.Find(col, true); isLocal {
-				colsyms[i].Underlying = col
+				colsyms[i].Underlying = newColref(col)
 			}
 		}
 	}
 	return colsyms, nil
 }
 
-func pushSelect(selectExpr sqlparser.SelectExpr, plan planBuilder, colsym *colsym) {
+func pushSelect(selectExpr sqlparser.SelectExpr, plan planBuilder, colsym *colsym) int {
 	routeNumber := colsym.Route.Order()
 	switch plan := plan.(type) {
 	case *joinBuilder:
 		if routeNumber <= plan.LeftOrder {
-			pushSelect(selectExpr, plan.Left, colsym)
-			plan.Join.LeftCols = append(plan.Join.LeftCols, plan.Join.Len())
-			return
+			ret := pushSelect(selectExpr, plan.Left, colsym)
+			plan.Join.Cols = append(plan.Join.Cols, -ret-1)
+		} else {
+			ret := pushSelect(selectExpr, plan.Right, colsym)
+			plan.Join.Cols = append(plan.Join.Cols, ret+1)
 		}
-		pushSelect(selectExpr, plan.Right, colsym)
-		plan.Join.RightCols = append(plan.Join.RightCols, plan.Join.Len())
+		return len(plan.Join.Cols) - 1
 	case *routeBuilder:
 		if routeNumber != plan.Order() {
 			// TODO(sougou): remove after testing
 			panic("unexpcted values")
 		}
 		plan.Select.SelectExprs = append(plan.Select.SelectExprs, selectExpr)
-		plan.Colsym = append(plan.Colsym, colsym)
+		plan.Colsyms = append(plan.Colsyms, colsym)
+		return len(plan.Colsyms) - 1
 	}
+	panic("unexpected")
 }
