@@ -16,22 +16,25 @@ import (
 type requestContext struct {
 	ctx              context.Context
 	sql              string
-	bindVariables    map[string]interface{}
+	bindVars         map[string]interface{}
 	tabletType       topodatapb.TabletType
 	session          *vtgatepb.Session
 	notInTransaction bool
 	router           *Router
+	// JoinVars is set by Join and used by Route.
+	JoinVars map[string]interface{}
 }
 
-func newRequestContext(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, router *Router) *requestContext {
+func newRequestContext(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, router *Router) *requestContext {
 	return &requestContext{
 		ctx:              ctx,
 		sql:              sql,
-		bindVariables:    bindVariables,
+		bindVars:         bindVars,
 		tabletType:       tabletType,
 		session:          session,
 		notInTransaction: notInTransaction,
 		router:           router,
+		JoinVars:         make(map[string]interface{}),
 	}
 }
 

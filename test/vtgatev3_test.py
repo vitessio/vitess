@@ -271,7 +271,7 @@ class TestVTGateFunctions(unittest.TestCase):
     # Test select equal
     for x in xrange(count):
       i = x+1
-      cursor.execute('select * from vt_user where id = :id', {'id': i})
+      cursor.execute('select id, name from vt_user where id = :id', {'id': i})
       self.assertEqual(
           (cursor.fetchall(), cursor.rowcount, cursor.lastrowid,
            cursor.description),
@@ -292,49 +292,33 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn.commit()
 
     # Verify values in db
-    result = shard_0_master.mquery('vt_user', 'select * from vt_user')
+    result = shard_0_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(result, ((1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_user')
+    result = shard_1_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(result, ((4L, 'test 4'), (6L, 'test 6'), (7L, 'test 7')))
-    result = lookup_master.mquery('vt_lookup', 'select * from vt_user_idx')
+    result = lookup_master.mquery('vt_lookup', 'select id from vt_user_idx')
     self.assertEqual(result, ((1L,), (2L,), (3L,), (4L,), (6L,), (7L,)))
 
     # Test IN clause
     result = vtgate_conn._execute(
-        'select * from vt_user where id in (:a, :b)', {'a': 1, 'b': 4},
+        'select id, name from vt_user where id in (:a, :b)', {'a': 1, 'b': 4},
         keyspace_name=None, tablet_type='master')
     result[0].sort()
     self.assertEqual(
         result,
         ([(1L, 'test 1'), (4L, 'test 4')], 2L, 0, [('id', 8L), ('name', 253L)]))
     result = vtgate_conn._execute(
-        'select * from vt_user where id in (:a, :b)', {'a': 1, 'b': 2},
+        'select id, name from vt_user where id in (:a, :b)', {'a': 1, 'b': 2},
         keyspace_name=None, tablet_type='master')
     result[0].sort()
     self.assertEqual(
         result,
         ([(1L, 'test 1'), (2L, 'test 2')], 2L, 0, [('id', 8L), ('name', 253L)]))
 
-    # Test keyrange
-    result = vtgate_conn._execute(
-        "select * from vt_user where keyrange('', '\x80')", {},
-        keyspace_name=None, tablet_type='master')
-    self.assertEqual(
-        result,
-        ([(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')], 3L, 0,
-         [('id', 8L), ('name', 253L)]))
-    result = vtgate_conn._execute(
-        "select * from vt_user where keyrange('\x80', '')", {},
-        keyspace_name=None, tablet_type='master')
-
-    self.assertEqual(
-        result,
-        ([(4L, 'test 4'), (6L, 'test 6'), (7L, 'test 7')], 3L, 0,
-         [('id', 8L), ('name', 253L)]))
-
     # Test scatter
     result = vtgate_conn._execute(
-        'select * from vt_user', {}, keyspace_name=None, tablet_type='master')
+        'select id, name from vt_user',
+        {}, keyspace_name=None, tablet_type='master')
     result[0].sort()
     self.assertEqual(
         result,
@@ -345,10 +329,10 @@ class TestVTGateFunctions(unittest.TestCase):
     # Test stream over scatter
     stream_cursor_1 = vtgate_conn.cursor(
         None, 'master', cursorclass=vtgate_cursor.StreamVTGateCursor)
-    stream_cursor_1.execute('select * from vt_user', {})
+    stream_cursor_1.execute('select id, name from vt_user', {})
     stream_cursor_2 = vtgate_conn.cursor(
         None, 'master', cursorclass=vtgate_cursor.StreamVTGateCursor)
-    stream_cursor_2.execute('select * from vt_user', {})
+    stream_cursor_2.execute('select id, name from vt_user', {})
     self.assertEqual(stream_cursor_1.description, [('id', 8L), ('name', 253L)])
     self.assertEqual(stream_cursor_2.description, [('id', 8L), ('name', 253L)])
     rows_1 = []
@@ -378,10 +362,10 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_user')
+    result = shard_0_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(
         result, ((1L, 'test one'), (2L, 'test 2'), (3L, 'test 3')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_user')
+    result = shard_1_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(
         result, ((4L, 'test four'), (6L, 'test 6'), (7L, 'test 7')))
 
@@ -398,11 +382,11 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_user')
+    result = shard_0_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(result, ((2L, 'test 2'), (3L, 'test 3')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_user')
+    result = shard_1_master.mquery('vt_user', 'select id, name from vt_user')
     self.assertEqual(result, ((6L, 'test 6'), (7L, 'test 7')))
-    result = lookup_master.mquery('vt_lookup', 'select * from vt_user_idx')
+    result = lookup_master.mquery('vt_lookup', 'select id from vt_user_idx')
     self.assertEqual(result, ((2L,), (3L,), (6L,), (7L,)))
 
   def test_user2(self):
@@ -425,23 +409,24 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_user2')
+    result = shard_0_master.mquery('vt_user', 'select id, name from vt_user2')
     self.assertEqual(result, ((1L, 'name1'), (2L, 'name2')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_user2')
+    result = shard_1_master.mquery('vt_user', 'select id, name from vt_user2')
     self.assertEqual(result, ((7L, 'name1'),))
-    result = lookup_master.mquery('vt_lookup', 'select * from name_user2_map')
+    result = lookup_master.mquery(
+        'vt_lookup', 'select name, user2_id from name_user2_map')
     self.assertEqual(result, (('name1', 1L), ('name1', 7L), ('name2', 2L)))
 
     # Test select by id
     result = vtgate_conn._execute(
-        'select * from vt_user2 where id = :id', {'id': 1},
+        'select id, name from vt_user2 where id = :id', {'id': 1},
         None, 'master')
     self.assertEqual(
         result, ([(1, 'name1')], 1L, 0, [('id', 8L), ('name', 253L)]))
 
     # Test select by lookup
     result = vtgate_conn._execute(
-        'select * from vt_user2 where name = :name', {'name': 'name1'},
+        'select id, name from vt_user2 where name = :name', {'name': 'name1'},
         None, 'master')
     result[0].sort()
     self.assertEqual(
@@ -450,7 +435,7 @@ class TestVTGateFunctions(unittest.TestCase):
 
     # Test IN clause using non-unique vindex
     result = vtgate_conn._execute(
-        "select * from vt_user2 where name in ('name1', 'name2')", {},
+        "select id, name from vt_user2 where name in ('name1', 'name2')", {},
         None, 'master')
     result[0].sort()
     self.assertEqual(
@@ -458,7 +443,7 @@ class TestVTGateFunctions(unittest.TestCase):
         ([(1, 'name1'), (2, 'name2'), (7, 'name1')], 3L, 0,
          [('id', 8L), ('name', 253L)]))
     result = vtgate_conn._execute(
-        "select * from vt_user2 where name in ('name1')", {},
+        "select id, name from vt_user2 where name in ('name1')", {},
         None, 'master')
     result[0].sort()
     self.assertEqual(
@@ -478,11 +463,12 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_user2')
+    result = shard_0_master.mquery('vt_user', 'select id, name from vt_user2')
     self.assertEqual(result, ())
-    result = shard_1_master.mquery('vt_user', 'select * from vt_user2')
+    result = shard_1_master.mquery('vt_user', 'select id, name from vt_user2')
     self.assertEqual(result, ((7L, 'name1'),))
-    result = lookup_master.mquery('vt_lookup', 'select * from name_user2_map')
+    result = lookup_master.mquery(
+        'vt_lookup', 'select name, user2_id from name_user2_map')
     self.assertEqual(result, (('name1', 7L),))
 
   def test_user_extra(self):
@@ -502,14 +488,16 @@ class TestVTGateFunctions(unittest.TestCase):
     for x in xrange(count):
       i = x+1
       result = vtgate_conn._execute(
-          'select * from vt_user_extra where user_id = :user_id',
+          'select user_id, email from vt_user_extra where user_id = :user_id',
           {'user_id': i}, None, 'master')
       self.assertEqual(
           result,
           ([(i, 'test %s' % i)], 1L, 0, [('user_id', 8L), ('email', 253L)]))
-    result = shard_0_master.mquery('vt_user', 'select * from vt_user_extra')
+    result = shard_0_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
     self.assertEqual(result, ((1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_user_extra')
+    result = shard_1_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
     self.assertEqual(result, ((4L, 'test 4'),))
 
     vtgate_conn.begin()
@@ -524,9 +512,11 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_user_extra')
+    result = shard_0_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
     self.assertEqual(result, ((1L, 'test one'), (2L, 'test 2'), (3L, 'test 3')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_user_extra')
+    result = shard_1_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
     self.assertEqual(result, ((4L, 'test four'),))
 
     vtgate_conn.begin()
@@ -541,9 +531,11 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_user_extra')
+    result = shard_0_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
     self.assertEqual(result, ((2L, 'test 2'), (3L, 'test 3')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_user_extra')
+    result = shard_1_master.mquery(
+        'vt_user', 'select user_id, email from vt_user_extra')
     self.assertEqual(result, ())
 
   def test_music(self):
@@ -562,7 +554,7 @@ class TestVTGateFunctions(unittest.TestCase):
     for x in xrange(count):
       i = x+1
       result = vtgate_conn._execute(
-          'select * from vt_music where id = :id', {'id': i},
+          'select user_id, id, song from vt_music where id = :id', {'id': i},
           None, 'master')
       self.assertEqual(
           result,
@@ -586,15 +578,18 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 1L, 8L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_music')
+    result = shard_0_master.mquery(
+        'vt_user', 'select user_id, id, song from vt_music')
     self.assertEqual(
         result,
         ((1L, 1L, 'test 1'), (2L, 2L, 'test 2'), (3L, 3L, 'test 3'),
          (5L, 6L, 'test 6')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_music')
+    result = shard_1_master.mquery(
+        'vt_user', 'select user_id, id, song from vt_music')
     self.assertEqual(
         result, ((4L, 4L, 'test 4'), (6L, 7L, 'test 7'), (6L, 8L, 'test 8')))
-    result = lookup_master.mquery('vt_lookup', 'select * from music_user_map')
+    result = lookup_master.mquery(
+        'vt_lookup', 'select music_id, user_id from music_user_map')
     self.assertEqual(
         result,
         ((1L, 1L), (2L, 2L), (3L, 3L), (4L, 4L), (6L, 5L), (7L, 6L), (8L, 6L)))
@@ -611,11 +606,13 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_music')
+    result = shard_0_master.mquery(
+        'vt_user', 'select user_id, id, song from vt_music')
     self.assertEqual(
         result, ((1L, 1L, 'test 1'), (2L, 2L, 'test 2'), (3L, 3L, 'test 3'),
                  (5L, 6L, 'test six')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_music')
+    result = shard_1_master.mquery(
+        'vt_user', 'select user_id, id, song from vt_music')
     self.assertEqual(
         result, ((4L, 4L, 'test 4'), (6L, 7L, 'test seven'),
                  (6L, 8L, 'test 8')))
@@ -632,12 +629,15 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 2L, 0L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_music')
+    result = shard_0_master.mquery(
+        'vt_user', 'select user_id, id, song from vt_music')
     self.assertEqual(
         result, ((1L, 1L, 'test 1'), (2L, 2L, 'test 2'), (5L, 6L, 'test six')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_music')
+    result = shard_1_master.mquery(
+        'vt_user', 'select user_id, id, song from vt_music')
     self.assertEqual(result, ((4L, 4L, 'test 4'),))
-    result = lookup_master.mquery('vt_lookup', 'select * from music_user_map')
+    result = lookup_master.mquery(
+        'vt_lookup', 'select music_id, user_id from music_user_map')
     self.assertEqual(result, ((1L, 1L), (2L, 2L), (4L, 4L), (6L, 5L)))
 
   def test_music_extra(self):
@@ -658,14 +658,17 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = vtgate_conn._execute(
-        'select * from vt_music_extra where music_id = :music_id',
+        'select music_id, user_id, artist from vt_music_extra '
+        'where music_id = :music_id',
         {'music_id': 6}, None, 'master')
     self.assertEqual(
         result, ([(6L, 5L, 'test 6')], 1, 0,
                  [('music_id', 8L), ('user_id', 8L), ('artist', 253L)]))
-    result = shard_0_master.mquery('vt_user', 'select * from vt_music_extra')
+    result = shard_0_master.mquery(
+        'vt_user', 'select music_id, user_id, artist from vt_music_extra')
     self.assertEqual(result, ((1L, 1L, 'test 1'), (6L, 5L, 'test 6')))
-    result = shard_1_master.mquery('vt_user', 'select * from vt_music_extra')
+    result = shard_1_master.mquery(
+        'vt_user', 'select music_id, user_id, artist from vt_music_extra')
     self.assertEqual(result, ())
 
     vtgate_conn.begin()
@@ -682,7 +685,8 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 0L, 0L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_music_extra')
+    result = shard_0_master.mquery(
+        'vt_user', 'select music_id, user_id, artist from vt_music_extra')
     self.assertEqual(result, ((1L, 1L, 'test 1'), (6L, 5L, 'test six')))
 
     vtgate_conn.begin()
@@ -697,7 +701,8 @@ class TestVTGateFunctions(unittest.TestCase):
         None, 'master')
     self.assertEqual(result, ([], 0L, 0L, []))
     vtgate_conn.commit()
-    result = shard_0_master.mquery('vt_user', 'select * from vt_music_extra')
+    result = shard_0_master.mquery(
+        'vt_user', 'select music_id, user_id, artist from vt_music_extra')
     self.assertEqual(result, ((1L, 1L, 'test 1'),))
 
   def test_insert_value_required(self):
@@ -721,7 +726,8 @@ class TestVTGateFunctions(unittest.TestCase):
         bindvars=[10, 'test 10'])
 
     out, _ = utils.vtgate.vtclient(
-        'select * from vt_user_extra where user_id = :v1', bindvars=[10])
+        'select user_id, email from vt_user_extra where user_id = :v1',
+        bindvars=[10])
     self.assertEqual(out, ['Index\tuser_id\temail', '0\t10\ttest 10'])
 
     utils.vtgate.vtclient(
@@ -729,7 +735,8 @@ class TestVTGateFunctions(unittest.TestCase):
         bindvars=[10, 'test 1000'])
 
     out, _ = utils.vtgate.vtclient(
-        'select * from vt_user_extra where user_id = :v1', bindvars=[10],
+        'select user_id, email from vt_user_extra where user_id = :v1',
+        bindvars=[10],
         streaming=True)
     self.assertEqual(out, ['Index\tuser_id\temail', '0\t10\ttest 1000'])
 
@@ -737,7 +744,8 @@ class TestVTGateFunctions(unittest.TestCase):
         'delete from vt_user_extra where user_id = :v1', bindvars=[10])
 
     out, _ = utils.vtgate.vtclient(
-        'select * from vt_user_extra where user_id = :v1', bindvars=[10])
+        'select user_id, email from vt_user_extra where user_id = :v1',
+        bindvars=[10])
     self.assertEqual(out, ['Index\tuser_id\temail'])
 
   def test_vtctl_vtgate_execute(self):
