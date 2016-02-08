@@ -143,7 +143,7 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Keyspace: keyspace,
 				Shards:   shards,
 			},
-		}, tabletType, true)
+		}, tabletType)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
@@ -156,7 +156,7 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Keyspace:    keyspace,
 				KeyspaceIds: keyspaceIDs,
 			},
-		}, tabletType, true)
+		}, tabletType)
 		return err
 	})
 }

@@ -329,7 +329,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 			Keyspace: keyspace,
 			Shards:   shards,
 		},
-	}, tabletType, true)
+	}, tabletType)
 	checkEcho(t, "ExecuteBatchShards", &qrs[0], err, map[string]string{
 		"callerId":      callerIDEcho,
 		"query":         echoPrefix + query,
@@ -338,7 +338,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":      bindVarsP3Echo,
 		"tabletType":    tabletTypeEcho,
 		"session":       sessionEcho,
-		"asTransaction": "true",
+		"asTransaction": "false",
 	})
 
 	qrs, err = tx.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
@@ -350,7 +350,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 			Keyspace:    keyspace,
 			KeyspaceIds: keyspaceIDs,
 		},
-	}, tabletType, true)
+	}, tabletType)
 	checkEcho(t, "ExecuteBatchKeyspaceIds", &qrs[0], err, map[string]string{
 		"callerId":      callerIDEcho,
 		"query":         echoPrefix + query,
@@ -359,7 +359,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":      bindVarsP3Echo,
 		"tabletType":    tabletTypeEcho,
 		"session":       sessionEcho,
-		"asTransaction": "true",
+		"asTransaction": "false",
 	})
 }
 

@@ -697,11 +697,9 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteKeyspaceIds(t, conn)
 	fs.hasCallerID = false
 	testTxPass(t, conn)
-	testTxPassNotInTransaction(t, conn)
 	testTxFail(t, conn)
 	fs.hasCallerID = true
 	testTx2Pass(t, conn)
-	testTx2PassNotInTransaction(t, conn)
 	testTx2Fail(t, conn)
 	testSplitQuery(t, conn)
 	testGetSrvKeyspace(t, conn)
@@ -1552,7 +1550,7 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
+	_, err = tx.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1566,7 +1564,7 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1574,25 +1572,6 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-}
-
-func testTxPassNotInTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	execCase := execMap["txRequestNIT"]
-
-	tx, err := conn.Begin(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
-	if err != nil {
-		t.Error(err)
-	}
-	// no rollback necessary
 }
 
 // Same as testTxPass, but with Begin2/Commit2/Rollback2 instead
@@ -1675,7 +1654,7 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
+	_, err = tx.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1689,7 +1668,7 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1697,26 +1676,6 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-}
-
-// Same as testTxPassNotInTransaction, but with Begin2/Commit2/Rollback2 instead
-func testTx2PassNotInTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	execCase := execMap["txRequestNIT"]
-
-	tx, err := conn.Begin2(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
-	if err != nil {
-		t.Error(err)
-	}
-	// no rollback necessary
 }
 
 func testBeginError(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1897,13 +1856,13 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchShards(ctx, nil, topodatapb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteBatchShards(ctx, nil, topodatapb.TabletType_REPLICA)
 	want = "executeBatchShards: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, topodatapb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, topodatapb.TabletType_REPLICA)
 	want = "executeBatchKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
@@ -1974,13 +1933,13 @@ func testTx2Fail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchShards(ctx, nil, topodatapb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteBatchShards(ctx, nil, topodatapb.TabletType_REPLICA)
 	want = "executeBatchShards: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, topodatapb.TabletType_REPLICA, false)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, topodatapb.TabletType_REPLICA)
 	want = "executeBatchKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShards: %v, want %v", err, want)
@@ -2373,9 +2332,8 @@ var execMap = map[string]struct {
 					Shards:   []string{"-80", "80-"},
 				},
 			},
-			TabletType:    topodatapb.TabletType_RDONLY,
-			AsTransaction: true,
-			Session:       session1,
+			TabletType: topodatapb.TabletType_RDONLY,
+			Session:    session1,
 		},
 		keyspaceIDBatchQuery: &queryExecuteBatchKeyspaceIds{
 			Queries: []*vtgatepb.BoundKeyspaceIdQuery{
@@ -2395,58 +2353,11 @@ var execMap = map[string]struct {
 					},
 				},
 			},
-			TabletType:    topodatapb.TabletType_RDONLY,
-			AsTransaction: true,
-			Session:       session1,
+			TabletType: topodatapb.TabletType_RDONLY,
+			Session:    session1,
 		},
 		result:     nil,
 		outSession: session2,
-	},
-	"txRequestNIT": {
-		batchQueryShard: &queryExecuteBatchShards{
-			Queries: []*vtgatepb.BoundShardQuery{
-				{
-					Query: &querypb.BoundQuery{
-						Sql: "txRequestNIT",
-						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": {
-								Type:  sqltypes.Int64,
-								Value: []byte("11143"),
-							},
-						},
-					},
-					Keyspace: "ks",
-					Shards:   []string{"-80", "80-"},
-				},
-			},
-			TabletType:    topodatapb.TabletType_RDONLY,
-			AsTransaction: true,
-			Session:       session1,
-		},
-		keyspaceIDBatchQuery: &queryExecuteBatchKeyspaceIds{
-			Queries: []*vtgatepb.BoundKeyspaceIdQuery{
-				{
-					Query: &querypb.BoundQuery{
-						Sql: "txRequestNIT",
-						BindVariables: map[string]*querypb.BindVariable{
-							"bind1": {
-								Type:  sqltypes.Int64,
-								Value: []byte("11143"),
-							},
-						},
-					},
-					Keyspace: "ks",
-					KeyspaceIds: [][]byte{
-						{'k', 'i', '1'},
-					},
-				},
-			},
-			TabletType:    topodatapb.TabletType_RDONLY,
-			AsTransaction: true,
-			Session:       session1,
-		},
-		result:     nil,
-		outSession: session1,
 	},
 }
 

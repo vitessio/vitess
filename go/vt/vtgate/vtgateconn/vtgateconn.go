@@ -250,21 +250,21 @@ func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace
 }
 
 // ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
-func (tx *VTGateTx) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
+func (tx *VTGateTx) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType) ([]sqltypes.Result, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeBatchShards: not in transaction")
 	}
-	res, session, err := tx.impl.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, tx.session)
+	res, session, err := tx.impl.ExecuteBatchShards(ctx, queries, tabletType, false /* asTransaction */, tx.session)
 	tx.session = session
 	return res, err
 }
 
 // ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
+func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType) ([]sqltypes.Result, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeBatchKeyspaceIds: not in transaction")
 	}
-	res, session, err := tx.impl.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, tx.session)
+	res, session, err := tx.impl.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, false /* asTransaction */, tx.session)
 	tx.session = session
 	return res, err
 }
