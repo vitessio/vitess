@@ -114,23 +114,23 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.Execute(ctx, query, bindVars, tabletType, true)
+		_, err := tx.Execute(ctx, query, bindVars, tabletType)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, true)
+		_, err := tx.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType, true)
+		_, err := tx.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, true)
+		_, err := tx.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteEntityIds(ctx, query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, true)
+		_, err := tx.ExecuteEntityIds(ctx, query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
@@ -143,7 +143,7 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Keyspace: keyspace,
 				Shards:   shards,
 			},
-		}, tabletType, true)
+		}, tabletType)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
@@ -156,7 +156,7 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 				Keyspace:    keyspace,
 				KeyspaceIds: keyspaceIDs,
 			},
-		}, tabletType, true)
+		}, tabletType)
 		return err
 	})
 }

@@ -45,7 +45,7 @@ func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.I
 	}, nil
 }
 
-func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	var s *vtgatepb.Session
 	if session != nil {
 		s = session.(*vtgatepb.Session)
@@ -55,11 +55,10 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 		return nil, session, err
 	}
 	request := &vtgatepb.ExecuteRequest{
-		CallerId:         callerid.EffectiveCallerIDFromContext(ctx),
-		Session:          s,
-		Query:            q,
-		TabletType:       tabletType,
-		NotInTransaction: notInTransaction,
+		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
+		Session:    s,
+		Query:      q,
+		TabletType: tabletType,
 	}
 	response, err := conn.c.Execute(ctx, request)
 	if err != nil {
@@ -71,7 +70,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	var s *vtgatepb.Session
 	if session != nil {
 		s = session.(*vtgatepb.Session)
@@ -81,13 +80,12 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 		return nil, session, err
 	}
 	request := &vtgatepb.ExecuteShardsRequest{
-		CallerId:         callerid.EffectiveCallerIDFromContext(ctx),
-		Session:          s,
-		Query:            q,
-		Keyspace:         keyspace,
-		Shards:           shards,
-		TabletType:       tabletType,
-		NotInTransaction: notInTransaction,
+		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
+		Session:    s,
+		Query:      q,
+		Keyspace:   keyspace,
+		Shards:     shards,
+		TabletType: tabletType,
 	}
 	response, err := conn.c.ExecuteShards(ctx, request)
 	if err != nil {
@@ -99,7 +97,7 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	var s *vtgatepb.Session
 	if session != nil {
 		s = session.(*vtgatepb.Session)
@@ -109,13 +107,12 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 		return nil, session, err
 	}
 	request := &vtgatepb.ExecuteKeyspaceIdsRequest{
-		CallerId:         callerid.EffectiveCallerIDFromContext(ctx),
-		Session:          s,
-		Query:            q,
-		Keyspace:         keyspace,
-		KeyspaceIds:      keyspaceIds,
-		TabletType:       tabletType,
-		NotInTransaction: notInTransaction,
+		CallerId:    callerid.EffectiveCallerIDFromContext(ctx),
+		Session:     s,
+		Query:       q,
+		Keyspace:    keyspace,
+		KeyspaceIds: keyspaceIds,
+		TabletType:  tabletType,
 	}
 	response, err := conn.c.ExecuteKeyspaceIds(ctx, request)
 	if err != nil {
@@ -127,7 +124,7 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	var s *vtgatepb.Session
 	if session != nil {
 		s = session.(*vtgatepb.Session)
@@ -137,13 +134,12 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 		return nil, session, err
 	}
 	request := &vtgatepb.ExecuteKeyRangesRequest{
-		CallerId:         callerid.EffectiveCallerIDFromContext(ctx),
-		Session:          s,
-		Query:            q,
-		Keyspace:         keyspace,
-		KeyRanges:        keyRanges,
-		TabletType:       tabletType,
-		NotInTransaction: notInTransaction,
+		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
+		Session:    s,
+		Query:      q,
+		Keyspace:   keyspace,
+		KeyRanges:  keyRanges,
+		TabletType: tabletType,
 	}
 	response, err := conn.c.ExecuteKeyRanges(ctx, request)
 	if err != nil {
@@ -155,7 +151,7 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	var s *vtgatepb.Session
 	if session != nil {
 		s = session.(*vtgatepb.Session)
@@ -172,7 +168,6 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 		EntityColumnName:  entityColumnName,
 		EntityKeyspaceIds: entityKeyspaceIDs,
 		TabletType:        tabletType,
-		NotInTransaction:  notInTransaction,
 	}
 	response, err := conn.c.ExecuteEntityIds(ctx, request)
 	if err != nil {
