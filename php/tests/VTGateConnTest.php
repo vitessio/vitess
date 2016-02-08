@@ -285,15 +285,15 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
 
         $tx = $conn->begin($ctx);
 
-        $echo = $this->getEcho($tx->execute($ctx, self::$ECHO_QUERY, self::$BIND_VARS, self::$TABLET_TYPE, TRUE));
+        $echo = $this->getEcho($tx->execute($ctx, self::$ECHO_QUERY, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
         $this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
         $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
         $this->assertEquals(self::$SESSION_ECHO, $echo['session']);
-        $this->assertEquals('true', $echo['notInTransaction']);
+        $this->assertEquals('false', $echo['notInTransaction']);
 
-        $echo = $this->getEcho($tx->executeShards($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$SHARDS, self::$BIND_VARS, self::$TABLET_TYPE, TRUE));
+        $echo = $this->getEcho($tx->executeShards($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$SHARDS, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
         $this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
@@ -301,9 +301,9 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
         $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
         $this->assertEquals(self::$SESSION_ECHO, $echo['session']);
-        $this->assertEquals('true', $echo['notInTransaction']);
+        $this->assertEquals('false', $echo['notInTransaction']);
 
-        $echo = $this->getEcho($tx->executeKeyspaceIds($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$KEYSPACE_IDS, self::$BIND_VARS, self::$TABLET_TYPE, TRUE));
+        $echo = $this->getEcho($tx->executeKeyspaceIds($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$KEYSPACE_IDS, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
         $this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
@@ -311,9 +311,9 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
         $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
         $this->assertEquals(self::$SESSION_ECHO, $echo['session']);
-        $this->assertEquals('true', $echo['notInTransaction']);
+        $this->assertEquals('false', $echo['notInTransaction']);
 
-        $echo = $this->getEcho($tx->executeKeyRanges($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$KEY_RANGES, self::$BIND_VARS, self::$TABLET_TYPE, TRUE));
+        $echo = $this->getEcho($tx->executeKeyRanges($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$KEY_RANGES, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
         $this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
@@ -321,9 +321,9 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
         $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
         $this->assertEquals(self::$SESSION_ECHO, $echo['session']);
-        $this->assertEquals('true', $echo['notInTransaction']);
+        $this->assertEquals('false', $echo['notInTransaction']);
 
-        $echo = $this->getEcho($tx->executeEntityIds($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$ENTITY_COLUMN_NAME, self::$ENTITY_KEYSPACE_IDS, self::$BIND_VARS, self::$TABLET_TYPE, TRUE));
+        $echo = $this->getEcho($tx->executeEntityIds($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$ENTITY_COLUMN_NAME, self::$ENTITY_KEYSPACE_IDS, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
         $this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
@@ -332,14 +332,14 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
         $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
         $this->assertEquals(self::$SESSION_ECHO, $echo['session']);
-        $this->assertEquals('true', $echo['notInTransaction']);
+        $this->assertEquals('false', $echo['notInTransaction']);
 
         $tx->rollback($ctx);
         $tx = $conn->begin($ctx);
 
         $results = $tx->executeBatchShards($ctx, array(
             ProtoUtils::BoundShardQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS)
-        ), self::$TABLET_TYPE, TRUE);
+        ), self::$TABLET_TYPE);
         $echo = $this->getEcho($results[0]);
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
@@ -348,11 +348,11 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(self::$BIND_VARS_ECHO_P3, $echo['bindVars']);
         $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
         $this->assertEquals(self::$SESSION_ECHO, $echo['session']);
-        $this->assertEquals('true', $echo['asTransaction']);
+        $this->assertEquals('false', $echo['asTransaction']);
 
         $results = $tx->executeBatchKeyspaceIds($ctx, array(
             ProtoUtils::BoundKeyspaceIdQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS)
-        ), self::$TABLET_TYPE, TRUE);
+        ), self::$TABLET_TYPE);
         $echo = $this->getEcho($results[0]);
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
@@ -361,7 +361,7 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(self::$BIND_VARS_ECHO_P3, $echo['bindVars']);
         $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
         $this->assertEquals(self::$SESSION_ECHO, $echo['session']);
-        $this->assertEquals('true', $echo['asTransaction']);
+        $this->assertEquals('false', $echo['asTransaction']);
 
         $tx->commit($ctx);
     }
