@@ -66,12 +66,16 @@ func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 }
 
 // ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
+// If "asTransaction" is true, vtgate will automatically create a transaction
+// (per shard) that encloses all the batch queries.
 func (conn *VTGateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
 	res, _, err := conn.impl.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, nil)
 	return res, err
 }
 
 // ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
+// If "asTransaction" is true, vtgate will automatically create a transaction
+// (per shard) that encloses all the batch queries.
 func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool) ([]sqltypes.Result, error) {
 	res, _, err := conn.impl.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, nil)
 	return res, err
