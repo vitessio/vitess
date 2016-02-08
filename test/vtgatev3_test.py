@@ -237,9 +237,9 @@ def tearDownModule():
 
 
 def get_connection(timeout=10.0):
-  protocol = protocols_flavor().vtgate_python_protocol()
+  protocol, endpoint = utils.vtgate.rpc_endpoint(python=True)
   try:
-    return vtgate_client.connect(protocol, utils.vtgate.addr(), timeout)
+    return vtgate_client.connect(protocol, endpoint, timeout)
   except Exception:
     logging.exception('Connection to vtgate (timeout=%s) failed.', timeout)
     raise
@@ -249,6 +249,12 @@ class TestVTGateFunctions(unittest.TestCase):
 
   def setUp(self):
     self.master_tablet = shard_1_master
+    if protocols_flavor().vtgate_python_protocol() == 'grpc':
+      self.int_type = 265
+      self.string_type = 6165
+    else:
+      self.int_type = 8L
+      self.string_type = 253L
 
   def test_user(self):
     count = 4
@@ -275,7 +281,8 @@ class TestVTGateFunctions(unittest.TestCase):
       self.assertEqual(
           (cursor.fetchall(), cursor.rowcount, cursor.lastrowid,
            cursor.description),
-          ([(i, 'test %s' % i)], 1L, 0, [('id', 8L), ('name', 253L)]))
+          ([(i, 'test %s' % i)], 1L, 0,
+           [('id', self.int_type), ('name', self.string_type)]))
 
     # Test insert with no auto-inc, then auto-inc
     vtgate_conn.begin()
@@ -306,14 +313,16 @@ class TestVTGateFunctions(unittest.TestCase):
     result[0].sort()
     self.assertEqual(
         result,
-        ([(1L, 'test 1'), (4L, 'test 4')], 2L, 0, [('id', 8L), ('name', 253L)]))
+        ([(1L, 'test 1'), (4L, 'test 4')], 2L, 0,
+         [('id', self.int_type), ('name', self.string_type)]))
     result = vtgate_conn._execute(
         'select id, name from vt_user where id in (:a, :b)', {'a': 1, 'b': 2},
         keyspace_name=None, tablet_type='master')
     result[0].sort()
     self.assertEqual(
         result,
-        ([(1L, 'test 1'), (2L, 'test 2')], 2L, 0, [('id', 8L), ('name', 253L)]))
+        ([(1L, 'test 1'), (2L, 'test 2')], 2L, 0,
+         [('id', self.int_type), ('name', self.string_type)]))
 
     # Test scatter
     result = vtgate_conn._execute(
@@ -324,7 +333,7 @@ class TestVTGateFunctions(unittest.TestCase):
         result,
         ([(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (4L, 'test 4'),
           (6L, 'test 6'), (7L, 'test 7')], 6L, 0,
-         [('id', 8L), ('name', 253L)]))
+         [('id', self.int_type), ('name', self.string_type)]))
 
     # Test stream over scatter
     stream_cursor_1 = vtgate_conn.cursor(
@@ -333,8 +342,10 @@ class TestVTGateFunctions(unittest.TestCase):
     stream_cursor_2 = vtgate_conn.cursor(
         None, 'master', cursorclass=vtgate_cursor.StreamVTGateCursor)
     stream_cursor_2.execute('select id, name from vt_user', {})
-    self.assertEqual(stream_cursor_1.description, [('id', 8L), ('name', 253L)])
-    self.assertEqual(stream_cursor_2.description, [('id', 8L), ('name', 253L)])
+    self.assertEqual(stream_cursor_1.description,
+                     [('id', self.int_type), ('name', self.string_type)])
+    self.assertEqual(stream_cursor_2.description,
+                     [('id', self.int_type), ('name', self.string_type)])
     rows_1 = []
     rows_2 = []
     for row_1, row_2 in itertools.izip(stream_cursor_1, stream_cursor_2):
@@ -422,7 +433,8 @@ class TestVTGateFunctions(unittest.TestCase):
         'select id, name from vt_user2 where id = :id', {'id': 1},
         None, 'master')
     self.assertEqual(
-        result, ([(1, 'name1')], 1L, 0, [('id', 8L), ('name', 253L)]))
+        result, ([(1, 'name1')], 1L, 0,
+                 [('id', self.int_type), ('name', self.string_type)]))
 
     # Test select by lookup
     result = vtgate_conn._execute(
@@ -431,7 +443,8 @@ class TestVTGateFunctions(unittest.TestCase):
     result[0].sort()
     self.assertEqual(
         result,
-        ([(1, 'name1'), (7, 'name1')], 2L, 0, [('id', 8L), ('name', 253L)]))
+        ([(1, 'name1'), (7, 'name1')], 2L, 0,
+         [('id', self.int_type), ('name', self.string_type)]))
 
     # Test IN clause using non-unique vindex
     result = vtgate_conn._execute(
@@ -441,14 +454,15 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(
         result,
         ([(1, 'name1'), (2, 'name2'), (7, 'name1')], 3L, 0,
-         [('id', 8L), ('name', 253L)]))
+         [('id', self.int_type), ('name', self.string_type)]))
     result = vtgate_conn._execute(
         "select id, name from vt_user2 where name in ('name1')", {},
         None, 'master')
     result[0].sort()
     self.assertEqual(
         result,
-        ([(1, 'name1'), (7, 'name1')], 2L, 0, [('id', 8L), ('name', 253L)]))
+        ([(1, 'name1'), (7, 'name1')], 2L, 0,
+         [('id', self.int_type), ('name', self.string_type)]))
 
     # Test delete
     vtgate_conn.begin()
@@ -492,7 +506,8 @@ class TestVTGateFunctions(unittest.TestCase):
           {'user_id': i}, None, 'master')
       self.assertEqual(
           result,
-          ([(i, 'test %s' % i)], 1L, 0, [('user_id', 8L), ('email', 253L)]))
+          ([(i, 'test %s' % i)], 1L, 0,
+           [('user_id', self.int_type), ('email', self.string_type)]))
     result = shard_0_master.mquery(
         'vt_user', 'select user_id, email from vt_user_extra')
     self.assertEqual(result, ((1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')))
@@ -559,7 +574,9 @@ class TestVTGateFunctions(unittest.TestCase):
       self.assertEqual(
           result,
           ([(i, i, 'test %s' % i)], 1, 0,
-           [('user_id', 8L), ('id', 8L), ('song', 253L)]))
+           [('user_id', self.int_type),
+            ('id', self.int_type),
+            ('song', self.string_type)]))
     vtgate_conn.begin()
     result = vtgate_conn._execute(
         'insert into vt_music (user_id, id, song) '
@@ -663,7 +680,9 @@ class TestVTGateFunctions(unittest.TestCase):
         {'music_id': 6}, None, 'master')
     self.assertEqual(
         result, ([(6L, 5L, 'test 6')], 1, 0,
-                 [('music_id', 8L), ('user_id', 8L), ('artist', 253L)]))
+                 [('music_id', self.int_type),
+                  ('user_id', self.int_type),
+                  ('artist', self.string_type)]))
     result = shard_0_master.mquery(
         'vt_user', 'select music_id, user_id, artist from vt_music_extra')
     self.assertEqual(result, ((1L, 1L, 'test 1'), (6L, 5L, 'test 6')))

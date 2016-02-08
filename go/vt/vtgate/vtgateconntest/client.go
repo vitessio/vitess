@@ -273,8 +273,8 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bi
 		Session:           session,
 		NotInTransaction:  notInTransaction,
 	}
-	if len(query.EntityKeyspaceIDs) == 1 && len(query.EntityKeyspaceIDs[0].XidValue) == 0 {
-		query.EntityKeyspaceIDs[0].XidValue = nil
+	if len(query.EntityKeyspaceIDs) == 1 && len(query.EntityKeyspaceIDs[0].Value) == 0 {
+		query.EntityKeyspaceIDs[0].Value = nil
 	}
 	if !reflect.DeepEqual(query, execCase.entityIdsQuery) {
 		f.t.Errorf("ExecuteEntityIds: %+v, want %+v", query, execCase.entityIdsQuery)
@@ -2173,8 +2173,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				{
-					XidType:    sqltypes.VarBinary,
-					XidValue:   []byte{105, 100, 49},
+					Type:       sqltypes.VarBinary,
+					Value:      []byte{105, 100, 49},
 					KeyspaceId: []byte{0x6B},
 				},
 			},
@@ -2281,8 +2281,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				{
-					XidType:    sqltypes.VarBinary,
-					XidValue:   []byte{105, 100, 49},
+					Type:       sqltypes.VarBinary,
+					Value:      []byte{105, 100, 49},
 					KeyspaceId: []byte{0x6B},
 				},
 			},
@@ -2389,8 +2389,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				{
-					XidType:    sqltypes.Int64,
-					XidValue:   []byte("-12345"),
+					Type:       sqltypes.Int64,
+					Value:      []byte("-12345"),
 					KeyspaceId: []byte{0x6B},
 				},
 			},
@@ -2501,8 +2501,8 @@ var execMap = map[string]struct {
 			EntityColumnName: "column",
 			EntityKeyspaceIDs: []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				{
-					XidType:    sqltypes.Int64,
-					XidValue:   []byte("123456"),
+					Type:       sqltypes.Int64,
+					Value:      []byte("123456"),
 					KeyspaceId: []byte{0x6B},
 				},
 			},

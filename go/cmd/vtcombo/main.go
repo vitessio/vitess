@@ -9,6 +9,7 @@
 package main
 
 import (
+	"expvar"
 	"flag"
 	"time"
 
@@ -99,7 +100,7 @@ func main() {
 
 	// vtgate configuration and init
 	resilientSrvTopoServer := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
-	healthCheck := discovery.NewHealthCheck(30*time.Second /*connTimeoutTotal*/, 1*time.Millisecond /*retryDelay*/, 1*time.Minute /*healthCheckTimeout*/)
+	healthCheck := discovery.NewHealthCheck(30*time.Second /*connTimeoutTotal*/, 1*time.Millisecond /*retryDelay*/, 1*time.Minute /*healthCheckTimeout*/, "" /* statsSuffix */)
 	tabletTypesToWait := []topodatapb.TabletType{
 		topodatapb.TabletType_MASTER,
 		topodatapb.TabletType_REPLICA,
@@ -115,6 +116,7 @@ func main() {
 		// FIXME(alainjobart): stop vtgate
 	})
 	servenv.OnClose(func() {
+		log.Infof("Total count of new connections to MySQL: %v", expvar.Get("mysql-new-connection-count"))
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
 		topo.CloseServers()

@@ -91,7 +91,7 @@ public abstract class RpcClientTest {
           .put(new byte[] {7, 8, 9}, new byte[] {1, 2, 3})
           .build();
   private static final String ENTITY_KEYSPACE_IDS_ECHO =
-      "[xid_type:INT64 xid_value:\"123\" keyspace_id:\"\\001\\002\\003\"  xid_type:FLOAT64 xid_value:\"2.5\" keyspace_id:\"\\004\\005\\006\"  xid_type:VARBINARY xid_value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]";
+      "[type:INT64 value:\"123\" keyspace_id:\"\\001\\002\\003\"  type:FLOAT64 value:\"2.5\" keyspace_id:\"\\004\\005\\006\"  type:VARBINARY value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]";
 
   private static final TabletType TABLET_TYPE = TabletType.REPLICA;
   private static final String TABLET_TYPE_ECHO = TABLET_TYPE.toString();

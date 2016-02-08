@@ -42,21 +42,21 @@ var (
 	entityKeyspaceIDs = []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 		{
 			KeyspaceId: []byte{1, 2, 3},
-			XidType:    sqltypes.Int64,
-			XidValue:   []byte("123"),
+			Type:       sqltypes.Int64,
+			Value:      []byte("123"),
 		},
 		{
 			KeyspaceId: []byte{4, 5, 6},
-			XidType:    sqltypes.Float64,
-			XidValue:   []byte("2"),
+			Type:       sqltypes.Float64,
+			Value:      []byte("2"),
 		},
 		{
 			KeyspaceId: []byte{7, 8, 9},
-			XidType:    sqltypes.VarBinary,
-			XidValue:   []byte{1, 2, 3},
+			Type:       sqltypes.VarBinary,
+			Value:      []byte{1, 2, 3},
 		},
 	}
-	entityKeyspaceIDsEcho = "[xid_type:INT64 xid_value:\"123\" keyspace_id:\"\\001\\002\\003\"  xid_type:FLOAT64 xid_value:\"2\" keyspace_id:\"\\004\\005\\006\"  xid_type:VARBINARY xid_value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]"
+	entityKeyspaceIDsEcho = "[type:INT64 value:\"123\" keyspace_id:\"\\001\\002\\003\"  type:FLOAT64 value:\"2\" keyspace_id:\"\\004\\005\\006\"  type:VARBINARY value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]"
 
 	tabletType     = topodatapb.TabletType_REPLICA
 	tabletTypeEcho = topodatapb.TabletType_name[int32(tabletType)]

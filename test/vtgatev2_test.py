@@ -235,9 +235,9 @@ def setup_tablets():
 
 
 def get_connection(timeout=10.0):
-  protocol = protocols_flavor().vtgate_python_protocol()
+  protocol, endpoint = utils.vtgate.rpc_endpoint(python=True)
   try:
-    return vtgate_client.connect(protocol, utils.vtgate.addr(), timeout)
+    return vtgate_client.connect(protocol, endpoint, timeout)
   except Exception:
     logging.exception('Connection to vtgate (timeout=%s) failed.', timeout)
     raise
@@ -464,17 +464,13 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.commit()
     kid_list = [pack_kid(kid) for kid in kid_list]
     cursor = vtgate_conn.cursor(keyspace=None, tablet_type='master')
+
     # Test ExecuteBatchKeyspaceIds
     params_list = [
         dict(sql='select msg, keyspace_id from vt_insert_test',
              bind_variables={},
              keyspace=KEYSPACE_NAME, keyspace_ids=kid_list,
              shards=None),
-        dict(sql='select eid, id, keyspace_id from vt_a',
-             bind_variables={},
-             keyspace=KEYSPACE_NAME,
-             keyspace_ids=None,
-             shards=[shard_name]),
         dict(sql='select eid + 100, id, keyspace_id from vt_a',
              bind_variables={},
              keyspace=KEYSPACE_NAME, keyspace_ids=kid_list,
@@ -486,6 +482,26 @@ class TestCoreVTGateFunctions(BaseTestCase):
     self.assertEqual(msg_0, 'test 0')
     self.assertEqual(msg_1, 'test 1')
     self.assertTrue(cursor.nextset())
+    eid_0_plus_100, eid_1_plus_100 = (
+        row[0] for row in sorted(cursor.fetchall())[:2])
+    self.assertEqual(eid_0_plus_100, 100)
+    self.assertEqual(eid_1_plus_100, 101)
+    self.assertFalse(cursor.nextset())
+
+    # Test ExecuteBatchShards
+    params_list = [
+        dict(sql='select eid, id, keyspace_id from vt_a',
+             bind_variables={},
+             keyspace=KEYSPACE_NAME,
+             keyspace_ids=None,
+             shards=[shard_name]),
+        dict(sql='select eid + 100, id, keyspace_id from vt_a',
+             bind_variables={},
+             keyspace=KEYSPACE_NAME,
+             keyspace_ids=None,
+             shards=[shard_name]),
+    ]
+    cursor.executemany(sql=None, params_list=params_list)
     self.assertEqual(cursor.rowcount, count)
     eid_0, eid_1 = (row[0] for row in sorted(cursor.fetchall())[:2])
     self.assertEqual(eid_0, 0)
@@ -1042,9 +1058,8 @@ class TestFailures(BaseTestCase):
     except dbexceptions.DatabaseError:
       # FIXME(alainjobart) add a method to get the session to vtgate_client,
       # instead of poking into it like this.
+      logging.info('Shard session: %s', vtgate_conn.session)
       if protocols_flavor().vtgate_python_protocol() == 'gorpc':
-        logging.info(
-            'SHARD SESSIONS: %s', vtgate_conn.session['ShardSessions'])
         transaction_id = (
             vtgate_conn.session['ShardSessions'][0]['TransactionId'])
       else:
@@ -1195,20 +1210,10 @@ class TestFailures(BaseTestCase):
       t.wait_for_vttablet_state('SERVING')
     self.replica_tablet2.kill_vttablet()
     replica_tablet_proc = self.replica_tablet.kill_vttablet(wait=False)
-    time.sleep(0.1)
+    if vtgate_gateway_flavor().flavor() == 'shardgateway':
+      time.sleep(1)  # skip the vttablet waiting period
     # send query while vttablet is in lameduck, should fail as no vttablet
-    try:
-      vtgate_conn._execute(
-          'select 1 from vt_insert_test', {},
-          KEYSPACE_NAME, 'replica',
-          keyranges=[self.keyrange])
-      self.fail('DatabaseError should have been raised')
-    except Exception, e:  # pylint: disable=broad-except
-      self.assertIsInstance(e, dbexceptions.DatabaseError)
-      self.assertNotIsInstance(e, dbexceptions.IntegrityError)
-      self.assertNotIsInstance(e, dbexceptions.OperationalError)
-      self.assertNotIsInstance(e, dbexceptions.TimeoutError)
-    # send another query, should also fail
+    time.sleep(0.1)  # wait a short while so vtgate gets the health check
     try:
       vtgate_conn._execute(
           'select 1 from vt_insert_test', {},

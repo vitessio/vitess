@@ -63,13 +63,13 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 			"col",
 			[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 				{
-					XidType:    sqltypes.Int64,
-					XidValue:   []byte("0"),
+					Type:       sqltypes.Int64,
+					Value:      []byte("0"),
 					KeyspaceId: []byte{0x10},
 				},
 				{
-					XidType:    sqltypes.VarBinary,
-					XidValue:   []byte("1"),
+					Type:       sqltypes.VarBinary,
+					Value:      []byte("1"),
 					KeyspaceId: []byte{0x25},
 				},
 			},

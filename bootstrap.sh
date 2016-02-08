@@ -71,6 +71,10 @@ if [ $SKIP_ROOT_INSTALLS == "True" ]; then
 elif [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
   echo "skipping gRPC build. remove $grpc_dist to force rebuild."
 else
+  # unlink homebrew's protobuf, to be able to compile the downloaded protobuf package
+  if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
+    brew unlink grpc/grpc/google-protobuf
+  fi
   # protobuf used to be a separate package, now we use the gRPC one
   rm -rf $VTROOT/dist/protobuf
   rm -rf $grpc_dist
@@ -82,8 +86,19 @@ else
   export PYTHONPATH=$(prepend_path $PYTHONPATH $grpc_dist/usr/local/lib/python2.7/dist-packages)
   export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
   export LD_LIBRARY_PATH=$(prepend_path $LD_LIBRARY_PATH $grpc_dist/usr/local/lib)
+
+  if [ `uname -s` == "Darwin" ]; then
+    # on OSX tox is installed in the following path
+    export PATH=$(prepend_path $PATH /usr/local/Cellar/python/2.7.11/Frameworks/Python.framework/Versions/2.7/bin)
+  fi
+
   ./travis/install_grpc.sh $grpc_dist || fail "gRPC build failed"
   echo "$grpc_ver" > $grpc_dist/.build_finished
+
+  # link homebrew's protobuf back
+  if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
+    brew link grpc/grpc/google-protobuf
+  fi
 fi
 
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
@@ -199,14 +214,6 @@ fi
 echo "creating git pre-commit hooks"
 mkdir -p $VTTOP/.git/hooks
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
-
-if [ `uname -s` == "Darwin" ]; then
-  echo "Setting up Apple System Integrity Protection (https://support.apple.com/en-us/HT204899)"
-  echo "A sudoer password is required in this step:"
-  sudo install_name_tool -change libgrpc.dylib $VTROOT/dist/grpc/lib/libgrpc.dylib $VTROOT/dist/grpc/lib/python2.7/site-packages/grpc/_adapter/_c.so
-  sudo install_name_tool -change libgpr.dylib $VTROOT/dist/grpc/lib/libgpr.dylib $VTROOT/dist/grpc/lib/python2.7/site-packages/grpc/_adapter/_c.so
-  sudo install_name_tool -change libgpr.dylib $VTROOT/dist/grpc/lib/libgpr.dylib $VTROOT/dist/grpc/lib/libgrpc.dylib
-fi
 
 echo
 echo "bootstrap finished - run 'source dev.env' in your shell before building."
