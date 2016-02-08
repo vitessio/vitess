@@ -22,7 +22,7 @@ $VTROOT/bin/vtgate \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
 
-echo "Access vtgate at http://$hostname:$port/debug/status"
+echo "Access vtgate at http://$hostname:$web_port/debug/status"
 
 disown -a
 

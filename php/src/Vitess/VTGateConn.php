@@ -5,6 +5,7 @@ class VTGateConn
 {
 
     /**
+     *
      * @var RpcClient
      */
     protected $client;
@@ -88,6 +89,13 @@ class VTGateConn
         return new Cursor($response->getResult());
     }
 
+    /**
+     * Execute multiple shard queries as a batch.
+     *
+     * @param boolean $as_transaction
+     *            If true, automatically create a transaction (per shard) that
+     *            encloses all the batch queries.
+     */
     public function executeBatchShards(Context $ctx, array $bound_shard_queries, $tablet_type, $as_transaction)
     {
         $request = new Proto\Vtgate\ExecuteBatchShardsRequest();
@@ -106,6 +114,13 @@ class VTGateConn
         return $results;
     }
 
+    /**
+     * Execute multiple keyspace ID queries as a batch.
+     *
+     * @param boolean $as_transaction
+     *            If true, automatically create a transaction (per shard) that
+     *            encloses all the batch queries.
+     */
     public function executeBatchKeyspaceIds(Context $ctx, array $bound_keyspace_id_queries, $tablet_type, $as_transaction)
     {
         $request = new Proto\Vtgate\ExecuteBatchKeyspaceIdsRequest();
