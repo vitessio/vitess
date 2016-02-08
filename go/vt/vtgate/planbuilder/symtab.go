@@ -25,7 +25,7 @@ type symtab struct {
 type colsym struct {
 	Alias      sqlparser.SQLName
 	Route      *routeBuilder
-	Symtab     *symtab
+	symtab     *symtab
 	Underlying colref
 	Vindex     Vindex
 }
@@ -33,22 +33,8 @@ type colsym struct {
 func newColsym(st *symtab) *colsym {
 	return &colsym{
 		Route:  st.FirstRoute,
-		Symtab: st,
+		symtab: st,
 	}
-}
-
-// tableAlias is part of symtab.
-// It represnts a table alias in a FROM clause.
-// TODO(sougou): Update comments after the struct is finalized.
-type tableAlias struct {
-	Alias  sqlparser.SQLName
-	Route  *routeBuilder
-	Symtab *symtab
-	// Keyspace points to the keyspace to which this
-	// alias belongs.
-	Keyspace *Keyspace
-	// CoVindexes is the list of column Vindexes for this alias.
-	ColVindexes []*ColVindex
 }
 
 // colref uniquely identifies a column reference.
@@ -65,6 +51,20 @@ func newColref(col *sqlparser.ColName) colref {
 		metadata: col.Metadata,
 		name:     col.Name,
 	}
+}
+
+// tableAlias is part of symtab.
+// It represnts a table alias in a FROM clause.
+// TODO(sougou): Update comments after the struct is finalized.
+type tableAlias struct {
+	Alias  sqlparser.SQLName
+	Route  *routeBuilder
+	symtab *symtab
+	// Keyspace points to the keyspace to which this
+	// alias belongs.
+	Keyspace *Keyspace
+	// CoVindexes is the list of column Vindexes for this alias.
+	ColVindexes []*ColVindex
 }
 
 // FindVindex returns the vindex if one was found for the column.
@@ -87,7 +87,7 @@ func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder, schem
 	st.tables = []*tableAlias{{
 		Alias:       alias,
 		Route:       route,
-		Symtab:      st,
+		symtab:      st,
 		Keyspace:    table.Keyspace,
 		ColVindexes: table.ColVindexes,
 	}}
@@ -102,7 +102,7 @@ func (st *symtab) Add(newsyms *symtab) error {
 		if found := st.findTable(t.Alias); found != nil {
 			return errors.New("duplicate symbols")
 		}
-		t.Symtab = st
+		t.symtab = st
 		st.tables = append(st.tables, t)
 	}
 	return nil
@@ -128,7 +128,7 @@ func (st *symtab) Merge(newsyms *symtab, route *routeBuilder) error {
 			return errors.New("duplicate symbols")
 		}
 		t.Route = route
-		t.Symtab = st
+		t.symtab = st
 		st.tables = append(st.tables, t)
 	}
 	return nil
@@ -159,9 +159,9 @@ func (st *symtab) SetRHS() {
 func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBuilder, isLocal bool, err error) {
 	switch m := col.Metadata.(type) {
 	case *colsym:
-		return m.Route, m.Symtab == st, nil
+		return m.Route, m.symtab == st, nil
 	case *tableAlias:
-		return m.Route, m.Symtab == st, nil
+		return m.Route, m.symtab == st, nil
 	}
 	if len(st.Colsyms) != 0 {
 		name := sqlparser.SQLName(sqlparser.String(col))
