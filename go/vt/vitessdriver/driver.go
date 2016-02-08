@@ -327,9 +327,9 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 func (s *stmt) executeVitess(ctx context.Context, args []driver.Value) (*sqltypes.Result, error) {
 	if s.c.tx != nil {
 		if s.c.useExecuteShards() {
-			return s.c.tx.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto, false /* notInTransaction */)
+			return s.c.tx.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto)
 		}
-		return s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto, false /* notInTransaction */)
+		return s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto)
 	}
 
 	// Non-transactional case.

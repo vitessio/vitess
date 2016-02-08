@@ -251,17 +251,17 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Fatalf("Begin error: %v", err)
 	}
 
-	qr, err = tx.Execute(ctx, echoPrefix+query, bindVars, tabletType, true)
+	qr, err = tx.Execute(ctx, echoPrefix+query, bindVars, tabletType)
 	checkEcho(t, "Execute", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
-		"notInTransaction": "true",
+		"notInTransaction": "false",
 	})
 
-	qr, err = tx.ExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType, true)
+	qr, err = tx.ExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType)
 	checkEcho(t, "ExecuteShards", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
@@ -270,10 +270,10 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
-		"notInTransaction": "true",
+		"notInTransaction": "false",
 	})
 
-	qr, err = tx.ExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType, true)
+	qr, err = tx.ExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType)
 	checkEcho(t, "ExecuteKeyspaceIds", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
@@ -282,10 +282,10 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
-		"notInTransaction": "true",
+		"notInTransaction": "false",
 	})
 
-	qr, err = tx.ExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType, true)
+	qr, err = tx.ExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType)
 	checkEcho(t, "ExecuteKeyRanges", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
@@ -294,10 +294,10 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
-		"notInTransaction": "true",
+		"notInTransaction": "false",
 	})
 
-	qr, err = tx.ExecuteEntityIds(ctx, echoPrefix+query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, true)
+	qr, err = tx.ExecuteEntityIds(ctx, echoPrefix+query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType)
 	checkEcho(t, "ExecuteEntityIds", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
@@ -307,7 +307,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
-		"notInTransaction": "true",
+		"notInTransaction": "false",
 	})
 
 	if err := tx.Rollback(ctx); err != nil {
