@@ -962,7 +962,12 @@ class TupleCompare(BaseWhereExpr):
   Example: If reading values ordered by columns (x, y, z) starting after
   the point (3, 5, 7), build the SQL:
 
-    "(x, y, z) > (3, 5, 7)".
+    "x = 3 AND (y = 5 AND z > 7 OR y > 5) OR x > 3".
+
+  NOTE: MySQL supports "(x, y, z) > (3, 5, 7)" to do the same thing,
+  but we have found that the optimizer frequently does not recognize
+  this as an indexed, range query. Surprisingly, it has a better chance
+  of efficiently using with the above inequality.
   """
 
   def __init__(self, starting_point, asc=True, inclusive=False):
@@ -994,27 +999,31 @@ class TupleCompare(BaseWhereExpr):
     """
     if column_name:
       raise ValueError('column_name should be None.')
+    where_clause = None
+    is_complex = False
     bind_vars = {}
-    column_list = []
-    token_list = []
-    for column, value in self.starting_point:
-      column_list.append(column)
-      bind_var = choose_bind_name(column, counter)
-      update_bind_vars(bind_vars, {bind_var: value})
-      if isinstance(value, (list, tuple, set)):
+    for column, prev_value in reversed(self.starting_point):
+      bind_name = choose_bind_name(column, counter)
+      if isinstance(prev_value, (list, tuple, set)):
         raise ValueError(
             'Column=%s value=%s should be a single value.' %
-            (column, value))
-      token_list.append('%%(%s)s' % (bind_var,))
-
-    parts = ['(%s)' % ', '.join(column_list)]
-    if self.asc:
-      op = '>=' if self.inclusive else '>'
-    else:
-      op = '<=' if self.inclusive else '<'
-    parts.append(op)
-    parts.append('(%s)' % ', '.join(token for token in token_list))
-    where_clause = ' '.join(parts)
+            (column, prev_value))
+      update_bind_vars(bind_vars, {bind_name: prev_value})
+      eq_part = '%s = %%(%s)s' % (column, bind_name)
+      if where_clause is None and self.inclusive:
+        op = '>=' if self.asc else '<='
+      else:
+        op = '>' if self.asc else '<'
+      ineq_part = '%s %s %%(%s)s' % (column, op, bind_name)
+      if where_clause:
+        if is_complex:
+          where_clause = '%s AND (%s) OR %s' % (
+              eq_part, where_clause, ineq_part)
+        else:
+          where_clause = '%s AND %s OR %s' % (eq_part, where_clause, ineq_part)
+          is_complex = True
+      else:
+        where_clause = ineq_part
     return where_clause, bind_vars
 
 
