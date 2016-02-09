@@ -956,25 +956,30 @@ class Flags(BaseUpdateValueExpr, BaseWhereExpr):
     return clause, bind_vars
 
 
-class AfterPrevValues(BaseWhereExpr):
+class TupleCompare(BaseWhereExpr):
   """Create SQL for an after clause in a multi-dimensional scan.
 
-  Example: If reading values ordered by columns (x, y, z) starting at
+  Example: If reading values ordered by columns (x, y, z) starting after
   the point (3, 5, 7), build the SQL:
 
     "x = 3 AND (y = 5 AND z > 7 OR y > 5) OR x > 3".
+
+  NOTE: MySQL supports "(x, y, z) > (3, 5, 7)" to do the same thing,
+  but we have found that the optimizer frequently does not recognize
+  this as an indexed, range query. Surprisingly, it has a better chance
+  of efficiently using with the above inequality.
   """
 
-  def __init__(self, prev_value_pairs, asc=True, inclusive=False):
+  def __init__(self, starting_point, asc=True, inclusive=False):
     """Constructor.
 
     Args:
-      prev_value_pairs: Ordered list of (column, prev_value) pairs.
+      starting_point: Ordered list of (column, start_value) pairs.
         Example - [('x', 3), ('y', 5), ('z', 7)].
       asc: If True, scan forward.
       inclusive: If True, also include starting point.
     """
-    self.prev_value_pairs = prev_value_pairs
+    self.starting_point = starting_point
     self.asc = asc
     self.inclusive = inclusive
 
@@ -997,7 +1002,7 @@ class AfterPrevValues(BaseWhereExpr):
     where_clause = None
     is_complex = False
     bind_vars = {}
-    for column, prev_value in reversed(self.prev_value_pairs):
+    for column, prev_value in reversed(self.starting_point):
       bind_name = choose_bind_name(column, counter)
       if isinstance(prev_value, (list, tuple, set)):
         raise ValueError(
@@ -1020,6 +1025,58 @@ class AfterPrevValues(BaseWhereExpr):
       else:
         where_clause = ineq_part
     return where_clause, bind_vars
+
+
+class TupleGreater(TupleCompare):
+  """WHERE expr for tuple > values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) > (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleGreater, self).__init__(
+        starting_point, asc=True, inclusive=False)
+
+
+class TupleGreaterEqual(TupleCompare):
+  """WHERE expr for tuple >= values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) >= (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleGreaterEqual, self).__init__(
+        starting_point, asc=True, inclusive=True)
+
+
+class TupleLess(TupleCompare):
+  """WHERE expr for tuple < values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) < (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleLess, self).__init__(
+        starting_point, asc=False, inclusive=False)
+
+
+class TupleLessEqual(TupleCompare):
+  """WHERE expr for tuple <= values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) <= (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleLessEqual, self).__init__(
+        starting_point, asc=False, inclusive=True)
 
 
 def make_flags(flag_mask, value):
