@@ -25,7 +25,7 @@ UNSHARDED = [keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)]
 
 # Parse args
 parser = argparse.ArgumentParser()
-parser.add_argument('--server', dest='server', default='localhost:15001')
+parser.add_argument('--server', dest='server', default='localhost:15991')
 parser.add_argument('--timeout', dest='timeout', type=float, default='10.0')
 args = parser.parse_args()
 

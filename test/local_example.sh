@@ -57,7 +57,9 @@ done
 echo "Run Python client script..."
 # Retry until vtgate is ready.
 start=`date +%s`
-until ./client.sh --server=localhost:15991 ; do
+# Test that the client.sh script works with no --server arg,
+# because that's how the tutorial says to run it.
+until ./client.sh ; do
   retry_with_timeout
 done
 
