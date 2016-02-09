@@ -5,7 +5,6 @@
 package vtgate
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -15,11 +14,13 @@ import (
 )
 
 func (rtr *Router) execPlan(vcursor *requestContext, plan interface{}) (*sqltypes.Result, error) {
-	route, ok := plan.(*planbuilder.Route)
-	if !ok {
-		return nil, errors.New("no joins yet")
+	switch plan := plan.(type) {
+	case *planbuilder.Join:
+		return rtr.execJoin(vcursor, plan)
+	case *planbuilder.Route:
+		return rtr.execRoute(vcursor, plan)
 	}
-	return rtr.execRoute(vcursor, route)
+	panic("unreachable")
 }
 
 func (rtr *Router) execJoin(vcursor *requestContext, join *planbuilder.Join) (*sqltypes.Result, error) {
@@ -52,9 +53,6 @@ func (rtr *Router) execJoin(vcursor *requestContext, join *planbuilder.Join) (*s
 			return nil, err
 		}
 		result.Fields = joinFields(lresult.Fields, rresult.Fields, join.Cols)
-		if len(rresult.Rows) == 0 {
-			return result, nil
-		}
 		if join.IsLeft && len(rresult.Rows) == 0 {
 			rresult.Rows = [][]sqltypes.Value{make([]sqltypes.Value, len(rresult.Fields))}
 		}
@@ -137,11 +135,13 @@ func (rtr *Router) execRoute(vcursor *requestContext, route *planbuilder.Route) 
 }
 
 func (rtr *Router) streamExecPlan(vcursor *requestContext, plan interface{}, sendReply func(*sqltypes.Result) error) error {
-	route, ok := plan.(*planbuilder.Route)
-	if !ok {
-		return errors.New("no joins yet")
+	switch plan := plan.(type) {
+	case *planbuilder.Join:
+		return rtr.streamExecPlan(vcursor, plan, sendReply)
+	case *planbuilder.Route:
+		return rtr.streamExecRoute(vcursor, plan, sendReply)
 	}
-	return rtr.streamExecRoute(vcursor, route, sendReply)
+	panic("unreachable")
 }
 
 func (rtr *Router) streamExecJoin(vcursor *requestContext, join *planbuilder.Join, sendReply func(*sqltypes.Result) error) error {
