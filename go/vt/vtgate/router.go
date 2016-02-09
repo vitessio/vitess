@@ -89,8 +89,6 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 		params, err = rtr.paramsSelectEqual(vcursor, plan)
 	case planbuilder.SelectIN:
 		params, err = rtr.paramsSelectIN(vcursor, plan)
-	case planbuilder.SelectKeyrange:
-		params, err = rtr.paramsSelectKeyrange(vcursor, plan)
 	case planbuilder.SelectScatter:
 		params, err = rtr.paramsSelectScatter(vcursor, plan)
 	default:
@@ -129,8 +127,6 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 		params, err = rtr.paramsSelectEqual(vcursor, plan)
 	case planbuilder.SelectIN:
 		params, err = rtr.paramsSelectIN(vcursor, plan)
-	case planbuilder.SelectKeyrange:
-		params, err = rtr.paramsSelectKeyrange(vcursor, plan)
 	case planbuilder.SelectScatter:
 		params, err = rtr.paramsSelectScatter(vcursor, plan)
 	default:
@@ -185,41 +181,6 @@ func (rtr *Router) paramsSelectIN(vcursor *requestContext, plan *planbuilder.Pla
 		query:     plan.Rewritten,
 		ks:        ks,
 		shardVars: routing.ShardVars(vcursor.bindVars),
-	}, nil
-}
-
-func (rtr *Router) paramsSelectKeyrange(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
-	keys, err := rtr.resolveKeys(plan.Values.([]interface{}), vcursor.bindVars)
-	if err != nil {
-		return nil, fmt.Errorf("paramsSelectKeyrange: %v", err)
-	}
-	kr, err := getKeyRange(keys)
-	if err != nil {
-		return nil, fmt.Errorf("paramsSelectKeyrange: %v", err)
-	}
-	ks, shards, err := mapExactShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.tabletType, kr)
-	if err != nil {
-		return nil, fmt.Errorf("paramsSelectKeyrange: %v", err)
-	}
-	if len(shards) != 1 {
-		return nil, fmt.Errorf("keyrange must match exactly one shard: %+v", keys)
-	}
-	return newScatterParams(plan.Rewritten, ks, vcursor.bindVars, shards), nil
-}
-
-func getKeyRange(keys []interface{}) (*topodatapb.KeyRange, error) {
-	var ksids [][]byte
-	for _, k := range keys {
-		switch k := k.(type) {
-		case string:
-			ksids = append(ksids, []byte(k))
-		default:
-			return nil, fmt.Errorf("expecting strings for keyrange: %+v", keys)
-		}
-	}
-	return &topodatapb.KeyRange{
-		Start: ksids[0],
-		End:   ksids[1],
 	}, nil
 }
 

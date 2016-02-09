@@ -30,7 +30,7 @@ func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 	switch plan.ID {
 	case SelectEqual:
 		plan.ID = UpdateEqual
-	case SelectIN, SelectScatter, SelectKeyrange:
+	case SelectIN, SelectScatter:
 		plan.ID = NoPlan
 		plan.Reason = "update has multi-shard where clause"
 		return plan
@@ -77,7 +77,7 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 	case SelectEqual:
 		plan.ID = DeleteEqual
 		plan.Subquery = generateDeleteSubquery(del, plan.Table)
-	case SelectIN, SelectScatter, SelectKeyrange:
+	case SelectIN, SelectScatter:
 		plan.ID = NoPlan
 		plan.Reason = "delete has multi-shard where clause"
 	default:
