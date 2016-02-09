@@ -53,7 +53,7 @@ public class VitessClientExample {
       System.out.println("Inserting into master...");
       VTGateTx tx = conn.begin(ctx);
       tx.executeShards(ctx, "INSERT INTO test_table (msg) VALUES (:msg)", keyspace, shards,
-          bindVars, TabletType.MASTER, false /* notInTransaction (ignore this because we will soon remove it) */);
+          bindVars, TabletType.MASTER);
       tx.commit(ctx);
 
       // Read it back from the master.
