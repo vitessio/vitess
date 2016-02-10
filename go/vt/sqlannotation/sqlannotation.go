@@ -76,7 +76,7 @@ func AddFilteredReplicationUnfriendlyIfDML(sql string) string {
 // AddFilteredReplicationUnfriendly annotates the given 'sql'
 // query as filtered-replication-unfriendly.
 func AddFilteredReplicationUnfriendly(sql string) string {
-	replicationUnfriendlyCountStat.Add(1)
+	filteredReplicationUnfriendlyCountStat.Add(1)
 	return sql + filteredReplicationUnfriendlyComment
 }
 
