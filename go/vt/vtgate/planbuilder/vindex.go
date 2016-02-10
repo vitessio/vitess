@@ -121,7 +121,7 @@ var registry = make(map[string]NewVindexFunc)
 // Register registers a vindex under the specified vindexType.
 // A duplicate vindexType will generate a panic.
 // New vindexes will be created using these functions at the
-// time of schema loading.
+// time of vschema loading.
 func Register(vindexType string, newVindexFunc NewVindexFunc) {
 	if _, ok := registry[vindexType]; ok {
 		panic(fmt.Sprintf("%s is already registered", vindexType))

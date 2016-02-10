@@ -13,7 +13,7 @@ import (
 )
 
 func TestJoin(t *testing.T) {
-	schema, err := LoadFile(locateFile("schema_test.json"))
+	vschema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestJoin(t *testing.T) {
 			t.Errorf("unexpected type: %T", statement)
 			continue
 		}
-		plan, _, err := processTableExprs(sel.From, schema)
+		plan, _, err := processTableExprs(sel.From, vschema)
 		if err != nil {
 			t.Error(err)
 			continue

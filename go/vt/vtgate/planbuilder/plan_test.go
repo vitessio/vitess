@@ -91,18 +91,18 @@ func TestPlanName(t *testing.T) {
 }
 
 func TestPlan(t *testing.T) {
-	schema, err := LoadFile(locateFile("schema_test.json"))
+	vschema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	testFile(t, "select_cases.txt", schema)
-	testFile(t, "dml_cases.txt", schema)
-	testFile(t, "insert_cases.txt", schema)
+	testFile(t, "select_cases.txt", vschema)
+	testFile(t, "dml_cases.txt", vschema)
+	testFile(t, "insert_cases.txt", vschema)
 }
 
-func testFile(t *testing.T, filename string, schema *Schema) {
+func testFile(t *testing.T, filename string, vschema *VSchema) {
 	for tcase := range iterateExecFile(filename) {
-		plan := BuildPlan(tcase.input, schema)
+		plan := BuildPlan(tcase.input, vschema)
 		if plan.ID == NoPlan {
 			plan.Rewritten = ""
 			plan.ColVindex = nil

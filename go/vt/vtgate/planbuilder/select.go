@@ -10,10 +10,10 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
+func buildSelectPlan(sel *sqlparser.Select, vschema *VSchema) *Plan {
 	plan := &Plan{ID: NoPlan}
 	tablename, _ := analyzeFrom(sel.From)
-	plan.Table, plan.Reason = schema.FindTable(tablename)
+	plan.Table, plan.Reason = vschema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}

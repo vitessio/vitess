@@ -10,13 +10,13 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func buildInsertPlan(ins *sqlparser.Insert, schema *Schema) *Plan {
+func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) *Plan {
 	plan := &Plan{
 		ID:        NoPlan,
 		Rewritten: generateQuery(ins),
 	}
 	tablename := sqlparser.GetTableName(ins.Table)
-	plan.Table, plan.Reason = schema.FindTable(tablename)
+	plan.Table, plan.Reason = vschema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}
@@ -53,7 +53,7 @@ func buildInsertPlan(ins *sqlparser.Insert, schema *Schema) *Plan {
 		plan.Reason = "column list doesn't match values"
 		return plan
 	}
-	colVindexes := schema.Tables[tablename].ColVindexes
+	colVindexes := vschema.Tables[tablename].ColVindexes
 	plan.ID = InsertSharded
 	plan.Values = make([]interface{}, 0, len(colVindexes))
 	for _, index := range colVindexes {

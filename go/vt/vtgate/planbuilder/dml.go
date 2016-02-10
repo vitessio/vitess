@@ -11,13 +11,13 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
+func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) *Plan {
 	plan := &Plan{
 		ID:        NoPlan,
 		Rewritten: generateQuery(upd),
 	}
 	tablename := sqlparser.GetTableName(upd.Table)
-	plan.Table, plan.Reason = schema.FindTable(tablename)
+	plan.Table, plan.Reason = vschema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}
@@ -57,13 +57,13 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex)
 	return false
 }
 
-func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
+func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) *Plan {
 	plan := &Plan{
 		ID:        NoPlan,
 		Rewritten: generateQuery(del),
 	}
 	tablename := sqlparser.GetTableName(del.Table)
-	plan.Table, plan.Reason = schema.FindTable(tablename)
+	plan.Table, plan.Reason = vschema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}

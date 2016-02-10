@@ -144,8 +144,8 @@ func (id PlanID) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", id.String())), nil
 }
 
-// BuildPlan builds a plan for a query based on the specified schema.
-func BuildPlan(query string, schema *Schema) *Plan {
+// BuildPlan builds a plan for a query based on the specified vschema.
+func BuildPlan(query string, vschema *VSchema) *Plan {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
 		return &Plan{
@@ -162,12 +162,13 @@ func BuildPlan(query string, schema *Schema) *Plan {
 	var plan *Plan
 	switch statement := statement.(type) {
 	case *sqlparser.Select:
-		plan = buildSelectPlan(statement, schema)
+		plan = buildSelectPlan(statement, vschema)
 		/*
-			planb, err := buildSelectPlan2(statement, schema)
+			planb, err := buildSelectPlan2(statement, vschema)
 			if err != nil {
 				return &Plan{
-					Reason: err.Error(),
+					Reason:   err.Error(),
+					Original: query,
 				}
 			}
 			plan = &Plan{
@@ -176,11 +177,11 @@ func BuildPlan(query string, schema *Schema) *Plan {
 			}
 		*/
 	case *sqlparser.Insert:
-		plan = buildInsertPlan(statement, schema)
+		plan = buildInsertPlan(statement, vschema)
 	case *sqlparser.Update:
-		plan = buildUpdatePlan(statement, schema)
+		plan = buildUpdatePlan(statement, vschema)
 	case *sqlparser.Delete:
-		plan = buildDeletePlan(statement, schema)
+		plan = buildDeletePlan(statement, vschema)
 	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
 		return noplan
 	default:

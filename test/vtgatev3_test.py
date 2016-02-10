@@ -72,7 +72,7 @@ user_id bigint,
 primary key (music_id)
 ) Engine=InnoDB'''
 
-schema = '''{
+vschema = '''{
   "Keyspaces": {
     "user": {
       "Sharded": true,
@@ -178,7 +178,7 @@ schema = '''{
 }'''
 
 # Verify valid json
-json.loads(schema)
+json.loads(vschema)
 
 
 def setUpModule():
@@ -215,7 +215,7 @@ def setUpModule():
     shard_1_master = keyspace_env.tablet_map['user.80-.master']
     lookup_master = keyspace_env.tablet_map['lookup.0.master']
 
-    utils.apply_vschema(schema)
+    utils.apply_vschema(vschema)
     utils.VtGate().start()
   except:
     tearDownModule()

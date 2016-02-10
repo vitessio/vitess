@@ -503,7 +503,7 @@ func TestSelectScatter(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerVSchema, "", scatterConn)
 
 	_, err := routerExec(router, "select id from user", nil)
 	if err != nil {
@@ -532,7 +532,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerVSchema, "", scatterConn)
 
 	sql := "select id from user"
 	result, err := routerStream(router, sql)
@@ -571,7 +571,7 @@ func TestSelectScatterFail(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerVSchema, "", scatterConn)
 
 	_, err := routerExec(router, "select id from user", nil)
 	want := "paramsSelectScatter: keyspace TestRouter fetch error: topo error GetSrvKeyspace"

@@ -12,22 +12,22 @@ import (
 
 // processTableExprs analyzes the FROM clause. It produces a planBuilder
 // and the associated symtab with all the routes identified.
-func processTableExprs(tableExprs sqlparser.TableExprs, schema *Schema) (planBuilder, *symtab, error) {
+func processTableExprs(tableExprs sqlparser.TableExprs, vschema *VSchema) (planBuilder, *symtab, error) {
 	if len(tableExprs) != 1 {
 		// TODO(sougou): better error message.
 		return nil, nil, errors.New("lists are not supported")
 	}
-	return processTableExpr(tableExprs[0], schema)
+	return processTableExpr(tableExprs[0], vschema)
 }
 
 // processTableExpr produces a planBuilder subtree and symtab
 // for the given TableExpr.
-func processTableExpr(tableExpr sqlparser.TableExpr, schema *Schema) (planBuilder, *symtab, error) {
+func processTableExpr(tableExpr sqlparser.TableExpr, vschema *VSchema) (planBuilder, *symtab, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
-		return processAliasedTable(tableExpr, schema)
+		return processAliasedTable(tableExpr, vschema)
 	case *sqlparser.ParenTableExpr:
-		plan, syms, err := processTableExprs(tableExpr.Exprs, schema)
+		plan, syms, err := processTableExprs(tableExpr.Exprs, vschema)
 		// We want to point to the higher level parenthesis because
 		// more routes can be merged with this one. If so, the order
 		// should be maintained as dictated by the parenthesis.
@@ -36,17 +36,17 @@ func processTableExpr(tableExpr sqlparser.TableExpr, schema *Schema) (planBuilde
 		}
 		return plan, syms, err
 	case *sqlparser.JoinTableExpr:
-		return processJoin(tableExpr, schema)
+		return processJoin(tableExpr, vschema)
 	}
 	panic("unreachable")
 }
 
 // processAliasedTable produces a planBuilder subtree and symtab
 // for the given AliasedTableExpr.
-func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, schema *Schema) (planBuilder, *symtab, error) {
+func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema) (planBuilder, *symtab, error) {
 	switch expr := tableExpr.Expr.(type) {
 	case *sqlparser.TableName:
-		route, table, err := getTablePlan(expr, schema)
+		route, table, err := getTablePlan(expr, vschema)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -59,7 +59,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, schema *Schema) 
 		if tableExpr.As != "" {
 			alias = tableExpr.As
 		}
-		syms := newSymtab(alias, table, plan, schema)
+		syms := newSymtab(alias, table, plan, vschema)
 		return plan, syms, nil
 	case *sqlparser.Subquery:
 		// TODO(sougou): implement.
@@ -71,12 +71,12 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, schema *Schema) 
 // getTablePlan produces the initial Route for the specified TableName.
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
-func getTablePlan(tableName *sqlparser.TableName, schema *Schema) (*Route, *Table, error) {
+func getTablePlan(tableName *sqlparser.TableName, vschema *VSchema) (*Route, *Table, error) {
 	if tableName.Qualifier != "" {
 		// TODO(sougou): better error message.
 		return nil, nil, errors.New("tablename qualifier not allowed")
 	}
-	table, reason := schema.FindTable(string(tableName.Name))
+	table, reason := vschema.FindTable(string(tableName.Name))
 	if reason != "" {
 		return nil, nil, errors.New(reason)
 	}
@@ -98,18 +98,18 @@ func getTablePlan(tableName *sqlparser.TableName, schema *Schema) (*Route, *Tabl
 // for the given Join. If the left and right nodes can be part
 // of the same route, then it's a routeBuilder. Otherwise,
 // it's a joinBuilder.
-func processJoin(join *sqlparser.JoinTableExpr, schema *Schema) (planBuilder, *symtab, error) {
+func processJoin(join *sqlparser.JoinTableExpr, vschema *VSchema) (planBuilder, *symtab, error) {
 	switch join.Join {
 	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
 	default:
 		// TODO(sougou): better error message.
 		return nil, nil, errors.New("unsupported join")
 	}
-	lplan, lsyms, err := processTableExpr(join.LeftExpr, schema)
+	lplan, lsyms, err := processTableExpr(join.LeftExpr, vschema)
 	if err != nil {
 		return nil, nil, err
 	}
-	rplan, rsyms, err := processTableExpr(join.RightExpr, schema)
+	rplan, rsyms, err := processTableExpr(join.RightExpr, vschema)
 	if err != nil {
 		return nil, nil, err
 	}

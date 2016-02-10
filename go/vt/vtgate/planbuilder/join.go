@@ -123,8 +123,8 @@ func (jb *joinBuilder) MarshalJSON() ([]byte, error) {
 
 // buildSelectPlan2 is the new function to build a Select plan.
 // TODO(sougou): rename after deprecating old one.
-func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (plan interface{}, err error) {
-	builder, _, err := processSelect(sel, schema, nil)
+func buildSelectPlan2(sel *sqlparser.Select, vschema *VSchema) (plan interface{}, err error) {
+	builder, _, err := processSelect(sel, vschema, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ func buildSelectPlan2(sel *sqlparser.Select, schema *Schema) (plan interface{}, 
 }
 
 // processSelect builds a plan for the given query or subquery.
-func processSelect(sel *sqlparser.Select, schema *Schema, outer *symtab) (planBuilder, *symtab, error) {
-	plan, syms, err := processTableExprs(sel.From, schema)
+func processSelect(sel *sqlparser.Select, vschema *VSchema, outer *symtab) (planBuilder, *symtab, error) {
+	plan, syms, err := processTableExprs(sel.From, vschema)
 	if err != nil {
 		return nil, nil, err
 	}

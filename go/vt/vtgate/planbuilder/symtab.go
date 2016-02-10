@@ -18,7 +18,7 @@ type symtab struct {
 	FirstRoute *routeBuilder
 	Externs    []*sqlparser.ColName
 	Outer      *symtab
-	Schema     *Schema
+	VSchema    *VSchema
 }
 
 // colsym contains symbol info about a select expression.
@@ -79,10 +79,10 @@ func (t *tableAlias) FindVindex(name sqlparser.SQLName) Vindex {
 
 // newSymtab creates a new symtab initialized
 // to contain the provided table alias.
-func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder, schema *Schema) *symtab {
+func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder, vschema *VSchema) *symtab {
 	st := &symtab{
 		FirstRoute: route,
-		Schema:     schema,
+		VSchema:    vschema,
 	}
 	st.tables = []*tableAlias{{
 		Alias:       alias,

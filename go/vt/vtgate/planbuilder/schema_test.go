@@ -82,8 +82,8 @@ func init() {
 	Register("stlu", NewSTLU)
 }
 
-func TestUnshardedSchema(t *testing.T) {
-	good := SchemaFormal{
+func TestUnshardedVSchema(t *testing.T) {
+	good := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"unsharded": {
 				Tables: map[string]string{
@@ -92,11 +92,11 @@ func TestUnshardedSchema(t *testing.T) {
 			},
 		},
 	}
-	got, err := BuildSchema(&good)
+	got, err := BuildVSchema(&good)
 	if err != nil {
 		t.Error(err)
 	}
-	want := &Schema{
+	want := &VSchema{
 		Tables: map[string]*Table{
 			"t1": {
 				Name: "t1",
@@ -108,12 +108,12 @@ func TestUnshardedSchema(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("BuildSchema:s\n%v, want\n%v", got, want)
+		t.Errorf("BuildVSchema:s\n%v, want\n%v", got, want)
 	}
 }
 
-func TestShardedSchemaOwned(t *testing.T) {
-	good := SchemaFormal{
+func TestShardedVSchemaOwned(t *testing.T) {
+	good := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -149,11 +149,11 @@ func TestShardedSchemaOwned(t *testing.T) {
 			},
 		},
 	}
-	got, err := BuildSchema(&good)
+	got, err := BuildVSchema(&good)
 	if err != nil {
 		t.Error(err)
 	}
-	want := &Schema{
+	want := &VSchema{
 		Tables: map[string]*Table{
 			"t1": {
 				Name: "t1",
@@ -191,12 +191,12 @@ func TestShardedSchemaOwned(t *testing.T) {
 	}
 	want.Tables["t1"].Owned = want.Tables["t1"].ColVindexes
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("BuildSchema:s\n%v, want\n%v", got, want)
+		t.Errorf("BuildVSchema:s\n%v, want\n%v", got, want)
 	}
 }
 
-func TestShardedSchemaNotOwned(t *testing.T) {
-	good := SchemaFormal{
+func TestShardedVSchemaNotOwned(t *testing.T) {
+	good := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -229,11 +229,11 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 			},
 		},
 	}
-	got, err := BuildSchema(&good)
+	got, err := BuildVSchema(&good)
 	if err != nil {
 		t.Error(err)
 	}
-	want := &Schema{
+	want := &VSchema{
 		Tables: map[string]*Table{
 			"t1": {
 				Name: "t1",
@@ -265,26 +265,26 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 		want.Tables["t1"].ColVindexes[0],
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("BuildSchema:s\n%v, want\n%v", got, want)
+		t.Errorf("BuildVSchema:s\n%v, want\n%v", got, want)
 	}
 }
 
-func TestLoadSchemaFail(t *testing.T) {
+func TestLoadVSchemaFail(t *testing.T) {
 	_, err := LoadFile("bogus file name")
 	want := "ReadFile failed"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("LoadFile: \n%q, should start with \n%q", err, want)
 	}
 
-	_, err = NewSchema([]byte("{,}"))
+	_, err = NewVSchema([]byte("{,}"))
 	want = "Unmarshal failed"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("LoadFile: \n%q, should start with \n%q", err, want)
 	}
 }
 
-func TestBuildSchemaClassNotFoundFail(t *testing.T) {
-	bad := SchemaFormal{
+func TestBuildVSchemaClassNotFoundFail(t *testing.T) {
+	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -309,15 +309,15 @@ func TestBuildSchemaClassNotFoundFail(t *testing.T) {
 			},
 		},
 	}
-	_, err := BuildSchema(&bad)
+	_, err := BuildVSchema(&bad)
 	want := "class t1 not found for table t1"
 	if err == nil || err.Error() != want {
-		t.Errorf("BuildSchema: %v, want %v", err, want)
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
 }
 
-func TestBuildSchemaVindexNotFoundFail(t *testing.T) {
-	bad := SchemaFormal{
+func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
+	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -342,15 +342,15 @@ func TestBuildSchemaVindexNotFoundFail(t *testing.T) {
 			},
 		},
 	}
-	_, err := BuildSchema(&bad)
+	_, err := BuildVSchema(&bad)
 	want := "vindexType noexist not found"
 	if err == nil || err.Error() != want {
-		t.Errorf("BuildSchema: %v, want %v", err, want)
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
 }
 
-func TestBuildSchemaInvalidVindexFail(t *testing.T) {
-	bad := SchemaFormal{
+func TestBuildVSchemaInvalidVindexFail(t *testing.T) {
+	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -375,15 +375,15 @@ func TestBuildSchemaInvalidVindexFail(t *testing.T) {
 			},
 		},
 	}
-	_, err := BuildSchema(&bad)
+	_, err := BuildVSchema(&bad)
 	want := "vindex stf needs to be Unique or NonUnique"
 	if err == nil || err.Error() != want {
-		t.Errorf("BuildSchema: %v, want %v", err, want)
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
 }
 
-func TestBuildSchemaDupTableFail(t *testing.T) {
-	bad := SchemaFormal{
+func TestBuildVSchemaDupTableFail(t *testing.T) {
+	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -429,15 +429,15 @@ func TestBuildSchemaDupTableFail(t *testing.T) {
 			},
 		},
 	}
-	_, err := BuildSchema(&bad)
+	_, err := BuildVSchema(&bad)
 	want := "table t1 has multiple definitions"
 	if err == nil || err.Error() != want {
-		t.Errorf("BuildSchema: %v, want %v", err, want)
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
 }
 
-func TestBuildSchemaNoindexFail(t *testing.T) {
-	bad := SchemaFormal{
+func TestBuildVSchemaNoindexFail(t *testing.T) {
+	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -462,15 +462,15 @@ func TestBuildSchemaNoindexFail(t *testing.T) {
 			},
 		},
 	}
-	_, err := BuildSchema(&bad)
+	_, err := BuildVSchema(&bad)
 	want := "vindex notexist not found for class t1"
 	if err == nil || err.Error() != want {
-		t.Errorf("BuildSchema: %v, want %v", err, want)
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
 }
 
-func TestBuildSchemaNotUniqueFail(t *testing.T) {
-	bad := SchemaFormal{
+func TestBuildVSchemaNotUniqueFail(t *testing.T) {
+	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -495,15 +495,15 @@ func TestBuildSchemaNotUniqueFail(t *testing.T) {
 			},
 		},
 	}
-	_, err := BuildSchema(&bad)
+	_, err := BuildVSchema(&bad)
 	want := "primary index stln is not Unique for class t1"
 	if err == nil || err.Error() != want {
-		t.Errorf("BuildSchema: %v, want %v", err, want)
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
 }
 
-func TestBuildSchemaPrimaryNonFunctionalFail(t *testing.T) {
-	bad := SchemaFormal{
+func TestBuildVSchemaPrimaryNonFunctionalFail(t *testing.T) {
+	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -529,15 +529,15 @@ func TestBuildSchemaPrimaryNonFunctionalFail(t *testing.T) {
 			},
 		},
 	}
-	_, err := BuildSchema(&bad)
+	_, err := BuildVSchema(&bad)
 	want := "primary owned index stlu is not Functional for class t1"
 	if err == nil || err.Error() != want {
-		t.Errorf("BuildSchema: %v, want %v", err, want)
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
 }
 
-func TestBuildSchemaNonPrimaryLookupFail(t *testing.T) {
-	bad := SchemaFormal{
+func TestBuildVSchemaNonPrimaryLookupFail(t *testing.T) {
+	bad := VSchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"sharded": {
 				Sharded: true,
@@ -569,9 +569,9 @@ func TestBuildSchemaNonPrimaryLookupFail(t *testing.T) {
 			},
 		},
 	}
-	_, err := BuildSchema(&bad)
+	_, err := BuildVSchema(&bad)
 	want := "non-primary owned index stfu is not Lookup for class t1"
 	if err == nil || err.Error() != want {
-		t.Errorf("BuildSchema: %v, want %v", err, want)
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
 }

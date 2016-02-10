@@ -12,13 +12,13 @@ import (
 	"strings"
 )
 
-// Schema represents the denormalized version of SchemaFormal,
+// VSchema represents the denormalized version of VSchemaFormal,
 // used for building routing plans.
-type Schema struct {
+type VSchema struct {
 	Tables map[string]*Table
 }
 
-// Table represnts a table in Schema.
+// Table represnts a table in VSchema.
 type Table struct {
 	Name        string
 	Keyspace    *Keyspace
@@ -42,9 +42,9 @@ type ColVindex struct {
 	Vindex Vindex
 }
 
-// BuildSchema builds a Schema from a SchemaFormal.
-func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
-	schema = &Schema{Tables: make(map[string]*Table)}
+// BuildVSchema builds a VSchema from a VSchemaFormal.
+func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
+	vschema = &VSchema{Tables: make(map[string]*Table)}
 	for ksname, ks := range source.Keyspaces {
 		keyspace := &Keyspace{
 			Name:    ksname,
@@ -65,7 +65,7 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 			vindexes[vname] = vindex
 		}
 		for tname, cname := range ks.Tables {
-			if _, ok := schema.Tables[tname]; ok {
+			if _, ok := vschema.Tables[tname]; ok {
 				return nil, fmt.Errorf("table %s has multiple definitions", tname)
 			}
 			t := &Table{
@@ -73,7 +73,7 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 				Keyspace: keyspace,
 			}
 			if !keyspace.Sharded {
-				schema.Tables[tname] = t
+				vschema.Tables[tname] = t
 				continue
 			}
 			class, ok := ks.Classes[cname]
@@ -116,19 +116,19 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 				}
 			}
 			t.Ordered = colVindexSorted(t.ColVindexes)
-			schema.Tables[tname] = t
+			vschema.Tables[tname] = t
 		}
 	}
-	return schema, nil
+	return vschema, nil
 }
 
 // FindTable returns a pointer to the Table if found.
 // Otherwise, it returns a reason, which is equivalent to an error.
-func (schema *Schema) FindTable(tablename string) (table *Table, reason string) {
+func (vschema *VSchema) FindTable(tablename string) (table *Table, reason string) {
 	if tablename == "" {
 		return nil, "complex table expression"
 	}
-	table = schema.Tables[tablename]
+	table = vschema.Tables[tablename]
 	if table == nil {
 		return nil, fmt.Sprintf("table %s not found", tablename)
 	}
@@ -151,9 +151,9 @@ func colVindexSorted(cvs []*ColVindex) (sorted []*ColVindex) {
 	return sorted
 }
 
-// SchemaFormal is the formal representation of the schema
+// VSchemaFormal is the formal representation of the vschema
 // as loaded from the source.
-type SchemaFormal struct {
+type VSchemaFormal struct {
 	Keyspaces map[string]KeyspaceFormal
 }
 
@@ -187,20 +187,20 @@ type ColVindexFormal struct {
 	Name string
 }
 
-// LoadFile creates a new Schema from a JSON file.
-func LoadFile(filename string) (schema *Schema, err error) {
+// LoadFile creates a new VSchema from a JSON file.
+func LoadFile(filename string) (vschema *VSchema, err error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("ReadFile failed: %v %v", filename, err)
 	}
-	return NewSchema(data)
+	return NewVSchema(data)
 }
 
-// NewSchema creates a new Schema from a JSON byte array.
-func NewSchema(data []byte) (schema *Schema, err error) {
-	var source SchemaFormal
+// NewVSchema creates a new VSchema from a JSON byte array.
+func NewVSchema(data []byte) (vschema *VSchema, err error) {
+	var source VSchemaFormal
 	if err := json.Unmarshal(data, &source); err != nil {
 		return nil, fmt.Errorf("Unmarshal failed: %v %s %v", source, data, err)
 	}
-	return BuildSchema(&source)
+	return BuildVSchema(&source)
 }

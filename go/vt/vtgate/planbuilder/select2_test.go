@@ -13,7 +13,7 @@ import (
 )
 
 func TestSelect2(t *testing.T) {
-	schema, err := LoadFile(locateFile("schema_test.json"))
+	vschema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestSelect2(t *testing.T) {
 			t.Errorf("unexpected type: %T", statement)
 			continue
 		}
-		plan, err := buildSelectPlan2(sel, schema)
+		plan, err := buildSelectPlan2(sel, vschema)
 		if err != nil {
 			t.Error(err)
 			continue

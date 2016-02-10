@@ -8,11 +8,11 @@ plans that describe how to fulfill a query that may
 span multiple keyspaces or shards.
 
 The main entry point for the planbuilder is the
-BuildPlan function that accepts a query and schema
+BuildPlan function that accepts a query and vschema
 and returns the plan.
 
 This package also provides various conevenience functions
-to build the Schema object, which it can later utilize
+to build the VSchema object, which it can later utilize
 to build query plans.
 
 Additionally, this package defines the various Vindex
@@ -103,7 +103,7 @@ starts off with its own route. After the analysis is done,
 if we decide to merge it with an outer route, we repoint
 all the symbols of the subquery to the outer route.
 
-The Schema currently doesn't contain the full list of columns
+The VSchema currently doesn't contain the full list of columns
 in the tables. For the sake of convenience, if a query
 references only one table, then we implicitly assume that
 all column references are against that table. However,

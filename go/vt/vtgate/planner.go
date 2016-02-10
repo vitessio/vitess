@@ -22,34 +22,40 @@ var noPlan = &planbuilder.Plan{
 	Reason: "planbuiler not initialized",
 }
 
+// Planner is used to compute the plan. It contains
+// the vschema, and has a cache of previous computed plans.
 type Planner struct {
-	schema *planbuilder.Schema
-	plans  *cache.LRUCache
+	vschema *planbuilder.VSchema
+	plans   *cache.LRUCache
 }
 
-func NewPlanner(schema *planbuilder.Schema, cacheSize int) *Planner {
+// NewPlanner creates a new planner for VTGate.
+func NewPlanner(vschema *planbuilder.VSchema, cacheSize int) *Planner {
 	plr := &Planner{
-		schema: schema,
-		plans:  cache.NewLRUCache(int64(cacheSize)),
+		vschema: vschema,
+		plans:   cache.NewLRUCache(int64(cacheSize)),
 	}
 	// TODO(sougou): Uncomment after making Planner testable.
 	//http.Handle("/debug/query_plans", plr)
-	//http.Handle("/debug/schema", plr)
+	//http.Handle("/debug/vschema", plr)
 	return plr
 }
 
+// GetPlan computes the plan for the given query. If one is in
+// the cache, it reuses it.
 func (plr *Planner) GetPlan(sql string) *planbuilder.Plan {
-	if plr.schema == nil {
+	if plr.vschema == nil {
 		return noPlan
 	}
 	if result, ok := plr.plans.Get(sql); ok {
 		return result.(*planbuilder.Plan)
 	}
-	plan := planbuilder.BuildPlan(sql, plr.schema)
+	plan := planbuilder.BuildPlan(sql, plr.vschema)
 	plr.plans.Set(sql, plan)
 	return plan
 }
 
+// ServeHTTP shows the current plans in the query cache.
 func (plr *Planner) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
 		acl.SendError(response, err)
@@ -70,9 +76,9 @@ func (plr *Planner) ServeHTTP(response http.ResponseWriter, request *http.Reques
 				response.Write(([]byte)("\n\n"))
 			}
 		}
-	} else if request.URL.Path == "/debug/schema" {
+	} else if request.URL.Path == "/debug/vschema" {
 		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		b, err := json.MarshalIndent(plr.schema, "", " ")
+		b, err := json.MarshalIndent(plr.vschema, "", " ")
 		if err != nil {
 			response.Write([]byte(err.Error()))
 			return
