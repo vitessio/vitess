@@ -300,4 +300,5 @@ func Run(t *testing.T, bpc binlogplayer.Client, endPoint *topodatapb.EndPoint, f
 	testServeUpdateStreamPanics(t, bpc)
 	testStreamKeyRangePanics(t, bpc)
 	testStreamTablesPanics(t, bpc)
+	fake.panics = false
 }
