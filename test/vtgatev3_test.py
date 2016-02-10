@@ -256,7 +256,7 @@ class TestVTGateFunctions(unittest.TestCase):
       self.int_type = 8L
       self.string_type = 253L
 
-  def _execute_on_master(self, vtgate_conn, sql, bind_vars):
+  def execute_on_master(self, vtgate_conn, sql, bind_vars):
     return vtgate_conn._execute(
         sql, bind_vars, tablet_type='master', keyspace_name=None)
 
@@ -293,14 +293,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_user (id, name) values (:id, :name)',
-        {'id': 6, 'name': 'test 6'},
-        tablet_type='master', keyspace_name=None)
+        {'id': 6, 'name': 'test 6'})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_user (name) values (:name)',
-        {'name': 'test 7'},
-        tablet_type='master', keyspace_name=None)
+        {'name': 'test 7'})
     self.assertEqual(result, ([], 1L, 7L, []))
     vtgate_conn.commit()
 
@@ -315,8 +313,7 @@ class TestVTGateFunctions(unittest.TestCase):
     # Test IN clause
     result = self.execute_on_master(
         vtgate_conn,
-        'select * from vt_user where id in (:a, :b)', {'a': 1, 'b': 4},
-        tablet_type='master', keyspace_name=None)
+        'select * from vt_user where id in (:a, :b)', {'a': 1, 'b': 4})
     result[0].sort()
     self.assertEqual(
         result,
@@ -324,8 +321,7 @@ class TestVTGateFunctions(unittest.TestCase):
          [('id', self.int_type), ('name', self.string_type)]))
     result = self.execute_on_master(
         vtgate_conn,
-        'select * from vt_user where id in (:a, :b)', {'a': 1, 'b': 2},
-        tablet_type='master', keyspace_name=None)
+        'select * from vt_user where id in (:a, :b)', {'a': 1, 'b': 2})
     result[0].sort()
     self.assertEqual(
         result,
@@ -339,16 +335,15 @@ class TestVTGateFunctions(unittest.TestCase):
     if protocols_flavor().vtgate_python_protocol() != 'grpc':
       result = self.execute_on_master(
           vtgate_conn,
-          "select * from vt_user where keyrange('', '\x80')", {},
-          tablet_type='master', keyspace_name=None)
+          "select * from vt_user where keyrange('', '\x80')", {})
       self.assertEqual(
           result,
           ([(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')], 3L, 0,
            [('id', self.int_type), ('name', self.string_type)]))
 
-      result = vtgate_conn._execute(
-          "select * from vt_user where keyrange('\x80', '')", {},
-          tablet_type='master', keyspace_name=None)
+      result = self.execute_on_master(
+          vtgate_conn,
+          "select * from vt_user where keyrange('\x80', '')", {})
       self.assertEqual(
           result,
           ([(4L, 'test 4'), (6L, 'test 6'), (7L, 'test 7')], 3L, 0,
@@ -394,14 +389,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'update vt_user set name = :name where id = :id',
-        {'id': 1, 'name': 'test one'},
-        tablet_type='master', keyspace_name=None)
+        {'id': 1, 'name': 'test one'})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'update vt_user set name = :name where id = :id',
-        {'id': 4, 'name': 'test four'},
-        tablet_type='master', keyspace_name=None)
+        {'id': 4, 'name': 'test four'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_user')
@@ -416,14 +409,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'delete from vt_user where id = :id',
-        {'id': 1},
-        tablet_type='master', keyspace_name=None)
+        {'id': 1})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'delete from vt_user where id = :id',
-        {'id': 4},
-        tablet_type='master', keyspace_name=None)
+        {'id': 4})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_user')
@@ -440,20 +431,17 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_user2 (id, name) values (:id, :name)',
-        {'id': 1, 'name': 'name1'},
-        tablet_type='master', keyspace_name=None)
+        {'id': 1, 'name': 'name1'})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_user2 (id, name) values (:id, :name)',
-        {'id': 7, 'name': 'name1'},
-        tablet_type='master', keyspace_name=None)
+        {'id': 7, 'name': 'name1'})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_user2 (id, name) values (:id, :name)',
-        {'id': 2, 'name': 'name2'},
-        tablet_type='master', keyspace_name=None)
+        {'id': 2, 'name': 'name2'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_user2')
@@ -466,8 +454,7 @@ class TestVTGateFunctions(unittest.TestCase):
     # Test select by id
     result = self.execute_on_master(
         vtgate_conn,
-        'select * from vt_user2 where id = :id', {'id': 1},
-        tablet_type='master', keyspace_name=None)
+        'select * from vt_user2 where id = :id', {'id': 1})
     self.assertEqual(
         result, ([(1, 'name1')], 1L, 0,
                  [('id', self.int_type), ('name', self.string_type)]))
@@ -475,8 +462,7 @@ class TestVTGateFunctions(unittest.TestCase):
     # Test select by lookup
     result = self.execute_on_master(
         vtgate_conn,
-        'select * from vt_user2 where name = :name', {'name': 'name1'},
-        tablet_type='master', keyspace_name=None)
+        'select * from vt_user2 where name = :name', {'name': 'name1'})
     result[0].sort()
     self.assertEqual(
         result,
@@ -486,8 +472,7 @@ class TestVTGateFunctions(unittest.TestCase):
     # Test IN clause using non-unique vindex
     result = self.execute_on_master(
         vtgate_conn,
-        "select * from vt_user2 where name in ('name1', 'name2')", {},
-        tablet_type='master', keyspace_name=None)
+        "select * from vt_user2 where name in ('name1', 'name2')", {})
     result[0].sort()
     self.assertEqual(
         result,
@@ -495,8 +480,7 @@ class TestVTGateFunctions(unittest.TestCase):
          [('id', self.int_type), ('name', self.string_type)]))
     result = self.execute_on_master(
         vtgate_conn,
-        "select * from vt_user2 where name in ('name1')", {},
-        tablet_type='master', keyspace_name=None)
+        "select * from vt_user2 where name in ('name1')", {})
     result[0].sort()
     self.assertEqual(
         result,
@@ -508,14 +492,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'delete from vt_user2 where id = :id',
-        {'id': 1},
-        tablet_type='master', keyspace_name=None)
+        {'id': 1})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'delete from vt_user2 where id = :id',
-        {'id': 2},
-        tablet_type='master', keyspace_name=None)
+        {'id': 2})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_user2')
@@ -536,8 +518,7 @@ class TestVTGateFunctions(unittest.TestCase):
           vtgate_conn,
           'insert into vt_user_extra (user_id, email) '
           'values (:user_id, :email)',
-          {'user_id': i, 'email': 'test %s' % i},
-          tablet_type='master', keyspace_name=None)
+          {'user_id': i, 'email': 'test %s' % i})
       self.assertEqual(result, ([], 1L, 0L, []))
       vtgate_conn.commit()
     for x in xrange(count):
@@ -545,7 +526,7 @@ class TestVTGateFunctions(unittest.TestCase):
       result = self.execute_on_master(
           vtgate_conn,
           'select * from vt_user_extra where user_id = :user_id',
-          {'user_id': i}, tablet_type='master', keyspace_name=None)
+          {'user_id': i})
       self.assertEqual(
           result,
           ([(i, 'test %s' % i)], 1L, 0,
@@ -559,14 +540,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'update vt_user_extra set email = :email where user_id = :user_id',
-        {'user_id': 1, 'email': 'test one'},
-        tablet_type='master', keyspace_name=None)
+        {'user_id': 1, 'email': 'test one'})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'update vt_user_extra set email = :email where user_id = :user_id',
-        {'user_id': 4, 'email': 'test four'},
-        tablet_type='master', keyspace_name=None)
+        {'user_id': 4, 'email': 'test four'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_user_extra')
@@ -578,14 +557,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'delete from vt_user_extra where user_id = :user_id',
-        {'user_id': 1},
-        tablet_type='master', keyspace_name=None)
+        {'user_id': 1})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'delete from  vt_user_extra where user_id = :user_id',
-        {'user_id': 4},
-        tablet_type='master', keyspace_name=None)
+        {'user_id': 4})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_user_extra')
@@ -603,16 +580,14 @@ class TestVTGateFunctions(unittest.TestCase):
       result = self.execute_on_master(
           vtgate_conn,
           'insert into vt_music (user_id, song) values (:user_id, :song)',
-          {'user_id': i, 'song': 'test %s' % i},
-          tablet_type='master', keyspace_name=None)
+          {'user_id': i, 'song': 'test %s' % i})
       self.assertEqual(result, ([], 1L, i, []))
       vtgate_conn.commit()
     for x in xrange(count):
       i = x+1
       result = self.execute_on_master(
           vtgate_conn,
-          'select * from vt_music where id = :id', {'id': i},
-          tablet_type='master', keyspace_name=None)
+          'select * from vt_music where id = :id', {'id': i})
       self.assertEqual(
           result,
           ([(i, i, 'test %s' % i)], 1, 0,
@@ -624,20 +599,17 @@ class TestVTGateFunctions(unittest.TestCase):
         vtgate_conn,
         'insert into vt_music (user_id, id, song) '
         'values (:user_id, :id, :song)',
-        {'user_id': 5, 'id': 6, 'song': 'test 6'},
-        tablet_type='master', keyspace_name=None)
+        {'user_id': 5, 'id': 6, 'song': 'test 6'})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_music (user_id, song) values (:user_id, :song)',
-        {'user_id': 6, 'song': 'test 7'},
-        tablet_type='master', keyspace_name=None)
+        {'user_id': 6, 'song': 'test 7'})
     self.assertEqual(result, ([], 1L, 7L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_music (user_id, song) values (:user_id, :song)',
-        {'user_id': 6, 'song': 'test 8'},
-        tablet_type='master', keyspace_name=None)
+        {'user_id': 6, 'song': 'test 8'})
     self.assertEqual(result, ([], 1L, 8L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_music')
@@ -657,14 +629,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'update vt_music set song = :song where id = :id',
-        {'id': 6, 'song': 'test six'},
-        tablet_type='master', keyspace_name=None)
+        {'id': 6, 'song': 'test six'})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'update vt_music set song = :song where id = :id',
-        {'id': 7, 'song': 'test seven'},
-        tablet_type='master', keyspace_name=None)
+        {'id': 7, 'song': 'test seven'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_music')
@@ -680,14 +650,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'delete from vt_music where id = :id',
-        {'id': 3},
-        tablet_type='master', keyspace_name=None)
+        {'id': 3})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'delete from vt_music where user_id = :user_id',
-        {'user_id': 6},
-        tablet_type='master', keyspace_name=None)
+        {'user_id': 6})
     self.assertEqual(result, ([], 2L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_music')
@@ -706,21 +674,19 @@ class TestVTGateFunctions(unittest.TestCase):
         vtgate_conn,
         'insert into vt_music_extra (music_id, user_id, artist) '
         'values (:music_id, :user_id, :artist)',
-        {'music_id': 1, 'user_id': 1, 'artist': 'test 1'},
-        tablet_type='master', keyspace_name=None)
+        {'music_id': 1, 'user_id': 1, 'artist': 'test 1'})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'insert into vt_music_extra (music_id, artist) '
         'values (:music_id, :artist)',
-        {'music_id': 6, 'artist': 'test 6'},
-        tablet_type='master', keyspace_name=None)
+        {'music_id': 6, 'artist': 'test 6'})
     self.assertEqual(result, ([], 1L, 0L, []))
     vtgate_conn.commit()
     result = self.execute_on_master(
         vtgate_conn,
         'select * from vt_music_extra where music_id = :music_id',
-        {'music_id': 6}, tablet_type='master', keyspace_name=None)
+        {'music_id': 6})
     self.assertEqual(
         result, ([(6L, 5L, 'test 6')], 1, 0,
                  [('music_id', self.int_type),
@@ -736,15 +702,13 @@ class TestVTGateFunctions(unittest.TestCase):
         vtgate_conn,
         'update vt_music_extra set artist = :artist '
         'where music_id = :music_id',
-        {'music_id': 6, 'artist': 'test six'},
-        tablet_type='master', keyspace_name=None)
+        {'music_id': 6, 'artist': 'test six'})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'update vt_music_extra set artist = :artist '
         'where music_id = :music_id',
-        {'music_id': 7, 'artist': 'test seven'},
-        tablet_type='master', keyspace_name=None)
+        {'music_id': 7, 'artist': 'test seven'})
     self.assertEqual(result, ([], 0L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_music_extra')
@@ -754,14 +718,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = self.execute_on_master(
         vtgate_conn,
         'delete from vt_music_extra where music_id = :music_id',
-        {'music_id': 6},
-        tablet_type='master', keyspace_name=None)
+        {'music_id': 6})
     self.assertEqual(result, ([], 1L, 0L, []))
     result = self.execute_on_master(
         vtgate_conn,
         'delete from vt_music_extra where music_id = :music_id',
-        {'music_id': 7},
-        tablet_type='master', keyspace_name=None)
+        {'music_id': 7})
     self.assertEqual(result, ([], 0L, 0L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery('vt_user', 'select * from vt_music_extra')
@@ -776,8 +738,7 @@ class TestVTGateFunctions(unittest.TestCase):
         self.execute_on_master(
             vtgate_conn,
             'insert into vt_user_extra (email) values (:email)',
-            {'email': 'test 10'},
-            tablet_type='master', keyspace_name=None)
+            {'email': 'test 10'})
     finally:
       vtgate_conn.rollback()
 
