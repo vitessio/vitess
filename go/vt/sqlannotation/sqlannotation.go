@@ -28,7 +28,7 @@ const (
 )
 
 var (
-	replicationUnfriendlyCountStat = stats.NewInt("replication-unfriendly-statements-count")
+	filteredReplicationUnfriendlyCountStat = stats.NewInt("ReplicationUnfriendlyStatementsCount")
 )
 
 // AddIfDML annotates 'sql' based on
