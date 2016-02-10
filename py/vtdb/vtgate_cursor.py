@@ -89,8 +89,8 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
         self.connection._execute(  # pylint: disable=protected-access
             sql,
             bind_variables,
-            self.keyspace,
-            self.tablet_type,
+            tablet_type=self.tablet_type,
+            keyspace_name=self.keyspace,
             shards=self.shards,
             keyspace_ids=self.keyspace_ids,
             keyranges=self.keyranges,
@@ -240,8 +240,8 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
     self.generator, self.description = self.connection._stream_execute(  # pylint: disable=protected-access
         sql,
         bind_variables,
-        self.keyspace,
-        self.tablet_type,
+        tablet_type=self.tablet_type,
+        keyspace_name=self.keyspace,
         shards=self.shards,
         keyspace_ids=self.keyspace_ids,
         keyranges=self.keyranges,
