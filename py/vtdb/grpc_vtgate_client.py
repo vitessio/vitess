@@ -108,12 +108,11 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
       self.effective_caller_id = None
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
-  def _execute(self, sql, bind_variables, keyspace_name, tablet_type,
-               shards=None,
-               keyspace_ids=None,
-               keyranges=None,
-               entity_keyspace_id_map=None, entity_column_name=None,
-               not_in_transaction=False, effective_caller_id=None, **kwargs):
+  def _execute(
+      self, sql, bind_variables, tablet_type, keyspace_name=None,
+      shards=None, keyspace_ids=None, keyranges=None,
+      entity_keyspace_id_map=None, entity_column_name=None,
+      not_in_transaction=False, effective_caller_id=None, **kwargs):
 
     # FIXME(alainjobart): keyspace should be in routing_kwargs,
     # as it's not used for v3.
@@ -289,7 +288,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient):
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _stream_execute(
-      self, sql, bind_variables, keyspace_name, tablet_type,
+      self, sql, bind_variables, tablet_type, keyspace_name=None,
       shards=None, keyspace_ids=None, keyranges=None,
       not_in_transaction=False, effective_caller_id=None,
       **kwargs):
