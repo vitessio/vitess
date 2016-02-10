@@ -13,6 +13,10 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collection;
 
@@ -43,6 +47,14 @@ public class BindVarTest {
                    .setType(Query.Type.INT64)
                    .setValue(ByteString.copyFromUtf8("123"))
                    .build()},
+        {(short)1, BindVariable.newBuilder()
+            .setType(Query.Type.INT64)
+            .setValue(ByteString.copyFromUtf8("1"))
+            .build()},
+        {(byte) 2, BindVariable.newBuilder()
+            .setType(Query.Type.INT64)
+            .setValue(ByteString.copyFromUtf8("2"))
+            .build()},
         // Uint
         {UnsignedLong.fromLongBits(-1), BindVariable.newBuilder()
                                             .setType(Query.Type.UINT64)
@@ -73,6 +85,43 @@ public class BindVarTest {
                      .setValue(ByteString.copyFrom(new byte[] {4, 5, 6}))
                      .build())
              .build()},
+        // Date
+        {new Date(0), BindVariable.newBuilder()
+            .setType(Query.Type.DATE)
+            .setValue(ByteString.copyFromUtf8("1970-01-01"))
+            .build()},
+        // Time
+        {Time.valueOf("00:00:00"), BindVariable.newBuilder()
+            .setType(Query.Type.TIME)
+            .setValue(ByteString.copyFromUtf8("00:00:00"))
+            .build()},
+        // TimeStamp
+        {Timestamp.valueOf("1970-01-01 00:00:00.0"), BindVariable.newBuilder()
+            .setType(Query.Type.TIMESTAMP)
+            .setValue(ByteString.copyFromUtf8("1970-01-01 00:00:00.0"))
+            .build()},
+        // Boolean
+        {true, BindVariable.newBuilder()
+            .setType(Query.Type.BIT)
+            .setValue(ByteString.copyFromUtf8("1"))
+            .build()},
+        {false, BindVariable.newBuilder()
+            .setType(Query.Type.BIT)
+            .setValue(ByteString.copyFromUtf8("0"))
+            .build()},
+        // BigDecimal
+        {new BigDecimal("123.123456789"), BindVariable.newBuilder()
+            .setType(Query.Type.FLOAT64)
+            .setValue(ByteString.copyFromUtf8("123.123456789000000000000000000000"))
+            .build()},
+        {new BigDecimal("123.1999999999999999999999999999994"), BindVariable.newBuilder()
+            .setType(Query.Type.FLOAT64)
+            .setValue(ByteString.copyFromUtf8("123.199999999999999999999999999999"))
+            .build()},
+        {new BigDecimal("123.1999999999999999999999999999995"), BindVariable.newBuilder()
+            .setType(Query.Type.FLOAT64)
+            .setValue(ByteString.copyFromUtf8("123.200000000000000000000000000000"))
+            .build()},
         // List of Int
         {Arrays.asList(1, 2, 3), BindVariable.newBuilder()
                                      .setType(Query.Type.TUPLE)

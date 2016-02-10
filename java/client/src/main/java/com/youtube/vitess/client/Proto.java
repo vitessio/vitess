@@ -17,6 +17,9 @@ import com.youtube.vitess.proto.Vtgate.BoundShardQuery;
 import com.youtube.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import com.youtube.vitess.proto.Vtrpc.RPCError;
 
+import java.sql.Date;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.SQLInvalidAuthorizationSpecException;
@@ -25,6 +28,7 @@ import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
 import java.util.Iterator;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -32,6 +36,9 @@ import java.util.Map;
  * Proto contains methods for working with Vitess protobuf messages.
  */
 public class Proto {
+
+  private static int MAX_DECIMAL_UNIT = 30;
+
   /**
    * Throws the proper SQLException for an error returned by VTGate.
    *
@@ -191,8 +198,8 @@ public class Proto {
         // Bytes
         this.type = Query.Type.VARBINARY;
         this.value = ByteString.copyFrom((byte[]) value);
-      } else if (value instanceof Integer || value instanceof Long) {
-        // Int32, Int64
+      } else if (value instanceof Integer || value instanceof Long || value instanceof Short || value instanceof Byte) {
+        // Int32, Int64, Short, Byte
         this.type = Query.Type.INT64;
         this.value = ByteString.copyFromUtf8(value.toString());
       } else if (value instanceof UnsignedLong) {
@@ -203,6 +210,26 @@ public class Proto {
         // Float, Double
         this.type = Query.Type.FLOAT64;
         this.value = ByteString.copyFromUtf8(value.toString());
+      } else if (value instanceof Date) {
+        // Date
+        this.type = Query.Type.DATE;
+        this.value = ByteString.copyFromUtf8(value.toString());
+      } else if (value instanceof Time) {
+        // Time
+        this.type = Query.Type.TIME;
+        this.value = ByteString.copyFromUtf8(value.toString());
+      } else if (value instanceof Timestamp) {
+        // DateTime, TimeStamp
+        this.type = Query.Type.TIMESTAMP;
+        this.value = ByteString.copyFromUtf8(value.toString());
+      } else if (value instanceof Boolean ) {
+        // Boolean
+        this.type = Query.Type.BIT;
+        this.value = ByteString.copyFromUtf8(((boolean)value) ? "1" : "0");
+      } else if (value instanceof BigDecimal) {
+        // BigDecimal
+        this.type = Query.Type.FLOAT64;
+        this.value = ByteString.copyFromUtf8(((BigDecimal) value).setScale(MAX_DECIMAL_UNIT,BigDecimal.ROUND_HALF_UP).toString());
       } else {
         throw new IllegalArgumentException(
             "unsupported type for Query.Value proto: " + value.getClass());
