@@ -19,13 +19,16 @@ from vtdb import vtgate_client
 from vtdb import grpc_vtgate_client  # pylint: disable=unused-import
 
 
-def exec_query(conn, title, query, response, keyspace=None, kr=None):
+def exec_query(conn, title, query, response, keyspace=None, kr=None):  # pylint: disable=missing-docstring
   if kr:
     # v2 cursor to address individual shards directly, for debug display
-    cursor = conn.cursor(keyspace, "master", keyranges=[keyrange.KeyRange(kr)])
+    cursor = conn.cursor(
+        tablet_type="master", keyspace=keyspace,
+        keyranges=[keyrange.KeyRange(kr)])
   else:
     # v3 cursor is automated
-    cursor = conn.cursor(keyspace, "master", writable=True)
+    cursor = conn.cursor(
+        tablet_type="master", keyspace=keyspace, writable=True)
 
   try:
     if not query or query == "undefined":
@@ -44,14 +47,14 @@ def exec_query(conn, title, query, response, keyspace=None, kr=None):
         "results": cursor.results,
         }
     cursor.close()
-  except Exception as e:
+  except Exception as e:  # pylint: disable=broad-except
     response[title] = {
         "title": title,
         "error": str(e),
         }
 
 
-def capture_log(port, queries):
+def capture_log(port, queries):  # pylint: disable=missing-docstring
   p = subprocess.Popen(
       ["curl", "-s", "-N", "http://localhost:%d/debug/querylog" % port],
       stdout=subprocess.PIPE)
@@ -131,7 +134,7 @@ def main():
         keyspace="lookup", kr="-")
 
     print json.dumps(response)
-  except Exception as e:
+  except Exception as e:  # pylint: disable=broad-except
     print json.dumps({"error": str(e)})
 
 

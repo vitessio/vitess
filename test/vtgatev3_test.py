@@ -263,7 +263,8 @@ class TestVTGateFunctions(unittest.TestCase):
   def test_user(self):
     count = 4
     vtgate_conn = get_connection()
-    cursor = vtgate_conn.cursor(None, 'master', writable=True)
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=None, writable=True)
 
     # Test insert
     for x in xrange(count):
@@ -361,10 +362,12 @@ class TestVTGateFunctions(unittest.TestCase):
 
     # Test stream over scatter
     stream_cursor_1 = vtgate_conn.cursor(
-        None, 'master', cursorclass=vtgate_cursor.StreamVTGateCursor)
+        tablet_type='master', keyspace=None,
+        cursorclass=vtgate_cursor.StreamVTGateCursor)
     stream_cursor_1.execute('select * from vt_user', {})
     stream_cursor_2 = vtgate_conn.cursor(
-        None, 'master', cursorclass=vtgate_cursor.StreamVTGateCursor)
+        tablet_type='master', keyspace=None,
+        cursorclass=vtgate_cursor.StreamVTGateCursor)
     stream_cursor_2.execute('select * from vt_user', {})
     self.assertEqual(stream_cursor_1.description,
                      [('id', self.int_type), ('name', self.string_type)])

@@ -212,7 +212,7 @@ index by_msg (msg)
     result = self.insert_index
     conn = self._vtdb_conn()
     cursor = conn.cursor(
-        'source_keyspace', 'master',
+        tablet_type='master', keyspace='source_keyspace',
         keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)],
         writable=True)
     for _ in xrange(count):

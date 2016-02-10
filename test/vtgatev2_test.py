@@ -271,9 +271,10 @@ def write_rows_to_shard(count, shard_index):
 
   for x in xrange(count):
     keyspace_id = kid_list[x % len(kid_list)]
-    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                keyspace_ids=[pack_kid(keyspace_id)],
-                                writable=True)
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=KEYSPACE_NAME,
+        keyspace_ids=[pack_kid(keyspace_id)],
+        writable=True)
     cursor.begin()
     cursor.execute(
         'insert into vt_insert_test (msg, keyspace_id) '
@@ -340,17 +341,19 @@ class TestCoreVTGateFunctions(BaseTestCase):
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
     for x in xrange(count):
       keyspace_id = kid_list[count%len(kid_list)]
-      cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                  keyspace_ids=[pack_kid(keyspace_id)],
-                                  writable=True)
+      cursor = vtgate_conn.cursor(
+          tablet_type='master', keyspace=KEYSPACE_NAME,
+          keyspace_ids=[pack_kid(keyspace_id)],
+          writable=True)
       cursor.begin()
       cursor.execute(
           'insert into vt_insert_test (msg, keyspace_id) '
           'values (%(msg)s, %(keyspace_id)s)',
           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       cursor.commit()
-    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                keyranges=[self.keyrange])
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=KEYSPACE_NAME,
+        keyranges=[self.keyrange])
     rowcount = cursor.execute('select * from vt_insert_test', {})
     self.assertEqual(rowcount, count, 'master fetch works')
 
@@ -363,7 +366,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     for shard_index in [0, 1]:
       # Fetch all rows in each shard
       cursor = vtgate_conn.cursor(
-          KEYSPACE_NAME, 'master',
+          tablet_type='master', keyspace=KEYSPACE_NAME,
           keyranges=[get_keyrange(SHARD_NAMES[shard_index])])
       rowcount = cursor.execute('select * from vt_insert_test', {})
       # Verify row count
@@ -373,8 +376,9 @@ class TestCoreVTGateFunctions(BaseTestCase):
         kid = result[2]
         self.assertIn(kid, SHARD_KID_MAP[SHARD_NAMES[shard_index]])
     # Do a cross shard range query and assert all rows are fetched
-    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                keyranges=[get_keyrange('75-95')])
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=KEYSPACE_NAME,
+        keyranges=[get_keyrange('75-95')])
     rowcount = cursor.execute('select * from vt_insert_test', {})
     self.assertEqual(rowcount, row_counts[0] + row_counts[1])
 
@@ -385,9 +389,10 @@ class TestCoreVTGateFunctions(BaseTestCase):
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
     for x in xrange(count):
       keyspace_id = kid_list[x%len(kid_list)]
-      cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                  keyspace_ids=[pack_kid(keyspace_id)],
-                                  writable=True)
+      cursor = vtgate_conn.cursor(
+          tablet_type='master', keyspace=KEYSPACE_NAME,
+          keyspace_ids=[pack_kid(keyspace_id)],
+          writable=True)
       cursor.begin()
       cursor.execute(
           'insert into vt_insert_test (msg, keyspace_id) '
@@ -400,8 +405,9 @@ class TestCoreVTGateFunctions(BaseTestCase):
         tablet_type='master', keyspace_name=KEYSPACE_NAME,
         keyranges=[self.keyrange])
     vtgate_conn.rollback()
-    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                keyranges=[self.keyrange])
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=KEYSPACE_NAME,
+        keyranges=[self.keyrange])
     rowcount = cursor.execute('select * from vt_insert_test', {})
     logging.debug('ROLLBACK TEST rowcount %d count %d', rowcount, count)
     self.assertEqual(
@@ -419,16 +425,18 @@ class TestCoreVTGateFunctions(BaseTestCase):
     for x in xrange(count):
       keyspace_id = kid_list[x%len(kid_list)]
       eid_map[x] = pack_kid(keyspace_id)
-      cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                  keyspace_ids=[pack_kid(keyspace_id)],
-                                  writable=True)
+      cursor = vtgate_conn.cursor(
+          tablet_type='master', keyspace=KEYSPACE_NAME,
+          keyspace_ids=[pack_kid(keyspace_id)],
+          writable=True)
       cursor.begin()
       cursor.execute(
           'insert into vt_a (eid, id, keyspace_id) '
           'values (%(eid)s, %(id)s, %(keyspace_id)s)',
           {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       cursor.commit()
-    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master', keyspace_ids=None)
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=KEYSPACE_NAME, keyspace_ids=None)
     rowcount = cursor.execute(
         'select * from vt_a', {},
         entity_keyspace_id_map=eid_map, entity_column_name='id')
@@ -442,9 +450,10 @@ class TestCoreVTGateFunctions(BaseTestCase):
     kid_list = SHARD_KID_MAP[shard_name]
     for x in xrange(count):
       keyspace_id = kid_list[x%len(kid_list)]
-      cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                  keyspace_ids=[pack_kid(keyspace_id)],
-                                  writable=True)
+      cursor = vtgate_conn.cursor(
+          tablet_type='master', keyspace=KEYSPACE_NAME,
+          keyspace_ids=[pack_kid(keyspace_id)],
+          writable=True)
       cursor.begin()
       cursor.execute(
           'insert into vt_insert_test (msg, keyspace_id) '
@@ -454,9 +463,10 @@ class TestCoreVTGateFunctions(BaseTestCase):
     _delete_all(self.shard_index, 'vt_a')
     for x in xrange(count):
       keyspace_id = kid_list[x%len(kid_list)]
-      cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                  keyspace_ids=[pack_kid(keyspace_id)],
-                                  writable=True)
+      cursor = vtgate_conn.cursor(
+          tablet_type='master', keyspace=KEYSPACE_NAME,
+          keyspace_ids=[pack_kid(keyspace_id)],
+          writable=True)
       cursor.begin()
       cursor.execute(
           'insert into vt_a (eid, id, keyspace_id) '
@@ -464,7 +474,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
           {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       cursor.commit()
     kid_list = [pack_kid(kid) for kid in kid_list]
-    cursor = vtgate_conn.cursor(keyspace=None, tablet_type='master')
+    cursor = vtgate_conn.cursor(tablet_type='master', keyspace=None)
 
     # Test ExecuteBatchKeyspaceIds
     params_list = [
@@ -516,7 +526,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def test_batch_write(self):
     vtgate_conn = get_connection()
-    cursor = vtgate_conn.cursor(keyspace=None, tablet_type='master')
+    cursor = vtgate_conn.cursor(tablet_type='master', keyspace=None)
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
     all_ids = [pack_kid(kid) for kid in kid_list]
     count = 10
@@ -578,7 +588,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
     def get_stream_cursor():
       return vtgate_conn.cursor(
-          KEYSPACE_NAME, 'master',
+          tablet_type='master', keyspace=KEYSPACE_NAME,
           keyranges=[self.keyrange],
           cursorclass=vtgate_cursor.StreamVTGateCursor)
 
@@ -608,7 +618,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     # Fetch all.
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
-        KEYSPACE_NAME, 'master',
+        tablet_type='master', keyspace=KEYSPACE_NAME,
         keyranges=[self.keyrange],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     stream_cursor.execute('select * from vt_insert_test', {})
@@ -623,7 +633,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     # Fetch one.
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
-        KEYSPACE_NAME, 'master',
+        tablet_type='master', keyspace=KEYSPACE_NAME,
         keyranges=[self.keyrange],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     stream_cursor.execute('select * from vt_insert_test', {})
@@ -637,7 +647,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     write_rows_to_shard(count, 1)
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
-        KEYSPACE_NAME, 'master',
+        tablet_type='master', keyspace=KEYSPACE_NAME,
         keyranges=[keyrange.KeyRange(
             keyrange_constants.NON_PARTIAL_KEYRANGE)],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
@@ -657,7 +667,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     vtgate_conn.commit()
     # After deletion, should result zero.
     stream_cursor = vtgate_conn.cursor(
-        KEYSPACE_NAME, 'master',
+        tablet_type='master', keyspace=KEYSPACE_NAME,
         keyranges=[self.keyrange],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     stream_cursor.execute('select * from vt_insert_test', {})
@@ -722,9 +732,10 @@ class TestCoreVTGateFunctions(BaseTestCase):
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
     for x in xrange(1, count):
       keyspace_id = kid_list[count % len(kid_list)]
-      cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                  keyspace_ids=[pack_kid(keyspace_id)],
-                                  writable=True)
+      cursor = vtgate_conn.cursor(
+          tablet_type='master', keyspace=KEYSPACE_NAME,
+          keyspace_ids=[pack_kid(keyspace_id)],
+          writable=True)
       cursor.begin()
       cursor.execute(
           'insert into vt_field_types '
@@ -735,8 +746,9 @@ class TestCoreVTGateFunctions(BaseTestCase):
            'unicode_val': unicode('str_%d' % x), 'float_val': x * 1.2,
            'keyspace_id': keyspace_id})
       cursor.commit()
-    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                keyranges=[self.keyrange])
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=KEYSPACE_NAME,
+        keyranges=[self.keyrange])
     rowcount = cursor.execute('select * from vt_field_types', {})
     field_names = [f[0] for f in cursor.description]
     self.assertEqual(rowcount, count -1, "rowcount doesn't match")
@@ -844,7 +856,7 @@ class TestFailures(BaseTestCase):
     """Tests that the status page loads correctly after a VTGate error."""
     vtgate_conn = get_connection()
     cursor = vtgate_conn.cursor(
-        'INVALID_KEYSPACE', 'replica', keyspace_ids=['0'])
+        tablet_type='replica', keyspace='INVALID_KEYSPACE', keyspace_ids=['0'])
     # We expect to see a DatabaseError due to an invalid keyspace
     with self.assertRaises(dbexceptions.DatabaseError):
       cursor.execute('select * from vt_insert_test', {})
@@ -908,7 +920,7 @@ class TestFailures(BaseTestCase):
     # increase it for this test.
     vtgate_conn = get_connection(timeout=30)
     stream_cursor = vtgate_conn.cursor(
-        KEYSPACE_NAME, 'replica',
+        tablet_type='replica', keyspace=KEYSPACE_NAME,
         keyranges=[self.keyrange],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     self.replica_tablet.kill_vttablet()
@@ -931,7 +943,7 @@ class TestFailures(BaseTestCase):
   def test_vtgate_restart_stream_execute(self):
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
-        KEYSPACE_NAME, 'replica',
+        tablet_type='replica', keyspace=KEYSPACE_NAME,
         keyranges=[self.keyrange],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     port = utils.vtgate.port
@@ -948,7 +960,7 @@ class TestFailures(BaseTestCase):
           '%s.%s.replica' % (KEYSPACE_NAME, SHARD_NAMES[self.shard_index]),
           2)
     stream_cursor = vtgate_conn.cursor(
-        KEYSPACE_NAME, 'replica',
+        tablet_type='replica', keyspace=KEYSPACE_NAME,
         keyranges=[self.keyrange],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     try:
@@ -1031,9 +1043,10 @@ class TestFailures(BaseTestCase):
     """
     vtgate_conn = get_connection()
     keyspace_id = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]][0]
-    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                keyspace_ids=[pack_kid(keyspace_id)],
-                                writable=True)
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=KEYSPACE_NAME,
+        keyspace_ids=[pack_kid(keyspace_id)],
+        writable=True)
     with self.assertRaises(dbexceptions.DatabaseError):
       cursor.execute('this is not valid syntax, throw an error', {})
 
@@ -1639,7 +1652,8 @@ class TestFailures(BaseTestCase):
 # Return round trip time for a VtGate query, ignore any errors
 def get_rtt(keyspace, query, tablet_type, keyranges):
   vtgate_conn = get_connection()
-  cursor = vtgate_conn.cursor(keyspace, tablet_type, keyranges=keyranges)
+  cursor = vtgate_conn.cursor(
+      tablet_type=tablet_type, keyspace=keyspace, keyranges=keyranges)
   start = time.time()
   try:
     cursor.execute(query, {})
@@ -1653,7 +1667,8 @@ def get_rtt(keyspace, query, tablet_type, keyranges):
 def send_long_query(keyspace, tablet_type, keyranges, delay):
   try:
     vtgate_conn = get_connection()
-    cursor = vtgate_conn.cursor(keyspace, tablet_type, keyranges=keyranges)
+    cursor = vtgate_conn.cursor(
+        tablet_type=tablet_type, keyspace=keyspace, keyranges=keyranges)
     query = 'select sleep(%s) from dual' % str(delay)
     try:
       cursor.execute(query, {})

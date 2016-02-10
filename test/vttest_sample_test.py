@@ -92,7 +92,8 @@ class TestMysqlctl(unittest.TestCase):
     row_id = 123
     keyspace_id = get_keyspace_id(row_id)
     cursor = conn.cursor(
-        'test_keyspace', 'master', keyspace_ids=[pack_kid(keyspace_id)],
+        tablet_type='master', keyspace='test_keyspace',
+        keyspace_ids=[pack_kid(keyspace_id)],
         writable=True)
     cursor.begin()
     insert = ('insert into test_table (id, msg, keyspace_id) values (%(id)s, '
@@ -132,7 +133,8 @@ class TestMysqlctl(unittest.TestCase):
     # Try to fetch a large number of rows
     # (more than one streaming result packet).
     stream_cursor = conn.cursor(
-        'test_keyspace', 'master', keyspace_ids=[pack_kid(keyspace_id)],
+        tablet_type='master', keyspace='test_keyspace',
+        keyspace_ids=[pack_kid(keyspace_id)],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     stream_cursor.execute('select * from test_table where id >= %(id_start)s',
                           {'id_start': id_start})

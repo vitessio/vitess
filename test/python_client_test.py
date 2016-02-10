@@ -88,38 +88,41 @@ class TestPythonClientBase(unittest.TestCase):
 
   def _open_shards_cursor(self):
     return self.conn.cursor(
-        'keyspace', 'master', shards=['-80'])
+        tablet_type='master', keyspace='keyspace', shards=['-80'])
 
   def _open_keyspace_ids_cursor(self):
     return self.conn.cursor(
-        'keyspace', 'master', keyspace_ids=[self.KEYSPACE_ID_0X80])
+        tablet_type='master', keyspace='keyspace',
+        keyspace_ids=[self.KEYSPACE_ID_0X80])
 
   def _open_keyranges_cursor(self):
     kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
-    return self.conn.cursor('keyspace', 'master', keyranges=[kr])
+    return self.conn.cursor(
+        tablet_type='master', keyspace='keyspace', keyranges=[kr])
 
   def _open_batch_cursor(self):
-    return self.conn.cursor(keyspace=None, tablet_type='master')
+    return self.conn.cursor(tablet_type='master', keyspace=None)
 
   def _open_stream_v3_cursor(self):
     return self.conn.cursor(
-        keyspace=None, tablet_type='master',
+        tablet_type='master', keyspace=None,
         cursorclass=vtgate_cursor.StreamVTGateCursor)
 
   def _open_stream_shards_cursor(self):
     return self.conn.cursor(
-        'keyspace', 'master', shards=['-80'],
+        tablet_type='master', keyspace='keyspace', shards=['-80'],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
 
   def _open_stream_keyspace_ids_cursor(self):
     return self.conn.cursor(
-        'keyspace', 'master', keyspace_ids=[self.KEYSPACE_ID_0X80],
+        tablet_type='master', keyspace='keyspace',
+        keyspace_ids=[self.KEYSPACE_ID_0X80],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
 
   def _open_stream_keyranges_cursor(self):
     kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
     return self.conn.cursor(
-        'keyspace', 'master', keyranges=[kr],
+        tablet_type='master', keyspace='keyspace', keyranges=[kr],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
 
 
@@ -173,7 +176,7 @@ class TestErrors(TestPythonClientBase):
     cursor.close()
 
     # ExecuteEntityIds test
-    cursor = self.conn.cursor('keyspace', 'master')
+    cursor = self.conn.cursor(tablet_type='master', keyspace='keyspace')
     with self.assertRaises(exception):
       cursor.execute(
           query, {},
@@ -387,7 +390,7 @@ class TestCallerId(TestPythonClientBase):
           entity_column_name='user_id')
 
     check_good_and_bad_effective_caller_ids(
-        self.conn.cursor('keyspace', 'master'),
+        self.conn.cursor(tablet_type='master', keyspace='keyspace'),
         cursor_execute_entity_ids_method)
 
     # test ExecuteBatchKeyspaceIds
@@ -505,7 +508,7 @@ class TestEcho(TestPythonClientBase):
   def test_echo_execute(self):
 
     # Execute
-    cursor = self.conn.cursor(keyspace=None, tablet_type=self.tablet_type)
+    cursor = self.conn.cursor(tablet_type=self.tablet_type, keyspace=None)
     cursor.set_effective_caller_id(self.caller_id)
     cursor.execute(self.echo_prefix+self.query, self.bind_variables)
     self._check_echo(cursor, {
@@ -518,9 +521,9 @@ class TestEcho(TestPythonClientBase):
     cursor.close()
 
     # ExecuteShards
-    cursor = self.conn.cursor(keyspace=self.keyspace,
-                              tablet_type=self.tablet_type,
-                              shards=self.shards)
+    cursor = self.conn.cursor(
+        tablet_type=self.tablet_type, keyspace=self.keyspace,
+        shards=self.shards)
     cursor.set_effective_caller_id(self.caller_id)
     cursor.execute(self.echo_prefix+self.query, self.bind_variables)
     self._check_echo(cursor, {
@@ -534,9 +537,9 @@ class TestEcho(TestPythonClientBase):
     cursor.close()
 
     # ExecuteKeyspaceIds
-    cursor = self.conn.cursor(keyspace=self.keyspace,
-                              tablet_type=self.tablet_type,
-                              keyspace_ids=self.keyspace_ids)
+    cursor = self.conn.cursor(
+        tablet_type=self.tablet_type, keyspace=self.keyspace,
+        keyspace_ids=self.keyspace_ids)
     cursor.set_effective_caller_id(self.caller_id)
     cursor.execute(self.echo_prefix+self.query, self.bind_variables)
     self._check_echo(cursor, {
@@ -550,9 +553,9 @@ class TestEcho(TestPythonClientBase):
     cursor.close()
 
     # ExecuteKeyRanges
-    cursor = self.conn.cursor(keyspace=self.keyspace,
-                              tablet_type=self.tablet_type,
-                              keyranges=self.key_ranges)
+    cursor = self.conn.cursor(
+        tablet_type=self.tablet_type, keyspace=self.keyspace,
+        keyranges=self.key_ranges)
     cursor.set_effective_caller_id(self.caller_id)
     cursor.execute(self.echo_prefix+self.query, self.bind_variables)
     self._check_echo(cursor, {
@@ -566,8 +569,8 @@ class TestEcho(TestPythonClientBase):
     cursor.close()
 
     # ExecuteEntityIds
-    cursor = self.conn.cursor(keyspace=self.keyspace,
-                              tablet_type=self.tablet_type)
+    cursor = self.conn.cursor(
+        tablet_type=self.tablet_type, keyspace=self.keyspace)
     cursor.set_effective_caller_id(self.caller_id)
     cursor.execute(self.echo_prefix+self.query, self.bind_variables,
                    entity_keyspace_id_map=self.entity_keyspace_ids,
@@ -584,9 +587,9 @@ class TestEcho(TestPythonClientBase):
     cursor.close()
 
     # ExecuteBatchShards
-    cursor = self.conn.cursor(keyspace=None,
-                              tablet_type=self.tablet_type,
-                              as_transaction=True)
+    cursor = self.conn.cursor(
+        tablet_type=self.tablet_type, keyspace=None,
+        as_transaction=True)
     cursor.set_effective_caller_id(self.caller_id)
     cursor.executemany(sql=None,
                        params_list=[
@@ -607,9 +610,9 @@ class TestEcho(TestPythonClientBase):
     cursor.close()
 
     # ExecuteBatchKeyspaceIds
-    cursor = self.conn.cursor(keyspace=None,
-                              tablet_type=self.tablet_type,
-                              as_transaction=True)
+    cursor = self.conn.cursor(
+        tablet_type=self.tablet_type, keyspace=None,
+        as_transaction=True)
     cursor.set_effective_caller_id(self.caller_id)
     cursor.executemany(sql=None,
                        params_list=[
