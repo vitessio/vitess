@@ -123,13 +123,7 @@ def main(mod=None, test_options=None):
     test_options(parser)
   (options, args) = parser.parse_args()
 
-  if options.verbose == 0:
-    level = logging.WARNING
-  elif options.verbose == 1:
-    level = logging.INFO
-  else:
-    level = logging.DEBUG
-  logging.getLogger().setLevel(level)
+  set_log_level(options.verbose)
   logging.basicConfig(
       format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
 
@@ -723,6 +717,15 @@ def get_log_level():
     return 'ERROR'
 
 
+def set_log_level(verbose):
+  level = logging.DEBUG
+  if verbose == 0:
+    level = logging.WARNING
+  elif verbose == 1:
+    level = logging.INFO
+  logging.getLogger().setLevel(level)
+
+
 # vtworker helpers
 def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
   """Runs a vtworker process, returning the stdout and stderr."""
@@ -1149,3 +1152,41 @@ def uint64_to_hex(integer):
   if integer > (1<<64)-1 or integer < 0:
     raise ValueError('Integer out of range: %d' % integer)
   return '%016X' % integer
+
+def get_shard_name(shard, num_shards):
+  """Returns an appropriate shard name, as a string.
+
+  A single shard name is simply 0; otherwise it will attempt to split up 0x100
+  into multiple shards.  For example, shard 1 of 2 is -80, shard 2 of 2 is 80-.
+
+  Args:
+    shard: The integer shard index (zero based)
+    num_shards: Total number of shards (int)
+
+  Returns:
+    The shard name as a string.
+  """
+
+  if num_shards == 1:
+    return '0'
+
+  shard_width = 0x100 / num_shards
+
+  if shard == 0:
+    return '-%02x' % shard_width
+  elif shard == num_shards - 1:
+    return '%02x-' % (shard * shard_width)
+  else:
+    return '%02x-%02x' % (shard * shard_width, (shard + 1) * shard_width)
+
+
+def get_shard_names(num_shards):
+  """Create a generator of shard names.
+
+  Args:
+    num_shards: Total number of shards (int)
+
+  Returns:
+    The shard name generator.
+  """
+  return (get_shard_name(x, num_shards) for x in xrange(num_shards))
