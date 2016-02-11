@@ -364,9 +364,9 @@ public class Row {
       case YEAR:
         return Short.valueOf(value.toStringUtf8());
       case ENUM: // fall through
-      case SET: // fall through
-      case BIT:
+      case SET:
         return value.toStringUtf8();
+      case BIT: // fall through
       case TEXT: // fall through
       case BLOB: // fall through
       case VARCHAR: // fall through
