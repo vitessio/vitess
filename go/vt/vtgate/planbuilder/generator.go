@@ -131,7 +131,7 @@ func (gen *generator) join(fromRoute *routeBuilder, col *sqlparser.ColName, toRo
 	gen.vars[joinVar] = struct{}{}
 	gen.refs[newColref(col)] = joinVar
 	gen.commonJoin(fromRoute, toRoute).SupplyVar(col, joinVar)
-	toRoute.Route.UseVars[joinVar] = struct{}{}
+	toRoute.Route.JoinVars[joinVar] = struct{}{}
 }
 
 func (gen *generator) commonJoin(fromRoute *routeBuilder, toRoute *routeBuilder) *joinBuilder {

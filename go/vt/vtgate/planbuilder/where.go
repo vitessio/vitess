@@ -5,6 +5,7 @@
 package planbuilder
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -16,34 +17,29 @@ import (
 // like for IN clauses.
 const ListVarName = "_vals"
 
-// getWhereRouting fills the plan fields for the where clause of a SELECT
-// statement. It gets reused for DML planning also, where the select plan is
-// replaced with the appropriate DML plan after the fact.
-// onlyUnique matches only Unique indexes.
-func getWhereRouting(where *sqlparser.Where, plan *Plan, onlyUnique bool) {
+// getWhereRouting is only used for DMLs now.
+// TODO(sougou): revisit after refactor.
+func getWhereRouting(where *sqlparser.Where, route *DMLRoute) error {
 	if where == nil {
-		plan.ID = SelectScatter
-		return
+		return errors.New("DML has multi-shard where clause")
 	}
 	if hasSubquery(where.Expr) {
-		plan.ID = NoPlan
-		plan.Reason = "has subquery"
-		return
+		return errors.New("DML has subquery")
 	}
-	for _, index := range plan.Table.Ordered {
-		if onlyUnique && !IsUnique(index.Vindex) {
+	for _, index := range route.Table.Ordered {
+		if !IsUnique(index.Vindex) {
 			continue
 		}
-		if planID, values := getMatch(where.Expr, index.Col); planID != SelectScatter {
-			plan.ID = planID
-			plan.ColVindex = index
-			plan.Values = values
-			return
+		if values := getMatch(where.Expr, index.Col); values != nil {
+			route.Vindex = index.Vindex
+			route.Values = values
+			return nil
 		}
 	}
-	plan.ID = SelectScatter
+	return errors.New("DML has multi-shard where clause")
 }
 
+// TODO(sougou): rewrite.
 func hasSubquery(node sqlparser.Expr) bool {
 	switch node := node.(type) {
 	case *sqlparser.AndExpr:
@@ -99,14 +95,14 @@ func hasSubquery(node sqlparser.Expr) bool {
 	}
 }
 
-func getMatch(node sqlparser.BoolExpr, col string) (planID PlanID, values interface{}) {
+func getMatch(node sqlparser.BoolExpr, col string) interface{} {
 	switch node := node.(type) {
 	case *sqlparser.AndExpr:
-		if planID, values = getMatch(node.Left, col); planID != SelectScatter {
-			return planID, values
+		if values := getMatch(node.Left, col); values != nil {
+			return values
 		}
-		if planID, values = getMatch(node.Right, col); planID != SelectScatter {
-			return planID, values
+		if values := getMatch(node.Right, col); values != nil {
+			return values
 		}
 	case *sqlparser.ParenBoolExpr:
 		return getMatch(node.Expr, col)
@@ -114,32 +110,20 @@ func getMatch(node sqlparser.BoolExpr, col string) (planID PlanID, values interf
 		switch node.Operator {
 		case "=":
 			if !nameMatch(node.Left, col) {
-				return SelectScatter, nil
+				return nil
 			}
 			if !sqlparser.IsValue(node.Right) {
-				return SelectScatter, nil
+				return nil
 			}
 			val, err := asInterface(node.Right)
 			if err != nil {
-				return SelectScatter, nil
+				return nil
 			}
-			return SelectEqual, val
-		case "in":
-			if !nameMatch(node.Left, col) {
-				return SelectScatter, nil
-			}
-			if !sqlparser.IsSimpleTuple(node.Right) {
-				return SelectScatter, nil
-			}
-			val, err := asInterface(node.Right)
-			if err != nil {
-				return SelectScatter, nil
-			}
-			node.Right = sqlparser.ListArg("::" + ListVarName)
-			return SelectIN, val
+			return val
 		}
+		return nil
 	}
-	return SelectScatter, nil
+	return nil
 }
 
 func nameMatch(node sqlparser.ValExpr, col string) bool {

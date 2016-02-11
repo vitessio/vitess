@@ -6,6 +6,7 @@ package planbuilder
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -49,78 +50,6 @@ var planName = [NumPlans]string{
 	"NewSelect",
 }
 
-// Plan represents the routing strategy for a given query.
-type Plan struct {
-	ID PlanID
-	// Reason usually contains a string describing the reason
-	// for why a certain plan was (or not) chosen.
-	Reason string
-	Table  *Table
-	// Original is the original query.
-	Original string
-	// Rewritten is the rewritten query. This is empty for
-	// all Unsharded plans since the Original query is sufficient.
-	Rewritten string
-	// Subquery is used for DeleteUnsharded to fetch the column values
-	// for owned vindexes so they can be deleted.
-	Subquery  string
-	ColVindex *ColVindex
-	// Values is a single or a list of values that are used
-	// for making routing decisions.
-	Values interface{}
-}
-
-// Size is defined so that Plan can be given to an LRUCache.
-func (pln *Plan) Size() int {
-	return 1
-}
-
-// MarshalJSON serializes the Plan into a JSON representation.
-func (pln *Plan) MarshalJSON() ([]byte, error) {
-	var tname, vindexName, col string
-	if pln.Table != nil {
-		tname = pln.Table.Name
-	}
-	if pln.ColVindex != nil {
-		vindexName = pln.ColVindex.Name
-		col = pln.ColVindex.Col
-	}
-	marshalPlan := struct {
-		ID        PlanID      `json:",omitempty"`
-		Reason    string      `json:",omitempty"`
-		Table     string      `json:",omitempty"`
-		Original  string      `json:",omitempty"`
-		Rewritten string      `json:",omitempty"`
-		Subquery  string      `json:",omitempty"`
-		Vindex    string      `json:",omitempty"`
-		Col       string      `json:",omitempty"`
-		Values    interface{} `json:",omitempty"`
-	}{
-		ID:        pln.ID,
-		Reason:    pln.Reason,
-		Table:     tname,
-		Original:  pln.Original,
-		Rewritten: pln.Rewritten,
-		Subquery:  pln.Subquery,
-		Vindex:    vindexName,
-		Col:       col,
-		Values:    pln.Values,
-	}
-	return json.Marshal(marshalPlan)
-}
-
-// IsMulti returns true if the SELECT query can potentially
-// be sent to more than one shard.
-func (pln *Plan) IsMulti() bool {
-	if pln.ID == SelectIN || pln.ID == SelectScatter {
-		return true
-	}
-	if pln.ID == SelectEqual && !IsUnique(pln.ColVindex.Vindex) {
-		return true
-	}
-	return false
-}
-
 func (id PlanID) String() string {
 	if id < 0 || id >= NumPlans {
 		return ""
@@ -128,67 +57,96 @@ func (id PlanID) String() string {
 	return planName[id]
 }
 
-// PlanByName returns the PlanID from the plan name.
-// If it cannot be found, then it returns NumPlans.
-func PlanByName(s string) (id PlanID, ok bool) {
-	for i, v := range planName {
-		if v == s {
-			return PlanID(i), true
-		}
-	}
-	return NumPlans, false
-}
-
 // MarshalJSON serializes the plan id as a JSON string.
 func (id PlanID) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", id.String())), nil
 }
 
+// Plan represents the routing strategy for a given query.
+type Plan struct {
+	// Original is the original query.
+	Original string `json:",omitempty"`
+	// Instructions contains the instructions needed to
+	// fulfil the query. It's a tree of primitives.
+	Instructions interface{} `json:",omitempty"`
+}
+
+// Size is defined so that Plan can be given to an LRUCache.
+func (pln *Plan) Size() int {
+	return 1
+}
+
+// DMLRoute represents the instructions to execute a DML.
+type DMLRoute struct {
+	PlanID PlanID
+	// Table points to the VSchema table for the DML. A DML
+	// is only allowed to change one table.
+	Table *Table
+	// Query is the query to be executed.
+	Query string
+	// Subquery is used for DeleteUnsharded to fetch the column values
+	// for owned vindexes so they can be deleted.
+	Subquery string
+	// Vindex and Values determine the route for the query.
+	Vindex Vindex
+	Values interface{}
+}
+
+// MarshalJSON serializes the Plan into a JSON representation.
+func (rt *DMLRoute) MarshalJSON() ([]byte, error) {
+	var tname, vindexName string
+	if rt.Table != nil {
+		tname = rt.Table.Name
+	}
+	if rt.Vindex != nil {
+		vindexName = rt.Vindex.String()
+	}
+	marshalPlan := struct {
+		PlanID   PlanID      `json:",omitempty"`
+		Table    string      `json:",omitempty"`
+		Query    string      `json:",omitempty"`
+		Subquery string      `json:",omitempty"`
+		Vindex   string      `json:",omitempty"`
+		Values   interface{} `json:",omitempty"`
+	}{
+		PlanID:   rt.PlanID,
+		Table:    tname,
+		Query:    rt.Query,
+		Subquery: rt.Subquery,
+		Vindex:   vindexName,
+		Values:   prettyValue(rt.Values),
+	}
+	return json.Marshal(marshalPlan)
+}
+
 // BuildPlan builds a plan for a query based on the specified vschema.
-func BuildPlan(query string, vschema *VSchema) *Plan {
+func BuildPlan(query string, vschema *VSchema) (*Plan, error) {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
-		return &Plan{
-			ID:       NoPlan,
-			Reason:   err.Error(),
-			Original: query,
-		}
+		return nil, err
 	}
-	noplan := &Plan{
-		ID:       NoPlan,
-		Reason:   "cannot build a plan for this construct",
+	plan := &Plan{
 		Original: query,
 	}
-	var plan *Plan
 	switch statement := statement.(type) {
 	case *sqlparser.Select:
-		plan = buildSelectPlan(statement, vschema)
-		/*
-			planb, err := buildSelectPlan2(statement, vschema)
-			if err != nil {
-				return &Plan{
-					Reason:   err.Error(),
-					Original: query,
-				}
-			}
-			plan = &Plan{
-				ID:     NewSelect,
-				Values: planb,
-			}
-		*/
+		//plan = buildSelectPlan(statement, vschema)
+		plan.Instructions, err = buildSelectPlan2(statement, vschema)
 	case *sqlparser.Insert:
-		plan = buildInsertPlan(statement, vschema)
+		plan.Instructions, err = buildInsertPlan(statement, vschema)
 	case *sqlparser.Update:
-		plan = buildUpdatePlan(statement, vschema)
+		plan.Instructions, err = buildUpdatePlan(statement, vschema)
 	case *sqlparser.Delete:
-		plan = buildDeletePlan(statement, vschema)
+		plan.Instructions, err = buildDeletePlan(statement, vschema)
 	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
-		return noplan
+		return nil, errors.New("cannot build a plan for this construct")
 	default:
 		panic("unexpected")
 	}
-	plan.Original = query
-	return plan
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
 
 func generateQuery(statement sqlparser.Statement) string {

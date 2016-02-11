@@ -6,7 +6,6 @@ package planbuilder
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -138,8 +137,8 @@ type Route struct {
 	// to compute the target shard(s) where the query must
 	// be sent.
 	// TODO(sougou): explain contents of Values.
-	Values  interface{}
-	UseVars map[string]struct{}
+	Values   interface{}
+	JoinVars map[string]struct{}
 }
 
 // MarshalJSON marshals Route into a readable form.
@@ -155,15 +154,15 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		Query    string              `json:",omitempty"`
 		Keyspace *Keyspace           `json:",omitempty"`
 		Vindex   string              `json:",omitempty"`
-		Values   string              `json:",omitempty"`
-		UseVars  map[string]struct{} `json:",omitempty"`
+		Values   interface{}         `json:",omitempty"`
+		JoinVars map[string]struct{} `json:",omitempty"`
 	}{
 		PlanID:   rt.PlanID,
 		Query:    rt.Query,
 		Keyspace: rt.Keyspace,
 		Vindex:   vindexName,
 		Values:   prettyValue(rt.Values),
-		UseVars:  rt.UseVars,
+		JoinVars: rt.JoinVars,
 	}
 	return json.Marshal(marshalRoute)
 }
@@ -175,16 +174,21 @@ func (rt *Route) SetPlan(planID PlanID, vindex Vindex, values interface{}) {
 	rt.Values = values
 }
 
-// prettyValue converts the Values to a readable form.
-// This function is used for testing and diagnostics.
-func prettyValue(value interface{}) string {
+// prettyValue converts the Values to a form that will
+// be human-readable when converted to JSON. This is
+// for testing and diagnostics.
+func prettyValue(value interface{}) interface{} {
 	switch value := value.(type) {
-	case nil:
-		return ""
-	case sqlparser.SQLNode:
-		return sqlparser.String(value)
 	case []byte:
 		return string(value)
+	case []interface{}:
+		newvals := make([]interface{}, len(value))
+		for i, old := range value {
+			newvals[i] = prettyValue(old)
+		}
+		return newvals
+	case sqlparser.SQLNode:
+		return sqlparser.String(value)
 	}
-	return fmt.Sprintf("%v", value)
+	return value
 }

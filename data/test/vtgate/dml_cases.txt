@@ -1,197 +1,236 @@
 # update table not found
 "update nouser set val = 1"
-{
-  "Reason": "table nouser not found",
-  "Original": "update nouser set val = 1"
-}
+"table nouser not found"
 
 # delete table not found
 "delete from nouser"
-{
-  "Reason": "table nouser not found",
-  "Original": "delete from nouser"
-}
+"table nouser not found"
 
 # update unsharded
 "update main1 set val = 1"
 {
-  "ID": "UpdateUnsharded",
-  "Table": "main1",
   "Original": "update main1 set val = 1",
-  "Rewritten": "update main1 set val = 1"
+  "Instructions": {
+    "PlanID": "UpdateUnsharded",
+    "Table": "main1",
+    "Query": "update main1 set val = 1"
+  }
 }
 
 # delete unsharded
 "delete from main1"
 {
-  "ID": "DeleteUnsharded",
-  "Table": "main1",
   "Original": "delete from main1",
-  "Rewritten": "delete from main1"
+  "Instructions": {
+    "PlanID": "DeleteUnsharded",
+    "Table": "main1",
+    "Query": "delete from main1"
+  }
 }
 
 # update with no where clause
 "update user set val = 1"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "user",
-  "Original": "update user set val = 1"
-}
+"DML has multi-shard where clause"
 
 # delete from with no where clause
 "delete from user"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "user",
-  "Original": "delete from user"
-}
+"DML has multi-shard where clause"
 
 # update by primary keyspace id
 "update user set val = 1 where id = 1"
 {
-  "ID": "UpdateEqual",
-  "Table": "user",
   "Original": "update user set val = 1 where id = 1",
-  "Rewritten": "update user set val = 1 where id = 1",
-  "Vindex": "user_index",
-  "Col": "id",
-  "Values": 1
+  "Instructions": {
+    "PlanID": "UpdateEqual",
+    "Table": "user",
+    "Query": "update user set val = 1 where id = 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
 }
 
 # delete from by primary keyspace id
 "delete from user where id = 1"
 {
-  "ID": "DeleteEqual",
-  "Table": "user",
   "Original": "delete from user where id = 1",
-  "Rewritten": "delete from user where id = 1",
-  "Subquery": "select id, name from user where id = 1 for update",
-  "Vindex": "user_index",
-  "Col": "id",
-  "Values": 1
+  "Instructions": {
+    "PlanID": "DeleteEqual",
+    "Table": "user",
+    "Query": "delete from user where id = 1",
+    "Subquery": "select id, name from user where id = 1 for update",
+    "Vindex": "user_index",
+    "Values": 1
+  }
 }
 
 # update KEYRANGE
 "update user set val = 1 where keyrange(1, 2)"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "user",
-  "Original": "update user set val = 1 where keyrange(1, 2)"
-}
+"DML has multi-shard where clause"
 
 # delete KEYRANGE
 "delete from user where keyrange(1, 2)"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "user",
-  "Original": "delete from user where keyrange(1, 2)"
-}
+"DML has multi-shard where clause"
 
 # update with primary id through IN clause
 "update user set val = 1 where id in (1, 2)"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "user",
-  "Original": "update user set val = 1 where id in (1, 2)"
-}
+"DML has multi-shard where clause"
 
 # delete from with primary id through IN clause
 "delete from user where id in (1, 2)"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "user",
-  "Original": "delete from user where id in (1, 2)"
-}
+"DML has multi-shard where clause"
 
 # update with non-unique key
 "update user set val = 1 where name = 'foo'"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "user",
-  "Original": "update user set val = 1 where name = 'foo'"
-}
+"DML has multi-shard where clause"
 
 # delete from with primary id through IN clause
 "delete from user where name = 'foo'"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "user",
-  "Original": "delete from user where name = 'foo'"
-}
+"DML has multi-shard where clause"
 
 # update with no index match
 "update user set val = 1 where user_id = 1"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "user",
-  "Original": "update user set val = 1 where user_id = 1"
-}
+"DML has multi-shard where clause"
 
 # delete from with no index match
 "delete from user where user_id = 1"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "user",
-  "Original": "delete from user where user_id = 1"
-}
+"DML has multi-shard where clause"
 
 # update by lookup
 "update music set val = 1 where id = 1"
 {
-  "ID": "UpdateEqual",
-  "Table": "music",
   "Original": "update music set val = 1 where id = 1",
-  "Rewritten": "update music set val = 1 where id = 1",
-  "Vindex": "music_user_map",
-  "Col": "id",
-  "Values": 1
+  "Instructions": {
+    "PlanID": "UpdateEqual",
+    "Table": "music",
+    "Query": "update music set val = 1 where id = 1",
+    "Vindex": "music_user_map",
+    "Values": 1
+  }
 }
 
 # delete from by lookup
 "delete from music where id = 1"
 {
-  "ID": "DeleteEqual",
-  "Table": "music",
   "Original": "delete from music where id = 1",
-  "Rewritten": "delete from music where id = 1",
-  "Subquery": "select id from music where id = 1 for update",
-  "Vindex": "music_user_map",
-  "Col": "id",
-  "Values": 1
+  "Instructions": {
+    "PlanID": "DeleteEqual",
+    "Table": "music",
+    "Query": "delete from music where id = 1",
+    "Subquery": "select id from music where id = 1 for update",
+    "Vindex": "music_user_map",
+    "Values": 1
+  }
 }
 
 # delete from, no owned vindexes
 "delete from music_extra where user_id = 1"
 {
-  "ID": "DeleteEqual",
-  "Table": "music_extra",
   "Original": "delete from music_extra where user_id = 1",
-  "Rewritten": "delete from music_extra where user_id = 1",
-  "Vindex": "user_index",
-  "Col": "user_id",
-  "Values": 1
+  "Instructions": {
+    "PlanID": "DeleteEqual",
+    "Table": "music_extra",
+    "Query": "delete from music_extra where user_id = 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
 }
 
 # update by lookup with IN clause
 "update music set val = 1 where id in (1, 2)"
-{
-  "Reason": "update has multi-shard where clause",
-  "Table": "music",
-  "Original": "update music set val = 1 where id in (1, 2)"
-}
+"DML has multi-shard where clause"
 
 # delete from by lookup with IN clause
 "delete from music where id in (1, 2)"
-{
-  "Reason": "delete has multi-shard where clause",
-  "Table": "music",
-  "Original": "delete from music where id in (1, 2)"
-}
+"DML has multi-shard where clause"
 
 # update changes index column
 "update music set id = 1 where id = 1"
+"index is changing"
+
+# insert unsharded
+"insert into main1 values(1, 2)"
 {
-  "Reason": "index is changing",
-  "Table": "music",
-  "Original": "update music set id = 1 where id = 1"
+  "Original": "insert into main1 values(1, 2)",
+  "Instructions": {
+    "PlanID": "InsertUnsharded",
+    "Table": "main1",
+    "Query": "insert into main1 values (1, 2)"
+  }
 }
+
+# insert no column list
+"insert into user values(1, 2, 3)"
+"no column list"
+
+# insert from select
+"insert into user(id) select 1 from dual"
+"subqueries not allowed"
+
+# insert with multiple rows
+"insert into user(id) values (1), (2)"
+"multi-row inserts not supported"
+
+# insert with subquery as value
+"insert into user(id) values (select 1 from dual)"
+"subqueries not allowed"
+
+# insert with mimatched column list
+"insert into user(id) values (1, 2)"
+"column list doesn't match values"
+
+# insert with one vindex
+"insert into user(id) values (1)"
+{
+  "Original": "insert into user(id) values (1)",
+  "Instructions": {
+    "PlanID": "InsertSharded",
+    "Table": "user",
+    "Query": "insert into user(id, name) values (:_id, :_name)",
+    "Values": [
+      1,
+      null
+    ]
+  }
+}
+
+# insert with non vindex
+"insert into user(nonid) values (2)"
+{
+  "Original": "insert into user(nonid) values (2)",
+  "Instructions": {
+    "PlanID": "InsertSharded",
+    "Table": "user",
+    "Query": "insert into user(nonid, id, name) values (2, :_id, :_name)",
+    "Values": [
+      null,
+      null
+    ]
+  }
+}
+
+# insert with all vindexes supplied
+"insert into user(nonid, name, id) values (2, 'foo', 1)"
+{
+  "Original": "insert into user(nonid, name, id) values (2, 'foo', 1)",
+  "Instructions": {
+    "PlanID": "InsertSharded",
+    "Table": "user",
+    "Query": "insert into user(nonid, name, id) values (2, :_name, :_id)",
+    "Values": [
+      1,
+      "foo"
+    ]
+  }
+}
+
+# insert invalid index value
+"insert into music_extra(music_id, user_id) values(1, 1.1)"
+"could not convert val: 1.1, pos: 1: strconv.ParseUint: parsing "1.1": invalid syntax"
+
+# insert invalid index value
+"insert into music_extra(music_id, user_id) values(1, id)"
+"could not convert val: id, pos: 1: id is not a value"
+
+# insert invalid table
+"insert into noexist(music_id, user_id) values(1, 1.1)"
+"table noexist not found"

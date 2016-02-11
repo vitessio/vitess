@@ -6,42 +6,37 @@ package planbuilder
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) *Plan {
-	plan := &Plan{
-		ID:        NoPlan,
-		Rewritten: generateQuery(upd),
+func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*DMLRoute, error) {
+	route := &DMLRoute{
+		Query: generateQuery(upd),
 	}
 	tablename := sqlparser.GetTableName(upd.Table)
-	plan.Table, plan.Reason = vschema.FindTable(tablename)
-	if plan.Reason != "" {
-		return plan
+	var err error
+	route.Table, err = vschema.FindTable(tablename)
+	if err != nil {
+		return nil, err
 	}
-	if !plan.Table.Keyspace.Sharded {
-		plan.ID = UpdateUnsharded
-		return plan
+	if !route.Table.Keyspace.Sharded {
+		// TODO(sougou): subquery check
+		route.PlanID = UpdateUnsharded
+		return route, nil
 	}
 
-	getWhereRouting(upd.Where, plan, true)
-	switch plan.ID {
-	case SelectEqual:
-		plan.ID = UpdateEqual
-	case SelectIN, SelectScatter:
-		plan.ID = NoPlan
-		plan.Reason = "update has multi-shard where clause"
-		return plan
-	default:
-		panic("unexpected")
+	err = getWhereRouting(upd.Where, route)
+	if err != nil {
+		return nil, err
 	}
-	if isIndexChanging(upd.Exprs, plan.Table.ColVindexes) {
-		plan.ID = NoPlan
-		plan.Reason = "index is changing"
+	route.PlanID = UpdateEqual
+	if isIndexChanging(upd.Exprs, route.Table.ColVindexes) {
+		return nil, errors.New("index is changing")
 	}
-	return plan
+	return route, nil
 }
 
 func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex) bool {
@@ -57,33 +52,29 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex)
 	return false
 }
 
-func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) *Plan {
-	plan := &Plan{
-		ID:        NoPlan,
-		Rewritten: generateQuery(del),
+func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*DMLRoute, error) {
+	route := &DMLRoute{
+		Query: generateQuery(del),
 	}
 	tablename := sqlparser.GetTableName(del.Table)
-	plan.Table, plan.Reason = vschema.FindTable(tablename)
-	if plan.Reason != "" {
-		return plan
+	var err error
+	route.Table, err = vschema.FindTable(tablename)
+	if err != nil {
+		return nil, err
 	}
-	if !plan.Table.Keyspace.Sharded {
-		plan.ID = DeleteUnsharded
-		return plan
+	if !route.Table.Keyspace.Sharded {
+		// TODO(sougou): subquery check
+		route.PlanID = DeleteUnsharded
+		return route, nil
 	}
 
-	getWhereRouting(del.Where, plan, true)
-	switch plan.ID {
-	case SelectEqual:
-		plan.ID = DeleteEqual
-		plan.Subquery = generateDeleteSubquery(del, plan.Table)
-	case SelectIN, SelectScatter:
-		plan.ID = NoPlan
-		plan.Reason = "delete has multi-shard where clause"
-	default:
-		panic("unexpected")
+	err = getWhereRouting(del.Where, route)
+	if err != nil {
+		return nil, err
 	}
-	return plan
+	route.PlanID = DeleteEqual
+	route.Subquery = generateDeleteSubquery(del, route.Table)
+	return route, nil
 }
 
 func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {

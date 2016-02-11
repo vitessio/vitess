@@ -76,21 +76,21 @@ func getTablePlan(tableName *sqlparser.TableName, vschema *VSchema) (*Route, *Ta
 		// TODO(sougou): better error message.
 		return nil, nil, errors.New("tablename qualifier not allowed")
 	}
-	table, reason := vschema.FindTable(string(tableName.Name))
-	if reason != "" {
-		return nil, nil, errors.New(reason)
+	table, err := vschema.FindTable(string(tableName.Name))
+	if err != nil {
+		return nil, nil, err
 	}
 	if table.Keyspace.Sharded {
 		return &Route{
 			PlanID:   SelectScatter,
 			Keyspace: table.Keyspace,
-			UseVars:  make(map[string]struct{}),
+			JoinVars: make(map[string]struct{}),
 		}, table, nil
 	}
 	return &Route{
 		PlanID:   SelectUnsharded,
 		Keyspace: table.Keyspace,
-		UseVars:  make(map[string]struct{}),
+		JoinVars: make(map[string]struct{}),
 	}, table, nil
 }
 

@@ -6,6 +6,7 @@ package planbuilder
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"sort"
@@ -124,15 +125,15 @@ func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 
 // FindTable returns a pointer to the Table if found.
 // Otherwise, it returns a reason, which is equivalent to an error.
-func (vschema *VSchema) FindTable(tablename string) (table *Table, reason string) {
+func (vschema *VSchema) FindTable(tablename string) (table *Table, err error) {
 	if tablename == "" {
-		return nil, "complex table expression"
+		return nil, errors.New("complex table expression")
 	}
 	table = vschema.Tables[tablename]
 	if table == nil {
-		return nil, fmt.Sprintf("table %s not found", tablename)
+		return nil, fmt.Errorf("table %s not found", tablename)
 	}
-	return table, ""
+	return table, nil
 }
 
 // ByCost provides the interface needed for ColVindexes to

@@ -72,58 +72,45 @@ func init() {
 	Register("multi", newMultiIndex)
 }
 
-func TestPlanName(t *testing.T) {
-	id, ok := PlanByName("SelectUnsharded")
-	if !ok {
-		t.Errorf("got false, want true")
-	}
-	if id != SelectUnsharded {
-		t.Errorf("got %d, want SelectUnsharded", id)
-	}
-	id, ok = PlanByName("NonExistent")
-	if ok {
-		t.Errorf("got true, want false")
-	}
-	fakeName := NumPlans.String()
-	if fakeName != "" {
-		t.Errorf("got %s, want \"\"", fakeName)
-	}
-}
-
 func TestPlan(t *testing.T) {
 	vschema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	testFile(t, "select_cases.txt", vschema)
+	testFile(t, "filter_cases.txt", vschema)
 	testFile(t, "dml_cases.txt", vschema)
-	testFile(t, "insert_cases.txt", vschema)
 }
 
 func testFile(t *testing.T, filename string, vschema *VSchema) {
 	for tcase := range iterateExecFile(filename) {
-		plan := BuildPlan(tcase.input, vschema)
-		if plan.ID == NoPlan {
-			plan.Rewritten = ""
-			plan.ColVindex = nil
-			plan.Values = nil
-		}
-		bout, err := json.Marshal(plan)
+		plan, err := BuildPlan(tcase.input, vschema)
+		var out string
 		if err != nil {
-			panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
+			out = err.Error()
+		} else {
+			bout, _ := json.Marshal(plan)
+			out = string(bout)
 		}
-		out := string(bout)
 		if out != tcase.output {
 			t.Errorf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out)
 		}
+		if err != nil {
+			out = fmt.Sprintf("\"%s\"", out)
+		} else {
+			bout, _ := json.MarshalIndent(plan, "", "  ")
+			out = string(bout)
+		}
+		fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
 	}
 }
 
 type testCase struct {
-	file   string
-	lineno int
-	input  string
-	output string
+	file     string
+	lineno   int
+	input    string
+	output   string
+	comments string
 }
 
 func iterateExecFile(name string) (testCaseIterator chan testCase) {
@@ -133,6 +120,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 		panic(fmt.Sprintf("Could not open file %s", name))
 	}
 	testCaseIterator = make(chan testCase)
+	var comments string
 	go func() {
 		defer close(testCaseIterator)
 
@@ -149,7 +137,11 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			}
 			lineno++
 			input := string(binput)
-			if input == "" || input == "\n" || input[0] == '#' || strings.HasPrefix(input, "Length:") {
+			if input == "" || input == "\n" || strings.HasPrefix(input, "Length:") {
+				continue
+			}
+			if input[0] == '#' {
+				comments = comments + input
 				continue
 			}
 			err = json.Unmarshal(binput, &input)
@@ -180,7 +172,14 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 					break
 				}
 			}
-			testCaseIterator <- testCase{name, lineno, input, string(output)}
+			testCaseIterator <- testCase{
+				file:     name,
+				lineno:   lineno,
+				input:    input,
+				output:   string(output),
+				comments: comments,
+			}
+			comments = ""
 		}
 	}()
 	return testCaseIterator

@@ -120,7 +120,7 @@ func (rtr *Router) execRoute(vcursor *requestContext, route *planbuilder.Route) 
 	}
 	saved := copyBindVars(vcursor.bindVars)
 	defer func() { vcursor.bindVars = saved }()
-	for k := range route.UseVars {
+	for k := range route.JoinVars {
 		vcursor.bindVars[k] = vcursor.JoinVars[k]
 	}
 	return rtr.scatterConn.ExecuteMulti(
@@ -224,7 +224,7 @@ func (rtr *Router) streamExecRoute(vcursor *requestContext, route *planbuilder.R
 	}
 	saved := copyBindVars(vcursor.bindVars)
 	defer func() { vcursor.bindVars = saved }()
-	for k := range route.UseVars {
+	for k := range route.JoinVars {
 		vcursor.bindVars[k] = vcursor.JoinVars[k]
 	}
 	return rtr.scatterConn.StreamExecuteMulti(
