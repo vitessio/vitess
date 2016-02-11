@@ -556,24 +556,29 @@ class TestSqlWhereExprs(BaseTestCase):
         '(col_a = %(col_a_5)s))',
         dict(col_a_3=11, col_a_4=20, col_a_5=30))
 
-  def test_after_prev__values(self):
+  def test_tuple_compare(self):
     self._check_build_where_sql(
-        sql_builder.AfterPrevValues([('x', 3), ('y', 5), ('z', 7)]),
-        'x = %(x_5)s AND (y = %(y_4)s AND z > %(z_3)s OR y > %(y_4)s) '
-        'OR x > %(x_5)s',
+        sql_builder.TupleGreater([('x', 3), ('y', 5), ('z', 7)]),
+        'x = %(x_5)s AND '
+        '(y = %(y_4)s AND z > %(z_3)s OR y > %(y_4)s) OR x > %(x_5)s',
         dict(x_5=3, y_4=5, z_3=7),
         column_name=None)
     self._check_build_where_sql(
-        sql_builder.AfterPrevValues(
-            [('x', 3), ('y', 5), ('z', 7)], inclusive=True),
-        'x = %(x_5)s AND (y = %(y_4)s AND z >= %(z_3)s OR y > %(y_4)s) '
-        'OR x > %(x_5)s',
+        sql_builder.TupleGreaterEqual([('x', 3), ('y', 5), ('z', 7)]),
+        'x = %(x_5)s AND '
+        '(y = %(y_4)s AND z >= %(z_3)s OR y > %(y_4)s) OR x > %(x_5)s',
         dict(x_5=3, y_4=5, z_3=7),
         column_name=None)
     self._check_build_where_sql(
-        sql_builder.AfterPrevValues([('x', 3), ('y', 5), ('z', 7)], asc=False),
-        'x = %(x_5)s AND (y = %(y_4)s AND z < %(z_3)s OR y < %(y_4)s) '
-        'OR x < %(x_5)s',
+        sql_builder.TupleLess([('x', 3), ('y', 5), ('z', 7)]),
+        'x = %(x_5)s AND '
+        '(y = %(y_4)s AND z < %(z_3)s OR y < %(y_4)s) OR x < %(x_5)s',
+        dict(x_5=3, y_4=5, z_3=7),
+        column_name=None)
+    self._check_build_where_sql(
+        sql_builder.TupleLessEqual([('x', 3), ('y', 5), ('z', 7)]),
+        'x = %(x_5)s AND '
+        '(y = %(y_4)s AND z <= %(z_3)s OR y < %(y_4)s) OR x < %(x_5)s',
         dict(x_5=3, y_4=5, z_3=7),
         column_name=None)
 

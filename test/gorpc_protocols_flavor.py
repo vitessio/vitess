@@ -8,7 +8,7 @@ import protocols_flavor
 # Now imports all the implementations we need.
 # We will change this to explicit registration soon.
 from vtctl import gorpc_vtctl_client  # pylint: disable=unused-import
-from vtdb import gorpc_update_stream  # pylint: disable=unused-import
+from vtdb import grpc_update_stream  # pylint: disable=unused-import
 from vtdb import vtgatev2  # pylint: disable=unused-import
 
 
@@ -16,10 +16,12 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   """Overrides to use go rpc everywhere."""
 
   def binlog_player_protocol(self):
-    return 'gorpc'
+    """No gorpc support for binlog player any more, use gRPC instead."""
+    return 'grpc'
 
   def binlog_player_python_protocol(self):
-    return 'gorpc'
+    """No gorpc support for binlog player any more, use gRPC instead."""
+    return 'grpc'
 
   def vtctl_client_protocol(self):
     return 'gorpc'
@@ -56,12 +58,12 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def service_map(self):
     return [
-        'bsonrpc-vt-updatestream',
         'bsonrpc-vt-vtctl',
         'bsonrpc-vt-vtgateservice',
         'grpc-vtworker',
         'grpc-queryservice',
         'grpc-tabletmanager',
+        'grpc-updatestream',
         ]
 
   def vttest_protocol(self):

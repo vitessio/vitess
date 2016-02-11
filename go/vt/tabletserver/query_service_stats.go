@@ -93,7 +93,8 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 			userTransactionCountName, []string{"CallerID", "Conclusion"}),
 		UserTransactionTimesNs: stats.NewMultiCounters(
 			userTransactionTimesNsName, []string{"CallerID", "Conclusion"}),
-		QPSRates:       stats.NewRates(qpsRateName, queryStats, 15, 60*time.Second),
+		// Sample every 5 seconds and keep samples for up to 15 minutes.
+		QPSRates:       stats.NewRates(qpsRateName, queryStats, 15*60/5, 5*time.Second),
 		ResultStats:    stats.NewHistogram(resultStatsName, resultBuckets),
 		SpotCheckCount: stats.NewInt(spotCheckCountName),
 	}

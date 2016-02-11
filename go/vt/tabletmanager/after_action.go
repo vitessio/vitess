@@ -98,6 +98,9 @@ func (agent *ActionAgent) broadcastHealth() {
 	if agent.BinlogPlayerMap != nil {
 		stats.SecondsBehindMasterFilteredReplication, stats.BinlogPlayersCount = agent.BinlogPlayerMap.StatusSummary()
 	}
+	if qss := agent.QueryServiceControl.QueryServiceStats(); qss != nil {
+		stats.Qps = qss.QPSRates.TotalRate()
+	}
 	if healthError != nil {
 		stats.HealthError = healthError.Error()
 	}

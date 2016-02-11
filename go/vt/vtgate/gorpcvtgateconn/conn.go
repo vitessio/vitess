@@ -84,15 +84,14 @@ func sessionFromRPC(session *vtgatepb.Session) interface{} {
 	return session
 }
 
-func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	s := sessionToRPC(session)
 	request := gorpcvtgatecommon.Query{
-		CallerID:         getEffectiveCallerID(ctx),
-		Sql:              query,
-		BindVariables:    bindVars,
-		TabletType:       tabletType,
-		Session:          s,
-		NotInTransaction: notInTransaction,
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		TabletType:    tabletType,
+		Session:       s,
 	}
 	var result gorpcvtgatecommon.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.Execute", request, &result); err != nil {
@@ -107,17 +106,16 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	return result.Result, sessionFromRPC(result.Session), nil
 }
 
-func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	s := sessionToRPC(session)
 	request := gorpcvtgatecommon.QueryShard{
-		CallerID:         getEffectiveCallerID(ctx),
-		Sql:              query,
-		BindVariables:    bindVars,
-		Keyspace:         keyspace,
-		Shards:           shards,
-		TabletType:       tabletType,
-		Session:          s,
-		NotInTransaction: notInTransaction,
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		Shards:        shards,
+		TabletType:    tabletType,
+		Session:       s,
 	}
 	var result gorpcvtgatecommon.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteShard", request, &result); err != nil {
@@ -132,17 +130,16 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 	return result.Result, sessionFromRPC(result.Session), nil
 }
 
-func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	s := sessionToRPC(session)
 	request := gorpcvtgatecommon.KeyspaceIdQuery{
-		CallerID:         getEffectiveCallerID(ctx),
-		Sql:              query,
-		BindVariables:    bindVars,
-		Keyspace:         keyspace,
-		KeyspaceIds:      keyspaceIds,
-		TabletType:       tabletType,
-		Session:          s,
-		NotInTransaction: notInTransaction,
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		KeyspaceIds:   keyspaceIds,
+		TabletType:    tabletType,
+		Session:       s,
 	}
 	var result gorpcvtgatecommon.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteKeyspaceIds", request, &result); err != nil {
@@ -157,17 +154,16 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	return result.Result, sessionFromRPC(result.Session), nil
 }
 
-func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topodatapb.KeyRange, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	s := sessionToRPC(session)
 	request := gorpcvtgatecommon.KeyRangeQuery{
-		CallerID:         getEffectiveCallerID(ctx),
-		Sql:              query,
-		BindVariables:    bindVars,
-		Keyspace:         keyspace,
-		KeyRanges:        keyRanges,
-		TabletType:       tabletType,
-		Session:          s,
-		NotInTransaction: notInTransaction,
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		KeyRanges:     keyRanges,
+		TabletType:    tabletType,
+		Session:       s,
 	}
 	var result gorpcvtgatecommon.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteKeyRanges", request, &result); err != nil {
@@ -182,7 +178,7 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	return result.Result, sessionFromRPC(result.Session), nil
 }
 
-func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, notInTransaction bool, session interface{}) (*sqltypes.Result, interface{}, error) {
+func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}) (*sqltypes.Result, interface{}, error) {
 	s := sessionToRPC(session)
 	request := gorpcvtgatecommon.EntityIdsQuery{
 		CallerID:          getEffectiveCallerID(ctx),
@@ -193,7 +189,6 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 		EntityKeyspaceIDs: gorpcvtgatecommon.ProtoToEntityIds(entityKeyspaceIDs),
 		TabletType:        tabletType,
 		Session:           s,
-		NotInTransaction:  notInTransaction,
 	}
 	var result gorpcvtgatecommon.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteEntityIds", request, &result); err != nil {

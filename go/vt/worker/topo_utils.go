@@ -45,12 +45,12 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 
 	// create a discovery healthcheck, wait for it to have one rdonly
 	// endpoints at this point
-	healthCheck := discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout)
+	healthCheck := discovery.NewHealthCheck(*remoteActionsTimeout, *healthcheckRetryDelay, *healthCheckTimeout, "" /* statsSuffix */)
 	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, 5 /*topoReadConcurrency*/)
 	defer watcher.Stop()
 	defer healthCheck.Close()
-	if err := discovery.WaitForEndPoints(healthCheck, cell, keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_RDONLY}); err != nil {
-		return nil, fmt.Errorf("error waiting for rdonly endpoints for %v %v %v: %v", cell, keyspace, shard, err)
+	if err := discovery.WaitForEndPoints(ctx, healthCheck, cell, keyspace, shard, []topodatapb.TabletType{topodatapb.TabletType_RDONLY}); err != nil {
+		return nil, fmt.Errorf("error waiting for rdonly endpoints for (%v,%v/%v): %v", cell, keyspace, shard, err)
 	}
 
 	var healthyEndpoints []*topodatapb.EndPoint
@@ -75,18 +75,19 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 			}
 			healthyEndpoints = append(healthyEndpoints, addr.EndPoint)
 		}
-		if len(healthyEndpoints) < *minHealthyEndPoints {
-			deadlineForLog, _ := busywaitCtx.Deadline()
-			wr.Logger().Infof("Waiting for enough endpoints to become available. available: %v required: %v Waiting up to %.1f more seconds.", len(healthyEndpoints), *minHealthyEndPoints, deadlineForLog.Sub(time.Now()).Seconds())
-			// Block for 1 second because 2 seconds is the -health_check_interval flag value in integration tests.
-			timer := time.NewTimer(1 * time.Second)
-			select {
-			case <-busywaitCtx.Done():
-				timer.Stop()
-			case <-timer.C:
-			}
-		} else {
+
+		if len(healthyEndpoints) >= *minHealthyEndPoints {
 			break
+		}
+
+		deadlineForLog, _ := busywaitCtx.Deadline()
+		wr.Logger().Infof("Waiting for enough endpoints to become available. available: %v required: %v Waiting up to %.1f more seconds.", len(healthyEndpoints), *minHealthyEndPoints, deadlineForLog.Sub(time.Now()).Seconds())
+		// Block for 1 second because 2 seconds is the -health_check_interval flag value in integration tests.
+		timer := time.NewTimer(1 * time.Second)
+		select {
+		case <-busywaitCtx.Done():
+			timer.Stop()
+		case <-timer.C:
 		}
 	}
 

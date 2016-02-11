@@ -212,7 +212,7 @@ index by_msg (msg)
     result = self.insert_index
     conn = self._vtdb_conn()
     cursor = conn.cursor(
-        'source_keyspace', 'master',
+        tablet_type='master', keyspace='source_keyspace',
         keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)],
         writable=True)
     for _ in xrange(count):
@@ -318,7 +318,8 @@ index by_msg (msg)
       for tbl in moved_tables:
         try:
           rows = conn._execute(
-              'select * from %s' % tbl, {}, destination_ks, db_type,
+              'select * from %s' % tbl, {}, tablet_type=db_type,
+              keyspace_name=destination_ks,
               keyranges=[keyrange.KeyRange(
                   keyrange_constants.NON_PARTIAL_KEYRANGE)])
           logging.debug(

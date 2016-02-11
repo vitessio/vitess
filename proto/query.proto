@@ -348,6 +348,10 @@ message RealtimeStats {
 
   // cpu_usage is used for load-based balancing
   double cpu_usage = 5;
+
+  // qps is the average QPS (queries per second) rate in the last XX seconds
+  // where XX is usually 60 (See query_service_stats.go).
+  double qps = 6;
 }
 
 // StreamHealthResponse is streamed by StreamHealth on a regular basis

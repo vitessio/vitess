@@ -7,11 +7,13 @@
 import base64
 import unittest
 
+from vtproto import topodata_pb2
+
+from vtdb import vtgate_client
+
 import environment
 import tablet
 import utils
-
-from vtproto import topodata_pb2
 
 # shards
 shard_0_master = tablet.Tablet()
@@ -64,27 +66,43 @@ def tearDownModule():
 class TestCustomSharding(unittest.TestCase):
   """Test a custom-shared keyspace."""
 
+  def _vtdb_conn(self):
+    protocol, addr = utils.vtgate.rpc_endpoint(python=True)
+    return vtgate_client.connect(protocol, addr, 30.0)
+
   def _insert_data(self, shard, start, count, table='data'):
-    sql = 'insert into %s(id, name) values (:id, :name)' % table
+    sql = 'insert into ' + table + '(id, name) values (%(id)s, %(name)s)'
+    conn = self._vtdb_conn()
+    cursor = conn.cursor(
+        tablet_type='master', keyspace='test_keyspace',
+        shards=[shard],
+        writable=True)
     for x in xrange(count):
       bindvars = {
           'id': start+x,
           'name': 'row %d' % (start+x),
       }
-      utils.vtgate.execute_shards(sql, 'test_keyspace', shard,
-                                  bindvars=bindvars)
+      conn.begin()
+      cursor.execute(sql, bindvars)
+      conn.commit()
+    conn.close()
 
   def _check_data(self, shard, start, count, table='data'):
-    sql = 'select name from %s where id=:id' % table
+    sql = 'select name from ' + table + ' where id=%(id)s'
+    conn = self._vtdb_conn()
+    cursor = conn.cursor(
+        tablet_type='master', keyspace='test_keyspace',
+        shards=[shard])
     for x in xrange(count):
       bindvars = {
           'id': start+x,
       }
-      qr = utils.vtgate.execute_shards(sql, 'test_keyspace', shard,
-                                       bindvars=bindvars)
-      self.assertEqual(len(qr['Rows']), 1)
-      v = qr['Rows'][0][0]
+      cursor.execute(sql, bindvars)
+      qr = cursor.fetchall()
+      self.assertEqual(len(qr), 1)
+      v = qr[0][0]
       self.assertEqual(v, 'row %d' % (start+x))
+    conn.close()
 
   def test_custom_end_to_end(self):
     """Runs through the common operations of a custom sharded keyspace.

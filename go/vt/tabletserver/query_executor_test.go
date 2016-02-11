@@ -158,7 +158,7 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
-	selectQuery := "select pk from test_table where pk = 1 limit 1000 for update"
+	selectQuery := "select pk from test_table where pk = 1 limit 1000"
 	db.AddQuery(selectQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -190,7 +190,7 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
-	selectQuery := "select pk from test_table where pk = 1 limit 1000 for update"
+	selectQuery := "select pk from test_table where pk = 1 limit 1000"
 	db.AddQuery(selectQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{

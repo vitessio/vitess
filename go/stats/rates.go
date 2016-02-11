@@ -6,46 +6,69 @@ package stats
 
 import (
 	"encoding/json"
+	"math"
 	"sync"
 	"time"
 )
+
+var timeNow = time.Now
 
 // CountTracker defines the interface that needs to
 // be supported by a variable for being tracked by
 // Rates.
 type CountTracker interface {
+	// Counts returns a map which maps each category to a count.
+	// Subsequent calls must return a monotonously increasing count for the same
+	// category.
+	// Optionally, an implementation may include the "All" category which has
+	// the total count across all categories (e.g. timing.go does this).
 	Counts() map[string]int64
 }
 
 // Rates is capable of reporting the rate (typically QPS)
 // for any variable that satisfies the CountTracker interface.
 type Rates struct {
+	// mu guards all fields.
 	mu           sync.Mutex
 	timeStamps   *RingInt64
 	counts       map[string]*RingInt64
 	countTracker CountTracker
 	samples      int
 	interval     time.Duration
+	// previousTotalCount is the total number of counts (across all categories)
+	// seen in the last sampling interval.
+	// It's used to calculate the latest total rate.
+	previousTotalCount int64
+	// timestampLastSampling is the time the periodic sampling was run last.
+	timestampLastSampling time.Time
+	// totalRate is the rate of total counts per second seen in the latest
+	// sampling interval e.g. 100 queries / 5 seconds sampling interval = 20 QPS.
+	totalRate float64
 }
 
 // NewRates reports rolling rate information for countTracker. samples specifies
 // the number of samples to report, and interval specifies the time interval
 // between samples. The minimum interval is 1 second.
+// If passing the special value of -1s as interval, we don't snapshot.
+// (use this for tests).
 func NewRates(name string, countTracker CountTracker, samples int, interval time.Duration) *Rates {
-	if interval < 1*time.Second {
+	if interval < 1*time.Second && interval != -1*time.Second {
 		panic("interval too small")
 	}
 	rt := &Rates{
-		timeStamps:   NewRingInt64(samples + 1),
-		counts:       make(map[string]*RingInt64),
-		countTracker: countTracker,
-		samples:      samples + 1,
-		interval:     interval,
+		timeStamps:            NewRingInt64(samples + 1),
+		counts:                make(map[string]*RingInt64),
+		countTracker:          countTracker,
+		samples:               samples + 1,
+		interval:              interval,
+		timestampLastSampling: timeNow(),
 	}
 	if name != "" {
 		Publish(name, rt)
 	}
-	go rt.track()
+	if interval > 0 {
+		go rt.track()
+	}
 	return rt
 }
 
@@ -60,9 +83,17 @@ func (rt *Rates) snapshot() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	currentCounts := rt.countTracker.Counts()
-	rt.timeStamps.Add(time.Now().UnixNano())
-	for k, v := range currentCounts {
+	now := timeNow()
+	rt.timeStamps.Add(now.UnixNano())
+
+	// Record current count for each category.
+	var totalCount int64
+	for k, v := range rt.countTracker.Counts() {
+		if k != "All" {
+			// Include call categories except "All" (which is returned by the
+			// "Timer.Counts()" implementation) to avoid double counting.
+			totalCount += v
+		}
 		if values, ok := rt.counts[k]; ok {
 			values.Add(v)
 		} else {
@@ -71,8 +102,24 @@ func (rt *Rates) snapshot() {
 			rt.counts[k].Add(v)
 		}
 	}
+
+	// Calculate current total rate.
+	// NOTE: We assume that every category with a non-zero value, which was
+	// tracked in "rt.previousTotalCount" in a previous sampling interval, is
+	// tracked in the current sampling interval in "totalCount" as well.
+	// (I.e. categories and their count must not "disappear" in
+	//  "rt.countTracker.Counts()".)
+	durationSeconds := now.Sub(rt.timestampLastSampling).Seconds()
+	rate := float64(totalCount-rt.previousTotalCount) / durationSeconds
+	// Round rate with a precision of 0.1.
+	rt.totalRate = math.Floor(rate*10+0.5) / 10
+	rt.previousTotalCount = totalCount
+	rt.timestampLastSampling = now
 }
 
+// Get returns for each category (string) its latest rates (up to X values
+// where X is the configured number of samples of the Rates struct).
+// Rates are ordered from least recent (index 0) to most recent (end of slice).
 func (rt *Rates) Get() (rateMap map[string][]float64) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
@@ -97,6 +144,14 @@ func (rt *Rates) Get() (rateMap map[string][]float64) {
 		}
 	}
 	return
+}
+
+// TotalRate returns the current total rate (counted across categories).
+func (rt *Rates) TotalRate() float64 {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
+	return rt.totalRate
 }
 
 func (rt *Rates) String() string {
