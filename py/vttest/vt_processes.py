@@ -140,11 +140,8 @@ class VtcomboProcess(VtProcess):
                                        shard.db_name) for shard in shards])
     self.extraparams = [
         '-db-config-app-charset', charset,
-        '-db-config-app-host', mysql_db.hostname(),
-        '-db-config-app-port', str(mysql_db.port()),
         '-db-config-app-uname', mysql_db.username(),
         '-db-config-app-pass', mysql_db.password(),
-        '-db-config-app-unixsocket', mysql_db.unix_socket(),
         '-topology', topology,
         '-mycnf_server_id', '1',
         '-mycnf_socket_file', mysql_db.unix_socket(),
@@ -153,6 +150,13 @@ class VtcomboProcess(VtProcess):
       self.extraparams.extend(['-vschema', vschema])
     if web_dir:
       self.extraparams.extend(['-web_dir', web_dir])
+    if mysql_db.unix_socket():
+      self.extraparams.extend(
+          ['-db-config-app-unixsocket', mysql_db.unix_socket()])
+    else:
+      self.extraparams.extend(
+          ['-db-config-app-host', mysql_db.hostname(),
+           '-db-config-app-port', str(mysql_db.port())])
 
 
 vtcombo_process = None

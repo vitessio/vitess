@@ -12,5 +12,5 @@ echo "Starting port forwarding to vtctld..."
 start_vtctld_forward
 trap stop_vtctld_forward EXIT
 
-vtctlclient -server localhost:$vtctld_forward_port "$@"
+vtctlclient -server 127.0.0.1:$vtctld_forward_port "$@"
 

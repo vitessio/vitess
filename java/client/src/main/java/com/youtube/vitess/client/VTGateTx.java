@@ -47,8 +47,8 @@ public class VTGateTx {
     return new VTGateTx(client, session);
   }
 
-  public Cursor execute(Context ctx, String query, Map<String, ?> bindVars, TabletType tabletType,
-      boolean notInTransaction) throws SQLException {
+  public Cursor execute(Context ctx, String query, Map<String, ?> bindVars, TabletType tabletType)
+      throws SQLException {
     if (!inTransaction()) {
       throw new SQLDataException("execute: not in transaction");
     }
@@ -56,7 +56,6 @@ public class VTGateTx {
         ExecuteRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
             .setTabletType(tabletType)
-            .setNotInTransaction(notInTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -68,7 +67,7 @@ public class VTGateTx {
   }
 
   public Cursor executeShards(Context ctx, String query, String keyspace, Iterable<String> shards,
-      Map<String, ?> bindVars, TabletType tabletType, boolean notInTransaction)
+      Map<String, ?> bindVars, TabletType tabletType)
       throws SQLException {
     if (!inTransaction()) {
       throw new SQLDataException("executeShards: not in transaction");
@@ -79,7 +78,6 @@ public class VTGateTx {
             .setKeyspace(keyspace)
             .addAllShards(shards)
             .setTabletType(tabletType)
-            .setNotInTransaction(notInTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -91,8 +89,8 @@ public class VTGateTx {
   }
 
   public Cursor executeKeyspaceIds(Context ctx, String query, String keyspace,
-      Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType,
-      boolean notInTransaction) throws SQLException {
+      Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType)
+      throws SQLException {
     if (!inTransaction()) {
       throw new SQLDataException("executeKeyspaceIds: not in transaction");
     }
@@ -102,7 +100,6 @@ public class VTGateTx {
             .setKeyspace(keyspace)
             .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
             .setTabletType(tabletType)
-            .setNotInTransaction(notInTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -114,8 +111,8 @@ public class VTGateTx {
   }
 
   public Cursor executeKeyRanges(Context ctx, String query, String keyspace,
-      Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType,
-      boolean notInTransaction) throws SQLException {
+      Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType)
+      throws SQLException {
     if (!inTransaction()) {
       throw new SQLDataException("executeKeyRanges: not in transaction");
     }
@@ -125,7 +122,6 @@ public class VTGateTx {
             .setKeyspace(keyspace)
             .addAllKeyRanges(keyRanges)
             .setTabletType(tabletType)
-            .setNotInTransaction(notInTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -138,7 +134,7 @@ public class VTGateTx {
 
   public Cursor executeEntityIds(Context ctx, String query, String keyspace,
       String entityColumnName, Map<byte[], ?> entityKeyspaceIds, Map<String, ?> bindVars,
-      TabletType tabletType, boolean notInTransaction) throws SQLException {
+      TabletType tabletType) throws SQLException {
     if (!inTransaction()) {
       throw new SQLDataException("executeEntityIds: not in transaction");
     }
@@ -150,7 +146,6 @@ public class VTGateTx {
             .addAllEntityKeyspaceIds(Iterables.transform(
                 entityKeyspaceIds.entrySet(), Proto.MAP_ENTRY_TO_ENTITY_KEYSPACE_ID))
             .setTabletType(tabletType)
-            .setNotInTransaction(notInTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -162,7 +157,7 @@ public class VTGateTx {
   }
 
   public List<Cursor> executeBatchShards(Context ctx, Iterable<? extends BoundShardQuery> queries,
-      TabletType tabletType, boolean asTransaction) throws SQLException {
+      TabletType tabletType) throws SQLException {
     if (!inTransaction()) {
       throw new SQLDataException("executeBatchShards: not in transaction");
     }
@@ -170,7 +165,6 @@ public class VTGateTx {
         ExecuteBatchShardsRequest.newBuilder()
             .addAllQueries(queries)
             .setTabletType(tabletType)
-            .setAsTransaction(asTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -182,8 +176,7 @@ public class VTGateTx {
   }
 
   public List<Cursor> executeBatchKeyspaceIds(Context ctx,
-      Iterable<? extends BoundKeyspaceIdQuery> queries, TabletType tabletType,
-      boolean asTransaction) throws SQLException {
+      Iterable<? extends BoundKeyspaceIdQuery> queries, TabletType tabletType) throws SQLException {
     if (!inTransaction()) {
       throw new SQLDataException("executeBatchKeyspaceIds: not in transaction");
     }
@@ -191,7 +184,6 @@ public class VTGateTx {
         ExecuteBatchKeyspaceIdsRequest.newBuilder()
             .addAllQueries(queries)
             .setTabletType(tabletType)
-            .setAsTransaction(asTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());

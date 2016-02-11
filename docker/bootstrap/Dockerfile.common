@@ -74,8 +74,7 @@ COPY tools /vt/src/github.com/youtube/vitess/tools
 COPY travis /vt/src/github.com/youtube/vitess/travis
 COPY composer.json composer.lock /vt/src/github.com/youtube/vitess/
 
-# Install gRPC and protobuf as root
-RUN $VTTOP/travis/install_protobuf.sh
+# Install gRPC (and protobuf) as root
 RUN $VTTOP/travis/install_grpc.sh
 
 # Install gRPC PHP dependencies

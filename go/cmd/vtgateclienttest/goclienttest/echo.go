@@ -42,21 +42,21 @@ var (
 	entityKeyspaceIDs = []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
 		{
 			KeyspaceId: []byte{1, 2, 3},
-			XidType:    sqltypes.Int64,
-			XidValue:   []byte("123"),
+			Type:       sqltypes.Int64,
+			Value:      []byte("123"),
 		},
 		{
 			KeyspaceId: []byte{4, 5, 6},
-			XidType:    sqltypes.Float64,
-			XidValue:   []byte("2"),
+			Type:       sqltypes.Float64,
+			Value:      []byte("2"),
 		},
 		{
 			KeyspaceId: []byte{7, 8, 9},
-			XidType:    sqltypes.VarBinary,
-			XidValue:   []byte{1, 2, 3},
+			Type:       sqltypes.VarBinary,
+			Value:      []byte{1, 2, 3},
 		},
 	}
-	entityKeyspaceIDsEcho = "[xid_type:INT64 xid_value:\"123\" keyspace_id:\"\\001\\002\\003\"  xid_type:FLOAT64 xid_value:\"2\" keyspace_id:\"\\004\\005\\006\"  xid_type:VARBINARY xid_value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]"
+	entityKeyspaceIDsEcho = "[type:INT64 value:\"123\" keyspace_id:\"\\001\\002\\003\"  type:FLOAT64 value:\"2\" keyspace_id:\"\\004\\005\\006\"  type:VARBINARY value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]"
 
 	tabletType     = topodatapb.TabletType_REPLICA
 	tabletTypeEcho = topodatapb.TabletType_name[int32(tabletType)]
@@ -251,17 +251,17 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Fatalf("Begin error: %v", err)
 	}
 
-	qr, err = tx.Execute(ctx, echoPrefix+query, bindVars, tabletType, true)
+	qr, err = tx.Execute(ctx, echoPrefix+query, bindVars, tabletType)
 	checkEcho(t, "Execute", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
-		"notInTransaction": "true",
+		"notInTransaction": "false",
 	})
 
-	qr, err = tx.ExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType, true)
+	qr, err = tx.ExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType)
 	checkEcho(t, "ExecuteShards", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
@@ -270,10 +270,10 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
-		"notInTransaction": "true",
+		"notInTransaction": "false",
 	})
 
-	qr, err = tx.ExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType, true)
+	qr, err = tx.ExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType)
 	checkEcho(t, "ExecuteKeyspaceIds", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
@@ -282,10 +282,10 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
-		"notInTransaction": "true",
+		"notInTransaction": "false",
 	})
 
-	qr, err = tx.ExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType, true)
+	qr, err = tx.ExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType)
 	checkEcho(t, "ExecuteKeyRanges", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
@@ -294,10 +294,10 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
-		"notInTransaction": "true",
+		"notInTransaction": "false",
 	})
 
-	qr, err = tx.ExecuteEntityIds(ctx, echoPrefix+query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, true)
+	qr, err = tx.ExecuteEntityIds(ctx, echoPrefix+query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType)
 	checkEcho(t, "ExecuteEntityIds", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
@@ -307,7 +307,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
-		"notInTransaction": "true",
+		"notInTransaction": "false",
 	})
 
 	if err := tx.Rollback(ctx); err != nil {
@@ -329,7 +329,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 			Keyspace: keyspace,
 			Shards:   shards,
 		},
-	}, tabletType, true)
+	}, tabletType)
 	checkEcho(t, "ExecuteBatchShards", &qrs[0], err, map[string]string{
 		"callerId":      callerIDEcho,
 		"query":         echoPrefix + query,
@@ -338,7 +338,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":      bindVarsP3Echo,
 		"tabletType":    tabletTypeEcho,
 		"session":       sessionEcho,
-		"asTransaction": "true",
+		"asTransaction": "false",
 	})
 
 	qrs, err = tx.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
@@ -350,7 +350,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 			Keyspace:    keyspace,
 			KeyspaceIds: keyspaceIDs,
 		},
-	}, tabletType, true)
+	}, tabletType)
 	checkEcho(t, "ExecuteBatchKeyspaceIds", &qrs[0], err, map[string]string{
 		"callerId":      callerIDEcho,
 		"query":         echoPrefix + query,
@@ -359,7 +359,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"bindVars":      bindVarsP3Echo,
 		"tabletType":    tabletTypeEcho,
 		"session":       sessionEcho,
-		"asTransaction": "true",
+		"asTransaction": "false",
 	})
 }
 

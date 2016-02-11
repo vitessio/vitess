@@ -578,14 +578,14 @@ func TestParseNumbers(t *testing.T) {
 		t.Error(err)
 	}
 	if uval != 1 {
-		t.Errorf("v.ParseInt64 = %d, want 1", uval)
+		t.Errorf("v.ParseUint64 = %d, want 1", uval)
 	}
 	fval, err := v.ParseFloat64()
 	if err != nil {
 		t.Error(err)
 	}
 	if fval != 1 {
-		t.Errorf("v.ParseInt64 = %d, want 1", fval)
+		t.Errorf("v.ParseFloat64 = %f, want 1", fval)
 	}
 }
 

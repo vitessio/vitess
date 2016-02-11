@@ -35,14 +35,16 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
   """
 
   def __init__(
-      self, connection, keyspace, tablet_type, keyspace_ids=None,
-      keyranges=None, writable=False, as_transaction=False):
+      self, connection, tablet_type, keyspace=None,
+      shards=None, keyspace_ids=None, keyranges=None,
+      writable=False, as_transaction=False):
     """Init VTGateCursor.
 
     Args:
       connection: A PEP0249 connection object.
-      keyspace: Str keyspace or None if batch API will be used.
       tablet_type: Str tablet_type.
+      keyspace: Str keyspace or None if batch API will be used.
+      shards: List of strings.
       keyspace_ids: Struct('!Q').packed keyspace IDs.
       keyranges: Str keyranges.
       writable: True if writable.
@@ -53,9 +55,10 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     self._writable = writable
     self.description = None
     self.index = None
-    self.keyranges = keyranges
     self.keyspace = keyspace
+    self.shards = shards
     self.keyspace_ids = keyspace_ids
+    self.keyranges = keyranges
     self.lastrowid = None
     self.results = None
     self.routing = None
@@ -87,8 +90,9 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
         self.connection._execute(  # pylint: disable=protected-access
             sql,
             bind_variables,
-            self.keyspace,
-            self.tablet_type,
+            tablet_type=self.tablet_type,
+            keyspace_name=self.keyspace,
+            shards=self.shards,
             keyspace_ids=self.keyspace_ids,
             keyranges=self.keyranges,
             entity_keyspace_id_map=entity_keyspace_id_map,
@@ -121,7 +125,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     sort_columns = []
     desc_columns = []
     for order_clause in order_by_columns:
-      if type(order_clause) in (tuple, list):
+      if isinstance(order_clause, (tuple, list)):
         sort_columns.append(order_clause[0])
         if ascii_lower(order_clause[1]) == 'desc':
           desc_columns.append(order_clause[0])
@@ -160,6 +164,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
       sql: The sql text, with %(format)s-style tokens. May be None.
       params_list: A list of the keyword params that are normally sent
         to execute. Either the sql arg or params['sql'] must be defined.
+      **kwargs: passed as is to connection._execute_batch.
     """
     if sql:
       sql_list = [sql] * len(params_list)
@@ -211,14 +216,16 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
   """
 
   def __init__(
-      self, connection, keyspace, tablet_type, keyspace_ids=None,
+      self, connection, tablet_type, keyspace=None,
+      shards=None, keyspace_ids=None,
       keyranges=None, writable=False):
     super(StreamVTGateCursor, self).__init__()
     self._conn = connection
     self._writable = writable
-    self.keyranges = keyranges
     self.keyspace = keyspace
+    self.shards = shards
     self.keyspace_ids = keyspace_ids
+    self.keyranges = keyranges
     self.routing = None
     self.tablet_type = tablet_type
 
@@ -235,8 +242,9 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
     self.generator, self.description = self.connection._stream_execute(  # pylint: disable=protected-access
         sql,
         bind_variables,
-        self.keyspace,
-        self.tablet_type,
+        tablet_type=self.tablet_type,
+        keyspace_name=self.keyspace,
+        shards=self.shards,
         keyspace_ids=self.keyspace_ids,
         keyranges=self.keyranges,
         not_in_transaction=not self.is_writable(),
@@ -250,7 +258,7 @@ def sort_row_list_by_columns(row_list, sort_columns=(), desc_columns=()):
   for column_index, column_name in reversed(
       [x for x in enumerate(sort_columns)]):
     og = operator.itemgetter(column_index)
-    if type(row_list) != list:
+    if not isinstance(row_list, list):
       row_list = sorted(
           row_list, key=og, reverse=bool(column_name in desc_columns))
     else:

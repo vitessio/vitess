@@ -165,6 +165,12 @@ public class VTGateConn implements Closeable {
     return new SimpleCursor(response.getResult());
   }
 
+  /**
+   * Execute multiple keyspace ID queries as a batch.
+   *
+   * @param asTransaction If true, automatically create a transaction (per shard) that encloses all
+   * the batch queries.
+   */
   public List<Cursor> executeBatchShards(Context ctx, Iterable<? extends BoundShardQuery> queries,
       TabletType tabletType, boolean asTransaction) throws SQLException {
     ExecuteBatchShardsRequest.Builder requestBuilder =
@@ -180,6 +186,12 @@ public class VTGateConn implements Closeable {
     return Proto.toCursorList(response.getResultsList());
   }
 
+  /**
+   * Execute multiple keyspace ID queries as a batch.
+   *
+   * @param asTransaction If true, automatically create a transaction (per shard) that encloses all
+   * the batch queries.
+   */
   public List<Cursor> executeBatchKeyspaceIds(Context ctx,
       Iterable<? extends BoundKeyspaceIdQuery> queries, TabletType tabletType,
       boolean asTransaction) throws SQLException {

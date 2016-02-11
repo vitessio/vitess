@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"strings"
@@ -71,6 +72,9 @@ type VerticalSplitCloneWorker struct {
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
 func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+	if len(tables) == 0 {
+		return nil, errors.New("list of tablets to be split out must not be empty")
+	}
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err

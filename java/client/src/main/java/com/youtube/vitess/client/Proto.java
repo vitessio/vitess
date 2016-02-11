@@ -90,8 +90,8 @@ public class Proto {
 
     return EntityId.newBuilder()
         .setKeyspaceId(ByteString.copyFrom(keyspaceId))
-        .setXidType(tval.type)
-        .setXidValue(tval.value)
+        .setType(tval.type)
+        .setValue(tval.value)
         .build();
   }
 

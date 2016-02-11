@@ -9,7 +9,7 @@ import protocols_flavor
 # We will change this to explicit registration soon.
 from vtctl import grpc_vtctl_client  # pylint: disable=unused-import
 from vtdb import grpc_update_stream  # pylint: disable=unused-import
-from vtdb import vtgatev2  # pylint: disable=unused-import
+from vtdb import grpc_vtgate_client  # pylint: disable=unused-import
 
 
 class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
@@ -43,10 +43,10 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
     return 'grpc'
 
   def vtgate_python_protocol(self):
-    return 'gorpc'
+    return 'grpc'
 
   def client_error_exception_type(self):
-    return face.RemoteError
+    return face.AbortionError
 
   def rpc_timeout_message(self):
     return 'context deadline exceeded'
@@ -63,4 +63,4 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
         ]
 
   def vttest_protocol(self):
-    return 'gorpc'
+    return 'grpc'

@@ -41,7 +41,6 @@ else
   echo "$ver" > $ver_file
 fi
 
-if [ ! -f $HOME/.phpenv/lib/grpc.so ]; then
-  echo "Forcing rebuild of gRPC so we can build PHP extension"
-  rm -rf $HOME/gopath/dist
-fi
+# composer install should be run in every travis build
+cd $HOME/gopath/src/github.com/youtube/vitess
+composer install

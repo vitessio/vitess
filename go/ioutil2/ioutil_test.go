@@ -21,7 +21,7 @@ func TestWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(data, rData) {
-		t.Fatalf("data mismatch: %v != %v")
+		t.Fatalf("data mismatch: %v != %v", data, rData)
 	}
 	if err := os.Remove(fname); err != nil {
 		t.Fatal(err)

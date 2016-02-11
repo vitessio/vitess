@@ -111,4 +111,9 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	if err := errFunc(); err == nil || !strings.Contains(err.Error(), expected1) || !strings.Contains(err.Error(), expected2) {
 		t.Fatalf("Unexpected remote error, got: '%v' was expecting to find '%v' and '%v'", err, expected1, expected2)
 	}
+
+	// and clean up the tablet
+	if err := ts.DeleteTablet(ctx, tablet.Alias); err != nil {
+		t.Errorf("DeleteTablet: %v", err)
+	}
 }

@@ -28,8 +28,8 @@ func EntityIdsToProto(l []EntityId) []*vtgatepb.ExecuteEntityIdsRequest_EntityId
 		if err != nil {
 			panic(err)
 		}
-		result[i].XidType = v.Type
-		result[i].XidValue = v.Value
+		result[i].Type = v.Type
+		result[i].Value = v.Value
 	}
 	return result
 }
@@ -41,7 +41,7 @@ func ProtoToEntityIds(l []*vtgatepb.ExecuteEntityIdsRequest_EntityId) []EntityId
 	}
 	result := make([]EntityId, len(l))
 	for i, e := range l {
-		v, err := sqltypes.ValueFromBytes(e.XidType, e.XidValue)
+		v, err := sqltypes.ValueFromBytes(e.Type, e.Value)
 		if err != nil {
 			panic(err)
 		}

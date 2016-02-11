@@ -12,9 +12,9 @@ set -e
 
 # Set up and clean.
 mkdir -p proto/build/proto2
-mkdir -p php/src/proto
+mkdir -p php/src/Vitess/Proto
 rm -f proto/build/proto2/*.proto
-rm -f php/src/proto/*.php
+rm -rf php/src/Vitess/Proto/*
 
 # Translate proto3 to proto2.
 pushd proto
@@ -33,5 +33,11 @@ popd
 
 # Generate PHP.
 for file in proto/build/proto2/*.proto; do
-  protoc-gen-php -i proto/build/proto2 -o php/src/proto $file
+  protoc-gen-php -i proto/build/proto2 -o php/src $file
+done
+
+# Fix names of *Stub.php files (should be named after the *Client class).
+for stubfile in `find php/src/Vitess/Proto -name '*Stub.php'`; do
+  clientfile=${stubfile/Stub/Client}
+  mv $stubfile $clientfile
 done

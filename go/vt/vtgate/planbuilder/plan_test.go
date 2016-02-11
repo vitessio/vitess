@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -110,19 +109,6 @@ func testFile(t *testing.T, filename string, schema *Schema) {
 			t.Errorf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out)
 		}
 	}
-}
-
-func loadSchema(name string) *Schema {
-	b, err := ioutil.ReadFile(locateFile(name))
-	if err != nil {
-		panic(err)
-	}
-	var schema Schema
-	err = json.Unmarshal(b, &schema)
-	if err != nil {
-		panic(err)
-	}
-	return &schema
 }
 
 type testCase struct {
