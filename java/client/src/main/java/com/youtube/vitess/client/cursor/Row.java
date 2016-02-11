@@ -3,17 +3,20 @@ package com.youtube.vitess.client.cursor;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 
+import com.youtube.vitess.mysql.DateTime;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
-
-import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.ISODateTimeFormat;
+import com.youtube.vitess.proto.Query.Type;
 
 import java.math.BigDecimal;
+import java.sql.Date;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 /**
@@ -99,10 +102,23 @@ public class Row {
   }
 
   public Object getObject(int columnIndex) throws SQLException {
+    ByteString rawValue = getRawValue(columnIndex);
+    if (rawValue == null) {
+      // Only a MySQL NULL value should return null.
+      // A zero-length value should return the appropriate type.
+      return null;
+    }
+    return convertFieldValue(fieldMap.get(columnIndex), rawValue);
+  }
+
+  /**
+   * Returns the raw {@link ByteString} for a column.
+   */
+  protected ByteString getRawValue(int columnIndex) throws SQLException {
     if (columnIndex >= values.size()) {
       throw new SQLDataException("invalid columnIndex: " + columnIndex);
     }
-    Object value = convertFieldValue(fieldMap.get(columnIndex), values.get(columnIndex));
+    ByteString value = values.get(columnIndex);
     lastGetWasNull = (value == null);
     return value;
   }
@@ -207,12 +223,132 @@ public class Row {
     return value == null ? 0 : value;
   }
 
-  public DateTime getDateTime(String columnLabel) throws SQLException {
-    return getDateTime(findColumn(columnLabel));
+  /**
+   * Returns the column value as a {@link Date} with the default time zone.
+   */
+  public Date getDate(String columnLabel) throws SQLException {
+    return getDate(findColumn(columnLabel), Calendar.getInstance());
   }
 
-  public DateTime getDateTime(int columnIndex) throws SQLException {
-    return getObject(columnIndex, DateTime.class);
+  /**
+   * Returns the column value as a {@link Date} with the given {@link Calendar}.
+   */
+  public Date getDate(String columnLabel, Calendar cal) throws SQLException {
+    return getDate(findColumn(columnLabel), cal);
+  }
+
+  /**
+   * Returns the column value as a {@link Date} with the default time zone.
+   */
+  public Date getDate(int columnIndex) throws SQLException {
+    return getDate(columnIndex, Calendar.getInstance());
+  }
+
+  /**
+   * Returns the column value as a {@link Date} with the given {@link Calendar}.
+   */
+  public Date getDate(int columnIndex, Calendar cal) throws SQLException {
+    ByteString rawValue = getRawValue(columnIndex);
+    if (rawValue == null) {
+      return null;
+    }
+    Field field = fieldMap.get(columnIndex);
+    if (field.getType() != Type.DATE) {
+      throw new SQLDataException(
+          "type mismatch, expected: " + Type.DATE + ", actual: " + field.getType());
+    }
+    try {
+      return DateTime.parseDate(rawValue.toStringUtf8(), cal);
+    } catch (ParseException e) {
+      throw new SQLDataException("Can't parse DATE: " + rawValue.toStringUtf8(), e);
+    }
+  }
+
+  /**
+   * Returns the column value as {@link Time} with the default time zone.
+   */
+  public Time getTime(String columnLabel) throws SQLException {
+    return getTime(findColumn(columnLabel), Calendar.getInstance());
+  }
+
+  /**
+   * Returns the column value as {@link Time} with the given {@link Calendar}.
+   */
+  public Time getTime(String columnLabel, Calendar cal) throws SQLException {
+    return getTime(findColumn(columnLabel), cal);
+  }
+
+  /**
+   * Returns the column value as {@link Time} with the default time zone.
+   */
+  public Time getTime(int columnIndex) throws SQLException {
+    return getTime(columnIndex, Calendar.getInstance());
+  }
+
+  /**
+   * Returns the column value as {@link Time} with the given {@link Calendar}.
+   */
+  public Time getTime(int columnIndex, Calendar cal) throws SQLException {
+    ByteString rawValue = getRawValue(columnIndex);
+    if (rawValue == null) {
+      return null;
+    }
+    Field field = fieldMap.get(columnIndex);
+    if (field.getType() != Type.TIME) {
+      throw new SQLDataException(
+          "type mismatch, expected: " + Type.TIME + ", actual: " + field.getType());
+    }
+    try {
+      return DateTime.parseTime(rawValue.toStringUtf8(), cal);
+    } catch (ParseException e) {
+      throw new SQLDataException("Can't parse TIME: " + rawValue.toStringUtf8(), e);
+    }
+  }
+
+  /**
+   * Returns the column value as {@link Timestamp} with the default time zone.
+   */
+  public Timestamp getTimestamp(String columnLabel) throws SQLException {
+    return getTimestamp(findColumn(columnLabel), Calendar.getInstance());
+  }
+
+  /**
+   * Returns the column value as {@link Timestamp} with the given {@link Calendar}.
+   */
+  public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
+    return getTimestamp(findColumn(columnLabel), cal);
+  }
+
+  /**
+   * Returns the column value as {@link Timestamp} with the default time zone.
+   */
+  public Timestamp getTimestamp(int columnIndex) throws SQLException {
+    return getTimestamp(columnIndex, Calendar.getInstance());
+  }
+
+  /**
+   * Returns the column value as {@link Timestamp} with the given {@link Calendar}.
+   */
+  public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
+    ByteString rawValue = getRawValue(columnIndex);
+    if (rawValue == null) {
+      return null;
+    }
+    Field field = fieldMap.get(columnIndex);
+    if (field.getType() != Type.TIMESTAMP && field.getType() != Type.DATETIME) {
+      throw new SQLDataException(
+          "type mismatch, expected: "
+              + Type.TIMESTAMP
+              + " or "
+              + Type.DATETIME
+              + ", actual: "
+              + field.getType());
+    }
+    try {
+      return DateTime.parseTimestamp(rawValue.toStringUtf8(), cal);
+    } catch (ParseException e) {
+      throw new SQLDataException("Can't parse TIMESTAMP: " + rawValue.toStringUtf8(), e);
+    }
   }
 
   public byte[] getBytes(String columnLabel) throws SQLException {
@@ -272,7 +408,7 @@ public class Row {
     Object o = getObject(columnIndex);
     if (o != null && !type.isInstance(o)) {
       throw new SQLDataException(
-          "type mismatch, expected:" + type.getName() + ", actual: " + o.getClass().getName());
+          "type mismatch, expected: " + type.getName() + ", actual: " + o.getClass().getName());
     }
     return (T) o;
   }
@@ -314,20 +450,14 @@ public class Row {
    * @throws SQLException
    */
   public boolean wasNull() throws SQLException {
-    // Note: lastGetWasNull is currently set only in getObject(int),
+    // Note: lastGetWasNull is currently set only in getRawValue(),
     // which means this relies on the fact that all other get*() methods
-    // eventually call into getObject(int). The unit tests help to ensure
-    // this by checking wasNull() after each get*().
+    // eventually call into that. The unit tests help to ensure this by
+    // checking wasNull() after each get*().
     return lastGetWasNull;
   }
 
   private static Object convertFieldValue(Field field, ByteString value) throws SQLException {
-    if (value == null) {
-      // Only a MySQL NULL value should return null.
-      // A zero-length value should return the appropriate type.
-      return null;
-    }
-
     // Note: We don't actually know the charset in which the value is encoded.
     // For dates and numeric values, we just assume UTF-8 because they (hopefully) don't contain
     // anything outside 7-bit ASCII, which (hopefully) is a subset of the actual charset.
@@ -355,12 +485,30 @@ public class Row {
       case NULL_TYPE:
         return null;
       case DATE:
-        return DateTime.parse(value.toStringUtf8(), ISODateTimeFormat.date());
+        // We don't get time zone information from the server,
+        // so we use the default time zone.
+        try {
+          return DateTime.parseDate(value.toStringUtf8());
+        } catch (ParseException e) {
+          throw new SQLDataException("Can't parse DATE: " + value.toStringUtf8(), e);
+        }
       case TIME:
-        return DateTime.parse(value.toStringUtf8(), DateTimeFormat.forPattern("HH:mm:ss"));
+        // We don't get time zone information from the server,
+        // so we use the default time zone.
+        try {
+          return DateTime.parseTime(value.toStringUtf8());
+        } catch (ParseException e) {
+          throw new SQLDataException("Can't parse TIME: " + value.toStringUtf8(), e);
+        }
       case DATETIME: // fall through
       case TIMESTAMP:
-        return DateTime.parse(value.toStringUtf8().replace(' ', 'T'));
+        // We don't get time zone information from the server,
+        // so we use the default time zone.
+        try {
+          return DateTime.parseTimestamp(value.toStringUtf8());
+        } catch (ParseException e) {
+          throw new SQLDataException("Can't parse TIMESTAMP: " + value.toStringUtf8(), e);
+        }
       case YEAR:
         return Short.valueOf(value.toStringUtf8());
       case ENUM: // fall through

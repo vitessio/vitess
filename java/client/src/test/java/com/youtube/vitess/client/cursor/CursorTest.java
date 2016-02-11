@@ -7,7 +7,6 @@ import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Query.QueryResult;
 
-import org.joda.time.DateTime;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -15,11 +14,18 @@ import org.junit.runners.JUnit4;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.Date;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.List;
+import java.util.TimeZone;
 
 @RunWith(JUnit4.class)
 public class CursorTest {
+  private static final Calendar GMT = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
+
   @Test
   public void testFindColumn() throws Exception {
     try (Cursor cursor =
@@ -199,30 +205,8 @@ public class CursorTest {
   }
 
   @Test
-  public void testGetDateTime() throws Exception {
-    List<Query.Type> types = Arrays.asList(Query.Type.DATETIME, Query.Type.TIMESTAMP);
-    for (Query.Type type : types) {
-      try (Cursor cursor =
-              new SimpleCursor(
-                  QueryResult.newBuilder()
-                      .addFields(Field.newBuilder().setName("col0").setType(type).build())
-                      .addFields(Field.newBuilder().setName("null").setType(type).build())
-                      .addRows(
-                          Query.Row.newBuilder()
-                              .addLengths("2008-01-02 14:15:16".length())
-                              .addLengths(-1) // SQL NULL
-                              .setValues(ByteString.copyFromUtf8("2008-01-02 14:15:16")))
-                      .build())) {
-        Row row = cursor.next();
-        Assert.assertNotNull(row);
-        Assert.assertEquals(new DateTime(2008, 1, 2, 14, 15, 16), row.getDateTime("col0"));
-        Assert.assertFalse(row.wasNull());
-        Assert.assertEquals(null, row.getDateTime("null"));
-        Assert.assertTrue(row.wasNull());
-      }
-    }
-
-    types = Arrays.asList(Query.Type.DATE);
+  public void testGetDate() throws Exception {
+    List<Query.Type> types = Arrays.asList(Query.Type.DATE);
     for (Query.Type type : types) {
       try (Cursor cursor =
               new SimpleCursor(
@@ -237,13 +221,18 @@ public class CursorTest {
                       .build())) {
         Row row = cursor.next();
         Assert.assertNotNull(row);
-        Assert.assertEquals(new DateTime(2008, 1, 2, 0, 0, 0), row.getDateTime("col0"));
+        Assert.assertEquals(Date.valueOf("2008-01-02"), row.getObject("col0"));
+        Assert.assertEquals(Date.valueOf("2008-01-02"), row.getDate("col0"));
+        Assert.assertEquals(new Date(1199232000000L), row.getDate("col0", GMT));
         Assert.assertFalse(row.wasNull());
-        Assert.assertEquals(null, row.getDateTime("null"));
+        Assert.assertEquals(null, row.getDate("null"));
         Assert.assertTrue(row.wasNull());
       }
     }
+  }
 
+  @Test
+  public void testGetTime() throws Exception {
     try (Cursor cursor =
             new SimpleCursor(
                 QueryResult.newBuilder()
@@ -257,10 +246,42 @@ public class CursorTest {
                     .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
-      Assert.assertEquals(new DateTime(1970, 1, 1, 12, 34, 56), row.getDateTime("col0"));
+      Assert.assertEquals(Time.valueOf("12:34:56"), row.getObject("col0"));
+      Assert.assertEquals(Time.valueOf("12:34:56"), row.getTime("col0"));
+      Assert.assertEquals(new Time(45296000L), row.getTime("col0", GMT));
       Assert.assertFalse(row.wasNull());
-      Assert.assertEquals(null, row.getDateTime("null"));
+      Assert.assertEquals(null, row.getTime("null"));
       Assert.assertTrue(row.wasNull());
+    }
+  }
+
+  @Test
+  public void testGetTimestamp() throws Exception {
+    List<Query.Type> types = Arrays.asList(Query.Type.DATETIME, Query.Type.TIMESTAMP);
+    for (Query.Type type : types) {
+      try (Cursor cursor =
+              new SimpleCursor(
+                  QueryResult.newBuilder()
+                      .addFields(Field.newBuilder().setName("col0").setType(type).build())
+                      .addFields(Field.newBuilder().setName("null").setType(type).build())
+                      .addRows(
+                          Query.Row.newBuilder()
+                              .addLengths("2008-01-02 14:15:16.123456".length())
+                              .addLengths(-1) // SQL NULL
+                              .setValues(ByteString.copyFromUtf8("2008-01-02 14:15:16.123456")))
+                      .build())) {
+        Row row = cursor.next();
+        Assert.assertNotNull(row);
+        Assert.assertEquals(Timestamp.valueOf("2008-01-02 14:15:16.123456"), row.getObject("col0"));
+        Assert.assertEquals(
+            Timestamp.valueOf("2008-01-02 14:15:16.123456"), row.getTimestamp("col0"));
+        Timestamp ts = new Timestamp(1199283316000L);
+        ts.setNanos(123456000);
+        Assert.assertEquals(ts, row.getTimestamp("col0", GMT));
+        Assert.assertFalse(row.wasNull());
+        Assert.assertEquals(null, row.getTimestamp("null"));
+        Assert.assertTrue(row.wasNull());
+      }
     }
   }
 
@@ -353,19 +374,13 @@ public class CursorTest {
             new SimpleCursor(
                 QueryResult.newBuilder()
                     .addFields(
-                        Field.newBuilder().setName("col0").setType(Query.Type.NULL_TYPE).build())
-                    .addFields(
                         Field.newBuilder().setName("null").setType(Query.Type.NULL_TYPE).build())
                     .addRows(
-                        Query.Row.newBuilder()
-                            .addLengths("1234".length())
-                            .addLengths(-1) // SQL NULL
-                            .setValues(ByteString.copyFromUtf8("1234")))
+                        Query.Row.newBuilder().addLengths(-1) // SQL NULL
+                        )
                     .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
-      Assert.assertEquals(null, row.getObject("col0"));
-      Assert.assertTrue(row.wasNull());
       Assert.assertEquals(null, row.getObject("null"));
       Assert.assertTrue(row.wasNull());
     }
