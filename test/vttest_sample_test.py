@@ -76,17 +76,17 @@ class TestMysqlctl(unittest.TestCase):
     # build the vtcombo address and protocol
     protocol = protocols_flavor().vttest_protocol()
     if protocol == 'grpc':
-      vtagte_addr = 'localhost:%d' % config['grpc_port']
+      vtgate_addr = 'localhost:%d' % config['grpc_port']
     else:
-      vtagte_addr = 'localhost:%d' % config['port']
+      vtgate_addr = 'localhost:%d' % config['port']
     conn_timeout = 30.0
     utils.pause('Paused test after vtcombo was started.\n'
                 'For manual testing, connect to vtgate at: %s '
                 'using protocol: %s.\n'
-                'Press enter to continue.' % (vtagte_addr, protocol))
+                'Press enter to continue.' % (vtgate_addr, protocol))
 
     # Connect to vtgate.
-    conn = vtgate_client.connect(protocol, vtagte_addr, conn_timeout)
+    conn = vtgate_client.connect(protocol, vtgate_addr, conn_timeout)
 
     # Insert a row.
     row_id = 123
@@ -149,7 +149,7 @@ class TestMysqlctl(unittest.TestCase):
     out, _ = utils.run(
         environment.binary_args('vtctlclient') +
         ['-vtctl_client_protocol', protocol,
-         '-server', vtagte_addr,
+         '-server', vtgate_addr,
          '-stderrthreshold', 'INFO',
          'ListAllTablets', 'test',
         ], trap_output=True)
