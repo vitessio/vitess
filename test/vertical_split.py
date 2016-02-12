@@ -138,6 +138,10 @@ class TestVerticalSplit(unittest.TestCase):
     for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
       t.create_db('vt_source_keyspace')
       t.start_vttablet(wait_for_state=None)
+#     for t in [destination_master, destination_replica,
+#               destination_rdonly1, destination_rdonly2]:
+#       t.create_db('vt_destination_keyspace')
+#       t.start_vttablet(wait_for_state=None)
     destination_master.start_vttablet(wait_for_state=None,
                                       target_tablet_type='replica')
     destination_replica.start_vttablet(wait_for_state=None,
@@ -187,6 +191,15 @@ index by_msg (msg)
     for t in [source_master, source_replica, source_rdonly1, source_rdonly2]:
       utils.run_vtctl(['ReloadSchema', t.tablet_alias])
 
+    # Add a table to the destination keyspace which should be ignored.
+    utils.run_vtctl(['ApplySchema',
+                     '-sql=' + create_table_template % 'extra1',
+                     'destination_keyspace'],
+                    auto_log=True)
+    for t in [destination_master, destination_replica,
+              destination_rdonly1, destination_rdonly2]:
+      utils.run_vtctl(['ReloadSchema', t.tablet_alias])
+
   def _insert_initial_values(self):
     self.moving1_first = self._insert_values('moving1', 100)
     self.moving2_first = self._insert_values('moving2', 100)
@@ -202,6 +215,14 @@ index by_msg (msg)
                        staying2_first, 100)
     self._check_values(source_master, 'vt_source_keyspace', 'view1',
                        self.moving1_first, 100)
+
+    # Insert data directly because vtgate would redirect us.
+    destination_master.mquery(
+        'vt_destination_keyspace',
+        "insert into %s (id, msg) values(%d, 'value %d')" % ('extra1', 1, 1),
+        write=True)
+    self._check_values(destination_master, 'vt_destination_keyspace', 'extra1',
+                       1, 1)
 
   def _vtdb_conn(self):
     protocol, addr = utils.vtgate.rpc_endpoint(python=True)
