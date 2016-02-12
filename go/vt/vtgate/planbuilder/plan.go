@@ -76,24 +76,21 @@ func (pln *Plan) Size() int {
 	return 1
 }
 
-// DMLRoute represents the instructions to execute a DML.
-type DMLRoute struct {
-	PlanID PlanID
-	// Table points to the VSchema table for the DML. A DML
-	// is only allowed to change one table.
-	Table *Table
-	// Query is the query to be executed.
-	Query string
-	// Subquery is used for DeleteUnsharded to fetch the column values
-	// for owned vindexes so they can be deleted.
+// Route represents the instructions to execute a statement.
+// It can be a select or dml.
+type Route struct {
+	PlanID   PlanID
+	Keyspace *Keyspace
+	Query    string
+	Vindex   Vindex
+	Values   interface{}
+	JoinVars map[string]struct{}
+	Table    *Table
 	Subquery string
-	// Vindex and Values determine the route for the query.
-	Vindex Vindex
-	Values interface{}
 }
 
 // MarshalJSON serializes the Plan into a JSON representation.
-func (rt *DMLRoute) MarshalJSON() ([]byte, error) {
+func (rt *Route) MarshalJSON() ([]byte, error) {
 	var tname, vindexName string
 	if rt.Table != nil {
 		tname = rt.Table.Name
@@ -102,21 +99,59 @@ func (rt *DMLRoute) MarshalJSON() ([]byte, error) {
 		vindexName = rt.Vindex.String()
 	}
 	marshalPlan := struct {
-		PlanID   PlanID      `json:",omitempty"`
-		Table    string      `json:",omitempty"`
-		Query    string      `json:",omitempty"`
-		Subquery string      `json:",omitempty"`
-		Vindex   string      `json:",omitempty"`
-		Values   interface{} `json:",omitempty"`
+		PlanID   PlanID              `json:",omitempty"`
+		Keyspace *Keyspace           `json:",omitempty"`
+		Query    string              `json:",omitempty"`
+		Vindex   string              `json:",omitempty"`
+		Values   interface{}         `json:",omitempty"`
+		JoinVars map[string]struct{} `json:",omitempty"`
+		Table    string              `json:",omitempty"`
+		Subquery string              `json:",omitempty"`
 	}{
 		PlanID:   rt.PlanID,
-		Table:    tname,
+		Keyspace: rt.Keyspace,
 		Query:    rt.Query,
-		Subquery: rt.Subquery,
 		Vindex:   vindexName,
 		Values:   prettyValue(rt.Values),
+		JoinVars: rt.JoinVars,
+		Table:    tname,
+		Subquery: rt.Subquery,
 	}
 	return json.Marshal(marshalPlan)
+}
+
+// SetPlan updates the plan info for the route.
+func (rt *Route) SetPlan(planID PlanID, vindex Vindex, values interface{}) {
+	rt.PlanID = planID
+	rt.Vindex = vindex
+	rt.Values = values
+}
+
+// prettyValue converts the Values to a form that will
+// be human-readable when converted to JSON. This is
+// for testing and diagnostics.
+func prettyValue(value interface{}) interface{} {
+	switch value := value.(type) {
+	case []byte:
+		return string(value)
+	case []interface{}:
+		newvals := make([]interface{}, len(value))
+		for i, old := range value {
+			newvals[i] = prettyValue(old)
+		}
+		return newvals
+	case sqlparser.SQLNode:
+		return sqlparser.String(value)
+	}
+	return value
+}
+
+// Join is the join plan.
+type Join struct {
+	IsLeft      bool           `json:",omitempty"`
+	Left, Right interface{}    `json:",omitempty"`
+	Cols        []int          `json:",omitempty"`
+	Vars        map[string]int `json:",omitempty"`
 }
 
 // BuildPlan builds a plan for a query based on the specified vschema.
@@ -130,7 +165,6 @@ func BuildPlan(query string, vschema *VSchema) (*Plan, error) {
 	}
 	switch statement := statement.(type) {
 	case *sqlparser.Select:
-		//plan = buildSelectPlan(statement, vschema)
 		plan.Instructions, err = buildSelectPlan2(statement, vschema)
 	case *sqlparser.Insert:
 		plan.Instructions, err = buildInsertPlan(statement, vschema)

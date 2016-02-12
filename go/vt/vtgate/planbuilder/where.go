@@ -19,7 +19,7 @@ const ListVarName = "_vals"
 
 // getWhereRouting is only used for DMLs now.
 // TODO(sougou): revisit after refactor.
-func getWhereRouting(where *sqlparser.Where, route *DMLRoute) error {
+func getWhereRouting(where *sqlparser.Where, route *Route) error {
 	if where == nil {
 		return errors.New("DML has multi-shard where clause")
 	}

@@ -12,8 +12,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*DMLRoute, error) {
-	route := &DMLRoute{
+func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
+	route := &Route{
 		Query: generateQuery(upd),
 	}
 	tablename := sqlparser.GetTableName(upd.Table)
@@ -22,7 +22,8 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*DMLRoute, error)
 	if err != nil {
 		return nil, err
 	}
-	if !route.Table.Keyspace.Sharded {
+	route.Keyspace = route.Table.Keyspace
+	if !route.Keyspace.Sharded {
 		// TODO(sougou): subquery check
 		route.PlanID = UpdateUnsharded
 		return route, nil
@@ -52,8 +53,8 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex)
 	return false
 }
 
-func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*DMLRoute, error) {
-	route := &DMLRoute{
+func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
+	route := &Route{
 		Query: generateQuery(del),
 	}
 	tablename := sqlparser.GetTableName(del.Table)
@@ -62,7 +63,8 @@ func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*DMLRoute, error)
 	if err != nil {
 		return nil, err
 	}
-	if !route.Table.Keyspace.Sharded {
+	route.Keyspace = route.Table.Keyspace
+	if !route.Keyspace.Sharded {
 		// TODO(sougou): subquery check
 		route.PlanID = DeleteUnsharded
 		return route, nil

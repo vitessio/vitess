@@ -17,14 +17,6 @@ import (
 // In general, the error should just be returned back to the
 // application.
 
-// Join is the join plan.
-type Join struct {
-	IsLeft      bool           `json:",omitempty"`
-	Left, Right interface{}    `json:",omitempty"`
-	Cols        []int          `json:",omitempty"`
-	Vars        map[string]int `json:",omitempty"`
-}
-
 // joinBuilder is used to build a Join primitive.
 // It's used to buid a normal join or a left join
 // operation.

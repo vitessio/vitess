@@ -101,7 +101,8 @@ func testFile(t *testing.T, filename string, vschema *VSchema) {
 			bout, _ := json.MarshalIndent(plan, "", "  ")
 			out = string(bout)
 		}
-		fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
+		// Uncomment this line to re-generate input files
+		//fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
 	}
 }
 

@@ -4,11 +4,11 @@
   "Original": "select id from user",
   "Instructions": {
     "PlanID": "SelectScatter",
-    "Query": "select id from user",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
-    }
+    },
+    "Query": "select id from user"
   }
 }
 
@@ -18,11 +18,11 @@
   "Original": "select id from user where user.id = 5",
   "Instructions": {
     "PlanID": "SelectEqualUnique",
-    "Query": "select id from user where user.id = 5",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "Query": "select id from user where user.id = 5",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -34,11 +34,11 @@
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
     "PlanID": "SelectEqualUnique",
-    "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -50,11 +50,11 @@
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
     "PlanID": "SelectEqualUnique",
-    "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -66,11 +66,11 @@
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
     "PlanID": "SelectEqualUnique",
-    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -82,11 +82,11 @@
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
     "PlanID": "SelectScatter",
-    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
-    }
+    },
+    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
   }
 }
 
@@ -97,21 +97,21 @@
   "Instructions": {
     "Left": {
       "PlanID": "SelectEqualUnique",
-      "Query": "select user.col from user where user.id = 5",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
       },
+      "Query": "select user.col from user where user.id = 5",
       "Vindex": "user_index",
       "Values": 5
     },
     "Right": {
       "PlanID": "SelectScatter",
-      "Query": "select user_extra.id from user_extra where user_extra.col = :col",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
       },
+      "Query": "select user_extra.id from user_extra where user_extra.col = :col",
       "JoinVars": {
         "col": {}
       }
@@ -132,21 +132,21 @@
   "Instructions": {
     "Left": {
       "PlanID": "SelectEqualUnique",
-      "Query": "select user.col from user where user.id = 5",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
       },
+      "Query": "select user.col from user where user.id = 5",
       "Vindex": "user_index",
       "Values": 5
     },
     "Right": {
       "PlanID": "SelectEqualUnique",
-      "Query": "select user_extra.id from user_extra where user_extra.col = :col and user_extra.user_id = 5",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
       },
+      "Query": "select user_extra.id from user_extra where user_extra.col = :col and user_extra.user_id = 5",
       "Vindex": "user_index",
       "Values": 5,
       "JoinVars": {
@@ -169,19 +169,19 @@
   "Instructions": {
     "Left": {
       "PlanID": "SelectScatter",
-      "Query": "select user.col from user",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      }
-    },
-    "Right": {
-      "PlanID": "SelectEqualUnique",
-      "Query": "select user_extra.id from user_extra where user_extra.col = :col and user_extra.user_id = :col",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
       },
+      "Query": "select user.col from user"
+    },
+    "Right": {
+      "PlanID": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_extra.id from user_extra where user_extra.col = :col and user_extra.user_id = :col",
       "Vindex": "user_index",
       "Values": ":col",
       "JoinVars": {
@@ -204,19 +204,19 @@
   "Instructions": {
     "Left": {
       "PlanID": "SelectScatter",
-      "Query": "select user.col from user where 1 = 1",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      }
-    },
-    "Right": {
-      "PlanID": "SelectScatter",
-      "Query": "select user_extra.id from user_extra where user_extra.col = :col",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
       },
+      "Query": "select user.col from user where 1 = 1"
+    },
+    "Right": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_extra.id from user_extra where user_extra.col = :col",
       "JoinVars": {
         "col": {}
       }
@@ -236,11 +236,11 @@
   "Original": "select id from user where user.col = 5 and user.id in (1, 2)",
   "Instructions": {
     "PlanID": "SelectIN",
-    "Query": "select id from user where user.col = 5 and user.id in ::_vals",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "Query": "select id from user where user.col = 5 and user.id in ::_vals",
     "Vindex": "user_index",
     "Values": [
       1,
@@ -255,11 +255,11 @@
   "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
     "PlanID": "SelectEqual",
-    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
     "Vindex": "name_user_map",
     "Values": "aa"
   }
@@ -271,11 +271,11 @@
   "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
   "Instructions": {
     "PlanID": "SelectEqualUnique",
-    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
     "Vindex": "user_index",
     "Values": 1
   }
@@ -287,11 +287,11 @@
   "Original": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
   "Instructions": {
     "PlanID": "SelectEqualUnique",
-    "Query": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
+    "Query": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
     "Vindex": "user_index",
     "Values": 1
   }
@@ -303,11 +303,11 @@
   "Original": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
   "Instructions": {
     "PlanID": "SelectScatter",
-    "Query": "select id from user where (user.id = 1 or user.name = 'aa' and user.id in (1, 2))",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
-    }
+    },
+    "Query": "select id from user where (user.id = 1 or user.name = 'aa' and user.id in (1, 2))"
   }
 }
 
@@ -318,19 +318,19 @@
   "Instructions": {
     "Left": {
       "PlanID": "SelectScatter",
-      "Query": "select user.id from user",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
-      }
+      },
+      "Query": "select user.id from user"
     },
     "Right": {
       "PlanID": "SelectUnsharded",
-      "Query": "select main1.id from main1 where main1.id = :id",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
+      "Query": "select main1.id from main1 where main1.id = :id",
       "JoinVars": {
         "id": {}
       }

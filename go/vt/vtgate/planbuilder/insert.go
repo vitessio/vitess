@@ -11,8 +11,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*DMLRoute, error) {
-	route := &DMLRoute{
+func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
+	route := &Route{
 		Query: generateQuery(ins),
 	}
 	tablename := sqlparser.GetTableName(ins.Table)
@@ -21,7 +21,8 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*DMLRoute, error)
 	if err != nil {
 		return nil, err
 	}
-	if !route.Table.Keyspace.Sharded {
+	route.Keyspace = route.Table.Keyspace
+	if !route.Keyspace.Sharded {
 		route.PlanID = InsertUnsharded
 		return route, nil
 	}
@@ -61,7 +62,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*DMLRoute, error)
 	return route, nil
 }
 
-func buildIndexPlan(ins *sqlparser.Insert, tablename string, colVindex *ColVindex, route *DMLRoute) error {
+func buildIndexPlan(ins *sqlparser.Insert, tablename string, colVindex *ColVindex, route *Route) error {
 	pos := -1
 	for i, column := range ins.Columns {
 		if colVindex.Col == sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr) {

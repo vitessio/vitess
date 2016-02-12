@@ -12,8 +12,12 @@
   "Original": "update main1 set val = 1",
   "Instructions": {
     "PlanID": "UpdateUnsharded",
-    "Table": "main1",
-    "Query": "update main1 set val = 1"
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update main1 set val = 1",
+    "Table": "main1"
   }
 }
 
@@ -23,8 +27,12 @@
   "Original": "delete from main1",
   "Instructions": {
     "PlanID": "DeleteUnsharded",
-    "Table": "main1",
-    "Query": "delete from main1"
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "delete from main1",
+    "Table": "main1"
   }
 }
 
@@ -42,10 +50,14 @@
   "Original": "update user set val = 1 where id = 1",
   "Instructions": {
     "PlanID": "UpdateEqual",
-    "Table": "user",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
     "Query": "update user set val = 1 where id = 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": 1,
+    "Table": "user"
   }
 }
 
@@ -55,11 +67,15 @@
   "Original": "delete from user where id = 1",
   "Instructions": {
     "PlanID": "DeleteEqual",
-    "Table": "user",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
     "Query": "delete from user where id = 1",
-    "Subquery": "select id, name from user where id = 1 for update",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": 1,
+    "Table": "user",
+    "Subquery": "select id, name from user where id = 1 for update"
   }
 }
 
@@ -101,10 +117,14 @@
   "Original": "update music set val = 1 where id = 1",
   "Instructions": {
     "PlanID": "UpdateEqual",
-    "Table": "music",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
     "Query": "update music set val = 1 where id = 1",
     "Vindex": "music_user_map",
-    "Values": 1
+    "Values": 1,
+    "Table": "music"
   }
 }
 
@@ -114,11 +134,15 @@
   "Original": "delete from music where id = 1",
   "Instructions": {
     "PlanID": "DeleteEqual",
-    "Table": "music",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
     "Query": "delete from music where id = 1",
-    "Subquery": "select id from music where id = 1 for update",
     "Vindex": "music_user_map",
-    "Values": 1
+    "Values": 1,
+    "Table": "music",
+    "Subquery": "select id from music where id = 1 for update"
   }
 }
 
@@ -128,10 +152,14 @@
   "Original": "delete from music_extra where user_id = 1",
   "Instructions": {
     "PlanID": "DeleteEqual",
-    "Table": "music_extra",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
     "Query": "delete from music_extra where user_id = 1",
     "Vindex": "user_index",
-    "Values": 1
+    "Values": 1,
+    "Table": "music_extra"
   }
 }
 
@@ -153,8 +181,12 @@
   "Original": "insert into main1 values(1, 2)",
   "Instructions": {
     "PlanID": "InsertUnsharded",
-    "Table": "main1",
-    "Query": "insert into main1 values (1, 2)"
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into main1 values (1, 2)",
+    "Table": "main1"
   }
 }
 
@@ -184,12 +216,16 @@
   "Original": "insert into user(id) values (1)",
   "Instructions": {
     "PlanID": "InsertSharded",
-    "Table": "user",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
     "Query": "insert into user(id, name) values (:_id, :_name)",
     "Values": [
       1,
       null
-    ]
+    ],
+    "Table": "user"
   }
 }
 
@@ -199,12 +235,16 @@
   "Original": "insert into user(nonid) values (2)",
   "Instructions": {
     "PlanID": "InsertSharded",
-    "Table": "user",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
     "Query": "insert into user(nonid, id, name) values (2, :_id, :_name)",
     "Values": [
       null,
       null
-    ]
+    ],
+    "Table": "user"
   }
 }
 
@@ -214,12 +254,16 @@
   "Original": "insert into user(nonid, name, id) values (2, 'foo', 1)",
   "Instructions": {
     "PlanID": "InsertSharded",
-    "Table": "user",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
     "Query": "insert into user(nonid, name, id) values (2, :_name, :_id)",
     "Values": [
       1,
       "foo"
-    ]
+    ],
+    "Table": "user"
   }
 }
 
