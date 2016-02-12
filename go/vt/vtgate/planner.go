@@ -9,6 +9,7 @@ package vtgate
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -16,11 +17,6 @@ import (
 	"github.com/youtube/vitess/go/cache"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
-
-var noPlan = &planbuilder.Plan{
-	ID:     planbuilder.NoPlan,
-	Reason: "planbuiler not initialized",
-}
 
 // Planner is used to compute the plan. It contains
 // the vschema, and has a cache of previous computed plans.
@@ -43,16 +39,19 @@ func NewPlanner(vschema *planbuilder.VSchema, cacheSize int) *Planner {
 
 // GetPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (plr *Planner) GetPlan(sql string) *planbuilder.Plan {
+func (plr *Planner) GetPlan(sql string) (*planbuilder.Plan, error) {
 	if plr.vschema == nil {
-		return noPlan
+		return nil, errors.New("vschema not initialized")
 	}
 	if result, ok := plr.plans.Get(sql); ok {
-		return result.(*planbuilder.Plan)
+		return result.(*planbuilder.Plan), nil
 	}
-	plan := planbuilder.BuildPlan(sql, plr.vschema)
+	plan, err := planbuilder.BuildPlan(sql, plr.vschema)
+	if err != nil {
+		return nil, err
+	}
 	plr.plans.Set(sql, plan)
-	return plan
+	return plan, nil
 }
 
 // ServeHTTP shows the current plans in the query cache.

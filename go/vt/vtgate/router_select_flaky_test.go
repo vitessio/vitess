@@ -60,12 +60,12 @@ func TestUnsharded(t *testing.T) {
 	}
 
 	sbclookup.Queries = nil
-	_, err = routerExec(router, "insert into music_user_map values(1)", nil)
+	_, err = routerExec(router, "insert into music_user_map values (1)", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "insert into music_user_map values(1)",
+		Sql:           "insert into music_user_map values (1)",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -119,7 +119,7 @@ func TestStreamUnshardedFail(t *testing.T) {
 	_, err = routerStream(router, sql)
 	want = `query "update music_user_map set a = 1 where id = 1" cannot be used for streaming`
 	if err == nil || err.Error() != want {
-		t.Errorf("routerExec: %v, want %v", err, want)
+		t.Errorf("routerExec: \n%v, want \n%v", err, want)
 	}
 }
 
@@ -306,7 +306,7 @@ func TestSelectEqualFail(t *testing.T) {
 	s := getSandbox("TestRouter")
 
 	_, err := routerExec(router, "select id from user where id = (select count(*) from music)", nil)
-	want := "cannot route query"
+	want := "query is too complex"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, must start with %v", err, want)
 	}
