@@ -32,15 +32,14 @@ import (
 // support the tests
 type verticalDiffTabletServer struct {
 	queryservice.ErrorQueryService
-	t             *testing.T
-	excludedTable string
-	keyspace      string
-	shard         string
+	t        *testing.T
+	keyspace string
+	shard    string
 }
 
 func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
-	if strings.Contains(sql, sq.excludedTable) {
-		sq.t.Errorf("Vertical Split Diff operation should skip the excluded table: %v query: %v", sq.excludedTable, sql)
+	if !strings.Contains(sql, "moving1") {
+		sq.t.Errorf("Vertical Split Diff operation should only operate on the 'moving1' table. query: %v", sql)
 	}
 
 	if hasKeyspace := strings.Contains(sql, "WHERE keyspace_id"); hasKeyspace == true {
@@ -156,19 +155,21 @@ func TestVerticalSplitDiff(t *testing.T) {
 	// have a good way to fake the binlog player yet, which is
 	// necessary for synchronizing replication.
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
-	excludedTable := "excludedTable1"
 	subFlags := flag.NewFlagSet("VerticalSplitDiff", flag.ContinueOnError)
-	gwrk, err := commandVerticalSplitDiff(wi, wr, subFlags, []string{
-		"-exclude_tables", excludedTable,
-		"destination_ks/0",
-	})
+	gwrk, err := commandVerticalSplitDiff(wi, wr, subFlags, []string{"destination_ks/0"})
 	if err != nil {
 		t.Fatalf("commandVerticalSplitDiff failed: %v", err)
 	}
 	wrk := gwrk.(*VerticalSplitDiffWorker)
 
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, destRdonly1, destRdonly2} {
-		// both source and destination should be identical (for schema and data returned)
+		// both source and destination have the table definition for 'moving1'.
+		// source also has "staying1" while destination has "extra1".
+		// (Both additional tables should be ignored by the diff.)
+		extraTable := "staying1"
+		if rdonly == destRdonly1 || rdonly == destRdonly2 {
+			extraTable = "extra1"
+		}
 		rdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -179,7 +180,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 					Type:              tmutils.TableBaseTable,
 				},
 				{
-					Name:              excludedTable,
+					Name:              extraTable,
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
@@ -191,10 +192,9 @@ func TestVerticalSplitDiff(t *testing.T) {
 			},
 		}
 		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffTabletServer{
-			t:             t,
-			excludedTable: excludedTable,
-			keyspace:      rdonly.Tablet.Keyspace,
-			shard:         rdonly.Tablet.Shard,
+			t:        t,
+			keyspace: rdonly.Tablet.Keyspace,
+			shard:    rdonly.Tablet.Shard,
 		})
 	}
 
