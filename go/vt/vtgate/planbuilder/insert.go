@@ -76,7 +76,7 @@ func buildIndexPlan(ins *sqlparser.Insert, tablename string, colVindex *ColVinde
 		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
 	row := ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple)
-	val, err := asInterface(row[pos])
+	val, err := valConvert(row[pos])
 	if err != nil {
 		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}

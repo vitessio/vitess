@@ -6,10 +6,16 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
+
+// ListVarName is the bind var name used for plans
+// that require VTGate to compute custom list values,
+// like for IN clauses.
+const ListVarName = "_vals"
 
 type generator struct {
 	refs map[colref]string
@@ -204,23 +210,33 @@ func (gen *generator) convert(route *routeBuilder, val interface{}) (interface{}
 			vals = append(vals, v)
 		}
 		return vals, nil
-	case sqlparser.ValArg:
-		return string(val), nil
 	case sqlparser.ListArg:
 		return string(val), nil
+	case sqlparser.ValExpr:
+		return valConvert(val)
+	}
+	return nil, errors.New("unrecognized symbol")
+}
+
+func valConvert(node sqlparser.ValExpr) (interface{}, error) {
+	switch node := node.(type) {
+	case sqlparser.ValArg:
+		return string(node), nil
 	case sqlparser.StrVal:
-		return []byte(val), nil
+		return []byte(node), nil
 	case sqlparser.NumVal:
-		numVal := string(val)
-		signed, err := strconv.ParseInt(numVal, 0, 64)
+		val := string(node)
+		signed, err := strconv.ParseInt(val, 0, 64)
 		if err == nil {
 			return signed, nil
 		}
-		unsigned, err := strconv.ParseUint(numVal, 0, 64)
+		unsigned, err := strconv.ParseUint(val, 0, 64)
 		if err == nil {
 			return unsigned, nil
 		}
 		return nil, err
+	case *sqlparser.NullVal:
+		return nil, nil
 	}
-	return nil, errors.New("unrecognized symbol")
+	return nil, fmt.Errorf("%v is not a value", sqlparser.String(node))
 }

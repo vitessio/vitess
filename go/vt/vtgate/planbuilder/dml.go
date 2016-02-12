@@ -23,13 +23,15 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
 		return nil, err
 	}
 	route.Keyspace = route.Table.Keyspace
+	if err := checkSubquery(upd); err != nil {
+		return nil, err
+	}
 	if !route.Keyspace.Sharded {
-		// TODO(sougou): subquery check
 		route.PlanID = UpdateUnsharded
 		return route, nil
 	}
 
-	err = getWhereRouting(upd.Where, route)
+	err = getDMLRouting(upd.Where, route)
 	if err != nil {
 		return nil, err
 	}
@@ -64,13 +66,15 @@ func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
 		return nil, err
 	}
 	route.Keyspace = route.Table.Keyspace
+	if err := checkSubquery(del); err != nil {
+		return nil, err
+	}
 	if !route.Keyspace.Sharded {
-		// TODO(sougou): subquery check
 		route.PlanID = DeleteUnsharded
 		return route, nil
 	}
 
-	err = getWhereRouting(del.Where, route)
+	err = getDMLRouting(del.Where, route)
 	if err != nil {
 		return nil, err
 	}
@@ -95,4 +99,60 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
 	buf.WriteString(sqlparser.String(del.Where))
 	buf.WriteString(" for update")
 	return buf.String()
+}
+
+func checkSubquery(node sqlparser.SQLNode) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			return false, errors.New("statement has subqueries")
+		}
+		return true, nil
+	}, node)
+}
+
+func getDMLRouting(where *sqlparser.Where, route *Route) error {
+	if where == nil {
+		return errors.New("DML has multi-shard where clause")
+	}
+	for _, index := range route.Table.Ordered {
+		if !IsUnique(index.Vindex) {
+			continue
+		}
+		if values := getMatch(where.Expr, index.Col); values != nil {
+			route.Vindex = index.Vindex
+			route.Values = values
+			return nil
+		}
+	}
+	return errors.New("DML has multi-shard where clause")
+}
+
+func getMatch(node sqlparser.BoolExpr, col string) interface{} {
+	filters := splitAndExpression(nil, node)
+	for _, filter := range filters {
+		comparison, ok := filter.(*sqlparser.ComparisonExpr)
+		if !ok {
+			continue
+		}
+		if comparison.Operator != sqlparser.EqualStr {
+			continue
+		}
+		if !nameMatch(comparison.Left, col) {
+			continue
+		}
+		if !sqlparser.IsValue(comparison.Right) {
+			continue
+		}
+		val, err := valConvert(comparison.Right)
+		if err != nil {
+			continue
+		}
+		return val
+	}
+	return nil
+}
+
+func nameMatch(node sqlparser.ValExpr, col string) bool {
+	colname, ok := node.(*sqlparser.ColName)
+	return ok && string(colname.Name) == col
 }

@@ -165,7 +165,7 @@ func BuildPlan(query string, vschema *VSchema) (*Plan, error) {
 	}
 	switch statement := statement.(type) {
 	case *sqlparser.Select:
-		plan.Instructions, err = buildSelectPlan2(statement, vschema)
+		plan.Instructions, err = buildSelectPlan(statement, vschema)
 	case *sqlparser.Insert:
 		plan.Instructions, err = buildInsertPlan(statement, vschema)
 	case *sqlparser.Update:
