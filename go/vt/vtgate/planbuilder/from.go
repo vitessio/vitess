@@ -145,13 +145,13 @@ func makejoinBuilder(lplan planBuilder, lsyms *symtab, rplan planBuilder, rsyms 
 	isLeft := false
 	if join.Join == sqlparser.LeftJoinStr {
 		isLeft = true
-		err := processBoolExpr(join.On, lsyms, sqlparser.WhereStr, leftmost(rplan))
+		err := processBoolExpr(join.On, rplan, lsyms, sqlparser.WhereStr)
 		if err != nil {
 			return nil, nil, err
 		}
 		setRHS(rplan)
 	} else {
-		err := processBoolExpr(join.On, lsyms, sqlparser.WhereStr, leftmost(lplan))
+		err := processBoolExpr(join.On, lplan, lsyms, sqlparser.WhereStr)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -243,7 +243,7 @@ func mergeRoutes(lRoute *routeBuilder, lsyms *symtab, rRoute *routeBuilder, rsym
 	for _, filter := range splitAndExpression(nil, join.On) {
 		// If VTGate evolves, this section should be rewritten
 		// to use processBoolExpr.
-		_, err = findRoute(filter, lsyms, lRoute)
+		_, err = findRoute(filter, lRoute, lsyms)
 		if err != nil {
 			return nil, nil, err
 		}

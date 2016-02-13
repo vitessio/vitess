@@ -20,7 +20,7 @@ func processSelectExprs(sel *sqlparser.Select, plan planBuilder, syms *symtab) e
 		// in the distant future.
 		plan.(*routeBuilder).Select.Distinct = sel.Distinct
 	}
-	colsyms, err := findSelectRoutes(sel.SelectExprs, syms, leftmost(plan))
+	colsyms, err := findSelectRoutes(sel.SelectExprs, plan, syms)
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func checkAggregates(sel *sqlparser.Select, plan planBuilder, syms *symtab) erro
 	return err
 }
 
-func findSelectRoutes(selectExprs sqlparser.SelectExprs, syms *symtab, startingRoute *routeBuilder) ([]*colsym, error) {
+func findSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder, syms *symtab) ([]*colsym, error) {
 	colsyms := make([]*colsym, len(selectExprs))
 	for i, node := range selectExprs {
 		colsyms[i] = newColsym(syms)
@@ -81,7 +81,7 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, syms *symtab, startingR
 			return nil, errors.New("* expressions not allowed")
 		}
 		var err error
-		colsyms[i].Route, err = findRoute(node.Expr, syms, startingRoute)
+		colsyms[i].Route, err = findRoute(node.Expr, plan, syms)
 		if err != nil {
 			return nil, err
 		}
