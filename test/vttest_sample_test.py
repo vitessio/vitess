@@ -146,6 +146,11 @@ class TestMysqlctl(unittest.TestCase):
     conn.close()
 
     # Test we can connect to vtcombo for vtctl actions
+    protocol = protocols_flavor().vtctl_python_client_protocol()
+    if protocol == 'grpc':
+      vtgate_addr = 'localhost:%d' % config['grpc_port']
+    else:
+      vtgate_addr = 'localhost:%d' % config['port']
     out, _ = utils.run(
         environment.binary_args('vtctlclient') +
         ['-vtctl_client_protocol', protocol,
