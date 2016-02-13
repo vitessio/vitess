@@ -10,10 +10,10 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func processBoolExpr(boolExpr sqlparser.BoolExpr, syms *symtab, whereType string) error {
+func processBoolExpr(boolExpr sqlparser.BoolExpr, syms *symtab, whereType string, startingRoute *routeBuilder) error {
 	filters := splitAndExpression(nil, boolExpr)
 	for _, filter := range filters {
-		err := processFilter(filter, syms, whereType)
+		err := processFilter(filter, syms, whereType, startingRoute)
 		if err != nil {
 			return err
 		}
@@ -21,8 +21,8 @@ func processBoolExpr(boolExpr sqlparser.BoolExpr, syms *symtab, whereType string
 	return nil
 }
 
-func processFilter(filter sqlparser.BoolExpr, syms *symtab, whereType string) error {
-	route, err := findRoute(filter, syms)
+func processFilter(filter sqlparser.BoolExpr, syms *symtab, whereType string, startingRoute *routeBuilder) error {
+	route, err := findRoute(filter, syms, startingRoute)
 	if err != nil {
 		return err
 	}

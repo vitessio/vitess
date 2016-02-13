@@ -159,6 +159,12 @@ func joinRows(lrow, rrow []sqltypes.Value, cols []int) []sqltypes.Value {
 }
 
 func (rtr *Router) execRoute(vcursor *requestContext, route *planbuilder.Route) (*sqltypes.Result, error) {
+	saved := copyBindVars(vcursor.bindVars)
+	defer func() { vcursor.bindVars = saved }()
+	for k := range route.JoinVars {
+		vcursor.bindVars[k] = vcursor.JoinVars[k]
+	}
+
 	switch route.PlanID {
 	case planbuilder.UpdateEqual:
 		return rtr.execUpdateEqual(vcursor, route)
@@ -186,11 +192,6 @@ func (rtr *Router) execRoute(vcursor *requestContext, route *planbuilder.Route) 
 	}
 	if err != nil {
 		return nil, err
-	}
-	saved := copyBindVars(vcursor.bindVars)
-	defer func() { vcursor.bindVars = saved }()
-	for k := range route.JoinVars {
-		vcursor.bindVars[k] = vcursor.JoinVars[k]
 	}
 	return rtr.scatterConn.ExecuteMulti(
 		vcursor.ctx,
@@ -230,8 +231,6 @@ func (rtr *Router) streamExecJoin(vcursor *requestContext, join *planbuilder.Joi
 	fieldSent := false
 	var rhsLen int
 	err := rtr.streamExecInstruction(vcursor, join.Left, func(lresult *sqltypes.Result) error {
-		saved := copyBindVars(vcursor.JoinVars)
-		defer func() { vcursor.JoinVars = saved }()
 		for _, lrow := range lresult.Rows {
 			for k, col := range join.Vars {
 				vcursor.JoinVars[k] = lrow[col]
@@ -286,6 +285,12 @@ func (rtr *Router) streamExecJoin(vcursor *requestContext, join *planbuilder.Joi
 }
 
 func (rtr *Router) streamExecRoute(vcursor *requestContext, route *planbuilder.Route, sendReply func(*sqltypes.Result) error) error {
+	saved := copyBindVars(vcursor.bindVars)
+	defer func() { vcursor.bindVars = saved }()
+	for k := range route.JoinVars {
+		vcursor.bindVars[k] = vcursor.JoinVars[k]
+	}
+
 	var err error
 	var params *scatterParams
 	switch route.PlanID {
@@ -302,11 +307,6 @@ func (rtr *Router) streamExecRoute(vcursor *requestContext, route *planbuilder.R
 	}
 	if err != nil {
 		return err
-	}
-	saved := copyBindVars(vcursor.bindVars)
-	defer func() { vcursor.bindVars = saved }()
-	for k := range route.JoinVars {
-		vcursor.bindVars[k] = vcursor.JoinVars[k]
 	}
 	return rtr.scatterConn.StreamExecuteMulti(
 		vcursor.ctx,

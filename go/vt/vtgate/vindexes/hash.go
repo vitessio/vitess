@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
@@ -183,6 +184,9 @@ func getNumber(v interface{}) (int64, error) {
 	// Failsafe check: v will never be a []byte.
 	if val, ok := v.([]byte); ok {
 		v = string(val)
+	}
+	if val, ok := v.(sqltypes.Value); ok {
+		v = val.String()
 	}
 
 	switch v := v.(type) {

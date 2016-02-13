@@ -115,12 +115,12 @@
 }
 
 # Left join , multi-chunk
-"select * from user left join main1 on a = b"
+"select * from user u left join main1 m on u.a = m.b"
 {
   "LeftOrder": 1,
   "RightOrder": 2,
   "Left": {
-    "Select": "select  from user",
+    "Select": "select  from user as u",
     "Order": 1,
     "Route": {
       "PlanID": "SelectScatter",
@@ -132,7 +132,7 @@
   },
   "Right": {
     "IsRHS": true,
-    "Select": "select  from main1 where a = b",
+    "Select": "select  from main1 as m where u.a = m.b",
     "Order": 2,
     "Route": {
       "PlanID": "SelectUnsharded",

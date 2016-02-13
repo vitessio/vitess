@@ -137,26 +137,21 @@ func makejoinBuilder(lplan planBuilder, lsyms *symtab, rplan planBuilder, rsyms 
 	// external references, and the FROM clause doesn't allow duplicates,
 	// it's safe to perform this conversion and still expect the same behavior.
 
-	// For LEFT JOIN, you have to push the ON clause into the RHS first.
-	isLeft := false
-	if join.Join == sqlparser.LeftJoinStr {
-		isLeft = true
-		err := processBoolExpr(join.On, rsyms, sqlparser.WhereStr)
-		if err != nil {
-			return nil, nil, err
-		}
-		setRHS(rplan)
-	}
-
 	err := lsyms.Add(rsyms)
 	if err != nil {
 		return nil, nil, err
 	}
 	assignOrder(rplan, lplan.Order())
-	// For normal joins, the ON clause can go to both sides.
-	// The push has to happen after the order is assigned.
-	if !isLeft {
-		err := processBoolExpr(join.On, lsyms, sqlparser.WhereStr)
+	isLeft := false
+	if join.Join == sqlparser.LeftJoinStr {
+		isLeft = true
+		err := processBoolExpr(join.On, lsyms, sqlparser.WhereStr, leftmost(rplan))
+		if err != nil {
+			return nil, nil, err
+		}
+		setRHS(rplan)
+	} else {
+		err := processBoolExpr(join.On, lsyms, sqlparser.WhereStr, leftmost(lplan))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -248,7 +243,7 @@ func mergeRoutes(lRoute *routeBuilder, lsyms *symtab, rRoute *routeBuilder, rsym
 	for _, filter := range splitAndExpression(nil, join.On) {
 		// If VTGate evolves, this section should be rewritten
 		// to use processBoolExpr.
-		_, err = findRoute(filter, lsyms)
+		_, err = findRoute(filter, lsyms, lRoute)
 		if err != nil {
 			return nil, nil, err
 		}

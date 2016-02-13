@@ -6,6 +6,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -177,12 +178,12 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 			route, _, err = st.Outer.Find(col, false)
 			return route, false, err
 		}
-		return nil, false, errors.New("symbol not found")
+		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
 	qualifier := col.Qualifier
 	if qualifier == "" && autoResolve {
 		if len(st.tables) != 1 {
-			return nil, false, errors.New("symbol not found")
+			return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 		}
 		for _, t := range st.tables {
 			qualifier = t.Alias
@@ -197,7 +198,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 			route, _, err = st.Outer.Find(col, false)
 			return route, false, err
 		}
-		return nil, false, errors.New("symbol not found")
+		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
 	col.Metadata = alias
 	return alias.Route, true, nil

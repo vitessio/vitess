@@ -28,7 +28,7 @@ func processSelect(sel *sqlparser.Select, vschema *VSchema, outer *symtab) (plan
 	}
 	syms.Outer = outer
 	if sel.Where != nil {
-		err = processBoolExpr(sel.Where.Expr, syms, sqlparser.WhereStr)
+		err = processBoolExpr(sel.Where.Expr, syms, sqlparser.WhereStr, leftmost(plan))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -38,7 +38,7 @@ func processSelect(sel *sqlparser.Select, vschema *VSchema, outer *symtab) (plan
 		return nil, nil, err
 	}
 	if sel.Having != nil {
-		err = processBoolExpr(sel.Having.Expr, syms, sqlparser.HavingStr)
+		err = processBoolExpr(sel.Having.Expr, syms, sqlparser.HavingStr, leftmost(plan))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -53,4 +53,14 @@ func processSelect(sel *sqlparser.Select, vschema *VSchema, outer *symtab) (plan
 	}
 	processMisc(sel, plan)
 	return plan, syms, nil
+}
+
+func leftmost(plan planBuilder) *routeBuilder {
+	switch plan := plan.(type) {
+	case *joinBuilder:
+		return leftmost(plan.Left)
+	case *routeBuilder:
+		return plan
+	}
+	panic("unexpected")
 }

@@ -93,6 +93,10 @@ func processOrderBy(orderBy sqlparser.OrderBy, syms *symtab) error {
 			// TODO(sougou): better error.
 			return errors.New("order by clause is too complex")
 		}
+		if !route.IsSingle() {
+			// TODO(sougou): better error.
+			return errors.New("order by clause is too complex")
+		}
 		routeNumber = route.Order()
 		route.Select.OrderBy = append(route.Select.OrderBy, order)
 	}

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -24,7 +25,17 @@ func TestNumericCost(t *testing.T) {
 }
 
 func TestNumericMap(t *testing.T) {
-	got, err := numeric.(planbuilder.Unique).Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6)})
+	sqlVal, _ := sqltypes.BuildIntegral("8")
+	got, err := numeric.(planbuilder.Unique).Map(nil, []interface{}{
+		1,
+		int32(2),
+		int64(3),
+		uint(4),
+		uint32(5),
+		uint64(6),
+		[]byte("7"),
+		sqlVal,
+	})
 	if err != nil {
 		t.Error(err)
 	}
@@ -35,6 +46,8 @@ func TestNumericMap(t *testing.T) {
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x04"),
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x05"),
 		[]byte("\x00\x00\x00\x00\x00\x00\x00\x06"),
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x07"),
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x08"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %+v, want %+v", got, want)

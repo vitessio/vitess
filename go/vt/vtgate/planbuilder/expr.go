@@ -10,8 +10,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func findRoute(expr sqlparser.Expr, syms *symtab) (route *routeBuilder, err error) {
-	highestRoute := syms.FirstRoute
+func findRoute(expr sqlparser.Expr, syms *symtab, startingRoute *routeBuilder) (route *routeBuilder, err error) {
+	highestRoute := startingRoute
 	var subroutes []*routeBuilder
 	var subsymslist []*symtab
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {

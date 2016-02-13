@@ -30,6 +30,7 @@ func TestJoin(t *testing.T) {
 		}
 		plan, _, err := processTableExprs(sel.From, vschema)
 		if err != nil {
+			t.Log(tcase.input)
 			t.Error(err)
 			continue
 		}
