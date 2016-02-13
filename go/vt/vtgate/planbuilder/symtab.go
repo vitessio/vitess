@@ -14,12 +14,11 @@ import (
 // symtab contains the symbols for a SELECT
 // statement.
 type symtab struct {
-	tables     []*tableAlias
-	Colsyms    []*colsym
-	FirstRoute *routeBuilder
-	Externs    []*sqlparser.ColName
-	Outer      *symtab
-	VSchema    *VSchema
+	tables  []*tableAlias
+	Colsyms []*colsym
+	Externs []*sqlparser.ColName
+	Outer   *symtab
+	VSchema *VSchema
 }
 
 // colsym contains symbol info about a select expression.
@@ -33,7 +32,6 @@ type colsym struct {
 
 func newColsym(st *symtab) *colsym {
 	return &colsym{
-		Route:  st.FirstRoute,
 		symtab: st,
 	}
 }
@@ -82,8 +80,7 @@ func (t *tableAlias) FindVindex(name sqlparser.SQLName) Vindex {
 // to contain the provided table alias.
 func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder, vschema *VSchema) *symtab {
 	st := &symtab{
-		FirstRoute: route,
-		VSchema:    vschema,
+		VSchema: vschema,
 	}
 	st.tables = []*tableAlias{{
 		Alias:       alias,
