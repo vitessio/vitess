@@ -11,8 +11,9 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-// symtab contains the symbols for a SELECT
-// statement.
+// symtab contains the symbols for a SELECT statement.
+// In the case of a subquery, the symtab points to the
+// symtab of the outer query.
 type symtab struct {
 	tables  []*tableAlias
 	Colsyms []*colsym
@@ -78,18 +79,25 @@ func (t *tableAlias) FindVindex(name sqlparser.SQLName) Vindex {
 
 // newSymtab creates a new symtab initialized
 // to contain the provided table alias.
-func newSymtab(alias sqlparser.SQLName, table *Table, route *routeBuilder, vschema *VSchema) *symtab {
-	st := &symtab{
+func newSymtab(vschema *VSchema) *symtab {
+	return &symtab{
 		VSchema: vschema,
 	}
-	st.tables = []*tableAlias{{
+}
+
+// AddAlias adds a table alias to symtab.
+func (st *symtab) AddAlias(alias sqlparser.SQLName, table *Table, route *routeBuilder) error {
+	if found := st.findTable(alias); found != nil {
+		return errors.New("duplicate symbols")
+	}
+	st.tables = append(st.tables, &tableAlias{
 		Alias:       alias,
 		Route:       route,
 		symtab:      st,
 		Keyspace:    table.Keyspace,
 		ColVindexes: table.ColVindexes,
-	}}
-	return st
+	})
+	return nil
 }
 
 // Add merges the new symbol table into the current one

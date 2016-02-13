@@ -10,8 +10,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func processSelectExprs(sel *sqlparser.Select, plan planBuilder, syms *symtab) error {
-	err := checkAggregates(sel, plan, syms)
+func processSelectExprs(sel *sqlparser.Select, plan planBuilder) error {
+	err := checkAggregates(sel, plan)
 	if err != nil {
 		return err
 	}
@@ -20,22 +20,22 @@ func processSelectExprs(sel *sqlparser.Select, plan planBuilder, syms *symtab) e
 		// in the distant future.
 		plan.(*routeBuilder).Select.Distinct = sel.Distinct
 	}
-	colsyms, err := findSelectRoutes(sel.SelectExprs, plan, syms)
+	colsyms, err := findSelectRoutes(sel.SelectExprs, plan)
 	if err != nil {
 		return err
 	}
 	for i, selectExpr := range sel.SelectExprs {
 		pushSelect(selectExpr, plan, colsyms[i])
 	}
-	syms.Colsyms = colsyms
-	err = processGroupBy(sel.GroupBy, plan, syms)
+	plan.Symtab().Colsyms = colsyms
+	err = processGroupBy(sel.GroupBy, plan)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func checkAggregates(sel *sqlparser.Select, plan planBuilder, syms *symtab) error {
+func checkAggregates(sel *sqlparser.Select, plan planBuilder) error {
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.FuncExpr:
@@ -63,7 +63,7 @@ func checkAggregates(sel *sqlparser.Select, plan planBuilder, syms *symtab) erro
 	for _, selectExpr := range sel.SelectExprs {
 		switch selectExpr := selectExpr.(type) {
 		case *sqlparser.NonStarExpr:
-			vindex := syms.Vindex(selectExpr.Expr, route, true)
+			vindex := plan.Symtab().Vindex(selectExpr.Expr, route, true)
 			if vindex != nil && IsUnique(vindex) {
 				return nil
 			}
@@ -72,16 +72,16 @@ func checkAggregates(sel *sqlparser.Select, plan planBuilder, syms *symtab) erro
 	return err
 }
 
-func findSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder, syms *symtab) ([]*colsym, error) {
+func findSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*colsym, error) {
 	colsyms := make([]*colsym, len(selectExprs))
 	for i, node := range selectExprs {
-		colsyms[i] = newColsym(syms)
+		colsyms[i] = newColsym(plan.Symtab())
 		node, ok := node.(*sqlparser.NonStarExpr)
 		if !ok {
 			return nil, errors.New("* expressions not allowed")
 		}
 		var err error
-		colsyms[i].Route, err = findRoute(node.Expr, plan, syms)
+		colsyms[i].Route, err = findRoute(node.Expr, plan)
 		if err != nil {
 			return nil, err
 		}
@@ -93,8 +93,8 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder, syms 
 			if colsyms[i].Alias == "" {
 				colsyms[i].Alias = sqlparser.SQLName(sqlparser.String(col))
 			}
-			colsyms[i].Vindex = syms.Vindex(col, colsyms[i].Route, true)
-			if _, isLocal, _ := syms.Find(col, true); isLocal {
+			colsyms[i].Vindex = plan.Symtab().Vindex(col, colsyms[i].Route, true)
+			if _, isLocal, _ := plan.Symtab().Find(col, true); isLocal {
 				colsyms[i].Underlying = newColref(col)
 			}
 		}

@@ -21,6 +21,8 @@ import (
 // the builder objects will be discarded, and only
 // the Plan objects will remain.
 type planBuilder interface {
+	// Symtab returns the associated symtab.
+	Symtab() *symtab
 	// Order is a number that signifies execution order.
 	// A lower Order number Route is executed before a
 	// higher one. For a node that contains other nodes,
@@ -44,10 +46,16 @@ type routeBuilder struct {
 	// executed by this route.
 	Select  sqlparser.Select
 	order   int
+	symtab  *symtab
 	Colsyms []*colsym
 	// Route is the plan object being built. It will contain all the
 	// information necessary to execute the route operation.
 	Route *Route
+}
+
+// Symtab returns the associated symtab.
+func (rtb *routeBuilder) Symtab() *symtab {
+	return rtb.symtab
 }
 
 // Order returns the order of the node.

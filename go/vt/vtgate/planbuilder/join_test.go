@@ -28,7 +28,7 @@ func TestJoin(t *testing.T) {
 			t.Errorf("unexpected type: %T", statement)
 			continue
 		}
-		plan, _, err := processTableExprs(sel.From, vschema)
+		plan, err := processTableExprs(sel.From, vschema)
 		if err != nil {
 			t.Log(tcase.input)
 			t.Error(err)

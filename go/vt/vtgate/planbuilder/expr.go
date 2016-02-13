@@ -10,14 +10,13 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func findRoute(expr sqlparser.Expr, plan planBuilder, syms *symtab) (route *routeBuilder, err error) {
+func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err error) {
 	highestRoute := leftmost(plan)
 	var subroutes []*routeBuilder
-	var subsymslist []*symtab
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			newRoute, isLocal, err := syms.Find(node, true)
+			newRoute, isLocal, err := plan.Symtab().Find(node, true)
 			if err != nil {
 				return false, err
 			}
@@ -29,7 +28,7 @@ func findRoute(expr sqlparser.Expr, plan planBuilder, syms *symtab) (route *rout
 			if !ok {
 				return false, errors.New("complex selects not allowd in subqueries")
 			}
-			subplan, subsyms, err := processSelect(sel, syms.VSchema, syms)
+			subplan, err := processSelect(sel, plan.Symtab().VSchema, plan)
 			if err != nil {
 				return false, err
 			}
@@ -37,8 +36,8 @@ func findRoute(expr sqlparser.Expr, plan planBuilder, syms *symtab) (route *rout
 			if !ok {
 				return false, errors.New("subquery is too complex")
 			}
-			for _, extern := range subsyms.Externs {
-				newRoute, isLocal, err := syms.Find(extern, false)
+			for _, extern := range subroute.Symtab().Externs {
+				newRoute, isLocal, err := plan.Symtab().Find(extern, false)
 				if err != nil {
 					return false, err
 				}
@@ -47,7 +46,6 @@ func findRoute(expr sqlparser.Expr, plan planBuilder, syms *symtab) (route *rout
 				}
 			}
 			subroutes = append(subroutes, subroute)
-			subsymslist = append(subsymslist, subsyms)
 			return false, nil
 		}
 		return true, nil
@@ -56,13 +54,13 @@ func findRoute(expr sqlparser.Expr, plan planBuilder, syms *symtab) (route *rout
 		return nil, err
 	}
 	for _, subroute := range subroutes {
-		err = subqueryCanMerge(highestRoute, subroute, syms)
+		err = subqueryCanMerge(highestRoute, subroute, subroute.Symtab())
 		if err != nil {
 			return nil, err
 		}
-	}
-	for i := range subsymslist {
-		subsymslist[i].Reroute(subroutes[i], highestRoute)
+		// This should be moved out if we become capable of processing
+		// subqueries without push-down.
+		subroute.Symtab().Reroute(subroute, highestRoute)
 	}
 	return highestRoute, nil
 }

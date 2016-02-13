@@ -9,7 +9,7 @@ import "github.com/youtube/vitess/go/vt/sqlparser"
 // buildSelectPlan2 is the new function to build a Select plan.
 // TODO(sougou): rename after deprecating old one.
 func buildSelectPlan(sel *sqlparser.Select, vschema *VSchema) (plan interface{}, err error) {
-	builder, _, err := processSelect(sel, vschema, nil)
+	builder, err := processSelect(sel, vschema, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -21,36 +21,38 @@ func buildSelectPlan(sel *sqlparser.Select, vschema *VSchema) (plan interface{},
 }
 
 // processSelect builds a plan for the given query or subquery.
-func processSelect(sel *sqlparser.Select, vschema *VSchema, outer *symtab) (planBuilder, *symtab, error) {
-	plan, syms, err := processTableExprs(sel.From, vschema)
+func processSelect(sel *sqlparser.Select, vschema *VSchema, outer planBuilder) (planBuilder, error) {
+	plan, err := processTableExprs(sel.From, vschema)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	syms.Outer = outer
+	if outer != nil {
+		plan.Symtab().Outer = outer.Symtab()
+	}
 	if sel.Where != nil {
-		err = processBoolExpr(sel.Where.Expr, plan, syms, sqlparser.WhereStr)
+		err = processBoolExpr(sel.Where.Expr, plan, sqlparser.WhereStr)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
-	err = processSelectExprs(sel, plan, syms)
+	err = processSelectExprs(sel, plan)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if sel.Having != nil {
-		err = processBoolExpr(sel.Having.Expr, plan, syms, sqlparser.HavingStr)
+		err = processBoolExpr(sel.Having.Expr, plan, sqlparser.HavingStr)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
-	err = processOrderBy(sel.OrderBy, syms)
+	err = processOrderBy(sel.OrderBy, plan)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	err = processLimit(sel.Limit, plan)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	processMisc(sel, plan)
-	return plan, syms, nil
+	return plan, nil
 }

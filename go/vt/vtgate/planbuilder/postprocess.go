@@ -11,7 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder, syms *symtab) error {
+func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 	if groupBy == nil {
 		return nil
 	}
@@ -22,7 +22,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder, syms *symtab) e
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			_, isLocal, err := syms.Find(node, true)
+			_, isLocal, err := plan.Symtab().Find(node, true)
 			if err != nil {
 				return false, err
 			}
@@ -46,7 +46,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder, syms *symtab) e
 	// It's a scatter route. We can allow group by if it references a
 	// column with a unique vindex.
 	for _, expr := range groupBy {
-		vindex := syms.Vindex(expr, route, true)
+		vindex := plan.Symtab().Vindex(expr, route, true)
 		if vindex != nil && IsUnique(vindex) {
 			route.Select.GroupBy = groupBy
 			return nil
@@ -55,7 +55,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder, syms *symtab) e
 	return errors.New("query is too complex to allow aggregates")
 }
 
-func processOrderBy(orderBy sqlparser.OrderBy, syms *symtab) error {
+func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 	if orderBy == nil {
 		return nil
 	}
@@ -66,7 +66,7 @@ func processOrderBy(orderBy sqlparser.OrderBy, syms *symtab) error {
 		case *sqlparser.ColName:
 			var isLocal bool
 			var err error
-			route, isLocal, err = syms.Find(node, true)
+			route, isLocal, err = plan.Symtab().Find(node, true)
 			if err != nil {
 				return err
 			}
@@ -80,11 +80,11 @@ func processOrderBy(orderBy sqlparser.OrderBy, syms *symtab) error {
 				// TODO(sougou): better error.
 				return errors.New("error parsing order by clause")
 			}
-			if num < 1 || num > int64(len(syms.Colsyms)) {
+			if num < 1 || num > int64(len(plan.Symtab().Colsyms)) {
 				// TODO(sougou): better error.
 				return errors.New("order by column number out of range")
 			}
-			route = syms.Colsyms[num-1].Route
+			route = plan.Symtab().Colsyms[num-1].Route
 		default:
 			// TODO(sougou): better error.
 			return errors.New("order by clause is too complex")

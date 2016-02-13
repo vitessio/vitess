@@ -55,6 +55,18 @@ symbols. The rules used by MySQL are not well documented.
 Therefore, we use the conservative rule that no
 tableAlias can be seen if colsyms are present.
 
+There's some criss-crossing of pointers for the sake
+of code simplification and efficiency. The objections
+of symtab point back to the symtab. This is because
+column references directly point to the objects, and
+we need to know the symtab to which they belong.
+PlanBuilders point to the symtab, and the symtab objects
+also point to planBuilders. The planBuilder pointing to
+symtab simplifies parameter passing. Otherwise, function
+calls were getting long. The symbols need to point to
+the routeBuilder because we have to know which primitive is
+supplying those values.
+
 The symbol table is modified as various sections of the
 query are parsed. The parsing of the FROM clause
 populates the table aliases. These are then used

@@ -10,10 +10,10 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func processBoolExpr(boolExpr sqlparser.BoolExpr, plan planBuilder, syms *symtab, whereType string) error {
+func processBoolExpr(boolExpr sqlparser.BoolExpr, plan planBuilder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	for _, filter := range filters {
-		err := processFilter(filter, plan, syms, whereType)
+		err := processFilter(filter, plan, whereType)
 		if err != nil {
 			return err
 		}
@@ -21,8 +21,8 @@ func processBoolExpr(boolExpr sqlparser.BoolExpr, plan planBuilder, syms *symtab
 	return nil
 }
 
-func processFilter(filter sqlparser.BoolExpr, plan planBuilder, syms *symtab, whereType string) error {
-	route, err := findRoute(filter, plan, syms)
+func processFilter(filter sqlparser.BoolExpr, plan planBuilder, whereType string) error {
+	route, err := findRoute(filter, plan)
 	if err != nil {
 		return err
 	}
@@ -36,12 +36,12 @@ func processFilter(filter sqlparser.BoolExpr, plan planBuilder, syms *symtab, wh
 	case sqlparser.HavingStr:
 		route.Select.AddHaving(filter)
 	}
-	updateRoute(route, syms, filter)
+	updateRoute(route, filter)
 	return nil
 }
 
-func updateRoute(route *routeBuilder, syms *symtab, filter sqlparser.BoolExpr) {
-	planID, vindex, values := computePlan(route, syms, filter)
+func updateRoute(route *routeBuilder, filter sqlparser.BoolExpr) {
+	planID, vindex, values := computePlan(route, filter)
 	if planID == SelectScatter {
 		return
 	}
@@ -76,26 +76,26 @@ func updateRoute(route *routeBuilder, syms *symtab, filter sqlparser.BoolExpr) {
 	}
 }
 
-func computePlan(route *routeBuilder, syms *symtab, filter sqlparser.BoolExpr) (planID PlanID, vindex Vindex, values interface{}) {
+func computePlan(route *routeBuilder, filter sqlparser.BoolExpr) (planID PlanID, vindex Vindex, values interface{}) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
 		case sqlparser.EqualStr:
-			return computeEqualPlan(route, syms, node)
+			return computeEqualPlan(route, node)
 		case sqlparser.InStr:
-			return computeINPlan(route, syms, node)
+			return computeINPlan(route, node)
 		}
 	}
 	return SelectScatter, nil, nil
 }
 
-func computeEqualPlan(route *routeBuilder, syms *symtab, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
+func computeEqualPlan(route *routeBuilder, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
 	left := comparison.Left
 	right := comparison.Right
-	vindex = syms.Vindex(left, route, true)
+	vindex = route.Symtab().Vindex(left, route, true)
 	if vindex == nil {
 		left, right = right, left
-		vindex = syms.Vindex(left, route, true)
+		vindex = route.Symtab().Vindex(left, route, true)
 		if vindex == nil {
 			return SelectScatter, nil, nil
 		}
@@ -109,8 +109,8 @@ func computeEqualPlan(route *routeBuilder, syms *symtab, comparison *sqlparser.C
 	return SelectEqual, vindex, right
 }
 
-func computeINPlan(route *routeBuilder, syms *symtab, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
-	vindex = syms.Vindex(comparison.Left, route, true)
+func computeINPlan(route *routeBuilder, comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
+	vindex = route.Symtab().Vindex(comparison.Left, route, true)
 	if vindex == nil {
 		return SelectScatter, nil, nil
 	}

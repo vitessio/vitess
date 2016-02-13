@@ -25,9 +25,15 @@ type joinBuilder struct {
 	LeftOrder, RightOrder int
 	// Left and Right are the nodes for the join.
 	Left, Right planBuilder
+	symtab      *symtab
 	Colsyms     []*colsym
 	// Join is the join plan.
 	Join *Join
+}
+
+// Symtab returns the associated symtab.
+func (jb *joinBuilder) Symtab() *symtab {
+	return jb.symtab
 }
 
 // Order returns the order of the node.
