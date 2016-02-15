@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
@@ -25,15 +26,18 @@ type Planner struct {
 	plans   *cache.LRUCache
 }
 
+var once sync.Once
+
 // NewPlanner creates a new planner for VTGate.
 func NewPlanner(vschema *planbuilder.VSchema, cacheSize int) *Planner {
 	plr := &Planner{
 		vschema: vschema,
 		plans:   cache.NewLRUCache(int64(cacheSize)),
 	}
-	// TODO(sougou): Uncomment after making Planner testable.
-	//http.Handle("/debug/query_plans", plr)
-	//http.Handle("/debug/vschema", plr)
+	once.Do(func() {
+		http.Handle("/debug/query_plans", plr)
+		http.Handle("/debug/vschema", plr)
+	})
 	return plr
 }
 
@@ -66,7 +70,7 @@ func (plr *Planner) ServeHTTP(response http.ResponseWriter, request *http.Reques
 		response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 		for _, v := range keys {
 			response.Write([]byte(fmt.Sprintf("%#v\n", v)))
-			if plan, ok := plr.plans.Get(v); ok {
+			if plan, ok := plr.plans.Peek(v); ok {
 				if b, err := json.MarshalIndent(plan, "", "  "); err != nil {
 					response.Write([]byte(err.Error()))
 				} else {

@@ -33,17 +33,16 @@ type Router struct {
 }
 
 type scatterParams struct {
-	query, ks string
+	ks        string
 	shardVars map[string]map[string]interface{}
 }
 
-func newScatterParams(query, ks string, bv map[string]interface{}, shards []string) *scatterParams {
+func newScatterParams(ks string, bv map[string]interface{}, shards []string) *scatterParams {
 	shardVars := make(map[string]map[string]interface{}, len(shards))
 	for _, shard := range shards {
 		shardVars[shard] = bv
 	}
 	return &scatterParams{
-		query:     query,
 		ks:        ks,
 		shardVars: shardVars,
 	}
@@ -91,12 +90,10 @@ func (rtr *Router) execJoin(vcursor *requestContext, join *planbuilder.Join) (*s
 	defer func() { vcursor.JoinVars = saved }()
 	result := &sqltypes.Result{}
 	if len(lresult.Rows) == 0 {
-		// We still need field info from the RHS.
-		// TODO(sougou): Change this to use an impossible query.
 		for k := range join.Vars {
 			vcursor.JoinVars[k] = nil
 		}
-		rresult, err := rtr.execInstruction(vcursor, join.Right)
+		rresult, err := rtr.getFields(vcursor, join.Right)
 		if err != nil {
 			return nil, err
 		}
@@ -111,7 +108,10 @@ func (rtr *Router) execJoin(vcursor *requestContext, join *planbuilder.Join) (*s
 		if err != nil {
 			return nil, err
 		}
-		result.Fields = joinFields(lresult.Fields, rresult.Fields, join.Cols)
+		// TODO(sougou): This should only be done once per top level exec.
+		if result.Fields == nil {
+			result.Fields = joinFields(lresult.Fields, rresult.Fields, join.Cols)
+		}
 		if join.IsLeft && len(rresult.Rows) == 0 {
 			rresult.Rows = [][]sqltypes.Value{make([]sqltypes.Value, len(rresult.Fields))}
 		}
@@ -195,9 +195,61 @@ func (rtr *Router) execRoute(vcursor *requestContext, route *planbuilder.Route) 
 	}
 	return rtr.scatterConn.ExecuteMulti(
 		vcursor.ctx,
-		params.query,
+		route.Query,
 		params.ks,
 		params.shardVars,
+		vcursor.tabletType,
+		NewSafeSession(vcursor.session),
+		vcursor.notInTransaction,
+	)
+}
+
+func (rtr *Router) getFields(vcursor *requestContext, instruction interface{}) (*sqltypes.Result, error) {
+	switch instruction := instruction.(type) {
+	case *planbuilder.Join:
+		return rtr.getJoinFields(vcursor, instruction)
+	case *planbuilder.Route:
+		return rtr.getRouteFields(vcursor, instruction)
+	}
+	panic("unreachable")
+}
+
+func (rtr *Router) getJoinFields(vcursor *requestContext, join *planbuilder.Join) (*sqltypes.Result, error) {
+	lresult, err := rtr.getFields(vcursor, join.Left)
+	if err != nil {
+		return nil, err
+	}
+	saved := copyBindVars(vcursor.JoinVars)
+	defer func() { vcursor.JoinVars = saved }()
+	result := &sqltypes.Result{}
+	for k := range join.Vars {
+		vcursor.JoinVars[k] = nil
+	}
+	rresult, err := rtr.getFields(vcursor, join.Right)
+	if err != nil {
+		return nil, err
+	}
+	result.Fields = joinFields(lresult.Fields, rresult.Fields, join.Cols)
+	return result, nil
+}
+
+func (rtr *Router) getRouteFields(vcursor *requestContext, route *planbuilder.Route) (*sqltypes.Result, error) {
+	saved := copyBindVars(vcursor.bindVars)
+	defer func() { vcursor.bindVars = saved }()
+	for k := range route.JoinVars {
+		vcursor.bindVars[k] = nil
+	}
+	ks, shard, err := getAnyShard(vcursor.ctx, rtr.serv, rtr.cell, route.Keyspace.Name, vcursor.tabletType)
+	if err != nil {
+		return nil, err
+	}
+
+	return rtr.scatterConn.Execute(
+		vcursor.ctx,
+		route.FieldQuery,
+		vcursor.bindVars,
+		ks,
+		[]string{shard},
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
 		vcursor.notInTransaction,
@@ -254,6 +306,7 @@ func (rtr *Router) streamExecJoin(vcursor *requestContext, join *planbuilder.Joi
 			if err != nil {
 				return err
 			}
+			// TODO(sougou): need to check if field was sent.
 			if join.IsLeft && !rowSent {
 				result := &sqltypes.Result{}
 				result.Rows = [][]sqltypes.Value{joinRows(
@@ -261,23 +314,22 @@ func (rtr *Router) streamExecJoin(vcursor *requestContext, join *planbuilder.Joi
 					make([]sqltypes.Value, rhsLen),
 					join.Cols,
 				)}
-				err := sendReply(result)
-				if err != nil {
-					return err
-				}
+				return sendReply(result)
 			}
 		}
 		if !fieldSent {
 			for k := range join.Vars {
 				vcursor.JoinVars[k] = nil
 			}
-			return rtr.streamExecInstruction(vcursor, join.Right, func(rresult *sqltypes.Result) error {
-				result := &sqltypes.Result{}
-				result.Fields = joinFields(lresult.Fields, rresult.Fields, join.Cols)
-				fieldSent = true
-				rhsLen = len(rresult.Fields)
-				return sendReply(result)
-			})
+			result := &sqltypes.Result{}
+			rresult, err := rtr.getFields(vcursor, join.Right)
+			if err != nil {
+				return err
+			}
+			result.Fields = joinFields(lresult.Fields, rresult.Fields, join.Cols)
+			fieldSent = true
+			rhsLen = len(rresult.Fields)
+			return sendReply(result)
 		}
 		return nil
 	})
@@ -310,7 +362,7 @@ func (rtr *Router) streamExecRoute(vcursor *requestContext, route *planbuilder.R
 	}
 	return rtr.scatterConn.StreamExecuteMulti(
 		vcursor.ctx,
-		params.query,
+		route.Query,
 		params.ks,
 		params.shardVars,
 		vcursor.tabletType,
@@ -326,7 +378,7 @@ func (rtr *Router) paramsUnsharded(vcursor *requestContext, route *planbuilder.R
 	if len(allShards) != 1 {
 		return nil, fmt.Errorf("unsharded keyspace %s has multiple shards", ks)
 	}
-	return newScatterParams(route.Query, ks, vcursor.bindVars, []string{allShards[0].Name}), nil
+	return newScatterParams(ks, vcursor.bindVars, []string{allShards[0].Name}), nil
 }
 
 func (rtr *Router) paramsSelectEqual(vcursor *requestContext, route *planbuilder.Route) (*scatterParams, error) {
@@ -338,7 +390,7 @@ func (rtr *Router) paramsSelectEqual(vcursor *requestContext, route *planbuilder
 	if err != nil {
 		return nil, fmt.Errorf("paramsSelectEqual: %v", err)
 	}
-	return newScatterParams(route.Query, ks, vcursor.bindVars, routing.Shards()), nil
+	return newScatterParams(ks, vcursor.bindVars, routing.Shards()), nil
 }
 
 func (rtr *Router) paramsSelectIN(vcursor *requestContext, route *planbuilder.Route) (*scatterParams, error) {
@@ -351,7 +403,6 @@ func (rtr *Router) paramsSelectIN(vcursor *requestContext, route *planbuilder.Ro
 		return nil, fmt.Errorf("paramsSelectEqual: %v", err)
 	}
 	return &scatterParams{
-		query:     route.Query,
 		ks:        ks,
 		shardVars: routing.ShardVars(vcursor.bindVars),
 	}, nil
@@ -366,7 +417,7 @@ func (rtr *Router) paramsSelectScatter(vcursor *requestContext, route *planbuild
 	for _, shard := range allShards {
 		shards = append(shards, shard.Name)
 	}
-	return newScatterParams(route.Query, ks, vcursor.bindVars, shards), nil
+	return newScatterParams(ks, vcursor.bindVars, shards), nil
 }
 
 func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *planbuilder.Route) (*sqltypes.Result, error) {

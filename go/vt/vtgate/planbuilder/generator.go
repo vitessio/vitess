@@ -178,6 +178,7 @@ func (gen *generator) generateQuery(route *routeBuilder) error {
 		return err
 	}
 	route.Route.Query = query.(string)
+	route.Route.FieldQuery = gen.generateFieldQuery(route, &route.Select)
 	return nil
 }
 
@@ -216,6 +217,34 @@ func (gen *generator) convert(route *routeBuilder, val interface{}) (interface{}
 		return valConvert(val)
 	}
 	return nil, errors.New("unrecognized symbol")
+}
+
+func (gen *generator) generateFieldQuery(route *routeBuilder, sel *sqlparser.Select) string {
+	formatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+		switch node := node.(type) {
+		case *sqlparser.Select:
+			buf.Myprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
+			return
+		case *sqlparser.JoinTableExpr:
+			if node.Join == sqlparser.LeftJoinStr || node.Join == sqlparser.RightJoinStr {
+				// ON clause is requried
+				buf.Myprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
+			} else {
+				buf.Myprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
+			}
+			return
+		case *sqlparser.ColName:
+			fromRoute, joinVar := gen.lookup(node)
+			if fromRoute != route {
+				buf.Myprintf("%a", ":"+joinVar)
+				return
+			}
+		}
+		node.Format(buf)
+	}
+	buf := sqlparser.NewTrackedBuffer(formatter)
+	formatter(buf, sel)
+	return buf.ParsedQuery().Query
 }
 
 func valConvert(node sqlparser.ValExpr) (interface{}, error) {

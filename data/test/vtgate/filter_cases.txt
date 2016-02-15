@@ -8,7 +8,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user"
+    "Query": "select id from user",
+    "FieldQuery": "select id from user where 1 != 1"
   }
 }
 
@@ -23,6 +24,7 @@
       "Sharded": true
     },
     "Query": "select id from user where user.id = 5",
+    "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -39,6 +41,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
+    "FieldQuery": "select user_extra.id from user join user_extra where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -55,6 +58,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
+    "FieldQuery": "select user_extra.id from user join user_extra where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -71,6 +75,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
+    "FieldQuery": "select user_extra.id from user left join user_extra on 1 != 1 where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -86,7 +91,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
+    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
+    "FieldQuery": "select user_extra.id from user left join user_extra on 1 != 1 where 1 != 1"
   }
 }
 
@@ -102,6 +108,7 @@
         "Sharded": true
       },
       "Query": "select user.col from user where user.id = 5",
+      "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "user_index",
       "Values": 5
     },
@@ -112,6 +119,7 @@
         "Sharded": true
       },
       "Query": "select user_extra.id from user_extra where user_extra.col = :col",
+      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
       "JoinVars": {
         "col": {}
       }
@@ -137,6 +145,7 @@
         "Sharded": true
       },
       "Query": "select user.col from user where user.id = 5",
+      "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "user_index",
       "Values": 5
     },
@@ -147,6 +156,7 @@
         "Sharded": true
       },
       "Query": "select user_extra.id from user_extra where user_extra.col = :col and user_extra.user_id = 5",
+      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
       "Vindex": "user_index",
       "Values": 5,
       "JoinVars": {
@@ -173,7 +183,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col from user"
+      "Query": "select user.col from user",
+      "FieldQuery": "select user.col from user where 1 != 1"
     },
     "Right": {
       "PlanID": "SelectEqualUnique",
@@ -182,6 +193,7 @@
         "Sharded": true
       },
       "Query": "select user_extra.id from user_extra where user_extra.col = :col and user_extra.user_id = :col",
+      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
       "Vindex": "user_index",
       "Values": ":col",
       "JoinVars": {
@@ -208,7 +220,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col from user where 1 = 1"
+      "Query": "select user.col from user where 1 = 1",
+      "FieldQuery": "select user.col from user where 1 != 1"
     },
     "Right": {
       "PlanID": "SelectScatter",
@@ -217,6 +230,7 @@
         "Sharded": true
       },
       "Query": "select user_extra.id from user_extra where user_extra.col = :col",
+      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
       "JoinVars": {
         "col": {}
       }
@@ -241,6 +255,7 @@
       "Sharded": true
     },
     "Query": "select id from user where user.col = 5 and user.id in ::_vals",
+    "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
     "Values": [
       1,
@@ -260,6 +275,7 @@
       "Sharded": true
     },
     "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+    "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
     "Values": "aa"
   }
@@ -276,6 +292,7 @@
       "Sharded": true
     },
     "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
+    "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
     "Values": 1
   }
@@ -292,6 +309,7 @@
       "Sharded": true
     },
     "Query": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
+    "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
     "Values": 1
   }
@@ -307,7 +325,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where (user.id = 1 or user.name = 'aa' and user.id in (1, 2))"
+    "Query": "select id from user where (user.id = 1 or user.name = 'aa' and user.id in (1, 2))",
+    "FieldQuery": "select id from user where 1 != 1"
   }
 }
 
@@ -322,7 +341,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.id from user"
+      "Query": "select user.id from user",
+      "FieldQuery": "select user.id from user where 1 != 1"
     },
     "Right": {
       "PlanID": "SelectUnsharded",
@@ -331,6 +351,7 @@
         "Sharded": false
       },
       "Query": "select main1.id from main1 where main1.id = :id",
+      "FieldQuery": "select main1.id from main1 where 1 != 1",
       "JoinVars": {
         "id": {}
       }

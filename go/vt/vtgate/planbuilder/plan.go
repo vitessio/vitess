@@ -79,14 +79,15 @@ func (pln *Plan) Size() int {
 // Route represents the instructions to execute a statement.
 // It can be a select or dml.
 type Route struct {
-	PlanID   PlanID
-	Keyspace *Keyspace
-	Query    string
-	Vindex   Vindex
-	Values   interface{}
-	JoinVars map[string]struct{}
-	Table    *Table
-	Subquery string
+	PlanID     PlanID
+	Keyspace   *Keyspace
+	Query      string
+	FieldQuery string
+	Vindex     Vindex
+	Values     interface{}
+	JoinVars   map[string]struct{}
+	Table      *Table
+	Subquery   string
 }
 
 // MarshalJSON serializes the Plan into a JSON representation.
@@ -99,23 +100,25 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		vindexName = rt.Vindex.String()
 	}
 	marshalPlan := struct {
-		PlanID   PlanID              `json:",omitempty"`
-		Keyspace *Keyspace           `json:",omitempty"`
-		Query    string              `json:",omitempty"`
-		Vindex   string              `json:",omitempty"`
-		Values   interface{}         `json:",omitempty"`
-		JoinVars map[string]struct{} `json:",omitempty"`
-		Table    string              `json:",omitempty"`
-		Subquery string              `json:",omitempty"`
+		PlanID     PlanID              `json:",omitempty"`
+		Keyspace   *Keyspace           `json:",omitempty"`
+		Query      string              `json:",omitempty"`
+		FieldQuery string              `json:",omitempty"`
+		Vindex     string              `json:",omitempty"`
+		Values     interface{}         `json:",omitempty"`
+		JoinVars   map[string]struct{} `json:",omitempty"`
+		Table      string              `json:",omitempty"`
+		Subquery   string              `json:",omitempty"`
 	}{
-		PlanID:   rt.PlanID,
-		Keyspace: rt.Keyspace,
-		Query:    rt.Query,
-		Vindex:   vindexName,
-		Values:   prettyValue(rt.Values),
-		JoinVars: rt.JoinVars,
-		Table:    tname,
-		Subquery: rt.Subquery,
+		PlanID:     rt.PlanID,
+		Keyspace:   rt.Keyspace,
+		Query:      rt.Query,
+		FieldQuery: rt.FieldQuery,
+		Vindex:     vindexName,
+		Values:     prettyValue(rt.Values),
+		JoinVars:   rt.JoinVars,
+		Table:      tname,
+		Subquery:   rt.Subquery,
 	}
 	return json.Marshal(marshalPlan)
 }
