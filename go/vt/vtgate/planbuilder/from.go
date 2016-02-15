@@ -63,8 +63,39 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema
 		_ = rtb.symtab.AddAlias(alias, table, rtb)
 		return rtb, nil
 	case *sqlparser.Subquery:
-		// TODO(sougou): implement.
-		return nil, errors.New("no subqueries")
+		sel, ok := expr.Select.(*sqlparser.Select)
+		if !ok {
+			return nil, errors.New("complex selects not allowd in subqueries")
+		}
+		subplan, err := processSelect(sel, vschema, nil)
+		if err != nil {
+			return nil, err
+		}
+		subroute, ok := subplan.(*routeBuilder)
+		if !ok {
+			return nil, errors.New("subquery is too complex")
+		}
+		rtb := &routeBuilder{
+			Select: sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
+			symtab: newSymtab(vschema),
+			order:  1,
+			Route:  subroute.Route,
+		}
+		table := &Table{
+			Keyspace: subroute.Route.Keyspace,
+		}
+		for _, colsyms := range subroute.Colsyms {
+			if colsyms.Vindex == nil {
+				continue
+			}
+			table.ColVindexes = append(table.ColVindexes, &ColVindex{
+				Col:    string(colsyms.Alias),
+				Vindex: colsyms.Vindex,
+			})
+		}
+		subroute.Redirect = rtb
+		_ = rtb.symtab.AddAlias(tableExpr.As, table, rtb)
+		return rtb, nil
 	}
 	panic("unreachable")
 }

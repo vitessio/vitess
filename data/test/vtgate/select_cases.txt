@@ -399,3 +399,84 @@
     }
   }
 }
+
+# subquery in FROM
+"select id from (select id from user where id = 5) as t"
+{
+  "Original": "select id from (select id from user where id = 5) as t",
+  "Instructions": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from (select id from user where id = 5) as t",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# subquery in FROM with join
+"select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id"
+{
+  "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
+  "Instructions": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# subquery in FROM, RHS of join
+"select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id"
+{
+  "Original": "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id",
+  "Instructions": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id"
+  }
+}
+
+# subquery in FROM with cross-shard join
+"select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col"
+{
+  "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col",
+  "Instructions": {
+    "Left": {
+      "PlanID": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select t.id from (select id from user where id = 5) as t",
+      "Vindex": "user_index",
+      "Values": 5
+    },
+    "Right": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user_extra where user_extra.col = :id",
+      "JoinVars": {
+        "id": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "id": 0
+    }
+  }
+}
