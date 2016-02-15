@@ -20,7 +20,6 @@ import (
 // joinBuilder is used to build a Join primitive.
 // It's used to buid a normal join or a left join
 // operation.
-// TODO(sougou): struct is incomplete.
 type joinBuilder struct {
 	LeftOrder, RightOrder int
 	// Left and Right are the nodes for the join.

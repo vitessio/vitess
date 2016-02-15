@@ -37,7 +37,6 @@ type planBuilder interface {
 // SelectScatter, etc. Portions of the original Select AST
 // are moved into this node, which will be used to build
 // the final SQL for this route.
-// TODO(sougou): struct is incomplete.
 type routeBuilder struct {
 	Redirect *routeBuilder
 	// IsRHS is true if the routeBuilder is the RHS of a

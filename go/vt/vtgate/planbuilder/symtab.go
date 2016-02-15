@@ -60,7 +60,6 @@ func newColref(col *sqlparser.ColName) colref {
 
 // tableAlias is part of symtab.
 // It represnts a table alias in a FROM clause.
-// TODO(sougou): Update comments after the struct is finalized.
 type tableAlias struct {
 	Alias  sqlparser.SQLName
 	route  *routeBuilder

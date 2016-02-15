@@ -265,14 +265,20 @@ func joinRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (pl
 		return mergeRoutes(lRoute, rRoute, join)
 	}
 
-	// TODO(sougou): Handle special case for SelectEqual
-
 	// Both routeBuilder are sharded routes. Analyze join condition for merging.
 	for _, filter := range splitAndExpression(nil, join.On) {
 		if isSameRoute(lRoute, rRoute, filter) {
 			return mergeRoutes(lRoute, rRoute, join)
 		}
 	}
+
+	// Both l & r routes point to the sameshard.
+	if lRoute.Route.PlanID == SelectEqualUnique && rRoute.Route.PlanID == SelectEqualUnique {
+		if valEqual(lRoute.Route.Values, rRoute.Route.Values) {
+			return mergeRoutes(lRoute, rRoute, join)
+		}
+	}
+
 	return makejoinBuilder(lRoute, rRoute, join)
 }
 

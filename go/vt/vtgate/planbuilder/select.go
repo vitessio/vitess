@@ -7,7 +7,6 @@ package planbuilder
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 // buildSelectPlan2 is the new function to build a Select plan.
-// TODO(sougou): rename after deprecating old one.
 func buildSelectPlan(sel *sqlparser.Select, vschema *VSchema) (plan interface{}, err error) {
 	builder, err := processSelect(sel, vschema, nil)
 	if err != nil {

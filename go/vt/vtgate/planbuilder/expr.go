@@ -5,6 +5,7 @@
 package planbuilder
 
 import (
+	"bytes"
 	"errors"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -54,7 +55,7 @@ func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err 
 		return nil, err
 	}
 	for _, subroute := range subroutes {
-		err = subqueryCanMerge(highestRoute, subroute, subroute.Symtab())
+		err = subqueryCanMerge(highestRoute, subroute)
 		if err != nil {
 			return nil, err
 		}
@@ -65,7 +66,7 @@ func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err 
 	return highestRoute, nil
 }
 
-func subqueryCanMerge(outer, inner *routeBuilder, outersyms *symtab) error {
+func subqueryCanMerge(outer, inner *routeBuilder) error {
 	if outer.Route.Keyspace.Name != inner.Route.Keyspace.Name {
 		return errors.New("subquery keyspaces don't match")
 	}
@@ -76,18 +77,24 @@ func subqueryCanMerge(outer, inner *routeBuilder, outersyms *symtab) error {
 		return nil
 	}
 	// SelectEqualUnique
-	// TODO(sougou): check other cases.
 	switch vals := inner.Route.Values.(type) {
 	case *sqlparser.ColName:
-		mergeRoute, _, _ := outersyms.Find(vals, false)
+		mergeRoute, _, _ := outer.Symtab().Find(vals, false)
 		if mergeRoute != outer {
 			return errors.New("subquery dependency doesn't match parent route")
 		}
+		return nil
+	}
+	if outer.Route.PlanID != SelectEqualUnique {
+		return errors.New("subquery and parent don't have the same route")
+	}
+	if !valEqual(outer.Route.Values, inner.Route.Values) {
+		return errors.New("subquery and parent route to different shards")
 	}
 	return nil
 }
 
-// colIsValue returns true if the expression can be treated as a value
+// exprIsValue returns true if the expression can be treated as a value
 // for the current route. External references are treated as value.
 func exprIsValue(expr sqlparser.ValExpr, route *routeBuilder) bool {
 	switch node := expr.(type) {
@@ -101,6 +108,24 @@ func exprIsValue(expr sqlparser.ValExpr, route *routeBuilder) bool {
 		panic("unreachable")
 	case sqlparser.ValArg, sqlparser.StrVal, sqlparser.NumVal:
 		return true
+	}
+	return false
+}
+
+func valEqual(a, b interface{}) bool {
+	switch a := a.(type) {
+	case sqlparser.ValArg:
+		if b, ok := b.(sqlparser.ValArg); ok {
+			return bytes.Equal([]byte(a), []byte(b))
+		}
+	case sqlparser.StrVal:
+		if b, ok := b.(sqlparser.StrVal); ok {
+			return bytes.Equal([]byte(a), []byte(b))
+		}
+	case sqlparser.NumVal:
+		if b, ok := b.(sqlparser.NumVal); ok {
+			return bytes.Equal([]byte(a), []byte(b))
+		}
 	}
 	return false
 }
