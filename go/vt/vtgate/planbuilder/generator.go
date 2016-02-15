@@ -115,9 +115,9 @@ func (gen *generator) lookup(col *sqlparser.ColName) (route *routeBuilder, joinV
 	ref := newColref(col)
 	switch meta := col.Metadata.(type) {
 	case *colsym:
-		return meta.Route, gen.refs[ref]
+		return meta.Route(), gen.refs[ref]
 	case *tableAlias:
-		return meta.Route, gen.refs[ref]
+		return meta.Route(), gen.refs[ref]
 	}
 	panic("unreachable")
 }

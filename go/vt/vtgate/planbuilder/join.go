@@ -82,7 +82,7 @@ func (jb *joinBuilder) SupplyCol(col *sqlparser.ColName) int {
 				return i
 			}
 		}
-		routeNumber := meta.Route.Order()
+		routeNumber := meta.Route().Order()
 		jb.Colsyms = append(jb.Colsyms, &colsym{Underlying: ref})
 		if routeNumber <= jb.LeftOrder {
 			ret := jb.Left.SupplyCol(col)

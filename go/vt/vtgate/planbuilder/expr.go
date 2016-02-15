@@ -60,7 +60,7 @@ func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err 
 		}
 		// This should be moved out if we become capable of processing
 		// subqueries without push-down.
-		subroute.Symtab().Reroute(subroute, highestRoute)
+		subroute.Redirect = highestRoute
 	}
 	return highestRoute, nil
 }
@@ -94,9 +94,9 @@ func exprIsValue(expr sqlparser.ValExpr, route *routeBuilder) bool {
 	case *sqlparser.ColName:
 		switch meta := node.Metadata.(type) {
 		case *colsym:
-			return meta.Route != route
+			return meta.Route() != route
 		case *tableAlias:
-			return meta.Route != route
+			return meta.Route() != route
 		}
 		panic("unreachable")
 	case sqlparser.ValArg, sqlparser.StrVal, sqlparser.NumVal:

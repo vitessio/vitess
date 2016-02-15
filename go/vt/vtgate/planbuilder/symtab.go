@@ -25,16 +25,21 @@ type symtab struct {
 // colsym contains symbol info about a select expression.
 type colsym struct {
 	Alias      sqlparser.SQLName
-	Route      *routeBuilder
+	route      *routeBuilder
 	symtab     *symtab
 	Underlying colref
 	Vindex     Vindex
 }
 
-func newColsym(st *symtab) *colsym {
+func newColsym(route *routeBuilder, st *symtab) *colsym {
 	return &colsym{
+		route:  route,
 		symtab: st,
 	}
+}
+
+func (cs *colsym) Route() *routeBuilder {
+	return cs.route.Resolve()
 }
 
 // colref uniquely identifies a column reference.
@@ -58,13 +63,17 @@ func newColref(col *sqlparser.ColName) colref {
 // TODO(sougou): Update comments after the struct is finalized.
 type tableAlias struct {
 	Alias  sqlparser.SQLName
-	Route  *routeBuilder
+	route  *routeBuilder
 	symtab *symtab
 	// Keyspace points to the keyspace to which this
 	// alias belongs.
 	Keyspace *Keyspace
 	// CoVindexes is the list of column Vindexes for this alias.
 	ColVindexes []*ColVindex
+}
+
+func (t *tableAlias) Route() *routeBuilder {
+	return t.route.Resolve()
 }
 
 // FindVindex returns the vindex if one was found for the column.
@@ -92,7 +101,7 @@ func (st *symtab) AddAlias(alias sqlparser.SQLName, table *Table, route *routeBu
 	}
 	st.tables = append(st.tables, &tableAlias{
 		Alias:       alias,
-		Route:       route,
+		route:       route,
 		symtab:      st,
 		Keyspace:    table.Keyspace,
 		ColVindexes: table.ColVindexes,
@@ -123,23 +132,6 @@ func (st *symtab) findTable(alias sqlparser.SQLName) *tableAlias {
 	return nil
 }
 
-// Merge merges the new symbol table into the current one and makes
-// all the tables part of the specified routeBuilder.
-func (st *symtab) Merge(newsyms *symtab, route *routeBuilder) error {
-	for _, t := range st.tables {
-		t.Route = route
-	}
-	for _, t := range newsyms.tables {
-		if found := st.findTable(t.Alias); found != nil {
-			return errors.New("duplicate symbols")
-		}
-		t.Route = route
-		t.symtab = st
-		st.tables = append(st.tables, t)
-	}
-	return nil
-}
-
 // SetRHS removes the ColVindexes from the aliases signifying
 // that they cannot be used to make routing decisions. This is
 // called if the table is in the RHS of a LEFT JOIN.
@@ -165,16 +157,16 @@ func (st *symtab) SetRHS() {
 func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBuilder, isLocal bool, err error) {
 	switch m := col.Metadata.(type) {
 	case *colsym:
-		return m.Route, m.symtab == st, nil
+		return m.Route(), m.symtab == st, nil
 	case *tableAlias:
-		return m.Route, m.symtab == st, nil
+		return m.Route(), m.symtab == st, nil
 	}
 	if len(st.Colsyms) != 0 {
 		name := sqlparser.SQLName(sqlparser.String(col))
 		for _, colsym := range st.Colsyms {
 			if name == colsym.Alias {
 				col.Metadata = colsym
-				return colsym.Route, true, nil
+				return colsym.Route(), true, nil
 			}
 		}
 		st.Externs = append(st.Externs, col)
@@ -206,7 +198,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
 	col.Metadata = alias
-	return alias.Route, true, nil
+	return alias.Route(), true, nil
 }
 
 // Vindex returns the vindex if the expression has an associated Vindex,
@@ -225,29 +217,15 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve b
 	}
 	switch meta := col.Metadata.(type) {
 	case *colsym:
-		if scope != meta.Route {
+		if scope != meta.Route() {
 			return nil
 		}
 		return meta.Vindex
 	case *tableAlias:
-		if scope != meta.Route {
+		if scope != meta.Route() {
 			return nil
 		}
 		return meta.FindVindex(col.Name)
 	}
 	return nil
-}
-
-// Reroute re-points the specified route to the new one.
-func (st *symtab) Reroute(o, n *routeBuilder) {
-	for _, t := range st.tables {
-		if t.Route == o {
-			t.Route = n
-		}
-	}
-	for _, c := range st.Colsyms {
-		if c.Route == o {
-			c.Route = n
-		}
-	}
 }

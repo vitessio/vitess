@@ -75,16 +75,15 @@ func checkAggregates(sel *sqlparser.Select, plan planBuilder) error {
 func findSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*colsym, error) {
 	colsyms := make([]*colsym, len(selectExprs))
 	for i, node := range selectExprs {
-		colsyms[i] = newColsym(plan.Symtab())
 		node, ok := node.(*sqlparser.NonStarExpr)
 		if !ok {
 			return nil, errors.New("* expressions not allowed")
 		}
-		var err error
-		colsyms[i].Route, err = findRoute(node.Expr, plan)
+		route, err := findRoute(node.Expr, plan)
 		if err != nil {
 			return nil, err
 		}
+		colsyms[i] = newColsym(route, plan.Symtab())
 		if node.As != "" {
 			colsyms[i].Alias = node.As
 		}
@@ -93,7 +92,7 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*c
 			if colsyms[i].Alias == "" {
 				colsyms[i].Alias = sqlparser.SQLName(sqlparser.String(col))
 			}
-			colsyms[i].Vindex = plan.Symtab().Vindex(col, colsyms[i].Route, true)
+			colsyms[i].Vindex = plan.Symtab().Vindex(col, colsyms[i].Route(), true)
 			if _, isLocal, _ := plan.Symtab().Find(col, true); isLocal {
 				colsyms[i].Underlying = newColref(col)
 			}
@@ -103,7 +102,7 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*c
 }
 
 func pushSelect(selectExpr sqlparser.SelectExpr, plan planBuilder, colsym *colsym) int {
-	routeNumber := colsym.Route.Order()
+	routeNumber := colsym.Route().Order()
 	switch plan := plan.(type) {
 	case *joinBuilder:
 		if routeNumber <= plan.LeftOrder {

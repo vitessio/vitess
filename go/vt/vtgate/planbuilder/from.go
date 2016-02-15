@@ -253,7 +253,8 @@ func mergeRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (p
 	if join.Join == sqlparser.LeftJoinStr {
 		rRoute.Symtab().SetRHS()
 	}
-	err := lRoute.Symtab().Merge(rRoute.Symtab(), lRoute)
+	rRoute.Redirect = lRoute
+	err := lRoute.Symtab().Add(rRoute.Symtab())
 	if err != nil {
 		return nil, err
 	}

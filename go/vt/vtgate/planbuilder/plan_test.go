@@ -95,14 +95,16 @@ func testFile(t *testing.T, filename string, vschema *VSchema) {
 		if out != tcase.output {
 			t.Errorf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out)
 		}
-		if err != nil {
-			out = fmt.Sprintf("\"%s\"", out)
-		} else {
-			bout, _ := json.MarshalIndent(plan, "", "  ")
-			out = string(bout)
-		}
-		// Uncomment this line to re-generate input files
-		//fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
+		// Uncomment these lines to re-generate input files
+		/*
+			if err != nil {
+				out = fmt.Sprintf("\"%s\"", out)
+			} else {
+				bout, _ := json.MarshalIndent(plan, "", "  ")
+				out = string(bout)
+			}
+			fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
+		*/
 	}
 }
 

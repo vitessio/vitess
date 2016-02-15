@@ -39,6 +39,7 @@ type planBuilder interface {
 // the final SQL for this route.
 // TODO(sougou): struct is incomplete.
 type routeBuilder struct {
+	Redirect *routeBuilder
 	// IsRHS is true if the routeBuilder is the RHS of a
 	// LEFT JOIN. If so, many restrictions come into play.
 	IsRHS bool
@@ -51,6 +52,13 @@ type routeBuilder struct {
 	// Route is the plan object being built. It will contain all the
 	// information necessary to execute the route operation.
 	Route *Route
+}
+
+func (rtb *routeBuilder) Resolve() *routeBuilder {
+	for rtb.Redirect != nil {
+		rtb = rtb.Redirect
+	}
+	return rtb
 }
 
 // Symtab returns the associated symtab.

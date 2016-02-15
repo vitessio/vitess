@@ -84,7 +84,7 @@ func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 				// TODO(sougou): better error.
 				return errors.New("order by column number out of range")
 			}
-			route = plan.Symtab().Colsyms[num-1].Route
+			route = plan.Symtab().Colsyms[num-1].Route()
 		default:
 			// TODO(sougou): better error.
 			return errors.New("order by clause is too complex")
