@@ -354,11 +354,9 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// now send an updated empty value, wait until we get the error
 	ft.notifications <- nil
 	expiry = time.Now().Add(5 * time.Second)
-	found := false
 	for {
 		got, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
 		if err != nil && strings.Contains(err.Error(), "no SrvKeyspace") {
-			found = true
 			break
 		}
 		if time.Now().After(expiry) {
@@ -366,8 +364,21 @@ func TestGetSrvKeyspace(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if !found {
-		t.Errorf("sending empty keyspace didn't result in error")
+
+	// now send an updated real value, see it come through
+	ft.notifications <- &topodatapb.SrvKeyspace{
+		ShardingColumnName: "test_matching",
+	}
+	expiry = time.Now().Add(5 * time.Second)
+	for {
+		got, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
+		if err == nil && got.ShardingColumnName == "test_matching" {
+			break
+		}
+		if time.Now().After(expiry) {
+			t.Fatalf("timeout waiting for new keyspace value")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 
