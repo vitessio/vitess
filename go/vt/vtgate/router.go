@@ -68,28 +68,28 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	if err != nil {
 		return nil, err
 	}
-	return rtr.execInstruction(vcursor, plan.Instructions)
+	return rtr.execInstruction(vcursor, plan.Instructions, true)
 }
 
-func (rtr *Router) execInstruction(vcursor *requestContext, instruction interface{}) (*sqltypes.Result, error) {
+func (rtr *Router) execInstruction(vcursor *requestContext, instruction interface{}, wantFields bool) (*sqltypes.Result, error) {
 	switch instruction := instruction.(type) {
 	case *planbuilder.Join:
-		return rtr.execJoin(vcursor, instruction)
+		return rtr.execJoin(vcursor, instruction, wantFields)
 	case *planbuilder.Route:
 		return rtr.execRoute(vcursor, instruction)
 	}
 	panic("unreachable")
 }
 
-func (rtr *Router) execJoin(vcursor *requestContext, join *planbuilder.Join) (*sqltypes.Result, error) {
-	lresult, err := rtr.execInstruction(vcursor, join.Left)
+func (rtr *Router) execJoin(vcursor *requestContext, join *planbuilder.Join, wantFields bool) (*sqltypes.Result, error) {
+	lresult, err := rtr.execInstruction(vcursor, join.Left, wantFields)
 	if err != nil {
 		return nil, err
 	}
 	saved := copyBindVars(vcursor.JoinVars)
 	defer func() { vcursor.JoinVars = saved }()
 	result := &sqltypes.Result{}
-	if len(lresult.Rows) == 0 {
+	if len(lresult.Rows) == 0 && wantFields {
 		for k := range join.Vars {
 			vcursor.JoinVars[k] = nil
 		}
@@ -104,19 +104,19 @@ func (rtr *Router) execJoin(vcursor *requestContext, join *planbuilder.Join) (*s
 		for k, col := range join.Vars {
 			vcursor.JoinVars[k] = lrow[col]
 		}
-		rresult, err := rtr.execInstruction(vcursor, join.Right)
+		rresult, err := rtr.execInstruction(vcursor, join.Right, wantFields)
 		if err != nil {
 			return nil, err
 		}
-		// TODO(sougou): This should only be done once per top level exec.
-		if result.Fields == nil {
+		if wantFields {
+			wantFields = false
 			result.Fields = joinFields(lresult.Fields, rresult.Fields, join.Cols)
-		}
-		if join.IsLeft && len(rresult.Rows) == 0 {
-			rresult.Rows = [][]sqltypes.Value{make([]sqltypes.Value, len(rresult.Fields))}
 		}
 		for _, rrow := range rresult.Rows {
 			result.Rows = append(result.Rows, joinRows(lrow, rrow, join.Cols))
+		}
+		if join.IsLeft && len(rresult.Rows) == 0 {
+			result.Rows = append(result.Rows, joinRows(lrow, nil, join.Cols))
 		}
 		result.RowsAffected += uint64(len(rresult.Rows))
 	}
@@ -153,7 +153,10 @@ func joinRows(lrow, rrow []sqltypes.Value, cols []int) []sqltypes.Value {
 			row[i] = lrow[-index-1]
 			continue
 		}
-		row[i] = rrow[index-1]
+		// rrow can be nil on left joins
+		if rrow != nil {
+			row[i] = rrow[index-1]
+		}
 	}
 	return row
 }
@@ -266,58 +269,59 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 	if err != nil {
 		return err
 	}
-	return rtr.streamExecInstruction(vcursor, plan.Instructions, sendReply)
+	return rtr.streamExecInstruction(vcursor, plan.Instructions, true, sendReply)
 }
 
-func (rtr *Router) streamExecInstruction(vcursor *requestContext, instruction interface{}, sendReply func(*sqltypes.Result) error) error {
+func (rtr *Router) streamExecInstruction(vcursor *requestContext, instruction interface{}, wantFields bool, sendReply func(*sqltypes.Result) error) error {
 	switch instruction := instruction.(type) {
 	case *planbuilder.Join:
-		return rtr.streamExecJoin(vcursor, instruction, sendReply)
+		return rtr.streamExecJoin(vcursor, instruction, wantFields, sendReply)
 	case *planbuilder.Route:
 		return rtr.streamExecRoute(vcursor, instruction, sendReply)
 	}
 	panic("unreachable")
 }
 
-func (rtr *Router) streamExecJoin(vcursor *requestContext, join *planbuilder.Join, sendReply func(*sqltypes.Result) error) error {
-	fieldSent := false
-	var rhsLen int
-	err := rtr.streamExecInstruction(vcursor, join.Left, func(lresult *sqltypes.Result) error {
+func (rtr *Router) streamExecJoin(vcursor *requestContext, join *planbuilder.Join, wantFields bool, sendReply func(*sqltypes.Result) error) error {
+	err := rtr.streamExecInstruction(vcursor, join.Left, wantFields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
 			for k, col := range join.Vars {
 				vcursor.JoinVars[k] = lrow[col]
 			}
 			rowSent := false
-			err := rtr.streamExecInstruction(vcursor, join.Right, func(rresult *sqltypes.Result) error {
+			err := rtr.streamExecInstruction(vcursor, join.Right, wantFields, func(rresult *sqltypes.Result) error {
 				result := &sqltypes.Result{}
-				if !fieldSent {
+				if wantFields {
+					wantFields = false
 					result.Fields = joinFields(lresult.Fields, rresult.Fields, join.Cols)
-					fieldSent = true
-					rhsLen = len(rresult.Fields)
-				}
-				if len(result.Rows) != 0 {
-					rowSent = true
 				}
 				for _, rrow := range rresult.Rows {
 					result.Rows = append(result.Rows, joinRows(lrow, rrow, join.Cols))
+				}
+				if len(rresult.Rows) != 0 {
+					rowSent = true
 				}
 				return sendReply(result)
 			})
 			if err != nil {
 				return err
 			}
-			// TODO(sougou): need to check if field was sent.
+			if wantFields {
+				// TODO(sougou): remove after testing
+				panic("unexptected")
+			}
 			if join.IsLeft && !rowSent {
 				result := &sqltypes.Result{}
 				result.Rows = [][]sqltypes.Value{joinRows(
 					lrow,
-					make([]sqltypes.Value, rhsLen),
+					nil,
 					join.Cols,
 				)}
 				return sendReply(result)
 			}
 		}
-		if !fieldSent {
+		if wantFields {
+			wantFields = false
 			for k := range join.Vars {
 				vcursor.JoinVars[k] = nil
 			}
@@ -327,8 +331,6 @@ func (rtr *Router) streamExecJoin(vcursor *requestContext, join *planbuilder.Joi
 				return err
 			}
 			result.Fields = joinFields(lresult.Fields, rresult.Fields, join.Cols)
-			fieldSent = true
-			rhsLen = len(rresult.Fields)
 			return sendReply(result)
 		}
 		return nil
