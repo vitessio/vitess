@@ -224,8 +224,8 @@ public class Proto {
         this.value = ByteString.copyFromUtf8(value.toString());
       } else if (value instanceof Boolean ) {
         // Boolean
-        this.type = Query.Type.BIT;
-        this.value = ByteString.copyFromUtf8(((boolean)value) ? "1" : "0");
+        this.type = Query.Type.INT64;
+        this.value = ByteString.copyFromUtf8(((boolean)value) ? String.valueOf(1) : String.valueOf(0));
       } else if (value instanceof BigDecimal) {
         // BigDecimal
         this.type = Query.Type.FLOAT64;
