@@ -512,8 +512,11 @@ primary key (name)
     self._test_keyrange_constraints()
 
     # run a health check on source replicas so they respond to discovery
-    utils.run_vtctl(['RunHealthCheck', shard_0_replica.tablet_alias, 'replica'])
-    utils.run_vtctl(['RunHealthCheck', shard_1_slave1.tablet_alias, 'replica'])
+    # (for binlog players) and on the source rdonlys (for workers)
+    for t in [shard_0_replica, shard_1_slave1]:
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'])
+    for t in [shard_0_ny_rdonly, shard_1_ny_rdonly, shard_1_rdonly1]:
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
 
     # create the split shards
     shard_2_master.init_tablet('master', 'test_keyspace', '80-c0')
@@ -562,7 +565,6 @@ primary key (name)
                         '--command_display_interval', '10ms',
                         'SplitClone',
                         '--exclude_tables', 'unrelated',
-                        '--strategy=-populate_blp_checkpoint',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         'test_keyspace/80-'],
@@ -608,7 +610,9 @@ primary key (name)
     self._check_binlog_player_vars(shard_2_master, seconds_behind_master_max=30)
     self._check_binlog_player_vars(shard_3_master, seconds_behind_master_max=30)
 
-    # use vtworker to compare the data
+    # use vtworker to compare the data (after health-checking the destination
+    # rdonly tablets so discovery works)
+    utils.run_vtctl(['RunHealthCheck', shard_3_rdonly1.tablet_alias, 'rdonly'])
     logging.debug('Running vtworker SplitDiff')
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', '--exclude_tables',
                         'unrelated', 'test_keyspace/c0-'],

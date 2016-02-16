@@ -210,11 +210,11 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ``` sh
     vitess/examples/kubernetes$ ./etcd-up.sh
     ### example output:
-    # Generating discovery token for global cell...
     # Creating etcd service for global cell...
-    # services/etcd-global
+    # service "etcd-global" created
+    # service "etcd-global-srv" created
     # Creating etcd replicationcontroller for global cell...
-    # replicationcontrollers/etcd-global
+    # replicationcontroller "etcd-global" created
     # ...
     ```
 
@@ -261,10 +261,10 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ``` sh
     vitess/examples/kubernetes$ ./vtctld-up.sh
     ### example output:
-    # Creating vtctld service...
-    # services/vtctld
-    # Creating vtctld pod...
-    # pods/vtctld
+    # Creating vtctld ClusterIP service...
+    # service "vtctld" created
+    # Creating vtctld replicationcontroller...
+    # replicationcontroller "vtctld" create createdd
     ```
 
 1.  **Access vtctld web UI**
@@ -347,15 +347,15 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ### example output:
     # Creating test_keyspace.shard-0 pods in cell test...
     # Creating pod for tablet test-0000000100...
-    # pods/vttablet-100
+    # pod "vttablet-100" created
     # Creating pod for tablet test-0000000101...
-    # pods/vttablet-101
+    # pod "vttablet-101" created
     # Creating pod for tablet test-0000000102...
-    # pods/vttablet-102
+    # pod "vttablet-102" created
     # Creating pod for tablet test-0000000103...
-    # pods/vttablet-103
+    # pod "vttablet-103" created
     # Creating pod for tablet test-0000000104...
-    # pods/vttablet-104
+    # pod "vttablet-104" created
     ```
 
     In the vtctld web UI, you should soon see a
@@ -509,10 +509,10 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ``` sh
     vitess/examples/kubernetes$ ./vtgate-up.sh
     ### example output:
-    # Creating vtgate service...
-    # services/vtgate
-    # Creating vtgate replicationcontroller...
-    # replicationcontrollers/vtgate
+    # Creating vtgate service in cell test...
+    # service "vtgate-test" created
+    # Creating vtgate replicationcontroller in cell test...
+    # replicationcontroller "vtgate-test" created
     ```
 
 ## Test your cluster with a client app
@@ -528,9 +528,9 @@ a later guide.
 vitess/examples/kubernetes$ ./guestbook-up.sh
 ### example output:
 # Creating guestbook service...
-# services/guestbook
+# services "guestbook" created
 # Creating guestbook replicationcontroller...
-# replicationcontrollers/guestbook
+# replicationcontroller "guestbook" created
 ```
 
 As with the `vtctld` service, by default the GuestBook app is not accessible

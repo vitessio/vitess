@@ -11,11 +11,12 @@ from vttest import vt_processes
 class LocalDatabase(object):
   """Set up a local Vitess database."""
 
-  def __init__(self, shards, schema_dir, vschema, mysql_only):
+  def __init__(self, shards, schema_dir, vschema, mysql_only, web_dir=None):
     self.shards = shards
     self.schema_dir = schema_dir
     self.vschema = vschema
     self.mysql_only = mysql_only
+    self.web_dir = web_dir
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
@@ -29,7 +30,8 @@ class LocalDatabase(object):
     if self.mysql_only:
       return
 
-    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db, self.vschema)
+    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db,
+                                    self.vschema, web_dir=self.web_dir)
 
   def teardown(self):
     """Kill all Vitess processes and wait for them to end.
@@ -132,11 +134,16 @@ class LocalDatabase(object):
     leave them alone for now.  See the MySQL manual 6.1.6 "Comment Syntax"
     for all the weird complications.
 
-    If source_root is specified, 'source FILENAME' lines in the SQL file will
-    source the specified filename relative to source_root.
+    Args:
+      filename: the SQL source file to use.
+      source_root: if specified, 'source FILENAME' lines in the SQL file will
+        source the specified filename relative to source_root.
+
+    Returns:
+      A list of SQL commands.
     """
-    file = open(filename)
-    lines = file.readlines()
+    fd = open(filename)
+    lines = fd.readlines()
 
     inside_single_quotes = 0
     inside_double_quotes = 0

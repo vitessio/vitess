@@ -126,16 +126,16 @@ type command struct {
 }
 
 var commands = []command{
-	command{"init", initCmd, "[-wait_time=20s] [-init_db_sql_file=]",
+	{"init", initCmd, "[-wait_time=20s] [-init_db_sql_file=]",
 		"Initalizes the directory structure and starts mysqld"},
-	command{"teardown", teardownCmd, "[-force]",
+	{"teardown", teardownCmd, "[-force]",
 		"Shuts mysqld down, and removes the directory"},
-	command{"start", startCmd, "[-wait_time=20s]",
+	{"start", startCmd, "[-wait_time=20s]",
 		"Starts mysqld on an already 'init'-ed directory"},
-	command{"shutdown", shutdownCmd, "[-wait_time=20s]",
+	{"shutdown", shutdownCmd, "[-wait_time=20s]",
 		"Shuts down mysqld, does not remove any file"},
 
-	command{"position", positionCmd,
+	{"position", positionCmd,
 		"<operation> <pos1> <pos2 | gtid>",
 		"Compute operations on replication positions"},
 }

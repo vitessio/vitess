@@ -12,7 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -20,7 +20,7 @@ import (
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
-func TestKeyRangeToShardMap(t *testing.T) {
+func TestMapKeyRangesToShards(t *testing.T) {
 	ts := new(sandboxTopo)
 	var testCases = []struct {
 		keyspace string
@@ -54,11 +54,12 @@ func TestKeyRangeToShardMap(t *testing.T) {
 			}
 			keyRange = krArray[0]
 		}
-		_, _, allShards, err := getKeyspaceShards(context.Background(), ts, "", testCase.keyspace, topodatapb.TabletType_MASTER)
-		gotShards, err := resolveKeyRangeToShards(allShards, keyRange)
+		krs := []*topodatapb.KeyRange{keyRange}
+		_, gotShards, err := mapKeyRangesToShards(context.Background(), ts, "", testCase.keyspace, topodatapb.TabletType_MASTER, krs)
 		if err != nil {
 			t.Errorf("want nil, got %v", err)
 		}
+		sort.Strings(gotShards)
 		if !reflect.DeepEqual(testCase.shards, gotShards) {
 			t.Errorf("want \n%#v, got \n%#v", testCase.shards, gotShards)
 		}
@@ -119,7 +120,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 					Query: &querypb.BoundQuery{
 						Sql: "q1",
 						BindVariables: map[string]*querypb.BindVariable{
-							"q1var": &querypb.BindVariable{
+							"q1var": {
 								Type:  sqltypes.Int64,
 								Value: []byte("1"),
 							},
@@ -131,7 +132,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 					Query: &querypb.BoundQuery{
 						Sql: "q2",
 						BindVariables: map[string]*querypb.BindVariable{
-							"q2var": &querypb.BindVariable{
+							"q2var": {
 								Type:  sqltypes.Int64,
 								Value: []byte("2"),
 							},
@@ -143,7 +144,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 					Query: &querypb.BoundQuery{
 						Sql: "q3",
 						BindVariables: map[string]*querypb.BindVariable{
-							"q3var": &querypb.BindVariable{
+							"q3var": {
 								Type:  sqltypes.Int64,
 								Value: []byte("3"),
 							},
@@ -156,8 +157,8 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 			requests: &scatterBatchRequest{
 				Length: 3,
 				Requests: map[string]*shardBatchRequest{
-					"ks1:0": &shardBatchRequest{
-						Queries: []tproto.BoundQuery{
+					"ks1:0": {
+						Queries: []querytypes.BoundQuery{
 							{
 								Sql:           "q1",
 								BindVariables: map[string]interface{}{"q1var": int64(1)},
@@ -167,8 +168,8 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 						Shard:         "0",
 						ResultIndexes: []int{0},
 					},
-					"ks1:1": &shardBatchRequest{
-						Queries: []tproto.BoundQuery{
+					"ks1:1": {
+						Queries: []querytypes.BoundQuery{
 							{
 								Sql:           "q1",
 								BindVariables: map[string]interface{}{"q1var": int64(1)},
@@ -181,8 +182,8 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 						Shard:         "1",
 						ResultIndexes: []int{0, 1},
 					},
-					"ks2:1": &shardBatchRequest{
-						Queries: []tproto.BoundQuery{
+					"ks2:1": {
+						Queries: []querytypes.BoundQuery{
 							{
 								Sql:           "q3",
 								BindVariables: map[string]interface{}{"q3var": int64(3)},
@@ -201,7 +202,7 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 					Query: &querypb.BoundQuery{
 						Sql: "q1",
 						BindVariables: map[string]*querypb.BindVariable{
-							"q1var": &querypb.BindVariable{
+							"q1var": {
 								Type:  sqltypes.Int64,
 								Value: []byte("1"),
 							},
@@ -214,8 +215,8 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 			requests: &scatterBatchRequest{
 				Length: 1,
 				Requests: map[string]*shardBatchRequest{
-					"ks1:0": &shardBatchRequest{
-						Queries: []tproto.BoundQuery{
+					"ks1:0": {
+						Queries: []querytypes.BoundQuery{
 							{
 								Sql:           "q1",
 								BindVariables: map[string]interface{}{"q1var": int64(1)},
@@ -258,7 +259,7 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 					Query: &querypb.BoundQuery{
 						Sql: "q1",
 						BindVariables: map[string]*querypb.BindVariable{
-							"q1var": &querypb.BindVariable{
+							"q1var": {
 								Type:  sqltypes.Int64,
 								Value: []byte("1"),
 							},
@@ -270,7 +271,7 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 					Query: &querypb.BoundQuery{
 						Sql: "q2",
 						BindVariables: map[string]*querypb.BindVariable{
-							"q2var": &querypb.BindVariable{
+							"q2var": {
 								Type:  sqltypes.Int64,
 								Value: []byte("2"),
 							},
@@ -285,7 +286,7 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 					Query: &querypb.BoundQuery{
 						Sql: "q1",
 						BindVariables: map[string]*querypb.BindVariable{
-							"q1var": &querypb.BindVariable{
+							"q1var": {
 								Type:  sqltypes.Int64,
 								Value: []byte("1"),
 							},
@@ -297,7 +298,7 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 					Query: &querypb.BoundQuery{
 						Sql: "q2",
 						BindVariables: map[string]*querypb.BindVariable{
-							"q2var": &querypb.BindVariable{
+							"q2var": {
 								Type:  sqltypes.Int64,
 								Value: []byte("2"),
 							},
@@ -324,5 +325,23 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 			want, _ := json.Marshal(testCase.shardQueries)
 			t.Errorf("idQueries: %#v\nResponse:   %s\nExpecting: %s", testCase.idQueries, got, want)
 		}
+	}
+}
+
+func BenchmarkResolveKeyRangeToShards(b *testing.B) {
+	ts := new(sandboxTopo)
+	kr := &topodatapb.KeyRange{
+		Start: []byte{0x40, 0, 0, 0, 0, 0, 0, 0},
+		End:   []byte{0x60, 0, 0, 0, 0, 0, 0, 0},
+	}
+	_, _, allShards, err := getKeyspaceShards(context.Background(), ts, "", KsTestSharded, topodatapb.TabletType_MASTER)
+	if err != nil {
+		b.Fatal(err)
+	}
+	uniqueShards := map[string]bool{}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		resolveKeyRangeToShards(allShards, uniqueShards, kr)
 	}
 }

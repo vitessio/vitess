@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var connMap map[string]*fakeConn
@@ -31,7 +32,7 @@ func TestHealthCheck(t *testing.T) {
 	createFakeConn(ep, input)
 	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
 	l := newListener()
-	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond).(*HealthCheckImpl)
+	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, time.Hour, "" /* statsSuffix */).(*HealthCheckImpl)
 	hc.SetListener(l)
 	hc.AddEndPoint("cell", "", ep)
 	t.Logf(`hc = HealthCheck(); hc.AddEndPoint("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
@@ -181,6 +182,73 @@ func TestHealthCheck(t *testing.T) {
 	if len(epsList) != 0 {
 		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want empty`, epsList)
 	}
+	// close healthcheck
+	hc.Close()
+}
+
+func TestHealthCheckTimeout(t *testing.T) {
+	timeout := 500 * time.Millisecond
+	ep := topo.NewEndPoint(0, "a")
+	ep.PortMap["vt"] = 1
+	input := make(chan *querypb.StreamHealthResponse)
+	createFakeConn(ep, input)
+	t.Logf(`createFakeConn({Host: "a", PortMap: {"vt": 1}}, c)`)
+	l := newListener()
+	hc := NewHealthCheck(1*time.Millisecond, 1*time.Millisecond, timeout, "" /* statsSuffix */).(*HealthCheckImpl)
+	hc.SetListener(l)
+	hc.AddEndPoint("cell", "", ep)
+	t.Logf(`hc = HealthCheck(); hc.AddEndPoint("cell", "", {Host: "a", PortMap: {"vt": 1}})`)
+
+	// one endpoint after receiving a StreamHealthResponse
+	shr := &querypb.StreamHealthResponse{
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving: true,
+		TabletExternallyReparentedTimestamp: 10,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+	want := &EndPointStats{
+		EndPoint: ep,
+		Cell:     "cell",
+		Target:   &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Up:       true,
+		Serving:  true,
+		Stats:    &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		TabletExternallyReparentedTimestamp: 10,
+	}
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
+	res := <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+	epsList := hc.GetEndPointStatsFromKeyspaceShard("k", "s")
+	if len(epsList) != 1 || !reflect.DeepEqual(epsList[0], want) {
+		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want %+v`, epsList, want)
+	}
+	// wait for timeout period
+	time.Sleep(2 * timeout)
+	t.Logf(`Sleep(2 * timeout)`)
+	res = <-l.output
+	if res.Serving {
+		t.Errorf(`<-l.output: %+v; want not serving`, res)
+	}
+	epsList = hc.GetEndPointStatsFromKeyspaceShard("k", "s")
+	if len(epsList) != 1 || epsList[0].Serving {
+		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want not serving`, epsList)
+	}
+	// send a healthcheck response, it should be serving again
+	input <- shr
+	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
+	res = <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+	epsList = hc.GetEndPointStatsFromKeyspaceShard("k", "s")
+	if len(epsList) != 1 || !reflect.DeepEqual(epsList[0], want) {
+		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want %+v`, epsList, want)
+	}
+	// close healthcheck
+	hc.Close()
 }
 
 type listener struct {
@@ -224,11 +292,11 @@ func (fc *fakeConn) Execute2(ctx context.Context, query string, bindVars map[str
 	return fc.Execute(ctx, query, bindVars, transactionID)
 }
 
-func (fc *fakeConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (fc *fakeConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (fc *fakeConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (fc *fakeConn) ExecuteBatch2(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	return fc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
@@ -264,7 +332,7 @@ func (fc *fakeConn) Rollback2(ctx context.Context, transactionID int64) error {
 	return fc.Rollback(ctx, transactionID)
 }
 
-func (fc *fakeConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
+func (fc *fakeConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 

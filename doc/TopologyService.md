@@ -53,7 +53,7 @@ A Shard can be locked. We use this during operations that affect either the Shar
 
 ### VSchema Data
 
-(experimental) The VSchema data contains sharding and routing information for the [VTGate V3](https://github.com/youtube/vitess/blob/master/doc/VTGateV3.md) API.
+(experimental) The VSchema data contains sharding and routing information for the [VTGate V3](http://vitess.io/doc/VTGateV3Features/) API.
 
 ## Local Data
 

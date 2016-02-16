@@ -90,7 +90,7 @@ func TestUnshardedSchema(t *testing.T) {
 	}
 	want := &Schema{
 		Tables: map[string]*Table{
-			"t1": &Table{
+			"t1": {
 				Name: "t1",
 				Keyspace: &Keyspace{
 					Name: "unsharded",
@@ -147,14 +147,14 @@ func TestShardedSchemaOwned(t *testing.T) {
 	}
 	want := &Schema{
 		Tables: map[string]*Table{
-			"t1": &Table{
+			"t1": {
 				Name: "t1",
 				Keyspace: &Keyspace{
 					Name:    "sharded",
 					Sharded: true,
 				},
 				ColVindexes: []*ColVindex{
-					&ColVindex{
+					{
 						Col:   "c1",
 						Type:  "stfu",
 						Name:  "stfu1",
@@ -165,7 +165,7 @@ func TestShardedSchemaOwned(t *testing.T) {
 							},
 						},
 					},
-					&ColVindex{
+					{
 						Col:    "c2",
 						Type:   "stln",
 						Name:   "stln1",
@@ -226,21 +226,21 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 	}
 	want := &Schema{
 		Tables: map[string]*Table{
-			"t1": &Table{
+			"t1": {
 				Name: "t1",
 				Keyspace: &Keyspace{
 					Name:    "sharded",
 					Sharded: true,
 				},
 				ColVindexes: []*ColVindex{
-					&ColVindex{
+					{
 						Col:    "c1",
 						Type:   "stlu",
 						Name:   "stlu1",
 						Owned:  false,
 						Vindex: &stLU{},
 					},
-					&ColVindex{
+					{
 						Col:    "c2",
 						Type:   "stfu",
 						Name:   "stfu1",

@@ -16,12 +16,11 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -35,31 +34,33 @@ type destinationTabletServer struct {
 	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
+	keyspace      string
+	shard         string
 }
 
-func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
-	if strings.Contains(query.Sql, sq.excludedTable) {
-		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
+func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
+	if strings.Contains(sql, sq.excludedTable) {
+		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
 
-	if hasKeyspace := strings.Contains(query.Sql, "WHERE keyspace_id"); hasKeyspace == true {
-		sq.t.Errorf("Sql query on destination should not contain a keyspace_id WHERE clause; query received: %v", query.Sql)
+	if hasKeyspace := strings.Contains(sql, "WHERE keyspace_id"); hasKeyspace == true {
+		sq.t.Errorf("Sql query on destination should not contain a keyspace_id WHERE clause; query received: %v", sql)
 	}
 
-	sq.t.Logf("destinationTabletServer: got query: %v", *query)
+	sq.t.Logf("destinationTabletServer: got query: %v", sql)
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&querypb.Field{
+			{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
-			&querypb.Field{
+			{
 				Name: "keyspace_id",
 				Type: sqltypes.Int64,
 			},
@@ -73,7 +74,7 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 	for i := 0; i < 100; i++ {
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
@@ -84,6 +85,21 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 		}
 	}
 	return nil
+}
+
+func (sq *destinationTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
 }
 
 // sourceTabletServer is a local QueryService implementation to support the tests
@@ -91,34 +107,36 @@ type sourceTabletServer struct {
 	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
+	keyspace      string
+	shard         string
 }
 
-func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
-	if strings.Contains(query.Sql, sq.excludedTable) {
-		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
+func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
+	if strings.Contains(sql, sq.excludedTable) {
+		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
 
 	// we test for a keyspace_id where clause, except for on views.
-	if !strings.Contains(query.Sql, "view") {
-		if hasKeyspace := strings.Contains(query.Sql, "WHERE keyspace_id < 0x4000000000000000"); hasKeyspace != true {
-			sq.t.Errorf("Sql query on source should contain a keyspace_id WHERE clause; query received: %v", query.Sql)
+	if !strings.Contains(sql, "view") {
+		if hasKeyspace := strings.Contains(sql, "WHERE keyspace_id < 0x4000000000000000"); hasKeyspace != true {
+			sq.t.Errorf("Sql query on source should contain a keyspace_id WHERE clause; query received: %v", sql)
 		}
 	}
 
-	sq.t.Logf("sourceTabletServer: got query: %v", *query)
+	sq.t.Logf("sourceTabletServer: got query: %v", sql)
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&querypb.Field{
+			{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
-			&querypb.Field{
+			{
 				Name: "keyspace_id",
 				Type: sqltypes.Int64,
 			},
@@ -132,7 +150,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 	for i := 0; i < 100; i++ {
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
@@ -145,11 +163,26 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 	return nil
 }
 
+func (sq *sourceTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
+}
+
 // TODO(aaijazi): Create a test in which source and destination data does not match
 
 func TestSplitDiff(t *testing.T) {
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
@@ -234,10 +267,30 @@ func TestSplitDiff(t *testing.T) {
 		}
 	}
 
-	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationTabletServer{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationTabletServer{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceTabletServer{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceTabletServer{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationTabletServer{
+		t:             t,
+		excludedTable: excludedTable,
+		keyspace:      leftRdonly1.Tablet.Keyspace,
+		shard:         leftRdonly1.Tablet.Shard,
+	})
+	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationTabletServer{
+		t:             t,
+		excludedTable: excludedTable,
+		keyspace:      leftRdonly2.Tablet.Keyspace,
+		shard:         leftRdonly2.Tablet.Shard,
+	})
+	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceTabletServer{
+		t:             t,
+		excludedTable: excludedTable,
+		keyspace:      sourceRdonly1.Tablet.Keyspace,
+		shard:         sourceRdonly1.Tablet.Shard,
+	})
+	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceTabletServer{
+		t:             t,
+		excludedTable: excludedTable,
+		keyspace:      sourceRdonly2.Tablet.Keyspace,
+		shard:         sourceRdonly2.Tablet.Shard,
+	})
 
 	err = wrk.Run(ctx)
 	status := wrk.StatusAsText()

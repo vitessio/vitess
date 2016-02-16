@@ -48,7 +48,7 @@ public class SimpleCursor extends Cursor {
     }
 
     if (rowIterator.hasNext()) {
-      return new Row(queryResult.getFieldsList(), rowIterator.next(), getFieldMap());
+      return new Row(getFieldMap(), rowIterator.next());
     }
     return null;
   }

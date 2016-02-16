@@ -8,6 +8,8 @@ package schema
 // It contains a data structure that's shared between sqlparser & tabletserver
 
 import (
+	"strings"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -55,7 +57,7 @@ func NewTable(name string) *Table {
 // AddColumn adds a column to the Table.
 func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes.Value, extra string) {
 	index := len(ta.Columns)
-	ta.Columns = append(ta.Columns, TableColumn{Name: name})
+	ta.Columns = append(ta.Columns, TableColumn{Name: strings.ToLower(name)})
 	ta.Columns[index].Type = columnType
 	if extra == "auto_increment" {
 		ta.Columns[index].IsAuto = true
@@ -65,11 +67,8 @@ func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes
 	if defval.IsNull() {
 		return
 	}
-	if sqltypes.IsIntegral(ta.Columns[index].Type) {
-		ta.Columns[index].Default = sqltypes.MakeNumeric(defval.Raw())
-	} else {
-		ta.Columns[index].Default = sqltypes.MakeString(defval.Raw())
-	}
+	// Schema values are trusted.
+	ta.Columns[index].Default = sqltypes.MakeTrusted(ta.Columns[index].Type, defval.Raw())
 }
 
 // FindColumn finds a column in the table. It returns the index if found.
@@ -122,7 +121,7 @@ func NewIndex(name string) *Index {
 
 // AddColumn adds a column to the index.
 func (idx *Index) AddColumn(name string, cardinality uint64) {
-	idx.Columns = append(idx.Columns, name)
+	idx.Columns = append(idx.Columns, strings.ToLower(name))
 	if cardinality == 0 {
 		cardinality = uint64(len(idx.Cardinality) + 1)
 	}

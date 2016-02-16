@@ -127,12 +127,12 @@ func (client *FakeTabletManagerClient) ApplySchema(ctx context.Context, tablet *
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *FakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	return &querypb.QueryResult{}, nil
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields bool) (*querypb.QueryResult, error) {
+func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int) (*querypb.QueryResult, error) {
 	return &querypb.QueryResult{}, nil
 }
 

@@ -92,7 +92,7 @@ func TestFindOverlappingShardsNoOverlap(t *testing.T) {
 
 	// just one shard, full keyrange
 	shardMap = map[string]*topo.ShardInfo{
-		"0": &topo.ShardInfo{},
+		"0": {},
 	}
 	os, err = findOverlappingShards(shardMap)
 	if len(os) != 0 || err != nil {
@@ -164,7 +164,7 @@ func TestFindOverlappingShardsOverlap(t *testing.T) {
 		t.Errorf("split in progress: %v %v", os, err)
 	}
 	compareResultLists(t, os, []expectedOverlappingShard{
-		expectedOverlappingShard{
+		{
 			left:  []string{"", "80"},
 			right: []string{"", "40", "80"},
 		},
@@ -183,7 +183,7 @@ func TestFindOverlappingShardsOverlap(t *testing.T) {
 		t.Errorf("1 to 4 split: %v %v", os, err)
 	}
 	compareResultLists(t, os, []expectedOverlappingShard{
-		expectedOverlappingShard{
+		{
 			left:  []string{"", ""},
 			right: []string{"", "40", "80", "c0", ""},
 		},
@@ -203,7 +203,7 @@ func TestFindOverlappingShardsOverlap(t *testing.T) {
 		t.Errorf("2 to 3 split: %v %v", os, err)
 	}
 	compareResultLists(t, os, []expectedOverlappingShard{
-		expectedOverlappingShard{
+		{
 			left:  []string{"", "40", "80"},
 			right: []string{"", "30", "60", "80"},
 		},
@@ -223,11 +223,11 @@ func TestFindOverlappingShardsOverlap(t *testing.T) {
 		t.Errorf("2 to 3 split: %v %v", os, err)
 	}
 	compareResultLists(t, os, []expectedOverlappingShard{
-		expectedOverlappingShard{
+		{
 			left:  []string{"", "80"},
 			right: []string{"", "40", "80"},
 		},
-		expectedOverlappingShard{
+		{
 			left:  []string{"80", ""},
 			right: []string{"80", "c0", ""},
 		},
@@ -242,7 +242,7 @@ func TestFindOverlappingShardsOverlap(t *testing.T) {
 	} else {
 		compareResultLists(t, []*OverlappingShards{o},
 			[]expectedOverlappingShard{
-				expectedOverlappingShard{
+				{
 					left:  []string{"", "80"},
 					right: []string{"", "40", "80"},
 				},

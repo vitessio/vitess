@@ -1,5 +1,17 @@
 package com.youtube.vitess.client.grpc;
 
+import io.grpc.ChannelImpl;
+import io.grpc.StatusRuntimeException;
+
+import java.io.IOException;
+import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.sql.SQLInvalidAuthorizationSpecException;
+import java.sql.SQLNonTransientException;
+import java.sql.SQLSyntaxErrorException;
+import java.sql.SQLTimeoutException;
+import java.sql.SQLTransientException;
+
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.StreamIterator;
@@ -39,18 +51,6 @@ import com.youtube.vitess.proto.Vtgate.StreamExecuteShardsResponse;
 import com.youtube.vitess.proto.grpc.VitessGrpc;
 import com.youtube.vitess.proto.grpc.VitessGrpc.VitessBlockingStub;
 import com.youtube.vitess.proto.grpc.VitessGrpc.VitessStub;
-
-import io.grpc.ChannelImpl;
-import io.grpc.StatusRuntimeException;
-
-import java.io.IOException;
-import java.sql.SQLException;
-import java.sql.SQLIntegrityConstraintViolationException;
-import java.sql.SQLInvalidAuthorizationSpecException;
-import java.sql.SQLNonTransientException;
-import java.sql.SQLSyntaxErrorException;
-import java.sql.SQLTimeoutException;
-import java.sql.SQLTransientException;
 
 /**
  * GrpcClient is a gRPC-based implementation of Vitess Rpcclient.
@@ -275,8 +275,12 @@ public class GrpcClient implements RpcClient {
           return new SQLInvalidAuthorizationSpecException(sre.toString(), sre);
         case UNAVAILABLE:
           return new SQLTransientException(sre.toString(), sre);
-        default:
-          return new SQLNonTransientException("gRPC StatusRuntimeException: " + e.toString(), e);
+        default: // Covers e.g. UNKNOWN.
+          String advice = "";
+          if (e.getCause() instanceof java.nio.channels.ClosedChannelException) {
+            advice = "Failed to connect to vtgate. Make sure that vtgate is running and you are using the correct address. Details: ";
+          }
+          return new SQLNonTransientException("gRPC StatusRuntimeException: " + advice + e.toString(), e);
       }
     }
     return new SQLNonTransientException("gRPC error: " + e.toString(), e);

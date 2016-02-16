@@ -16,7 +16,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -45,15 +44,15 @@ var (
 // resharding happened.
 type Resolver struct {
 	scatterConn *ScatterConn
-	toposerv    SrvTopoServer
+	toposerv    topo.SrvTopoServer
 	cell        string
 }
 
 // NewResolver creates a new Resolver. All input parameters are passed through
 // for creating ScatterConn.
-func NewResolver(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, testGateway string) *Resolver {
+func NewResolver(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletTypesToWait []topodatapb.TabletType, testGateway string) *Resolver {
 	return &Resolver{
-		scatterConn: NewScatterConn(hc, topoServer, serv, statsName, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, testGateway),
+		scatterConn: NewScatterConn(hc, topoServer, serv, statsName, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, tabletTypesToWait, testGateway),
 		toposerv:    serv,
 		cell:        cell,
 	}
@@ -245,7 +244,7 @@ func (res *Resolver) ExecuteEntityIds(
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session) (*tproto.QueryResultList, error) {
+func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session) ([]sqltypes.Result, error) {
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
 		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(ctx, res.toposerv, res.cell, tabletType, queries)
 		if err != nil {
@@ -264,7 +263,7 @@ func (res *Resolver) ExecuteBatch(
 	asTransaction bool,
 	session *vtgatepb.Session,
 	buildBatchRequest func() (*scatterBatchRequest, error),
-) (*tproto.QueryResultList, error) {
+) ([]sqltypes.Result, error) {
 	batchRequest, err := buildBatchRequest()
 	if err != nil {
 		return nil, err
@@ -372,6 +371,11 @@ func (res *Resolver) Commit(ctx context.Context, inSession *vtgatepb.Session) er
 // Rollback rolls back a transaction.
 func (res *Resolver) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
 	return res.scatterConn.Rollback(ctx, NewSafeSession(inSession))
+}
+
+// GetGatewayCacheStatus returns a displayable version of the Gateway cache.
+func (res *Resolver) GetGatewayCacheStatus() GatewayEndPointCacheStatusList {
+	return res.scatterConn.GetGatewayCacheStatus()
 }
 
 // StrsEquals compares contents of two string slices.

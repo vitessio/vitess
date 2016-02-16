@@ -11,12 +11,12 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 func TestBatchRead(t *testing.T) {
 	client := framework.NewClient()
-	queries := []proto.BoundQuery{{
+	queries := []querytypes.BoundQuery{{
 		Sql:           "select * from vitess_a where id = :a",
 		BindVariables: map[string]interface{}{"a": 2},
 	}, {
@@ -39,11 +39,11 @@ func TestBatchRead(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeNumeric([]byte("2")),
-				sqltypes.MakeString([]byte("bcde")),
-				sqltypes.MakeString([]byte("fghi")),
+			{
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("bcde")),
+				sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("fghi")),
 			},
 		},
 	}
@@ -57,15 +57,13 @@ func TestBatchRead(t *testing.T) {
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeNumeric([]byte("2")),
+			{
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
 			},
 		},
 	}
-	want := &proto.QueryResultList{
-		List: []sqltypes.Result{qr1, qr2},
-	}
+	want := []sqltypes.Result{qr1, qr2}
 
 	qrl, err := client.ExecuteBatch(queries, false)
 	if err != nil {
@@ -79,7 +77,7 @@ func TestBatchRead(t *testing.T) {
 
 func TestBatchTransaction(t *testing.T) {
 	client := framework.NewClient()
-	queries := []proto.BoundQuery{{
+	queries := []querytypes.BoundQuery{{
 		Sql: "insert into vitess_test values(4, null, null, null)",
 	}, {
 		Sql: "select * from vitess_test where intval = 4",
@@ -88,11 +86,11 @@ func TestBatchTransaction(t *testing.T) {
 	}}
 
 	wantRows := [][]sqltypes.Value{
-		[]sqltypes.Value{
-			sqltypes.MakeNumeric([]byte("4")),
-			sqltypes.Value{},
-			sqltypes.Value{},
-			sqltypes.Value{},
+		{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+			{},
+			{},
+			{},
 		},
 	}
 
@@ -102,8 +100,8 @@ func TestBatchTransaction(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
-		t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+	if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
+		t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 	}
 
 	// Not in transaction, AsTransaction true
@@ -112,8 +110,8 @@ func TestBatchTransaction(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
-		t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+	if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
+		t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 	}
 
 	// In transaction, AsTransaction false
@@ -129,8 +127,8 @@ func TestBatchTransaction(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if !reflect.DeepEqual(qrl.List[1].Rows, wantRows) {
-			t.Errorf("Rows: \n%#v, want \n%#v", qrl.List[1].Rows, wantRows)
+		if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
+			t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 		}
 	}()
 

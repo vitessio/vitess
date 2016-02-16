@@ -180,7 +180,7 @@ func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerda
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &tabletmanagerdatapb.ExecuteFetchAsDbaResponse{}
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetchAsDba, request, response, func() error {
-		qr, err := s.agent.ExecuteFetchAsDba(ctx, request.Query, request.DbName, int(request.MaxRows), request.WantFields, request.DisableBinlogs, request.ReloadSchema)
+		qr, err := s.agent.ExecuteFetchAsDba(ctx, request.Query, request.DbName, int(request.MaxRows), request.DisableBinlogs, request.ReloadSchema)
 		if err != nil {
 			return vterrors.ToGRPCError(err)
 		}
@@ -193,7 +193,7 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *tabletmanagerda
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &tabletmanagerdatapb.ExecuteFetchAsAppResponse{}
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetchAsApp, request, response, func() error {
-		qr, err := s.agent.ExecuteFetchAsApp(ctx, request.Query, int(request.MaxRows), request.WantFields)
+		qr, err := s.agent.ExecuteFetchAsApp(ctx, request.Query, int(request.MaxRows))
 		if err != nil {
 			return vterrors.ToGRPCError(err)
 		}

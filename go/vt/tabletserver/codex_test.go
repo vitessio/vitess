@@ -26,7 +26,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pkValues := []interface{}{pk1Val}
 	// want [[1]]
-	want := [][]sqltypes.Value{[]sqltypes.Value{pk1Val}}
+	want := [][]sqltypes.Value{{pk1Val}}
 	got, _ := buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -36,7 +36,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	bindVars["pk1"] = 1
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
-	want = [][]sqltypes.Value{[]sqltypes.Value{pk1Val}}
+	want = [][]sqltypes.Value{{pk1Val}}
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -46,7 +46,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	bindVars["pk1"] = nil
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
-	want = [][]sqltypes.Value{[]sqltypes.Value{sqltypes.Value{}}}
+	want = [][]sqltypes.Value{{{}}}
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -55,7 +55,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	// invalid value
 	bindVars["pk1"] = struct{}{}
 	pkValues = []interface{}{":pk1"}
-	wantErr := "error: unsupported bind variable type struct {}: {}"
+	wantErr := "error: unexpected type struct {}: {}"
 
 	got, err := buildValueList(&tableInfo, pkValues, bindVars)
 
@@ -66,7 +66,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	// type mismatch int
 	bindVars["pk1"] = "str"
 	pkValues = []interface{}{":pk1"}
-	wantErr = "error: type mismatch, expecting numeric type for str"
+	wantErr = "error: strconv.ParseInt"
 
 	got, err = buildValueList(&tableInfo, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -88,7 +88,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pk2Val, _ := sqltypes.BuildValue("abc")
 	pkValues = []interface{}{pk1Val, pk2Val}
 	// want [[1 abc]]
-	want = [][]sqltypes.Value{[]sqltypes.Value{pk1Val, pk2Val}}
+	want = [][]sqltypes.Value{{pk1Val, pk2Val}}
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -104,8 +104,8 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 	// want [[1 abc][2 xyz]]
 	want = [][]sqltypes.Value{
-		[]sqltypes.Value{pk1Val, pk2Val},
-		[]sqltypes.Value{pk1Val2, pk2Val2}}
+		{pk1Val, pk2Val},
+		{pk1Val2, pk2Val2}}
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -119,8 +119,8 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 	// want [[1 abc][1 xyz]]
 	want = [][]sqltypes.Value{
-		[]sqltypes.Value{pk1Val, pk2Val},
-		[]sqltypes.Value{pk1Val, pk2Val2},
+		{pk1Val, pk2Val},
+		{pk1Val, pk2Val2},
 	}
 
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
@@ -142,8 +142,8 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 	// want [[1 abc][1 xyz]]
 	want = [][]sqltypes.Value{
-		[]sqltypes.Value{pk1Val, pk2Val},
-		[]sqltypes.Value{pk1Val, pk2Val2},
+		{pk1Val, pk2Val},
+		{pk1Val, pk2Val2},
 	}
 
 	// list arg one value
@@ -159,7 +159,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	}
 	// want [[1 abc][1 xyz]]
 	want = [][]sqltypes.Value{
-		[]sqltypes.Value{pk1Val, pk2Val},
+		{pk1Val, pk2Val},
 	}
 
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
@@ -210,16 +210,20 @@ func TestCodexResolvePKValues(t *testing.T) {
 
 	pkValues := make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
-	// resolvePKValues fail because type mismatch. pk column 0 has int type but
-	// list variables are strings.
-	_, _, err := resolvePKValues(&tableInfo, pkValues, bindVariables)
-	testUtils.checkTabletError(t, err, ErrFail, "type mismatch")
-	// pkValues is a list of sqltypes.Value and bypasses bind variables.
-	// But, the type mismatches, pk column 0 is int but variable is string.
+	// resolvePKValues should succeed for strings that can be converted to int.
+	v, _, err := resolvePKValues(&tableInfo, pkValues, bindVariables)
+	if err != nil {
+		t.Error(err)
+	}
+	wantV := []interface{}{[]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))}}
+	if !reflect.DeepEqual(v, wantV) {
+		t.Errorf("resolvePKValues: %#v, want %#v", v, wantV)
+	}
+	// resolvePKValues should fail because of conversion error.
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, sqltypes.MakeString([]byte("type_mismatch")))
 	_, _, err = resolvePKValues(&tableInfo, pkValues, nil)
-	testUtils.checkTabletError(t, err, ErrFail, "type mismatch")
+	testUtils.checkTabletError(t, err, ErrFail, "strconv.ParseInt")
 	// pkValues with different length
 	bindVariables = make(map[string]interface{})
 	bindVariables[key] = 1
@@ -248,16 +252,23 @@ func TestCodexResolveListArg(t *testing.T) {
 	_, err := resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
 	testUtils.checkTabletError(t, err, ErrFail, "")
 
+	// This should successfully convert.
 	bindVariables[key] = []interface{}{"1"}
-	_, err = resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
-	testUtils.checkTabletError(t, err, ErrFail, "type mismatch")
+	v, err := resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
+	if err != nil {
+		t.Error(err)
+	}
+	wantV := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))}
+	if !reflect.DeepEqual(v, wantV) {
+		t.Errorf("resolvePKValues: %#v, want %#v", v, wantV)
+	}
 
 	bindVariables[key] = []interface{}{10}
 	result, err := resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
 	if err != nil {
 		t.Fatalf("should not get an error, but got error: %v", err)
 	}
-	testUtils.checkEqual(t, []sqltypes.Value{sqltypes.MakeNumeric([]byte("10"))}, result)
+	testUtils.checkEqual(t, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("10"))}, result)
 }
 
 func TestCodexBuildSecondaryList(t *testing.T) {
@@ -278,7 +289,7 @@ func TestCodexBuildSecondaryList(t *testing.T) {
 	secondaryPKValues := []interface{}{nil, pk2SecVal}
 	// want [[1 xyz]]
 	want := [][]sqltypes.Value{
-		[]sqltypes.Value{pk1Val, pk2SecVal}}
+		{pk1Val, pk2SecVal}}
 	got, _ := buildSecondaryList(&tableInfo, pkList, secondaryPKValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("case 1 failed, got %v, want %v", got, want)
@@ -313,16 +324,6 @@ func TestCodexBuildStreamComment(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("case 1 failed, got %v, want %v", got, want)
 	}
-}
-
-func TestCodexResolveValueWithIncompatibleValueType(t *testing.T) {
-	testUtils := newTestUtils()
-	tableInfo := createTableInfo("Table",
-		[]string{"pk1", "pk2", "col1"},
-		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
-		[]string{"pk1", "pk2"})
-	_, err := resolveValue(tableInfo.GetPKColumn(0), 0, nil)
-	testUtils.checkTabletError(t, err, ErrFail, "incompatible value type ")
 }
 
 func TestCodexValidateRow(t *testing.T) {
@@ -399,8 +400,8 @@ func TestCodexGetLimit(t *testing.T) {
 func TestCodexBuildKey(t *testing.T) {
 	testUtils := newTestUtils()
 	newKey := buildKey([]sqltypes.Value{
-		sqltypes.MakeNumeric([]byte("1")),
-		sqltypes.MakeNumeric([]byte("2")),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 	})
 	testUtils.checkEqual(t, "1.2", newKey)
 
@@ -428,41 +429,6 @@ func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
 	testUtils.checkEqual(t, int64(0), val)
 }
 
-func TestCodexValidateKey(t *testing.T) {
-	testUtils := newTestUtils()
-	queryServiceStats := NewQueryServiceStats("", false)
-	tableInfo := createTableInfo("Table",
-		[]string{"pk1", "pk2", "col1"},
-		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
-		[]string{"pk1", "pk2"})
-	// validate empty key
-	newKey := validateKey(&tableInfo, "", queryServiceStats)
-	testUtils.checkEqual(t, "", newKey)
-	// validate keys that do not match number of pk columns
-	newKey = validateKey(&tableInfo, "1", queryServiceStats)
-	testUtils.checkEqual(t, "", newKey)
-	newKey = validateKey(&tableInfo, "1.2.3", queryServiceStats)
-	testUtils.checkEqual(t, "", newKey)
-	// validate keys with null
-	newKey = validateKey(&tableInfo, "'MQ=='.null", queryServiceStats)
-	testUtils.checkEqual(t, "", newKey)
-	// validate keys with invalid base64 encoded string
-	newKey = validateKey(&tableInfo, "'MQ==<'.2", queryServiceStats)
-	testUtils.checkEqual(t, "", newKey)
-	// validate keys with invalid value
-	mismatchCounterBefore := queryServiceStats.InternalErrors.Counts()["Mismatch"]
-	newKey = validateKey(&tableInfo, "not_a_number.2", queryServiceStats)
-	mismatchCounterAfter := queryServiceStats.InternalErrors.Counts()["Mismatch"]
-	if mismatchCounterAfter-mismatchCounterBefore != 1 {
-		t.Fatalf("Mismatch counter should increase by one. Mismatch counter before: %d, after: %d, diff: %d", mismatchCounterBefore, mismatchCounterAfter, mismatchCounterAfter-mismatchCounterBefore)
-	}
-	testUtils.checkEqual(t, "", newKey)
-	// validate valid keys
-	newKey = validateKey(&tableInfo, "1.2", queryServiceStats)
-	testUtils.checkEqual(t, "1.2", newKey)
-
-}
-
 func TestCodexUnicoded(t *testing.T) {
 	testUtils := newTestUtils()
 	in := "test"
@@ -480,7 +446,7 @@ func createTableInfo(
 		colType := colTypes[i]
 		defaultVal := sqltypes.Value{}
 		if sqltypes.IsIntegral(colType) {
-			defaultVal = sqltypes.MakeNumeric([]byte("0"))
+			defaultVal = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
 		} else if colType == sqltypes.VarBinary {
 			defaultVal = sqltypes.MakeString([]byte(""))
 		}

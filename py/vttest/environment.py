@@ -25,7 +25,8 @@ mysql_db_class = None
 
 def get_test_directory():
   """Returns the toplevel directory for the tests. Might create it."""
-  directory = tempfile.mkdtemp(prefix='vttest', dir=os.environ.get('VTDATAROOT', None))
+  directory = tempfile.mkdtemp(prefix='vttest',
+                               dir=os.environ.get('VTDATAROOT', None))
   # Override VTDATAROOT to point to the newly created dir
   os.environ['VTDATAROOT'] = directory
   os.mkdir(get_logs_directory(directory))
@@ -35,8 +36,10 @@ def get_test_directory():
 def get_logs_directory(directory):
   """Returns the directory for logs, might be based on directory.
 
-  Parameters:
+  Args:
     directory: the value returned by get_test_directory().
+  Returns:
+    the directory for logs.
   """
   return os.path.join(directory, 'logs')
 
@@ -44,7 +47,7 @@ def get_logs_directory(directory):
 def cleanup_test_directory(directory):
   """Cleans up the test directory after the test is done.
 
-  Parameters:
+  Args:
     directory: the value returned by get_test_directory().
   """
   shutil.rmtree(directory)
@@ -53,11 +56,18 @@ def cleanup_test_directory(directory):
 def extra_vtcombo_parameters():
   """Returns extra parameters to send to vtcombo."""
   return [
-    '-service_map', 'grpc-vtgateservice,bsonrpc-vt-vtgateservice',
-  ]
+      '-service_map', ','.join([
+          'grpc-vtgateservice',
+          'bsonrpc-vt-vtgateservice',
+          'grpc-vtctl',
+          'bsonrpc-vt-vtctl',
+          ]),
+      ]
 
 
+# pylint: disable=unused-argument
 def process_is_healthy(name, addr):
+
   """Double-checks a process is healthy and ready for RPCs."""
   return True
 
@@ -70,7 +80,18 @@ def get_protocol():
 def get_port(name, protocol=None):
   """Returns the port to use for a given process.
 
-  This is only called once per process, so picking an unused port will also work.
+  This is only called once per process, so picking an unused port will also
+  work.
+
+  Args:
+    name: process name.
+    protocol: the protocol used.
+
+  Returns:
+    the port to use.
+
+  Raises:
+    ValueError: the port name is invalid.
   """
   if name == 'vtcombo':
     port = base_port

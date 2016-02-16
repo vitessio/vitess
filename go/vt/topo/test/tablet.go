@@ -29,6 +29,8 @@ func tabletEqual(left, right *topodatapb.Tablet) (bool, error) {
 
 // CheckTablet verifies the topo server API is correct for managing tablets.
 func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
+	tts := topo.Server{Impl: ts}
+
 	cell := getLocalCell(ctx, t, ts)
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: 1},
@@ -90,15 +92,47 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
 	}
 
-	if _, err := ts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+	// unconditional tablet update
+	nt.Hostname = "remotehost2"
+	if _, err := ts.UpdateTablet(ctx, nt, -1); err != nil {
+		t.Errorf("UpdateTablet(-1): %v", err)
+	}
+
+	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
+	if err != nil {
+		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+	}
+	if want := "remotehost2"; nt.Hostname != want {
+		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
+	}
+
+	// test UpdateTabletFields works
+	updatedTablet, err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.Hostname = "anotherhost"
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)
+	}
+	if got, want := updatedTablet.Hostname, "anotherhost"; got != want {
+		t.Errorf("updatedTablet.Hostname = %q, want %q", got, want)
 	}
 	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+	}
+	if got, want := nt.Hostname, "anotherhost"; got != want {
+		t.Errorf("nt.Hostname = %q, want %q", got, want)
+	}
+
+	// test UpdateTabletFields that returns ErrNoUpdateNeeded works
+	if _, err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+		return topo.ErrNoUpdateNeeded
+	}); err != nil {
+		t.Errorf("UpdateTabletFields: %v", err)
+	}
+	if nnt, nnv, nnerr := ts.GetTablet(ctx, tablet.Alias); nnv != nv {
+		t.Errorf("GetTablet %v: %v %v %v", tablet.Alias, nnt, nnv, nnerr)
 	}
 
 	if want := "anotherhost"; nt.Hostname != want {

@@ -343,7 +343,11 @@ func (conn *Connection) FetchNext() (row []sqltypes.Value, err error) {
 		}
 		start := len(arena)
 		arena = append(arena, colPtr[:colLength]...)
-		row[i] = BuildValue(arena[start:start+int(colLength)], cfields[i]._type)
+		// MySQL values can be trusted.
+		row[i] = sqltypes.MakeTrusted(
+			sqltypes.MySQLToType(int64(cfields[i]._type), int64(cfields[i].flags)),
+			arena[start:start+int(colLength)],
+		)
 	}
 	return row, nil
 }
@@ -460,25 +464,6 @@ func (conn *Connection) SetCharset(cs *binlogdatapb.Charset) error {
 		cs.Client, cs.Conn, cs.Server)
 	_, err := conn.ExecuteFetch(sql, 1, false)
 	return err
-}
-
-// BuildValue returns a sqltypes.Value from the passed in fields
-func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {
-	if bytes == nil {
-		return sqltypes.NULL
-	}
-	switch fieldType {
-	case typeDecimal, TypeFloat, TypeDouble, TypeNewDecimal:
-		return sqltypes.MakeFractional(bytes)
-	case TypeTimestamp:
-		return sqltypes.MakeString(bytes)
-	}
-	// The below condition represents the following list of values:
-	// TypeTiny, TypeShort, TypeLong, TypeLonglong, TypeInt24, TypeYear:
-	if fieldType <= TypeInt24 || fieldType == TypeYear {
-		return sqltypes.MakeNumeric(bytes)
-	}
-	return sqltypes.MakeString(bytes)
 }
 
 func cfree(str *C.char) {

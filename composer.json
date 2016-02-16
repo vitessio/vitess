@@ -1,0 +1,25 @@
+{
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "https://github.com/stanley-cheung/Protobuf-PHP"
+    }
+  ],
+  "name": "vitess/php-client",
+  "description": "PHP client for Vitess",
+  "minimum-stability": "dev",
+  "config": {
+    "vendor-dir": "php/vendor"
+  },
+  "require": {
+    "php": ">=5.5.0",
+    "datto/protobuf-php": "dev-master",
+    "google/auth": "dev-master",
+    "grpc/grpc": "dev-release-0_12"
+  },
+  "autoload": {
+    "psr-4": {
+      "Vitess\\": "php/src/Vitess/"
+    }
+  }
+}

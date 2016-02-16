@@ -76,12 +76,12 @@
 }
 
 # multi-table (right join)
-"select * from a right join b"
+"select * from a right join b on c = d"
 {
   "PlanID": "PASS_SELECT",
   "Reason": "TABLE",
   "FieldQuery": "select * from a right join b on 1 != 1 where 1 != 1",
-  "FullQuery": "select * from a right join b limit :#maxLimit"
+  "FullQuery": "select * from a right join b on c = d limit :#maxLimit"
 }
 
 # table not cached

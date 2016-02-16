@@ -156,6 +156,10 @@ type FakeMysqlDaemon struct {
 	// PromoteSlaveResult is returned by PromoteSlave
 	PromoteSlaveResult replication.Position
 
+	// SchemaFunc provides the return value for GetSchema.
+	// If not defined, the "Schema" field will be used instead, see below.
+	SchemaFunc func() (*tabletmanagerdatapb.SchemaDefinition, error)
+
 	// Schema will be returned by GetSchema. If nil we'll
 	// return an error.
 	Schema *tabletmanagerdatapb.SchemaDefinition
@@ -397,6 +401,9 @@ func (fmd *FakeMysqlDaemon) CheckSuperQueryList() error {
 
 // GetSchema is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	if fmd.SchemaFunc != nil {
+		return fmd.SchemaFunc()
+	}
 	if fmd.Schema == nil {
 		return nil, fmt.Errorf("no schema defined")
 	}

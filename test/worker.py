@@ -157,6 +157,10 @@ def tearDownModule():
 class TestBaseSplitClone(unittest.TestCase):
   """Abstract test base class for testing the SplitClone worker."""
 
+  def __init__(self, *args, **kwargs):
+    super(TestBaseSplitClone, self).__init__(*args, **kwargs)
+    self.num_insert_rows = utils.options.num_insert_rows
+
   def run_shard_tablets(
       self, shard_name, shard_tablets, create_table=True):
     """Handles all the necessary work for initially running a shard's tablets.
@@ -356,8 +360,8 @@ class TestBaseSplitClone(unittest.TestCase):
           '80-', shard_1_tablets, create_table=False)
 
       logging.debug('Start inserting initial data: %s rows',
-                    utils.options.num_insert_rows)
-      self.insert_values(shard_master, utils.options.num_insert_rows, 2)
+                    self.num_insert_rows)
+      self.insert_values(shard_master, self.num_insert_rows, 2)
       logging.debug(
           'Done inserting initial data, waiting for replication to catch up')
       utils.wait_for_replication_pos(shard_master, shard_rdonly1)
@@ -430,7 +434,6 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
          '--source_reader_count', '1',
          '--destination_pack_count', '1',
          '--destination_writer_count', '1',
-         '--strategy=-populate_blp_checkpoint',
          'test_keyspace/0'],
         worker_rpc_port)
 
@@ -498,6 +501,10 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
 
 
 class TestReparentDuringWorkerCopy(TestBaseSplitCloneResiliency):
+
+  def __init__(self, *args, **kwargs):
+    super(TestReparentDuringWorkerCopy, self).__init__(*args, **kwargs)
+    self.num_insert_rows = utils.options.num_insert_rows_before_reparent_test
 
   def test_reparent_during_worker_copy(self):
     """Simulates a destination reparent during a worker SplitClone copy.
@@ -600,9 +607,15 @@ class TestVtworkerWebinterface(unittest.TestCase):
 
 def add_test_options(parser):
   parser.add_option(
-      '--num_insert_rows', type='int', default=3000,
+      '--num_insert_rows', type='int', default=100,
       help='The number of rows, per shard, that we should insert before '
       'resharding for this test.')
+  parser.add_option(
+      '--num_insert_rows_before_reparent_test', type='int', default=3000,
+      help='The number of rows, per shard, that we should insert before '
+      'running TestReparentDuringWorkerCopy (supersedes --num_insert_rows in '
+      'that test). There must be enough rows such that SplitClone takes '
+      'several seconds to run while we run a planned reparent.')
 
 if __name__ == '__main__':
   utils.main(test_options=add_test_options)

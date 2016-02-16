@@ -26,12 +26,6 @@ type SlaveWasRestartedArgs struct {
 
 // shard action node structures
 
-// ApplySchemaShardArgs is the payload for ApplySchemaShard
-type ApplySchemaShardArgs struct {
-	MasterTabletAlias *topodatapb.TabletAlias
-	Change            string
-}
-
 // SetShardServedTypesArgs is the payload for SetShardServedTypes
 type SetShardServedTypesArgs struct {
 	Cells      []string
@@ -93,17 +87,6 @@ func RebuildShard() *ActionNode {
 func CheckShard() *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionCheck,
-	}).SetGuid()
-}
-
-// ApplySchemaShard returns an ActionNode
-func ApplySchemaShard(masterTabletAlias *topodatapb.TabletAlias, change string) *ActionNode {
-	return (&ActionNode{
-		Action: ShardActionApplySchema,
-		Args: &ApplySchemaShardArgs{
-			MasterTabletAlias: masterTabletAlias,
-			Change:            change,
-		},
 	}).SetGuid()
 }
 

@@ -22,7 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools/events"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -32,7 +32,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 	ctx := context.Background()
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -170,7 +170,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 
 	ctx := context.Background()
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1"})
+	ts := zktestserver.New(t, []string{"cell1"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master, a new master, two good slaves, one bad slave
@@ -219,7 +219,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 
 	ctx := context.Background()
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1"})
+	ts := zktestserver.New(t, []string{"cell1"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master, a new master, two good slaves, one bad slave
@@ -262,7 +262,7 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 
 	ctx := context.Background()
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old master, a new master, and a good slave.

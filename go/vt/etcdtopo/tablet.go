@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
@@ -44,8 +44,14 @@ func (s *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, ex
 	if err != nil {
 		return -1, err
 	}
-	resp, err := cell.CompareAndSwap(tabletFilePath(tablet.Alias),
-		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	var resp *etcd.Response
+	if existingVersion == -1 {
+		// Set unconditionally.
+		resp, err = cell.Set(tabletFilePath(tablet.Alias), string(data), 0 /* ttl */)
+	} else {
+		resp, err = cell.CompareAndSwap(tabletFilePath(tablet.Alias),
+			string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	}
 	if err != nil {
 		return -1, convertError(err)
 	}
@@ -53,29 +59,6 @@ func (s *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, ex
 		return -1, ErrBadResponse
 	}
 	return int64(resp.Node.ModifiedIndex), nil
-}
-
-// UpdateTabletFields implements topo.Server.
-func (s *Server) UpdateTabletFields(ctx context.Context, tabletAlias *topodatapb.TabletAlias, updateFunc func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
-	var tablet *topodatapb.Tablet
-	var err error
-
-	for {
-		var version int64
-		if tablet, version, err = s.GetTablet(ctx, tabletAlias); err != nil {
-			return nil, err
-		}
-		if err = updateFunc(tablet); err != nil {
-			return nil, err
-		}
-		if _, err = s.UpdateTablet(ctx, tablet, version); err != topo.ErrBadVersion {
-			break
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	return tablet, nil
 }
 
 // DeleteTablet implements topo.Server.

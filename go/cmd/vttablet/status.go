@@ -8,6 +8,7 @@ import (
 	_ "github.com/youtube/vitess/go/vt/status"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
@@ -172,7 +173,7 @@ var onStatusRegistered func()
 func addStatusParts(qsc tabletserver.Controller) {
 	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
 		return map[string]interface{}{
-			"Tablet":              agent.Tablet(),
+			"Tablet":              topo.NewTabletInfo(agent.Tablet(), -1),
 			"BlacklistedTables":   agent.BlacklistedTables(),
 			"DisableQueryService": agent.DisableQueryService(),
 		}

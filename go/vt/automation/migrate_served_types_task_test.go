@@ -28,12 +28,12 @@ func TestMigrateServedTypesTask(t *testing.T) {
 		"type":            "rdonly",
 		"vtctld_endpoint": "localhost:15000",
 	}
-	testTask(t, "MigrateServedTypes", task, parameters)
+	testTask(t, "MigrateServedTypes", task, parameters, fake)
 
 	fake.RegisterResult([]string{"MigrateServedTypes", "--cells=cell1", "--reverse=true", "test_keyspace/0", "rdonly"},
 		"",  // No output.
 		nil) // No error.
-	parameters["cell"] = "cell1"
+	parameters["cells"] = "cell1"
 	parameters["reverse"] = "true"
-	testTask(t, "MigrateServedTypes", task, parameters)
+	testTask(t, "MigrateServedTypes", task, parameters, fake)
 }

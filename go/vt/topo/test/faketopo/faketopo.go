@@ -109,11 +109,6 @@ func (ft FakeTopo) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, 
 	return 0, errNotImplemented
 }
 
-// UpdateTabletFields implements topo.Server.
-func (ft FakeTopo) UpdateTabletFields(ctx context.Context, tabletAlias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
-	return nil, errNotImplemented
-}
-
 // DeleteTablet implements topo.Server.
 func (ft FakeTopo) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error {
 	return errNotImplemented

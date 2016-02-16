@@ -15,7 +15,7 @@ import (
 	log "github.com/golang/glog"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
@@ -132,7 +132,7 @@ func (blc *Balancer) refresh() error {
 	}
 	if len(blc.addressNodes) == 0 {
 		return vterrors.FromError(
-			vtrpc.ErrorCode_INTERNAL_ERROR,
+			vtrpcpb.ErrorCode_INTERNAL_ERROR,
 			fmt.Errorf("no available addresses"),
 		)
 	}

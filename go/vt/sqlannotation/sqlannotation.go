@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
+
+	"github.com/youtube/vitess/go/stats"
 )
 
 const (
@@ -23,6 +25,10 @@ const (
 	insertDML                            = "insert"
 	updateDML                            = "update"
 	deleteDML                            = "delete"
+)
+
+var (
+	filteredReplicationUnfriendlyCountStat = stats.NewInt("ReplicationUnfriendlyStatementsCount")
 )
 
 // AddIfDML annotates 'sql' based on
@@ -70,6 +76,7 @@ func AddFilteredReplicationUnfriendlyIfDML(sql string) string {
 // AddFilteredReplicationUnfriendly annotates the given 'sql'
 // query as filtered-replication-unfriendly.
 func AddFilteredReplicationUnfriendly(sql string) string {
+	filteredReplicationUnfriendlyCountStat.Add(1)
 	return sql + filteredReplicationUnfriendlyComment
 }
 

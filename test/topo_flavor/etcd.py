@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
-# Copyright 2014, Google Inc. All rights reserved.
+# Copyright 2014 Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
+
+"""Etcd specific configuration."""
 
 import os
 import shutil
@@ -10,12 +12,12 @@ import shutil
 import server
 
 
-class EtcdCluster:
+class EtcdCluster(object):
   """Sets up a global or cell-local etcd cluster."""
 
   def __init__(self, name):
-    import environment
-    import utils
+    import environment  # pylint: disable=g-import-not-at-top
+    import utils  # pylint: disable=g-import-not-at-top
 
     self.port_base = environment.reserve_ports(2)
 
@@ -54,7 +56,7 @@ class EtcdTopoServer(server.TopoServer):
   clusters = {}
 
   def setup(self, add_bad_host=False):
-    import utils
+    import utils  # pylint: disable=g-import-not-at-top
 
     for cell in ['global', 'test_ca', 'test_nj', 'test_ny']:
       self.clusters[cell] = EtcdCluster(cell)
@@ -73,7 +75,7 @@ class EtcdTopoServer(server.TopoServer):
             data='value=' + cluster.client_addr)
 
   def teardown(self):
-    import utils
+    import utils  # pylint: disable=g-import-not-at-top
 
     for cluster in self.clusters.itervalues():
       utils.kill_sub_process(cluster.proc)
@@ -87,7 +89,7 @@ class EtcdTopoServer(server.TopoServer):
     ]
 
   def wipe(self):
-    import utils
+    import utils  # pylint: disable=g-import-not-at-top
 
     for cell, cluster in self.clusters.iteritems():
       if cell == 'global':
@@ -104,5 +106,7 @@ class EtcdTopoServer(server.TopoServer):
             cluster.api_url + '/keys/vt/replication?recursive=true',
             request='DELETE')
 
+  def update_addr(self, cell, keyspace, shard, tablet_index, port):
+    pass
 
 server.flavor_map['etcd'] = EtcdTopoServer()

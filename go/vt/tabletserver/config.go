@@ -198,6 +198,9 @@ type Controller interface {
 	// SetServingType transitions the query service to the required serving type.
 	SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) error
 
+	// EnterLameduck causes tabletserver to enter the lameduck state.
+	EnterLameduck()
+
 	// IsServing returns true if the query service is running
 	IsServing() bool
 
@@ -221,6 +224,8 @@ type Controller interface {
 
 	// QueryService returns the QueryService object used by this Controller
 	QueryService() queryservice.QueryService
+
+	QueryServiceStats() *QueryServiceStats
 
 	// BroadcastHealth sends the current health to all listeners
 	BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats)

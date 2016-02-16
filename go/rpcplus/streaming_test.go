@@ -144,7 +144,7 @@ func TestStreamingRpc(t *testing.T) {
 
 	// log.Println("Closing")
 	client.Close()
-	for _ = range rowChan {
+	for range rowChan {
 	}
 	// log.Println("Closed")
 

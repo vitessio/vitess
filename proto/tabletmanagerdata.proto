@@ -188,9 +188,8 @@ message ExecuteFetchAsDbaRequest {
   string query = 1;
   string db_name = 2;
   uint64 max_rows = 3;
-  bool want_fields = 4;
-  bool disable_binlogs = 5;
-  bool reload_schema = 6;
+  bool disable_binlogs = 4;
+  bool reload_schema = 5;
 }
 
 message ExecuteFetchAsDbaResponse {
@@ -200,7 +199,6 @@ message ExecuteFetchAsDbaResponse {
 message ExecuteFetchAsAppRequest {
   string query = 1;
   uint64 max_rows = 2;
-  bool want_fields = 3;
 }
 
 message ExecuteFetchAsAppResponse {

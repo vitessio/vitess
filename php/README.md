@@ -2,7 +2,13 @@
 
 This folder contains the PHP client for Vitess.
 
-See `demo.php` for a simple example of using the API.
+For a simple example of using the API, see the [client.php]
+(https://github.com/youtube/vitess/blob/master/examples/local/client.php)
+script, which works with the environment created by the [local setup example]
+(http://vitess.io/getting-started/local-instance.html).
+
+There is also a similar example client for the [VTGateV3 demo]
+(https://github.com/youtube/vitess/tree/master/examples/demo) environment.
 
 ## Prerequisites
 
@@ -24,9 +30,9 @@ $ sudo pecl install grpc-beta
 To download the dependencies of the gRPC PHP library, run Composer:
 
 ``` sh
-$ cd vitess/php
-vitess/php$ curl -sS https://getcomposer.org/installer | php
-vitess/php$ php composer.phar install
+$ cd vitess
+vitess$ curl -sS https://getcomposer.org/installer | php
+vitess$ php composer.phar install
 ```
 
 ## Unit Tests
@@ -74,9 +80,9 @@ xdebug
 Then you can run a coverage check with PHPUnit:
 
 ``` sh
-vitess/php$ phpunit --coverage-html _test tests
+vitess$ phpunit --coverage-html php/_test
 
 # Open in browser.
-vitess/php$ xdg-open _test/index.html
+vitess$ xdg-open php/_test/index.html
 ```
 

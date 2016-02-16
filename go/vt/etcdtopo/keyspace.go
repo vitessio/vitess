@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
@@ -37,8 +38,14 @@ func (s *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *top
 		return -1, err
 	}
 
-	resp, err := s.getGlobal().CompareAndSwap(keyspaceFilePath(keyspace),
-		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	var resp *etcd.Response
+	if existingVersion == -1 {
+		// Set unconditionally.
+		resp, err = s.getGlobal().Set(keyspaceFilePath(keyspace), string(data), 0 /* ttl */)
+	} else {
+		resp, err = s.getGlobal().CompareAndSwap(keyspaceFilePath(keyspace),
+			string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	}
 	if err != nil {
 		return -1, convertError(err)
 	}

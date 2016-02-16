@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+"""Common import for all tests."""
+
 import base64
 import json
 import logging
@@ -15,20 +17,17 @@ import time
 import unittest
 import urllib2
 
-import MySQLdb
-
-from vtproto import topodata_pb2
-
-from vtdb import keyrange_constants
-
-from vtctl import vtctl_client
-
 import environment
 from mysql_flavor import mysql_flavor
 from mysql_flavor import set_mysql_flavor
+import MySQLdb
 from protocols_flavor import protocols_flavor
-from protocols_flavor import set_protocols_flavor
 from topo_flavor.server import set_topo_server_flavor
+from vtctl import vtctl_client
+from vtdb import keyrange_constants
+from vtgate_gateway_flavor.gateway import set_vtgate_gateway_flavor
+from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
+from vtproto import topodata_pb2
 
 
 options = None
@@ -87,8 +86,9 @@ def add_options(parser):
       '--skip-teardown', action='store_true',
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
-  parser.add_option('--protocols-flavor')
+  parser.add_option('--protocols-flavor', default='gorpc')
   parser.add_option('--topo-server-flavor', default='zookeeper')
+  parser.add_option('--vtgate-gateway-flavor', default='shardgateway')
 
 
 def set_options(opts):
@@ -96,8 +96,9 @@ def set_options(opts):
   options = opts
 
   set_mysql_flavor(options.mysql_flavor)
-  set_protocols_flavor(options.protocols_flavor)
+  environment.setup_protocol_flavor(options.protocols_flavor)
   set_topo_server_flavor(options.topo_server_flavor)
+  set_vtgate_gateway_flavor(options.vtgate_gateway_flavor)
   environment.skip_build = options.skip_build
 
 
@@ -122,13 +123,7 @@ def main(mod=None, test_options=None):
     test_options(parser)
   (options, args) = parser.parse_args()
 
-  if options.verbose == 0:
-    level = logging.WARNING
-  elif options.verbose == 1:
-    level = logging.INFO
-  else:
-    level = logging.DEBUG
-  logging.getLogger().setLevel(level)
+  set_log_level(options.verbose)
   logging.basicConfig(
       format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
 
@@ -348,7 +343,7 @@ def zk_cat_json(path):
 #      if done:
 #        break
 #      timeout = utils.wait_step('condition', timeout)
-def wait_step(msg, timeout, sleep_time=1.0):
+def wait_step(msg, timeout, sleep_time=0.1):
   timeout -= sleep_time
   if timeout <= 0:
     raise TestError('timeout waiting for condition "%s"' % msg)
@@ -501,13 +496,12 @@ class VtGate(object):
     self.port = port or environment.reserve_ports(1)
     if protocols_flavor().vtgate_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
-    self.secure_port = None
     self.proc = None
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            timeout_total='4s', timeout_per_conn='2s',
-            extra_args=None):
+            timeout_total='2s', timeout_per_conn='1s',
+            extra_args=None, tablets=None):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
 
     args = environment.binary_args('vtgate') + [
@@ -521,7 +515,10 @@ class VtGate(object):
         '-conn-timeout-per-conn', timeout_per_conn,
         '-bsonrpc_timeout', '5s',
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+        '-gateway_implementation', vtgate_gateway_flavor().flavor(),
+        '-tablet_types_to_wait', 'MASTER,REPLICA',
     ]
+    args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():
@@ -534,10 +531,7 @@ class VtGate(object):
       args.extend(extra_args)
 
     self.proc = run_bg(args)
-    if self.secure_port:
-      wait_for_vars('vtgate', self.port, 'SecureConnections')
-    else:
-      wait_for_vars('vtgate', self.port)
+    wait_for_vars('vtgate', self.port)
 
     global vtgate
     if not vtgate:
@@ -566,18 +560,18 @@ class VtGate(object):
       vtgate = None
 
   def addr(self):
-    """Returns the address of the vtgate process."""
+    """Returns the address of the vtgate process, for web access."""
     return 'localhost:%d' % self.port
 
-  def secure_addr(self):
-    """Returns the secure address of the vtgate process."""
-    return 'localhost:%d' % self.secure_port
-
-  def rpc_endpoint(self):
-    """Returns the endpoint to use for RPCs."""
-    if protocols_flavor().vtgate_protocol() == 'grpc':
-      return 'localhost:%d' % self.grpc_port
-    return self.addr()
+  def rpc_endpoint(self, python=False):
+    """Returns the protocol and endpoint to use for RPCs."""
+    if python:
+      protocol = protocols_flavor().vtgate_python_protocol()
+    else:
+      protocol = protocols_flavor().vtgate_protocol()
+    if protocol == 'grpc':
+      return protocol, 'localhost:%d' % self.grpc_port
+    return protocol, self.addr()
 
   def get_status(self):
     """Returns the status page for this process."""
@@ -587,13 +581,19 @@ class VtGate(object):
     """Returns the vars for this process."""
     return get_vars(self.port)
 
-  def vtclient(self, sql, tablet_type='master', bindvars=None,
-               streaming=False, verbose=False, raise_on_error=False):
+  def vtclient(self, sql, keyspace=None, shard=None, tablet_type='master',
+               bindvars=None, streaming=False,
+               verbose=False, raise_on_error=True):
     """Uses the vtclient binary to send a query to vtgate."""
+    protocol, addr = self.rpc_endpoint()
     args = environment.binary_args('vtclient') + [
-        '-server', self.rpc_endpoint(),
+        '-server', addr,
         '-tablet_type', tablet_type,
-        '-vtgate_protocol', protocols_flavor().vtgate_protocol()]
+        '-vtgate_protocol', protocol]
+    if keyspace:
+      args.extend(['-keyspace', keyspace])
+    if shard:
+      args.extend(['-shard', shard])
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if streaming:
@@ -608,8 +608,9 @@ class VtGate(object):
 
   def execute(self, sql, tablet_type='master', bindvars=None):
     """Uses 'vtctl VtGateExecute' to execute a command."""
+    _, addr = self.rpc_endpoint()
     args = ['VtGateExecute',
-            '-server', self.rpc_endpoint(),
+            '-server', addr,
             '-tablet_type', tablet_type]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
@@ -619,8 +620,9 @@ class VtGate(object):
   def execute_shards(self, sql, keyspace, shards, tablet_type='master',
                      bindvars=None):
     """Uses 'vtctl VtGateExecuteShards' to execute a command."""
+    _, addr = self.rpc_endpoint()
     args = ['VtGateExecuteShards',
-            '-server', self.rpc_endpoint(),
+            '-server', addr,
             '-keyspace', keyspace,
             '-shards', shards,
             '-tablet_type', tablet_type]
@@ -631,8 +633,9 @@ class VtGate(object):
 
   def split_query(self, sql, keyspace, split_count, bindvars=None):
     """Uses 'vtctl VtGateSplitQuery' to cut a query up in chunks."""
+    _, addr = self.rpc_endpoint()
     args = ['VtGateSplitQuery',
-            '-server', self.rpc_endpoint(),
+            '-server', addr,
             '-keyspace', keyspace,
             '-split_count', str(split_count)]
     if bindvars:
@@ -712,6 +715,15 @@ def get_log_level():
     return 'WARNING'
   else:
     return 'ERROR'
+
+
+def set_log_level(verbose):
+  level = logging.DEBUG
+  if verbose == 0:
+    level = logging.WARNING
+  elif verbose == 1:
+    level = logging.INFO
+  logging.getLogger().setLevel(level)
 
 
 # vtworker helpers
@@ -1032,18 +1044,8 @@ class Vtctld(object):
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
 
-  def serving_graph(self):
-    data = json.load(
-        urllib2.urlopen(
-            'http://localhost:%d/serving_graph/test_nj?format=json' %
-            self.port))
-    if data['Errors']:
-      raise VtctldError(data['Errors'])
-    return data['Keyspaces']
-
   def start(self):
     args = environment.binary_args('vtctld') + [
-        '-debug',
         '-web_dir', environment.vttop + '/web/vtctld',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),
@@ -1103,9 +1105,6 @@ class Vtctld(object):
       protocol = protocols_flavor().vtctl_client_protocol()
     rpc_port = self.port
     if protocol == 'grpc':
-      # import the grpc vtctl client implementation, change the port
-      if python:
-        from vtctl import grpc_vtctl_client  # pylint: disable=g-import-not-at-top,unused-variable
       rpc_port = self.grpc_port
     return (protocol, '%s:%d' % (socket.getfqdn(), rpc_port))
 
@@ -1153,3 +1152,41 @@ def uint64_to_hex(integer):
   if integer > (1<<64)-1 or integer < 0:
     raise ValueError('Integer out of range: %d' % integer)
   return '%016X' % integer
+
+def get_shard_name(shard, num_shards):
+  """Returns an appropriate shard name, as a string.
+
+  A single shard name is simply 0; otherwise it will attempt to split up 0x100
+  into multiple shards.  For example, shard 1 of 2 is -80, shard 2 of 2 is 80-.
+
+  Args:
+    shard: The integer shard index (zero based)
+    num_shards: Total number of shards (int)
+
+  Returns:
+    The shard name as a string.
+  """
+
+  if num_shards == 1:
+    return '0'
+
+  shard_width = 0x100 / num_shards
+
+  if shard == 0:
+    return '-%02x' % shard_width
+  elif shard == num_shards - 1:
+    return '%02x-' % (shard * shard_width)
+  else:
+    return '%02x-%02x' % (shard * shard_width, (shard + 1) * shard_width)
+
+
+def get_shard_names(num_shards):
+  """Create a generator of shard names.
+
+  Args:
+    num_shards: Total number of shards (int)
+
+  Returns:
+    The shard name generator.
+  """
+  return (get_shard_name(x, num_shards) for x in xrange(num_shards))

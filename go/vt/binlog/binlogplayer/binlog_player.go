@@ -92,8 +92,7 @@ type BinlogPlayer struct {
 	dbClient VtClient
 
 	// for key range base requests
-	keyspaceIDType topodatapb.KeyspaceIdType
-	keyRange       *topodatapb.KeyRange
+	keyRange *topodatapb.KeyRange
 
 	// for table base requests
 	tables []string
@@ -111,14 +110,13 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *topodatapb.EndPoint, keyspaceIDType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
+func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *topodatapb.EndPoint, keyRange *topodatapb.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
 	result := &BinlogPlayer{
-		endPoint:       endPoint,
-		dbClient:       dbClient,
-		keyspaceIDType: keyspaceIDType,
-		keyRange:       keyRange,
-		uid:            uid,
-		blplStats:      blplStats,
+		endPoint:  endPoint,
+		dbClient:  dbClient,
+		keyRange:  keyRange,
+		uid:       uid,
+		blplStats: blplStats,
 	}
 	var err error
 	result.position, err = replication.DecodePosition(startPosition)
@@ -342,7 +340,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if len(blp.tables) > 0 {
 		responseChan, errFunc, err = blplClient.StreamTables(ctx, replication.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
 	} else {
-		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyspaceIDType, blp.keyRange, blp.defaultCharset)
+		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
 		log.Errorf("Error sending streaming query to binlog server: %v", err)

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/topo"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
@@ -23,7 +23,7 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql:           "select * from music_user_map where id = 1",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -35,7 +35,7 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select * from music_user_map where id = 1",
 		BindVariables: map[string]interface{}{},
 	}, {
@@ -51,7 +51,7 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "delete from music_user_map",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -64,7 +64,7 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "insert into music_user_map values(1)",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -123,6 +123,67 @@ func TestStreamUnshardedFail(t *testing.T) {
 	}
 }
 
+func TestSelectBindvars(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+
+	_, err := routerExec(router, "select * from user where id = :id", map[string]interface{}{
+		"id": 1,
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select * from user where id = :id",
+		BindVariables: map[string]interface{}{"id": 1},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	sbc1.Queries = nil
+
+	_, err = routerExec(router, "select * from user where name in (:name1, :name2)", map[string]interface{}{
+		"name1": "foo1",
+		"name2": "foo2",
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "select * from user where name in ::_vals",
+		BindVariables: map[string]interface{}{
+			"name1": "foo1",
+			"name2": "foo2",
+			"_vals": []interface{}{"foo1", "foo2"},
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	sbc1.Queries = nil
+
+	_, err = routerExec(router, "select * from user where name in (:name1, :name2)", map[string]interface{}{
+		"name1": []byte("foo1"),
+		"name2": []byte("foo2"),
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "select * from user where name in ::_vals",
+		BindVariables: map[string]interface{}{
+			"name1": []byte("foo1"),
+			"name2": []byte("foo2"),
+			"_vals": []interface{}{"foo1", "foo2"},
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+}
+
 func TestSelectEqual(t *testing.T) {
 	router, sbc1, sbc2, sbclookup := createRouterEnv()
 
@@ -130,7 +191,7 @@ func TestSelectEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql:           "select * from user where id = 1",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -140,13 +201,13 @@ func TestSelectEqual(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
-
 	sbc1.Queries = nil
+
 	_, err = routerExec(router, "select * from user where id = 3", nil)
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select * from user where id = 3",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -159,20 +220,39 @@ func TestSelectEqual(t *testing.T) {
 	if sbc1.Queries != nil {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
-
 	sbc2.Queries = nil
+
+	_, err = routerExec(router, "select * from user where id = '3'", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "select * from user where id = '3'",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
+	}
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+	sbc2.Queries = nil
+
 	_, err = routerExec(router, "select * from user where name = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select * from user where name = 'foo'",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]interface{}{
 			"name": "foo",
@@ -186,7 +266,7 @@ func TestSelectEqual(t *testing.T) {
 func TestSelectEqualNotFound(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 
-	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{}})
+	sbclookup.setResults([]*sqltypes.Result{{}})
 	result, err := routerExec(router, "select * from music where id = 1", nil)
 	if err != nil {
 		t.Error(err)
@@ -196,7 +276,7 @@ func TestSelectEqualNotFound(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	sbclookup.setResults([]*sqltypes.Result{&sqltypes.Result{}})
+	sbclookup.setResults([]*sqltypes.Result{{}})
 	result, err = routerExec(router, "select * from user where name = 'foo'", nil)
 	if err != nil {
 		t.Error(err)
@@ -282,7 +362,7 @@ func TestSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "select * from user where id in ::_vals",
 		BindVariables: map[string]interface{}{
 			"_vals": []interface{}{int64(1)},
@@ -300,7 +380,7 @@ func TestSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select * from user where id in ::_vals",
 		BindVariables: map[string]interface{}{
 			"_vals": []interface{}{int64(1)},
@@ -309,7 +389,7 @@ func TestSelectIN(t *testing.T) {
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select * from user where id in ::_vals",
 		BindVariables: map[string]interface{}{
 			"_vals": []interface{}{int64(3)},
@@ -325,14 +405,14 @@ func TestSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select * from user where name = 'foo'",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]interface{}{
 			"name": "foo",
@@ -383,7 +463,7 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql: "select user_id from name_user_map where name = :name",
 		BindVariables: map[string]interface{}{
 			"name": "foo",
@@ -418,7 +498,7 @@ func TestSelectKeyrange(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql:           "select * from user",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -434,7 +514,7 @@ func TestSelectKeyrange(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []tproto.BoundQuery{{
+	wantQueries = []querytypes.BoundQuery{{
 		Sql:           "select * from user",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -515,14 +595,14 @@ func TestSelectScatter(t *testing.T) {
 		s.MapTestConn(shard, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
+	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	_, err := routerExec(router, "select * from user", nil)
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []tproto.BoundQuery{{
+	wantQueries := []querytypes.BoundQuery{{
 		Sql:           "select * from user",
 		BindVariables: map[string]interface{}{},
 	}}
@@ -544,7 +624,7 @@ func TestStreamSelectScatter(t *testing.T) {
 		s.MapTestConn(shard, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
+	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	sql := "select * from user"
@@ -583,7 +663,7 @@ func TestSelectScatterFail(t *testing.T) {
 		s.MapTestConn(shard, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, "")
+	scatterConn := NewScatterConn(nil, topo.Server{}, serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour, nil, "")
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	_, err := routerExec(router, "select * from user", nil)

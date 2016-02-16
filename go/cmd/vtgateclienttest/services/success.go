@@ -26,33 +26,34 @@ func newSuccessClient(fallback vtgateservice.VTGateService) *successClient {
 	}
 }
 
-func (c *successClient) Begin(ctx context.Context, outSession *vtgatepb.Session) error {
-	outSession.InTransaction = true
-	return nil
+func (c *successClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+	return &vtgatepb.Session{
+		InTransaction: true,
+	}, nil
 }
 
-func (c *successClient) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
-	if inSession != nil && inSession.InTransaction {
+func (c *successClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
+	if session != nil && session.InTransaction {
 		return nil
 	}
-	return c.fallback.Commit(ctx, inSession)
+	return c.fallback.Commit(ctx, session)
 }
 
-func (c *successClient) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
-	if inSession != nil && inSession.InTransaction {
+func (c *successClient) Rollback(ctx context.Context, session *vtgatepb.Session) error {
+	if session != nil && session.InTransaction {
 		return nil
 	}
-	return c.fallback.Rollback(ctx, inSession)
+	return c.fallback.Rollback(ctx, session)
 }
 
 func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	if keyspace == "big" {
 		return &topodatapb.SrvKeyspace{
 			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-				&topodatapb.SrvKeyspace_KeyspacePartition{
+				{
 					ServedType: topodatapb.TabletType_REPLICA,
 					ShardReferences: []*topodatapb.ShardReference{
-						&topodatapb.ShardReference{
+						{
 							Name: "shard0",
 							KeyRange: &topodatapb.KeyRange{
 								Start: []byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
@@ -65,7 +66,7 @@ func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 			ShardingColumnName: "sharding_column_name",
 			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 			ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
-				&topodatapb.SrvKeyspace_ServedFrom{
+				{
 					TabletType: topodatapb.TabletType_MASTER,
 					Keyspace:   "other_keyspace",
 				},

@@ -11,8 +11,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -125,7 +126,7 @@ func (vind *HashAuto) ReverseMap(_ planbuilder.VCursor, ksid []byte) (interface{
 
 // Create reserves the id by inserting it into the vindex table.
 func (vind *HashAuto) Create(vcursor planbuilder.VCursor, id interface{}) error {
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
 			vind.Column: id,
@@ -139,7 +140,7 @@ func (vind *HashAuto) Create(vcursor planbuilder.VCursor, id interface{}) error 
 
 // Generate generates a new id by using the autoinc of the vindex table.
 func (vind *HashAuto) Generate(vcursor planbuilder.VCursor) (id int64, err error) {
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
 			vind.Column: nil,
@@ -154,7 +155,7 @@ func (vind *HashAuto) Generate(vcursor planbuilder.VCursor) (id int64, err error
 
 // Delete deletes the entry from the vindex table.
 func (vind *HashAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, _ []byte) error {
-	bq := &tproto.BoundQuery{
+	bq := &querytypes.BoundQuery{
 		Sql: vind.del,
 		BindVariables: map[string]interface{}{
 			vind.Column: ids,
@@ -167,6 +168,11 @@ func (vind *HashAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, _ [
 }
 
 func getNumber(v interface{}) (int64, error) {
+	// Failsafe check: v will never be a []byte.
+	if val, ok := v.([]byte); ok {
+		v = string(val)
+	}
+
 	switch v := v.(type) {
 	case int:
 		return int64(v), nil
@@ -180,6 +186,16 @@ func getNumber(v interface{}) (int64, error) {
 		return int64(v), nil
 	case uint64:
 		return int64(v), nil
+	case string:
+		signed, err := strconv.ParseInt(v, 0, 64)
+		if err == nil {
+			return signed, nil
+		}
+		unsigned, err := strconv.ParseUint(v, 0, 64)
+		if err == nil {
+			return int64(unsigned), nil
+		}
+		return 0, fmt.Errorf("getNumber: %v", err)
 	}
 	return 0, fmt.Errorf("unexpected type for %v: %T", v, v)
 }

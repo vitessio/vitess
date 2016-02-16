@@ -7,6 +7,7 @@ package fakevtctlclient
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -17,45 +18,82 @@ import (
 // FakeLoggerEventStreamingClient is the base for the fakes for the vtctlclient and vtworkerclient.
 // It allows to register a (multi-)line string for a given command and return the result as channel which streams it back.
 type FakeLoggerEventStreamingClient struct {
-	results map[argsKey]result
+	results map[string]*result
+	// mu guards all fields of the structs.
+	mu sync.Mutex
 }
 
 // NewFakeLoggerEventStreamingClient creates a new fake.
-func NewFakeLoggerEventStreamingClient() FakeLoggerEventStreamingClient {
-	return FakeLoggerEventStreamingClient{make(map[argsKey]result)}
+func NewFakeLoggerEventStreamingClient() *FakeLoggerEventStreamingClient {
+	return &FakeLoggerEventStreamingClient{results: make(map[string]*result)}
 }
 
-// argsKey is used as map KeyType because []string is not supported.
-type argsKey struct {
-	args string
-}
-
-// fromSlice returns a map key for a []string.
-func fromSlice(args []string) argsKey {
-	return argsKey{strings.Join(args, "|")}
+// generateKey returns a map key for a []string.
+// ([]string is not supported as map key.)
+func generateKey(args []string) string {
+	return strings.Join(args, " ")
 }
 
 // result contains the result the fake should respond for a given command.
 type result struct {
 	output string
 	err    error
+	// count is the number of times this result is registered for the same
+	// command. With each stream of this result, count will be decreased by one.
+	count int
+}
+
+func (r1 result) Equals(r2 result) bool {
+	return r1.output == r2.output &&
+		((r1.err == nil && r2.err == nil) ||
+			(r1.err != nil && r2.err != nil && r1.err.Error() == r2.err.Error()))
 }
 
 // RegisterResult registers for a given command (args) the result which the fake should return.
+// Once the result was returned, it will be automatically deregistered.
 func (f *FakeLoggerEventStreamingClient) RegisterResult(args []string, output string, err error) error {
-	argsKey := fromSlice(args)
-	if result, ok := f.results[argsKey]; ok {
-		return fmt.Errorf("Result is already registered as: %v", result)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	k := generateKey(args)
+	v := result{output, err, 1}
+	if result, ok := f.results[k]; ok {
+		if result.Equals(v) {
+			result.count++
+			return nil
+		}
+		return fmt.Errorf("A different result (%v) is already registered for command: %v", result, args)
 	}
-	f.results[argsKey] = result{output, err}
+	f.results[k] = &v
 	return nil
+}
+
+// RegisteredCommands returns a list of commands which are currently registered.
+// This is useful to check that all registered results have been consumed.
+func (f *FakeLoggerEventStreamingClient) RegisteredCommands() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	var commands []string
+	for k := range f.results {
+		commands = append(commands, k)
+	}
+	return commands
 }
 
 // StreamResult returns a channel which streams back a registered result as logging events.
 func (f *FakeLoggerEventStreamingClient) StreamResult(args []string) (<-chan *logutilpb.Event, func() error, error) {
-	result, ok := f.results[fromSlice(args)]
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	k := generateKey(args)
+	result, ok := f.results[k]
 	if !ok {
 		return nil, nil, fmt.Errorf("No response was registered for args: %v", args)
+	}
+	result.count--
+	if result.count == 0 {
+		delete(f.results, k)
 	}
 
 	stream := make(chan *logutilpb.Event)

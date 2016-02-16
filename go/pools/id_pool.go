@@ -36,7 +36,7 @@ func (pool *IDPool) Get() (id uint32) {
 	defer pool.Unlock()
 
 	// Pick a value that's been returned, if any.
-	for key, _ := range pool.used {
+	for key := range pool.used {
 		delete(pool.used, key)
 		return key
 	}

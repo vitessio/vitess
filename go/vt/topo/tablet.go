@@ -22,12 +22,6 @@ import (
 )
 
 const (
-	// According to docs, the tablet uid / (mysql server id) is uint32.
-	// However, zero appears to be a sufficiently degenerate value to use
-	// as a marker for not having a parent server id.
-	// http://dev.mysql.com/doc/refman/5.1/en/replication-options.html
-	NO_TABLET = 0
-
 	// ReplicationLag is the key in the health map to indicate high
 	// replication lag
 	ReplicationLag = "replication_lag"
@@ -247,25 +241,33 @@ func (ts Server) UpdateTablet(ctx context.Context, tablet *TabletInfo) error {
 	return nil
 }
 
-// UpdateTabletFields is a high level wrapper for TopoServer.UpdateTabletFields
-// that generates trace spans.
-func (ts Server) UpdateTabletFields(ctx context.Context, alias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) error {
+// UpdateTabletFields is a high level helper to read a tablet record, call an
+// update function on it, and then write it back. If the write fails due to
+// a version mismatch, it will re-read the record and retry the update.
+// If the update succeeds, it returns the updated tablet.
+// If the update method returns ErrNoUpdateNeeded, nothing is written,
+// and nil,nil is returned.
+func (ts Server) UpdateTabletFields(ctx context.Context, alias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTabletFields")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
-	tablet, err := ts.Impl.UpdateTabletFields(ctx, alias, update)
-	if err != nil {
-		return err
+	for {
+		ti, err := ts.GetTablet(ctx, alias)
+		if err != nil {
+			return nil, err
+		}
+		if err = update(ti.Tablet); err != nil {
+			if err == ErrNoUpdateNeeded {
+				return nil, nil
+			}
+			return nil, err
+		}
+		if err = ts.UpdateTablet(ctx, ti); err != ErrBadVersion {
+			return ti.Tablet, err
+		}
 	}
-	if tablet != nil {
-		event.Dispatch(&events.TabletChange{
-			Tablet: *tablet,
-			Status: "updated",
-		})
-	}
-	return nil
 }
 
 // Validate makes sure a tablet is represented correctly in the topology server.

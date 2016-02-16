@@ -33,8 +33,8 @@ func TestTheFramework(t *testing.T) {
 		Name:  "fail",
 		Query: "select /* fail */ eid, id from vitess_a union select eid, id from vitess_b",
 		Result: [][]string{
-			[]string{"2", "1"},
-			[]string{"1", "2"},
+			{"2", "1"},
+			{"1", "2"},
 		},
 		RowsAffected: 1,
 		Rewritten: []string{
@@ -183,8 +183,8 @@ func TestNocacheCases(t *testing.T) {
 				{"1", "2", "1", "2"},
 			},
 			Rewritten: []string{
-				"select a.eid, a.id, b.eid, b.id from vitess_a as a cross join vitess_b as b where 1 != 1",
-				"select /* cross join */ a.eid, a.id, b.eid, b.id from vitess_a as a cross join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
+				"select a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b where 1 != 1",
+				"select /* cross join */ a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
 			RowsAffected: 2,
 		},
@@ -567,6 +567,29 @@ func TestNocacheCases(t *testing.T) {
 				},
 				framework.TestQuery("begin"),
 				framework.TestQuery("delete from vitess_a where eid>1"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "insert with mixed case column names",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert into vitess_mixed_case(col1, col2) values(1, 2)",
+					Rewritten: []string{
+						"insert into vitess_mixed_case(col1, col2) values (1, 2) /* _stream vitess_mixed_case (col1 ) (1 )",
+					},
+					RowsAffected: 1,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select COL1, COL2 from vitess_mixed_case",
+					Result: [][]string{
+						{"1", "2"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_mixed_case"),
 				framework.TestQuery("commit"),
 			},
 		},

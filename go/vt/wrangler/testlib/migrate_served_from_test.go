@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -23,7 +23,7 @@ import (
 func TestMigrateServedFrom(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -88,9 +88,9 @@ func TestMigrateServedFrom(t *testing.T) {
 	// destMaster will see the refresh, and has to respond to it.
 	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
 	destMaster.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &sqltypes.Result{
+		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(replication.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
 					sqltypes.MakeString([]byte("")),
 				},
@@ -125,7 +125,7 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	if len(si.TabletControls) != 1 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
@@ -153,11 +153,11 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	if len(si.TabletControls) != 2 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_REPLICA,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
@@ -185,15 +185,15 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	if len(si.TabletControls) != 3 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_REPLICA,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
-		&topodatapb.Shard_TabletControl{
+		{
 			TabletType:        topodatapb.TabletType_MASTER,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},

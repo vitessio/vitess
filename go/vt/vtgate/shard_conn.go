@@ -15,13 +15,14 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var danglingTabletConn = stats.NewInt("DanglingTabletConn")
@@ -53,12 +54,12 @@ type ShardConn struct {
 // NewShardConn creates a new ShardConn. It creates a Balancer using
 // serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
 // number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topodatapb.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
+func NewShardConn(ctx context.Context, serv topo.SrvTopoServer, cell, keyspace, shard string, tabletType topodatapb.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
 	getAddresses := func() (*topodatapb.EndPoints, error) {
 		endpoints, _, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
 			return nil, vterrors.NewVitessError(
-				vtrpc.ErrorCode_INTERNAL_ERROR, err,
+				vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
 				"endpoints fetch error: %v", err,
 			)
 		}
@@ -101,7 +102,7 @@ type ShardConnError struct {
 	// Preserve the original error, so that we don't need to parse the error string.
 	Err error
 	// EndPointCode is the error code to use for all the endpoint errors in aggregate
-	EndPointCode vtrpc.ErrorCode
+	EndPointCode vtrpcpb.ErrorCode
 }
 
 func (e *ShardConnError) Error() string {
@@ -112,7 +113,7 @@ func (e *ShardConnError) Error() string {
 }
 
 // VtErrorCode returns the underlying Vitess error code
-func (e *ShardConnError) VtErrorCode() vtrpc.ErrorCode { return e.EndPointCode }
+func (e *ShardConnError) VtErrorCode() vtrpcpb.ErrorCode { return e.EndPointCode }
 
 // Dial creates tablet connection and connects to the vttablet.
 // It is not necessary to call this function before serving queries,
@@ -129,17 +130,17 @@ func (sdc *ShardConn) Dial(ctx context.Context) error {
 func (sdc *ShardConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (qr *sqltypes.Result, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qr, innerErr = conn.Execute2(ctx, query, bindVars, transactionID)
+		qr, innerErr = conn.Execute(ctx, query, bindVars, transactionID)
 		return innerErr
 	}, transactionID, false)
 	return qr, err
 }
 
 // ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
-func (sdc *ShardConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (qrs *tproto.QueryResultList, err error) {
+func (sdc *ShardConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) (qrs []sqltypes.Result, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qrs, innerErr = conn.ExecuteBatch2(ctx, queries, asTransaction, transactionID)
+		qrs, innerErr = conn.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 		return innerErr
 	}, transactionID, false)
 	return qrs, err
@@ -152,7 +153,7 @@ func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars 
 	var results <-chan *sqltypes.Result
 	err := sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var err error
-		results, erFunc, err = conn.StreamExecute2(ctx, query, bindVars, transactionID)
+		results, erFunc, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
 		usedConn = conn
 		return err
 	}, transactionID, true)
@@ -167,7 +168,7 @@ func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars 
 func (sdc *ShardConn) Begin(ctx context.Context) (transactionID int64, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		transactionID, innerErr = conn.Begin2(ctx)
+		transactionID, innerErr = conn.Begin(ctx)
 		return innerErr
 	}, 0, false)
 	return transactionID, err
@@ -176,22 +177,22 @@ func (sdc *ShardConn) Begin(ctx context.Context) (transactionID int64, err error
 // Commit commits the current transaction. The retry rules are the same as Execute.
 func (sdc *ShardConn) Commit(ctx context.Context, transactionID int64) (err error) {
 	return sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
-		return conn.Commit2(ctx, transactionID)
+		return conn.Commit(ctx, transactionID)
 	}, transactionID, false)
 }
 
 // Rollback rolls back the current transaction. The retry rules are the same as Execute.
 func (sdc *ShardConn) Rollback(ctx context.Context, transactionID int64) (err error) {
 	return sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
-		return conn.Rollback2(ctx, transactionID)
+		return conn.Rollback(ctx, transactionID)
 	}, transactionID, false)
 }
 
 // SplitQuery splits a query into sub queries. The retry rules are the same as Execute.
-func (sdc *ShardConn) SplitQuery(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
+func (sdc *ShardConn) SplitQuery(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		queries, innerErr = conn.SplitQuery(ctx, tproto.BoundQuery{
+		queries, innerErr = conn.SplitQuery(ctx, querytypes.BoundQuery{
 			Sql:           sql,
 			BindVariables: bindVariables,
 		}, splitColumn, splitCount)
@@ -300,13 +301,13 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 	if len(endPoints) == 0 {
 		// No valid endpoint
 		return nil, nil, false, vterrors.FromError(
-			vtrpc.ErrorCode_INTERNAL_ERROR,
+			vtrpcpb.ErrorCode_INTERNAL_ERROR,
 			fmt.Errorf("no valid endpoint"),
 		)
 	}
 	if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {
 		return nil, nil, true, vterrors.FromError(
-			vtrpc.ErrorCode_DEADLINE_EXCEEDED,
+			vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 			fmt.Errorf("timeout when getting endpoints"),
 		)
 	}
@@ -334,7 +335,7 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 		allErrors.RecordError(vtErr)
 		if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {
 			err = vterrors.FromError(
-				vtrpc.ErrorCode_DEADLINE_EXCEEDED,
+				vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 				fmt.Errorf("timeout when connecting to %+v", endPoint),
 			)
 			allErrors.RecordError(err)

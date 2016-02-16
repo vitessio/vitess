@@ -18,11 +18,10 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -33,15 +32,17 @@ import (
 // testQueryService is a local QueryService implementation to support the tests
 type testQueryService struct {
 	queryservice.ErrorQueryService
-	t *testing.T
+	t        *testing.T
+	keyspace string
+	shard    string
 }
 
-func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
 	var err error
-	parts := strings.Split(query.Sql, " ")
+	parts := strings.Split(sql, " ")
 	for _, part := range parts {
 		if strings.HasPrefix(part, "id>=") {
 			min, err = strconv.Atoi(part[4:])
@@ -52,20 +53,20 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 			max, err = strconv.Atoi(part[3:])
 		}
 	}
-	sq.t.Logf("testQueryService: got query: %v with min %v max %v", *query, min, max)
+	sq.t.Logf("testQueryService: got query: %v with min %v max %v", sql, min, max)
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&querypb.Field{
+			{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
-			&querypb.Field{
+			{
 				Name: "keyspace_id",
 				Type: sqltypes.Int64,
 			},
@@ -79,7 +80,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	for i := min; i < max; i++ {
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
@@ -91,6 +92,21 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	}
 	// SELECT id, msg, keyspace_id FROM table1 WHERE id>=180 AND id<190 ORDER BY id
 	return nil
+}
+
+func (sq *testQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
 }
 
 type ExpectedExecuteFetch struct {
@@ -114,7 +130,7 @@ func NewFakePoolConnectionQuery(t *testing.T, query string, err error) *FakePool
 	return &FakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			ExpectedExecuteFetch{
+			{
 				Query:       query,
 				QueryResult: &sqltypes.Result{},
 				Error:       err,
@@ -179,21 +195,21 @@ func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 		return &FakePoolConnection{
 			t: t,
 			ExpectedExecuteFetch: []ExpectedExecuteFetch{
-				ExpectedExecuteFetch{
+				{
 					Query: "SELECT MIN(id), MAX(id) FROM vt_ks.table1",
 					QueryResult: &sqltypes.Result{
 						Fields: []*querypb.Field{
-							&querypb.Field{
+							{
 								Name: "min",
 								Type: sqltypes.Int64,
 							},
-							&querypb.Field{
+							{
 								Name: "max",
 								Type: sqltypes.Int64,
 							},
 						},
 						Rows: [][]sqltypes.Value{
-							[]sqltypes.Value{
+							{
 								sqltypes.MakeString([]byte("100")),
 								sqltypes.MakeString([]byte("200")),
 							},
@@ -238,13 +254,9 @@ func DestinationsFactory(t *testing.T, insertCount int64) func() (dbconnpool.Poo
 	}
 }
 
-func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
-	testSplitClone(t, "-populate_blp_checkpoint")
-}
-
-func testSplitClone(t *testing.T, strategy string) {
+func TestSplitClone(t *testing.T) {
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
@@ -290,7 +302,6 @@ func testSplitClone(t *testing.T, strategy string) {
 
 	subFlags := flag.NewFlagSet("SplitClone", flag.ContinueOnError)
 	gwrk, err := commandSplitClone(wi, wi.wr, subFlags, []string{
-		"-strategy", strategy,
 		"-source_reader_count", "10",
 		"-destination_pack_count", "4",
 		"-min_table_size_for_split", "1",
@@ -324,7 +335,11 @@ func testSplitClone(t *testing.T, strategy string) {
 			"STOP SLAVE",
 			"START SLAVE",
 		}
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &testQueryService{t: t})
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &testQueryService{
+			t:        t,
+			keyspace: sourceRdonly.Tablet.Keyspace,
+			shard:    sourceRdonly.Tablet.Shard,
+		})
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so

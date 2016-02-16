@@ -93,14 +93,11 @@ message StreamKeyRangeRequest {
   // where to start
   string position = 1;
 
-  // type to get
-  topodata.KeyspaceIdType keyspace_id_type = 2;
-
   // what to get
-  topodata.KeyRange key_range = 3;
+  topodata.KeyRange key_range = 2;
 
   // default charset on the player side
-  Charset charset = 4;
+  Charset charset = 3;
 }
 
 // StreamKeyRangeResponse is the response from StreamKeyRange

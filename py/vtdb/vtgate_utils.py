@@ -117,6 +117,9 @@ class VitessError(Exception):
     Returns:
       An exception from dbexceptions.
     """
+    # FIXME(alainjobart): this is extremely confusing: self.message is only
+    # used for integrity errors, and nothing else. The other cases
+    # have to provide the message in the args.
     if self.code == vtrpc_pb2.TRANSIENT_ERROR:
       return dbexceptions.TransientError(args)
     if self.code == vtrpc_pb2.INTEGRITY_ERROR:
@@ -171,6 +174,7 @@ def convert_exception_kwarg(key, value):
       'entity_column_name',
       'keyspace',
       'num_queries',
+      'sql',
       'tablet_type'):
     return key, value
   elif key == 'entity_keyspace_id_map':

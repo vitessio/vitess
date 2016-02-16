@@ -1,23 +1,25 @@
+"""Manage VTTablet during test."""
+
 import json
 import logging
 import os
+import re
 import shutil
 import sys
 import time
 import urllib2
 import warnings
-import re
+
+import environment
+from mysql_flavor import mysql_flavor
+import MySQLdb
+from protocols_flavor import protocols_flavor
+from topo_flavor.server import topo_server
+import utils
+
 # Dropping a table inexplicably produces a warning despite
 # the 'IF EXISTS' clause. Squelch these warnings.
 warnings.simplefilter('ignore')
-
-import MySQLdb
-
-import environment
-import utils
-from mysql_flavor import mysql_flavor
-from protocols_flavor import protocols_flavor
-
 
 tablet_cell_map = {
     62344: 'nj',
@@ -103,6 +105,8 @@ class Tablet(object):
     # filled in during init_tablet
     self.keyspace = None
     self.shard = None
+    self.index = None
+    self.tablet_index = None
 
     # utility variables
     self.tablet_alias = 'test_%s-%010d' % (self.cell, self.tablet_uid)
@@ -116,15 +120,21 @@ class Tablet(object):
   def update_stream_python_endpoint(self):
     protocol = protocols_flavor().binlog_player_python_protocol()
     port = self.port
-    if protocol == 'gorpc':
-      from vtdb import gorpc_update_stream
-    elif protocol == 'grpc':
-      # import the grpc update stream client implementation, change the port
-      from vtdb import grpc_update_stream
+    if protocol == 'grpc':
       port = self.grpc_port
     return (protocol, 'localhost:%d' % port)
 
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
+    """Runs a mysqlctl command.
+
+    Args:
+      cmd: the command to run.
+      extra_my_cnf: list of extra mycnf files to use
+      with_ports: if set, sends the tablet and mysql ports to mysqlctl.
+      verbose: passed to mysqlctld.
+    Returns:
+      the result of run_bg.
+    """
     extra_env = {}
     all_extra_my_cnf = get_all_extra_my_cnf(extra_my_cnf)
     if all_extra_my_cnf:
@@ -145,6 +155,15 @@ class Tablet(object):
     return utils.run_bg(args, extra_env=extra_env)
 
   def mysqlctld(self, cmd, extra_my_cnf=None, verbose=False):
+    """Runs a mysqlctld command.
+
+    Args:
+      cmd: the command to run.
+      extra_my_cnf: list of extra mycnf files to use
+      verbose: passed to mysqlctld.
+    Returns:
+      the result of run_bg.
+    """
     extra_env = {}
     all_extra_my_cnf = get_all_extra_my_cnf(extra_my_cnf)
     if all_extra_my_cnf:
@@ -207,8 +226,18 @@ class Tablet(object):
     return conn, MySQLdb.cursors.DictCursor(conn)
 
   # Query the MySQL instance directly
-  def mquery(
-      self, dbname, query, write=False, user='vt_dba', conn_params=None):
+  def mquery(self, dbname, query, write=False, user='vt_dba', conn_params=None):
+    """Runs a query to MySQL directly, using python's SQL driver.
+
+    Args:
+      dbname: if set, the dbname to use.
+      query: the SQL query (or queries) to run.
+      write: if set, wraps the query in a transaction.
+      user: the db user to use.
+      conn_params: extra mysql connection parameters.
+    Returns:
+      the rows.
+    """
     if conn_params is None:
       conn_params = {}
     conn, cursor = self.connect(dbname, user=user, **conn_params)
@@ -237,14 +266,15 @@ class Tablet(object):
   def reset_replication(self):
     self.mquery('', mysql_flavor().reset_replication_commands())
 
-  def populate(self, dbname, create_sql, insert_sqls=[]):
+  def populate(self, dbname, create_sql, insert_sqls=None):
     self.create_db(dbname)
     if isinstance(create_sql, basestring):
       create_sql = [create_sql]
     for q in create_sql:
       self.mquery(dbname, q)
-    for q in insert_sqls:
-      self.mquery(dbname, q, write=True)
+    if insert_sqls:
+      for q in insert_sqls:
+        self.mquery(dbname, q, write=True)
 
   def has_db(self, name):
     rows = self.mquery('', 'show databases')
@@ -309,11 +339,13 @@ class Tablet(object):
     return utils.run_vtctl(args)
 
   def init_tablet(self, tablet_type, keyspace, shard,
+                  tablet_index=None,
                   start=False, dbname=None, parent=True, wait_for_start=True,
                   include_mysql_port=True, **kwargs):
     self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
+    self.tablet_index = tablet_index
 
     self.dbname = dbname or ('vt_' + self.keyspace)
 
@@ -367,10 +399,13 @@ class Tablet(object):
       extra_args=None, extra_env=None, include_mysql_port=True,
       init_tablet_type=None, init_keyspace=None,
       init_shard=None, init_db_name_override=None,
-      supports_backups=False):
+      supports_backups=False, grace_period='1s'):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
+
+    Returns:
+      the process that was started.
     """
     args = environment.binary_args('vttablet')
     # Use 'localhost' as hostname because Travis CI worker hostnames
@@ -384,6 +419,7 @@ class Tablet(object):
                  protocols_flavor().tablet_manager_protocol()])
     args.extend(['-tablet_protocol', protocols_flavor().tabletconn_protocol()])
     args.extend(['-binlog_player_healthcheck_topology_refresh', '1s'])
+    args.extend(['-binlog_player_healthcheck_retry_delay', '1s'])
     args.extend(['-binlog_player_retry_delay', '1s'])
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
     if self.use_mysqlctld:
@@ -478,6 +514,8 @@ class Tablet(object):
       args.extend(['-grpc_port', str(self.grpc_port)])
     if lameduck_period:
       args.extend(['-lameduck-period', lameduck_period])
+    if grace_period:
+      args.extend(['-serving_state_grace_period', grace_period])
     if security_policy:
       args.extend(['-security_policy', security_policy])
     if extra_args:
@@ -506,6 +544,11 @@ class Tablet(object):
     # wait for query service to be in the right state
     if wait_for_state:
       self.wait_for_vttablet_state(wait_for_state, port=port)
+
+    if self.tablet_index is not None:
+      topo_server().update_addr(
+          'test_'+self.cell, self.keyspace, self.shard,
+          self.tablet_index, (port or self.port))
 
     return self.proc
 
@@ -569,15 +612,24 @@ class Tablet(object):
     return urllib2.urlopen('http://localhost:%d/healthz' % self.port).read()
 
   def kill_vttablet(self, wait=True):
+    """Sends a SIG_TERM to the tablet.
+
+    Args:
+      wait: will wait for the process to exit.
+    Returns:
+      the subprocess object (use it to get exit code).
+    """
     logging.debug('killing vttablet: %s, wait: %s', self.tablet_alias,
                   str(wait))
-    if self.proc is not None:
+    proc = self.proc
+    if proc is not None:
       Tablet.tablets_running -= 1
-      if self.proc.poll() is None:
-        self.proc.terminate()
+      if proc.poll() is None:
+        proc.terminate()
         if wait:
-          self.proc.wait()
+          proc.wait()
       self.proc = None
+    return proc
 
   def hard_kill_vttablet(self):
     logging.debug('hard killing vttablet: %s', self.tablet_alias)
@@ -589,9 +641,15 @@ class Tablet(object):
       self.proc = None
 
   def wait_for_binlog_server_state(self, expected, timeout=30.0):
+    """Wait for the tablet's binlog server to be in the provided state.
+
+    Args:
+      expected: the state to wait for.
+      timeout: how long to wait before error.
+    """
     while True:
       v = utils.get_vars(self.port)
-      if v == None:
+      if v is None:
         if self.proc.poll() is not None:
           raise utils.TestError(
               'vttablet died while test waiting for binlog state %s' %
@@ -615,9 +673,15 @@ class Tablet(object):
                   self.tablet_alias, expected)
 
   def wait_for_binlog_player_count(self, expected, timeout=30.0):
+    """Wait for a tablet to have binlog players.
+
+    Args:
+      expected: number of expected binlog players to wait for.
+      timeout: how long to wait.
+    """
     while True:
       v = utils.get_vars(self.port)
-      if v == None:
+      if v is None:
         if self.proc.poll() is not None:
           raise utils.TestError(
               'vttablet died while test waiting for binlog count %s' %
@@ -641,12 +705,21 @@ class Tablet(object):
                   self.tablet_alias, expected)
 
   @classmethod
-  def check_vttablet_count(klass):
+  def check_vttablet_count(cls):
     if Tablet.tablets_running > 0:
       raise utils.TestError('This test is not killing all its vttablets')
 
   def execute(self, sql, bindvars=None, transaction_id=None, auto_log=True):
     """execute uses 'vtctl VtTabletExecute' to execute a command.
+
+    Args:
+      sql: the command to execute.
+      bindvars: a dict of bind variables.
+      transaction_id: the id of the transaction to use if necessary.
+      auto_log: passed to run_vtctl.
+
+    Returns:
+      the result of running vtctl command.
     """
     args = [
         'VtTabletExecute',
@@ -662,6 +735,12 @@ class Tablet(object):
 
   def begin(self, auto_log=True):
     """begin uses 'vtctl VtTabletBegin' to start a transaction.
+
+    Args:
+      auto_log: passed to run_vtctl.
+
+    Returns:
+      the transaction id.
     """
     args = [
         'VtTabletBegin',
@@ -674,6 +753,13 @@ class Tablet(object):
 
   def commit(self, transaction_id, auto_log=True):
     """commit uses 'vtctl VtTabletCommit' to commit a transaction.
+
+    Args:
+      transaction_id: id of the transaction to roll back.
+      auto_log: passed to run_vtctl.
+
+    Returns:
+      the return code for run_vtctl.
     """
     args = [
         'VtTabletCommit',
@@ -686,6 +772,13 @@ class Tablet(object):
 
   def rollback(self, transaction_id, auto_log=True):
     """rollback uses 'vtctl VtTabletRollback' to rollback a transaction.
+
+    Args:
+      transaction_id: id of the transaction to roll back.
+      auto_log: passed to run_vtctl.
+
+    Returns:
+      the return code for run_vtctl.
     """
     args = [
         'VtTabletRollback',

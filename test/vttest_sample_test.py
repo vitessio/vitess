@@ -60,6 +60,7 @@ class TestMysqlctl(unittest.TestCase):
             'test_keyspace/80-:test_keyspace_1',
             '--schema_dir', os.path.join(environment.vttop, 'test',
                                          'vttest_schema'),
+            '--web_dir', environment.vttop + '/web/vtctld',
            ]
     sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     config = json.loads(sp.stdout.readline())
@@ -72,28 +73,27 @@ class TestMysqlctl(unittest.TestCase):
     json_vars = json.loads(data)
     self.assertIn('vtcombo', json_vars['cmdline'][0])
 
-    # to test vtcombo:
-    # ./vttest_sample_test.py -v -d
-    # go install && vtcombo -port 15010 -grpc_port 15011 -service_map grpc-vtgateservice -topology test_keyspace/-80:test_keyspace_0,test_keyspace/80-:test_keyspace_1 -mycnf_server_id 1 -mycnf_socket_file $VTDATAROOT/vttest*/vt_0000000001/mysql.sock -db-config-dba-uname vt_dba -db-config-dba-charset utf8 -db-config-app-uname vt_app -db-config-app-charset utf8 -alsologtostderr
-    # vtctl -vtgate_protocol grpc VtGateExecuteShards -server localhost:15011 -keyspace test_keyspace -shards -80 -tablet_type master "select 1 from dual"
-    # vtctl -vtgate_protocol grpc VtGateExecuteKeyspaceIds -server localhost:15011 -keyspace test_keyspace -keyspace_ids 20 -tablet_type master "show tables"
-    utils.pause('good time to test vtcombo with database running')
-
+    # build the vtcombo address and protocol
     protocol = protocols_flavor().vttest_protocol()
     if protocol == 'grpc':
-      vtagte_addr = 'localhost:%d' % config['grpc_port']
+      vtgate_addr = 'localhost:%d' % config['grpc_port']
     else:
-      vtagte_addr = 'localhost:%d' % config['port']
+      vtgate_addr = 'localhost:%d' % config['port']
     conn_timeout = 30.0
+    utils.pause('Paused test after vtcombo was started.\n'
+                'For manual testing, connect to vtgate at: %s '
+                'using protocol: %s.\n'
+                'Press enter to continue.' % (vtgate_addr, protocol))
 
     # Connect to vtgate.
-    conn = vtgate_client.connect(protocol, vtagte_addr, conn_timeout)
+    conn = vtgate_client.connect(protocol, vtgate_addr, conn_timeout)
 
     # Insert a row.
     row_id = 123
     keyspace_id = get_keyspace_id(row_id)
     cursor = conn.cursor(
-        'test_keyspace', 'master', keyspace_ids=[pack_kid(keyspace_id)],
+        tablet_type='master', keyspace='test_keyspace',
+        keyspace_ids=[pack_kid(keyspace_id)],
         writable=True)
     cursor.begin()
     insert = ('insert into test_table (id, msg, keyspace_id) values (%(id)s, '
@@ -133,7 +133,8 @@ class TestMysqlctl(unittest.TestCase):
     # Try to fetch a large number of rows
     # (more than one streaming result packet).
     stream_cursor = conn.cursor(
-        'test_keyspace', 'master', keyspace_ids=[pack_kid(keyspace_id)],
+        tablet_type='master', keyspace='test_keyspace',
+        keyspace_ids=[pack_kid(keyspace_id)],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     stream_cursor.execute('select * from test_table where id >= %(id_start)s',
                           {'id_start': id_start})
@@ -143,6 +144,48 @@ class TestMysqlctl(unittest.TestCase):
     # Clean up.
     cursor.close()
     conn.close()
+
+    # Test we can connect to vtcombo for vtctl actions
+    protocol = protocols_flavor().vtctl_python_client_protocol()
+    if protocol == 'grpc':
+      vtgate_addr = 'localhost:%d' % config['grpc_port']
+    else:
+      vtgate_addr = 'localhost:%d' % config['port']
+    out, _ = utils.run(
+        environment.binary_args('vtctlclient') +
+        ['-vtctl_client_protocol', protocol,
+         '-server', vtgate_addr,
+         '-stderrthreshold', 'INFO',
+         'ListAllTablets', 'test',
+        ], trap_output=True)
+    num_master = 0
+    num_replica = 0
+    num_rdonly = 0
+    num_dash_80 = 0
+    num_80_dash = 0
+    for line in out.splitlines():
+      parts = line.split()
+      self.assertEqual(parts[1], 'test_keyspace',
+                       'invalid keyspace in line: %s' % line)
+      if parts[3] == 'master':
+        num_master += 1
+      elif parts[3] == 'replica':
+        num_replica += 1
+      elif parts[3] == 'rdonly':
+        num_rdonly += 1
+      else:
+        self.fail('invalid tablet type in line: %s' % line)
+      if parts[2] == '-80':
+        num_dash_80 += 1
+      elif parts[2] == '80-':
+        num_80_dash += 1
+      else:
+        self.fail('invalid shard name in line: %s' % line)
+    self.assertEqual(num_master, 2)
+    self.assertEqual(num_replica, 2)
+    self.assertEqual(num_rdonly, 2)
+    self.assertEqual(num_dash_80, 3)
+    self.assertEqual(num_80_dash, 3)
 
     # and we're done, clean-up process
     sp.stdin.write('\n')

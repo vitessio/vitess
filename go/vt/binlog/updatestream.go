@@ -16,7 +16,7 @@ type UpdateStream interface {
 	ServeUpdateStream(position string, sendReply func(reply *binlogdatapb.StreamEvent) error) error
 
 	// StreamKeyRange streams events related to a KeyRange only
-	StreamKeyRange(position string, keyspaceIdType topodatapb.KeyspaceIdType, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error
+	StreamKeyRange(position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error
 
 	// StreamTables streams events related to a set of Tables only
 	StreamTables(position string, tables []string, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error

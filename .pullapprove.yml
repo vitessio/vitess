@@ -1,0 +1,20 @@
+approve_by_comment: true
+approve_regex: '^(LGTM|lgtm)'
+reject_regex: '^Rejected'
+reset_on_push: false
+reviewers:
+  name: vitess-eng
+  required: 1
+  members:
+  - aaijazi
+  - alainjobart
+  - AndyDiamondstein
+  - dumbunny
+  - enisoc
+  - erzel
+  - guokeno0
+  - guoliang100
+  - michael-berlin
+  - sougou
+  - thompsonja
+

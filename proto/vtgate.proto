@@ -199,11 +199,11 @@ message ExecuteEntityIdsRequest {
   string entity_column_name = 5;
 
   message EntityId {
-    // xid_type is the type of the entity's value. Can be NULL.
-    query.Type xid_type = 1;
+    // type is the type of the entity's value. Can be NULL_TYPE.
+    query.Type type = 1;
 
-    // xid_value is the value for the entity. Not set if xid_type is NULL.
-    bytes xid_value = 2;
+    // value is the value for the entity. Not set if type is NULL_TYPE.
+    bytes value = 2;
 
     // keyspace_id is the associated keyspace_id for the entity.
     bytes keyspace_id = 3;

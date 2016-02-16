@@ -111,7 +111,7 @@ func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 	db.AddQuery("describe `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte("pk")),
 				sqltypes.MakeString([]byte("int")),
 				sqltypes.MakeString([]byte{}),
@@ -140,7 +140,7 @@ func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte("PRIMARY")),
@@ -160,7 +160,7 @@ func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 	db.AddQuery("describe `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte("pk")),
 				sqltypes.MakeString([]byte("decimal")),
 				sqltypes.MakeString([]byte{}),
@@ -217,7 +217,7 @@ func TestTableInfoSetPKColumn(t *testing.T) {
 	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte("INDEX")),
@@ -256,7 +256,7 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte("PRIMARY")),
@@ -321,7 +321,7 @@ func newTestTableInfoCachePool() *CachePool {
 
 func getTestTableInfoQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
-		"select * from `test_table` where 1 != 1": &sqltypes.Result{
+		"select * from `test_table` where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -333,10 +333,10 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table`": &sqltypes.Result{
+		"describe `test_table`": {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("pk")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -344,7 +344,7 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("1")),
 					sqltypes.MakeString([]byte{}),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("name")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -352,7 +352,7 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("1")),
 					sqltypes.MakeString([]byte{}),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("addr")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -362,10 +362,10 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"show index from `test_table`": &sqltypes.Result{
+		"show index from `test_table`": {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("PRIMARY")),
@@ -374,7 +374,7 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("300")),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("INDEX")),
@@ -383,7 +383,7 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("300")),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("INDEX")),

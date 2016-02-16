@@ -5,7 +5,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -16,9 +15,9 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 
-	// import the 'vitess' sql driver
-	_ "github.com/youtube/vitess/go/vt/client"
+	"github.com/youtube/vitess/go/vt/vitessdriver"
 )
 
 var (
@@ -34,6 +33,8 @@ in the form of :v1, :v2, etc.
 	timeout       = flag.Duration("timeout", 30*time.Second, "timeout for queries")
 	streaming     = flag.Bool("streaming", false, "use a streaming query")
 	bindVariables = newBindvars("bind_variables", "bind variables as a json list")
+	keyspace      = flag.String("keyspace", "", "Keyspace of a specific keyspace/shard to target. Disables vtgate v3.")
+	shard         = flag.String("shard", "", "Shard of a specific keyspace/shard to target. Disables vtgate v3.")
 )
 
 func init() {
@@ -104,8 +105,16 @@ func main() {
 		exit.Return(1)
 	}
 
-	connStr := fmt.Sprintf(`{"address": "%s", "tablet_type": "%s", "streaming": %v, "timeout": %d}`, *server, *tabletType, *streaming, int64(30*(*timeout)))
-	db, err := sql.Open("vitess", connStr)
+	c := vitessdriver.Configuration{
+		Protocol:   *vtgateconn.VtgateProtocol,
+		Address:    *server,
+		Keyspace:   *keyspace,
+		Shard:      *shard,
+		TabletType: *tabletType,
+		Timeout:    *timeout,
+		Streaming:  *streaming,
+	}
+	db, err := vitessdriver.OpenWithConfiguration(c)
 	if err != nil {
 		log.Errorf("client error: %v", err)
 		exit.Return(1)
@@ -135,8 +144,8 @@ func main() {
 		}
 
 		rowsAffected, err := result.RowsAffected()
-		lastInsertId, err := result.LastInsertId()
-		log.Infof("Total time: %v / Row affected: %v / Last Insert Id: %v", time.Now().Sub(now), rowsAffected, lastInsertId)
+		lastInsertID, err := result.LastInsertId()
+		log.Infof("Total time: %v / Row affected: %v / Last Insert Id: %v", time.Now().Sub(now), rowsAffected, lastInsertID)
 	} else {
 
 		// launch the query

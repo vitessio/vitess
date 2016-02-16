@@ -25,6 +25,7 @@ var queryserviceStatusTemplate = `
   </tr>
   {{end}}
 </table>
+<!-- The div in the next line will be overwritten by the JavaScript graph. -->
 <div id="qps_chart">QPS: {{.CurrentQPS}}</div>
 <script type="text/javascript" src="https://www.google.com/jsapi"></script>
 <script type="text/javascript">
@@ -32,9 +33,9 @@ var queryserviceStatusTemplate = `
 google.load("jquery", "1.4.0");
 google.load("visualization", "1", {packages:["corechart"]});
 
-function minutesAgo(d, i) {
+function sampleDate(d, i) {
   var copy = new Date(d);
-  copy.setMinutes(copy.getMinutes() - i);
+  copy.setTime(copy.getTime() - i*60/5*1000);
   return copy
 }
 
@@ -70,12 +71,19 @@ function drawQPSChart() {
 
       var data = [["Time"].concat(planTypes)];
 
-      for (var i = 0; i < 15; i++) {
-        var datum = [minutesAgo(now, i)];
+      // Create data points, starting with the most recent timestamp.
+      // (On the graph this means going from right to left.)
+      // Time span: 15 minutes in 5 second intervals.
+      for (var i = 0; i < 15*60/5; i++) {
+        var datum = [sampleDate(now, i)];
         for (var j = 0; j < planTypes.length; j++) {
-          if (i < qps.All.length) {
-            datum.push(+qps[planTypes[j]][i].toFixed(2));
+          if (i < qps[planTypes[j]].length) {
+          	// Rates are ordered from least recent to most recent.
+          	// Therefore, we have to start reading from the end of the array.
+          	var idx = qps[planTypes[j]].length - i - 1;
+            datum.push(+qps[planTypes[j]][idx].toFixed(2));
           } else {
+            // Assume 0.0 QPS for older, non-existant data points.
             datum.push(0);
           }
         }
@@ -87,8 +95,8 @@ function drawQPSChart() {
 
   redraw();
 
-  // redraw every 30 seconds.
-  window.setInterval(redraw, 30000);
+  // redraw every 2.5 seconds.
+  window.setInterval(redraw, 2500);
 }
 google.setOnLoadCallback(drawQPSChart);
 </script>
@@ -111,7 +119,6 @@ func (tsv *TabletServer) AddStatusPart() {
 		rates := tsv.qe.queryServiceStats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
-
 		}
 		return status
 	})

@@ -17,8 +17,6 @@
   </span>
 </div>
 
-<h2 ng-bind="node.Path"></h2>
-
 <md-list ng-if="node.Children">
 <md-list-item class="md-whiteframe-z1" ng-repeat="child in node.Children" ng-click="navigate('/topo/' + (path ? path+'/' : '') + child)">
   <md-icon md-font-set="material-icons">folder</md-icon>

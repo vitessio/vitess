@@ -20,7 +20,7 @@ import (
 // The fake can be used to return a specific result for a given command.
 // If the command is not registered, an error will be thrown.
 type FakeVtworkerClient struct {
-	fakevtctlclient.FakeLoggerEventStreamingClient
+	*fakevtctlclient.FakeLoggerEventStreamingClient
 }
 
 // NewFakeVtworkerClient creates a FakeVtworkerClient struct.
@@ -29,7 +29,7 @@ func NewFakeVtworkerClient() *FakeVtworkerClient {
 }
 
 // FakeVtworkerClientFactory always returns the current instance.
-func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.VtworkerClient, error) {
+func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.Client, error) {
 	return f, nil
 }
 
