@@ -175,8 +175,8 @@ func (ft FakeTopo) DeleteEndPoints(ctx context.Context, cell, keyspace, shard st
 }
 
 // WatchSrvKeyspace implements topo.Server.WatchSrvKeyspace
-func (ft FakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
-	return nil, nil, errNotImplemented
+func (ft FakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
+	return nil, errNotImplemented
 }
 
 // UpdateSrvShard implements topo.Server.

@@ -198,7 +198,6 @@ type fakeTopo struct {
 	keyspace      string
 	callCount     int
 	notifications chan *topodatapb.SrvKeyspace
-	stopWatching  chan struct{}
 }
 
 func (ft *fakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
@@ -213,15 +212,14 @@ func (ft *fakeTopo) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string
 	return nil
 }
 
-func (ft *fakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
+func (ft *fakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
 	ft.callCount++
 	if keyspace == ft.keyspace {
 		ft.notifications = make(chan *topodatapb.SrvKeyspace, 10)
-		ft.stopWatching = make(chan struct{})
 		ft.notifications <- &topodatapb.SrvKeyspace{}
-		return ft.notifications, ft.stopWatching, nil
+		return ft.notifications, nil
 	}
-	return nil, nil, fmt.Errorf("Unknown keyspace")
+	return nil, fmt.Errorf("Unknown keyspace")
 }
 
 func (ft *fakeTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error) {
