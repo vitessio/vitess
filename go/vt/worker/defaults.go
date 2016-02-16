@@ -5,8 +5,11 @@
 package worker
 
 const (
-	defaultSourceReaderCount      = 10
-	defaultDestinationPackCount   = 10
+	defaultSourceReaderCount = 10
+	// defaultDestinationPackCount is the number of rows which will be aggreated
+	// into one transaction. Note that higher values will increase memory
+	// consumption in vtworker, vttablet and mysql.
+	defaultDestinationPackCount   = 1000
 	defaultMinTableSizeForSplit   = 1024 * 1024
 	defaultDestinationWriterCount = 20
 )

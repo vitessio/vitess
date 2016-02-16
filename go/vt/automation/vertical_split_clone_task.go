@@ -19,7 +19,6 @@ type VerticalSplitCloneTask struct {
 func (t *VerticalSplitCloneTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
 	// TODO(mberlin): Add parameters for the following options?
 	//                        '--source_reader_count', '1',
-	//                        '--destination_pack_count', '1',
 	//                        '--destination_writer_count', '1',
 	args := []string{"VerticalSplitClone"}
 	args = append(args, "--tables="+parameters["tables"])
