@@ -248,8 +248,10 @@ type Impl interface {
 	// The initial error returned by this method is meant to catch
 	// the obvious bad cases (invalid cell, invalid tabletType, ...)
 	// that are never going to work. Mutiple notifications with the
-	// same contents may be sent (for instance when the serving graph
-	// is rebuilt, the version changes, but the content hasn't changed).
+	// same contents may be sent (for instance, when the serving graph
+	// is rebuilt, but the content of SrvKeyspace is the same,
+	// the object version will change, most likely triggering the
+	// notification, but the content hasn't changed).
 	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *topodatapb.SrvKeyspace, err error)
 
 	// UpdateSrvShard updates the serving records for a cell,

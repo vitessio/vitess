@@ -7,6 +7,7 @@ package vtgate
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -333,9 +334,10 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 	ft.UpdateSrvKeyspace(context.Background(), "", "test_ks", want)
 
+	// wait untl we get the right value
 	var got *topodatapb.SrvKeyspace
 	expiry := time.Now().Add(5 * time.Second)
-	for i := time.Now(); i.Before(expiry); {
+	for {
 		got, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
 		if err != nil {
 			t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
@@ -343,10 +345,29 @@ func TestGetSrvKeyspace(t *testing.T) {
 		if proto.Equal(want, got) {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		if time.Now().After(expiry) {
+			t.Fatalf("GetSrvKeyspace() timeout = %+v, want %+v", got, want)
+		}
+		time.Sleep(time.Millisecond)
 	}
-	if !proto.Equal(want, got) {
-		t.Fatalf("GetSrvKeyspace() = %+v, want %+v", got, want)
+
+	// now send an updated empty value, wait until we get the error
+	ft.notifications <- nil
+	expiry = time.Now().Add(5 * time.Second)
+	found := false
+	for {
+		got, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
+		if err != nil && strings.Contains(err.Error(), "no SrvKeyspace") {
+			found = true
+			break
+		}
+		if time.Now().After(expiry) {
+			t.Fatalf("timeout waiting for no keyspace error")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !found {
+		t.Errorf("sending empty keyspace didn't result in error")
 	}
 }
 

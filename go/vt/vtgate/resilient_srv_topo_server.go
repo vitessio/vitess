@@ -131,9 +131,10 @@ type srvKeyspaceEntry struct {
 	lastErrorCtx context.Context
 }
 
-// setValue remembers the current value (or nil if the node doesn't exist)
-// and sets lastError / lastErrorCtx if necessary.
-func (ske *srvKeyspaceEntry) setValue(ctx context.Context, value *topodatapb.SrvKeyspace) {
+// setValueLocked remembers the current value (or nil if the node doesn't exist)
+// and sets lastError / lastErrorCtx if necessary. ske.mutex
+// must be held when calling this function.
+func (ske *srvKeyspaceEntry) setValueLocked(ctx context.Context, value *topodatapb.SrvKeyspace) {
 	ske.value = value
 	if value == nil {
 		ske.lastError = fmt.Errorf("no SrvKeyspace %v in cell %v", ske.keyspace, ske.cell)
@@ -333,7 +334,10 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 		return entry.value, entry.lastError
 	}
 
-	// watch is not running, let's try to start it
+	// Watch is not running, let's try to start it.
+	// We use a background context, as the watch should last
+	// forever (as opposed to the current query's ctx getting
+	// the current value).
 	newCtx := context.Background()
 	notifications, err := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
 	if err != nil {
@@ -358,12 +362,12 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 
 	// we are now watching, cache the first notification
 	entry.watchRunning = true
-	entry.setValue(ctx, sk)
+	entry.setValueLocked(ctx, sk)
 
 	go func() {
 		for sk := range notifications {
 			entry.mutex.Lock()
-			entry.setValue(nil, sk)
+			entry.setValueLocked(nil, sk)
 			entry.mutex.Unlock()
 		}
 		log.Errorf("failed to receive from channel")
