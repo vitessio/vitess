@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 /**
  * Type-converting wrapper around raw
  * {@link com.youtube.vitess.proto.Query.Row} proto.
@@ -28,10 +30,11 @@ import java.util.List;
  * the list of {@link Field}s from the corresponding
  * {@link com.youtube.vitess.proto.Query.QueryResult}.
  */
+@NotThreadSafe
 public class Row {
-  private FieldMap fieldMap;
-  private List<ByteString> values;
-  private Query.Row rawRow;
+  private final FieldMap fieldMap;
+  private final List<ByteString> values;
+  private final Query.Row rawRow;
   private boolean lastGetWasNull;
 
   /**
@@ -70,6 +73,7 @@ public class Row {
    */
   public Row(List<Field> fields, List<ByteString> values) {
     this.fieldMap = new FieldMap(fields);
+    this.rawRow = null;
     this.values = values;
   }
 

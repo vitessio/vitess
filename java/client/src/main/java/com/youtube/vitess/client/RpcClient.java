@@ -1,5 +1,7 @@
 package com.youtube.vitess.client;
 
+import com.google.common.util.concurrent.ListenableFuture;
+
 import com.youtube.vitess.proto.Query.QueryResult;
 import com.youtube.vitess.proto.Vtgate.BeginRequest;
 import com.youtube.vitess.proto.Vtgate.BeginResponse;
@@ -38,30 +40,31 @@ import java.sql.SQLException;
  */
 public interface RpcClient extends Closeable {
   // execute sends a single query using the VTGate V3 API.
-  ExecuteResponse execute(Context ctx, ExecuteRequest request) throws SQLException;
+  ListenableFuture<ExecuteResponse> execute(Context ctx, ExecuteRequest request)
+      throws SQLException;
 
   // executeShards sends a single query to a set of shards.
-  ExecuteShardsResponse executeShards(Context ctx, ExecuteShardsRequest request)
+  ListenableFuture<ExecuteShardsResponse> executeShards(Context ctx, ExecuteShardsRequest request)
       throws SQLException;
 
   // executeKeyspaceIds sends a query with a set of keyspace IDs.
-  ExecuteKeyspaceIdsResponse executeKeyspaceIds(Context ctx, ExecuteKeyspaceIdsRequest request)
-      throws SQLException;
+  ListenableFuture<ExecuteKeyspaceIdsResponse> executeKeyspaceIds(
+      Context ctx, ExecuteKeyspaceIdsRequest request) throws SQLException;
 
   // executeKeyRanges sends a query with a set of key ranges.
-  ExecuteKeyRangesResponse executeKeyRanges(Context ctx, ExecuteKeyRangesRequest request)
-      throws SQLException;
+  ListenableFuture<ExecuteKeyRangesResponse> executeKeyRanges(
+      Context ctx, ExecuteKeyRangesRequest request) throws SQLException;
 
   // executeEntityIds sends a query with a set of entity IDs.
-  ExecuteEntityIdsResponse executeEntityIds(Context ctx, ExecuteEntityIdsRequest request)
-      throws SQLException;
+  ListenableFuture<ExecuteEntityIdsResponse> executeEntityIds(
+      Context ctx, ExecuteEntityIdsRequest request) throws SQLException;
 
   // executeBatchShards sends a list of queries to a set of shards.
-  ExecuteBatchShardsResponse executeBatchShards(Context ctx, ExecuteBatchShardsRequest request)
-      throws SQLException;
+  ListenableFuture<ExecuteBatchShardsResponse> executeBatchShards(
+      Context ctx, ExecuteBatchShardsRequest request) throws SQLException;
 
   // executeBatchKeyspaceIds sends a list of queries with keyspace ids as bind variables.
-  ExecuteBatchKeyspaceIdsResponse executeBatchKeyspaceIds(
+  ListenableFuture<ExecuteBatchKeyspaceIdsResponse> executeBatchKeyspaceIds(
       Context ctx, ExecuteBatchKeyspaceIdsRequest request) throws SQLException;
 
   // streamExecute starts stream queries with the VTGate V3 API.
@@ -81,18 +84,20 @@ public interface RpcClient extends Closeable {
       Context ctx, StreamExecuteKeyRangesRequest request) throws SQLException;
 
   // begin starts a transaction.
-  BeginResponse begin(Context ctx, BeginRequest request) throws SQLException;
+  ListenableFuture<BeginResponse> begin(Context ctx, BeginRequest request) throws SQLException;
 
   // commit commits a transaction.
-  CommitResponse commit(Context ctx, CommitRequest request) throws SQLException;
+  ListenableFuture<CommitResponse> commit(Context ctx, CommitRequest request) throws SQLException;
 
   // rollback rolls back a pending transaction.
-  RollbackResponse rollback(Context ctx, RollbackRequest request) throws SQLException;
+  ListenableFuture<RollbackResponse> rollback(Context ctx, RollbackRequest request)
+      throws SQLException;
 
   // splitQuery splits a query into smaller queries.
-  SplitQueryResponse splitQuery(Context ctx, SplitQueryRequest request) throws SQLException;
+  ListenableFuture<SplitQueryResponse> splitQuery(Context ctx, SplitQueryRequest request)
+      throws SQLException;
 
   // getSrvKeyspace returns a list of serving keyspaces.
-  GetSrvKeyspaceResponse getSrvKeyspace(Context ctx, GetSrvKeyspaceRequest request)
-      throws SQLException;
+  ListenableFuture<GetSrvKeyspaceResponse> getSrvKeyspace(
+      Context ctx, GetSrvKeyspaceRequest request) throws SQLException;
 }
