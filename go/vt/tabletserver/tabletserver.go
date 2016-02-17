@@ -797,6 +797,8 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 // subset of rows from the original query.
 func (tsv *TabletServer) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, sessionID int64) (splits []querytypes.QuerySplit, err error) {
 	logStats := newLogStats("SplitQuery", ctx)
+	logStats.OriginalSQL = sql
+	logStats.BindVariables = bindVariables
 	defer handleError(&err, logStats, tsv.qe.queryServiceStats)
 	if err = tsv.startRequest(target, sessionID, false, false); err != nil {
 		return nil, err
