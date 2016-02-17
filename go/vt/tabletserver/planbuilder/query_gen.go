@@ -38,7 +38,7 @@ func FormatImpossible(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	case *sqlparser.Select:
 		buf.Myprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
 	case *sqlparser.JoinTableExpr:
-		if node.Join == sqlparser.AST_LEFT_JOIN || node.Join == sqlparser.AST_RIGHT_JOIN {
+		if node.Join == sqlparser.LeftJoinStr || node.Join == sqlparser.RightJoinStr {
 			// ON clause is requried
 			buf.Myprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
 		} else {
@@ -104,7 +104,7 @@ func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 
 // GenerateSelectSubquery generates the subquery for selects.
 func GenerateSelectSubquery(sel *sqlparser.Select, tableInfo *schema.Table, index string) *sqlparser.ParsedQuery {
-	hint := &sqlparser.IndexHints{Type: sqlparser.AST_USE, Indexes: []sqlparser.SQLName{sqlparser.SQLName(index)}}
+	hint := &sqlparser.IndexHints{Type: sqlparser.UseStr, Indexes: []sqlparser.SQLName{sqlparser.SQLName(index)}}
 	tableExpr := sel.From[0].(*sqlparser.AliasedTableExpr)
 	savedHint := tableExpr.Hints
 	tableExpr.Hints = hint
@@ -159,7 +159,7 @@ func GenerateSubquery(columns []string, table *sqlparser.AliasedTableExpr, where
 	fmt.Fprintf(buf, "%s", columns[i])
 	buf.Myprintf(" from %v%v%v%v", table, where, order, limit)
 	if forUpdate {
-		buf.Myprintf(sqlparser.AST_FOR_UPDATE)
+		buf.Myprintf(sqlparser.ForUpdateStr)
 	}
 	return buf.ParsedQuery()
 }

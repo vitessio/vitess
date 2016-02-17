@@ -1,13 +1,31 @@
 package tabletserver
 
 import (
+	"time"
+
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
 // This file contains the status web page export for tabletserver
 
 var queryserviceStatusTemplate = `
-State: {{.State}}<br>
+<h2>State: {{.State}}</h2>
+<h2>Queryservice History</h2>
+<table>
+  <tr>
+    <th>Time</th>
+    <th>Target Tablet Type</th>
+    <th>Serving State</th>
+  </tr>
+  {{range .History}}
+  <tr>
+    <td>{{.Time.Format "Jan 2, 2006 at 15:04:05 (MST)"}}</td>
+    <td>{{.TabletType}}</td>
+    <td>{{.ServingState}}</td>
+  </tr>
+  {{end}}
+</table>
+<!-- The div in the next line will be overwritten by the JavaScript graph. -->
 <div id="qps_chart">QPS: {{.CurrentQPS}}</div>
 <script type="text/javascript" src="https://www.google.com/jsapi"></script>
 <script type="text/javascript">
@@ -15,9 +33,9 @@ State: {{.State}}<br>
 google.load("jquery", "1.4.0");
 google.load("visualization", "1", {packages:["corechart"]});
 
-function minutesAgo(d, i) {
+function sampleDate(d, i) {
   var copy = new Date(d);
-  copy.setMinutes(copy.getMinutes() - i);
+  copy.setTime(copy.getTime() - i*60/5*1000);
   return copy
 }
 
@@ -53,12 +71,19 @@ function drawQPSChart() {
 
       var data = [["Time"].concat(planTypes)];
 
-      for (var i = 0; i < 15; i++) {
-        var datum = [minutesAgo(now, i)];
+      // Create data points, starting with the most recent timestamp.
+      // (On the graph this means going from right to left.)
+      // Time span: 15 minutes in 5 second intervals.
+      for (var i = 0; i < 15*60/5; i++) {
+        var datum = [sampleDate(now, i)];
         for (var j = 0; j < planTypes.length; j++) {
-          if (i < qps.All.length) {
-            datum.push(+qps[planTypes[j]][i].toFixed(2));
+          if (i < qps[planTypes[j]].length) {
+          	// Rates are ordered from least recent to most recent.
+          	// Therefore, we have to start reading from the end of the array.
+          	var idx = qps[planTypes[j]].length - i - 1;
+            datum.push(+qps[planTypes[j]][idx].toFixed(2));
           } else {
+            // Assume 0.0 QPS for older, non-existant data points.
             datum.push(0);
           }
         }
@@ -70,8 +95,8 @@ function drawQPSChart() {
 
   redraw();
 
-  // redraw every 30 seconds.
-  window.setInterval(redraw, 30000);
+  // redraw every 2.5 seconds.
+  window.setInterval(redraw, 2500);
 }
 google.setOnLoadCallback(drawQPSChart);
 </script>
@@ -80,20 +105,36 @@ google.setOnLoadCallback(drawQPSChart);
 
 type queryserviceStatus struct {
 	State      string
+	History    []interface{}
 	CurrentQPS float64
 }
 
 // AddStatusPart registers the status part for the status page.
-func (rqsc *realQueryServiceControl) AddStatusPart() {
+func (tsv *TabletServer) AddStatusPart() {
 	servenv.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
 		status := queryserviceStatus{
-			State: rqsc.sqlQueryRPCService.GetState(),
+			State:   tsv.GetState(),
+			History: tsv.history.Records(),
 		}
-		rates := rqsc.sqlQueryRPCService.qe.queryServiceStats.QPSRates.Get()
+		rates := tsv.qe.queryServiceStats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
-
 		}
 		return status
 	})
+}
+
+type historyRecord struct {
+	Time         time.Time
+	TabletType   string
+	ServingState string
+}
+
+// IsDuplicate implements history.Deduplicable
+func (r *historyRecord) IsDuplicate(other interface{}) bool {
+	rother, ok := other.(*historyRecord)
+	if !ok {
+		return false
+	}
+	return r.TabletType == rother.TabletType && r.ServingState == rother.ServingState
 }

@@ -1,16 +1,4 @@
-# Concepts
-
-Vitess uses the following concepts and terms:
-
-* [keyspace](#keyspace)
-* [shard](#shard)
-* [tablet](#tablet)
-* [keyspace ID](#keyspace-id)
-* [shard graph](#shard-graph)
-* [replication graph](#replication-graph)
-* [serving graph](#serving-graph)
-* [topology service](#topology-service)
-* [cell (data center)](#cell-(data-center))
+This document defines common Vitess concepts and terminology.
 
 ## Keyspace
 
@@ -50,9 +38,9 @@ A keyspace ID can be an unsigned number or a binary character column
 (<code>unsigned bigint</code> or <code>varbinary</code> in MySQL tables).
 Other data types are not allowed due to ambiguous equality or inequality rules.
 
-<!--
+<div style="display:none">
 TODO: keyspace ID rules must be solidified once VTGate features are finalized.
--->
+</div>
 
 ## Shard
 
@@ -62,7 +50,7 @@ Each MySQL instance within a shard has the same data or should have the same dat
 
 A keyspace that does not use sharding effectively has one shard. Vitess names the shard <code>0</code> by convention. When sharded a keyspace has <code>N</code> shards with non-overlapping data. Usually, <code>N</code> is a power of 2.
 
-Vitess supports [dynamic resharding](https://github.com/youtube/vitess/blob/master/doc/Resharding.md), in which one shard is split into multiple shards for instance. During dynamic resharding, the data in the source shard is split into the destination shards. Then the source shard is deleted.
+Vitess supports [dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding), in which one shard is split into multiple shards for instance. During dynamic resharding, the data in the source shard is split into the destination shards. Then the source shard is deleted.
 
 ## Tablet
 
@@ -70,28 +58,24 @@ A *tablet* is a single server that runs:
 
 * a MySQL instance
 * a <code>vttablet</code> instance
-* a local row cache instance
+* (optionally) a local row cache instance
 * any other database-specific process necessary for operational purposes
 
-A tablet has a status as well as a type. Common statuses and types are listed below:
+A tablet has a type. Common types are listed below:
 
-* **status**
-  * idle - not assigned to a keyspace
-  * assigned - designated to a particular shard within a keyspace
-  * scrap - unhealthy
 * **type**
   * master - The read-write database that is the MySQL master
   * replica - A MySQL slave that serves read-only traffic with guaranteed low replication latency
   * rdonly - A MySQL slave that serves read-only traffic for backend processing jobs, such as MapReduce-type jobs. This type of table does not have guaranteed replication latency.
   * spare - A MySQL slave that is not currently in use.
 
-There are several other tablet types that each serve a specific purpose, including <code>experimental</code>, <code>schema</code>, <code>lag</code>, <code>backup</code>, <code>restore</code>, <code>checker</code>.
+There are several other tablet types that each serve a specific purpose, including <code>experimental</code>, <code>schema</code>, <code>backup</code>, <code>restore</code>, <code>worker</code>.
 
 Only <code>master</code>, <code>replica</code>, and <code>rdonly</code> tablets are included in the [serving graph](#serving-graph).
 
-<!--
+<div style="display:none">
 TODO: Add pointer to complete list of types and explain how to update type?
--->
+</div>
 
 ## Shard graph
 
@@ -142,11 +126,11 @@ A Vitess implementation has one global instance of the topology service and one 
   Each local instance contains information about information specific to the cell where it is located. Specifically, it contains data about tablets in the cell, the serving graph for that cell, and the master-slave map for MySQL instances in that cell.<br><br>
   The local topology server must be available for Vitess to serve data.
 
-<!--
+<div style="display:none">
   To ensure reliability, the topology service has multiple server processes running on different servers. Those servers elect a master and perform chorum writes. In ZooKeeper, for a write to succeed, more than half of the servers must acknowledge it. Thus, a typical ZooKeeper configuration consists of either three or five servers, where two (out of three) or three (out of five) servers must agree for a write operation to succeed.
 The instance is the set of servers providing topology services. So, in a Vitess implementation using ZooKeeper, the global and local instances likely consist of three or five servers apiece.
   To be reliable, the global instance needs to have server processes spread across all regions and cells. Read-only replicas of the global instance can be maintained in each data center (cell).
--->
+</div>
 
 ## Cell (Data Center)
 

@@ -11,6 +11,7 @@ It is generated from these files:
 It has these top-level messages:
 	Target
 	VTGateCallerID
+	Value
 	BindVariable
 	BoundQuery
 	Field
@@ -40,216 +41,219 @@ It has these top-level messages:
 package query
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 import topodata "github.com/youtube/vitess/go/vt/proto/topodata"
 import vtrpc "github.com/youtube/vitess/go/vt/proto/vtrpc"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
+var _ = fmt.Errorf
+var _ = math.Inf
 
-type BindVariable_Type int32
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+const _ = proto.ProtoPackageIsVersion1
 
-const (
-	BindVariable_TYPE_NULL       BindVariable_Type = 0
-	BindVariable_TYPE_BYTES      BindVariable_Type = 1
-	BindVariable_TYPE_INT        BindVariable_Type = 2
-	BindVariable_TYPE_UINT       BindVariable_Type = 3
-	BindVariable_TYPE_FLOAT      BindVariable_Type = 4
-	BindVariable_TYPE_BYTES_LIST BindVariable_Type = 5
-	BindVariable_TYPE_INT_LIST   BindVariable_Type = 6
-	BindVariable_TYPE_UINT_LIST  BindVariable_Type = 7
-	BindVariable_TYPE_FLOAT_LIST BindVariable_Type = 8
-)
-
-var BindVariable_Type_name = map[int32]string{
-	0: "TYPE_NULL",
-	1: "TYPE_BYTES",
-	2: "TYPE_INT",
-	3: "TYPE_UINT",
-	4: "TYPE_FLOAT",
-	5: "TYPE_BYTES_LIST",
-	6: "TYPE_INT_LIST",
-	7: "TYPE_UINT_LIST",
-	8: "TYPE_FLOAT_LIST",
-}
-var BindVariable_Type_value = map[string]int32{
-	"TYPE_NULL":       0,
-	"TYPE_BYTES":      1,
-	"TYPE_INT":        2,
-	"TYPE_UINT":       3,
-	"TYPE_FLOAT":      4,
-	"TYPE_BYTES_LIST": 5,
-	"TYPE_INT_LIST":   6,
-	"TYPE_UINT_LIST":  7,
-	"TYPE_FLOAT_LIST": 8,
-}
-
-func (x BindVariable_Type) String() string {
-	return proto.EnumName(BindVariable_Type_name, int32(x))
-}
-
-// Type follows enum_field_types from mysql.h.
-type Field_Type int32
+// Flag allows us to qualify types by their common properties.
+type Flag int32
 
 const (
-	Field_TYPE_DECIMAL     Field_Type = 0
-	Field_TYPE_TINY        Field_Type = 1
-	Field_TYPE_SHORT       Field_Type = 2
-	Field_TYPE_LONG        Field_Type = 3
-	Field_TYPE_FLOAT       Field_Type = 4
-	Field_TYPE_DOUBLE      Field_Type = 5
-	Field_TYPE_NULL        Field_Type = 6
-	Field_TYPE_TIMESTAMP   Field_Type = 7
-	Field_TYPE_LONGLONG    Field_Type = 8
-	Field_TYPE_INT24       Field_Type = 9
-	Field_TYPE_DATE        Field_Type = 10
-	Field_TYPE_TIME        Field_Type = 11
-	Field_TYPE_DATETIME    Field_Type = 12
-	Field_TYPE_YEAR        Field_Type = 13
-	Field_TYPE_NEWDATE     Field_Type = 14
-	Field_TYPE_VARCHAR     Field_Type = 15
-	Field_TYPE_BIT         Field_Type = 16
-	Field_TYPE_NEWDECIMAL  Field_Type = 246
-	Field_TYPE_ENUM        Field_Type = 247
-	Field_TYPE_SET         Field_Type = 248
-	Field_TYPE_TINY_BLOB   Field_Type = 249
-	Field_TYPE_MEDIUM_BLOB Field_Type = 250
-	Field_TYPE_LONG_BLOB   Field_Type = 251
-	Field_TYPE_BLOB        Field_Type = 252
-	Field_TYPE_VAR_STRING  Field_Type = 253
-	Field_TYPE_STRING      Field_Type = 254
-	Field_TYPE_GEOMETRY    Field_Type = 255
+	Flag_NONE       Flag = 0
+	Flag_ISINTEGRAL Flag = 256
+	Flag_ISUNSIGNED Flag = 512
+	Flag_ISFLOAT    Flag = 1024
+	Flag_ISQUOTED   Flag = 2048
+	Flag_ISTEXT     Flag = 4096
+	Flag_ISBINARY   Flag = 8192
 )
 
-var Field_Type_name = map[int32]string{
-	0:   "TYPE_DECIMAL",
-	1:   "TYPE_TINY",
-	2:   "TYPE_SHORT",
-	3:   "TYPE_LONG",
-	4:   "TYPE_FLOAT",
-	5:   "TYPE_DOUBLE",
-	6:   "TYPE_NULL",
-	7:   "TYPE_TIMESTAMP",
-	8:   "TYPE_LONGLONG",
-	9:   "TYPE_INT24",
-	10:  "TYPE_DATE",
-	11:  "TYPE_TIME",
-	12:  "TYPE_DATETIME",
-	13:  "TYPE_YEAR",
-	14:  "TYPE_NEWDATE",
-	15:  "TYPE_VARCHAR",
-	16:  "TYPE_BIT",
-	246: "TYPE_NEWDECIMAL",
-	247: "TYPE_ENUM",
-	248: "TYPE_SET",
-	249: "TYPE_TINY_BLOB",
-	250: "TYPE_MEDIUM_BLOB",
-	251: "TYPE_LONG_BLOB",
-	252: "TYPE_BLOB",
-	253: "TYPE_VAR_STRING",
-	254: "TYPE_STRING",
-	255: "TYPE_GEOMETRY",
+var Flag_name = map[int32]string{
+	0:    "NONE",
+	256:  "ISINTEGRAL",
+	512:  "ISUNSIGNED",
+	1024: "ISFLOAT",
+	2048: "ISQUOTED",
+	4096: "ISTEXT",
+	8192: "ISBINARY",
 }
-var Field_Type_value = map[string]int32{
-	"TYPE_DECIMAL":     0,
-	"TYPE_TINY":        1,
-	"TYPE_SHORT":       2,
-	"TYPE_LONG":        3,
-	"TYPE_FLOAT":       4,
-	"TYPE_DOUBLE":      5,
-	"TYPE_NULL":        6,
-	"TYPE_TIMESTAMP":   7,
-	"TYPE_LONGLONG":    8,
-	"TYPE_INT24":       9,
-	"TYPE_DATE":        10,
-	"TYPE_TIME":        11,
-	"TYPE_DATETIME":    12,
-	"TYPE_YEAR":        13,
-	"TYPE_NEWDATE":     14,
-	"TYPE_VARCHAR":     15,
-	"TYPE_BIT":         16,
-	"TYPE_NEWDECIMAL":  246,
-	"TYPE_ENUM":        247,
-	"TYPE_SET":         248,
-	"TYPE_TINY_BLOB":   249,
-	"TYPE_MEDIUM_BLOB": 250,
-	"TYPE_LONG_BLOB":   251,
-	"TYPE_BLOB":        252,
-	"TYPE_VAR_STRING":  253,
-	"TYPE_STRING":      254,
-	"TYPE_GEOMETRY":    255,
+var Flag_value = map[string]int32{
+	"NONE":       0,
+	"ISINTEGRAL": 256,
+	"ISUNSIGNED": 512,
+	"ISFLOAT":    1024,
+	"ISQUOTED":   2048,
+	"ISTEXT":     4096,
+	"ISBINARY":   8192,
 }
 
-func (x Field_Type) String() string {
-	return proto.EnumName(Field_Type_name, int32(x))
+func (x Flag) String() string {
+	return proto.EnumName(Flag_name, int32(x))
 }
+func (Flag) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-// Flag contains the MySQL field flags bitset values e.g. to
-// distinguish between signed and unsigned integer.  These numbers
-// should exactly match values defined in
-// dist/mysql-5.1.52/include/mysql_com.h
-type Field_Flag int32
+// Type defines the various supported data types in bind vars
+// and query results.
+type Type int32
 
 const (
-	// ZEROVALUE_FLAG is not part of the MySQL specification and only
-	// used in unit tests.
-	Field_VT_ZEROVALUE_FLAG        Field_Flag = 0
-	Field_VT_NOT_NULL_FLAG         Field_Flag = 1
-	Field_VT_PRI_KEY_FLAG          Field_Flag = 2
-	Field_VT_UNIQUE_KEY_FLAG       Field_Flag = 4
-	Field_VT_MULTIPLE_KEY_FLAG     Field_Flag = 8
-	Field_VT_BLOB_FLAG             Field_Flag = 16
-	Field_VT_UNSIGNED_FLAG         Field_Flag = 32
-	Field_VT_ZEROFILL_FLAG         Field_Flag = 64
-	Field_VT_BINARY_FLAG           Field_Flag = 128
-	Field_VT_ENUM_FLAG             Field_Flag = 256
-	Field_VT_AUTO_INCREMENT_FLAG   Field_Flag = 512
-	Field_VT_TIMESTAMP_FLAG        Field_Flag = 1024
-	Field_VT_SET_FLAG              Field_Flag = 2048
-	Field_VT_NO_DEFAULT_VALUE_FLAG Field_Flag = 4096
-	Field_VT_ON_UPDATE_NOW_FLAG    Field_Flag = 8192
-	Field_VT_NUM_FLAG              Field_Flag = 32768
+	// NULL_TYPE specifies a NULL type.
+	Type_NULL_TYPE Type = 0
+	// INT8 specifies a TINYINT type.
+	// Properties: 1, IsNumber.
+	Type_INT8 Type = 257
+	// UINT8 specifies a TINYINT UNSIGNED type.
+	// Properties: 2, IsNumber, IsUnsigned.
+	Type_UINT8 Type = 770
+	// INT16 specifies a SMALLINT type.
+	// Properties: 3, IsNumber.
+	Type_INT16 Type = 259
+	// UINT16 specifies a SMALLINT UNSIGNED type.
+	// Properties: 4, IsNumber, IsUnsigned.
+	Type_UINT16 Type = 772
+	// INT24 specifies a MEDIUMINT type.
+	// Properties: 5, IsNumber.
+	Type_INT24 Type = 261
+	// UINT24 specifies a MEDIUMINT UNSIGNED type.
+	// Properties: 6, IsNumber, IsUnsigned.
+	Type_UINT24 Type = 774
+	// INT32 specifies a INTEGER type.
+	// Properties: 7, IsNumber.
+	Type_INT32 Type = 263
+	// UINT32 specifies a INTEGER UNSIGNED type.
+	// Properties: 8, IsNumber, IsUnsigned.
+	Type_UINT32 Type = 776
+	// INT64 specifies a BIGINT type.
+	// Properties: 9, IsNumber.
+	Type_INT64 Type = 265
+	// UINT64 specifies a BIGINT UNSIGNED type.
+	// Properties: 10, IsNumber, IsUnsigned.
+	Type_UINT64 Type = 778
+	// FLOAT32 specifies a FLOAT type.
+	// Properties: 11, IsFloat.
+	Type_FLOAT32 Type = 1035
+	// FLOAT64 specifies a DOUBLE or REAL type.
+	// Properties: 12, IsFloat.
+	Type_FLOAT64 Type = 1036
+	// TIMESTAMP specifies a TIMESTAMP type.
+	// Properties: 13, IsQuoted.
+	Type_TIMESTAMP Type = 2061
+	// DATE specifies a DATE type.
+	// Properties: 14, IsQuoted.
+	Type_DATE Type = 2062
+	// TIME specifies a TIME type.
+	// Properties: 15, IsQuoted.
+	Type_TIME Type = 2063
+	// DATETIME specifies a DATETIME type.
+	// Properties: 16, IsQuoted.
+	Type_DATETIME Type = 2064
+	// YEAR specifies a YEAR type.
+	// Properties: 17, IsNumber, IsUnsigned.
+	Type_YEAR Type = 785
+	// DECIMAL specifies a DECIMAL or NUMERIC type.
+	// Properties: 18, None.
+	Type_DECIMAL Type = 18
+	// TEXT specifies a TEXT type.
+	// Properties: 19, IsQuoted, IsText.
+	Type_TEXT Type = 6163
+	// BLOB specifies a BLOB type.
+	// Properties: 20, IsQuoted, IsBinary.
+	Type_BLOB Type = 10260
+	// VARCHAR specifies a VARCHAR type.
+	// Properties: 21, IsQuoted, IsText.
+	Type_VARCHAR Type = 6165
+	// VARBINARY specifies a VARBINARY type.
+	// Properties: 22, IsQuoted, IsBinary.
+	Type_VARBINARY Type = 10262
+	// CHAR specifies a CHAR type.
+	// Properties: 23, IsQuoted, IsText.
+	Type_CHAR Type = 6167
+	// BINARY specifies a BINARY type.
+	// Properties: 24, IsQuoted, IsBinary.
+	Type_BINARY Type = 10264
+	// BIT specifies a BIT type.
+	// Properties: 25, IsQuoted.
+	Type_BIT Type = 2073
+	// ENUM specifies an ENUM type.
+	// Properties: 26, IsQuoted.
+	Type_ENUM Type = 2074
+	// SET specifies a SET type.
+	// Properties: 27, IsQuoted.
+	Type_SET Type = 2075
+	// TUPLE specifies a a tuple. This cannot
+	// be returned in a QueryResult, but it can
+	// be sent as a bind var.
+	// Properties: 28, None.
+	Type_TUPLE Type = 28
 )
 
-var Field_Flag_name = map[int32]string{
-	0:     "VT_ZEROVALUE_FLAG",
-	1:     "VT_NOT_NULL_FLAG",
-	2:     "VT_PRI_KEY_FLAG",
-	4:     "VT_UNIQUE_KEY_FLAG",
-	8:     "VT_MULTIPLE_KEY_FLAG",
-	16:    "VT_BLOB_FLAG",
-	32:    "VT_UNSIGNED_FLAG",
-	64:    "VT_ZEROFILL_FLAG",
-	128:   "VT_BINARY_FLAG",
-	256:   "VT_ENUM_FLAG",
-	512:   "VT_AUTO_INCREMENT_FLAG",
-	1024:  "VT_TIMESTAMP_FLAG",
-	2048:  "VT_SET_FLAG",
-	4096:  "VT_NO_DEFAULT_VALUE_FLAG",
-	8192:  "VT_ON_UPDATE_NOW_FLAG",
-	32768: "VT_NUM_FLAG",
+var Type_name = map[int32]string{
+	0:     "NULL_TYPE",
+	257:   "INT8",
+	770:   "UINT8",
+	259:   "INT16",
+	772:   "UINT16",
+	261:   "INT24",
+	774:   "UINT24",
+	263:   "INT32",
+	776:   "UINT32",
+	265:   "INT64",
+	778:   "UINT64",
+	1035:  "FLOAT32",
+	1036:  "FLOAT64",
+	2061:  "TIMESTAMP",
+	2062:  "DATE",
+	2063:  "TIME",
+	2064:  "DATETIME",
+	785:   "YEAR",
+	18:    "DECIMAL",
+	6163:  "TEXT",
+	10260: "BLOB",
+	6165:  "VARCHAR",
+	10262: "VARBINARY",
+	6167:  "CHAR",
+	10264: "BINARY",
+	2073:  "BIT",
+	2074:  "ENUM",
+	2075:  "SET",
+	28:    "TUPLE",
 }
-var Field_Flag_value = map[string]int32{
-	"VT_ZEROVALUE_FLAG":        0,
-	"VT_NOT_NULL_FLAG":         1,
-	"VT_PRI_KEY_FLAG":          2,
-	"VT_UNIQUE_KEY_FLAG":       4,
-	"VT_MULTIPLE_KEY_FLAG":     8,
-	"VT_BLOB_FLAG":             16,
-	"VT_UNSIGNED_FLAG":         32,
-	"VT_ZEROFILL_FLAG":         64,
-	"VT_BINARY_FLAG":           128,
-	"VT_ENUM_FLAG":             256,
-	"VT_AUTO_INCREMENT_FLAG":   512,
-	"VT_TIMESTAMP_FLAG":        1024,
-	"VT_SET_FLAG":              2048,
-	"VT_NO_DEFAULT_VALUE_FLAG": 4096,
-	"VT_ON_UPDATE_NOW_FLAG":    8192,
-	"VT_NUM_FLAG":              32768,
+var Type_value = map[string]int32{
+	"NULL_TYPE": 0,
+	"INT8":      257,
+	"UINT8":     770,
+	"INT16":     259,
+	"UINT16":    772,
+	"INT24":     261,
+	"UINT24":    774,
+	"INT32":     263,
+	"UINT32":    776,
+	"INT64":     265,
+	"UINT64":    778,
+	"FLOAT32":   1035,
+	"FLOAT64":   1036,
+	"TIMESTAMP": 2061,
+	"DATE":      2062,
+	"TIME":      2063,
+	"DATETIME":  2064,
+	"YEAR":      785,
+	"DECIMAL":   18,
+	"TEXT":      6163,
+	"BLOB":      10260,
+	"VARCHAR":   6165,
+	"VARBINARY": 10262,
+	"CHAR":      6167,
+	"BINARY":    10264,
+	"BIT":       2073,
+	"ENUM":      2074,
+	"SET":       2075,
+	"TUPLE":     28,
 }
 
-func (x Field_Flag) String() string {
-	return proto.EnumName(Field_Flag_name, int32(x))
+func (x Type) String() string {
+	return proto.EnumName(Type_name, int32(x))
 }
+func (Type) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
 // Target describes what the client expects the tablet is.
 // If the tablet does not match, an error is returned.
@@ -259,9 +263,10 @@ type Target struct {
 	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
-func (m *Target) Reset()         { *m = Target{} }
-func (m *Target) String() string { return proto.CompactTextString(m) }
-func (*Target) ProtoMessage()    {}
+func (m *Target) Reset()                    { *m = Target{} }
+func (m *Target) String() string            { return proto.CompactTextString(m) }
+func (*Target) ProtoMessage()               {}
+func (*Target) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
 // VTGateCallerID is sent by VTGate to VTTablet to describe the
 // caller. If possible, this information is secure. For instance,
@@ -275,37 +280,54 @@ type VTGateCallerID struct {
 	Username string `protobuf:"bytes,1,opt,name=username" json:"username,omitempty"`
 }
 
-func (m *VTGateCallerID) Reset()         { *m = VTGateCallerID{} }
-func (m *VTGateCallerID) String() string { return proto.CompactTextString(m) }
-func (*VTGateCallerID) ProtoMessage()    {}
+func (m *VTGateCallerID) Reset()                    { *m = VTGateCallerID{} }
+func (m *VTGateCallerID) String() string            { return proto.CompactTextString(m) }
+func (*VTGateCallerID) ProtoMessage()               {}
+func (*VTGateCallerID) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
-// BindVariable represents a single bind variable in a Query
-type BindVariable struct {
-	Type BindVariable_Type `protobuf:"varint,1,opt,name=type,enum=query.BindVariable_Type" json:"type,omitempty"`
-	// Depending on type, only one value below is set.
-	ValueBytes     []byte    `protobuf:"bytes,2,opt,name=value_bytes,proto3" json:"value_bytes,omitempty"`
-	ValueInt       int64     `protobuf:"varint,3,opt,name=value_int" json:"value_int,omitempty"`
-	ValueUint      uint64    `protobuf:"varint,4,opt,name=value_uint" json:"value_uint,omitempty"`
-	ValueFloat     float64   `protobuf:"fixed64,5,opt,name=value_float" json:"value_float,omitempty"`
-	ValueBytesList [][]byte  `protobuf:"bytes,6,rep,name=value_bytes_list,proto3" json:"value_bytes_list,omitempty"`
-	ValueIntList   []int64   `protobuf:"varint,7,rep,name=value_int_list" json:"value_int_list,omitempty"`
-	ValueUintList  []uint64  `protobuf:"varint,8,rep,name=value_uint_list" json:"value_uint_list,omitempty"`
-	ValueFloatList []float64 `protobuf:"fixed64,9,rep,name=value_float_list" json:"value_float_list,omitempty"`
+// Value represents a typed value.
+type Value struct {
+	Type  Type   `protobuf:"varint,1,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 }
 
-func (m *BindVariable) Reset()         { *m = BindVariable{} }
-func (m *BindVariable) String() string { return proto.CompactTextString(m) }
-func (*BindVariable) ProtoMessage()    {}
+func (m *Value) Reset()                    { *m = Value{} }
+func (m *Value) String() string            { return proto.CompactTextString(m) }
+func (*Value) ProtoMessage()               {}
+func (*Value) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+
+// BindVariable represents a single bind variable in a Query.
+type BindVariable struct {
+	Type  Type   `protobuf:"varint,1,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	// values are set if type is TUPLE.
+	Values []*Value `protobuf:"bytes,3,rep,name=values" json:"values,omitempty"`
+}
+
+func (m *BindVariable) Reset()                    { *m = BindVariable{} }
+func (m *BindVariable) String() string            { return proto.CompactTextString(m) }
+func (*BindVariable) ProtoMessage()               {}
+func (*BindVariable) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+
+func (m *BindVariable) GetValues() []*Value {
+	if m != nil {
+		return m.Values
+	}
+	return nil
+}
 
 // BoundQuery is a query with its bind variables
 type BoundQuery struct {
-	Sql           []byte                   `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
+	// sql is the SQL query to execute
+	Sql string `protobuf:"bytes,1,opt,name=sql" json:"sql,omitempty"`
+	// bind_variables is a map of all bind variables to expand in the query
 	BindVariables map[string]*BindVariable `protobuf:"bytes,2,rep,name=bind_variables" json:"bind_variables,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
-func (m *BoundQuery) Reset()         { *m = BoundQuery{} }
-func (m *BoundQuery) String() string { return proto.CompactTextString(m) }
-func (*BoundQuery) ProtoMessage()    {}
+func (m *BoundQuery) Reset()                    { *m = BoundQuery{} }
+func (m *BoundQuery) String() string            { return proto.CompactTextString(m) }
+func (*BoundQuery) ProtoMessage()               {}
+func (*BoundQuery) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
 func (m *BoundQuery) GetBindVariables() map[string]*BindVariable {
 	if m != nil {
@@ -317,24 +339,31 @@ func (m *BoundQuery) GetBindVariables() map[string]*BindVariable {
 // Field describes a single column returned by a query
 type Field struct {
 	// name of the field as returned by mysql C API
-	Name string     `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Type Field_Type `protobuf:"varint,2,opt,name=type,enum=query.Field_Type" json:"type,omitempty"`
-	// flags is essentially a bitset<Flag>.
-	Flags int64 `protobuf:"varint,3,opt,name=flags" json:"flags,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	// vitess-defined type. Conversion function is in sqltypes package.
+	Type Type `protobuf:"varint,2,opt,name=type,enum=query.Type" json:"type,omitempty"`
 }
 
-func (m *Field) Reset()         { *m = Field{} }
-func (m *Field) String() string { return proto.CompactTextString(m) }
-func (*Field) ProtoMessage()    {}
+func (m *Field) Reset()                    { *m = Field{} }
+func (m *Field) String() string            { return proto.CompactTextString(m) }
+func (*Field) ProtoMessage()               {}
+func (*Field) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
 
 // Row is a database row.
 type Row struct {
-	Values [][]byte `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
+	// lengths contains the length of each value in values.
+	// A length of -1 means that the field is NULL. While
+	// reading values, you have to accummulate the length
+	// to know the offset where the next value begins in values.
+	Lengths []int64 `protobuf:"zigzag64,1,rep,name=lengths" json:"lengths,omitempty"`
+	// values contains a concatenation of all values in the row.
+	Values []byte `protobuf:"bytes,2,opt,name=values,proto3" json:"values,omitempty"`
 }
 
-func (m *Row) Reset()         { *m = Row{} }
-func (m *Row) String() string { return proto.CompactTextString(m) }
-func (*Row) ProtoMessage()    {}
+func (m *Row) Reset()                    { *m = Row{} }
+func (m *Row) String() string            { return proto.CompactTextString(m) }
+func (*Row) ProtoMessage()               {}
+func (*Row) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
 // QueryResult is returned by Execute and ExecuteStream.
 //
@@ -352,9 +381,10 @@ type QueryResult struct {
 	Rows         []*Row   `protobuf:"bytes,4,rep,name=rows" json:"rows,omitempty"`
 }
 
-func (m *QueryResult) Reset()         { *m = QueryResult{} }
-func (m *QueryResult) String() string { return proto.CompactTextString(m) }
-func (*QueryResult) ProtoMessage()    {}
+func (m *QueryResult) Reset()                    { *m = QueryResult{} }
+func (m *QueryResult) String() string            { return proto.CompactTextString(m) }
+func (*QueryResult) ProtoMessage()               {}
+func (*QueryResult) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
 func (m *QueryResult) GetFields() []*Field {
 	if m != nil {
@@ -378,9 +408,10 @@ type GetSessionIdRequest struct {
 	Shard             string          `protobuf:"bytes,4,opt,name=shard" json:"shard,omitempty"`
 }
 
-func (m *GetSessionIdRequest) Reset()         { *m = GetSessionIdRequest{} }
-func (m *GetSessionIdRequest) String() string { return proto.CompactTextString(m) }
-func (*GetSessionIdRequest) ProtoMessage()    {}
+func (m *GetSessionIdRequest) Reset()                    { *m = GetSessionIdRequest{} }
+func (m *GetSessionIdRequest) String() string            { return proto.CompactTextString(m) }
+func (*GetSessionIdRequest) ProtoMessage()               {}
+func (*GetSessionIdRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
 func (m *GetSessionIdRequest) GetEffectiveCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -401,9 +432,10 @@ type GetSessionIdResponse struct {
 	SessionId int64 `protobuf:"varint,1,opt,name=session_id" json:"session_id,omitempty"`
 }
 
-func (m *GetSessionIdResponse) Reset()         { *m = GetSessionIdResponse{} }
-func (m *GetSessionIdResponse) String() string { return proto.CompactTextString(m) }
-func (*GetSessionIdResponse) ProtoMessage()    {}
+func (m *GetSessionIdResponse) Reset()                    { *m = GetSessionIdResponse{} }
+func (m *GetSessionIdResponse) String() string            { return proto.CompactTextString(m) }
+func (*GetSessionIdResponse) ProtoMessage()               {}
+func (*GetSessionIdResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
 
 // ExecuteRequest is the payload to Execute
 type ExecuteRequest struct {
@@ -415,9 +447,10 @@ type ExecuteRequest struct {
 	SessionId         int64           `protobuf:"varint,6,opt,name=session_id" json:"session_id,omitempty"`
 }
 
-func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
-func (m *ExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteRequest) ProtoMessage()    {}
+func (m *ExecuteRequest) Reset()                    { *m = ExecuteRequest{} }
+func (m *ExecuteRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteRequest) ProtoMessage()               {}
+func (*ExecuteRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
 
 func (m *ExecuteRequest) GetEffectiveCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -452,9 +485,10 @@ type ExecuteResponse struct {
 	Result *QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *ExecuteResponse) Reset()         { *m = ExecuteResponse{} }
-func (m *ExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteResponse) ProtoMessage()    {}
+func (m *ExecuteResponse) Reset()                    { *m = ExecuteResponse{} }
+func (m *ExecuteResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteResponse) ProtoMessage()               {}
+func (*ExecuteResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
 
 func (m *ExecuteResponse) GetResult() *QueryResult {
 	if m != nil {
@@ -474,9 +508,10 @@ type ExecuteBatchRequest struct {
 	SessionId         int64           `protobuf:"varint,7,opt,name=session_id" json:"session_id,omitempty"`
 }
 
-func (m *ExecuteBatchRequest) Reset()         { *m = ExecuteBatchRequest{} }
-func (m *ExecuteBatchRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchRequest) ProtoMessage()    {}
+func (m *ExecuteBatchRequest) Reset()                    { *m = ExecuteBatchRequest{} }
+func (m *ExecuteBatchRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteBatchRequest) ProtoMessage()               {}
+func (*ExecuteBatchRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{12} }
 
 func (m *ExecuteBatchRequest) GetEffectiveCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -511,9 +546,10 @@ type ExecuteBatchResponse struct {
 	Results []*QueryResult `protobuf:"bytes,1,rep,name=results" json:"results,omitempty"`
 }
 
-func (m *ExecuteBatchResponse) Reset()         { *m = ExecuteBatchResponse{} }
-func (m *ExecuteBatchResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchResponse) ProtoMessage()    {}
+func (m *ExecuteBatchResponse) Reset()                    { *m = ExecuteBatchResponse{} }
+func (m *ExecuteBatchResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteBatchResponse) ProtoMessage()               {}
+func (*ExecuteBatchResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{13} }
 
 func (m *ExecuteBatchResponse) GetResults() []*QueryResult {
 	if m != nil {
@@ -531,9 +567,10 @@ type StreamExecuteRequest struct {
 	SessionId         int64           `protobuf:"varint,5,opt,name=session_id" json:"session_id,omitempty"`
 }
 
-func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
-func (m *StreamExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteRequest) ProtoMessage()    {}
+func (m *StreamExecuteRequest) Reset()                    { *m = StreamExecuteRequest{} }
+func (m *StreamExecuteRequest) String() string            { return proto.CompactTextString(m) }
+func (*StreamExecuteRequest) ProtoMessage()               {}
+func (*StreamExecuteRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{14} }
 
 func (m *StreamExecuteRequest) GetEffectiveCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -568,9 +605,10 @@ type StreamExecuteResponse struct {
 	Result *QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
-func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteResponse) ProtoMessage()    {}
+func (m *StreamExecuteResponse) Reset()                    { *m = StreamExecuteResponse{} }
+func (m *StreamExecuteResponse) String() string            { return proto.CompactTextString(m) }
+func (*StreamExecuteResponse) ProtoMessage()               {}
+func (*StreamExecuteResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{15} }
 
 func (m *StreamExecuteResponse) GetResult() *QueryResult {
 	if m != nil {
@@ -587,9 +625,10 @@ type BeginRequest struct {
 	SessionId         int64           `protobuf:"varint,4,opt,name=session_id" json:"session_id,omitempty"`
 }
 
-func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
-func (m *BeginRequest) String() string { return proto.CompactTextString(m) }
-func (*BeginRequest) ProtoMessage()    {}
+func (m *BeginRequest) Reset()                    { *m = BeginRequest{} }
+func (m *BeginRequest) String() string            { return proto.CompactTextString(m) }
+func (*BeginRequest) ProtoMessage()               {}
+func (*BeginRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{16} }
 
 func (m *BeginRequest) GetEffectiveCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -617,9 +656,10 @@ type BeginResponse struct {
 	TransactionId int64 `protobuf:"varint,1,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
-func (m *BeginResponse) Reset()         { *m = BeginResponse{} }
-func (m *BeginResponse) String() string { return proto.CompactTextString(m) }
-func (*BeginResponse) ProtoMessage()    {}
+func (m *BeginResponse) Reset()                    { *m = BeginResponse{} }
+func (m *BeginResponse) String() string            { return proto.CompactTextString(m) }
+func (*BeginResponse) ProtoMessage()               {}
+func (*BeginResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{17} }
 
 // CommitRequest is the payload to Commit
 type CommitRequest struct {
@@ -630,9 +670,10 @@ type CommitRequest struct {
 	SessionId         int64           `protobuf:"varint,5,opt,name=session_id" json:"session_id,omitempty"`
 }
 
-func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
-func (m *CommitRequest) String() string { return proto.CompactTextString(m) }
-func (*CommitRequest) ProtoMessage()    {}
+func (m *CommitRequest) Reset()                    { *m = CommitRequest{} }
+func (m *CommitRequest) String() string            { return proto.CompactTextString(m) }
+func (*CommitRequest) ProtoMessage()               {}
+func (*CommitRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{18} }
 
 func (m *CommitRequest) GetEffectiveCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -659,9 +700,10 @@ func (m *CommitRequest) GetTarget() *Target {
 type CommitResponse struct {
 }
 
-func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
-func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
-func (*CommitResponse) ProtoMessage()    {}
+func (m *CommitResponse) Reset()                    { *m = CommitResponse{} }
+func (m *CommitResponse) String() string            { return proto.CompactTextString(m) }
+func (*CommitResponse) ProtoMessage()               {}
+func (*CommitResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{19} }
 
 // RollbackRequest is the payload to Rollback
 type RollbackRequest struct {
@@ -672,9 +714,10 @@ type RollbackRequest struct {
 	SessionId         int64           `protobuf:"varint,5,opt,name=session_id" json:"session_id,omitempty"`
 }
 
-func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
-func (m *RollbackRequest) String() string { return proto.CompactTextString(m) }
-func (*RollbackRequest) ProtoMessage()    {}
+func (m *RollbackRequest) Reset()                    { *m = RollbackRequest{} }
+func (m *RollbackRequest) String() string            { return proto.CompactTextString(m) }
+func (*RollbackRequest) ProtoMessage()               {}
+func (*RollbackRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{20} }
 
 func (m *RollbackRequest) GetEffectiveCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -701,9 +744,10 @@ func (m *RollbackRequest) GetTarget() *Target {
 type RollbackResponse struct {
 }
 
-func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
-func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
-func (*RollbackResponse) ProtoMessage()    {}
+func (m *RollbackResponse) Reset()                    { *m = RollbackResponse{} }
+func (m *RollbackResponse) String() string            { return proto.CompactTextString(m) }
+func (*RollbackResponse) ProtoMessage()               {}
+func (*RollbackResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{21} }
 
 // SplitQueryRequest is the payload for SplitQuery
 type SplitQueryRequest struct {
@@ -716,9 +760,10 @@ type SplitQueryRequest struct {
 	SessionId         int64           `protobuf:"varint,7,opt,name=session_id" json:"session_id,omitempty"`
 }
 
-func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
-func (m *SplitQueryRequest) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryRequest) ProtoMessage()    {}
+func (m *SplitQueryRequest) Reset()                    { *m = SplitQueryRequest{} }
+func (m *SplitQueryRequest) String() string            { return proto.CompactTextString(m) }
+func (*SplitQueryRequest) ProtoMessage()               {}
+func (*SplitQueryRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{22} }
 
 func (m *SplitQueryRequest) GetEffectiveCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -756,9 +801,10 @@ type QuerySplit struct {
 	RowCount int64 `protobuf:"varint,2,opt,name=row_count" json:"row_count,omitempty"`
 }
 
-func (m *QuerySplit) Reset()         { *m = QuerySplit{} }
-func (m *QuerySplit) String() string { return proto.CompactTextString(m) }
-func (*QuerySplit) ProtoMessage()    {}
+func (m *QuerySplit) Reset()                    { *m = QuerySplit{} }
+func (m *QuerySplit) String() string            { return proto.CompactTextString(m) }
+func (*QuerySplit) ProtoMessage()               {}
+func (*QuerySplit) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{23} }
 
 func (m *QuerySplit) GetQuery() *BoundQuery {
 	if m != nil {
@@ -773,9 +819,10 @@ type SplitQueryResponse struct {
 	Queries []*QuerySplit `protobuf:"bytes,1,rep,name=queries" json:"queries,omitempty"`
 }
 
-func (m *SplitQueryResponse) Reset()         { *m = SplitQueryResponse{} }
-func (m *SplitQueryResponse) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse) ProtoMessage()    {}
+func (m *SplitQueryResponse) Reset()                    { *m = SplitQueryResponse{} }
+func (m *SplitQueryResponse) String() string            { return proto.CompactTextString(m) }
+func (*SplitQueryResponse) ProtoMessage()               {}
+func (*SplitQueryResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{24} }
 
 func (m *SplitQueryResponse) GetQueries() []*QuerySplit {
 	if m != nil {
@@ -788,9 +835,10 @@ func (m *SplitQueryResponse) GetQueries() []*QuerySplit {
 type StreamHealthRequest struct {
 }
 
-func (m *StreamHealthRequest) Reset()         { *m = StreamHealthRequest{} }
-func (m *StreamHealthRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamHealthRequest) ProtoMessage()    {}
+func (m *StreamHealthRequest) Reset()                    { *m = StreamHealthRequest{} }
+func (m *StreamHealthRequest) String() string            { return proto.CompactTextString(m) }
+func (*StreamHealthRequest) ProtoMessage()               {}
+func (*StreamHealthRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{25} }
 
 // RealtimeStats contains information about the tablet status
 type RealtimeStats struct {
@@ -818,30 +866,39 @@ type RealtimeStats struct {
 	SecondsBehindMasterFilteredReplication int64 `protobuf:"varint,4,opt,name=seconds_behind_master_filtered_replication" json:"seconds_behind_master_filtered_replication,omitempty"`
 	// cpu_usage is used for load-based balancing
 	CpuUsage float64 `protobuf:"fixed64,5,opt,name=cpu_usage" json:"cpu_usage,omitempty"`
+	// qps is the average QPS (queries per second) rate in the last XX seconds
+	// where XX is usually 60 (See query_service_stats.go).
+	Qps float64 `protobuf:"fixed64,6,opt,name=qps" json:"qps,omitempty"`
 }
 
-func (m *RealtimeStats) Reset()         { *m = RealtimeStats{} }
-func (m *RealtimeStats) String() string { return proto.CompactTextString(m) }
-func (*RealtimeStats) ProtoMessage()    {}
+func (m *RealtimeStats) Reset()                    { *m = RealtimeStats{} }
+func (m *RealtimeStats) String() string            { return proto.CompactTextString(m) }
+func (*RealtimeStats) ProtoMessage()               {}
+func (*RealtimeStats) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{26} }
 
 // StreamHealthResponse is streamed by StreamHealth on a regular basis
 type StreamHealthResponse struct {
 	// target is the current server type. Only queries with that exact Target
 	// record will be accepted.
 	Target *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	// serving is true iff the tablet is serving. A tablet may not be serving
+	// if filtered replication is enabled on a master for instance,
+	// or if a replica should not be used because the keyspace is being resharded.
+	Serving bool `protobuf:"varint,2,opt,name=serving" json:"serving,omitempty"`
 	// tablet_externally_reparented_timestamp contains the last time
 	// tabletmanager.TabletExternallyReparented was called on this tablet,
 	// or 0 if it was never called. This is meant to differentiate two tablets
 	// that report a target.TabletType of MASTER, only the one with the latest
 	// timestamp should be trusted.
-	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,2,opt,name=tablet_externally_reparented_timestamp" json:"tablet_externally_reparented_timestamp,omitempty"`
+	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,3,opt,name=tablet_externally_reparented_timestamp" json:"tablet_externally_reparented_timestamp,omitempty"`
 	// realtime_stats contains information about the tablet status
-	RealtimeStats *RealtimeStats `protobuf:"bytes,3,opt,name=realtime_stats" json:"realtime_stats,omitempty"`
+	RealtimeStats *RealtimeStats `protobuf:"bytes,4,opt,name=realtime_stats" json:"realtime_stats,omitempty"`
 }
 
-func (m *StreamHealthResponse) Reset()         { *m = StreamHealthResponse{} }
-func (m *StreamHealthResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamHealthResponse) ProtoMessage()    {}
+func (m *StreamHealthResponse) Reset()                    { *m = StreamHealthResponse{} }
+func (m *StreamHealthResponse) String() string            { return proto.CompactTextString(m) }
+func (*StreamHealthResponse) ProtoMessage()               {}
+func (*StreamHealthResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{27} }
 
 func (m *StreamHealthResponse) GetTarget() *Target {
 	if m != nil {
@@ -858,7 +915,122 @@ func (m *StreamHealthResponse) GetRealtimeStats() *RealtimeStats {
 }
 
 func init() {
-	proto.RegisterEnum("query.BindVariable_Type", BindVariable_Type_name, BindVariable_Type_value)
-	proto.RegisterEnum("query.Field_Type", Field_Type_name, Field_Type_value)
-	proto.RegisterEnum("query.Field_Flag", Field_Flag_name, Field_Flag_value)
+	proto.RegisterType((*Target)(nil), "query.Target")
+	proto.RegisterType((*VTGateCallerID)(nil), "query.VTGateCallerID")
+	proto.RegisterType((*Value)(nil), "query.Value")
+	proto.RegisterType((*BindVariable)(nil), "query.BindVariable")
+	proto.RegisterType((*BoundQuery)(nil), "query.BoundQuery")
+	proto.RegisterType((*Field)(nil), "query.Field")
+	proto.RegisterType((*Row)(nil), "query.Row")
+	proto.RegisterType((*QueryResult)(nil), "query.QueryResult")
+	proto.RegisterType((*GetSessionIdRequest)(nil), "query.GetSessionIdRequest")
+	proto.RegisterType((*GetSessionIdResponse)(nil), "query.GetSessionIdResponse")
+	proto.RegisterType((*ExecuteRequest)(nil), "query.ExecuteRequest")
+	proto.RegisterType((*ExecuteResponse)(nil), "query.ExecuteResponse")
+	proto.RegisterType((*ExecuteBatchRequest)(nil), "query.ExecuteBatchRequest")
+	proto.RegisterType((*ExecuteBatchResponse)(nil), "query.ExecuteBatchResponse")
+	proto.RegisterType((*StreamExecuteRequest)(nil), "query.StreamExecuteRequest")
+	proto.RegisterType((*StreamExecuteResponse)(nil), "query.StreamExecuteResponse")
+	proto.RegisterType((*BeginRequest)(nil), "query.BeginRequest")
+	proto.RegisterType((*BeginResponse)(nil), "query.BeginResponse")
+	proto.RegisterType((*CommitRequest)(nil), "query.CommitRequest")
+	proto.RegisterType((*CommitResponse)(nil), "query.CommitResponse")
+	proto.RegisterType((*RollbackRequest)(nil), "query.RollbackRequest")
+	proto.RegisterType((*RollbackResponse)(nil), "query.RollbackResponse")
+	proto.RegisterType((*SplitQueryRequest)(nil), "query.SplitQueryRequest")
+	proto.RegisterType((*QuerySplit)(nil), "query.QuerySplit")
+	proto.RegisterType((*SplitQueryResponse)(nil), "query.SplitQueryResponse")
+	proto.RegisterType((*StreamHealthRequest)(nil), "query.StreamHealthRequest")
+	proto.RegisterType((*RealtimeStats)(nil), "query.RealtimeStats")
+	proto.RegisterType((*StreamHealthResponse)(nil), "query.StreamHealthResponse")
+	proto.RegisterEnum("query.Flag", Flag_name, Flag_value)
+	proto.RegisterEnum("query.Type", Type_name, Type_value)
+}
+
+var fileDescriptor0 = []byte{
+	// 1334 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xd4, 0x57, 0xdd, 0x6e, 0x1b, 0x45,
+	0x14, 0x66, 0xed, 0xb5, 0xe3, 0x1c, 0x27, 0xce, 0x74, 0xe3, 0xa0, 0x50, 0xb5, 0x52, 0xb5, 0xa0,
+	0x52, 0x22, 0x64, 0xa5, 0x6e, 0xa9, 0x2a, 0xe0, 0x02, 0x3b, 0xd9, 0xa6, 0x2b, 0x25, 0x4e, 0x6a,
+	0xaf, 0x23, 0x7a, 0xb5, 0x9a, 0xd8, 0x13, 0x67, 0xd5, 0xf5, 0xae, 0xbb, 0x33, 0x9b, 0x36, 0x77,
+	0xe1, 0xff, 0xff, 0x4f, 0xfc, 0x15, 0xb8, 0x03, 0x9e, 0x81, 0x2b, 0xc4, 0x1b, 0xf0, 0x0c, 0x3c,
+	0x02, 0x57, 0xdc, 0x22, 0x66, 0x66, 0x67, 0xd7, 0x4e, 0x63, 0x10, 0xdc, 0xa0, 0xf6, 0x2a, 0x7b,
+	0xce, 0x99, 0x39, 0xe7, 0xfb, 0xbe, 0x39, 0x33, 0x3e, 0x81, 0xf2, 0xdd, 0x98, 0x44, 0x47, 0xb5,
+	0x51, 0x14, 0xb2, 0xd0, 0x28, 0x48, 0xe3, 0x6c, 0x85, 0x85, 0xa3, 0xb0, 0x8f, 0x19, 0x4e, 0xdc,
+	0x67, 0xcb, 0x87, 0x2c, 0x1a, 0xf5, 0x12, 0xc3, 0x74, 0xa0, 0xe8, 0xe0, 0x68, 0x40, 0x98, 0x81,
+	0xa0, 0x74, 0x87, 0x1c, 0xd1, 0x11, 0xee, 0x91, 0x65, 0xed, 0x82, 0x76, 0x69, 0xd6, 0x98, 0x87,
+	0x02, 0x3d, 0xc0, 0x51, 0x7f, 0x39, 0x27, 0xcd, 0xe7, 0xa0, 0xcc, 0xf0, 0x9e, 0x4f, 0x98, 0xcb,
+	0x8e, 0x46, 0x64, 0x39, 0xcf, 0x9d, 0x95, 0x7a, 0xb5, 0x96, 0x65, 0x77, 0x64, 0xd0, 0xe1, 0x31,
+	0xd3, 0x84, 0xca, 0xae, 0xb3, 0x81, 0x19, 0x59, 0xc3, 0xbe, 0x4f, 0x22, 0x7b, 0x5d, 0x64, 0x8f,
+	0x29, 0x89, 0x02, 0x3c, 0x54, 0xd9, 0xcd, 0xcb, 0x50, 0xd8, 0xc5, 0x7e, 0x4c, 0x8c, 0xa7, 0x40,
+	0x97, 0x09, 0x35, 0x99, 0xb0, 0x5c, 0x4b, 0x28, 0x88, 0x3c, 0x02, 0xc1, 0xa1, 0x58, 0x23, 0x11,
+	0xcc, 0x99, 0xbb, 0x30, 0xd7, 0xf4, 0x82, 0xfe, 0x2e, 0x8e, 0x3c, 0x51, 0xeb, 0xdf, 0xef, 0x34,
+	0xce, 0x41, 0x51, 0x9a, 0x94, 0xc3, 0xce, 0x5f, 0x2a, 0xd7, 0xe7, 0xd4, 0x5a, 0x89, 0xc0, 0xfc,
+	0x5e, 0x03, 0x68, 0x86, 0x71, 0xd0, 0xbf, 0x25, 0x9c, 0x46, 0x19, 0xf2, 0xf4, 0xae, 0xaf, 0x44,
+	0x78, 0x19, 0x2a, 0x7b, 0xbc, 0xa6, 0x7b, 0xa8, 0x8a, 0x52, 0x9e, 0x51, 0x64, 0x78, 0x46, 0x65,
+	0x18, 0xef, 0xab, 0x4d, 0x62, 0xa3, 0x56, 0xc0, 0xb8, 0xf6, 0x36, 0x18, 0xa7, 0xbd, 0xa2, 0x00,
+	0x97, 0x5a, 0x15, 0x30, 0x27, 0x91, 0x96, 0xeb, 0x8b, 0x69, 0xde, 0x89, 0x6d, 0x2f, 0xe6, 0xae,
+	0x6b, 0xe6, 0x2a, 0x14, 0x6e, 0x78, 0xc4, 0xef, 0x1b, 0x73, 0xa0, 0x8f, 0x65, 0xcc, 0x34, 0xc8,
+	0x9d, 0xd2, 0xc0, 0xbc, 0x08, 0xf9, 0x76, 0x78, 0xcf, 0x58, 0x80, 0x19, 0x9f, 0x04, 0x03, 0x76,
+	0x40, 0xf9, 0x96, 0xfc, 0x25, 0xc3, 0xa8, 0x64, 0x62, 0x24, 0xb2, 0x86, 0x50, 0x96, 0x04, 0xda,
+	0x84, 0xc6, 0x3e, 0x13, 0x5a, 0xed, 0x8b, 0x42, 0xc9, 0xf2, 0xb1, 0x56, 0x49, 0xf5, 0x25, 0x98,
+	0x8f, 0xc2, 0x7b, 0xd4, 0xc5, 0xfb, 0xfb, 0xa4, 0xc7, 0x48, 0xd2, 0x1c, 0xba, 0x71, 0x06, 0x66,
+	0xbd, 0x80, 0x1f, 0x30, 0x73, 0xbd, 0xbe, 0x6c, 0x0d, 0xdd, 0x58, 0x06, 0x5d, 0xac, 0x5c, 0xd6,
+	0x65, 0x16, 0x50, 0x59, 0x38, 0x22, 0xf3, 0x81, 0x06, 0x8b, 0x1b, 0x84, 0x75, 0x08, 0xa5, 0x5e,
+	0x18, 0xd8, 0xfd, 0x36, 0xe1, 0x31, 0xca, 0x8c, 0xe7, 0x61, 0x91, 0xc8, 0xb4, 0xde, 0x21, 0x71,
+	0x7b, 0xb2, 0x75, 0x44, 0x3a, 0x4d, 0x0a, 0xb3, 0x50, 0x4b, 0xfa, 0x36, 0x6b, 0xa9, 0x3a, 0x2c,
+	0x7a, 0xc3, 0x21, 0xe9, 0x7b, 0xbc, 0xcf, 0x26, 0x56, 0x27, 0x32, 0x2e, 0xa5, 0x07, 0x7c, 0xaa,
+	0x0d, 0xb3, 0x26, 0xcf, 0x9f, 0x6c, 0x72, 0x5d, 0x76, 0xe5, 0x0a, 0x54, 0x4f, 0x22, 0xa3, 0xa3,
+	0x90, 0xf3, 0x32, 0x0c, 0x00, 0x9a, 0x38, 0x53, 0x44, 0x79, 0xf3, 0x37, 0x0d, 0x2a, 0xd6, 0x7d,
+	0xd2, 0x8b, 0x19, 0xf9, 0xff, 0x18, 0x9c, 0x87, 0x22, 0x93, 0x17, 0x56, 0xe2, 0x2f, 0xd7, 0xe7,
+	0xd3, 0x13, 0x4f, 0x6e, 0xf1, 0x05, 0x48, 0x6e, 0xbd, 0xa4, 0x53, 0xae, 0x9f, 0x39, 0xd5, 0xa5,
+	0xc6, 0x93, 0x50, 0x61, 0x11, 0x0e, 0x28, 0xe6, 0x20, 0x13, 0x36, 0x05, 0xc1, 0xe6, 0x21, 0x86,
+	0x45, 0xc9, 0xf0, 0x05, 0x58, 0xc8, 0x08, 0x2a, 0x21, 0x4c, 0x28, 0x46, 0xb2, 0x4f, 0x14, 0x29,
+	0x43, 0x55, 0x98, 0xe8, 0x20, 0xf3, 0x4f, 0x7e, 0xbe, 0x6a, 0x5f, 0x13, 0xb3, 0xde, 0xc1, 0x23,
+	0xa3, 0x8e, 0x09, 0x33, 0xc2, 0xf6, 0x48, 0xda, 0x95, 0xd3, 0xf5, 0xc1, 0xd4, 0x9d, 0x90, 0x48,
+	0xea, 0x53, 0x9a, 0xa2, 0x5b, 0x71, 0x8a, 0x6e, 0x33, 0x52, 0xb7, 0x97, 0xa0, 0x7a, 0x92, 0xbf,
+	0x12, 0xef, 0x69, 0x98, 0x49, 0xc4, 0x4b, 0xef, 0xd6, 0x34, 0xf5, 0x7e, 0xd5, 0xa0, 0xda, 0x61,
+	0x11, 0xc1, 0xc3, 0xc7, 0xaf, 0xb9, 0x4e, 0x8a, 0x51, 0x50, 0x62, 0x2c, 0x3d, 0x44, 0xe7, 0x3f,
+	0xb4, 0xd2, 0x0f, 0x1a, 0x7f, 0xf3, 0xc9, 0xc0, 0x0b, 0x1e, 0x19, 0x11, 0x4e, 0x52, 0xd4, 0x25,
+	0xc5, 0x67, 0x61, 0x5e, 0x81, 0x54, 0xd4, 0x4e, 0x37, 0x4b, 0xf2, 0x64, 0xfc, 0xac, 0xc1, 0xfc,
+	0x5a, 0x38, 0x1c, 0x7a, 0xec, 0x91, 0xe1, 0x73, 0x1a, 0xaa, 0x3e, 0xa5, 0xaf, 0x93, 0xa3, 0x44,
+	0x50, 0x49, 0xd1, 0x27, 0x44, 0xcd, 0x5f, 0x34, 0x58, 0x68, 0x87, 0xbe, 0xbf, 0x87, 0x7b, 0x77,
+	0x1e, 0x4b, 0x4a, 0x06, 0xa0, 0x31, 0x7e, 0x45, 0xea, 0x0f, 0x0d, 0xce, 0x74, 0x46, 0xbe, 0xc7,
+	0x54, 0x27, 0x3e, 0x36, 0xd7, 0xaf, 0x0a, 0x73, 0x54, 0xe0, 0x76, 0x7b, 0xa1, 0x1f, 0x0f, 0x93,
+	0x97, 0x6b, 0xd6, 0x58, 0x84, 0x72, 0xea, 0x8d, 0x03, 0xf6, 0x0f, 0xcf, 0x56, 0x03, 0x40, 0xe6,
+	0x91, 0xdc, 0xc7, 0xe5, 0xb4, 0xbf, 0x2b, 0xc7, 0x7f, 0xf4, 0xf9, 0x2f, 0xbc, 0x4a, 0x9b, 0x93,
+	0x29, 0xae, 0x83, 0x31, 0xa9, 0x5c, 0x76, 0xd3, 0xb3, 0x77, 0x57, 0x3b, 0xf1, 0xee, 0x8e, 0xcb,
+	0x99, 0x4b, 0xb0, 0x98, 0x3c, 0x13, 0x37, 0x09, 0xf6, 0x59, 0xfa, 0x9b, 0x61, 0xfe, 0xc4, 0x6f,
+	0x4c, 0x5b, 0x78, 0xbc, 0x21, 0xe9, 0x30, 0xcc, 0xa8, 0x20, 0x79, 0x20, 0x97, 0xb8, 0x24, 0x8a,
+	0xc2, 0x48, 0xcd, 0x41, 0xe7, 0x61, 0x89, 0x92, 0x5e, 0x18, 0xf4, 0xa9, 0xbb, 0x47, 0x0e, 0xc4,
+	0xc4, 0x36, 0xc4, 0x94, 0x91, 0x48, 0xe2, 0x9a, 0xe7, 0x43, 0x4d, 0x95, 0x8f, 0x71, 0x7e, 0x38,
+	0x70, 0x47, 0x3e, 0x3e, 0x22, 0x11, 0x55, 0xa8, 0x85, 0xd0, 0x05, 0x7e, 0x58, 0x2b, 0x53, 0x37,
+	0xbb, 0xfb, 0x9e, 0xcf, 0xff, 0x90, 0xbe, 0x1b, 0x11, 0x0e, 0xb2, 0x87, 0xe5, 0xef, 0x41, 0xd2,
+	0x4c, 0x9c, 0x7c, 0x6f, 0x14, 0xbb, 0x31, 0xc5, 0x03, 0x22, 0x85, 0xd6, 0xc4, 0x5c, 0x77, 0x77,
+	0x44, 0xa5, 0xc0, 0x9a, 0xf9, 0x63, 0xf6, 0x8c, 0xa7, 0x84, 0x94, 0x18, 0xe3, 0x53, 0xd6, 0xa6,
+	0x9d, 0x32, 0x1f, 0xd7, 0xf8, 0x1c, 0x75, 0xe8, 0x05, 0x03, 0x09, 0xbd, 0x64, 0xd4, 0xe0, 0xa2,
+	0x9a, 0xbb, 0xc9, 0x7d, 0x26, 0x46, 0x68, 0xdf, 0x3f, 0x12, 0x78, 0x70, 0x44, 0x02, 0x3e, 0x80,
+	0xb9, 0x42, 0x19, 0xca, 0xf0, 0x70, 0x24, 0xc9, 0xe4, 0x79, 0x9f, 0x56, 0x22, 0x25, 0x98, 0x4b,
+	0x85, 0x62, 0xaa, 0x5f, 0xaa, 0xe9, 0x04, 0x36, 0xa9, 0xe6, 0xca, 0x1d, 0xd0, 0x6f, 0xf8, 0x78,
+	0x60, 0x94, 0x40, 0x6f, 0x6d, 0xb7, 0x2c, 0xf4, 0x04, 0x07, 0x00, 0x76, 0xc7, 0x6e, 0x39, 0xd6,
+	0x46, 0xbb, 0xb1, 0x89, 0x8e, 0x73, 0x89, 0xa3, 0xdb, 0xea, 0xd8, 0x1b, 0x2d, 0x6b, 0x1d, 0x1d,
+	0xeb, 0x7c, 0x02, 0x9d, 0xb1, 0x3b, 0x37, 0x36, 0xb7, 0x1b, 0x0e, 0x3a, 0x2e, 0xf1, 0x09, 0xaa,
+	0x64, 0x77, 0x6e, 0x75, 0xb7, 0x1d, 0x11, 0x44, 0x5c, 0x84, 0xa2, 0xdd, 0x71, 0xac, 0x57, 0x79,
+	0xec, 0x42, 0x12, 0x6b, 0xda, 0xad, 0x46, 0xfb, 0x36, 0x3a, 0x7e, 0x65, 0xe5, 0xf7, 0x1c, 0xe8,
+	0x6a, 0x3c, 0x9f, 0x6d, 0x75, 0x37, 0x37, 0x5d, 0xe7, 0xf6, 0x8e, 0x28, 0x39, 0x0b, 0x3a, 0x2f,
+	0x78, 0x1d, 0xbd, 0x96, 0xe3, 0x6d, 0x59, 0xe8, 0xca, 0xef, 0xd7, 0x8b, 0xe2, 0x9b, 0x7f, 0x5e,
+	0xbe, 0x86, 0xde, 0xc8, 0x89, 0xb4, 0xdd, 0xc4, 0x78, 0x33, 0x0d, 0xd4, 0xaf, 0xa2, 0xb7, 0xb2,
+	0x00, 0x37, 0xde, 0x4e, 0x03, 0x57, 0xea, 0xe8, 0x9d, 0x2c, 0xc0, 0x8d, 0x77, 0xd3, 0xc0, 0xb5,
+	0xab, 0xe8, 0xbd, 0x2c, 0xc0, 0x8d, 0xf7, 0x8b, 0x82, 0x8b, 0x64, 0xc2, 0x97, 0x7d, 0x50, 0xca,
+	0x2c, 0x1e, 0xfb, 0xb0, 0xc4, 0x07, 0xe5, 0x59, 0xc7, 0xde, 0xb2, 0x3a, 0x4e, 0x63, 0x6b, 0x07,
+	0x7d, 0x84, 0x04, 0xcc, 0xf5, 0x86, 0x63, 0xa1, 0x8f, 0xe5, 0xa7, 0x08, 0xa1, 0x4f, 0x90, 0xe0,
+	0x28, 0xbc, 0xd2, 0xfc, 0x54, 0x46, 0x6e, 0x5b, 0x8d, 0x36, 0xfa, 0xac, 0xc8, 0x0b, 0xcd, 0xac,
+	0x5b, 0x6b, 0xf6, 0x16, 0x97, 0xd1, 0x90, 0x3b, 0x84, 0x2a, 0x9f, 0xaf, 0x8a, 0xcf, 0xe6, 0xe6,
+	0x76, 0x13, 0x7d, 0xb1, 0x23, 0x0a, 0xee, 0x36, 0xda, 0x6b, 0x37, 0xf9, 0x86, 0x2f, 0x57, 0x45,
+	0x41, 0x6e, 0x29, 0xbd, 0xbe, 0xda, 0x11, 0x0b, 0x65, 0xe8, 0xeb, 0x55, 0x01, 0x5a, 0xf9, 0x1f,
+	0xec, 0xf0, 0xc3, 0xca, 0x37, 0x6d, 0x07, 0x7d, 0x23, 0xab, 0x59, 0xad, 0xee, 0x16, 0xfa, 0x16,
+	0x09, 0x67, 0xc7, 0x72, 0xd0, 0x77, 0xc2, 0x59, 0x70, 0xba, 0x3b, 0x9b, 0x16, 0x3a, 0xd7, 0x3c,
+	0x0b, 0xcb, 0xbd, 0x70, 0x58, 0x3b, 0x0a, 0x63, 0x16, 0xef, 0x91, 0xda, 0xa1, 0xc7, 0xf8, 0xa5,
+	0x4f, 0xfe, 0xf7, 0xdb, 0x2b, 0xca, 0x3f, 0x57, 0xfe, 0x0a, 0x00, 0x00, 0xff, 0xff, 0xb1, 0x47,
+	0x96, 0x83, 0x35, 0x0e, 0x00, 0x00,
 }

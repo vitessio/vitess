@@ -5,9 +5,7 @@
 package automation
 
 import (
-	"fmt"
-
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
 )
 
@@ -16,20 +14,25 @@ type CopySchemaShardTask struct {
 }
 
 // Run is part of the Task interface.
-func (t *CopySchemaShardTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
-	keyspaceAndSourceShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
-	keyspaceAndDestShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["dest_shard"])
-	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"],
-		[]string{"CopySchemaShard", keyspaceAndSourceShard, keyspaceAndDestShard})
+func (t *CopySchemaShardTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
+	args := []string{"CopySchemaShard"}
+	if tables := parameters["tables"]; tables != "" {
+		args = append(args, "--tables="+tables)
+	}
+	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
+		args = append(args, "--exclude_tables="+excludeTables)
+	}
+	args = append(args, parameters["source_keyspace_and_shard"], parameters["dest_keyspace_and_shard"])
+	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"], args)
 	return nil, output, err
 }
 
 // RequiredParameters is part of the Task interface.
 func (t *CopySchemaShardTask) RequiredParameters() []string {
-	return []string{"keyspace", "source_shard", "dest_shard", "vtctld_endpoint"}
+	return []string{"source_keyspace_and_shard", "dest_keyspace_and_shard", "vtctld_endpoint"}
 }
 
 // OptionalParameters is part of the Task interface.
 func (t *CopySchemaShardTask) OptionalParameters() []string {
-	return nil
+	return []string{"tables", "exclude_tables"}
 }

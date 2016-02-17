@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"flag"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,36 +13,36 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // testQueryService is a local QueryService implementation to support the tests
 type testQueryService struct {
 	queryservice.ErrorQueryService
-	t *testing.T
+	t        *testing.T
+	keyspace string
+	shard    string
 }
 
-func (sq *testQueryService) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
 	var err error
-	parts := strings.Split(query.Sql, " ")
+	parts := strings.Split(sql, " ")
 	for _, part := range parts {
 		if strings.HasPrefix(part, "id>=") {
 			min, err = strconv.Atoi(part[4:])
@@ -52,22 +53,22 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *pb.Target
 			max, err = strconv.Atoi(part[3:])
 		}
 	}
-	sq.t.Logf("testQueryService: got query: %v with min %v max %v", *query, min, max)
+	sq.t.Logf("testQueryService: got query: %v with min %v max %v", sql, min, max)
 
 	// Send the headers
-	if err := sendReply(&mproto.QueryResult{
-		Fields: []mproto.Field{
-			mproto.Field{
+	if err := sendReply(&sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
 				Name: "id",
-				Type: mproto.VT_LONGLONG,
+				Type: sqltypes.Int64,
 			},
-			mproto.Field{
+			{
 				Name: "msg",
-				Type: mproto.VT_VARCHAR,
+				Type: sqltypes.VarChar,
 			},
-			mproto.Field{
+			{
 				Name: "keyspace_id",
-				Type: mproto.VT_LONGLONG,
+				Type: sqltypes.Int64,
 			},
 		},
 	}); err != nil {
@@ -77,9 +78,9 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *pb.Target
 	// Send the values
 	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
 	for i := min; i < max; i++ {
-		if err := sendReply(&mproto.QueryResult{
+		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
@@ -93,11 +94,26 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *pb.Target
 	return nil
 }
 
+func (sq *testQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
+}
+
 type ExpectedExecuteFetch struct {
 	Query       string
 	MaxRows     int
 	WantFields  bool
-	QueryResult *mproto.QueryResult
+	QueryResult *sqltypes.Result
 	Error       error
 }
 
@@ -114,16 +130,16 @@ func NewFakePoolConnectionQuery(t *testing.T, query string, err error) *FakePool
 	return &FakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			ExpectedExecuteFetch{
+			{
 				Query:       query,
-				QueryResult: &mproto.QueryResult{},
+				QueryResult: &sqltypes.Result{},
 				Error:       err,
 			},
 		},
 	}
 }
 
-func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if fpc.ExpectedExecuteFetchIndex >= len(fpc.ExpectedExecuteFetch) {
 		fpc.t.Errorf("got unexpected out of bound fetch: %v >= %v", fpc.ExpectedExecuteFetchIndex, len(fpc.ExpectedExecuteFetch))
 		return nil, fmt.Errorf("unexpected out of bound fetch")
@@ -150,7 +166,7 @@ func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfield
 	return fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].QueryResult, nil
 }
 
-func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	return nil
 }
 
@@ -179,21 +195,21 @@ func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 		return &FakePoolConnection{
 			t: t,
 			ExpectedExecuteFetch: []ExpectedExecuteFetch{
-				ExpectedExecuteFetch{
+				{
 					Query: "SELECT MIN(id), MAX(id) FROM vt_ks.table1",
-					QueryResult: &mproto.QueryResult{
-						Fields: []mproto.Field{
-							mproto.Field{
+					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
 								Name: "min",
-								Type: mproto.VT_LONGLONG,
+								Type: sqltypes.Int64,
 							},
-							mproto.Field{
+							{
 								Name: "max",
-								Type: mproto.VT_LONGLONG,
+								Type: sqltypes.Int64,
 							},
 						},
 						Rows: [][]sqltypes.Value{
-							[]sqltypes.Value{
+							{
 								sqltypes.MakeString([]byte("100")),
 								sqltypes.MakeString([]byte("200")),
 							},
@@ -238,77 +254,92 @@ func DestinationsFactory(t *testing.T, insertCount int64) func() (dbconnpool.Poo
 	}
 }
 
-func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
-	testSplitClone(t, "-populate_blp_checkpoint")
-}
+func TestSplitClone(t *testing.T) {
+	db := fakesqldb.Register()
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ctx := context.Background()
+	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
-func testSplitClone(t *testing.T, strategy string) {
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
+		ShardingColumnName: "keyspace_id",
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
 
-	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
-		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
-	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
-	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
-	leftMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
-		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-40"))
-	leftRdonly := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+	leftRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
-	rightMaster := testlib.NewFakeTablet(t, wr, "cell1", 20,
-		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
-	rightRdonly := testlib.NewFakeTablet(t, wr, "cell1", 21,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
+	rightMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 20,
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
+	rightRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 21,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, rightMaster, rightRdonly} {
-		ft.StartActionLoop(t, wr)
+		ft.StartActionLoop(t, wi.wr)
 		defer ft.StopActionLoop(t)
 	}
 
 	// add the topo and schema data we'll need
-	ctx := context.Background()
 	if err := ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
-	if err := wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", pbt.KeyspaceIdType_UINT64, 4, false); err != nil {
+	if err := wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, 4, false); err != nil {
 		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
-	if err := wr.RebuildKeyspaceGraph(ctx, "ks", nil, true); err != nil {
+	if err := wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	gwrk, err := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, strategy, 10 /*sourceReaderCount*/, 4 /*destinationPackCount*/, 1 /*minTableSizeForSplit*/, 10 /*destinationWriterCount*/)
+	subFlags := flag.NewFlagSet("SplitClone", flag.ContinueOnError)
+	gwrk, err := commandSplitClone(wi, wi.wr, subFlags, []string{
+		"-source_reader_count", "10",
+		"-destination_pack_count", "4",
+		"-min_table_size_for_split", "1",
+		"-destination_writer_count", "10",
+		"ks/-80",
+	})
 	if err != nil {
 		t.Errorf("Worker creation failed: %v", err)
 	}
 	wrk := gwrk.(*SplitCloneWorker)
 
 	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
-		sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
+		sourceRdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
-			TableDefinitions: []*myproto.TableDefinition{
-				&myproto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:              "table1",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TableBaseTable,
+					Type:              tmutils.TableBaseTable,
 					// This informs how many rows we can pack into a single insert
 					DataLength: 2048,
 				},
 			},
 		}
 		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = SourceRdonlyFactory(t)
-		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-			GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+			GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 		}
 		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 			"STOP SLAVE",
 			"START SLAVE",
 		}
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &testQueryService{t: t})
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &testQueryService{
+			t:        t,
+			keyspace: sourceRdonly.Tablet.Keyspace,
+			shard:    sourceRdonly.Tablet.Shard,
+		})
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so

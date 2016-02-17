@@ -1,14 +1,17 @@
 # This image is only meant to be built from within the build.sh script.
-FROM debian:wheezy
+FROM debian:jessie
 
 # Install dependencies
-RUN apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0xcbcb082a1bb943db \
- && echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.0/debian wheezy main' > /etc/apt/sources.list.d/mariadb.list \
+RUN apt-key adv --recv-keys --keyserver pgp.mit.edu 5072E1F5 \
+ && echo 'deb http://repo.mysql.com/apt/debian/ jessie mysql-5.6' > /etc/apt/sources.list.d/mysql.list \
  && apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    bzip2 \
-    memcached \
-    mariadb-server \
+ && DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y --no-install-recommends \
+      bzip2 \
+      memcached \
+      libmysqlclient18 \
+      mysql-client \
+      mysql-server \
  && rm -rf /var/lib/apt/lists/*
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
@@ -21,7 +24,7 @@ ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
-ENV LD_LIBRARY_PATH $VTROOT/dist/vt-zookeeper-3.3.5/lib
+ENV LD_LIBRARY_PATH $VTROOT/dist/vt-zookeeper-3.4.6/lib
 
 # Copy binaries (placed by build.sh)
 COPY lite/vt /vt

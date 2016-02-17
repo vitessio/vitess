@@ -7,43 +7,44 @@ package testlib
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestPlannedReparentShard(t *testing.T) {
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	db := fakesqldb.Register()
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Create a master, a couple good slaves
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, pb.TabletType_REPLICA)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
+	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, db)
 
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
-	newMaster.FakeMysqlDaemon.WaitMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.WaitMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   7,
 			Server:   123,
 			Sequence: 990,
 		},
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlaveResult = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	newMaster.FakeMysqlDaemon.PromoteSlaveResult = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   7,
 			Server:   456,
 			Sequence: 991,
@@ -69,7 +70,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).QueryServiceEnabled = true
+	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).QueryServiceEnabled = true
 
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
@@ -125,7 +126,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	if !goodSlave2.FakeMysqlDaemon.ReadOnly {
 		t.Errorf("goodSlave2.FakeMysqlDaemon.ReadOnly not set")
 	}
-	if oldMaster.Agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).QueryServiceEnabled {
+	if oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).QueryServiceEnabled {
 		t.Errorf("oldMaster...QueryServiceEnabled set")
 	}
 

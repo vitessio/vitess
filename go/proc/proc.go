@@ -92,8 +92,12 @@ func killPredecessor(port string) {
 }
 
 func listen(port string) (l net.Listener, err error) {
+	laddr := ":" + port
+	if laddr == ":" {
+		laddr = ":0"
+	}
 	for i := 0; i < 100; i++ {
-		l, err = net.Listen("tcp", ":"+port)
+		l, err = net.Listen("tcp", laddr)
 		if err != nil {
 			if strings.Contains(err.Error(), "already in use") {
 				time.Sleep(1 * time.Millisecond)

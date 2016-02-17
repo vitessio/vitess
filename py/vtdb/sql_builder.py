@@ -7,8 +7,6 @@ import itertools
 import pprint
 import time
 
-# TODO(dumbunny): integration with SQL Alchemy ?
-
 
 class DBRow(object):
   """An object with an attr for every column returned by a query."""
@@ -89,7 +87,7 @@ def colstr(
 
   def col_with_prefix(col):
     """Prepend alias to col if it makes sense."""
-    if isinstance(col, BaseSQLSelectExpr):
+    if isinstance(col, BaseSelectExpr):
       return col.select_sql(alias)
     if alias and '.' not in col:
       col = '%s.%s' % (alias, col)
@@ -119,8 +117,8 @@ def build_values_clause(columns, bind_vars):
   for column in columns:
     if column in bind_vars:
       bind_list.append(column)
-      if isinstance(bind_vars[column], BaseSQLInsertExpr):
-        sql, new_bind_vars = bind_vars[column].build_insert_sql()
+      if isinstance(bind_vars[column], BaseInsertValueExpr):
+        sql, new_bind_vars = bind_vars[column].build_insert_value_sql()
         bind_vars[column] = sql
         update_bind_vars(bind_vars, new_bind_vars)
       clause_parts.append('%%(%s)s' % column)
@@ -232,7 +230,7 @@ def build_where_clause(column_value_pairs):
   counter = itertools.count(1)
 
   for column, value in column_value_pairs:
-    if isinstance(value, BaseSQLWhereExpr):
+    if isinstance(value, BaseWhereExpr):
       clause, clause_bind_vars = value.build_where_sql(column, counter=counter)
       update_bind_vars(bind_vars, clause_bind_vars)
       condition_list.append(clause)
@@ -350,8 +348,9 @@ def update_columns_query(table_name, where_column_value_pairs=None,
   clause_list = []
   bind_vars = {}
   for i, (column, value) in enumerate(update_column_value_pairs):
-    if isinstance(value, BaseSQLUpdateExpr):
-      clause, clause_bind_vars = value.build_update_sql(column)
+    if isinstance(value, BaseUpdateValueExpr):
+      value_sql, clause_bind_vars = value.build_update_value_sql(column)
+      clause = '%s = %s' % (column, value_sql)
       clause_list.append(clause)
       update_bind_vars(bind_vars, clause_bind_vars)
     else:
@@ -455,205 +454,125 @@ def make_bind_list(column, values, counter=None):
   return result
 
 
-class BaseSQLUpdateExpr(object):
-  """Return SQL for an UPDATE expression.
+class BaseUpdateValueExpr(object):
+  """Return SQL for a value expression in an UPDATE clause.
 
-  Expr is used in: UPDATE ... SET expr [, expr ..] WHERE ...;
+  Expr is used in: UPDATE ... SET col_name=expr[, col_name=expr ..] WHERE ...;
 
-  It should have the form "col_name = ..."
+  Override value_expr, pass value_expr in __init__, or override
+  build_update_value_sql.
   """
 
-  def build_update_sql(self, column_name):
-    """Return SQL and bind_vars for an UPDATE SET expression.
+  # Simple derived classes can override this value.
+  update_value_expr = None
+
+  def build_update_value_sql(self, column_name):
+    """Get SQL and bind vars. Override for different behavior."""
+    _ = column_name
+    if not self.update_value_expr:
+      raise ValueError('update_value_expr must be defined.')
+    return self.update_value_expr, self.bind_vars
+
+
+class RawUpdateValueExpr(BaseUpdateValueExpr):
+
+  def __init__(self, update_value_expr=None, **bind_vars):
+    """Pass in the update_value_expr and bind_vars.
 
     Args:
-      column_name: Str name of column to update.
-
-    Returns:
-      A (str SQL, (str: value) dict bind_vars) pair.
+      update_value_expr: Str SQL on the right side of '=' in the update expr.
+      **bind_vars: The (str: value) to be returned by build_update_value_sql.
     """
-    raise NotImplementedError
-
-
-class RawSQLUpdateExpr(BaseSQLUpdateExpr):
-  """A parameterized update expr.
-
-  This is the simplest base class for an SQLUpdateExpr that is
-  not also an SQLInsertExpr.
-
-  See BaseSQLInsertExpr.
-  """
-  right_expr = None
-
-  def __init__(self, right_expr=None, **bind_vars):
-    """Pass in the right_expr and bind_vars.
-
-    Either right_expr or the right_expr class variable should be
-    defined.
-
-    Args:
-      right_expr: Str SQL on the right side of '=' in the update expr.
-      **bind_vars: The (str: value) dict returned by build_update_sql.
-
-    Raises:
-      ValueError: If right_expr is not defined.
-    """
-    if right_expr:
-      self.right_expr = right_expr
-    elif not self.right_expr:
-      raise ValueError('No right_expr.')
+    self.update_value_expr = update_value_expr
     self.bind_vars = bind_vars
 
-  def build_update_sql(self, column_name):
-    return '%s = %s' % (column_name, self.right_expr), self.bind_vars
 
-
-class BaseSQLInsertExpr(BaseSQLUpdateExpr):
-  """Return SQL for an INSERT VALUES expression.
+class BaseInsertValueExpr(BaseUpdateValueExpr):
+  """Return SQL for a value expression in an INSERT VALUES clause.
 
   Expr is used in: INSERT ... VALUES (expr [, expr ...]) ...
+
+  Every insert value can also be used as an update.
+
+  Override insert_value_expr, pass insert_value_expr in __init__, or override
+  build_insert_value_sql.
   """
 
-  def build_insert_sql(self):
-    """Return SQL for an INSERT VALUES expression.
+  # Simple derived classes can override this value.
+  insert_value_expr = None
 
-    Returns:
-      A (str SQL, (str: value) dict bind_vars) pair.
-    """
-    raise NotImplementedError
+  def build_insert_value_sql(self):
+    """Get SQL and bind vars. Override for different behavior."""
+    if not self.insert_value_expr:
+      raise ValueError('insert_value_expr must be defined.')
+    return self.insert_value_expr, self.bind_vars
 
-  def build_update_sql(self, column_name):
-    """Return the update SQL expr corresponding to the insert expr.
-
-    Any insert expr should have a corresponding update expr; the reverse
-    is not true ("failures = failures + 3" is an update expr, but
-    "failures + 3" is not an insert expr).
-
-    Args:
-      column_name: Str name of column to update.
-
-    Returns:
-      A (str SQL, (str: value) dict bind_vars) pair.
-    """
-    insert_sql, bind_vars = self.build_insert_sql()
-    return '%s = %s' % (column_name, insert_sql), bind_vars
+  def build_update_value_sql(self, column_name):
+    _ = column_name
+    return self.build_insert_value_sql()
 
 
-class RawSQLInsertExpr(BaseSQLInsertExpr):
-  """A parameterized insert expr.
+class RawInsertValueExpr(BaseInsertValueExpr):
 
-  This is the simplest base class for an SQLInsertExpr.
-
-  See BaseSQLInsertExpr.
-  """
-  insert_expr = None
-
-  def __init__(self, insert_expr=None, **bind_vars):
-    """Pass in the insert_expr and bind_vars.
-
-    Either insert_expr or the insert_expr class variable should be
-    defined.
+  def __init__(self, insert_value_expr, **bind_vars):
+    """Pass in the insert_value_expr and bind_vars.
 
     Args:
-      insert_expr: Str SQL to be returned from build_insert_sql.
+      insert_value_expr: Str SQL to be returned from build_update_value_sql.
       **bind_vars: The (str: value) dict bind_vars to be returned from
-        build_insert_sql.
-
-    Raises:
-      ValueError: If insert_expr is not defined.
+        build_update_value_sql.
     """
-    if insert_expr:
-      self.insert_expr = insert_expr
-    elif not self.insert_expr:
-      raise ValueError('No insert_expr.')
+    self.insert_value_expr = insert_value_expr
     self.bind_vars = bind_vars
 
-  def build_insert_sql(self):
-    return self.insert_expr, self.bind_vars
 
-
-# Deprecated: Use RawSQLUpdateExpr instead.
-class MySQLFunction(BaseSQLUpdateExpr):
-  """A 'column = func' element of an update set clause.
-
-  Example: "failures = failures + %(failures_1)s", {'failures_1': 3}
-  """
-
-  def __init__(self, func, bind_vars=None):
-    """Init MySQLFunction.
-
-    Args:
-      func: Str of right-hand side of 'column = func', with formatting
-        keys corresponding to bind vars.
-      bind_vars: A (str: value) bind var dict corresponding
-        to formatting keys found in func.
-    """
-    self.func = func
-    self.bind_vars = bind_vars or {}
-
-  def build_update_sql(self, column_name):
-    """Return (str query, bind vars) for an UPDATE SET clause."""
-    clause = '%s = %s' % (column_name, self.func)
-    return clause, self.bind_vars
-
-
-class BaseSQLSelectExpr(object):
+class BaseSelectExpr(object):
   """Return SQL for a SELECT expression.
 
   Expr is used in: SELECT expr [, expr ...] FROM ...;
+
+  Override select_expr, pass select_expr in __init__, or override
+  select_sql.
   """
+
+  select_expr = None
 
   def select_sql(self, alias):
     """Return SQL for a SELECT expression.
 
     Args:
       alias: Str alias qualifier for column_name. If there is a column_name
-        for this BaseSQLSelectExpr, it should be written as alias.column_name.
+        for this BaseSelectExpr, it should be written as alias.column_name.
 
     Returns:
       Str SQL for a comma-delimited expr in a SELECT ... query.
-    """
-    raise NotImplementedError
-
-
-class RawSQLSelectExpr(BaseSQLSelectExpr):
-  """A SelectExpr that is raw SQL."""
-
-  # Derived class must define select_expr.
-  select_expr = None
-
-  def __init__(self, select_expr=None):
-    """Pass in the select_expr.
-
-    Either select_expr or the select_expr class variable should be
-    defined.
-
-    Args:
-      select_expr: Str SQL to be returned from select_sql.
 
     Raises:
-      ValueError: If select_expr is not defined.
+      ValueError: On bad input.
     """
-
-    if select_expr:
-      self.select_expr = select_expr
-    elif not self.select_expr:
-      raise ValueError('No select_expr.')
-
-  def select_sql(self, alias):
+    if not self.select_expr:
+      raise ValueError('select_expr must be defined.')
     _ = alias
     return self.select_expr
 
 
-class Count(RawSQLSelectExpr):
+class RawSelectExpr(BaseSelectExpr):
+
+  def __init__(self, select_expr=None):
+    """Pass in the select_expr.
+
+    Args:
+      select_expr: Str SQL to be returned from select_sql.
+    """
+    self.select_expr = select_expr
+
+
+class Count(BaseSelectExpr):
 
   select_expr = 'COUNT(1)'
 
 
-# This is an overly restrictive class name. For instance,
-# this could be used to create "FROM_UNIXTIME(time_created)",
-# but this is not an aggregate.
-class SQLAggregate(BaseSQLSelectExpr):
+class SelectFunction(BaseSelectExpr):
   """A 'func(column_name)' element of a select where clause.
 
   Example: "SUM(failures)".
@@ -662,7 +581,7 @@ class SQLAggregate(BaseSQLSelectExpr):
   function_name = None
 
   def __init__(self, column_name, function_name=None):
-    """Init SQLAggregate.
+    """Init SelectFunction.
 
     Either function_name or the function_name class variable should be
     defined.
@@ -690,22 +609,22 @@ class SQLAggregate(BaseSQLSelectExpr):
     return clause
 
 
-class Max(SQLAggregate):
+class Max(SelectFunction):
 
   function_name = 'MAX'
 
 
-class Min(SQLAggregate):
+class Min(SelectFunction):
 
   function_name = 'MIN'
 
 
-class Sum(SQLAggregate):
+class Sum(SelectFunction):
 
   function_name = 'SUM'
 
 
-class BaseSQLWhereExpr(object):
+class BaseWhereExpr(object):
   """Return SQL for a WHERE expression.
 
   Expr is used in WHERE clauses in various ways, like:
@@ -726,7 +645,7 @@ class BaseSQLWhereExpr(object):
     raise NotImplementedError
 
 
-class NullSafeNotValue(BaseSQLWhereExpr):
+class NullSafeNotEqual(BaseWhereExpr):
   """A null-safe inequality operator.
 
   For any [column] and [value] we do "NOT [column] <=> [value]".
@@ -747,7 +666,7 @@ class NullSafeNotValue(BaseSQLWhereExpr):
     return clause, bind_vars
 
 
-class SQLOperator(BaseSQLWhereExpr):
+class SQLOperator(BaseWhereExpr):
   """Base class for a column expression in a SQL WHERE clause."""
 
   op = None
@@ -786,20 +705,14 @@ class SQLOperator(BaseSQLWhereExpr):
     return clause, bind_vars
 
 
-class NotValue(SQLOperator):
-
+class NotEqual(SQLOperator):
   op = '!='
 
-  def build_where_sql(self, column_name, counter):
-    if self.value is None:
-      return '%s IS NOT NULL' % column_name, {}
-    return super(NotValue, self).build_where_sql(column_name, counter=counter)
 
-
-class InValuesOperatorBase(SQLOperator):
+class InExprBase(SQLOperator):
 
   def __init__(self, *values):
-    super(InValuesOperatorBase, self).__init__(values)
+    super(InExprBase, self).__init__(values)
 
   def build_where_sql(self, column_name, counter):
     op = self.op
@@ -810,29 +723,24 @@ class InValuesOperatorBase(SQLOperator):
     return clause, dict(bind_list)
 
 
-# You rarely need to use InValues directly in your database classes.
-# List and tuples are handled automatically by most database helper methods.
-class InValues(InValuesOperatorBase):
-  op = 'IN'
-
-
-class NotInValues(InValuesOperatorBase):
+class NotIn(InExprBase):
   op = 'NOT IN'
 
 
-class InValuesOrNull(InValues):
+class InOrNull(InExprBase):
+  op = 'IN'
 
   def build_where_sql(self, column_name, counter):
-    clause, bind_vars = super(InValuesOrNull, self).build_where_sql(
+    clause, bind_vars = super(InOrNull, self).build_where_sql(
         column_name, counter=counter)
     clause = '(%s OR %s IS NULL)' % (clause, column_name)
     return clause, bind_vars
 
 
-class BetweenValues(SQLOperator):
+class Between(SQLOperator):
 
   def __init__(self, value0, value1):
-    super(BetweenValues, self).__init__((value0, value1), 'BETWEEN')
+    super(Between, self).__init__((value0, value1), 'BETWEEN')
 
   def build_where_sql(self, column_name, counter):
     op = self.op
@@ -843,19 +751,38 @@ class BetweenValues(SQLOperator):
     return clause, dict(bind_list)
 
 
-class OrValues(SQLOperator):
+class OrExprs(SQLOperator):
+  """WHERE expr for multiple OR values on the same column.
+
+  This is used when a column can take on two exprs, like:
+
+    "col BETWEEN 10 AND 20 OR col = 30".
+  """
 
   def __init__(self, *values):
-    if not values or len(values) == 1:
+    """Initialize with multiple BaseWhereExprs or literal values.
+
+    At least one value should be a BaseWhereExpr. Example:
+
+      Prefer: col=[2, 4, 6] -> "col IN (2, 4, 6)"
+      To: col=OrExprs(2, 4, 6) -> "col = 2 OR col = 4 OR col = 6"
+
+    Args:
+      *values: List of 2 or more BaseWhereExprs or literals.
+
+    Raises:
+      ValueError: On bad input.
+    """
+    if len(values) < 2:
       raise ValueError('Two or more arguments expected.')
-    super(OrValues, self).__init__(values, 'OR')
+    super(OrExprs, self).__init__(values, 'OR')
 
   def build_where_sql(self, column_name, counter):
     condition_list = []
     bind_vars = {}
 
     for v in self.value:
-      if isinstance(v, BaseSQLWhereExpr):
+      if isinstance(v, BaseWhereExpr):
         clause, clause_bind_vars = v.build_where_sql(
             column_name, counter=counter)
         update_bind_vars(bind_vars, clause_bind_vars)
@@ -869,24 +796,28 @@ class OrValues(SQLOperator):
     return or_clause, bind_vars
 
 
-class LikeValue(SQLOperator):
-  op = 'LIKE'
-
-
-class GreaterThanValue(SQLOperator):
+class Greater(SQLOperator):
   op = '>'
 
 
-class GreaterThanOrEqualToValue(SQLOperator):
+class GreaterEqual(SQLOperator):
   op = '>='
 
 
-class LessThanValue(SQLOperator):
+class Less(SQLOperator):
   op = '<'
 
 
-class LessThanOrEqualToValue(SQLOperator):
+class LessEqual(SQLOperator):
   op = '<='
+
+
+class Like(SQLOperator):
+  op = 'LIKE'
+
+
+class NotLike(SQLOperator):
+  op = 'NOT LIKE'
 
 
 class ModuloEquals(SQLOperator):
@@ -921,7 +852,7 @@ class Expression(SQLOperator):
     return clause, {}
 
 
-class IsNullOrEmptyString(BaseSQLWhereExpr):
+class IsNullOrEmptyString(BaseWhereExpr):
 
   def build_where_sql(self, column_name, counter):
     # Note: mysql treats '' the same as '   '
@@ -929,21 +860,21 @@ class IsNullOrEmptyString(BaseSQLWhereExpr):
     return "(%s IS NULL OR %s = '')" % (column_name, column_name), {}
 
 
-class IsNullValue(BaseSQLWhereExpr):
+class IsNull(BaseWhereExpr):
 
   def build_where_sql(self, column_name, counter):
     _ = counter
     return '%s IS NULL' % column_name, {}
 
 
-class IsNotNullValue(BaseSQLWhereExpr):
+class IsNotNull(BaseWhereExpr):
 
   def build_where_sql(self, column_name, counter):
     _ = counter
     return '%s IS NOT NULL' % column_name, {}
 
 
-class Flag(BaseSQLUpdateExpr, BaseSQLWhereExpr):
+class Flags(BaseUpdateValueExpr, BaseWhereExpr):
   """A class with flags_present and flags_absent.
 
   This can create SELECT WHERE clause sql like "flags & 0x3 = 0x1" and
@@ -969,11 +900,12 @@ class Flag(BaseSQLUpdateExpr, BaseSQLWhereExpr):
         self.__class__.__name__, self.flags_to_add, self.flags_to_remove)
 
   def __or__(self, other):
-    return Flag(flags_present=self.flags_to_add | other.flags_to_add,
-                flags_absent=self.flags_to_remove | other.flags_to_remove)
+    return Flags(
+        flags_present=self.flags_to_add | other.flags_to_add,
+        flags_absent=self.flags_to_remove | other.flags_to_remove)
 
   def __eq__(self, other):
-    if not isinstance(other, Flag):
+    if not isinstance(other, Flags):
       return False
     return self.mask == other.mask and self.value == other.value
 
@@ -1005,7 +937,7 @@ class Flag(BaseSQLUpdateExpr, BaseSQLWhereExpr):
     }
     return clause, bind_vars
 
-  def build_update_sql(self, column_name='flags'):
+  def build_update_value_sql(self, column_name):
     """Return UPDATE WHERE clause and bind_vars.
 
     Args:
@@ -1015,8 +947,7 @@ class Flag(BaseSQLUpdateExpr, BaseSQLWhereExpr):
       A (str clause, (str: obj) bind_vars dict) pair.
     """
     clause = (
-        '%(column_name)s = (%(column_name)s | '
-        '%%(update_%(column_name)s_add)s) & '
+        '(%(column_name)s | %%(update_%(column_name)s_add)s) & '
         '~%%(update_%(column_name)s_remove)s') % dict(
             column_name=column_name)
     bind_vars = {
@@ -1025,11 +956,134 @@ class Flag(BaseSQLUpdateExpr, BaseSQLWhereExpr):
     return clause, bind_vars
 
 
-def make_flag(flag_mask, value):
+class TupleCompare(BaseWhereExpr):
+  """Create SQL for an after clause in a multi-dimensional scan.
+
+  Example: If reading values ordered by columns (x, y, z) starting after
+  the point (3, 5, 7), build the SQL:
+
+    "x = 3 AND (y = 5 AND z > 7 OR y > 5) OR x > 3".
+
+  NOTE: MySQL supports "(x, y, z) > (3, 5, 7)" to do the same thing,
+  but we have found that the optimizer frequently does not recognize
+  this as an indexed, range query. Surprisingly, it has a better chance
+  of efficiently using with the above inequality.
+  """
+
+  def __init__(self, starting_point, asc=True, inclusive=False):
+    """Constructor.
+
+    Args:
+      starting_point: Ordered list of (column, start_value) pairs.
+        Example - [('x', 3), ('y', 5), ('z', 7)].
+      asc: If True, scan forward.
+      inclusive: If True, also include starting point.
+    """
+    self.starting_point = starting_point
+    self.asc = asc
+    self.inclusive = inclusive
+
+  def build_where_sql(self, column_name, counter):
+    """Return multi-variable inequality expression.
+
+    Args:
+      column_name: Should be None. Ignored.
+      counter: Instance of itertools.count supplying numeric suffixes.
+
+    Returns:
+      sql: The str SQL, including placeholders for the values.
+      bind_vars: Dict mapping placeholder names to actual values.
+
+    Raises:
+      ValueError: If column_name is not None.
+    """
+    if column_name:
+      raise ValueError('column_name should be None.')
+    where_clause = None
+    is_complex = False
+    bind_vars = {}
+    for column, prev_value in reversed(self.starting_point):
+      bind_name = choose_bind_name(column, counter)
+      if isinstance(prev_value, (list, tuple, set)):
+        raise ValueError(
+            'Column=%s value=%s should be a single value.' %
+            (column, prev_value))
+      update_bind_vars(bind_vars, {bind_name: prev_value})
+      eq_part = '%s = %%(%s)s' % (column, bind_name)
+      if where_clause is None and self.inclusive:
+        op = '>=' if self.asc else '<='
+      else:
+        op = '>' if self.asc else '<'
+      ineq_part = '%s %s %%(%s)s' % (column, op, bind_name)
+      if where_clause:
+        if is_complex:
+          where_clause = '%s AND (%s) OR %s' % (
+              eq_part, where_clause, ineq_part)
+        else:
+          where_clause = '%s AND %s OR %s' % (eq_part, where_clause, ineq_part)
+          is_complex = True
+      else:
+        where_clause = ineq_part
+    return where_clause, bind_vars
+
+
+class TupleGreater(TupleCompare):
+  """WHERE expr for tuple > values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) > (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleGreater, self).__init__(
+        starting_point, asc=True, inclusive=False)
+
+
+class TupleGreaterEqual(TupleCompare):
+  """WHERE expr for tuple >= values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) >= (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleGreaterEqual, self).__init__(
+        starting_point, asc=True, inclusive=True)
+
+
+class TupleLess(TupleCompare):
+  """WHERE expr for tuple < values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) < (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleLess, self).__init__(
+        starting_point, asc=False, inclusive=False)
+
+
+class TupleLessEqual(TupleCompare):
+  """WHERE expr for tuple <= values expr.
+
+  starting_point=[('x', 3), ('y', 5)] makes: '(x, y) <= (3, 5)'.
+
+  See TupleCompare.
+  """
+
+  def __init__(self, starting_point):
+    super(TupleLessEqual, self).__init__(
+        starting_point, asc=False, inclusive=True)
+
+
+def make_flags(flag_mask, value):
   if value:
-    return Flag(flags_present=flag_mask)
+    return Flags(flags_present=flag_mask)
   else:
-    return Flag(flags_absent=flag_mask)
+    return Flags(flags_absent=flag_mask)
 
 
 def update_bind_vars(bind_vars, new_bind_vars):
@@ -1042,16 +1096,14 @@ def update_bind_vars(bind_vars, new_bind_vars):
     bind_vars[k] = v
 
 
-class Increment(BaseSQLUpdateExpr):
+class Increment(BaseUpdateValueExpr):
 
   def __init__(self, amount):
     self.amount = amount
 
-  def build_update_sql(self, column_name):
-    clause = (
-        '%(column_name)s = (%(column_name)s + '
-        '%%(update_%(column_name)s_amount)s)') % dict(
-            column_name=column_name)
+  def build_update_value_sql(self, column_name):
+    clause = '(%(column_name)s + %%(update_%(column_name)s_amount)s)' % dict(
+        column_name=column_name)
     bind_vars = {'update_%s_amount' % column_name: self.amount}
     return clause, bind_vars
 

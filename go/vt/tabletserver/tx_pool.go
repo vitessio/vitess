@@ -12,13 +12,16 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/callerid"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
 )
 
@@ -49,10 +52,10 @@ type TxPool struct {
 	activePool        *pools.Numbered
 	lastID            sync2.AtomicInt64
 	timeout           sync2.AtomicDuration
-	poolTimeout       sync2.AtomicDuration
 	ticks             *timer.Timer
 	txStats           *stats.Timings
 	queryServiceStats *QueryServiceStats
+	checker           MySQLChecker
 	// Tracking culprits that cause tx pool full errors.
 	logMu   sync.Mutex
 	lastLog time.Time
@@ -64,10 +67,10 @@ func NewTxPool(
 	txStatsPrefix string,
 	capacity int,
 	timeout time.Duration,
-	poolTimeout time.Duration,
 	idleTimeout time.Duration,
 	enablePublishStats bool,
-	qStats *QueryServiceStats) *TxPool {
+	qStats *QueryServiceStats,
+	checker MySQLChecker) *TxPool {
 
 	txStatsName := ""
 	if enablePublishStats {
@@ -75,20 +78,19 @@ func NewTxPool(
 	}
 
 	axp := &TxPool{
-		pool:              NewConnPool(name, capacity, idleTimeout, enablePublishStats, qStats),
+		pool:              NewConnPool(name, capacity, idleTimeout, enablePublishStats, qStats, checker),
 		activePool:        pools.NewNumbered(),
 		lastID:            sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:           sync2.NewAtomicDuration(timeout),
-		poolTimeout:       sync2.NewAtomicDuration(poolTimeout),
 		ticks:             timer.NewTimer(timeout / 10),
 		txStats:           stats.NewTimings(txStatsName),
+		checker:           checker,
 		queryServiceStats: qStats,
 	}
 	// Careful: pool also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
 	if enablePublishStats {
 		stats.Publish(name+"Timeout", stats.DurationFunc(axp.timeout.Get))
-		stats.Publish(name+"PoolTimeout", stats.DurationFunc(axp.poolTimeout.Get))
 	}
 	return axp
 }
@@ -146,16 +148,25 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 			panic(err)
 		case pools.ErrTimeout:
 			axp.LogActive()
-			panic(NewTabletError(ErrTxPoolFull, "Transaction pool connection limit exceeded"))
+			panic(NewTabletError(ErrTxPoolFull, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"))
 		}
-		panic(NewTabletErrorSql(ErrFatal, err))
+		panic(NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
 	}
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
-		panic(NewTabletErrorSql(ErrFail, err))
+		panic(NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
 	}
 	transactionID := axp.lastID.Add(1)
-	axp.activePool.Register(transactionID, newTxConnection(conn, transactionID, axp))
+	axp.activePool.Register(
+		transactionID,
+		newTxConnection(
+			conn,
+			transactionID,
+			axp,
+			callerid.ImmediateCallerIDFromContext(ctx),
+			callerid.EffectiveCallerIDFromContext(ctx),
+		),
+	)
 	return transactionID
 }
 
@@ -172,7 +183,7 @@ func (axp *TxPool) SafeCommit(ctx context.Context, transactionID int64) (invalid
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, fetchErr := conn.Exec(ctx, "commit", 1, false); fetchErr != nil {
 		conn.Close()
-		err = NewTabletErrorSql(ErrFail, fetchErr)
+		err = NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, fetchErr)
 	}
 	return
 }
@@ -184,7 +195,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) {
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
-		panic(NewTabletErrorSql(ErrFail, err))
+		panic(NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err))
 	}
 }
 
@@ -193,7 +204,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) {
 func (axp *TxPool) Get(transactionID int64) (conn *TxConnection) {
 	v, err := axp.activePool.Get(transactionID, "for query")
 	if err != nil {
-		panic(NewTabletError(ErrNotInTx, "Transaction %d: %v", transactionID, err))
+		panic(NewTabletError(ErrNotInTx, vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err))
 	}
 	return v.(*TxConnection)
 }
@@ -224,42 +235,35 @@ func (axp *TxPool) SetTimeout(timeout time.Duration) {
 	axp.ticks.SetInterval(timeout / 10)
 }
 
-// SetPoolTimeout sets the wait time for the tx pool.
-// TODO(sougou): move this to SqlQuery.
-func (axp *TxPool) SetPoolTimeout(timeout time.Duration) {
-	axp.poolTimeout.Set(timeout)
-}
-
-// PoolTimeout returns the wait time for the tx pool.
-func (axp *TxPool) PoolTimeout() time.Duration {
-	return axp.poolTimeout.Get()
-}
-
 // TxConnection is meant for executing transactions. It keeps track
 // of dirty keys for rowcache invalidation. It can return itself to
 // the tx pool correctly. It also does not retry statements if there
 // are failures.
 type TxConnection struct {
 	*DBConn
-	TransactionID int64
-	pool          *TxPool
-	inUse         bool
-	StartTime     time.Time
-	EndTime       time.Time
-	dirtyTables   map[string]DirtyKeys
-	Queries       []string
-	Conclusion    string
-	LogToFile     sync2.AtomicInt32
+	TransactionID     int64
+	pool              *TxPool
+	inUse             bool
+	StartTime         time.Time
+	EndTime           time.Time
+	dirtyTables       map[string]DirtyKeys
+	Queries           []string
+	Conclusion        string
+	LogToFile         sync2.AtomicInt32
+	ImmediateCallerID *querypb.VTGateCallerID
+	EffectiveCallerID *vtrpcpb.CallerID
 }
 
-func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool) *TxConnection {
+func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) *TxConnection {
 	return &TxConnection{
-		DBConn:        conn,
-		TransactionID: transactionID,
-		pool:          pool,
-		StartTime:     time.Now(),
-		dirtyTables:   make(map[string]DirtyKeys),
-		Queries:       make([]string, 0, 8),
+		DBConn:            conn,
+		TransactionID:     transactionID,
+		pool:              pool,
+		StartTime:         time.Now(),
+		dirtyTables:       make(map[string]DirtyKeys),
+		Queries:           make([]string, 0, 8),
+		ImmediateCallerID: immediate,
+		EffectiveCallerID: effective,
 	}
 }
 
@@ -275,14 +279,14 @@ func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
 }
 
 // Exec executes the statement for the current transaction.
-func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	r, err := txc.DBConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
 		if IsConnErr(err) {
-			go checkMySQL()
-			return nil, NewTabletErrorSql(ErrFatal, err)
+			txc.pool.checker.CheckMySQL()
+			return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
-		return nil, NewTabletErrorSql(ErrFail, err)
+		return nil, NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return r, nil
 }
@@ -305,6 +309,15 @@ func (txc *TxConnection) RecordQuery(query string) {
 func (txc *TxConnection) discard(conclusion string) {
 	txc.Conclusion = conclusion
 	txc.EndTime = time.Now()
+
+	username := callerid.GetPrincipal(txc.EffectiveCallerID)
+	if username == "" {
+		username = callerid.GetUsername(txc.ImmediateCallerID)
+	}
+	duration := txc.EndTime.Sub(txc.StartTime)
+	txc.pool.queryServiceStats.UserTransactionCount.Add([]string{username, conclusion}, 1)
+	txc.pool.queryServiceStats.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
+
 	txc.pool.activePool.Unregister(txc.TransactionID)
 	txc.DBConn.Recycle()
 	// Ensure PoolConnection won't be accessed after Recycle.
@@ -315,11 +328,18 @@ func (txc *TxConnection) discard(conclusion string) {
 	TxLogger.Send(txc)
 }
 
+// EventTime returns the time the event was created.
+func (txc *TxConnection) EventTime() time.Time {
+	return txc.EndTime
+}
+
 // Format returns a printable version of the connection info.
 func (txc *TxConnection) Format(params url.Values) string {
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t%.6f\t%v\t%v\t\n",
+		"%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
 		txc.TransactionID,
+		callerid.GetPrincipal(txc.EffectiveCallerID),
+		callerid.GetUsername(txc.ImmediateCallerID),
 		txc.StartTime.Format(time.StampMicro),
 		txc.EndTime.Format(time.StampMicro),
 		txc.EndTime.Sub(txc.StartTime).Seconds(),

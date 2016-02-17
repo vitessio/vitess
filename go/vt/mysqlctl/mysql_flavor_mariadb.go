@@ -12,8 +12,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 // mariaDB10 is the implementation of MysqlFlavor for MariaDB 10.0.10
@@ -28,7 +27,7 @@ func (*mariaDB10) VersionMatch(version string) bool {
 }
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
-func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosition, err error) {
+func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp replication.Position, err error) {
 	qr, err := mysqld.FetchSuperQuery("SELECT @@GLOBAL.gtid_binlog_pos")
 	if err != nil {
 		return rp, err
@@ -40,16 +39,16 @@ func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPos
 }
 
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
-func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (proto.ReplicationStatus, error) {
+func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (replication.Status, error) {
 	fields, err := mysqld.fetchSuperQueryMap("SHOW ALL SLAVES STATUS")
 	if err != nil {
-		return proto.ReplicationStatus{}, ErrNotSlave
+		return replication.Status{}, ErrNotSlave
 	}
 	status := parseSlaveStatus(fields)
 
 	status.Position, err = flavor.ParseReplicationPosition(fields["Gtid_Slave_Pos"])
 	if err != nil {
-		return proto.ReplicationStatus{}, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", fields["Gtid_Slave_Pos"], err)
+		return replication.Status{}, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", fields["Gtid_Slave_Pos"], err)
 	}
 	return status, nil
 }
@@ -58,7 +57,7 @@ func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (proto.ReplicationStatus, e
 //
 // Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
 // if the slave thread stops. If that is a problem, we'll have to change this.
-func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
+func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos replication.Position, waitTimeout time.Duration) error {
 	var query string
 	if waitTimeout == 0 {
 		// Omit the timeout to wait indefinitely. In MariaDB, a timeout of 0 means
@@ -100,20 +99,10 @@ func (*mariaDB10) PromoteSlaveCommands() []string {
 	}
 }
 
-// StartReplicationCommands implements MysqlFlavor.StartReplicationCommands().
-func (*mariaDB10) StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error) {
-	// Make SET gtid_slave_pos command.
-	setSlavePos := fmt.Sprintf("SET GLOBAL gtid_slave_pos = '%s'", status.Position)
-
-	// Make CHANGE MASTER TO command.
-	args := changeMasterArgs(params, status.MasterHost, status.MasterPort, status.MasterConnectRetry)
-	args = append(args, "MASTER_USE_GTID = slave_pos")
-	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
-
+// SetSlavePositionCommands implements MysqlFlavor.
+func (*mariaDB10) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
 	return []string{
-		setSlavePos,
-		changeMasterTo,
-		"START SLAVE",
+		fmt.Sprintf("SET GLOBAL gtid_slave_pos = '%s'", pos),
 	}, nil
 }
 
@@ -128,17 +117,17 @@ func (*mariaDB10) SetMasterCommands(params *sqldb.ConnParams, masterHost string,
 }
 
 // ParseGTID implements MysqlFlavor.ParseGTID().
-func (*mariaDB10) ParseGTID(s string) (proto.GTID, error) {
-	return proto.ParseGTID(mariadbFlavorID, s)
+func (*mariaDB10) ParseGTID(s string) (replication.GTID, error) {
+	return replication.ParseGTID(mariadbFlavorID, s)
 }
 
 // ParseReplicationPosition implements MysqlFlavor.ParseReplicationposition().
-func (*mariaDB10) ParseReplicationPosition(s string) (proto.ReplicationPosition, error) {
-	return proto.ParseReplicationPosition(mariadbFlavorID, s)
+func (*mariaDB10) ParseReplicationPosition(s string) (replication.Position, error) {
+	return replication.ParsePosition(mariadbFlavorID, s)
 }
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.ReplicationPosition) error {
+func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
 	const ComBinlogDump = 0x12
 
 	// Tell the server that we understand GTIDs by setting our slave capability
@@ -173,7 +162,7 @@ func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.Re
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
-func (*mariaDB10) MakeBinlogEvent(buf []byte) blproto.BinlogEvent {
+func (*mariaDB10) MakeBinlogEvent(buf []byte) replication.BinlogEvent {
 	return NewMariadbBinlogEvent(buf)
 }
 
@@ -188,19 +177,19 @@ func (*mariaDB10) DisableBinlogPlayback(mysqld *Mysqld) error {
 }
 
 // mariadbBinlogEvent wraps a raw packet buffer and provides methods to examine
-// it by implementing blproto.BinlogEvent. Some methods are pulled in from
+// it by implementing replication.BinlogEvent. Some methods are pulled in from
 // binlogEvent.
 type mariadbBinlogEvent struct {
 	binlogEvent
 }
 
 // NewMariadbBinlogEvent creates a BinlogEvent instance from given byte array
-func NewMariadbBinlogEvent(buf []byte) blproto.BinlogEvent {
+func NewMariadbBinlogEvent(buf []byte) replication.BinlogEvent {
 	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf)}
 }
 
 // HasGTID implements BinlogEvent.HasGTID().
-func (ev mariadbBinlogEvent) HasGTID(f blproto.BinlogFormat) bool {
+func (ev mariadbBinlogEvent) HasGTID(f replication.BinlogFormat) bool {
 	// MariaDB provides GTIDs in a separate event type GTID_EVENT.
 	return ev.IsGTID()
 }
@@ -217,7 +206,7 @@ func (ev mariadbBinlogEvent) IsGTID() bool {
 //   8         sequence number
 //   4         domain ID
 //   1         flags2
-func (ev mariadbBinlogEvent) IsBeginGTID(f blproto.BinlogFormat) bool {
+func (ev mariadbBinlogEvent) IsBeginGTID(f replication.BinlogFormat) bool {
 	const FLStandalone = 1
 
 	data := ev.Bytes()[f.HeaderLength:]
@@ -232,10 +221,10 @@ func (ev mariadbBinlogEvent) IsBeginGTID(f blproto.BinlogFormat) bool {
 //   8         sequence number
 //   4         domain ID
 //   1         flags2
-func (ev mariadbBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
+func (ev mariadbBinlogEvent) GTID(f replication.BinlogFormat) (replication.GTID, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 
-	return proto.MariadbGTID{
+	return replication.MariadbGTID{
 		Sequence: binary.LittleEndian.Uint64(data[:8]),
 		Domain:   binary.LittleEndian.Uint32(data[8 : 8+4]),
 		Server:   ev.ServerID(),
@@ -243,7 +232,7 @@ func (ev mariadbBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().
-func (ev mariadbBinlogEvent) StripChecksum(f blproto.BinlogFormat) (blproto.BinlogEvent, []byte, error) {
+func (ev mariadbBinlogEvent) StripChecksum(f replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	switch f.ChecksumAlgorithm {
 	case BinlogChecksumAlgOff, BinlogChecksumAlgUndef:
 		// There is no checksum.

@@ -5,25 +5,25 @@
 package vtgate
 
 import (
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 type requestContext struct {
 	ctx              context.Context
 	sql              string
 	bindVariables    map[string]interface{}
-	tabletType       pb.TabletType
-	session          *proto.Session
+	tabletType       topodatapb.TabletType
+	session          *vtgatepb.Session
 	notInTransaction bool
 	router           *Router
 }
 
-func newRequestContext(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, router *Router) *requestContext {
+func newRequestContext(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, router *Router) *requestContext {
 	return &requestContext{
 		ctx:              ctx,
 		sql:              sql,
@@ -35,6 +35,6 @@ func newRequestContext(ctx context.Context, sql string, bindVariables map[string
 	}
 }
 
-func (vc *requestContext) Execute(boundQuery *tproto.BoundQuery) (*mproto.QueryResult, error) {
+func (vc *requestContext) Execute(boundQuery *querytypes.BoundQuery) (*sqltypes.Result, error) {
 	return vc.router.Execute(vc.ctx, boundQuery.Sql, boundQuery.BindVariables, vc.tabletType, vc.session, false)
 }

@@ -1,60 +1,110 @@
-This document explains the client library strategy for Vitess. A Vitess cluster can be accessed
-by a variety of clients, written in different languages. We provide a unified client strategy
-for each language we support.
+You can access your Vitess cluster using a variety of clients and
+programming languages. Vitess client libraries help your client
+application to more easily talk to your storage system to query data.
 
-Vitess's service is exposed through a proto3 service definition, and we support gRPC.
-So we therefore support all languages the gRPC framework supports. The RPC layer is however
-a bit raw to use as is, so we implement a thin layer on the RPC API to the vtgate server pool.
-Each client provides a single connection abstraction to the vtgate service.
-The RPC API is described in the proto file. (TODO: link to the proto generated doc).
+Vitess' service is exposed through a
+[proto3](https://developers.google.com/protocol-buffers/docs/proto3)
+service definition. Vitess supports [gRPC](http://www.grpc.io/),
+and you can use the 
+[proto compiler](https://developers.google.com/protocol-buffers/docs/proto?hl=en#generating)
+to generate stubs that can call the API in any language that the
+gRPC framework supports.
 
-## Core Principles for the Client Libraries
+This document explains the client library strategy for Vitess.
 
-The following principles are followed by each client library:
+## Core Principles
 
-* Each client should if possible fully implement the server API, and provide access to all methods:
-  * Execution of queries targeted to a specific set of shards (the ...Shards methods).
-  * Execution of queries targeted by sharding key (the ...KeyspaceIds, ...KeyRanges and ...EntityIds methods).
-  * Execution of queries using the v3 API, which chooses a target automatically (Experimental).
-  * Transaction methods (Begin, Commit, Rollback).
-  * Map-Reduce helper method (SplitQuery).
-  * Topology method (GetSrvKeyspace).
-* The connection object should be thread-safe if applicable, and allow the multiplexing of multiple queries on the same connection (streaming queries, transactions, ...).
-* A lower level plug-in abstraction should be used, so the transport used can be plugged-in, and we can use different RPC frameworks. Note if the proto3 library is available in the language, it is preferable to use the data types generated from our proto files in the API.
-* A higher level object abstraction should be available so the user doesn't have to keep track of the Session.
-* Language specific idiomatic constructs to provide helpful constructs to application developers. Integration with language database drivers will lower the barrier of entry for application developers. Full integration may require the use of v3 API:
-  * For Python, compliance with DB API.
-  * For Java, compliance with JDBC.
-  * For PHP, compliance with PDO.
-  * For Go, the database/sql package.
-* If a well-known Map-Reduce framework exists for the language, both a data source and a sink should be provided for that language. For instance, in Java, we provide a Hadoop data source and a sink.
-* Higher level libraries can also be provided if they make sense. For instance, we have object-based helper classes in Python (used by YouTube) that we provide.
-* Expose the same set of well-documented error codes to the user. (TODO: link to the proto error doc).
-* Use vtgateclienttest to fully unit-test all API calls (vtgateclienttest is a small server that can simulate a real server and return specific responses to allow full client feature coverage).
+Vitess client libraries follow these core principles:
 
-## RPC Frameworks
+* Libraries fully implement the server API and provide access to all
+  API methods, which support the following types of functions:
+  * Transactions (begin, commit, rollback)
+  * Queries targeted to a specific shards or groups of shards
+  * Queries targeted based on sharding key values
+  * Queries that monitor sharding configurations  
+  * MapReduce operations
+* Libraries expose an identical set of well-documented error codes.
+* Libraries provide a single-connection abstraction to the
+  <code>vtgate</code> service. The connection object should be
+  thread-safe, if applicable, and should support multiplexing for
+  streaming queries, transactions, and other operations that rely
+  on multiple queries.
+* A low-level plug-in abstraction enables the transport to be plugged
+  in so that the application can use different RPC frameworks. For
+  instance, within Google, we use proto2 objects with an internal
+  RPC system.<br class="bigbreak">**Note:** If the proto3 library is available in
+  your language, we recommend that your API calls use the data types
+  generated from our .proto files.
+* A high-level object abstraction allows the user to execute transactions
+  without having to keep track of the database session.
+* Libraries support <code>vtgateclienttest</code>, enabling you to
+  fully unit-test all API calls. <code>vtgateclienttest</code> is
+  a small server that simulates a real <code>vtgate</code> server
+  and returns specific responses to allow for full client feature
+  coverage.
 
-We started Vitess with BSON-RPC, which is BSON-encoded data structures on top of the Go RPC framework. However, limitations in that framework, and the availability of gRPC, made us switch to [gRPC](https://github.com/grpc).
+## Language-specific considerations
+* Each client library should support language-specific, idiomatic
+  constructs to simplify application development in that language.
+* Client libraries should integrate with the following language-specific
+  database drivers, though this support is not yet provided:
+  * Go: [database/sql package](http://golang.org/pkg/database/sql/)
+  * Java: [JDBC](https://docs.oracle.com/javase/tutorial/jdbc/index.html)
+    compliance
+  * PHP: [PHP Data Objects \(PDO\)](http://php.net/manual/en/intro.pdo.php)
+    compliance
+  * Python: [DB API](https://www.python.org/dev/peps/pep-0249/) compliance
+* Libraries provide a thin wrapper around the proto3 service definitions.
+  Those wrappers could be extended with adapters to higher level libraries
+  like SQLAlchemy (Python) or JDBC (Java), with other object-based helper
+  classes in the relevant language, or both.
+* If a well-known MapReduce framework exists for the language, the client
+  library should provide a data source and a data sink. For example, you
+  can read data from Vitess inside a Hadoop MapReduce job and save the
+  output into Vitess.
 
-We now define our services using [proto files](https://github.com/google/protobuf), and the proto3 syntax.
+## Available libraries
 
-We are not however constrained by it. The plug-in client strategy we follow allows us to easily send the proto3 objects over any transport (for instance, within Google, we use proto2 objects over Stubby).
+### Go
 
-## Java
+The Go client interface is in the
+["vtgateconn" package](https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn).
 
-TODO: fill in more information, once refactor is done.
+There are multiple implementations available. We recommend to use the
+["grpc" implementation](https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn).
+Load it by importing its package:
 
-## PHP
+``` go
+import "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
+```
 
-TODO: fill in more information.
+When you connect to vtgate, use the
+[`DialProtocol` method](https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn#DialProtocol)
+and specify "grpc" as protocol.
+Alternatively, you can set the
+[command line flag "vtgate_protocol"](https://github.com/youtube/vitess/blob/ff800b2a1801f0bb8b0c29a701d9c0988bf827e2/go/vt/vtgate/vtgateconn/vtgateconn.go#L27)
+to "grpc".
 
-## Go
+The Go client interface has multiple Execute* methods for different use-cases
+and sharding configurations. When you start off with an unsharded database, we
+recommend to use the
+[ExecuteShards method](https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn#VTGateConn.ExecuteShards)
+and pass "0" as only shard.
 
-The Go client exposes the entire API. It also provides an adapter for the go native database/sql library, based on the v3 API.
+For an example how to use the Go client, see the end-to-end test
+[local_cluster_test.go](https://github.com/youtube/vitess/blob/master/go/vt/vttest/local_cluster_test.go).
+From this test file, you can also reuse the "LaunchVitess" call to
+instantiate a minimal Vitess setup (including a MySQL server). This way you can
+test your application against an actual instance.
 
-No map-reduce integration is supported yet.
+### Java
 
-## Python
+* [Java client](https://github.com/youtube/vitess/blob/master/java/client/src/main/java/com/youtube/vitess/client/VTGateConn.java)
 
-TODO: fill in more information.
+### PHP
 
+* [PHP client](https://github.com/youtube/vitess/tree/master/php)
+
+### Python
+
+* [Python client](https://github.com/youtube/vitess/blob/master/py/vtdb/vtgatev2.py)

@@ -2,20 +2,24 @@
 sudo: false
 language: go
 go:
-  - 1.4
+  - 1.5
 addons:
   apt:
+    sources:
+    - ubuntu-toolchain-r-test
     packages:
     # NOTE: When you add a dependency, don't forget to add comment why it's necessary.
     - automake
     - libtool
     - memcached
+    - php5-cli
+    - php5-dev
     - python-dev
     - python-mysqldb
     - python-pip
-    - python-virtualenv
     - libssl-dev
-    - g++
+    - g++-4.8
+    - gcc-4.8
     - git
     - pkg-config
     # installs libaio1 which is required by MariaDB 10.0 server package
@@ -31,25 +35,32 @@ cache:
   - $MYSQL_ROOT
   # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
   - $HOME/gopath/dist/grpc/.build_finished
-  - $HOME/gopath/dist/grpc/grpc/python2.7_virtual_environment
-  - $HOME/gopath/dist/grpc/lib/python2.7/site-packages
-  - $HOME/gopath/dist/protobuf/.build_finished
-  - $HOME/gopath/dist/protobuf/lib
-  - $HOME/gopath/dist/py-cbson/lib/python2.7/site-packages
+  - $HOME/gopath/dist/grpc/usr/local
   - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
   - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
   - $HOME/gopath/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages
-  - $HOME/gopath/dist/vt-zookeeper-3.3.5/.build_finished
-  - $HOME/gopath/dist/vt-zookeeper-3.3.5/include
-  - $HOME/gopath/dist/vt-zookeeper-3.3.5/lib
+  - $HOME/gopath/dist/vt-zookeeper-3.4.6/.build_finished
+  - $HOME/gopath/dist/vt-zookeeper-3.4.6/include
+  - $HOME/gopath/dist/vt-zookeeper-3.4.6/lib
   # Maven repository for Java dependencies.
   - $HOME/.m2
+  - $HOME/.phpenv
 before_cache:
   # Travis CI caching doesn't work with this symlink. Just delete it.
   - rm $HOME/gopath/bin/zksrv.sh
-  # Delete this file because it keeps changing (having the latest timestamp of an update)
-  # and triggers a lengthy update of the cache (~19 seconds).
-  - rm $HOME/.m2/repository/com/youtube/vitess/gorpc-client/0.0.1-SNAPSHOT/resolver-status.properties
+  # Delete these files because they keep changing (having the latest timestamp
+  # of an update) and trigger a lengthy update of the cache (~25 seconds).
+  - rm $HOME/.m2/repository/com/youtube/vitess/*/maven-metadata-local.xml
+  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/*-SNAPSHOT.jar
+  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/_remote.repositories
+  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/maven-metadata-local.xml
+  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/resolver-status.properties
+  - rm $HOME/.m2/repository/io/grpc/protoc-gen-grpc-java/*/protoc-gen-grpc-java-*.pom.lastUpdated
+  # Don't cache unnecessary PHP files.
+  - rm $HOME/.phpenv/versions/*/sbin/*
+  - rm $HOME/.phpenv/versions/*/bin/php-cgi
+  - find $HOME/.phpenv/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf
+  - find $HOME/.phpenv/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
 env:
   global:
     - MYSQL_FLAVOR=MariaDB
@@ -58,47 +69,45 @@ env:
     # Enable parallel compilation e.g. for gRPC.
     # (The Travis CI worker is allowed to use up to 2 cores, but as of 07/2015 4 parallel compilations is actually faster.)
     - MAKEFLAGS=-j4
-    # Uncomment the next line to debug Python integration tests.
-    # NOTE: When -k is enabled, subsequent tests will fail because the test directory is not empty.
-    #       I.e. modify the Makefile to make sure that the test to be debugged is run first.
-    #- VT_TEST_FLAGS="-v -k"
     # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).
     # As of 07/2015 this value works best in a Travis CI container.
     - VT_GO_PARALLEL=4
+    - PATH="$HOME/.phpenv/bin:$HOME/gopath/dist/protobuf/bin:$PATH"
+    # Add -follow to TEST_FLAGS below to print as the test runs, to diagnose stuck tests.
+    - TEST_FLAGS="-docker=false -timeout=5m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
+    - CC=gcc-4.8
+    - CXX=g++-4.8
   matrix:
     # NOTE: Travis CI schedules up to 5 tests simultaneously.
     #       All our tests should be spread out as evenly as possible across these 5 slots.
     #       We should always utilize all 5 slots because the cost of the setup is high (up to one minute).
     # NOTE: Use "" if you specify a space separated list of multiple targets.
-   - MAKE_TARGET="unit_test build java_vtgate_client_test queryservice_test"
-   - MAKE_TARGET="unit_test_race unit_test_goveralls"
-   # Run large tests first because they take longer than medium. This way, it evens out better when tests get queued.
-   - MAKE_TARGET="build large_integration_test ci_skip_integration_test"
-   - MAKE_TARGET="build small_integration_test"
-   - MAKE_TARGET="build medium_integration_test"
+    - TEST_MATRIX="-shard 0"
+    - TEST_MATRIX="-shard 1"
+    - TEST_MATRIX="-shard 2"
+    - TEST_MATRIX="-shard 3"
+    - TEST_MATRIX="-shard 4"
 before_install:
-  - bash travis/download_mariadb.sh
+  - travis/download_mariadb.sh
+  - travis/php_init.sh
 install:
-  - bash -v bootstrap.sh
-script:
+  - ./bootstrap.sh
+before_script:
   - source dev.env
+  # Travis only tests. Run only on the first shard.
+  # Part of "before_script" because in "script" the job would not fail immediately if a command fails.
+  - |
+    if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
+      travis/check_make_proto.sh
+    fi
+script:
+  - eval "$(phpenv init -)"
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
-  - |
-      return_value=1
-      for target in $MAKE_TARGET; do
-        echo "Running: make $target"
-        travis_retry /usr/bin/time -f "elapsed: %E CPU: %P Memory: %M kB" make $target
-        return_value=$?
-        if [ $return_value -ne 0 ]; then
-          echo "ERROR: make $target failed with code: $return_value. Please fix the problem and re-trigger the test."
-          break
-        fi
-      done
-      [ $return_value -eq 0 ] || false
+  - go run test.go $TEST_FLAGS $TEST_MATRIX
 after_failure:
   # In case of errors, output log files to make it easier to debug the error.
   # List all available files.
   - ls -alR $HOME/gopath/vtdataroot
-  # Output *.log* and *.stderr files. (Uncomment VT_TEST_FLAGS above or tests will delete their logs.)
+  # Output *.log* and *.stderr files. (Add -keep-data to TEST_FLAGS above or tests will delete their logs.)
   - find $HOME/gopath/vtdataroot \( -name "*.log*" -or -name "*.stderr" \) -type f -print0 | xargs -0r --verbose --max-args=1 cat

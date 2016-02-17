@@ -51,8 +51,7 @@ public class GoRpcBsonDecoder extends ExtendableBsonDecoder {
 
   public static class GoRpcBSONCallBack extends BasicBSONCallback {
     public void gotULong(final String name, final long v) {
-      final UnsignedLong ulv = UnsignedLong.fromLongBits(v);
-      _put(name, ulv);
+      _put(name, v);
     }
   }
 }

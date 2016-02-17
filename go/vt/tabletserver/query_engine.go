@@ -17,7 +17,9 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tableacl/acl"
 )
 
 // spotCheckMultiplier determines the precision of the
@@ -41,7 +43,8 @@ const spotCheckMultiplier = 1e6
 // TODO(sougou): Switch to error return scheme.
 type QueryEngine struct {
 	schemaInfo *SchemaInfo
-	dbconfigs  *dbconfigs.DBConfigs
+	config     Config
+	dbconfigs  dbconfigs.DBConfigs
 
 	// Pools
 	cachePool      *CachePool
@@ -51,14 +54,13 @@ type QueryEngine struct {
 	// Services
 	txPool       *TxPool
 	consolidator *sync2.Consolidator
-	invalidator  *RowcacheInvalidator
 	streamQList  *QueryList
 	tasks        sync.WaitGroup
 
 	// Vars
-	queryTimeout     sync2.AtomicDuration
 	spotCheckFreq    sync2.AtomicInt64
 	strictMode       sync2.AtomicInt64
+	autoCommit       sync2.AtomicInt64
 	maxResultSize    sync2.AtomicInt64
 	maxDMLRows       sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
@@ -69,9 +71,8 @@ type QueryEngine struct {
 	tableaclDenied       *stats.MultiCounters
 	tableaclPseudoDenied *stats.MultiCounters
 	strictTableAcl       bool
-	enableAutoCommit     bool
 	enableTableAclDryRun bool
-	exemptACL            string
+	exemptACL            acl.ACL
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
@@ -102,31 +103,19 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 	if err == ErrConnPoolClosed {
 		panic(ErrConnPoolClosed)
 	}
-	panic(NewTabletErrorSql(ErrFatal, err))
+	// If there's a problem with getting a connection out of the pool, that is
+	// probably not due to the query itself. The query might succeed on a different
+	// tablet.
+	panic(NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
 }
 
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(config Config) *QueryEngine {
-	qe := &QueryEngine{enableAutoCommit: config.EnableAutoCommit}
+func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
+	qe := &QueryEngine{config: config}
 	qe.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
-	qe.schemaInfo = NewSchemaInfo(
-		config.QueryCacheSize,
-		config.StatsPrefix,
-		map[string]string{
-			debugQueryPlansKey: config.DebugURLPrefix + "/query_plans",
-			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
-			debugTableStatsKey: config.DebugURLPrefix + "/table_stats",
-			debugSchemaKey:     config.DebugURLPrefix + "/schema",
-		},
-		time.Duration(config.SchemaReloadTime*1e9),
-		time.Duration(config.IdleTimeout*1e9),
-		config.EnablePublishStats,
-		qe.queryServiceStats,
-	)
 
-	// Pools
 	qe.cachePool = NewCachePool(
 		config.PoolNamePrefix+"Rowcache",
 		config.RowCache,
@@ -135,12 +124,31 @@ func NewQueryEngine(config Config) *QueryEngine {
 		config.EnablePublishStats,
 		qe.queryServiceStats,
 	)
+	qe.schemaInfo = NewSchemaInfo(
+		config.StatsPrefix,
+		checker,
+		config.QueryCacheSize,
+		time.Duration(config.SchemaReloadTime*1e9),
+		time.Duration(config.IdleTimeout*1e9),
+		qe.cachePool,
+		map[string]string{
+			debugQueryPlansKey: config.DebugURLPrefix + "/query_plans",
+			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
+			debugTableStatsKey: config.DebugURLPrefix + "/table_stats",
+			debugSchemaKey:     config.DebugURLPrefix + "/schema",
+			debugQueryRulesKey: config.DebugURLPrefix + "/query_rules",
+		},
+		config.EnablePublishStats,
+		qe.queryServiceStats,
+	)
+
 	qe.connPool = NewConnPool(
 		config.PoolNamePrefix+"ConnPool",
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
 		qe.queryServiceStats,
+		checker,
 	)
 	qe.streamConnPool = NewConnPool(
 		config.PoolNamePrefix+"StreamConnPool",
@@ -148,49 +156,59 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
 		qe.queryServiceStats,
+		checker,
 	)
 
-	// Services
 	qe.txPool = NewTxPool(
 		config.PoolNamePrefix+"TransactionPool",
 		config.StatsPrefix,
 		config.TransactionCap,
 		time.Duration(config.TransactionTimeout*1e9),
-		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
 		qe.queryServiceStats,
+		checker,
 	)
 	qe.consolidator = sync2.NewConsolidator()
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
-	qe.invalidator = NewRowcacheInvalidator(config.StatsPrefix, qe, config.EnablePublishStats)
 	qe.streamQList = NewQueryList()
 
-	// Vars
-	qe.queryTimeout.Set(time.Duration(config.QueryTimeout * 1e9))
 	qe.spotCheckFreq = sync2.NewAtomicInt64(int64(config.SpotCheckRatio * spotCheckMultiplier))
 	if config.StrictMode {
 		qe.strictMode.Set(1)
 	}
+	if config.EnableAutoCommit {
+		qe.autoCommit.Set(1)
+	}
 	qe.strictTableAcl = config.StrictTableAcl
 	qe.enableTableAclDryRun = config.EnableTableAclDryRun
-	qe.exemptACL = config.TableAclExemptACL
+
+	if config.TableAclExemptACL != "" {
+		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
+			if exemptACL, err := f.New([]string{config.TableAclExemptACL}); err == nil {
+				log.Infof("Setting Table ACL exempt rule for %v", config.TableAclExemptACL)
+				qe.exemptACL = exemptACL
+			} else {
+				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
+			}
+		} else {
+			log.Infof("Cannot get current ACL Factory: %v", err)
+		}
+	}
+
 	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.MaxResultSize))
 	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
-	// Loggers
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	var tableACLAllowedName string
 	var tableACLDeniedName string
 	var tableACLPseudoDeniedName string
-	// Stats
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
 		stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
 		stats.Publish(config.StatsPrefix+"StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
-		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
 		stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
 			return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
 		}))
@@ -208,7 +226,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 }
 
 // Open must be called before sending requests to QueryEngine.
-func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) {
+func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs, schemaOverrides []SchemaOverride) {
 	qe.dbconfigs = dbconfigs
 	appParams := dbconfigs.App.ConnParams
 	// Create dba params based on App connection params
@@ -223,31 +241,22 @@ func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []Sc
 	if qe.strictMode.Get() != 0 {
 		strictMode = true
 	}
-	if !strictMode && dbconfigs.App.EnableRowcache {
-		panic(NewTabletError(ErrFatal, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
+	if !strictMode && qe.config.RowCache.Enabled {
+		panic(NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
 	}
-	if dbconfigs.App.EnableRowcache {
+	if qe.config.RowCache.Enabled {
 		qe.cachePool.Open()
 		log.Infof("rowcache is enabled")
 	} else {
-		// Invalidator should not be enabled if rowcache is not enabled.
-		dbconfigs.App.EnableInvalidator = false
 		log.Infof("rowcache is not enabled")
 	}
 
 	start := time.Now()
 	// schemaInfo depends on cachePool. Every table that has a rowcache
 	// points to the cachePool.
-	qe.schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, qe.cachePool, strictMode)
+	qe.schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
-	// Start the invalidator only after schema is loaded.
-	// This will allow qe to find the table info
-	// for the invalidation events that will start coming
-	// immediately.
-	if dbconfigs.App.EnableInvalidator {
-		qe.invalidator.Open(dbconfigs.App.DbName, mysqld)
-	}
 	qe.connPool.Open(&appParams, &dbaParams)
 	qe.streamConnPool.Open(&appParams, &dbaParams)
 	qe.txPool.Open(&appParams, &dbaParams)
@@ -272,8 +281,8 @@ func (qe *QueryEngine) Launch(f func()) {
 	}()
 }
 
-// CheckMySQL returns true if we can connect to MySQL.
-func (qe *QueryEngine) CheckMySQL() bool {
+// IsMySQLReachable returns true if we can connect to MySQL.
+func (qe *QueryEngine) IsMySQLReachable() bool {
 	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnParams, qe.queryServiceStats.MySQLStats)
 	if err != nil {
 		if IsConnErr(err) {
@@ -302,14 +311,12 @@ func (qe *QueryEngine) Close() {
 	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
-	qe.invalidator.Close()
 	qe.schemaInfo.Close()
 	qe.cachePool.Close()
-	qe.dbconfigs = nil
 }
 
 // Commit commits the specified transaction.
-func (qe *QueryEngine) Commit(ctx context.Context, logStats *SQLQueryStats, transactionID int64) {
+func (qe *QueryEngine) Commit(ctx context.Context, logStats *LogStats, transactionID int64) {
 	dirtyTables, err := qe.txPool.SafeCommit(ctx, transactionID)
 	for tableName, invalidList := range dirtyTables {
 		tableInfo := qe.schemaInfo.GetTable(tableName)
@@ -329,4 +336,20 @@ func (qe *QueryEngine) Commit(ctx context.Context, logStats *SQLQueryStats, tran
 	if err != nil {
 		panic(err)
 	}
+}
+
+// ClearRowcache invalidates all items in the rowcache.
+func (qe *QueryEngine) ClearRowcache(ctx context.Context) error {
+	if qe.cachePool.IsClosed() {
+		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "rowcache is not up")
+	}
+	conn := qe.cachePool.Get(ctx)
+	defer func() { qe.cachePool.Put(conn) }()
+
+	if err := conn.FlushAll(); err != nil {
+		conn.Close()
+		conn = nil
+		return NewTabletError(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, "%s", err)
+	}
+	return nil
 }

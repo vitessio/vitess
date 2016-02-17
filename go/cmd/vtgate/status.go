@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	_ "github.com/youtube/vitess/go/vt/status"
+	"github.com/youtube/vitess/go/vt/vtgate"
 )
 
 var (
@@ -13,7 +14,7 @@ var (
   }
   td, th {
     border: 1px solid #999;
-    padding: 0.5rem;
+    padding: 0.2rem;
   }
 </style>
 <table>
@@ -52,7 +53,7 @@ var (
 <br>
 <table>
   <tr>
-    <th colspan="5">EndPoints Cache</th>
+    <th colspan="5">EndPoints Cache (NOT USED for new endpoint implementation)</th>
   </tr>
   <tr>
     <th>Cell</th>
@@ -71,7 +72,7 @@ var (
   </tr>
   {{end}}
 </table>
-<small>This is just a cache, so some data may not be visible here yet.</small>
+<small>This is just a cache, so some data may not be visible here yet. It is empty if using new endpoint implementation.</small>
 `
 
 	statsTemplate = `
@@ -193,21 +194,97 @@ google.setOnLoadCallback(function() {
 
 </script>
 `
+
+	gatewayStatusTemplate = `
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.2rem;
+  }
+  table tr:nth-child(even) {
+    background-color: #eee;
+  }
+  table tr:nth-child(odd) {
+    background-color: #fff;
+  }
+</style>
+<table>
+  <tr>
+    <th>Keyspace</th>
+    <th>Shard</th>
+    <th>TabletType</th>
+    <th>Address</th>
+    <th>Query Sent</th>
+    <th>Query Error</th>
+    <th>QPS (avg 1m)</th>
+    <th>Latency (ms) (avg 1m)</th>
+  </tr>
+  {{range $i, $status := .}}
+  <tr>
+    <td>{{$status.Keyspace}}</td>
+    <td>{{$status.Shard}}</td>
+    <td>{{$status.TabletType}}</td>
+    <td><a href="http://{{$status.Addr}}">{{$status.Name}}</a></td>
+    <td>{{$status.QueryCount}}</td>
+    <td>{{$status.QueryError}}</td>
+    <td>{{$status.QPS}}</td>
+    <td>{{$status.AvgLatency}}</td>
+  </tr>
+  {{end}}
+</table>
+`
+
+	healthCheckTemplate = `
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.2rem;
+  }
+</style>
+<table>
+  <tr>
+    <th colspan="5">HealthCheck EndPoints Cache</th>
+  </tr>
+  <tr>
+    <th>Cell</th>
+    <th>Keyspace</th>
+    <th>Shard</th>
+    <th>TabletType</th>
+    <th>EndPointsStats</th>
+  </tr>
+  {{range $i, $eps := .}}
+  <tr>
+    <td>{{github_com_youtube_vitess_vtctld_srv_cell $eps.Cell}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $eps.Cell $eps.Target.Keyspace}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_shard $eps.Cell $eps.Target.Keyspace $eps.Target.Shard}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_type $eps.Cell $eps.Target.Keyspace $eps.Target.Shard $eps.Target.TabletType}}</td>
+    <td>{{$eps.StatusAsHTML}}</td>
+  </tr>
+  {{end}}
+</table>
+`
 )
 
 // For use by plugins which wish to avoid racing when registering status page parts.
 var onStatusRegistered func()
 
-func init() {
-	servenv.OnRun(func() {
-		servenv.AddStatusPart("Topology Cache", topoTemplate, func() interface{} {
-			return resilientSrvTopoServer.CacheStatus()
-		})
-		servenv.AddStatusPart("Stats", statsTemplate, func() interface{} {
-			return nil
-		})
-		if onStatusRegistered != nil {
-			onStatusRegistered()
-		}
+func addStatusParts(vtgate *vtgate.VTGate) {
+	servenv.AddStatusPart("Topology Cache", topoTemplate, func() interface{} {
+		return resilientSrvTopoServer.CacheStatus()
 	})
+	servenv.AddStatusPart("Gateway Status", gatewayStatusTemplate, func() interface{} {
+		return vtgate.GetGatewayCacheStatus()
+	})
+	servenv.AddStatusPart("Health Check Cache (NOT FOR QUERY ROUTING)", healthCheckTemplate, func() interface{} {
+		return healthCheck.CacheStatus()
+	})
+	if onStatusRegistered != nil {
+		onStatusRegistered()
+	}
 }

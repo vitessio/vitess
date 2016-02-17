@@ -7,9 +7,11 @@
 import datetime
 from urlparse import urlparse
 
+from grpc.beta import implementations
+
+import vtctl_client
 from vtproto import vtctldata_pb2
 from vtproto import vtctlservice_pb2
-import vtctl_client
 
 
 class GRPCVtctlClient(vtctl_client.VtctlClient):
@@ -31,38 +33,24 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
       self.stub.close()
 
     p = urlparse('http://' + self.addr)
-    self.stub = vtctlservice_pb2.early_adopter_create_Vtctl_stub(p.hostname,
-                                                                 p.port)
+    channel = implementations.insecure_channel(p.hostname, p.port)
+    self.stub = vtctlservice_pb2.beta_create_Vtctl_stub(channel)
 
   def close(self):
-    self.stub.close()
     self.stub = None
 
   def is_closed(self):
     return self.stub is None
 
-  def execute_vtctl_command(self, args, action_timeout=30.0, lock_timeout=5.0):
+  def execute_vtctl_command(self, args, action_timeout=30.0):
     req = vtctldata_pb2.ExecuteVtctlCommandRequest(
         args=args,
-        action_timeout=long(action_timeout * 1e9),
-        lock_timeout=long(lock_timeout * 1e9))
-    with self.stub as stub:
-      it = stub.ExecuteVtctlCommand(req, action_timeout)
-      for response in it:
-        t = datetime.datetime.utcfromtimestamp(response.event.time.seconds)
-        try:
-          yield vtctl_client.Event(t, response.event.level, response.event.file,
-                                   response.event.line, response.event.value)
-        except GeneratorExit:
-          # if the loop is interrupted for any reason, we need to
-          # cancel the iterator, so we close the RPC connection,
-          # and the with __exit__ statement is executed.
-
-          # FIXME(alainjobart) this is flaky. It sometimes doesn't stop
-          # the iterator, and we don't get out of the 'with'.
-          # Sending a Ctrl-C to the process then works for some reason.
-          it.cancel()
-          break
+        action_timeout=long(action_timeout * 1e9))
+    it = self.stub.ExecuteVtctlCommand(req, action_timeout)
+    for response in it:
+      t = datetime.datetime.utcfromtimestamp(response.event.time.seconds)
+      yield vtctl_client.Event(t, response.event.level, response.event.file,
+                               response.event.line, response.event.value)
 
 
 vtctl_client.register_conn_class('grpc', GRPCVtctlClient)

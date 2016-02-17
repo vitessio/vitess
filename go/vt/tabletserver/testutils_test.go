@@ -16,7 +16,15 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 )
+
+type dummyChecker struct {
+}
+
+func (dummyChecker) CheckMySQL() {}
+
+var DummyChecker = dummyChecker{}
 
 type fakeCallInfo struct {
 	remoteAddr string
@@ -101,13 +109,11 @@ func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) mysqlctl.MysqlD
 	)
 }
 
-func (util *testUtils) newDBConfigs() dbconfigs.DBConfigs {
+func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
 	appDBConfig := dbconfigs.DBConfig{
-		ConnParams:        sqldb.ConnParams{},
-		Keyspace:          "test_keyspace",
-		Shard:             "0",
-		EnableRowcache:    false,
-		EnableInvalidator: false,
+		ConnParams: sqldb.ConnParams{Engine: db.Name},
+		Keyspace:   "test_keyspace",
+		Shard:      "0",
 	}
 	return dbconfigs.DBConfigs{
 		App: appDBConfig,
@@ -135,6 +141,7 @@ func (util *testUtils) newConnPool() *ConnPool {
 		10*time.Second,
 		false,
 		NewQueryServiceStats("", false),
+		DummyChecker,
 	)
 }
 
@@ -147,16 +154,18 @@ func newTestSchemaInfo(
 	name := fmt.Sprintf("TestSchemaInfo-%d-", randID)
 	queryServiceStats := NewQueryServiceStats(name, enablePublishStats)
 	return NewSchemaInfo(
-		queryCacheSize,
 		name,
+		DummyChecker,
+		queryCacheSize,
+		reloadTime,
+		idleTimeout,
+		newTestSchemaInfoCachePool(enablePublishStats, queryServiceStats),
 		map[string]string{
 			debugQueryPlansKey: fmt.Sprintf("/debug/query_plans_%d", randID),
 			debugQueryStatsKey: fmt.Sprintf("/debug/query_stats_%d", randID),
 			debugTableStatsKey: fmt.Sprintf("/debug/table_stats_%d", randID),
 			debugSchemaKey:     fmt.Sprintf("/debug/schema_%d", randID),
 		},
-		reloadTime,
-		idleTimeout,
 		enablePublishStats,
 		queryServiceStats,
 	)

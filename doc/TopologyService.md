@@ -53,7 +53,7 @@ A Shard can be locked. We use this during operations that affect either the Shar
 
 ### VSchema Data
 
-(experimental) The VSchema data contains sharding and routing information for the [VTGate V3](https://github.com/youtube/vitess/blob/master/doc/VTGateV3.md) API.
+(experimental) The VSchema data contains sharding and routing information for the [VTGate V3](http://vitess.io/doc/VTGateV3Features/) API.
 
 ## Local Data
 
@@ -75,7 +75,7 @@ A Tablet record is created before a tablet can be running (either by `vtctl Init
 
 * The vttablet process itself owns the record while it is running, and can change it.
 * At init time, before the tablet starts
-* After shutdown, when the tablet gets scrapped or deleted.
+* After shutdown, when the tablet gets deleted.
 * If a tablet becomes unresponsive, it may be forced to spare to remove it from the serving graph (such as when reparenting away from a dead master, by the `vtctl ReparentShard` action).
 
 ### Replication Graph

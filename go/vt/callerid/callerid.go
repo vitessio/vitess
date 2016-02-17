@@ -9,8 +9,8 @@ package callerid
 import (
 	"golang.org/x/net/context"
 
-	qrpb "github.com/youtube/vitess/go/vt/proto/query"
-	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // The datatype for CallerID Context Keys
@@ -23,23 +23,23 @@ var (
 	effectiveCallerIDKey callerIDKey = 1
 )
 
-// NewImmediateCallerID creates a qrpb.VTGateCallerID initialized with username
-func NewImmediateCallerID(username string) *qrpb.VTGateCallerID {
-	return &qrpb.VTGateCallerID{Username: username}
+// NewImmediateCallerID creates a querypb.VTGateCallerID initialized with username
+func NewImmediateCallerID(username string) *querypb.VTGateCallerID {
+	return &querypb.VTGateCallerID{Username: username}
 }
 
 // GetUsername returns the immediate caller of VTGate
-func GetUsername(im *qrpb.VTGateCallerID) string {
+func GetUsername(im *querypb.VTGateCallerID) string {
 	if im == nil {
 		return ""
 	}
 	return im.Username
 }
 
-// NewEffectiveCallerID creates a new vtpb.CallerID with principal, component and
+// NewEffectiveCallerID creates a new vtrpcpb.CallerID with principal, component and
 // subComponent
-func NewEffectiveCallerID(principal string, component string, subComponent string) *vtpb.CallerID {
-	return &vtpb.CallerID{Principal: principal, Component: component, Subcomponent: subComponent}
+func NewEffectiveCallerID(principal string, component string, subComponent string) *vtrpcpb.CallerID {
+	return &vtrpcpb.CallerID{Principal: principal, Component: component, Subcomponent: subComponent}
 }
 
 // GetPrincipal returns the effective user identifier, which is usually filled in
@@ -48,7 +48,7 @@ func NewEffectiveCallerID(principal string, component string, subComponent strin
 // If the request comes directly from the Internet, or if the Vitess client
 // takes action on its own accord, it is okay for this method to
 // return empty string.
-func GetPrincipal(ef *vtpb.CallerID) string {
+func GetPrincipal(ef *vtrpcpb.CallerID) string {
 	if ef == nil {
 		return ""
 	}
@@ -58,7 +58,7 @@ func GetPrincipal(ef *vtpb.CallerID) string {
 // GetComponent returns the running process of the effective caller.
 // It can for instance return hostname:port of the servlet initiating the
 // database call, or the container engine ID used by the servlet.
-func GetComponent(ef *vtpb.CallerID) string {
+func GetComponent(ef *vtrpcpb.CallerID) string {
 	if ef == nil {
 		return ""
 	}
@@ -68,16 +68,16 @@ func GetComponent(ef *vtpb.CallerID) string {
 // GetSubcomponent returns a component inisde the process of effective caller,
 // which is responsible for generating this request. Suggested values are a
 // servlet name or an API endpoint name.
-func GetSubcomponent(ef *vtpb.CallerID) string {
+func GetSubcomponent(ef *vtrpcpb.CallerID) string {
 	if ef == nil {
 		return ""
 	}
 	return ef.Subcomponent
 }
 
-// NewContext adds the provided EffectiveCallerID(vtpb.CallerID) and ImmediateCallerID(qrpb.VTGateCallerID)
+// NewContext adds the provided EffectiveCallerID(vtrpcpb.CallerID) and ImmediateCallerID(querypb.VTGateCallerID)
 // into the Context
-func NewContext(ctx context.Context, ef *vtpb.CallerID, im *qrpb.VTGateCallerID) context.Context {
+func NewContext(ctx context.Context, ef *vtrpcpb.CallerID, im *querypb.VTGateCallerID) context.Context {
 	ctx = context.WithValue(
 		context.WithValue(ctx, effectiveCallerIDKey, ef),
 		immediateCallerIDKey,
@@ -86,20 +86,20 @@ func NewContext(ctx context.Context, ef *vtpb.CallerID, im *qrpb.VTGateCallerID)
 	return ctx
 }
 
-// EffectiveCallerIDFromContext returns the EffectiveCallerID(vtpb.CallerID)
+// EffectiveCallerIDFromContext returns the EffectiveCallerID(vtrpcpb.CallerID)
 // stored in the Context, if any
-func EffectiveCallerIDFromContext(ctx context.Context) *vtpb.CallerID {
-	ef, ok := ctx.Value(effectiveCallerIDKey).(*vtpb.CallerID)
+func EffectiveCallerIDFromContext(ctx context.Context) *vtrpcpb.CallerID {
+	ef, ok := ctx.Value(effectiveCallerIDKey).(*vtrpcpb.CallerID)
 	if ok && ef != nil {
 		return ef
 	}
 	return nil
 }
 
-// ImmediateCallerIDFromContext returns the ImmediateCallerID(qrpb.VTGateCallerID)
+// ImmediateCallerIDFromContext returns the ImmediateCallerID(querypb.VTGateCallerID)
 // stored in the Context, if any
-func ImmediateCallerIDFromContext(ctx context.Context) *qrpb.VTGateCallerID {
-	im, ok := ctx.Value(immediateCallerIDKey).(*qrpb.VTGateCallerID)
+func ImmediateCallerIDFromContext(ctx context.Context) *querypb.VTGateCallerID {
+	im, ok := ctx.Value(immediateCallerIDKey).(*querypb.VTGateCallerID)
 	if ok && im != nil {
 		return im
 	}

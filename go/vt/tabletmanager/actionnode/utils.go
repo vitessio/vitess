@@ -8,6 +8,7 @@ package actionnode
 // topology server.
 
 import (
+	"flag"
 	"time"
 
 	log "github.com/golang/glog"
@@ -20,12 +21,19 @@ var (
 	// DefaultLockTimeout is a good value to use as a default for
 	// locking a shard / keyspace.
 	DefaultLockTimeout = 30 * time.Second
+
+	// LockTimeout is the command line flag that introduces a shorter
+	// timeout for locking topology structures.
+	LockTimeout = flag.Duration("lock_timeout", DefaultLockTimeout, "timeout for acquiring topology locks")
 )
 
 // LockKeyspace will lock the keyspace in the topology server.
 // UnlockKeyspace should be called if this returns no error.
 func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace string) (lockPath string, err error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, n.Action)
+
+	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
+	defer cancel()
 
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.LockKeyspaceForAction")
@@ -88,6 +96,9 @@ func (n *ActionNode) UnlockKeyspace(ctx context.Context, ts topo.Server, keyspac
 // UnlockShard should be called if this returns no error.
 func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, shard string) (lockPath string, err error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, n.Action)
+
+	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
+	defer cancel()
 
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.LockShardForAction")
@@ -152,6 +163,9 @@ func (n *ActionNode) UnlockShard(ctx context.Context, ts topo.Server, keyspace, 
 // UnlockSrvShard should be called if this returns no error.
 func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string) (lockPath string, err error) {
 	log.Infof("Locking serving shard %v/%v/%v for action %v", cell, keyspace, shard, n.Action)
+
+	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
+	defer cancel()
 
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.LockSrvShardForAction")

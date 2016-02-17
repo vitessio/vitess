@@ -7,26 +7,27 @@ package vtgate
 // This is a V3 file. Do not intermix with V2.
 
 import (
+	"encoding/hex"
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlannotation"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 const (
-	ksidName   = "keyspace_id"
-	dmlPostfix = " /* _routing keyspace_id:%v */"
+	ksidName = "keyspace_id"
 )
 
 // Router is the layer to route queries to the correct shards
 // based on the values in the query.
 type Router struct {
-	serv        SrvTopoServer
+	serv        topo.SrvTopoServer
 	cell        string
 	planner     *Planner
 	scatterConn *ScatterConn
@@ -50,7 +51,7 @@ func newScatterParams(query, ks string, bv map[string]interface{}, shards []stri
 }
 
 // NewRouter creates a new Router.
-func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, statsName string, scatterConn *ScatterConn) *Router {
+func NewRouter(serv topo.SrvTopoServer, cell string, schema *planbuilder.Schema, statsName string, scatterConn *ScatterConn) *Router {
 	return &Router{
 		serv:        serv,
 		cell:        cell,
@@ -60,7 +61,7 @@ func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, stat
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool) (*mproto.QueryResult, error) {
+func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if bindVariables == nil {
 		bindVariables = make(map[string]interface{})
 	}
@@ -108,7 +109,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[st
 }
 
 // StreamExecute executes a streaming query.
-func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*mproto.QueryResult) error) error {
+func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
 	if bindVariables == nil {
 		bindVariables = make(map[string]interface{})
 	}
@@ -202,17 +203,17 @@ func (rtr *Router) paramsSelectKeyrange(vcursor *requestContext, plan *planbuild
 	return newScatterParams(plan.Rewritten, ks, vcursor.bindVariables, shards), nil
 }
 
-func getKeyRange(keys []interface{}) (key.KeyRange, error) {
-	var ksids []key.KeyspaceId
+func getKeyRange(keys []interface{}) (*topodatapb.KeyRange, error) {
+	var ksids [][]byte
 	for _, k := range keys {
 		switch k := k.(type) {
 		case string:
-			ksids = append(ksids, key.KeyspaceId(k))
+			ksids = append(ksids, []byte(k))
 		default:
-			return key.KeyRange{}, fmt.Errorf("expecting strings for keyrange: %+v", keys)
+			return nil, fmt.Errorf("expecting strings for keyrange: %+v", keys)
 		}
 	}
-	return key.KeyRange{
+	return &topodatapb.KeyRange{
 		Start: ksids[0],
 		End:   ksids[1],
 	}, nil
@@ -230,7 +231,7 @@ func (rtr *Router) paramsSelectScatter(vcursor *requestContext, plan *planbuilde
 	return newScatterParams(plan.Rewritten, ks, vcursor.bindVariables, shards), nil
 }
 
-func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Plan) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.bindVariables)
 	if err != nil {
 		return nil, fmt.Errorf("execUpdateEqual: %v", err)
@@ -239,11 +240,11 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Pl
 	if err != nil {
 		return nil, fmt.Errorf("execUpdateEqual: %v", err)
 	}
-	if ksid == key.MinKey {
-		return &mproto.QueryResult{}, nil
+	if len(ksid) == 0 {
+		return &sqltypes.Result{}, nil
 	}
 	vcursor.bindVariables[ksidName] = string(ksid)
-	rewritten := plan.Rewritten + fmt.Sprintf(dmlPostfix, ksid)
+	rewritten := sqlannotation.AddKeyspaceID(plan.Rewritten, ksid)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -255,7 +256,7 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Pl
 		vcursor.notInTransaction)
 }
 
-func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Plan) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.bindVariables)
 	if err != nil {
 		return nil, fmt.Errorf("execDeleteEqual: %v", err)
@@ -264,8 +265,8 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Pl
 	if err != nil {
 		return nil, fmt.Errorf("execDeleteEqual: %v", err)
 	}
-	if ksid == key.MinKey {
-		return &mproto.QueryResult{}, nil
+	if len(ksid) == 0 {
+		return &sqltypes.Result{}, nil
 	}
 	if plan.Subquery != "" {
 		err = rtr.deleteVindexEntries(vcursor, plan, ks, shard, ksid)
@@ -274,7 +275,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Pl
 		}
 	}
 	vcursor.bindVariables[ksidName] = string(ksid)
-	rewritten := plan.Rewritten + fmt.Sprintf(dmlPostfix, ksid)
+	rewritten := sqlannotation.AddKeyspaceID(plan.Rewritten, ksid)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -286,7 +287,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Pl
 		vcursor.notInTransaction)
 }
 
-func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.Plan) (*sqltypes.Result, error) {
 	input := plan.Values.([]interface{})
 	keys, err := rtr.resolveKeys(input, vcursor.bindVariables)
 	if err != nil {
@@ -313,7 +314,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 		}
 	}
 	vcursor.bindVariables[ksidName] = string(ksid)
-	rewritten := plan.Rewritten + fmt.Sprintf(dmlPostfix, ksid)
+	rewritten := sqlannotation.AddKeyspaceID(plan.Rewritten, ksid)
 	result, err := rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -327,10 +328,10 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 	if generated != 0 {
-		if result.InsertId != 0 {
+		if result.InsertID != 0 {
 			return nil, fmt.Errorf("vindex and db generated a value each for insert")
 		}
-		result.InsertId = uint64(generated)
+		result.InsertID = uint64(generated)
 	}
 	return result, nil
 }
@@ -338,18 +339,16 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface{}) (keys []interface{}, err error) {
 	keys = make([]interface{}, 0, len(vals))
 	for _, val := range vals {
-		switch val := val.(type) {
-		case string:
-			v, ok := bindVars[val[1:]]
+		if v, ok := val.(string); ok {
+			val, ok = bindVars[v[1:]]
 			if !ok {
-				return nil, fmt.Errorf("could not find bind var %s", val)
+				return nil, fmt.Errorf("could not find bind var %s", v)
 			}
-			keys = append(keys, v)
-		case []byte:
-			keys = append(keys, string(val))
-		default:
-			keys = append(keys, val)
 		}
+		if v, ok := val.([]byte); ok {
+			val = string(v)
+		}
+		keys = append(keys, val)
 	}
 	return keys, nil
 }
@@ -367,7 +366,7 @@ func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface
 			return "", nil, err
 		}
 		for i, ksid := range ksids {
-			if ksid == key.MinKey {
+			if len(ksid) == 0 {
 				continue
 			}
 			shard, err := getShardForKeyspaceID(allShards, ksid)
@@ -396,28 +395,28 @@ func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface
 	return newKeyspace, routing, nil
 }
 
-func (rtr *Router) resolveSingleShard(vcursor *requestContext, vindexKey interface{}, plan *planbuilder.Plan) (newKeyspace, shard string, ksid key.KeyspaceId, err error) {
+func (rtr *Router) resolveSingleShard(vcursor *requestContext, vindexKey interface{}, plan *planbuilder.Plan) (newKeyspace, shard string, ksid []byte, err error) {
 	newKeyspace, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.tabletType)
 	if err != nil {
-		return "", "", "", err
+		return "", "", nil, err
 	}
 	mapper := plan.ColVindex.Vindex.(planbuilder.Unique)
 	ksids, err := mapper.Map(vcursor, []interface{}{vindexKey})
 	if err != nil {
-		return "", "", "", err
+		return "", "", nil, err
 	}
 	ksid = ksids[0]
-	if ksid == key.MinKey {
+	if len(ksid) == 0 {
 		return "", "", ksid, nil
 	}
 	shard, err = getShardForKeyspaceID(allShards, ksid)
 	if err != nil {
-		return "", "", "", err
+		return "", "", nil, err
 	}
 	return newKeyspace, shard, ksid, nil
 }
 
-func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilder.Plan, ks, shard string, ksid key.KeyspaceId) error {
+func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilder.Plan, ks, shard string, ksid []byte) error {
 	result, err := rtr.scatterConn.Execute(
 		vcursor.ctx,
 		plan.Subquery,
@@ -436,11 +435,7 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilde
 	for i, colVindex := range plan.Table.Owned {
 		keys := make(map[interface{}]bool)
 		for _, row := range result.Rows {
-			k, err := mproto.Convert(result.Fields[i], row[i])
-			if err != nil {
-				return err
-			}
-			switch k := k.(type) {
+			switch k := row[i].ToNative().(type) {
 			case []byte:
 				keys[string(k)] = true
 			default:
@@ -467,17 +462,17 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilde
 	return nil
 }
 
-func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}) (ksid key.KeyspaceId, generated int64, err error) {
+func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}) (ksid []byte, generated int64, err error) {
 	if colVindex.Owned {
 		if vindexKey == nil {
 			generator, ok := colVindex.Vindex.(planbuilder.FunctionalGenerator)
 			if !ok {
-				return "", 0, fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+				return nil, 0, fmt.Errorf("value must be supplied for column %s", colVindex.Col)
 			}
 			generated, err = generator.Generate(vcursor)
 			vindexKey = generated
 			if err != nil {
-				return "", 0, err
+				return nil, 0, err
 			}
 		} else {
 			// TODO(sougou): I think we have to ignore dup key error if this was
@@ -485,27 +480,27 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 			// uncommon use case. We should revisit this when work on v3 resumes.
 			err = colVindex.Vindex.(planbuilder.Functional).Create(vcursor, vindexKey)
 			if err != nil {
-				return "", 0, err
+				return nil, 0, err
 			}
 		}
 	}
 	if vindexKey == nil {
-		return "", 0, fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+		return nil, 0, fmt.Errorf("value must be supplied for column %s", colVindex.Col)
 	}
 	mapper := colVindex.Vindex.(planbuilder.Unique)
 	ksids, err := mapper.Map(vcursor, []interface{}{vindexKey})
 	if err != nil {
-		return "", 0, err
+		return nil, 0, err
 	}
 	ksid = ksids[0]
-	if ksid == key.MinKey {
-		return "", 0, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
+	if len(ksid) == 0 {
+		return nil, 0, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 	}
 	bv["_"+colVindex.Col] = vindexKey
 	return ksid, generated, nil
 }
 
-func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}, ksid key.KeyspaceId) (generated int64, err error) {
+func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}, ksid []byte) (generated int64, err error) {
 	if colVindex.Owned {
 		if vindexKey == nil {
 			generator, ok := colVindex.Vindex.(planbuilder.LookupGenerator)
@@ -542,7 +537,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 				return 0, err
 			}
 			if !ok {
-				return 0, fmt.Errorf("value %v for column %s does not map to keyspace id %v", vindexKey, colVindex.Col, ksid)
+				return 0, fmt.Errorf("value %v for column %s does not map to keyspace id %v", vindexKey, colVindex.Col, hex.EncodeToString(ksid))
 			}
 		}
 	}
@@ -550,7 +545,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 	return generated, nil
 }
 
-func (rtr *Router) getRouting(ctx context.Context, keyspace string, tabletType pb.TabletType, ksid key.KeyspaceId) (newKeyspace, shard string, err error) {
+func (rtr *Router) getRouting(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ksid []byte) (newKeyspace, shard string, err error) {
 	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, rtr.serv, rtr.cell, keyspace, tabletType)
 	if err != nil {
 		return "", "", err

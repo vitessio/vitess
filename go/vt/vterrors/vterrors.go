@@ -8,39 +8,63 @@ package vterrors
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	pb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-const (
-	// TabletError is the base VtTablet error. All VtTablet errors should be 4 digits, starting with 1.
-	TabletError = 1000
-	// UnknownTabletError is the code for an unknown error that came from VtTablet.
-	UnknownTabletError = 1999
-	// VtgateError is the base VTGate error code. All VTGate errors should be 4 digits, starting with 2.
-	VtgateError = 2000
-	// UnknownVtgateError is the code for an unknown error that came from VTGate.
-	UnknownVtgateError = 2999
-)
+// ConcatenateErrors aggregates an array of errors into a single error by string concatenation
+func ConcatenateErrors(errors []error) error {
+	errStrs := make([]string, 0, len(errors))
+	for _, e := range errors {
+		errStrs = append(errStrs, fmt.Sprintf("%v", e))
+	}
+	// sort the error strings so we always have deterministic ordering
+	sort.Strings(errStrs)
+	return fmt.Errorf("%v", strings.Join(errStrs, "\n"))
+}
+
+// VtError is implemented by any type that exposes a vtrpcpb.ErrorCode
+type VtError interface {
+	VtErrorCode() vtrpcpb.ErrorCode
+}
+
+// RecoverVtErrorCode attempts to recover a vtrpcpb.ErrorCode from an error
+func RecoverVtErrorCode(err error) vtrpcpb.ErrorCode {
+	if vtErr, ok := err.(VtError); ok {
+		return vtErr.VtErrorCode()
+	}
+	return vtrpcpb.ErrorCode_UNKNOWN_ERROR
+}
 
 // VitessError is the error type that we use internally for passing structured errors
 type VitessError struct {
 	// Error code of the Vitess error
-	Code int64
-	// Additional context string, distinct from the error message. For example, if
-	// you wanted an error like "foo error: original error", the Message string
-	// should be "foo error: "
+	Code vtrpcpb.ErrorCode
+	// Error message that should be returned. This allows us to change an error message
+	// without losing the underlying error. For example, if you have an error like
+	// context.DeadlikeExceeded, you don't want to modify it - otherwise you would lose
+	// the ability to programatically check for that error. However, you might want to
+	// add some context to the error, giving you a message like "command failed: deadline exceeded".
+	// To do that, you can create a NewVitessError to wrap the original error, but redefine
+	// the error message.
 	Message string
 	err     error
 }
 
-// Error implements the error interface. For now, it should exactly recreate the original error string.
-// It intentionally (for now) does not expose all the information that VitessError has. This
-// is so that it can be used in the mixed state where parts of the stack are trying to parse
-// error strings.
+// Error implements the error interface. It will return the redefined error message, if there
+// is one. If there isn't, it will return the original error message.
 func (e *VitessError) Error() string {
-	return fmt.Sprintf("%v", e.err)
+	if e.Message == "" {
+		return fmt.Sprintf("%v", e.err)
+	}
+	return e.Message
+}
+
+// VtErrorCode returns the underlying Vitess error code
+func (e *VitessError) VtErrorCode() vtrpcpb.ErrorCode {
+	return e.Code
 }
 
 // AsString returns a VitessError as a string, with more detailed information than Error().
@@ -51,48 +75,49 @@ func (e *VitessError) AsString() string {
 	return fmt.Sprintf("Code: %v, err: %v", e.Code, e.err)
 }
 
-// FromError returns a VitessError with the supplied error code and wrapped error.
-func FromError(code int64, err error) error {
+// NewVitessError returns a VitessError backed error with the given arguments.
+// Useful for preserving an underlying error while creating a new error message.
+func NewVitessError(code vtrpcpb.ErrorCode, err error, format string, args ...interface{}) error {
+	return &VitessError{
+		Code:    code,
+		Message: fmt.Sprintf(format, args...),
+		err:     err,
+	}
+}
+
+// FromError returns a VitessError with the supplied error code by wrapping an
+// existing error.
+func FromError(code vtrpcpb.ErrorCode, err error) error {
 	return &VitessError{
 		Code: code,
 		err:  err,
 	}
 }
 
-// FromRPCError recovers a VitessError from a *RPCError (which is how VitessErrors
-// are transmitted across RPC boundaries).
-func FromRPCError(rpcErr *mproto.RPCError) error {
-	if rpcErr == nil {
-		return nil
-	}
-	return &VitessError{
-		Code: rpcErr.Code,
-		err:  fmt.Errorf("%v", rpcErr.Message),
-	}
-}
-
-// FromVtRPCError recovers a VitessError from a *vtrpc.RPCError (which is how VitessErrors
-// are transmitted across proto3 RPC boundaries).
-func FromVtRPCError(rpcErr *pb.RPCError) *VitessError {
-	if rpcErr == nil {
-		return nil
-	}
-	return &VitessError{
-		Code: int64(rpcErr.Code),
-		err:  fmt.Errorf("%v", rpcErr.Message),
-	}
-}
-
-// WithPrefix allows a string to be prefixed to an error, without nesting a new VitessError.
+// WithPrefix allows a string to be prefixed to an error, without chaining a new VitessError.
 func WithPrefix(prefix string, in error) error {
 	vtErr, ok := in.(*VitessError)
 	if !ok {
-		return fmt.Errorf("%s: %s", prefix, in)
+		return fmt.Errorf("%s%s", prefix, in)
 	}
 
 	return &VitessError{
 		Code:    vtErr.Code,
 		err:     vtErr.err,
-		Message: fmt.Sprintf("%s: %s", prefix, vtErr.Message),
+		Message: fmt.Sprintf("%s%s", prefix, vtErr.Error()),
+	}
+}
+
+// WithSuffix allows a string to be suffixed to an error, without chaining a new VitessError.
+func WithSuffix(in error, suffix string) error {
+	vtErr, ok := in.(*VitessError)
+	if !ok {
+		return fmt.Errorf("%s%s", in, suffix)
+	}
+
+	return &VitessError{
+		Code:    vtErr.Code,
+		err:     vtErr.err,
+		Message: fmt.Sprintf("%s%s", vtErr.Error(), suffix),
 	}
 }

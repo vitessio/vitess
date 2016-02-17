@@ -43,15 +43,16 @@ type Instance struct {
 	currentCancelFunc   context.CancelFunc
 	lastRunError        error
 
+	// backgroundContext is context.Background() from main() which has to be plumbed through.
+	backgroundContext      context.Context
 	topoServer             topo.Server
 	cell                   string
-	lockTimeout            time.Duration
 	commandDisplayInterval time.Duration
 }
 
 // NewInstance creates a new Instance.
-func NewInstance(ts topo.Server, cell string, lockTimeout, commandDisplayInterval time.Duration) *Instance {
-	wi := &Instance{topoServer: ts, cell: cell, commandDisplayInterval: commandDisplayInterval}
+func NewInstance(ctx context.Context, ts topo.Server, cell string, commandDisplayInterval time.Duration) *Instance {
+	wi := &Instance{backgroundContext: ctx, topoServer: ts, cell: cell, commandDisplayInterval: commandDisplayInterval}
 	// Note: setAndStartWorker() also adds a MemoryLogger for the webserver.
 	wi.wr = wi.CreateWrangler(logutil.NewConsoleLogger())
 	return wi
@@ -59,7 +60,7 @@ func NewInstance(ts topo.Server, cell string, lockTimeout, commandDisplayInterva
 
 // CreateWrangler creates a new wrangler using the instance specific configuration.
 func (wi *Instance) CreateWrangler(logger logutil.Logger) *wrangler.Wrangler {
-	return wrangler.New(logger, wi.topoServer, tmclient.NewTabletManagerClient(), wi.lockTimeout)
+	return wrangler.New(logger, wi.topoServer, tmclient.NewTabletManagerClient())
 }
 
 // setAndStartWorker will set the current worker.
@@ -74,7 +75,7 @@ func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan s
 
 	wi.currentWorker = wrk
 	wi.currentMemoryLogger = logutil.NewMemoryLogger()
-	wi.currentContext, wi.currentCancelFunc = context.WithCancel(context.Background())
+	wi.currentContext, wi.currentCancelFunc = context.WithCancel(wi.backgroundContext)
 	wi.lastRunError = nil
 	done := make(chan struct{})
 	wranglerLogger := wr.Logger()
@@ -124,7 +125,7 @@ func (wi *Instance) InstallSignalHandlers() {
 		if wi.currentCancelFunc != nil {
 			wi.currentCancelFunc()
 		} else {
-			fmt.Printf("Shutting down idle worker after receiving signal: %v", s)
+			log.Infof("Shutting down idle worker after receiving signal: %v", s)
 			os.Exit(0)
 		}
 	}()

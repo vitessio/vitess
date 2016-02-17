@@ -1,5 +1,5 @@
 ---
-layout: default
+layout: doc
 title: "Key Concepts"
 description: Understand common terms used in Vitess.
 modified:

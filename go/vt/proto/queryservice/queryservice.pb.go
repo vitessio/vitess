@@ -13,6 +13,8 @@ It has these top-level messages:
 package queryservice
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 import query "github.com/youtube/vitess/go/vt/proto/query"
 
 import (
@@ -22,6 +24,12 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
+var _ = fmt.Errorf
+var _ = math.Inf
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+const _ = proto.ProtoPackageIsVersion1
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
@@ -230,9 +238,9 @@ func RegisterQueryServer(s *grpc.Server, srv QueryServer) {
 	s.RegisterService(&_Query_serviceDesc, srv)
 }
 
-func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.GetSessionIdRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).GetSessionId(ctx, in)
@@ -242,9 +250,9 @@ func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, codec grp
 	return out, nil
 }
 
-func _Query_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.ExecuteRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).Execute(ctx, in)
@@ -254,9 +262,9 @@ func _Query_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Cod
 	return out, nil
 }
 
-func _Query_ExecuteBatch_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_ExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.ExecuteBatchRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).ExecuteBatch(ctx, in)
@@ -287,9 +295,9 @@ func (x *queryStreamExecuteServer) Send(m *query.StreamExecuteResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Query_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.BeginRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).Begin(ctx, in)
@@ -299,9 +307,9 @@ func _Query_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec
 	return out, nil
 }
 
-func _Query_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.CommitRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).Commit(ctx, in)
@@ -311,9 +319,9 @@ func _Query_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Code
 	return out, nil
 }
 
-func _Query_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.RollbackRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).Rollback(ctx, in)
@@ -323,9 +331,9 @@ func _Query_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Co
 	return out, nil
 }
 
-func _Query_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_SplitQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(query.SplitQueryRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(QueryServer).SplitQuery(ctx, in)
@@ -401,4 +409,26 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
+}
+
+var fileDescriptor0 = []byte{
+	// 281 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x6c, 0x92, 0xdd, 0x4a, 0xc3, 0x40,
+	0x10, 0x85, 0x15, 0x6c, 0x95, 0x31, 0xde, 0x8c, 0xd6, 0x9f, 0xe8, 0x95, 0x0f, 0x50, 0x44, 0x05,
+	0x41, 0xf0, 0xa6, 0x45, 0xb4, 0x08, 0x82, 0xcd, 0x13, 0xa4, 0x71, 0xd0, 0xc5, 0x24, 0x1b, 0xb3,
+	0x53, 0xd1, 0x47, 0xf6, 0x2d, 0xac, 0xd9, 0xcc, 0x26, 0xd9, 0xe6, 0x72, 0xbe, 0x33, 0xe7, 0x70,
+	0xb2, 0x13, 0xc0, 0xcf, 0x25, 0x95, 0x3f, 0x86, 0xca, 0x2f, 0x95, 0xd0, 0xb8, 0x28, 0x35, 0x6b,
+	0x0c, 0xda, 0x2c, 0xdc, 0xad, 0x26, 0x2b, 0x5d, 0xfe, 0x6e, 0xc1, 0xe0, 0xe5, 0x7f, 0xc6, 0x19,
+	0x04, 0x0f, 0xc4, 0x11, 0x19, 0xa3, 0x74, 0x3e, 0x7b, 0xc5, 0x70, 0x6c, 0xf7, 0xda, 0x70, 0x4e,
+	0x2b, 0x66, 0x38, 0x3c, 0xed, 0xd5, 0x4c, 0xa1, 0x73, 0x43, 0xe7, 0x1b, 0x78, 0x0b, 0xdb, 0xf7,
+	0xdf, 0x94, 0x2c, 0x99, 0x70, 0x54, 0x6f, 0xd6, 0xb3, 0x04, 0x1c, 0xfa, 0xd8, 0x79, 0x57, 0x35,
+	0x6a, 0x38, 0x89, 0x39, 0x79, 0x77, 0x35, 0xda, 0xd0, 0xaf, 0xd1, 0xd5, 0x5c, 0xd4, 0x33, 0xec,
+	0x45, 0x5c, 0x52, 0x9c, 0x49, 0x19, 0xd9, 0xef, 0x50, 0x09, 0x3b, 0xeb, 0x17, 0x25, 0xed, 0x62,
+	0x13, 0xaf, 0x61, 0x30, 0xa1, 0x37, 0x95, 0xe3, 0x7e, 0xbd, 0x5a, 0x4d, 0xe2, 0x3f, 0xe8, 0x42,
+	0xd7, 0xe2, 0x06, 0x86, 0x53, 0x9d, 0x65, 0x8a, 0x51, 0x36, 0xec, 0x28, 0xbe, 0x91, 0x47, 0x9d,
+	0xf1, 0x0e, 0x76, 0xe6, 0x3a, 0x4d, 0x17, 0x71, 0xf2, 0x81, 0xf2, 0x5e, 0x02, 0xc4, 0x7c, 0xb4,
+	0xc6, 0x9d, 0x7d, 0x0a, 0x10, 0x15, 0xa9, 0x62, 0x7b, 0xdd, 0x63, 0xf9, 0x3a, 0x87, 0x24, 0xe2,
+	0xa4, 0x47, 0x71, 0x21, 0x4f, 0x10, 0xd8, 0xf7, 0x78, 0xa4, 0x38, 0xe5, 0xe6, 0x1a, 0x6d, 0xe8,
+	0x5f, 0xa3, 0xab, 0x35, 0xef, 0xb7, 0x18, 0x56, 0xbf, 0xdc, 0xd5, 0x5f, 0x00, 0x00, 0x00, 0xff,
+	0xff, 0xb4, 0x5c, 0x99, 0x9c, 0xa3, 0x02, 0x00, 0x00,
 }

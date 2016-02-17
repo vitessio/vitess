@@ -17,7 +17,7 @@ import (
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
@@ -34,15 +34,15 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	}
 
 	// create a keyspace and a couple tablets
-	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
+	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("cannot create keyspace: %v", err)
 	}
-	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &pb.Shard{Cells: []string{"test_cell"}}); err != nil {
+	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &topodatapb.Shard{Cells: []string{"test_cell"}}); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
 	tts := topo.Server{Impl: fromTS}
-	if err := tts.CreateTablet(ctx, &pb.Tablet{
-		Alias: &pb.TabletAlias{
+	if err := tts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  123,
 		},
@@ -55,14 +55,14 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 		},
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
-		Type:           pb.TabletType_MASTER,
+		Type:           topodatapb.TabletType_MASTER,
 		DbNameOverride: "",
 		KeyRange:       nil,
 	}); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
-	if err := tts.CreateTablet(ctx, &pb.Tablet{
-		Alias: &pb.TabletAlias{
+	if err := tts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  234,
 		},
@@ -76,7 +76,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
-		Type:           pb.TabletType_REPLICA,
+		Type:           topodatapb.TabletType_REPLICA,
 		DbNameOverride: "",
 		KeyRange:       nil,
 	}); err != nil {

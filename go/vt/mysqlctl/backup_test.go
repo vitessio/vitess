@@ -64,19 +64,19 @@ func TestFindFilesToBackup(t *testing.T) {
 	sort.Sort(forTest(result))
 	t.Logf("findFilesTobackup returned: %v", result)
 	expected := []FileEntry{
-		FileEntry{
+		{
 			Base: "Data",
 			Name: "vt_db/db.opt",
 		},
-		FileEntry{
+		{
 			Base: "Data",
 			Name: "vt_symlink/table1.frm",
 		},
-		FileEntry{
+		{
 			Base: "InnoDBData",
 			Name: "innodb_data_1",
 		},
-		FileEntry{
+		{
 			Base: "InnoDBLog",
 			Name: "innodb_log_1",
 		},

@@ -2,34 +2,38 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-from itertools import izip
-import logging
 from urlparse import urlparse
 
-from vtdb import dbexceptions
-from vtdb import field_types
-from vtdb import update_stream
+from grpc.beta import implementations
+from grpc.framework.interfaces.face import face
 
 from vtproto import binlogdata_pb2
 from vtproto import binlogservice_pb2
-from vtproto import replicationdata_pb2
+
+from vtdb import dbexceptions
+from vtdb import field_types_proto3
+from vtdb import update_stream
+
 
 def _make_row(row, conversions):
+  """Builds a python native row from proto3 row."""
   converted_row = []
-  for conversion_func, field_data in izip(conversions, row):
-    if field_data is None:
-      v = None
-    elif conversion_func:
-      v = conversion_func(field_data)
+  offset = 0
+  for i, l in enumerate(row.lengths):
+    if l == -1:
+      converted_row.append(None)
+    elif conversions[i]:
+      converted_row.append(conversions[i](row.values[offset:offset+l]))
+      offset += l
     else:
-      v = field_data
-    converted_row.append(v)
+      converted_row.append(row.values[offset:offset+l])
+      offset += l
   return converted_row
 
 
 class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
-  """GRPCUpdateStreamConnection is the gRPC implementation of
-  UpdateStreamConnection.
+  """The gRPC implementation of UpdateStreamConnection.
+
   It is registered as 'grpc' protocol.
   """
 
@@ -43,20 +47,20 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
 
   def dial(self):
     p = urlparse('http://' + self.addr)
-    self.stub = binlogservice_pb2.early_adopter_create_UpdateStream_stub(
-        p.hostname, p.port)
+    channel = implementations.insecure_channel(p.hostname, p.port)
+    self.stub = binlogservice_pb2.beta_create_UpdateStream_stub(channel)
 
   def close(self):
     self.stub = None
 
   def is_closed(self):
-    return self.stub == None
+    return self.stub is None
 
   def stream_update(self, position, timeout=3600.0):
-    req = binlogdata_pb2.StreamUpdateRequest(position=position)
+    try:
+      req = binlogdata_pb2.StreamUpdateRequest(position=position)
 
-    with self.stub as stub:
-      it = stub.StreamUpdate(req, timeout)
+      it = self.stub.StreamUpdate(req, timeout)
       for response in it:
         stream_event = response.stream_event
         fields = []
@@ -65,29 +69,24 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
           conversions = []
           for field in stream_event.primary_key_fields:
             fields.append(field.name)
-            conversions.append(field_types.conversions.get(field.type))
+            conversions.append(field_types_proto3.conversions.get(field.type))
 
           for r in stream_event.primary_key_values:
-            row = tuple(_make_row(r.values, conversions))
+            row = tuple(_make_row(r, conversions))
             rows.append(row)
 
-        try:
-          yield update_stream.StreamEvent(category=int(stream_event.category),
-                                          table_name=stream_event.table_name,
-                                          fields=fields,
-                                          rows=rows,
-                                          sql=stream_event.sql,
-                                          timestamp=stream_event.timestamp,
-                                          transaction_id=stream_event.transaction_id)
-        except GeneratorExit:
-          # if the loop is interrupted for any reason, we need to
-          # cancel the iterator, so we close the RPC connection,
-          # and the with __exit__ statement is executed.
-
-          # FIXME(alainjobart) this is flaky. It sometimes doesn't stop
-          # the iterator, and we don't get out of the 'with'.
-          # Sending a Ctrl-C to the process then works for some reason.
-          it.cancel()
-          break
+        yield update_stream.StreamEvent(
+            category=int(stream_event.category),
+            table_name=stream_event.table_name,
+            fields=fields,
+            rows=rows,
+            sql=stream_event.sql,
+            timestamp=stream_event.timestamp,
+            transaction_id=stream_event.transaction_id)
+    except face.AbortionError as e:
+      # FIXME(alainjobart) These exceptions don't print well, so raise
+      # one that will.  The real fix is to define a set of exceptions
+      # for this library and raise that, but it's more work.
+      raise dbexceptions.OperationalError(e.details, e)
 
 update_stream.register_conn_class('grpc', GRPCUpdateStreamConnection)

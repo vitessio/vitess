@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"golang.org/x/net/context"
 
 	// import mysql to register mysql connection function
@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	port        = flag.Int("port", 6612, "vtocc port")
+	port        = flag.Int("port", 6612, "vttablet port")
 	mysqlPort   = flag.Int("mysql_port", 3306, "mysql port")
 	tabletUID   = flag.Uint("tablet_uid", 41983, "tablet uid")
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
@@ -35,12 +35,12 @@ var (
 
 func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for startup")
-	bootstrapArchive := subFlags.String("bootstrap_archive", "mysql-db-dir.tbz", "name of bootstrap archive within vitess/data/bootstrap directory")
+	initDBSQLFile := subFlags.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
 	subFlags.Parse(args)
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
 	defer cancel()
-	if err := mysqld.Init(ctx, *bootstrapArchive); err != nil {
+	if err := mysqld.Init(ctx, *initDBSQLFile); err != nil {
 		return fmt.Errorf("failed init mysql: %v", err)
 	}
 	return nil
@@ -89,30 +89,30 @@ func positionCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 		return fmt.Errorf("Not enough arguments for position operation.")
 	}
 
-	pos1, err := myproto.DecodeReplicationPosition(args[1])
+	pos1, err := replication.DecodePosition(args[1])
 	if err != nil {
 		return err
 	}
 
 	switch args[0] {
 	case "equal":
-		pos2, err := myproto.DecodeReplicationPosition(args[2])
+		pos2, err := replication.DecodePosition(args[2])
 		if err != nil {
 			return err
 		}
 		fmt.Println(pos1.Equal(pos2))
 	case "at_least":
-		pos2, err := myproto.DecodeReplicationPosition(args[2])
+		pos2, err := replication.DecodePosition(args[2])
 		if err != nil {
 			return err
 		}
 		fmt.Println(pos1.AtLeast(pos2))
 	case "append":
-		gtid, err := myproto.DecodeGTID(args[2])
+		gtid, err := replication.DecodeGTID(args[2])
 		if err != nil {
 			return err
 		}
-		fmt.Println(myproto.AppendGTID(pos1, gtid))
+		fmt.Println(replication.AppendGTID(pos1, gtid))
 	}
 
 	return nil
@@ -126,16 +126,16 @@ type command struct {
 }
 
 var commands = []command{
-	command{"init", initCmd, "[-wait_time=20s] [-bootstrap_archive=mysql-db-dir.tbz]",
+	{"init", initCmd, "[-wait_time=20s] [-init_db_sql_file=]",
 		"Initalizes the directory structure and starts mysqld"},
-	command{"teardown", teardownCmd, "[-force]",
+	{"teardown", teardownCmd, "[-force]",
 		"Shuts mysqld down, and removes the directory"},
-	command{"start", startCmd, "[-wait_time=20s]",
+	{"start", startCmd, "[-wait_time=20s]",
 		"Starts mysqld on an already 'init'-ed directory"},
-	command{"shutdown", shutdownCmd, "[-wait_time=20s]",
+	{"shutdown", shutdownCmd, "[-wait_time=20s]",
 		"Shuts down mysqld, does not remove any file"},
 
-	command{"position", positionCmd,
+	{"position", positionCmd,
 		"<operation> <pos1> <pos2 | gtid>",
 		"Compute operations on replication positions"},
 }

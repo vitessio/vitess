@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
 	"launchpad.net/gozk/zookeeper"
@@ -22,7 +23,7 @@ var customRule1 = `[
 					"BindVarConds":[{
 						"Name": "asdfg",
 						"OnAbsent": false,
-						"Operator": "NOOP"
+						"Operator": ""
 					}]
 				}
 			]`
@@ -47,7 +48,7 @@ func setUpFakeZk(t *testing.T) {
 }
 
 func TestZkCustomRule(t *testing.T) {
-	tqsc := tabletserver.NewTestQueryServiceControl()
+	tqsc := tabletservermock.NewController()
 
 	setUpFakeZk(t)
 	zkcr := NewZkCustomRule(conn)

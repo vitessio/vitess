@@ -6,19 +6,18 @@ package testlib
 
 import (
 	"testing"
-	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func checkShardServedTypes(t *testing.T, ts topo.Server, shard string, expected int) {
@@ -33,33 +32,42 @@ func checkShardServedTypes(t *testing.T, ts topo.Server, shard string, expected 
 }
 
 func TestMigrateServedTypes(t *testing.T) {
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	db := fakesqldb.Register()
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
+	// create keyspace
+	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
+		ShardingColumnName: "keyspace_id",
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+
 	// create the source shard
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER,
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "ks", "0"))
-	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, pb.TabletType_REPLICA,
+	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "ks", "0"))
-	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, pb.TabletType_RDONLY,
+	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, topodatapb.TabletType_RDONLY, db,
 		TabletKeyspaceShard(t, "ks", "0"))
 
 	// create the first destination shard
-	dest1Master := NewFakeTablet(t, wr, "cell1", 20, pb.TabletType_MASTER,
+	dest1Master := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "ks", "-80"))
-	dest1Replica := NewFakeTablet(t, wr, "cell1", 21, pb.TabletType_REPLICA,
+	dest1Replica := NewFakeTablet(t, wr, "cell1", 21, topodatapb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "ks", "-80"))
-	dest1Rdonly := NewFakeTablet(t, wr, "cell1", 22, pb.TabletType_RDONLY,
+	dest1Rdonly := NewFakeTablet(t, wr, "cell1", 22, topodatapb.TabletType_RDONLY, db,
 		TabletKeyspaceShard(t, "ks", "-80"))
 
 	// create the second destination shard
-	dest2Master := NewFakeTablet(t, wr, "cell1", 30, pb.TabletType_MASTER,
+	dest2Master := NewFakeTablet(t, wr, "cell1", 30, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "ks", "80-"))
-	dest2Replica := NewFakeTablet(t, wr, "cell1", 31, pb.TabletType_REPLICA,
+	dest2Replica := NewFakeTablet(t, wr, "cell1", 31, topodatapb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "ks", "80-"))
-	dest2Rdonly := NewFakeTablet(t, wr, "cell1", 32, pb.TabletType_RDONLY,
+	dest2Rdonly := NewFakeTablet(t, wr, "cell1", 32, topodatapb.TabletType_RDONLY, db,
 		TabletKeyspaceShard(t, "ks", "80-"))
 
 	// double check the shards have the right served types
@@ -77,8 +85,8 @@ func TestMigrateServedTypes(t *testing.T) {
 
 	// sourceMaster will see the refresh, and has to respond to it
 	// also will be asked about its replication position.
-	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   5,
 			Server:   456,
 			Sequence: 892,
@@ -97,11 +105,11 @@ func TestMigrateServedTypes(t *testing.T) {
 
 	// dest1Master will see the refresh, and has to respond to it.
 	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	dest1Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &mproto.QueryResult{
+	dest1Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
-					sqltypes.MakeString([]byte(myproto.EncodeReplicationPosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
+				{
+					sqltypes.MakeString([]byte(replication.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
 					sqltypes.MakeString([]byte("")),
 				},
 			},
@@ -120,11 +128,11 @@ func TestMigrateServedTypes(t *testing.T) {
 
 	// dest2Master will see the refresh, and has to respond to it.
 	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	dest2Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &mproto.QueryResult{
+	dest2Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
-					sqltypes.MakeString([]byte(myproto.EncodeReplicationPosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
+				{
+					sqltypes.MakeString([]byte(replication.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
 					sqltypes.MakeString([]byte("")),
 				},
 			},

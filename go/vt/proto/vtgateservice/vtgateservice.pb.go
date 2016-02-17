@@ -13,6 +13,8 @@ It has these top-level messages:
 package vtgateservice
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 import vtgate "github.com/youtube/vitess/go/vt/proto/vtgate"
 
 import (
@@ -22,6 +24,12 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
+var _ = fmt.Errorf
+var _ = math.Inf
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+const _ = proto.ProtoPackageIsVersion1
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
@@ -30,40 +38,58 @@ var _ grpc.ClientConn
 // Client API for Vitess service
 
 type VitessClient interface {
-	// Execute executes tries to route the query to the right shard.
-	// (this is a vtgate v3 API, use carefully)
+	// Execute tries to route the query to the right shard.
+	// It depends on the query and bind variables to provide enough
+	// information in conjonction with the vindexes to route the query.
+	// API group: v3 API (alpha)
 	Execute(ctx context.Context, in *vtgate.ExecuteRequest, opts ...grpc.CallOption) (*vtgate.ExecuteResponse, error)
 	// ExecuteShards executes the query on the specified shards.
+	// API group: Custom Sharding
 	ExecuteShards(ctx context.Context, in *vtgate.ExecuteShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteShardsResponse, error)
 	// ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
+	// API group: Range-based Sharding
 	ExecuteKeyspaceIds(ctx context.Context, in *vtgate.ExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyspaceIdsResponse, error)
 	// ExecuteKeyRanges executes the query based on the specified key ranges.
+	// API group: Range-based Sharding
 	ExecuteKeyRanges(ctx context.Context, in *vtgate.ExecuteKeyRangesRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyRangesResponse, error)
 	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
+	// API group: Range-based Sharding
 	ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteEntityIdsResponse, error)
 	// ExecuteBatchShards executes the list of queries on the specified shards.
+	// API group: Custom Sharding
 	ExecuteBatchShards(ctx context.Context, in *vtgate.ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchShardsResponse, error)
 	// ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
+	// API group: Range-based Sharding
 	ExecuteBatchKeyspaceIds(ctx context.Context, in *vtgate.ExecuteBatchKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error)
-	// StreamExecute exectures a streaming query based on shards.
-	// (this is a vtgate v3 API, use carefully)
+	// StreamExecute executes a streaming query based on shards.
+	// It depends on the query and bind variables to provide enough
+	// information in conjonction with the vindexes to route the query.
+	// Use this method if the query returns a large number of rows.
+	// API group: v3 API (alpha)
 	StreamExecute(ctx context.Context, in *vtgate.StreamExecuteRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteClient, error)
-	// StreamExecuteShard exectures a streaming query based on shards.
+	// StreamExecuteShards executes a streaming query based on shards.
 	// Use this method if the query returns a large number of rows.
+	// API group: Custom Sharding
 	StreamExecuteShards(ctx context.Context, in *vtgate.StreamExecuteShardsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteShardsClient, error)
-	// StreamExecuteKeyspaceIds exectures a streaming query based on keyspace ids.
+	// StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids.
 	// Use this method if the query returns a large number of rows.
+	// API group: Range-based Sharding
 	StreamExecuteKeyspaceIds(ctx context.Context, in *vtgate.StreamExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyspaceIdsClient, error)
-	// StreamExecuteKeyRanges exectures a streaming query based on key ranges.
+	// StreamExecuteKeyRanges executes a streaming query based on key ranges.
 	// Use this method if the query returns a large number of rows.
+	// API group: Range-based Sharding
 	StreamExecuteKeyRanges(ctx context.Context, in *vtgate.StreamExecuteKeyRangesRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyRangesClient, error)
 	// Begin a transaction.
+	// API group: Transactions
 	Begin(ctx context.Context, in *vtgate.BeginRequest, opts ...grpc.CallOption) (*vtgate.BeginResponse, error)
 	// Commit a transaction.
+	// API group: Transactions
 	Commit(ctx context.Context, in *vtgate.CommitRequest, opts ...grpc.CallOption) (*vtgate.CommitResponse, error)
 	// Rollback a transaction.
+	// API group: Transactions
 	Rollback(ctx context.Context, in *vtgate.RollbackRequest, opts ...grpc.CallOption) (*vtgate.RollbackResponse, error)
 	// Split a query into non-overlapping sub queries
+	// API group: Map Reduce
 	SplitQuery(ctx context.Context, in *vtgate.SplitQueryRequest, opts ...grpc.CallOption) (*vtgate.SplitQueryResponse, error)
 	// GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
 	// This method is provided as a convenient way for clients to take a
@@ -72,6 +98,7 @@ type VitessClient interface {
 	// information may change, use the Execute calls for that).
 	// It is convenient for monitoring applications for instance, or if
 	// using custom sharding.
+	// API group: Topology
 	GetSrvKeyspace(ctx context.Context, in *vtgate.GetSrvKeyspaceRequest, opts ...grpc.CallOption) (*vtgate.GetSrvKeyspaceResponse, error)
 }
 
@@ -322,40 +349,58 @@ func (c *vitessClient) GetSrvKeyspace(ctx context.Context, in *vtgate.GetSrvKeys
 // Server API for Vitess service
 
 type VitessServer interface {
-	// Execute executes tries to route the query to the right shard.
-	// (this is a vtgate v3 API, use carefully)
+	// Execute tries to route the query to the right shard.
+	// It depends on the query and bind variables to provide enough
+	// information in conjonction with the vindexes to route the query.
+	// API group: v3 API (alpha)
 	Execute(context.Context, *vtgate.ExecuteRequest) (*vtgate.ExecuteResponse, error)
 	// ExecuteShards executes the query on the specified shards.
+	// API group: Custom Sharding
 	ExecuteShards(context.Context, *vtgate.ExecuteShardsRequest) (*vtgate.ExecuteShardsResponse, error)
 	// ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
+	// API group: Range-based Sharding
 	ExecuteKeyspaceIds(context.Context, *vtgate.ExecuteKeyspaceIdsRequest) (*vtgate.ExecuteKeyspaceIdsResponse, error)
 	// ExecuteKeyRanges executes the query based on the specified key ranges.
+	// API group: Range-based Sharding
 	ExecuteKeyRanges(context.Context, *vtgate.ExecuteKeyRangesRequest) (*vtgate.ExecuteKeyRangesResponse, error)
 	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
+	// API group: Range-based Sharding
 	ExecuteEntityIds(context.Context, *vtgate.ExecuteEntityIdsRequest) (*vtgate.ExecuteEntityIdsResponse, error)
 	// ExecuteBatchShards executes the list of queries on the specified shards.
+	// API group: Custom Sharding
 	ExecuteBatchShards(context.Context, *vtgate.ExecuteBatchShardsRequest) (*vtgate.ExecuteBatchShardsResponse, error)
 	// ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
+	// API group: Range-based Sharding
 	ExecuteBatchKeyspaceIds(context.Context, *vtgate.ExecuteBatchKeyspaceIdsRequest) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error)
-	// StreamExecute exectures a streaming query based on shards.
-	// (this is a vtgate v3 API, use carefully)
+	// StreamExecute executes a streaming query based on shards.
+	// It depends on the query and bind variables to provide enough
+	// information in conjonction with the vindexes to route the query.
+	// Use this method if the query returns a large number of rows.
+	// API group: v3 API (alpha)
 	StreamExecute(*vtgate.StreamExecuteRequest, Vitess_StreamExecuteServer) error
-	// StreamExecuteShard exectures a streaming query based on shards.
+	// StreamExecuteShards executes a streaming query based on shards.
 	// Use this method if the query returns a large number of rows.
+	// API group: Custom Sharding
 	StreamExecuteShards(*vtgate.StreamExecuteShardsRequest, Vitess_StreamExecuteShardsServer) error
-	// StreamExecuteKeyspaceIds exectures a streaming query based on keyspace ids.
+	// StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids.
 	// Use this method if the query returns a large number of rows.
+	// API group: Range-based Sharding
 	StreamExecuteKeyspaceIds(*vtgate.StreamExecuteKeyspaceIdsRequest, Vitess_StreamExecuteKeyspaceIdsServer) error
-	// StreamExecuteKeyRanges exectures a streaming query based on key ranges.
+	// StreamExecuteKeyRanges executes a streaming query based on key ranges.
 	// Use this method if the query returns a large number of rows.
+	// API group: Range-based Sharding
 	StreamExecuteKeyRanges(*vtgate.StreamExecuteKeyRangesRequest, Vitess_StreamExecuteKeyRangesServer) error
 	// Begin a transaction.
+	// API group: Transactions
 	Begin(context.Context, *vtgate.BeginRequest) (*vtgate.BeginResponse, error)
 	// Commit a transaction.
+	// API group: Transactions
 	Commit(context.Context, *vtgate.CommitRequest) (*vtgate.CommitResponse, error)
 	// Rollback a transaction.
+	// API group: Transactions
 	Rollback(context.Context, *vtgate.RollbackRequest) (*vtgate.RollbackResponse, error)
 	// Split a query into non-overlapping sub queries
+	// API group: Map Reduce
 	SplitQuery(context.Context, *vtgate.SplitQueryRequest) (*vtgate.SplitQueryResponse, error)
 	// GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
 	// This method is provided as a convenient way for clients to take a
@@ -364,6 +409,7 @@ type VitessServer interface {
 	// information may change, use the Execute calls for that).
 	// It is convenient for monitoring applications for instance, or if
 	// using custom sharding.
+	// API group: Topology
 	GetSrvKeyspace(context.Context, *vtgate.GetSrvKeyspaceRequest) (*vtgate.GetSrvKeyspaceResponse, error)
 }
 
@@ -371,9 +417,9 @@ func RegisterVitessServer(s *grpc.Server, srv VitessServer) {
 	s.RegisterService(&_Vitess_serviceDesc, srv)
 }
 
-func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).Execute(ctx, in)
@@ -383,9 +429,9 @@ func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Co
 	return out, nil
 }
 
-func _Vitess_ExecuteShards_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteShardsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteShards(ctx, in)
@@ -395,9 +441,9 @@ func _Vitess_ExecuteShards_Handler(srv interface{}, ctx context.Context, codec g
 	return out, nil
 }
 
-func _Vitess_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteKeyspaceIdsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteKeyspaceIds(ctx, in)
@@ -407,9 +453,9 @@ func _Vitess_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, co
 	return out, nil
 }
 
-func _Vitess_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteKeyRangesRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteKeyRanges(ctx, in)
@@ -419,9 +465,9 @@ func _Vitess_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, code
 	return out, nil
 }
 
-func _Vitess_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteEntityIdsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteEntityIds(ctx, in)
@@ -431,9 +477,9 @@ func _Vitess_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, code
 	return out, nil
 }
 
-func _Vitess_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteBatchShardsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteBatchShards(ctx, in)
@@ -443,9 +489,9 @@ func _Vitess_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, co
 	return out, nil
 }
 
-func _Vitess_ExecuteBatchKeyspaceIds_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_ExecuteBatchKeyspaceIds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.ExecuteBatchKeyspaceIdsRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).ExecuteBatchKeyspaceIds(ctx, in)
@@ -539,9 +585,9 @@ func (x *vitessStreamExecuteKeyRangesServer) Send(m *vtgate.StreamExecuteKeyRang
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Vitess_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_Begin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.BeginRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).Begin(ctx, in)
@@ -551,9 +597,9 @@ func _Vitess_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Code
 	return out, nil
 }
 
-func _Vitess_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.CommitRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).Commit(ctx, in)
@@ -563,9 +609,9 @@ func _Vitess_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Cod
 	return out, nil
 }
 
-func _Vitess_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.RollbackRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).Rollback(ctx, in)
@@ -575,9 +621,9 @@ func _Vitess_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.C
 	return out, nil
 }
 
-func _Vitess_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_SplitQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.SplitQueryRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).SplitQuery(ctx, in)
@@ -587,9 +633,9 @@ func _Vitess_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc
 	return out, nil
 }
 
-func _Vitess_GetSrvKeyspace_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Vitess_GetSrvKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(vtgate.GetSrvKeyspaceRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(VitessServer).GetSrvKeyspace(ctx, in)
@@ -674,4 +720,36 @@ var _Vitess_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
+}
+
+var fileDescriptor0 = []byte{
+	// 443 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x94, 0x5f, 0x8b, 0xd3, 0x40,
+	0x14, 0xc5, 0xf5, 0xc1, 0x2a, 0x17, 0x2b, 0x32, 0xd5, 0xb6, 0x16, 0x6b, 0xb5, 0x62, 0xeb, 0x53,
+	0x10, 0x05, 0x41, 0x10, 0x84, 0x4a, 0x11, 0x59, 0x58, 0xb6, 0x0d, 0xec, 0x3e, 0xed, 0x43, 0x92,
+	0xbd, 0xa4, 0xa1, 0xf9, 0xd7, 0xcc, 0x24, 0x6c, 0xbe, 0xe9, 0x7e, 0x9c, 0xed, 0x36, 0x99, 0xd9,
+	0x99, 0xc9, 0xa4, 0x7d, 0xdb, 0x39, 0xe7, 0xdc, 0xdf, 0x6c, 0x4f, 0x2e, 0x03, 0xbd, 0x82, 0xf9,
+	0x0e, 0x43, 0x8a, 0x59, 0x11, 0x78, 0x68, 0xa5, 0x59, 0xc2, 0x12, 0xd2, 0x55, 0xc4, 0xd1, 0xcb,
+	0xea, 0x58, 0x99, 0xdf, 0xef, 0x00, 0x3a, 0x97, 0xc1, 0xde, 0xa5, 0xe4, 0x37, 0x3c, 0x5f, 0xde,
+	0xa2, 0x97, 0x33, 0x24, 0x7d, 0xab, 0x0e, 0xd5, 0xc2, 0x1a, 0x77, 0x39, 0x52, 0x36, 0x1a, 0x34,
+	0x74, 0x9a, 0x26, 0x31, 0xc5, 0xe9, 0x13, 0x72, 0x0e, 0xdd, 0x5a, 0xb4, 0x37, 0x4e, 0x76, 0x43,
+	0xc9, 0x7b, 0x2d, 0x5b, 0xc9, 0x9c, 0x34, 0x6e, 0x71, 0x05, 0xef, 0x1a, 0x48, 0x6d, 0x9d, 0x61,
+	0x49, 0x53, 0xc7, 0xc3, 0xff, 0x7b, 0xe8, 0x27, 0x6d, 0x4c, 0xf2, 0x38, 0x79, 0x7a, 0x2c, 0x22,
+	0xf0, 0x57, 0xf0, 0xfa, 0xd1, 0x5f, 0x3b, 0xb1, 0x8f, 0x94, 0x4c, 0x9a, 0x93, 0x95, 0xc3, 0xd1,
+	0x1f, 0xdb, 0x03, 0x06, 0xf0, 0x32, 0x66, 0x01, 0x2b, 0x1f, 0xfe, 0x6b, 0x1d, 0x2c, 0x9c, 0x36,
+	0xb0, 0x14, 0x30, 0x14, 0xb2, 0x70, 0x98, 0xb7, 0xa9, 0x5b, 0xd6, 0x0b, 0x91, 0xbc, 0xb6, 0x42,
+	0x94, 0x88, 0xc0, 0x87, 0x30, 0x90, 0x7d, 0xb9, 0xf4, 0x99, 0x09, 0x60, 0x68, 0x7e, 0x7e, 0x32,
+	0x27, 0x6e, 0xbb, 0x80, 0xae, 0xcd, 0x32, 0x74, 0x22, 0xbe, 0x71, 0x62, 0x5b, 0x14, 0xb9, 0xb1,
+	0x2d, 0x9a, 0xcb, 0x79, 0xdf, 0x9e, 0x12, 0x17, 0x7a, 0x8a, 0x59, 0xf7, 0x33, 0x35, 0x4e, 0xaa,
+	0x05, 0x7d, 0x3e, 0x9a, 0x91, 0xee, 0xd8, 0xc1, 0x50, 0x89, 0xc8, 0x25, 0xcd, 0x8d, 0x10, 0x43,
+	0x4b, 0x5f, 0x4f, 0x07, 0xa5, 0x2b, 0xb7, 0xd0, 0xd7, 0x73, 0xf5, 0xb6, 0x7e, 0x69, 0xe3, 0xa8,
+	0x3b, 0x3b, 0x3b, 0x15, 0x93, 0x2e, 0xfb, 0x09, 0xcf, 0x16, 0xe8, 0x07, 0x31, 0x79, 0xc3, 0x87,
+	0x0e, 0x47, 0x8e, 0x7a, 0xab, 0xa9, 0xe2, 0x6b, 0xfe, 0x82, 0xce, 0xdf, 0x24, 0x8a, 0x02, 0x46,
+	0x44, 0xa4, 0x3a, 0xf3, 0xc9, 0xbe, 0x2e, 0x8b, 0xd1, 0x3f, 0xf0, 0x62, 0x9d, 0x84, 0xa1, 0xeb,
+	0x78, 0x5b, 0x22, 0x5e, 0x17, 0xae, 0xf0, 0xf1, 0x61, 0xd3, 0x10, 0x80, 0x25, 0x80, 0x9d, 0x86,
+	0x01, 0x5b, 0xe5, 0x98, 0x95, 0xe4, 0x9d, 0xf8, 0xb5, 0x42, 0xe3, 0x90, 0x91, 0xc9, 0x12, 0x98,
+	0x15, 0xbc, 0xfa, 0x87, 0xcc, 0xce, 0x0a, 0xfe, 0x21, 0x88, 0xd8, 0x39, 0x55, 0xe7, 0xb8, 0x0f,
+	0x6d, 0x36, 0x47, 0x2e, 0x26, 0x30, 0xf6, 0x92, 0xc8, 0x2a, 0x93, 0x9c, 0xe5, 0x2e, 0x5a, 0xc5,
+	0xe1, 0x95, 0xad, 0x9e, 0x5d, 0xcb, 0xcf, 0x52, 0xcf, 0xed, 0x1c, 0xfe, 0xfe, 0x71, 0x1f, 0x00,
+	0x00, 0xff, 0xff, 0x36, 0x12, 0x3e, 0x98, 0xb6, 0x05, 0x00, 0x00,
 }

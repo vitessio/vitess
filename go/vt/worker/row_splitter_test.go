@@ -11,10 +11,9 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func hki(hexValue string) []byte {
@@ -28,8 +27,8 @@ func hki(hexValue string) []byte {
 func si(start, end string) *topo.ShardInfo {
 	s := hki(start)
 	e := hki(end)
-	return topo.NewShardInfo("keyspace", start+"-"+end, &pb.Shard{
-		KeyRange: &pb.KeyRange{
+	return topo.NewShardInfo("keyspace", start+"-"+end, &topodatapb.Shard{
+		KeyRange: &topodatapb.KeyRange{
 			Start: s,
 			End:   e,
 		},
@@ -42,7 +41,7 @@ func TestRowSplitterUint64(t *testing.T) {
 		si("40", "c0"),
 		si("c0", ""),
 	}
-	rs := NewRowSplitter(shards, key.KIT_UINT64, 1)
+	rs := NewRowSplitter(shards, topodatapb.KeyspaceIdType_UINT64, 1)
 
 	// rows in different shards
 	row0 := []sqltypes.Value{
@@ -81,8 +80,8 @@ func TestRowSplitterUint64(t *testing.T) {
 func siBytes(start, end string) *topo.ShardInfo {
 	s := hex.EncodeToString([]byte(start))
 	e := hex.EncodeToString([]byte(end))
-	return topo.NewShardInfo("keyspace", s+"-"+e, &pb.Shard{
-		KeyRange: &pb.KeyRange{
+	return topo.NewShardInfo("keyspace", s+"-"+e, &topodatapb.Shard{
+		KeyRange: &topodatapb.KeyRange{
 			Start: []byte(start),
 			End:   []byte(end),
 		},
@@ -95,7 +94,7 @@ func TestRowSplitterString(t *testing.T) {
 		siBytes("E", "L"),
 		siBytes("L", ""),
 	}
-	rs := NewRowSplitter(shards, key.KIT_BYTES, 1)
+	rs := NewRowSplitter(shards, topodatapb.KeyspaceIdType_BYTES, 1)
 
 	// rows in different shards
 	row0 := []sqltypes.Value{

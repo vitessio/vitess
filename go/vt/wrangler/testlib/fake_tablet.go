@@ -24,9 +24,10 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
@@ -45,7 +46,7 @@ import (
 // - a 'done' channel (used to terminate the fake event loop)
 type FakeTablet struct {
 	// Tablet and FakeMysqlDaemon are populated at NewFakeTablet time.
-	Tablet          *pb.Tablet
+	Tablet          *topodatapb.Tablet
 	FakeMysqlDaemon *mysqlctl.FakeMysqlDaemon
 
 	// The following fields are created when we start the event loop for
@@ -65,11 +66,11 @@ type FakeTablet struct {
 // TabletOption is an interface for changing tablet parameters.
 // It's a way to pass multiple parameters to NewFakeTablet without
 // making it too cumbersome.
-type TabletOption func(tablet *pb.Tablet)
+type TabletOption func(tablet *topodatapb.Tablet)
 
 // TabletKeyspaceShard is the option to set the tablet keyspace and shard
 func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
-	return func(tablet *pb.Tablet) {
+	return func(tablet *topodatapb.Tablet) {
 		tablet.Keyspace = keyspace
 		shard, kr, err := topo.ValidateShardName(shard)
 		if err != nil {
@@ -82,7 +83,7 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 
 // ForceInitTablet is the tablet option to set the 'force' flag during InitTablet
 func ForceInitTablet() TabletOption {
-	return func(tablet *pb.Tablet) {
+	return func(tablet *topodatapb.Tablet) {
 		// set the force_init field into the portmap as a hack
 		tablet.PortMap["force_init"] = 1
 	}
@@ -91,7 +92,7 @@ func ForceInitTablet() TabletOption {
 // StartHTTPServer is the tablet option to start the HTTP server when
 // starting a tablet.
 func StartHTTPServer() TabletOption {
-	return func(tablet *pb.Tablet) {
+	return func(tablet *topodatapb.Tablet) {
 		// set the start_http_server field into the portmap as a hack
 		tablet.PortMap["start_http_server"] = 1
 	}
@@ -101,12 +102,12 @@ func StartHTTPServer() TabletOption {
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
 // Use TabletOption implementations if you need to change values at creation.
-func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType pb.TabletType, options ...TabletOption) *FakeTablet {
+func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType topodatapb.TabletType, db *fakesqldb.DB, options ...TabletOption) *FakeTablet {
 	if uid < 0 || uid > 99 {
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
-	tablet := &pb.Tablet{
-		Alias:    &pb.TabletAlias{Cell: cell, Uid: uid},
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: uid},
 		Hostname: fmt.Sprintf("%vhost", cell),
 		PortMap: map[string]int32{
 			"vt":    int32(8100 + uid),
@@ -125,12 +126,12 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	delete(tablet.PortMap, "start_http_server")
 	_, force := tablet.PortMap["force_init"]
 	delete(tablet.PortMap, "force_init")
-	if err := wr.InitTablet(context.Background(), tablet, force, true, false); err != nil {
+	if err := wr.InitTablet(context.Background(), tablet, force, false, true, false); err != nil {
 		t.Fatalf("cannot create tablet %v: %v", uid, err)
 	}
 
 	// create a FakeMysqlDaemon with the right information by default
-	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon()
+	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon(db)
 	fakeMysqlDaemon.MysqlPort = 3300 + int32(uid)
 
 	return &FakeTablet{
@@ -173,7 +174,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	// create a test agent on that port, and re-read the record
 	// (it has new ports and IP)
 	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon)
-	ft.Tablet = ft.Agent.Tablet().Tablet
+	ft.Tablet = ft.Agent.Tablet()
 
 	// create the gRPC server
 	ft.RPCServer = grpc.NewServer()
@@ -187,7 +188,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	c := tmclient.NewTabletManagerClient()
 	for timeout >= 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		err := c.Ping(ctx, ft.Agent.Tablet())
+		err := c.Ping(ctx, topo.NewTabletInfo(ft.Agent.Tablet(), -1))
 		cancel()
 		if err == nil {
 			break

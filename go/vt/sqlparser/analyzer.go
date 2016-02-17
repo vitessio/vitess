@@ -50,7 +50,7 @@ func IsValue(node ValExpr) bool {
 // HasINClause returns true if any of the conditions has an IN clause.
 func HasINClause(conditions []BoolExpr) bool {
 	for _, node := range conditions {
-		if c, ok := node.(*ComparisonExpr); ok && c.Operator == AST_IN {
+		if c, ok := node.(*ComparisonExpr); ok && c.Operator == InStr {
 			return true
 		}
 	}
@@ -98,7 +98,7 @@ func AsInterface(node ValExpr) (interface{}, error) {
 	case StrVal:
 		return sqltypes.MakeString(node), nil
 	case NumVal:
-		n, err := sqltypes.BuildNumeric(string(node))
+		n, err := sqltypes.BuildIntegral(string(node))
 		if err != nil {
 			return nil, fmt.Errorf("type mismatch: %s", err)
 		}

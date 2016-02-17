@@ -15,9 +15,17 @@ It has these top-level messages:
 package vtrpc
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
+var _ = fmt.Errorf
+var _ = math.Inf
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+const _ = proto.ProtoPackageIsVersion1
 
 // ErrorCode is the enum values for Errors. Internally, errors should
 // be created with one of these codes. These will then be translated over the wire
@@ -31,8 +39,8 @@ const (
 	// as opposed to the RPC layer)
 	ErrorCode_CANCELLED ErrorCode = 1
 	// UNKNOWN_ERROR includes:
-	// 1. MySQL error codes that we don't explicitly handle
-	// 2.  MySQL response that wasn't as expected. For example, we might expect a MySQL
+	// 1. MySQL error codes that we don't explicitly handle.
+	// 2. MySQL response that wasn't as expected. For example, we might expect a MySQL
 	//  timestamp to be returned in a particular way, but it wasn't.
 	// 3. Anything else that doesn't fall into a different bucket.
 	ErrorCode_UNKNOWN_ERROR ErrorCode = 2
@@ -47,30 +55,50 @@ const (
 	// PERMISSION_DENIED errors are returned when a user requests access to something
 	// that they don't have permissions for.
 	ErrorCode_PERMISSION_DENIED ErrorCode = 6
-	// THROTTLED_ERROR is returned when a user exceeds their quota in some dimension and
-	// get throttled due to that.
-	ErrorCode_THROTTLED_ERROR ErrorCode = 7
+	// RESOURCE_EXHAUSTED is returned when a query exceeds its quota in some dimension
+	// and can't be completed due to that. Queries that return RESOURCE_EXHAUSTED
+	// should not be retried, as it could be detrimental to the server's health.
+	// Examples of errors that will cause the RESOURCE_EXHAUSTED code:
+	// 1. TxPoolFull: this is retried server-side, and is only returned as an error
+	//  if the server-side retries failed.
+	// 2. Query is killed due to it taking too long.
+	ErrorCode_RESOURCE_EXHAUSTED ErrorCode = 7
 	// QUERY_NOT_SERVED means that a query could not be served right now.
-	// This could be due to various reasons: QueryService is not running,
-	// should not be running, wrong shard, wrong tablet type, etc. Clients that
-	// receive this error should usually re-resolve the topology, and then retry the query.
+	// Client can interpret it as: "the tablet that you sent this query to cannot
+	// serve the query right now, try a different tablet or try again later."
+	// This could be due to various reasons: QueryService is not serving, should
+	// not be serving, wrong shard, wrong tablet type, blacklisted table, etc.
+	// Clients that receive this error should usually retry the query, but after taking
+	// the appropriate steps to make sure that the query will get sent to the correct
+	// tablet.
 	ErrorCode_QUERY_NOT_SERVED ErrorCode = 8
 	// NOT_IN_TX means that we're not currently in a transaction, but we should be.
 	ErrorCode_NOT_IN_TX ErrorCode = 9
-	// INTERNAL_ERROR is returned when:
+	// INTERNAL_ERRORs are problems that only the server can fix, not the client.
+	// These errors are not due to a query itself, but rather due to the state of
+	// the system.
+	// Generally, we don't expect the errors to go away by themselves, but they
+	// may go away after human intervention.
+	// Examples of scenarios where INTERNAL_ERROR is returned:
 	//  1. Something is not configured correctly internally.
-	//  2. A necessary resource is not available
-	//  3. Some other internal error occures
-	// INTERNAL_ERRORs are not problems that are expected to fix themselves, and retrying
-	// the query will not help.
+	//  2. A necessary resource is not available, and we don't expect it to become available by itself.
+	//  3. A sanity check fails
+	//  4. Some other internal error occurs
+	// Clients should not retry immediately, as there is little chance of success.
+	// However, it's acceptable for retries to happen internally, for example to
+	// multiple backends, in case only a subset of backend are not functional.
 	ErrorCode_INTERNAL_ERROR ErrorCode = 10
-	// RESOURCE_TEMPORARILY_UNAVAILABLE is used for when a resource limit has temporarily
-	// been reached. Trying this error, with an exponential backoff, should succeed.
-	// Various types of resources can be exhausted, including:
-	// 1. TxPool can be full
+	// TRANSIENT_ERROR is used for when there is some error that we expect we can
+	// recover from automatically - often due to a resource limit temporarily being
+	// reached. Retrying this error, with an exponential backoff, should succeed.
+	// Clients should be able to successfully retry the query on the same backends.
+	// Examples of things that can trigger this error:
+	// 1. Query has been throttled
 	// 2. VtGate could have request backlog
-	// 3. MySQL could have a deadlock
-	ErrorCode_RESOURCE_TEMPORARILY_UNAVAILABLE ErrorCode = 11
+	ErrorCode_TRANSIENT_ERROR ErrorCode = 11
+	// UNAUTHENTICATED errors are returned when a user requests access to something,
+	// and we're unable to verify the user's authentication.
+	ErrorCode_UNAUTHENTICATED ErrorCode = 12
 )
 
 var ErrorCode_name = map[int32]string{
@@ -81,69 +109,33 @@ var ErrorCode_name = map[int32]string{
 	4:  "DEADLINE_EXCEEDED",
 	5:  "INTEGRITY_ERROR",
 	6:  "PERMISSION_DENIED",
-	7:  "THROTTLED_ERROR",
+	7:  "RESOURCE_EXHAUSTED",
 	8:  "QUERY_NOT_SERVED",
 	9:  "NOT_IN_TX",
 	10: "INTERNAL_ERROR",
-	11: "RESOURCE_TEMPORARILY_UNAVAILABLE",
+	11: "TRANSIENT_ERROR",
+	12: "UNAUTHENTICATED",
 }
 var ErrorCode_value = map[string]int32{
-	"SUCCESS":                          0,
-	"CANCELLED":                        1,
-	"UNKNOWN_ERROR":                    2,
-	"BAD_INPUT":                        3,
-	"DEADLINE_EXCEEDED":                4,
-	"INTEGRITY_ERROR":                  5,
-	"PERMISSION_DENIED":                6,
-	"THROTTLED_ERROR":                  7,
-	"QUERY_NOT_SERVED":                 8,
-	"NOT_IN_TX":                        9,
-	"INTERNAL_ERROR":                   10,
-	"RESOURCE_TEMPORARILY_UNAVAILABLE": 11,
+	"SUCCESS":            0,
+	"CANCELLED":          1,
+	"UNKNOWN_ERROR":      2,
+	"BAD_INPUT":          3,
+	"DEADLINE_EXCEEDED":  4,
+	"INTEGRITY_ERROR":    5,
+	"PERMISSION_DENIED":  6,
+	"RESOURCE_EXHAUSTED": 7,
+	"QUERY_NOT_SERVED":   8,
+	"NOT_IN_TX":          9,
+	"INTERNAL_ERROR":     10,
+	"TRANSIENT_ERROR":    11,
+	"UNAUTHENTICATED":    12,
 }
 
 func (x ErrorCode) String() string {
 	return proto.EnumName(ErrorCode_name, int32(x))
 }
-
-// ErrorCodeDeprecated is the enum values for Errors. These are deprecated errors, we
-// should instead be using ErrorCode.
-type ErrorCodeDeprecated int32
-
-const (
-	// NoError means there was no error, and the message should be ignored.
-	ErrorCodeDeprecated_NoError ErrorCodeDeprecated = 0
-	// TabletError is the base VtTablet error. All VtTablet errors
-	// should be 4 digits, starting with 1.
-	ErrorCodeDeprecated_TabletError ErrorCodeDeprecated = 1000
-	// UnknownTabletError is the code for an unknown error that came
-	// from VtTablet.
-	ErrorCodeDeprecated_UnknownTabletError ErrorCodeDeprecated = 1999
-	// VtgateError is the base VTGate error code. All VTGate errors
-	// should be 4 digits, starting with 2.
-	ErrorCodeDeprecated_VtgateError ErrorCodeDeprecated = 2000
-	// UnknownVtgateError is the code for an unknown error that came from VTGate.
-	ErrorCodeDeprecated_UnknownVtgateError ErrorCodeDeprecated = 2999
-)
-
-var ErrorCodeDeprecated_name = map[int32]string{
-	0:    "NoError",
-	1000: "TabletError",
-	1999: "UnknownTabletError",
-	2000: "VtgateError",
-	2999: "UnknownVtgateError",
-}
-var ErrorCodeDeprecated_value = map[string]int32{
-	"NoError":            0,
-	"TabletError":        1000,
-	"UnknownTabletError": 1999,
-	"VtgateError":        2000,
-	"UnknownVtgateError": 2999,
-}
-
-func (x ErrorCodeDeprecated) String() string {
-	return proto.EnumName(ErrorCodeDeprecated_name, int32(x))
-}
+func (ErrorCode) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
 // CallerID is passed along RPCs to identify the originating client
 // for a request. It is not meant to be secure, but only
@@ -170,24 +162,54 @@ type CallerID struct {
 	Subcomponent string `protobuf:"bytes,3,opt,name=subcomponent" json:"subcomponent,omitempty"`
 }
 
-func (m *CallerID) Reset()         { *m = CallerID{} }
-func (m *CallerID) String() string { return proto.CompactTextString(m) }
-func (*CallerID) ProtoMessage()    {}
+func (m *CallerID) Reset()                    { *m = CallerID{} }
+func (m *CallerID) String() string            { return proto.CompactTextString(m) }
+func (*CallerID) ProtoMessage()               {}
+func (*CallerID) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
 // RPCError is an application-level error structure returned by
 // VtTablet (and passed along by VtGate if appropriate).
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 type RPCError struct {
-	Code    ErrorCodeDeprecated `protobuf:"varint,1,opt,name=code,enum=vtrpc.ErrorCodeDeprecated" json:"code,omitempty"`
-	Message string              `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
+	Code    ErrorCode `protobuf:"varint,1,opt,name=code,enum=vtrpc.ErrorCode" json:"code,omitempty"`
+	Message string    `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
 }
 
-func (m *RPCError) Reset()         { *m = RPCError{} }
-func (m *RPCError) String() string { return proto.CompactTextString(m) }
-func (*RPCError) ProtoMessage()    {}
+func (m *RPCError) Reset()                    { *m = RPCError{} }
+func (m *RPCError) String() string            { return proto.CompactTextString(m) }
+func (*RPCError) ProtoMessage()               {}
+func (*RPCError) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
 func init() {
+	proto.RegisterType((*CallerID)(nil), "vtrpc.CallerID")
+	proto.RegisterType((*RPCError)(nil), "vtrpc.RPCError")
 	proto.RegisterEnum("vtrpc.ErrorCode", ErrorCode_name, ErrorCode_value)
-	proto.RegisterEnum("vtrpc.ErrorCodeDeprecated", ErrorCodeDeprecated_name, ErrorCodeDeprecated_value)
+}
+
+var fileDescriptor0 = []byte{
+	// 356 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x44, 0x91, 0x49, 0xaf, 0xda, 0x30,
+	0x10, 0x80, 0xcb, 0x4e, 0x86, 0x2d, 0xb8, 0x8b, 0x50, 0x0f, 0x55, 0xc5, 0xa9, 0xea, 0x21, 0x87,
+	0xf6, 0xd8, 0x93, 0x71, 0xa6, 0xc5, 0x6a, 0xea, 0x50, 0x2f, 0x2d, 0x9c, 0x22, 0x48, 0xa3, 0x0a,
+	0x09, 0x48, 0x14, 0x02, 0xd2, 0xfb, 0x05, 0xef, 0x6f, 0x3f, 0x3b, 0x20, 0x71, 0xb2, 0xe6, 0x9b,
+	0xe5, 0xb3, 0xc7, 0x30, 0xb8, 0x56, 0x65, 0x91, 0x06, 0x45, 0x99, 0x57, 0x39, 0xe9, 0xd4, 0xc1,
+	0xfc, 0x3b, 0xf4, 0xd9, 0xf6, 0x70, 0xc8, 0x4a, 0x1e, 0x92, 0x29, 0x78, 0x45, 0xb9, 0x3f, 0xa5,
+	0xfb, 0x62, 0x7b, 0x98, 0x35, 0x3e, 0x36, 0x3e, 0x79, 0x0e, 0xa5, 0xf9, 0xb1, 0xc8, 0x4f, 0xd9,
+	0xa9, 0x9a, 0x35, 0x6b, 0xf4, 0x06, 0x86, 0xe7, 0xcb, 0xee, 0x41, 0x5b, 0x8e, 0xce, 0xbf, 0x41,
+	0x5f, 0xae, 0x18, 0x96, 0x65, 0x5e, 0x92, 0x0f, 0xd0, 0x4e, 0xf3, 0x7f, 0x59, 0x3d, 0x62, 0xfc,
+	0xc5, 0x0f, 0x6e, 0xda, 0x3a, 0xc7, 0x2c, 0x27, 0x13, 0xe8, 0x1d, 0xb3, 0xf3, 0x79, 0xfb, 0x3f,
+	0xbb, 0x8d, 0xfc, 0xfc, 0xdc, 0x04, 0xef, 0x91, 0x1e, 0x40, 0x4f, 0x19, 0xc6, 0x50, 0x29, 0xff,
+	0x15, 0x19, 0x81, 0xc7, 0xa8, 0x60, 0x18, 0x45, 0x18, 0xfa, 0x0d, 0x7b, 0x9f, 0x91, 0x11, 0x3f,
+	0x45, 0xfc, 0x57, 0x24, 0x28, 0x65, 0x2c, 0xfd, 0xa6, 0xab, 0x58, 0xd0, 0x30, 0xe1, 0x62, 0x65,
+	0xb4, 0xdf, 0x22, 0x6f, 0x61, 0x1a, 0x22, 0x0d, 0x23, 0x2e, 0x30, 0xc1, 0x35, 0x43, 0x0c, 0x6d,
+	0x63, 0x9b, 0xbc, 0x86, 0x09, 0x17, 0x1a, 0x7f, 0x48, 0xae, 0x37, 0xf7, 0xd6, 0x8e, 0xab, 0x5d,
+	0xa1, 0xfc, 0xc5, 0x95, 0xe2, 0xb1, 0x48, 0x42, 0x14, 0xdc, 0xd6, 0x76, 0xc9, 0x3b, 0x20, 0x12,
+	0x55, 0x6c, 0x24, 0x73, 0x23, 0x96, 0xd4, 0x28, 0x6d, 0x79, 0xcf, 0xbe, 0xdc, 0xff, 0x6d, 0x50,
+	0x6e, 0x12, 0x11, 0xeb, 0x44, 0xa1, 0xfc, 0x63, 0x69, 0xdf, 0xf9, 0x5d, 0xcc, 0x45, 0xa2, 0xd7,
+	0xbe, 0x47, 0x08, 0x8c, 0x9d, 0x48, 0x0a, 0x1a, 0xdd, 0x3d, 0xe0, 0xe4, 0x5a, 0x52, 0xa1, 0x38,
+	0x0a, 0x7d, 0x87, 0x03, 0x07, 0x8d, 0xa0, 0x46, 0x2f, 0x2d, 0xe4, 0x8c, 0x3a, 0xc5, 0x70, 0xf1,
+	0x1e, 0x66, 0x76, 0xb3, 0xc1, 0x53, 0x7e, 0xa9, 0x2e, 0xbb, 0x2c, 0xb8, 0xee, 0x2b, 0xbb, 0xa8,
+	0xdb, 0x8f, 0xed, 0xba, 0xf5, 0xf1, 0xf5, 0x25, 0x00, 0x00, 0xff, 0xff, 0x95, 0xcb, 0x10, 0x8a,
+	0xc7, 0x01, 0x00, 0x00,
 }

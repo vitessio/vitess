@@ -9,13 +9,14 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestOrderedColumns(t *testing.T) {
-	input := &myproto.TableDefinition{
+	input := &tabletmanagerdatapb.TableDefinition{
 		PrimaryKeyColumns: []string{"pk1", "pk2"},
 		Columns:           []string{"pk1", "col1", "pk2", "col2"},
 	}
@@ -45,71 +46,71 @@ func TestUint64FromKeyspaceId(t *testing.T) {
 
 func TestCompareRows(t *testing.T) {
 	table := []struct {
-		fields      []mproto.Field
+		fields      []*querypb.Field
 		left, right []sqltypes.Value
 		want        int
 	}{
 		{
-			fields: []mproto.Field{{"a", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG}},
-			left:   []sqltypes.Value{{sqltypes.Numeric("123")}},
-			right:  []sqltypes.Value{{sqltypes.Numeric("14")}},
+			fields: []*querypb.Field{{"a", sqltypes.Int32}},
+			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("123"))},
+			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("14"))},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{
-				{"a", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG},
-				{"b", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG},
+			fields: []*querypb.Field{
+				{"a", sqltypes.Int32},
+				{"b", sqltypes.Int32},
 			},
 			left: []sqltypes.Value{
-				{sqltypes.Numeric("555")},
-				{sqltypes.Numeric("12")},
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("555")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("12")),
 			},
 			right: []sqltypes.Value{
-				{sqltypes.Numeric("555")},
-				{sqltypes.Numeric("144")},
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("555")),
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("144")),
 			},
 			want: -1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG}},
-			left:   []sqltypes.Value{{sqltypes.Numeric("144")}},
-			right:  []sqltypes.Value{{sqltypes.Numeric("144")}},
+			fields: []*querypb.Field{{"a", sqltypes.Int32}},
+			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("144"))},
+			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("144"))},
 			want:   0,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_LONGLONG, mproto.VT_UNSIGNED_FLAG}},
-			left:   []sqltypes.Value{{sqltypes.Numeric("9223372036854775809")}},
-			right:  []sqltypes.Value{{sqltypes.Numeric("9223372036854775810")}},
+			fields: []*querypb.Field{{"a", sqltypes.Uint64}},
+			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775809"))},
+			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775810"))},
 			want:   -1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_LONGLONG, mproto.VT_UNSIGNED_FLAG}},
-			left:   []sqltypes.Value{{sqltypes.Numeric("9223372036854775819")}},
-			right:  []sqltypes.Value{{sqltypes.Numeric("9223372036854775810")}},
+			fields: []*querypb.Field{{"a", sqltypes.Uint64}},
+			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775819"))},
+			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775810"))},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_DOUBLE, mproto.VT_ZEROVALUE_FLAG}},
-			left:   []sqltypes.Value{{sqltypes.Fractional("3.14")}},
-			right:  []sqltypes.Value{{sqltypes.Fractional("3.2")}},
+			fields: []*querypb.Field{{"a", sqltypes.Float64}},
+			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Float64, []byte("3.14"))},
+			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Float64, []byte("3.2"))},
 			want:   -1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_DOUBLE, mproto.VT_ZEROVALUE_FLAG}},
-			left:   []sqltypes.Value{{sqltypes.Fractional("123.4")}},
-			right:  []sqltypes.Value{{sqltypes.Fractional("123.2")}},
+			fields: []*querypb.Field{{"a", sqltypes.Float64}},
+			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Float64, []byte("123.4"))},
+			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Float64, []byte("123.2"))},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_STRING, mproto.VT_ZEROVALUE_FLAG}},
-			left:   []sqltypes.Value{{sqltypes.String("abc")}},
-			right:  []sqltypes.Value{{sqltypes.String("abb")}},
+			fields: []*querypb.Field{{"a", sqltypes.Char}},
+			left:   []sqltypes.Value{sqltypes.MakeString([]byte("abc"))},
+			right:  []sqltypes.Value{sqltypes.MakeString([]byte("abb"))},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{{"a", mproto.VT_STRING, mproto.VT_ZEROVALUE_FLAG}},
-			left:   []sqltypes.Value{{sqltypes.String("abc")}},
-			right:  []sqltypes.Value{{sqltypes.String("abd")}},
+			fields: []*querypb.Field{{"a", sqltypes.Char}},
+			left:   []sqltypes.Value{sqltypes.MakeString([]byte("abc"))},
+			right:  []sqltypes.Value{sqltypes.MakeString([]byte("abd"))},
 			want:   -1,
 		},
 	}

@@ -5,16 +5,16 @@
 
 set -e
 
-mkdir tmp
+mkdir tmp tmp/pkg tmp/lib
+cp extract.sh tmp/
+chmod -R 777 tmp
 
-# Collect all the local Python libs we need.
-cp -R $VTTOP/py/* tmp/
-for pypath in $(find $VTROOT/dist -name site-packages); do
-  cp -R $pypath/* tmp/
-done
+# We also need the grpc library.
+docker run --rm -v $PWD/tmp:/out vitess/base bash /out/extract.sh
 
 # Build the Docker image.
 docker build -t vitess/guestbook .
 
 # Clean up.
+docker run --rm -v $PWD/tmp:/out vitess/base bash -c 'rm -rf /out/pkg/* /out/lib/*'
 rm -rf tmp

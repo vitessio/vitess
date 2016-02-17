@@ -41,14 +41,25 @@ def connect(protocol, vtgate_addrs, timeout, *pargs, **kargs):
     dbexceptions.OperationalError: if we are unable to establish the connection
       (for instance, no available instance).
     dbexceptions.Error: if vtgate_addrs have the wrong type.
-    Exception: if the protocol is unknown, or vtgate_addrs are malformed.
+    ValueError: If the protocol is unknown, or vtgate_addrs are malformed.
   """
   if protocol not in vtgate_client_conn_classes:
-    raise Exception('Unknown vtclient protocol', protocol)
-  conn = vtgate_client_conn_classes[protocol](vtgate_addrs, timeout,
-                                              *pargs, **kargs)
+    raise ValueError('Unknown vtgate_client protocol', protocol)
+  conn = vtgate_client_conn_classes[protocol](
+      vtgate_addrs, timeout, *pargs, **kargs)
   conn.dial()
   return conn
+
+
+# Note: Eventually, this object will be replaced by a proto3 CallerID
+# object when all vitess customers have migrated to proto3.
+class CallerID(object):
+  """An object with principal, component, and subcomponent fields."""
+
+  def __init__(self, principal=None, component=None, subcomponent=None):
+    self.principal = principal
+    self.component = component
+    self.subcomponent = subcomponent
 
 
 class VTGateClient(object):
@@ -60,9 +71,6 @@ class VTGateClient(object):
   FIXME(alainjobart) transactional state (the Session object) is currently
   maintained by this object. It should be maintained by the cursor, and just
   returned / passed in with every method that makes sense.
-
-  FIXME(alainjobart) streaming state is also maintained by this object.
-  It should also be maintained by the cursor only.
   """
 
   def __init__(self, addr, timeout):
@@ -72,17 +80,25 @@ class VTGateClient(object):
       addr: server address. Can be protocol dependent.
       timeout: connection timeout (float, in seconds).
     """
-    pass
+    self.addr = addr
+    self.timeout = timeout
+    # self.session is used by vtgate_utils.exponential_backoff_retry.
+    # implementations should use it to store the session object.
+    self.session = None
 
   def dial(self):
-    """Dial to the server. If successful, call close() to close the connection.
+    """Dial to the server.
+
+    If successful, call close() to close the connection.
     """
-    pass
+    raise NotImplementedError('Child class needs to implement this')
 
   def close(self):
-    """Close the connection. This object may be re-used again by calling dial().
+    """Close the connection.
+
+    This object may be re-used again by calling dial().
     """
-    pass
+    raise NotImplementedError('Child class needs to implement this')
 
   def is_closed(self):
     """Checks the connection status.
@@ -90,7 +106,7 @@ class VTGateClient(object):
     Returns:
       True if this connection is closed.
     """
-    pass
+    raise NotImplementedError('Child class needs to implement this')
 
   def cursor(self, *pargs, **kwargs):
     """Creates a cursor instance associated with this connection.
@@ -102,13 +118,7 @@ class VTGateClient(object):
     Returns:
       A new cursor to use on this connection.
     """
-    cursorclass = None
-    if 'cursorclass' in kwargs:
-      cursorclass = kwargs['cursorclass']
-      del kwargs['cursorclass']
-
-    if cursorclass is None:
-      cursorclass = vtgate_cursor.VTGateCursor
+    cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
   def begin(self, effective_caller_id=None):
@@ -118,11 +128,11 @@ class VTGateClient(object):
     should return it and let the cursor store it.
 
     Args:
-      effective_caller_id: Identifies who made this call.
+      effective_caller_id: CallerID Object.
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -130,21 +140,17 @@ class VTGateClient(object):
       dbexceptions.ProgrammingError: the supplied statements are invalid,
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
-
     """
-    pass
+    raise NotImplementedError('Child class needs to implement this')
 
-  def commit(self, effective_caller_id=None):
+  def commit(self):
     """Commits the current transaction.
 
     FIXME(alainjobart): should take the session in.
 
-    Args:
-      effective_caller_id: Identifies who made this call.
-
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -153,19 +159,16 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
+    raise NotImplementedError('Child class needs to implement this')
 
-  def rollback(self, effective_caller_id=None):
+  def rollback(self):
     """Rolls the current transaction back.
 
     FIXME(alainjobart): should take the session in.
 
-    Args:
-      effective_caller_id: Identifies who made this call.
-
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -174,25 +177,25 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
+    raise NotImplementedError('Child class needs to implement this')
 
   def _execute(self, sql, bind_variables, tablet_type,
-               keyspace=None,
+               keyspace_name=None,
                shards=None,
                keyspace_ids=None,
                keyranges=None,
                entity_keyspace_id_map=None, entity_column_name=None,
-               not_in_transaction=False,
-               effective_caller_id=None):
+               not_in_transaction=False, effective_caller_id=None, **kwargs):
     """Executes the given sql.
 
     FIXME(alainjobart): should take the session in.
+    FIXME(alainjobart): implementations have keyspace before tablet_type!
 
     Args:
       sql: query to execute.
       bind_variables: map of bind variables for the query.
       tablet_type: the (string) version of the tablet type.
-      keyspace: if specified, the keyspace to send the query to.
+      keyspace_name: if specified, the keyspace to send the query to.
         Required if any of the routing parameters is used.
         Not required only if using vtgate v3 API.
       shards: if specified, use this list of shards names to route the query.
@@ -215,7 +218,8 @@ class VTGateClient(object):
         Requires keyspace, entity_keyspace_id_map.
       not_in_transaction: force this execute to be outside the current
         transaction, if any.
-      effective_caller_id: Identifies who made this call.
+      effective_caller_id: CallerID object.
+      **kwargs: implementation specific parameters.
 
     Returns:
       results: list of rows.
@@ -225,7 +229,7 @@ class VTGateClient(object):
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -234,14 +238,12 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
+    raise NotImplementedError('Child class needs to implement this')
 
-  def _execute_batch(self, sql_list, bind_variables_list, tablet_type,
-                     keyspace_list=None,
-                     shards_list=None,
-                     keyspace_ids_list=None,
-                     as_transaction=False,
-                     effective_caller_id=None):
+  def _execute_batch(
+      self, sql_list, bind_variables_list, tablet_type,
+      keyspace_list=None, shards_list=None, keyspace_ids_list=None,
+      as_transaction=False, effective_caller_id=None, **kwargs):
     """Executes a list of sql queries.
 
     These follow the same routing rules as _execute.
@@ -264,7 +266,8 @@ class VTGateClient(object):
         Incompatible with shards_list.
         Requires keyspace_list.
       as_transaction: starts and commits a transaction around the statements.
-      effective_caller_id: Identifies who made this call.
+      effective_caller_id: CallerID object.
+      **kwargs: implementation specific parameters.
 
     Returns:
       results: an array of (results, rowcount, lastrowid, fields) tuples,
@@ -272,7 +275,7 @@ class VTGateClient(object):
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -281,14 +284,11 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
+    raise NotImplementedError('Child class needs to implement this')
 
-  def _stream_execute(self, sql, bind_variables, tablet_type,
-                      keyspace=None,
-                      shards=None,
-                      keyspace_ids=None,
-                      keyranges=None,
-                      effective_caller_id=None):
+  def _stream_execute(
+      self, sql, bind_variables, tablet_type, keyspace=None, shards=None,
+      keyspace_ids=None, keyranges=None, effective_caller_id=None, **kwargs):
     """Executes the given sql, in streaming mode.
 
     FIXME(alainjobart): the return values are weird (historical reasons)
@@ -311,17 +311,15 @@ class VTGateClient(object):
       keyranges: if specified, use this list to route the query.
         Incompatible with shards, keyspace_ids.
         Requires keyspace.
-      effective_caller_id: Identifies who made this call.
+      effective_caller_id: CallerID object.
+      **kwargs: implementation specific parameters.
 
     Returns:
-      None
-      0
-      0
-      fields: the field definitions.
+      A (row generator, fields) pair.
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
+      dbexceptions.TransientError: the server is overloaded, and this query
         is asked to back off.
       dbexceptions.IntegrityError: integrity of an index would not be
         guaranteed with this statement.
@@ -330,26 +328,7 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
-
-  def _stream_next(self):
-    """Returns the next result for a streaming query.
-
-    Returns:
-      row: a row of results, or None if done.
-
-    Raises:
-      dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
-        is asked to back off.
-      dbexceptions.IntegrityError: integrity of an index would not be
-        guaranteed with this statement.
-      dbexceptions.DatabaseError: generic database error.
-      dbexceptions.ProgrammingError: the supplied statements are invalid,
-        this is probably an error in the code.
-      dbexceptions.FatalError: this query should not be retried.
-    """
-    pass
+    raise NotImplementedError('Child class needs to implement this')
 
   def get_srv_keyspace(self, keyspace):
     """Returns a SrvKeyspace object.
@@ -363,4 +342,4 @@ class VTGateClient(object):
     Raises:
       TBD
     """
-    pass
+    raise NotImplementedError('Child class needs to implement this')

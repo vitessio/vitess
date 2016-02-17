@@ -4,7 +4,10 @@
 # This image also contains bash, which is needed for startup scripts,
 # such as those found in the Vitess Kubernetes example. The official
 # etcd Docker image on quay.io doesn't have any shell in it.
-FROM golang:1.4-wheezy
+FROM golang:1.5
+
+ADD getsrv.go /go/
+RUN GOBIN=/go/bin go install /go/getsrv.go
 
 RUN mkdir -p src/github.com/coreos && \
     cd src/github.com/coreos && \

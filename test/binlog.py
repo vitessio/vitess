@@ -12,18 +12,17 @@
 import logging
 import unittest
 
+from vtdb import keyrange_constants
+from vtdb import update_stream
+
 import environment
 import tablet
 import utils
 from mysql_flavor import mysql_flavor
 
-from vtdb import keyrange_constants
-from vtdb import update_stream
-
 src_master = tablet.Tablet()
 src_replica = tablet.Tablet()
-src_rdonly1 = tablet.Tablet()
-src_rdonly2 = tablet.Tablet()
+src_rdonly = tablet.Tablet()
 dst_master = tablet.Tablet()
 dst_replica = tablet.Tablet()
 
@@ -35,8 +34,7 @@ def setUpModule():
     setup_procs = [
         src_master.init_mysql(),
         src_replica.init_mysql(),
-        src_rdonly1.init_mysql(),
-        src_rdonly2.init_mysql(),
+        src_rdonly.init_mysql(),
         dst_master.init_mysql(),
         dst_replica.init_mysql(),
         ]
@@ -51,26 +49,23 @@ def setUpModule():
 
     src_master.init_tablet('master', 'test_keyspace', '0')
     src_replica.init_tablet('replica', 'test_keyspace', '0')
-    src_rdonly1.init_tablet('rdonly', 'test_keyspace', '0')
-    src_rdonly2.init_tablet('rdonly', 'test_keyspace', '0')
+    src_rdonly.init_tablet('rdonly', 'test_keyspace', '0')
 
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-
-    for t in [src_master, src_replica, src_rdonly1, src_rdonly2]:
+    for t in [src_master, src_replica, src_rdonly]:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
 
-    for t in [src_master, src_replica, src_rdonly1, src_rdonly2]:
+    for t in [src_master, src_replica, src_rdonly]:
       t.wait_for_vttablet_state('SERVING')
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      src_master.tablet_alias], auto_log=True)
 
     # Create schema
-    logging.debug("Creating schema...")
+    logging.debug('Creating schema...')
     create_table = '''create table test_table(
         id bigint auto_increment,
         keyspace_id bigint(20) unsigned,
@@ -83,6 +78,11 @@ def setUpModule():
                      '-sql=' + create_table,
                      'test_keyspace'], auto_log=True)
 
+    # run a health check on source replica so it responds to discovery
+    # (for binlog players) and on the source rdonlys (for workers)
+    utils.run_vtctl(['RunHealthCheck', src_replica.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', src_rdonly.tablet_alias, 'rdonly'])
+
     # Create destination shard.
     dst_master.init_tablet('master', 'test_keyspace', '-')
     dst_replica.init_tablet('replica', 'test_keyspace', '-')
@@ -91,7 +91,6 @@ def setUpModule():
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-',
                      dst_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # copy the schema
     utils.run_vtctl(['CopySchemaShard', src_replica.tablet_alias,
@@ -99,18 +98,17 @@ def setUpModule():
 
     # run the clone worked (this is a degenerate case, source and destination
     # both have the full keyrange. Happens to work correctly).
-    logging.debug("Running the clone worker to start binlog stream...")
+    logging.debug('Running the clone worker to start binlog stream...')
     utils.run_vtworker(['--cell', 'test_nj',
                         'SplitClone',
-                        '--strategy=-populate_blp_checkpoint',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         'test_keyspace/0'],
-                        auto_log=True)
+                       auto_log=True)
     dst_master.wait_for_binlog_player_count(1)
 
     # Wait for dst_replica to be ready.
-    dst_replica.wait_for_binlog_server_state("Enabled")
+    dst_replica.wait_for_binlog_server_state('Enabled')
   except:
     tearDownModule()
     raise
@@ -120,14 +118,13 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  tablet.kill_tablets([src_master, src_replica, src_rdonly1, src_rdonly2,
+  tablet.kill_tablets([src_master, src_replica, src_rdonly,
                        dst_master, dst_replica])
 
   teardown_procs = [
       src_master.teardown_mysql(),
       src_replica.teardown_mysql(),
-      src_rdonly1.teardown_mysql(),
-      src_rdonly2.teardown_mysql(),
+      src_rdonly.teardown_mysql(),
       dst_master.teardown_mysql(),
       dst_replica.teardown_mysql(),
       ]
@@ -139,8 +136,7 @@ def tearDownModule():
 
   src_master.remove_tree()
   src_replica.remove_tree()
-  src_rdonly1.remove_tree()
-  src_rdonly2.remove_tree()
+  src_rdonly.remove_tree()
   dst_master.remove_tree()
   dst_replica.remove_tree()
 
@@ -162,8 +158,10 @@ class TestBinlog(unittest.TestCase):
     # Vitess tablets default to using utf8, so we insert something crazy and
     # pretend it's latin1. If the binlog player doesn't also pretend it's
     # latin1, it will be inserted as utf8, which will change its value.
-    src_master.mquery("vt_test_keyspace",
-        "INSERT INTO test_table (id, keyspace_id, msg) VALUES (41523, 1, 'Šṛ́rỏé') /* EMD keyspace_id:1 */",
+    src_master.mquery(
+        'vt_test_keyspace',
+        "INSERT INTO test_table (id, keyspace_id, msg) "
+        "VALUES (41523, 1, 'Šṛ́rỏé') /* vtgate:: keyspace_id:00000001 */",
         conn_params={'charset': 'latin1'}, write=True)
 
     # Wait for it to replicate.
@@ -171,13 +169,16 @@ class TestBinlog(unittest.TestCase):
     for stream_event in stream.stream_update(start_position):
       if stream_event.category == update_stream.StreamEvent.POS:
         break
+    stream.close()
 
     # Check the value.
-    data = dst_master.mquery("vt_test_keyspace",
-        "SELECT id, keyspace_id, msg FROM test_table WHERE id=41523 LIMIT 1")
+    data = dst_master.mquery(
+        'vt_test_keyspace',
+        'SELECT id, keyspace_id, msg FROM test_table WHERE id=41523 LIMIT 1')
     self.assertEqual(len(data), 1, 'No data replicated.')
     self.assertEqual(len(data[0]), 3, 'Wrong number of columns.')
-    self.assertEqual(data[0][2], 'Šṛ́rỏé', 'Data corrupted due to wrong charset.')
+    self.assertEqual(data[0][2], 'Šṛ́rỏé',
+                     'Data corrupted due to wrong charset.')
 
   def test_checksum_enabled(self):
     start_position = mysql_flavor().master_position(dst_replica)
@@ -186,14 +187,16 @@ class TestBinlog(unittest.TestCase):
     # Enable binlog_checksum, which will also force a log rotation that should
     # cause binlog streamer to notice the new checksum setting.
     if not mysql_flavor().enable_binlog_checksum(dst_replica):
-      logging.debug('skipping checksum test on flavor without binlog_checksum setting')
+      logging.debug(
+          'skipping checksum test on flavor without binlog_checksum setting')
       return
 
     # Insert something and make sure it comes through intact.
-    sql = "INSERT INTO test_table (id, keyspace_id, msg) VALUES (19283, 1, 'testing checksum enabled') /* EMD keyspace_id:1 */"
-    src_master.mquery("vt_test_keyspace",
-        sql,
-        write=True)
+    sql = (
+        "INSERT INTO test_table (id, keyspace_id, msg) "
+        "VALUES (19283, 1, 'testing checksum enabled') "
+        "/* vtgate:: keyspace_id:00000001 */")
+    src_master.mquery('vt_test_keyspace', sql, write=True)
 
     # Look for it using update stream to see if binlog streamer can talk to
     # dst_replica, which now has binlog_checksum enabled.
@@ -218,10 +221,12 @@ class TestBinlog(unittest.TestCase):
     mysql_flavor().disable_binlog_checksum(dst_replica)
 
     # Insert something and make sure it comes through intact.
-    sql = "INSERT INTO test_table (id, keyspace_id, msg) VALUES (58812, 1, 'testing checksum disabled') /* EMD keyspace_id:1 */"
-    src_master.mquery("vt_test_keyspace",
-        sql,
-        write=True)
+    sql = (
+        "INSERT INTO test_table (id, keyspace_id, msg) "
+        "VALUES (58812, 1, 'testing checksum disabled') "
+        "/* vtgate:: keyspace_id:00000001 */")
+    src_master.mquery(
+        'vt_test_keyspace', sql, write=True)
 
     # Look for it using update stream to see if binlog streamer can talk to
     # dst_replica, which now has binlog_checksum disabled.

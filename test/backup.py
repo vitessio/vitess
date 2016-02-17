@@ -1,20 +1,13 @@
 #!/usr/bin/env python
 
-import warnings
-# Dropping a table inexplicably produces a warning despite
-# the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter("ignore")
-
-import gzip
 import logging
-import os
-import shutil
-from subprocess import call
 import unittest
 
+import MySQLdb
+
 import environment
-import utils
 import tablet
+import utils
 
 use_mysqlctld = True
 
@@ -23,6 +16,7 @@ tablet_replica1 = tablet.Tablet(use_mysqlctld=use_mysqlctld)
 tablet_replica2 = tablet.Tablet(use_mysqlctld=use_mysqlctld)
 
 setup_procs = []
+
 
 def setUpModule():
   try:
@@ -34,7 +28,7 @@ def setUpModule():
         tablet_master.init_mysql(),
         tablet_replica1.init_mysql(),
         tablet_replica2.init_mysql(),
-        ]
+    ]
     if use_mysqlctld:
       tablet_master.wait_for_mysqlctl_socket()
       tablet_replica1.wait_for_mysqlctl_socket()
@@ -44,6 +38,7 @@ def setUpModule():
   except:
     tearDownModule()
     raise
+
 
 def tearDownModule():
   if utils.options.skip_teardown:
@@ -59,7 +54,7 @@ def tearDownModule():
         tablet_master.teardown_mysql(),
         tablet_replica1.teardown_mysql(),
         tablet_replica2.teardown_mysql(),
-        ]
+    ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()
@@ -72,6 +67,7 @@ def tearDownModule():
 
 
 class TestBackup(unittest.TestCase):
+
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
     environment.topo_server().wipe()
@@ -86,11 +82,15 @@ class TestBackup(unittest.TestCase):
   ) Engine=InnoDB'''
 
   def _insert_master(self, index):
-    tablet_master.mquery('vt_test_keyspace',
-                         "insert into vt_insert_test (msg) values ('test %s')" % index, write=True)
+    tablet_master.mquery(
+        'vt_test_keyspace',
+        "insert into vt_insert_test (msg) values ('test %s')" %
+        index, write=True)
 
   def test_backup(self):
-    """test_backup will:
+    """Test backup flow.
+
+    test_backup will:
     - create a shard with master and replica1 only
     - run InitShardMaster
     - insert some data
@@ -115,9 +115,16 @@ class TestBackup(unittest.TestCase):
     self._insert_master(1)
     timeout = 10
     while True:
-      result = tablet_replica1.mquery('vt_test_keyspace', 'select count(*) from vt_insert_test')
-      if result[0][0] == 1:
-        break
+      try:
+        result = tablet_replica1.mquery(
+            'vt_test_keyspace', 'select count(*) from vt_insert_test')
+        if result[0][0] == 1:
+          break
+      except MySQLdb.DatabaseError:
+        # ignore exceptions, we'll just timeout (the tablet creation
+        # can take some time to replicate, and we get a 'table vt_insert_test
+        # does not exist exception in some rare cases)
+        logging.exception('exception waiting for data to replicate')
       timeout = utils.wait_step('slave tablet getting data', timeout)
 
     # backup the slave
@@ -136,31 +143,33 @@ class TestBackup(unittest.TestCase):
     # check the new slave has the data
     timeout = 10
     while True:
-      result = tablet_replica2.mquery('vt_test_keyspace', 'select count(*) from vt_insert_test')
+      result = tablet_replica2.mquery(
+          'vt_test_keyspace', 'select count(*) from vt_insert_test')
       if result[0][0] == 2:
         break
       timeout = utils.wait_step('new slave tablet getting data', timeout)
 
     # list the backups
-    backups, err = utils.run_vtctl(tablet.get_backup_storage_flags() +
-                                   ['ListBackups', 'test_keyspace/0'],
-                                   mode=utils.VTCTL_VTCTL, trap_output=True)
+    backups, _ = utils.run_vtctl(tablet.get_backup_storage_flags() +
+                                 ['ListBackups', 'test_keyspace/0'],
+                                 mode=utils.VTCTL_VTCTL, trap_output=True)
     backups = backups.splitlines()
-    logging.debug("list of backups: %s", backups)
+    logging.debug('list of backups: %s', backups)
     self.assertEqual(len(backups), 1)
-    self.assertTrue(backups[0].startswith(tablet_replica1.tablet_alias))
+    self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
 
     # remove the backup
-    utils.run_vtctl(tablet.get_backup_storage_flags() +
-                    ['RemoveBackup', 'test_keyspace/0', backups[0]],
-                     auto_log=True, mode=utils.VTCTL_VTCTL)
+    utils.run_vtctl(
+        tablet.get_backup_storage_flags() +
+        ['RemoveBackup', 'test_keyspace/0', backups[0]],
+        auto_log=True, mode=utils.VTCTL_VTCTL)
 
     # make sure the list of backups is empty now
-    backups, err = utils.run_vtctl(tablet.get_backup_storage_flags() +
-                                   ['ListBackups', 'test_keyspace/0'],
-                                   mode=utils.VTCTL_VTCTL, trap_output=True)
+    backups, _ = utils.run_vtctl(tablet.get_backup_storage_flags() +
+                                 ['ListBackups', 'test_keyspace/0'],
+                                 mode=utils.VTCTL_VTCTL, trap_output=True)
     backups = backups.splitlines()
-    logging.debug("list of backups after remove: %s", backups)
+    logging.debug('list of backups after remove: %s', backups)
     self.assertEqual(len(backups), 0)
 
     for t in tablet_master, tablet_replica1, tablet_replica2:

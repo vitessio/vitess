@@ -5,9 +5,8 @@
 package automation
 
 import (
-	"fmt"
-
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 )
 
@@ -16,18 +15,15 @@ type SplitCloneTask struct {
 }
 
 // Run is part of the Task interface.
-func (t *SplitCloneTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
-	keyspaceAndSourceShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
+func (t *SplitCloneTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
 	// TODO(mberlin): Add parameters for the following options?
 	//                        '--source_reader_count', '1',
-	//                        '--destination_pack_count', '1',
 	//                        '--destination_writer_count', '1',
-	//                        '--strategy=-populate_blp_checkpoint',
-	args := []string{"SplitClone", "--strategy=-populate_blp_checkpoint"}
-	if excludeTables, ok := parameters["exclude_tables"]; ok {
+	args := []string{"SplitClone"}
+	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
-	args = append(args, keyspaceAndSourceShard)
+	args = append(args, topoproto.KeyspaceShardString(parameters["keyspace"], parameters["source_shard"]))
 	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 
 	// TODO(mberlin): Remove explicit reset when vtworker supports it implicility.

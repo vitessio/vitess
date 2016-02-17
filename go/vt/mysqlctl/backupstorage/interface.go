@@ -20,8 +20,8 @@ var (
 
 // BackupHandle describes an individual backup.
 type BackupHandle interface {
-	// Bucket is the location of the backup. Will contain keyspace/shard.
-	Bucket() string
+	// Directory is the location of the backup. Will contain keyspace/shard.
+	Directory() string
 
 	// Name is the individual name of the backup. Will contain
 	// tabletAlias-timestamp.
@@ -52,23 +52,28 @@ type BackupHandle interface {
 
 // BackupStorage is the interface to the storage system
 type BackupStorage interface {
-	// ListBackups returns all the backups in a bucket.  The
+	// ListBackups returns all the backups in a directory.  The
 	// returned backups are read-only (ReadFile can be called, but
 	// AddFile/EndBackup/AbortBackup cannot).
 	// The backups are string-sorted by Name(), ascending (ends up
 	// being the oldest backup first).
-	ListBackups(bucket string) ([]BackupHandle, error)
+	ListBackups(dir string) ([]BackupHandle, error)
 
 	// StartBackup creates a new backup with the given name.  If a
 	// backup with the same name already exists, it's an error.
 	// The returned backup is read-write
 	// (AddFile/EndBackup/AbortBackup cann all be called, not
 	// ReadFile)
-	StartBackup(bucket, name string) (BackupHandle, error)
+	StartBackup(dir, name string) (BackupHandle, error)
 
 	// RemoveBackup removes all the data associated with a backup.
 	// It will not appear in ListBackups after RemoveBackup succeeds.
-	RemoveBackup(bucket, name string) error
+	RemoveBackup(dir, name string) error
+
+	// Close frees resources associated with an active backup session,
+	// such as closing connections. Implementations of BackupStorage must support
+	// being reused after Close() is called.
+	Close() error
 }
 
 // BackupStorageMap contains the registered implementations for BackupStorage
@@ -76,6 +81,7 @@ var BackupStorageMap = make(map[string]BackupStorage)
 
 // GetBackupStorage returns the current BackupStorage implementation.
 // Should be called after flags have been initialized.
+// When all operations are done, call BackupStorage.Close() to free resources.
 func GetBackupStorage() (BackupStorage, error) {
 	bs, ok := BackupStorageMap[*BackupStorageImplementation]
 	if !ok {

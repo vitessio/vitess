@@ -5,21 +5,24 @@
 set -e
 
 cell='test'
-port=15001
+web_port=15001 # This is also the bsonrpc port.
+grpc_port=15991
 
-hostname=`hostname -f`
-
-# We expect to find zk-client-conf.json in the same folder as this script.
 script_root=`dirname "${BASH_SOURCE}"`
-
-# Set up environment.
-export LD_LIBRARY_PATH=$VTROOT/dist/vt-zookeeper-3.3.5/lib:$LD_LIBRARY_PATH
-export ZK_CLIENT_CONFIG=$script_root/zk-client-conf.json
-mkdir -p $VTDATAROOT/tmp
+source $script_root/env.sh
 
 # Start vtgate.
-$VTROOT/bin/vtgate -log_dir $VTDATAROOT/tmp -port $port -cell $cell \
+$VTROOT/bin/vtgate \
+  -log_dir $VTDATAROOT/tmp \
+  -port $web_port \
+  -grpc_port $grpc_port \
+  -cell $cell \
+  -tablet_protocol grpc \
+  -service_map 'bsonrpc-vt-vtgateservice,grpc-vtgateservice' \
+  -pid_file $VTDATAROOT/tmp/vtgate.pid \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
-echo "Access vtgate at http://$hostname:$port/debug/status"
+
+echo "Access vtgate at http://$hostname:$web_port/debug/status"
 
 disown -a
+

@@ -18,27 +18,31 @@ import (
 
 var (
 	querylogzHeader = []byte(`
-		<tr>
-			<th>Method</th>
-			<th>Context</th>
-			<th>Start</th>
-			<th>End</th>
-			<th>Duration</th>
-			<th>MySQL time</th>
-			<th>Conn wait</th>
-			<th>Plan</th>
-			<th>SQL</th>
-			<th>Queries</th>
-			<th>Sources</th>
-			<th>RowsAffected</th>
-			<th>Response Size</th>
-			<th>Cache Hits</th>
-			<th>Cache Misses</th>
-			<th>Cache Absent</th>
-			<th>Cache Invalidations</th>
-			<th>Transaction ID</th>
-			<th>Error</th>
-		</tr>
+		<thead>
+			<tr>
+				<th>Method</th>
+				<th>Context</th>
+				<th>Effective Caller</th>
+				<th>Immediate Caller</th>
+				<th>Start</th>
+				<th>End</th>
+				<th>Duration</th>
+				<th>MySQL time</th>
+				<th>Conn wait</th>
+				<th>Plan</th>
+				<th>SQL</th>
+				<th>Queries</th>
+				<th>Sources</th>
+				<th>RowsAffected</th>
+				<th>Response Size</th>
+				<th>Cache Hits</th>
+				<th>Cache Misses</th>
+				<th>Cache Absent</th>
+				<th>Cache Invalidations</th>
+				<th>Transaction ID</th>
+				<th>Error</th>
+			</tr>
+		</thead>
 	`)
 	querylogzFuncMap = template.FuncMap{
 		"stampMicro":   func(t time.Time) string { return t.Format(time.StampMicro) },
@@ -49,13 +53,15 @@ var (
 		<tr class=".ColorLevel">
 			<td>{{.Method}}</td>
 			<td>{{.ContextHTML}}</td>
+			<td>{{.EffectiveCaller}}</td>
+			<td>{{.ImmediateCaller}}</td>
 			<td>{{.StartTime | stampMicro}}</td>
 			<td>{{.EndTime | stampMicro}}</td>
 			<td>{{.TotalTime.Seconds}}</td>
 			<td>{{.MysqlResponseTime.Seconds}}</td>
 			<td>{{.WaitingForConnection.Seconds}}</td>
 			<td>{{.PlanType}}</td>
-			<td>{{.OriginalSql | unquote | cssWrappable}}</td>
+			<td>{{.OriginalSQL | unquote | cssWrappable}}</td>
 			<td>{{.NumberOfQueries}}</td>
 			<td>{{.FmtQuerySources}}</td>
 			<td>{{.RowsAffected}}</td>
@@ -72,8 +78,8 @@ var (
 
 func init() {
 	http.HandleFunc("/querylogz", func(w http.ResponseWriter, r *http.Request) {
-		ch := SqlQueryLogger.Subscribe("querylogz")
-		defer SqlQueryLogger.Unsubscribe(ch)
+		ch := StatsLogger.Subscribe("querylogz")
+		defer StatsLogger.Unsubscribe(ch)
 		querylogzHandler(ch, w, r)
 	})
 }
@@ -100,9 +106,9 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 				return
 			default:
 			}
-			stats, ok := out.(*SQLQueryStats)
+			stats, ok := out.(*LogStats)
 			if !ok {
-				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name(), out, &SQLQueryStats{})
+				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name(), out, &LogStats{})
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")
@@ -118,7 +124,7 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 				level = "high"
 			}
 			tmplData := struct {
-				*SQLQueryStats
+				*LogStats
 				ColorLevel string
 			}{stats, level}
 			if err := querylogzTmpl.Execute(w, tmplData); err != nil {

@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"flag"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,36 +13,36 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// verticalSqlQuery is a local QueryService implementation to support the tests
-type verticalSqlQuery struct {
+// verticalTabletServer is a local QueryService implementation to support the tests
+type verticalTabletServer struct {
 	queryservice.ErrorQueryService
-	t *testing.T
+	t        *testing.T
+	keyspace string
+	shard    string
 }
 
-func (sq *verticalSqlQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
 	var err error
-	parts := strings.Split(query.Sql, " ")
+	parts := strings.Split(sql, " ")
 	for _, part := range parts {
 		if strings.HasPrefix(part, "id>=") {
 			min, err = strconv.Atoi(part[4:])
@@ -52,18 +53,18 @@ func (sq *verticalSqlQuery) StreamExecute(ctx context.Context, target *pb.Target
 			max, err = strconv.Atoi(part[3:])
 		}
 	}
-	sq.t.Logf("verticalSqlQuery: got query: %v with min %v max %v", *query, min, max)
+	sq.t.Logf("verticalTabletServer: got query: %v with min %v max %v", sql, min, max)
 
 	// Send the headers
-	if err := sendReply(&mproto.QueryResult{
-		Fields: []mproto.Field{
-			mproto.Field{
+	if err := sendReply(&sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
 				Name: "id",
-				Type: mproto.VT_LONGLONG,
+				Type: sqltypes.Int64,
 			},
-			mproto.Field{
+			{
 				Name: "msg",
-				Type: mproto.VT_VARCHAR,
+				Type: sqltypes.VarChar,
 			},
 		},
 	}); err != nil {
@@ -72,9 +73,9 @@ func (sq *verticalSqlQuery) StreamExecute(ctx context.Context, target *pb.Target
 
 	// Send the values
 	for i := min; i < max; i++ {
-		if err := sendReply(&mproto.QueryResult{
+		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 				},
@@ -84,6 +85,21 @@ func (sq *verticalSqlQuery) StreamExecute(ctx context.Context, target *pb.Target
 		}
 	}
 	return nil
+}
+
+func (sq *verticalTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
 }
 
 // VerticalFakePoolConnection implements dbconnpool.PoolConnection
@@ -99,16 +115,16 @@ func NewVerticalFakePoolConnectionQuery(t *testing.T, query string, err error) *
 	return &VerticalFakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			ExpectedExecuteFetch{
+			{
 				Query:       query,
-				QueryResult: &mproto.QueryResult{},
+				QueryResult: &sqltypes.Result{},
 				Error:       err,
 			},
 		},
 	}
 }
 
-func (fpc *VerticalFakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (fpc *VerticalFakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if fpc.ExpectedExecuteFetchIndex >= len(fpc.ExpectedExecuteFetch) {
 		fpc.t.Errorf("got unexpected out of bound fetch: %v >= %v", fpc.ExpectedExecuteFetchIndex, len(fpc.ExpectedExecuteFetch))
 		return nil, fmt.Errorf("unexpected out of bound fetch")
@@ -135,7 +151,7 @@ func (fpc *VerticalFakePoolConnection) ExecuteFetch(query string, maxrows int, w
 	return fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].QueryResult, nil
 }
 
-func (fpc *VerticalFakePoolConnection) ExecuteStreamFetch(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (fpc *VerticalFakePoolConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	return nil
 }
 
@@ -164,21 +180,21 @@ func VerticalSourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection
 		return &VerticalFakePoolConnection{
 			t: t,
 			ExpectedExecuteFetch: []ExpectedExecuteFetch{
-				ExpectedExecuteFetch{
+				{
 					Query: "SELECT MIN(id), MAX(id) FROM vt_source_ks.moving1",
-					QueryResult: &mproto.QueryResult{
-						Fields: []mproto.Field{
-							mproto.Field{
+					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
 								Name: "min",
-								Type: mproto.VT_LONGLONG,
+								Type: sqltypes.Int64,
 							},
-							mproto.Field{
+							{
 								Name: "max",
-								Type: mproto.VT_LONGLONG,
+								Type: sqltypes.Int64,
 							},
 						},
 						Rows: [][]sqltypes.Value{
-							[]sqltypes.Value{
+							{
 								sqltypes.MakeString([]byte("100")),
 								sqltypes.MakeString([]byte("200")),
 							},
@@ -223,92 +239,101 @@ func VerticalDestinationsFactory(t *testing.T, insertCount int64) func() (dbconn
 	}
 }
 
-func TestVerticalSplitClonePopulateBlpCheckpoint(t *testing.T) {
-	testVerticalSplitClone(t, "-populate_blp_checkpoint")
-}
+func TestVerticalSplitClone(t *testing.T) {
+	db := fakesqldb.Register()
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ctx := context.Background()
+	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
-func testVerticalSplitClone(t *testing.T, strategy string) {
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
-
-	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
-		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
-	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
-	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
 	// Create the destination keyspace with the appropriate ServedFromMap
-	ki := &pbt.Keyspace{
-		ServedFroms: []*pbt.Keyspace_ServedFrom{
-			&pbt.Keyspace_ServedFrom{
-				TabletType: pbt.TabletType_MASTER,
+	ki := &topodatapb.Keyspace{
+		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
+			{
+				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   "source_ks",
 			},
-			&pbt.Keyspace_ServedFrom{
-				TabletType: pbt.TabletType_REPLICA,
+			{
+				TabletType: topodatapb.TabletType_REPLICA,
 				Keyspace:   "source_ks",
 			},
-			&pbt.Keyspace_ServedFrom{
-				TabletType: pbt.TabletType_RDONLY,
+			{
+				TabletType: topodatapb.TabletType_RDONLY,
 				Keyspace:   "source_ks",
 			},
 		},
 	}
-	ctx := context.Background()
-	wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
+	wi.wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
-	destMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
-		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
-	destRdonly := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+	destMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
+		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+	destRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
+		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, destMaster, destRdonly} {
-		ft.StartActionLoop(t, wr)
+		ft.StartActionLoop(t, wi.wr)
 		defer ft.StopActionLoop(t)
 	}
 
 	// add the topo and schema data we'll need
-	if err := wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, true); err != nil {
+	if err := wi.wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
-	if err := wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil, true); err != nil {
+	if err := wi.wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	gwrk, err := NewVerticalSplitCloneWorker(wr, "cell1", "destination_ks", "0", []string{"moving.*", "view1"}, strategy, 10 /*sourceReaderCount*/, 4 /*destinationPackCount*/, 1 /*minTableSizeForSplit*/, 10 /*destinationWriterCount*/)
+	subFlags := flag.NewFlagSet("SplitClone", flag.ContinueOnError)
+	gwrk, err := commandVerticalSplitClone(wi, wi.wr, subFlags, []string{
+		"-tables", "moving.*,view1",
+		"-source_reader_count", "10",
+		"-destination_pack_count", "4",
+		"-min_table_size_for_split", "1",
+		"-destination_writer_count", "10",
+		"destination_ks/0",
+	})
 	if err != nil {
 		t.Errorf("Worker creation failed: %v", err)
 	}
 	wrk := gwrk.(*VerticalSplitCloneWorker)
 
 	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
-		sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
+		sourceRdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
-			TableDefinitions: []*myproto.TableDefinition{
-				&myproto.TableDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
 					Name:              "moving1",
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TableBaseTable,
+					Type:              tmutils.TableBaseTable,
 					// This informs how many rows we can pack into a single insert
 					DataLength: 2048,
 				},
-				&myproto.TableDefinition{
+				{
 					Name: "view1",
-					Type: myproto.TableView,
+					Type: tmutils.TableView,
 				},
 			},
 		}
 		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = VerticalSourceRdonlyFactory(t)
-		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-			GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+			GTIDSet: replication.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 		}
 		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 			"STOP SLAVE",
 			"START SLAVE",
 		}
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalSqlQuery{t: t})
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalTabletServer{
+			t:        t,
+			keyspace: sourceRdonly.Tablet.Keyspace,
+			shard:    sourceRdonly.Tablet.Shard,
+		})
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so

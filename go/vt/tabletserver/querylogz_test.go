@@ -13,11 +13,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
 )
 
-func TestQuerylogzHandlerInvalidSqlQueryStats(t *testing.T) {
+func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
 	response := httptest.NewRecorder()
 	ch := make(chan interface{}, 1)
@@ -25,15 +26,15 @@ func TestQuerylogzHandlerInvalidSqlQueryStats(t *testing.T) {
 	querylogzHandler(ch, response, req)
 	close(ch)
 	if !strings.Contains(response.Body.String(), "error") {
-		t.Fatalf("should show an error page for an non SqlQueryStats")
+		t.Fatalf("should show an error page for an non LogStats")
 	}
 }
 
 func TestQuerylogzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := newSqlQueryStats("Execute", context.Background())
-	logStats.PlanType = planbuilder.PLAN_PASS_SELECT.String()
-	logStats.OriginalSql = "select name from test_table limit 1000"
+	logStats := newLogStats("Execute", context.Background())
+	logStats.PlanType = planbuilder.PlanPassSelect.String()
+	logStats.OriginalSQL = "select name from test_table limit 1000"
 	logStats.RowsAffected = 1000
 	logStats.NumberOfQueries = 1
 	logStats.StartTime, _ = time.Parse("Jan 2 15:04:05", "Nov 29 13:33:09")
@@ -44,11 +45,18 @@ func TestQuerylogzHandler(t *testing.T) {
 	logStats.CacheMisses = 2
 	logStats.CacheInvalidations = 3
 	logStats.TransactionID = 131
+	logStats.ctx = callerid.NewContext(
+		context.Background(),
+		callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
+		callerid.NewImmediateCallerID("immediate-caller"),
+	)
 
 	// fast query
 	fastQueryPattern := []string{
 		`<td>Execute</td>`,
 		`<td></td>`,
+		`<td>effective-caller</td>`,
+		`<td>immediate-caller</td>`,
 		`<td>Nov 29 13:33:09.000000</td>`,
 		`<td>Nov 29 13:33:09.001000</td>`,
 		`<td>0.001</td>`,
@@ -80,6 +88,8 @@ func TestQuerylogzHandler(t *testing.T) {
 	mediumQueryPattern := []string{
 		`<td>Execute</td>`,
 		`<td></td>`,
+		`<td>effective-caller</td>`,
+		`<td>immediate-caller</td>`,
 		`<td>Nov 29 13:33:09.000000</td>`,
 		`<td>Nov 29 13:33:09.020000</td>`,
 		`<td>0.02</td>`,
@@ -111,6 +121,8 @@ func TestQuerylogzHandler(t *testing.T) {
 	slowQueryPattern := []string{
 		`<td>Execute</td>`,
 		`<td></td>`,
+		`<td>effective-caller</td>`,
+		`<td>immediate-caller</td>`,
 		`<td>Nov 29 13:33:09.000000</td>`,
 		`<td>Nov 29 13:33:09.500000</td>`,
 		`<td>0.5</td>`,
@@ -138,7 +150,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 }
 
-func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *SQLQueryStats, page []byte) {
+func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *LogStats, page []byte) {
 	matcher := regexp.MustCompile(strings.Join(pattern, `\s*`))
 	if !matcher.Match(page) {
 		t.Fatalf("querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))

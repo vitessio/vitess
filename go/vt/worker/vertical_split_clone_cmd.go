@@ -52,7 +52,7 @@ const verticalSplitCloneHTML2 = `
       <LABEL for="tables">Tables: </LABEL>
         <INPUT type="text" id="tables" name="tables" value="moving.*"></BR>
       <LABEL for="strategy">Strategy: </LABEL>
-        <INPUT type="text" id="strategy" name="strategy" value="-populate_blp_checkpoint"></BR>
+        <INPUT type="text" id="strategy" name="strategy" value=""></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
       <LABEL for="destinationPackCount">Destination Pack Count: </LABEL>
@@ -68,8 +68,8 @@ const verticalSplitCloneHTML2 = `
   <h1>Help</h1>
     <p>Strategy can have the following values, comma separated:</p>
     <ul>
-      <li><b>populateBlpCheckpoint</b>: creates (if necessary) and populates the blp_checkpoint table in the destination. Required for filtered replication to start.</li>
-      <li><b>dontStartBinlogPlayer</b>: (requires populateBlpCheckpoint) will setup, but not start binlog replication on the destination. The flag has to be manually cleared from the _vt.blp_checkpoint table.</li>
+      <li><b>skipPopulateBlpCheckpoint</b>: skips creating (if necessary) and populating the blp_checkpoint table in the destination. Not skipped by default because it's required for filtered replication to start.</li>
+      <li><b>dontStartBinlogPlayer</b>: (requires skipPopulateBlpCheckpoint to be false) will setup, but not start binlog replication on the destination. The flag has to be manually cleared from the _vt.blp_checkpoint table.</li>
       <li><b>skipSetSourceShards</b>: we won't set SourceShards on the destination shards, disabling filtered replication. Useful for worker tests.</li>
     </ul>
   </body>
@@ -80,7 +80,7 @@ var verticalSplitCloneTemplate2 = mustParseTemplate("verticalSplitClone2", verti
 
 func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -strategy=-help' for more info")
+	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker VerticalSplitClone --strategy=-help k/s' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
@@ -111,7 +111,9 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 // keyspacesWithServedFrom returns all the keyspaces that have ServedFrom set
 // to one value.
 func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]string, error) {
-	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +126,9 @@ func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]stri
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			ki, err := wr.TopoServer().GetKeyspace(ctx, keyspace)
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+			ki, err := wr.TopoServer().GetKeyspace(shortCtx, keyspace)
+			cancel()
 			if err != nil {
 				rec.RecordError(err)
 				return

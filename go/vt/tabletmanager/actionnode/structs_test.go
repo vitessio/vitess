@@ -6,7 +6,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // These tests encode a slaveWasRestartedTestArgs (same as
@@ -14,21 +14,19 @@ import (
 // decode it as a SlaveWasRestartedArgs, and vice versa
 
 type slaveWasRestartedTestArgs struct {
-	Parent               *pb.TabletAlias
+	Parent               *topodatapb.TabletAlias
 	ExpectedMasterAddr   string
 	ExpectedMasterIPAddr string
-	ScrapStragglers      bool
 }
 
 func TestMissingFieldsJson(t *testing.T) {
 	swra := &slaveWasRestartedTestArgs{
-		Parent: &pb.TabletAlias{
+		Parent: &topodatapb.TabletAlias{
 			Uid:  1,
 			Cell: "aa",
 		},
 		ExpectedMasterAddr:   "a1",
 		ExpectedMasterIPAddr: "i1",
-		ScrapStragglers:      true,
 	}
 	data, err := json.MarshalIndent(swra, "", "  ")
 	if err != nil {
@@ -43,7 +41,7 @@ func TestMissingFieldsJson(t *testing.T) {
 
 func TestExtraFieldsJson(t *testing.T) {
 	swra := &SlaveWasRestartedArgs{
-		Parent: &pb.TabletAlias{
+		Parent: &topodatapb.TabletAlias{
 			Uid:  1,
 			Cell: "aa",
 		},
@@ -61,13 +59,12 @@ func TestExtraFieldsJson(t *testing.T) {
 
 func TestMissingFieldsBson(t *testing.T) {
 	swra := &slaveWasRestartedTestArgs{
-		Parent: &pb.TabletAlias{
+		Parent: &topodatapb.TabletAlias{
 			Uid:  1,
 			Cell: "aa",
 		},
 		ExpectedMasterAddr:   "a1",
 		ExpectedMasterIPAddr: "i1",
-		ScrapStragglers:      true,
 	}
 	data, err := bson.Marshal(swra)
 	if err != nil {
@@ -83,7 +80,7 @@ func TestMissingFieldsBson(t *testing.T) {
 
 func TestExtraFieldsBson(t *testing.T) {
 	swra := &SlaveWasRestartedArgs{
-		Parent: &pb.TabletAlias{
+		Parent: &topodatapb.TabletAlias{
 			Uid:  1,
 			Cell: "aa",
 		},

@@ -1,23 +1,34 @@
 kind: ReplicationController
 apiVersion: v1
 metadata:
-  name: vtgate
-  labels: {name: vtgate}
+  name: vtgate-{{cell}}
 spec:
   replicas: {{replicas}}
-  selector: {name: vtgate}
   template:
     metadata:
-      labels: {name: vtgate}
+      labels:
+        component: vtgate
+        cell: {{cell}}
+        app: vitess
     spec:
       containers:
         - name: vtgate
           image: vitess/lite
+          livenessProbe:
+            httpGet:
+              path: /debug/vars
+              port: 15001
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
           volumeMounts:
             - name: syslog
               mountPath: /dev/log
             - name: vtdataroot
               mountPath: /vt/vtdataroot
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
           command:
             - sh
             - "-c"
@@ -26,11 +37,14 @@ spec:
               chown -R vitess /vt &&
               su -p -c "/vt/bin/vtgate
               -topo_implementation etcd
-              -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
+              -etcd_global_addrs http://etcd-global:4001
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
               -port 15001
-              -cell test" vitess
+              -grpc_port 15991
+              -tablet_protocol grpc
+              -service_map 'bsonrpc-vt-vtgateservice,grpc-vtgateservice'
+              -cell {{cell}}" vitess
       volumes:
         - name: syslog
           hostPath: {path: /dev/log}

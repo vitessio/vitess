@@ -1,26 +1,14 @@
-**Contents:**
-
-* [Overview](#overview)
-* [Comparisons to other storage options](#comparisons-to-other-storage-options)
-* [Features](#features)
-* [Architecture](#architecture)
-* [History](#history)
-
-<a name="overview"></a>
-
 Vitess is a database solution for scaling MySQL. It's architected to run as
 effectively in a public or private cloud architecture as it does on dedicated
 hardware. It combines and extends many important MySQL features with the
 scalability of a NoSQL database. Vitess has been serving all YouTube database
 traffic since 2011.
 
-### Vitess on Kubernetes
+## Vitess on Kubernetes
 
 Kubernetes is an open-source orchestration system for Docker containers, and Vitess is the logical storage engine choice for Kubernetes users.
 
 Kubernetes handles scheduling onto nodes in a compute cluster, actively manages workloads on those nodes, and groups containers comprising an application for easy management and discovery. Using Kubernetes, you can easily create and manage a Vitess cluster, out of the box.
-
-### Vitess on Local Hardware
 
 ## Comparisons to other storage options
 
@@ -31,10 +19,13 @@ The following sections compare Vitess to two common alternatives, a vanilla MySQ
 Vitess improves a vanilla MySQL implementation in several ways:
 
 <table class="comparison">
+  <thead>
   <tr>
     <th>Vanilla MySQL</th>
     <th>Vitess</th>
   </tr>
+  </thead>
+  <tbody>
   <tr>
     <td>Every MySQL connection has a memory overhead that ranges between 256KB and almost 3MB, depending on which MySQL release you're using. As your user base grows, you need to add RAM to support additional connections, but the RAM does not contribute to faster queries. In addition, there is a significant CPU cost associated with obtaining the connections.</td>
     <td>Vitess' BSON-based protocol creates very lightweight connections that are around 32KB. Vitess' connection pooling feature uses Go's concurrency support to map these lightweight connections to a small pool of MySQL connections. As such, Vitess can easily handle thousands of connections.</td>
@@ -55,6 +46,7 @@ Vitess improves a vanilla MySQL implementation in several ways:
     <td>A MySQL cluster can have custom database configurations for different workloads, like a master database for writes, fast read-only replicas for web clients, slower read-only replicas for batch jobs, and so forth. If the database has horizontal sharding, the setup is repeated for each shard, and the app needs baked-in logic to know how to find the right database.</td>
     <td>Vitess uses a topology backed by a consistent data store, like etcd or ZooKeeper. This means the cluster view is always up-to-date and consistent for different clients. Vitess also provides a proxy that routes queries efficiently to the most appropriate MySQL instance.</td>
   </tr>
+  </tbody>
 </table>
 
 ### Vitess vs. NoSQL
@@ -62,10 +54,13 @@ Vitess improves a vanilla MySQL implementation in several ways:
 If you're considering a NoSQL solution primarily because of concerns about the scalability of MySQL, Vitess might be a more appropriate choice for your application. While NoSQL provides great support for unstructured data, Vitess still offers several benefits not available in NoSQL datastores:
 
 <table class="comparison">
+  <thead>
   <tr>
     <th>NoSQL</th>
     <th>Vitess</th>
   </tr>
+  </thead>
+  <tbody>
   <tr>
     <td>NoSQL databases do not define relationships between database tables, and only support a subset of the SQL language.</td>
     <td>Vitess is not a simple key-value store. It supports complex query semantics such as where clauses, JOINS, aggregation functions, and more.</td>
@@ -82,6 +77,7 @@ If you're considering a NoSQL solution primarily because of concerns about the s
     <td>NoSQL solutions provide limited support for database indexes compared to MySQL.</td>
     <td>Vitess allows you to use all of MySQL's indexing functionality to optimize query performance.</td>
   </tr>
+  </tbody>
 </table>
 
 ## Features
@@ -125,7 +121,9 @@ Vitess tools and servers are designed to help you whether you start with a compl
 
 The diagram below illustrates Vitess' components:
 
-![Diagram showing Vitess implementation](https://raw.githubusercontent.com/youtube/vitess/master/doc/VitessOverview.png)
+<div style="overflow-x: scroll">
+<img src="https://raw.githubusercontent.com/youtube/vitess/master/doc/VitessOverview.png" alt="Diagram showing Vitess implementation" width="509" height="322"/>
+</div>
 
 ### Topology
 
@@ -143,11 +141,7 @@ To route queries, vtgate considers the sharding scheme, required latency, and th
 
 **vttablet** is a proxy server that sits in front of a MySQL database. A Vitess implementation has one vttablet for each MySQL instance.
 
-vttablet performs tasks that attempt to maximize throughput as well as protect MySQL from harmful queries. Its features include connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates, and it provides streaming services that are used for [filtered replication](Resharding.md#filtered-replication) and data exports.
-
-<!--
-It is a newer version of and provides all of the same benefits as vtocc, including connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates. It also provides streaming services that are used for [filtered replication](Resharding.md#filtered-replication) and data export.
--->
+vttablet performs tasks that attempt to maximize throughput as well as protect MySQL from harmful queries. Its features include connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates, and it provides streaming services that are used for [filtered replication](/user-guide/sharding.html#filtered-replication) and data exports.
 
 A lightweight Vitess implementation uses vttablet as a smart connection proxy that serves queries for a single MySQL database. By running vttablet in front of your MySQL database and changing your app to use the Vitess client instead of your MySQL driver, your app benefits from vttablet's connection pooling, query rewriting, and query de-duping features.
 

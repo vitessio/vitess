@@ -10,8 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 // Sample event data for MySQL 5.6.
@@ -34,7 +33,7 @@ func TestMysql56IsGTID(t *testing.T) {
 }
 
 func TestMysql56HasGTID(t *testing.T) {
-	format := blproto.BinlogFormat{}
+	format := replication.BinlogFormat{}
 	if got, want := mysql56FormatEvent.HasGTID(format), false; got != want {
 		t.Errorf("%#v.HasGTID() = %#v, want %#v", mysql56FormatEvent, got, want)
 	}
@@ -69,8 +68,8 @@ func TestMysql56StripChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query() error: %v", err)
 	}
-	if want := "insert into test_table (msg) values ('hello')"; string(gotQuery.Sql) != want {
-		t.Errorf("query = %#v, want %#v", string(gotQuery.Sql), want)
+	if want := "insert into test_table (msg) values ('hello')"; string(gotQuery.SQL) != want {
+		t.Errorf("query = %#v, want %#v", string(gotQuery.SQL), want)
 	}
 }
 
@@ -99,8 +98,8 @@ func TestMysql56GTID(t *testing.T) {
 
 func TestMysql56ParseGTID(t *testing.T) {
 	input := "00010203-0405-0607-0809-0A0B0C0D0E0F:56789"
-	want := proto.Mysql56GTID{
-		Server:   proto.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+	want := replication.Mysql56GTID{
+		Server:   replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 		Sequence: 56789,
 	}
 
@@ -116,11 +115,11 @@ func TestMysql56ParseGTID(t *testing.T) {
 func TestMysql56ParseReplicationPosition(t *testing.T) {
 	input := "00010203-0405-0607-0809-0a0b0c0d0e0f:1-2"
 
-	sid := proto.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	var set proto.GTIDSet = proto.Mysql56GTIDSet{}
-	set = set.AddGTID(proto.Mysql56GTID{Server: sid, Sequence: 1})
-	set = set.AddGTID(proto.Mysql56GTID{Server: sid, Sequence: 2})
-	want := proto.ReplicationPosition{GTIDSet: set}
+	sid := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	var set replication.GTIDSet = replication.Mysql56GTIDSet{}
+	set = set.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 1})
+	set = set.AddGTID(replication.Mysql56GTID{Server: sid, Sequence: 2})
+	want := replication.Position{GTIDSet: set}
 
 	got, err := (&mysql56{}).ParseReplicationPosition(input)
 	if err != nil {
@@ -162,83 +161,20 @@ func TestMysql56PromoteSlaveCommands(t *testing.T) {
 	}
 }
 
-func TestMysql56StartReplicationCommands(t *testing.T) {
-	params := &sqldb.ConnParams{
-		Uname: "username",
-		Pass:  "password",
-	}
+func TestMysql56SetSlavePositionCommands(t *testing.T) {
 	pos, _ := (&mysql56{}).ParseReplicationPosition("00010203-0405-0607-0809-0a0b0c0d0e0f:1-2")
-	status := &proto.ReplicationStatus{
-		Position:           pos,
-		MasterHost:         "localhost",
-		MasterPort:         123,
-		MasterConnectRetry: 1234,
-	}
 	want := []string{
 		"RESET MASTER",
 		"SET GLOBAL gtid_purged = '00010203-0405-0607-0809-0a0b0c0d0e0f:1-2'",
-		`CHANGE MASTER TO
-  MASTER_HOST = 'localhost',
-  MASTER_PORT = 123,
-  MASTER_USER = 'username',
-  MASTER_PASSWORD = 'password',
-  MASTER_CONNECT_RETRY = 1234,
-  MASTER_AUTO_POSITION = 1`,
-		"START SLAVE",
 	}
 
-	got, err := (&mysql56{}).StartReplicationCommands(params, status)
+	got, err := (&mysql56{}).SetSlavePositionCommands(pos)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mysql56{}).StartReplicationCommands(%#v, %#v) = %#v, want %#v", params, status, got, want)
-	}
-}
-
-func TestMysql56StartReplicationCommandsSSL(t *testing.T) {
-	params := &sqldb.ConnParams{
-		Uname:     "username",
-		Pass:      "password",
-		SslCa:     "ssl-ca",
-		SslCaPath: "ssl-ca-path",
-		SslCert:   "ssl-cert",
-		SslKey:    "ssl-key",
-	}
-	mysql.EnableSSL(params)
-	pos, _ := (&mysql56{}).ParseReplicationPosition("00010203-0405-0607-0809-0a0b0c0d0e0f:1-2")
-	status := &proto.ReplicationStatus{
-		Position:           pos,
-		MasterHost:         "localhost",
-		MasterPort:         123,
-		MasterConnectRetry: 1234,
-	}
-	want := []string{
-		"RESET MASTER",
-		"SET GLOBAL gtid_purged = '00010203-0405-0607-0809-0a0b0c0d0e0f:1-2'",
-		`CHANGE MASTER TO
-  MASTER_HOST = 'localhost',
-  MASTER_PORT = 123,
-  MASTER_USER = 'username',
-  MASTER_PASSWORD = 'password',
-  MASTER_CONNECT_RETRY = 1234,
-  MASTER_SSL = 1,
-  MASTER_SSL_CA = 'ssl-ca',
-  MASTER_SSL_CAPATH = 'ssl-ca-path',
-  MASTER_SSL_CERT = 'ssl-cert',
-  MASTER_SSL_KEY = 'ssl-key',
-  MASTER_AUTO_POSITION = 1`,
-		"START SLAVE",
-	}
-
-	got, err := (&mysql56{}).StartReplicationCommands(params, status)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("(&mysql56{}).StartReplicationCommands(%#v, %#v) = %#v, want %#v", params, status, got, want)
+		t.Errorf("(&mysql56{}).SetSlavePositionCommands(%#v) = %#v, want %#v", pos, got, want)
 	}
 }
 
@@ -342,7 +278,7 @@ func TestMakeBinlogDumpGTIDCommand(t *testing.T) {
 	}
 
 	pos, _ := (&mysql56{}).ParseReplicationPosition("00010203-0405-0607-0809-0a0b0c0d0e0f:1-2")
-	got := makeBinlogDumpGTIDCommand(0x0000 /* flags */, 0x01020304 /* serverID */, pos.GTIDSet.(proto.Mysql56GTIDSet))
+	got := makeBinlogDumpGTIDCommand(0x0000 /* flags */, 0x01020304 /* serverID */, pos.GTIDSet.(replication.Mysql56GTIDSet))
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("makeBinlogDumpGTIDCommand() = %#v, want %#v", got, want)
 	}

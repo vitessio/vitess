@@ -7,7 +7,7 @@ package topoproto
 import (
 	"testing"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestParseKeyspaceShard(t *testing.T) {
@@ -32,11 +32,11 @@ func TestParseKeyspaceShard(t *testing.T) {
 }
 
 func TestSourceShardAsHTML(t *testing.T) {
-	s := &pb.Shard_SourceShard{
+	s := &topodatapb.Shard_SourceShard{
 		Uid:      123,
 		Keyspace: "source_keyspace",
 		Shard:    "source_shard",
-		KeyRange: &pb.KeyRange{
+		KeyRange: &topodatapb.KeyRange{
 			Start: []byte{0x80},
 		},
 		Tables: []string{"table1", "table2"},

@@ -14,5 +14,6 @@ func CreateServices() vtgateservice.VTGateService {
 	s = newSuccessClient(s)
 	s = newErrorClient(s)
 	s = newCallerIDClient(s)
+	s = newEchoClient(s)
 	return s
 }

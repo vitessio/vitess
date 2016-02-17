@@ -1,0 +1,234 @@
+// Copyright 2015, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package framework
+
+import (
+	"errors"
+	"fmt"
+	"reflect"
+	"strings"
+
+	"github.com/youtube/vitess/go/sqltypes"
+)
+
+// Testable restricts the types that can be added to
+// a test case.
+type Testable interface {
+	Test(name string, client *QueryClient) error
+}
+
+var (
+	_ Testable = TestQuery("")
+	_ Testable = &TestCase{}
+	_ Testable = &MultiCase{}
+)
+
+// TestQuery represents a plain query. It will be
+// executed without a bind variable. The framework
+// will check for errors, but nothing beyond. Statements
+// like 'begin', etc. will be converted to the corresponding
+// transaction commands.
+type TestQuery string
+
+// Test executes the query and returns an error if it failed.
+func (tq TestQuery) Test(name string, client *QueryClient) error {
+	_, err := exec(client, string(tq), nil)
+	if err != nil {
+		if name == "" {
+			return err
+		}
+		return fmt.Errorf("%s: Execute failed: %v", name, err)
+	}
+	return nil
+}
+
+// TestCase represents one test case. It will execute the
+// query and verify its results and effects against what
+// must be expected. Expected fields are optional.
+type TestCase struct {
+	// Name gives a name to the test case. It will be used
+	// for reporting failures.
+	Name string
+
+	// Query and BindVars are the input.
+	Query    string
+	BindVars map[string]interface{}
+
+	// Result is the list of rows that must be returned.
+	// It's represented as 2-d strings. They byte values
+	// will be compared against The bytes returned by the
+	// query. The check is skipped if Result is nil.
+	Result [][]string
+
+	// Rows affected can be nil or an int.
+	RowsAffected interface{}
+
+	// Rewritten specifies how the query should have be rewritten.
+	Rewritten []string
+
+	// Plan specifies the plan type that was used. It will be matched
+	// against tabletserver.PlanType(val).String().
+	Plan string
+
+	// If Table is specified, then the framework will validate the
+	// cache stats for that table. If the stat values are nil, then
+	// the check is skipped.
+	Table         string
+	Hits          interface{}
+	Misses        interface{}
+	Absent        interface{}
+	Invalidations interface{}
+}
+
+// Test executes the test case and returns an error if it failed.
+// The name parameter is used if the test case doesn't have a name.
+func (tc *TestCase) Test(name string, client *QueryClient) error {
+	var errs []string
+	if tc.Name != "" {
+		name = tc.Name
+	}
+
+	catcher := NewQueryCatcher()
+	defer catcher.Close()
+
+	var tstart TableStat
+	if tc.Table != "" {
+		tstart = TableStats()[tc.Table]
+	}
+
+	qr, err := exec(client, tc.Query, tc.BindVars)
+	if err != nil {
+		return fmt.Errorf("%s: Execute failed: %v", name, err)
+	}
+
+	if tc.Result != nil {
+		result := RowsToStrings(qr)
+		if !reflect.DeepEqual(result, tc.Result) {
+			errs = append(errs, fmt.Sprintf("Result mismatch:\n'%+v' does not match\n'%+v'", result, tc.Result))
+		}
+	}
+
+	if tc.RowsAffected != nil {
+		want := tc.RowsAffected.(int)
+		if int(qr.RowsAffected) != want {
+			errs = append(errs, fmt.Sprintf("RowsAffected mismatch: %d, want %d", int(qr.RowsAffected), want))
+		}
+	}
+
+	queryInfo, err := catcher.Next()
+	if err != nil {
+		errs = append(errs, fmt.Sprintf("Query catcher failed: %v", err))
+	}
+	if tc.Rewritten != nil {
+		// Work-around for a quirk. The stream comments also contain
+		// "; ". So, we have to get rid of the additional artifacts
+		// to make it match expected results.
+		unstripped := strings.Split(queryInfo.RewrittenSQL(), "; ")
+		got := make([]string, 0, len(unstripped))
+		for _, str := range unstripped {
+			if str == "" || str == "*/" {
+				continue
+			}
+			got = append(got, str)
+		}
+		if !reflect.DeepEqual(got, tc.Rewritten) {
+			errs = append(errs, fmt.Sprintf("Rewritten mismatch:\n'%+v' does not match\n'%+v'", got, tc.Rewritten))
+		}
+	}
+	if tc.Plan != "" {
+		if queryInfo.PlanType != tc.Plan {
+			errs = append(errs, fmt.Sprintf("Plan mismatch: %s, want %s", queryInfo.PlanType, tc.Plan))
+		}
+	}
+
+	if tc.Table != "" {
+		tend := TableStats()[tc.Table]
+		if err = checkStat("Hits", tc.Hits, tend.Hits-tstart.Hits, queryInfo.CacheHits); err != nil {
+			errs = append(errs, err.Error())
+		}
+		if err = checkStat("Misses", tc.Misses, tend.Misses-tstart.Misses, queryInfo.CacheMisses); err != nil {
+			errs = append(errs, err.Error())
+		}
+		if err = checkStat("Absent", tc.Absent, tend.Absent-tstart.Absent, queryInfo.CacheAbsent); err != nil {
+			errs = append(errs, err.Error())
+		}
+		if err = checkStat("Invalidations", tc.Invalidations, tend.Invalidations-tstart.Invalidations, queryInfo.CacheInvalidations); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if len(errs) != 0 {
+		if name == "" {
+			return errors.New(strings.Join(errs, "\n"))
+		}
+		return errors.New(fmt.Sprintf("%s failed:\n", name) + strings.Join(errs, "\n"))
+	}
+	return nil
+}
+
+func exec(client *QueryClient, query string, bv map[string]interface{}) (*sqltypes.Result, error) {
+	switch query {
+	case "begin":
+		return nil, client.Begin()
+	case "commit":
+		return nil, client.Commit()
+	case "rollback":
+		return nil, client.Rollback()
+	}
+	return client.Execute(query, bv)
+}
+
+// RowsToStrings converts qr.Rows to [][]string.
+func RowsToStrings(qr *sqltypes.Result) [][]string {
+	var result [][]string
+	for _, row := range qr.Rows {
+		var srow []string
+		for _, cell := range row {
+			srow = append(srow, cell.String())
+		}
+		result = append(result, srow)
+	}
+	return result
+}
+
+func checkStat(name string, want interface{}, gotStats int, gotInfo int64) error {
+	if want == nil {
+		return nil
+	}
+	var errs []string
+	iwant := want.(int)
+	if gotStats != iwant {
+		errs = append(errs, fmt.Sprintf("%s mismatch on table stats: %d, want %d", name, gotStats, iwant))
+	}
+	if int(gotInfo) != iwant {
+		errs = append(errs, fmt.Sprintf("%s mismatch on query info: %d, want %d", name, int(gotInfo), iwant))
+	}
+	if len(errs) != 0 {
+		return errors.New(strings.Join(errs, "\n"))
+	}
+	return nil
+}
+
+// MultiCase groups a number of test cases under a name.
+// A MultiCase is also Testable. So, it can be recursive.
+type MultiCase struct {
+	Name  string
+	Cases []Testable
+}
+
+// Test executes the test cases in MultiCase. The test is
+// interrupted if there is a failure. The name parameter is
+// used if MultiCase doesn't have a Name.
+func (mc *MultiCase) Test(name string, client *QueryClient) error {
+	if mc.Name != "" {
+		name = mc.Name
+	}
+	for _, tcase := range mc.Cases {
+		if err := tcase.Test(name, client); err != nil {
+			client.Rollback()
+			return err
+		}
+	}
+	return nil
+}

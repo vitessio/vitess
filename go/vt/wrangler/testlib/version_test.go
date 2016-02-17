@@ -10,14 +10,14 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func expvarHandler(gitRev *string) func(http.ResponseWriter, *http.Request) {
@@ -49,16 +49,17 @@ func TestVersion(t *testing.T) {
 	wrangler.ResetDebugVarsGetVersion()
 
 	// Initialize our environment
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	db := fakesqldb.Register()
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// couple tablets is enough
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER,
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, db,
 		TabletKeyspaceShard(t, "source", "0"),
 		StartHTTPServer())
-	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, pb.TabletType_REPLICA,
+	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, db,
 		TabletKeyspaceShard(t, "source", "0"),
 		StartHTTPServer())
 

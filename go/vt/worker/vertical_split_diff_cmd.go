@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -44,8 +43,6 @@ const verticalSplitDiffHTML2 = `
   <p>Shard involved: {{.Keyspace}}/{{.Shard}}</p>
   <h1>Vertical Split Diff Action</h1>
     <form action="/Diffs/VerticalSplitDiff" method="post">
-      <LABEL for="excludeTables">Exclude Tables: </LABEL>
-        <INPUT type="text" id="excludeTables" name="excludeTables" value=""></BR>
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
       <INPUT type="submit" name="submit" value="Vertical Split Diff"/>
@@ -57,7 +54,6 @@ var verticalSplitDiffTemplate = mustParseTemplate("verticalSplitDiff", verticalS
 var verticalSplitDiffTemplate2 = mustParseTemplate("verticalSplitDiff2", verticalSplitDiffHTML2)
 
 func commandVerticalSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
-	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
@@ -69,17 +65,15 @@ func commandVerticalSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return nil, err
 	}
-	var excludeTableArray []string
-	if *excludeTables != "" {
-		excludeTableArray = strings.Split(*excludeTables, ",")
-	}
-	return NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray), nil
+	return NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard), nil
 }
 
 // shardsWithTablesSources returns all the shards that have SourceShards set
 // to one value, with an array of Tables.
 func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]string, error) {
-	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +86,9 @@ func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			shards, err := wr.TopoServer().GetShardNames(ctx, keyspace)
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+			shards, err := wr.TopoServer().GetShardNames(shortCtx, keyspace)
+			cancel()
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -101,7 +97,9 @@ func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[
 				wg.Add(1)
 				go func(keyspace, shard string) {
 					defer wg.Done()
-					si, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
+					shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+					si, err := wr.TopoServer().GetShard(shortCtx, keyspace, shard)
+					cancel()
 					if err != nil {
 						rec.RecordError(err)
 						return
@@ -158,21 +156,15 @@ func interactiveVerticalSplitDiff(ctx context.Context, wi *Instance, wr *wrangle
 		return nil, verticalSplitDiffTemplate2, result, nil
 	}
 
-	// Process input form.
-	excludeTables := r.FormValue("excludeTables")
-	var excludeTableArray []string
-	if excludeTables != "" {
-		excludeTableArray = strings.Split(excludeTables, ",")
-	}
-
 	// start the diff job
-	wrk := NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray)
+	wrk := NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard)
 	return wrk, nil, nil, nil
 }
 
 func init() {
 	AddCommand("Diffs", Command{"VerticalSplitDiff",
 		commandVerticalSplitDiff, interactiveVerticalSplitDiff,
-		"[--exclude_tables=''] <keyspace/shard>",
-		"Diffs a rdonly destination keyspace against its SourceShard for a vertical split"})
+		"<keyspace/shard>",
+		"Diffs an rdonly tablet from the (destination) keyspace/shard against an rdonly tablet from the respective source keyspace/shard." +
+			" Only compares the tables which were set by a previous VerticalSplitClone command."})
 }

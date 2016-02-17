@@ -11,24 +11,29 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 const (
-	// ErrFail is returned when a query fails
+	// ErrFail is returned when a query fails, and we think it's because the query
+	// itself is problematic. That means that the query will not  be retried.
 	ErrFail = iota
 
 	// ErrRetry is returned when a query can be retried
 	ErrRetry
 
-	// ErrFatal is returned when a query cannot be retried
+	// ErrFatal is returned when a query fails due to some internal state, but we
+	// don't suspect the query itself to be bad. The query can be retried by VtGate
+	// to a different VtTablet (in case a different tablet is healthier), but
+	// probably shouldn't be retried by clients.
 	ErrFatal
 
 	// ErrTxPoolFull is returned when we can't get a connection
@@ -43,7 +48,11 @@ const (
 )
 
 // ErrConnPoolClosed is returned / panicked when the connection pool is closed.
-var ErrConnPoolClosed = NewTabletError(ErrFatal, "connection pool is closed")
+var ErrConnPoolClosed = NewTabletError(ErrFatal,
+	// connection pool being closed is not the query's fault, it can be retried on a
+	// different VtTablet.
+	vtrpcpb.ErrorCode_INTERNAL_ERROR,
+	"connection pool is closed")
 
 var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
@@ -51,7 +60,9 @@ var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 type TabletError struct {
 	ErrorType int
 	Message   string
-	SqlError  int
+	SQLError  int
+	// ErrorCode will be used to transmit the error across RPC boundaries
+	ErrorCode vtrpcpb.ErrorCode
 }
 
 // This is how go-mysql exports its error number
@@ -60,40 +71,66 @@ type hasNumber interface {
 }
 
 // NewTabletError returns a TabletError of the given type
-func NewTabletError(errorType int, format string, args ...interface{}) *TabletError {
+func NewTabletError(errorType int, errCode vtrpcpb.ErrorCode, format string, args ...interface{}) *TabletError {
 	return &TabletError{
 		ErrorType: errorType,
 		Message:   printable(fmt.Sprintf(format, args...)),
+		ErrorCode: errCode,
 	}
 }
 
-// NewTabletErrorSql returns a TabletError based on the error
-func NewTabletErrorSql(errorType int, err error) *TabletError {
+// NewTabletErrorSQL returns a TabletError based on the error
+func NewTabletErrorSQL(errorType int, errCode vtrpcpb.ErrorCode, err error) *TabletError {
 	var errnum int
 	errstr := err.Error()
 	if sqlErr, ok := err.(hasNumber); ok {
 		errnum = sqlErr.Number()
-		// Override error type if MySQL is in read-only mode. It's probably because
-		// there was a remaster and there are old clients still connected.
-		if errnum == mysql.ErrOptionPreventsStatement && strings.Contains(errstr, "read-only") {
-			errorType = ErrRetry
+		switch errnum {
+		case mysql.ErrOptionPreventsStatement:
+			// Override error type if MySQL is in read-only mode. It's probably because
+			// there was a remaster and there are old clients still connected.
+			if strings.Contains(errstr, "read-only") {
+				errorType = ErrRetry
+				errCode = vtrpcpb.ErrorCode_QUERY_NOT_SERVED
+			}
+		case mysql.ErrDupEntry:
+			errCode = vtrpcpb.ErrorCode_INTEGRITY_ERROR
+		default:
 		}
 	}
 	return &TabletError{
 		ErrorType: errorType,
 		Message:   printable(errstr),
-		SqlError:  errnum,
+		SQLError:  errnum,
+		ErrorCode: errCode,
 	}
 }
 
 // PrefixTabletError attempts to add a string prefix to a TabletError, while preserving its
 // ErrorType. If the given error is not a TabletError, a new TabletError is returned
 // with the desired ErrorType.
-func PrefixTabletError(errorType int, err error, prefix string) error {
+func PrefixTabletError(errorType int, errCode vtrpcpb.ErrorCode, err error, prefix string) error {
 	if terr, ok := err.(*TabletError); ok {
-		return NewTabletError(terr.ErrorType, "%s%s", prefix, terr.Message)
+		return NewTabletError(terr.ErrorType, terr.ErrorCode, "%s%s", prefix, terr.Message)
 	}
-	return NewTabletError(errorType, "%s%s", prefix, err)
+	return NewTabletError(errorType, errCode, "%s%s", prefix, err)
+}
+
+// ToGRPCError returns a TabletError as a grpc error, with the
+// appropriate error code. This function lives here, instead of in vterrors,
+// so that the vterrors package doesn't have to import tabletserver.
+func ToGRPCError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	code := grpc.Code(err)
+	if tErr, ok := err.(*TabletError); ok {
+		// If we got a TabletError, prefer its error code
+		code = vterrors.ErrorCodeToGRPCCode(tErr.ErrorCode)
+	}
+
+	return grpc.Errorf(code, "%v %v", vterrors.GRPCServerErrPrefix, err)
 }
 
 func printable(in string) string {
@@ -114,7 +151,7 @@ func IsConnErr(err error) bool {
 	var sqlError int
 	switch err := err.(type) {
 	case *TabletError:
-		sqlError = err.SqlError
+		sqlError = err.SQLError
 	case hasNumber:
 		sqlError = err.Number()
 	default:
@@ -139,6 +176,11 @@ func (te *TabletError) Error() string {
 	return te.Prefix() + te.Message
 }
 
+// VtErrorCode returns the underlying Vitess error code
+func (te *TabletError) VtErrorCode() vtrpcpb.ErrorCode {
+	return te.ErrorCode
+}
+
 // Prefix returns the prefix for the error, like error, fatal, etc.
 func (te *TabletError) Prefix() string {
 	prefix := "error: "
@@ -153,7 +195,7 @@ func (te *TabletError) Prefix() string {
 		prefix = "not_in_tx: "
 	}
 	// Special case for killed queries.
-	if te.SqlError == mysql.ErrServerLost {
+	if te.SQLError == mysql.ErrServerLost {
 		prefix = prefix + "the query was killed either because it timed out or was canceled: "
 	}
 	return prefix
@@ -171,7 +213,7 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 	case ErrNotInTx:
 		queryServiceStats.ErrorStats.Add("NotInTx", 1)
 	default:
-		switch te.SqlError {
+		switch te.SQLError {
 		case mysql.ErrDupEntry:
 			queryServiceStats.InfoErrors.Add("DupKey", 1)
 		case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock:
@@ -182,12 +224,20 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 	}
 }
 
-func handleError(err *error, logStats *SQLQueryStats, queryServiceStats *QueryServiceStats) {
+func handleError(err *error, logStats *LogStats, queryServiceStats *QueryServiceStats) {
+	var terr *TabletError
+	defer func() {
+		if logStats != nil {
+			logStats.Error = terr
+			logStats.Send()
+		}
+	}()
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
 			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-			*err = NewTabletError(ErrFail, "%v: uncaught panic", x)
+			terr = NewTabletError(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic", x)
+			*err = terr
 			queryServiceStats.InternalErrors.Add("Panic", 1)
 			return
 		}
@@ -199,19 +249,16 @@ func handleError(err *error, logStats *SQLQueryStats, queryServiceStats *QuerySe
 		case ErrTxPoolFull:
 			logTxPoolFull.Errorf("%v", terr)
 		default:
-			switch terr.SqlError {
+			switch terr.SQLError {
 			// MySQL deadlock errors are (usually) due to client behavior, not server
 			// behavior, and therefore logged at the INFO level.
-			case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock:
+			case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong,
+				mysql.ErrDataOutOfRange, mysql.ErrBadNullError:
 				log.Infof("%v", terr)
 			default:
 				log.Errorf("%v", terr)
 			}
 		}
-	}
-	if logStats != nil {
-		logStats.Error = *err
-		logStats.Send()
 	}
 }
 
@@ -239,8 +286,7 @@ func rpcErrFromTabletError(err error) *mproto.RPCError {
 	terr, ok := err.(*TabletError)
 	if ok {
 		return &mproto.RPCError{
-			// Transform TabletError code to VitessError code
-			Code: int64(terr.ErrorType) + vterrors.TabletError,
+			Code: int64(terr.ErrorCode),
 			// Make sure the the VitessError message is identical to the TabletError
 			// err, so that downstream consumers will see identical messages no matter
 			// which server version they're using.
@@ -250,101 +296,15 @@ func rpcErrFromTabletError(err error) *mproto.RPCError {
 
 	// We don't know exactly what the passed in error was
 	return &mproto.RPCError{
-		Code:    vterrors.UnknownTabletError,
+		Code:    int64(vtrpcpb.ErrorCode_UNKNOWN_ERROR),
 		Message: err.Error(),
 	}
 }
 
-// AddTabletErrorToQueryResult will mutate a QueryResult struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToQueryResult(err error, reply *mproto.QueryResult) {
+// AddTabletError will update a mproto.RPCError with details from a TabletError.
+func AddTabletError(err error, replyErr **mproto.RPCError) {
 	if err == nil {
 		return
 	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToSessionInfo will mutate a SessionInfo struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToSessionInfo(err error, reply *proto.SessionInfo) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToTransactionInfo will mutate a TransactionInfo struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToTransactionInfo(err error, reply *proto.TransactionInfo) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToQueryResultList will mutate a QueryResultList struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToQueryResultList(err error, reply *proto.QueryResultList) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToSplitQueryResult will mutate a SplitQueryResult struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToSplitQueryResult(err error, reply *proto.SplitQueryResult) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToBeginResponse will mutate a BeginResponse struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToBeginResponse(err error, reply *proto.BeginResponse) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToCommitResponse will mutate a CommitResponse struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToCommitResponse(err error, reply *proto.CommitResponse) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// AddTabletErrorToRollbackResponse will mutate a RollbackResponse struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToRollbackResponse(err error, reply *proto.RollbackResponse) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
-// TabletErrorToRPCError transforms the provided error to a RPCError,
-// if any.
-func TabletErrorToRPCError(err error) *vtrpc.RPCError {
-	if err == nil {
-		return nil
-	}
-	if terr, ok := err.(*TabletError); ok {
-		return &vtrpc.RPCError{
-			// Transform TabletError code to VitessError code
-			Code: vtrpc.ErrorCodeDeprecated(int64(terr.ErrorType) + vterrors.TabletError),
-			// Make sure the the VitessError message is identical to the TabletError
-			// err, so that downstream consumers will see identical messages no matter
-			// which endpoint they're using.
-			Message: terr.Error(),
-		}
-	}
-	return &vtrpc.RPCError{
-		Code:    vtrpc.ErrorCodeDeprecated_UnknownTabletError,
-		Message: err.Error(),
-	}
+	*replyErr = rpcErrFromTabletError(err)
 }

@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -24,7 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 // This file handles the backup and restore related code
@@ -45,8 +46,11 @@ const (
 )
 
 var (
-	// ErrNoBackup is returned when there is no backup
+	// ErrNoBackup is returned when there is no backup.
 	ErrNoBackup = errors.New("no available backup")
+
+	// ErrExistingDB is returned when there's already an active DB.
+	ErrExistingDB = errors.New("skipping restore due to existing database")
 )
 
 // FileEntry is one file to backup
@@ -99,13 +103,13 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 }
 
 // BackupManifest represents the backup. It lists all the files, and
-// the ReplicationPosition that the backup was taken at.
+// the Position that the backup was taken at.
 type BackupManifest struct {
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
 
-	// ReplicationPosition is the position at which the backup was taken
-	ReplicationPosition proto.ReplicationPosition
+	// Position is the position at which the backup was taken
+	Position replication.Position
 }
 
 // isDbDir returns true if the given directory contains a DB
@@ -181,14 +185,15 @@ func findFilesTobackup(cnf *Mycnf) ([]FileEntry, error) {
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bucket, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
+func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
 
 	// start the backup with the BackupStorage
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return err
 	}
-	bh, err := bs.StartBackup(bucket, name)
+	defer bs.Close()
+	bh, err := bs.StartBackup(dir, name)
 	if err != nil {
 		return fmt.Errorf("StartBackup failed: %v", err)
 	}
@@ -208,7 +213,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	slaveStartRequired := false
 	sourceIsMaster := false
 	readOnly := true
-	var replicationPosition proto.ReplicationPosition
+	var replicationPosition replication.Position
 
 	// see if we need to restart replication after backup
 	logger.Infof("getting current replication status")
@@ -245,7 +250,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 		if err = StopSlave(mysqld, hookExtraEnv); err != nil {
 			return fmt.Errorf("cannot stop slave: %v", err)
 		}
-		var slaveStatus proto.ReplicationStatus
+		var slaveStatus replication.Status
 		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
 			return fmt.Errorf("cannot get slave status: %v", err)
@@ -300,7 +305,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	return nil
 }
 
-func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition proto.ReplicationPosition, backupConcurrency int) (err error) {
+func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition replication.Position, backupConcurrency int) (err error) {
 	sema := sync2.NewSemaphore(backupConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -383,8 +388,8 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 
 	// JSON-encode and write the MANIFEST
 	bm := &BackupManifest{
-		FileEntries:         fes,
-		ReplicationPosition: replicationPosition,
+		FileEntries: fes,
+		Position:    replicationPosition,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -399,10 +404,19 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 
 // checkNoDB makes sure there is no vt_ db already there. Used by Restore,
 // we do not wnat to destroy an existing DB.
-func checkNoDB(mysqld MysqlDaemon) error {
+// Returns true iff the condition is satisfied (there's no DB).
+// Returns (false, nil) if the check succeeds but the condition is not
+// satisfied (there is a DB).
+// Returns non-nil error if one occurs while trying to perform the check.
+func checkNoDB(ctx context.Context, mysqld MysqlDaemon) (bool, error) {
+	// Wait for mysqld to be ready, in case it was launched in parallel with us.
+	if err := mysqld.Wait(ctx); err != nil {
+		return false, err
+	}
+
 	qr, err := mysqld.FetchSuperQuery("SHOW DATABASES")
 	if err != nil {
-		return fmt.Errorf("checkNoDB failed: %v", err)
+		return false, fmt.Errorf("checkNoDB failed: %v", err)
 	}
 
 	for _, row := range qr.Rows {
@@ -410,16 +424,19 @@ func checkNoDB(mysqld MysqlDaemon) error {
 			dbName := row[0].String()
 			tableQr, err := mysqld.FetchSuperQuery("SHOW TABLES FROM " + dbName)
 			if err != nil {
-				return fmt.Errorf("checkNoDB failed: %v", err)
-			} else if len(tableQr.Rows) == 0 {
+				return false, fmt.Errorf("checkNoDB failed: %v", err)
+			}
+			if len(tableQr.Rows) == 0 {
 				// no tables == empty db, all is well
 				continue
 			}
-			return fmt.Errorf("checkNoDB failed, found active db %v", dbName)
+			// found active db
+			log.Warningf("checkNoDB failed, found active db %v", dbName)
+			return false, nil
 		}
 	}
 
-	return nil
+	return true, nil
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the
@@ -497,71 +514,131 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 	return rec.Error()
 }
 
+// removeExistingFiles will delete existing files in the data dir to prevent
+// conflicts with the restored archive. In particular, binlogs can be created
+// even during initial bootstrap, and these can interfere with configuring
+// replication if kept around after the restore.
+func removeExistingFiles(cnf *Mycnf) error {
+	paths := map[string]string{
+		"BinLogPath.*":          cnf.BinLogPath,
+		"DataDir":               cnf.DataDir,
+		"InnodbDataHomeDir":     cnf.InnodbDataHomeDir,
+		"InnodbLogGroupHomeDir": cnf.InnodbLogGroupHomeDir,
+		"RelayLogPath.*":        cnf.RelayLogPath,
+		"RelayLogIndexPath":     cnf.RelayLogIndexPath,
+		"RelayLogInfoPath":      cnf.RelayLogInfoPath,
+	}
+	for name, path := range paths {
+		if path == "" {
+			return fmt.Errorf("can't remove existing files: %v is unknown", name)
+		}
+
+		if strings.HasSuffix(name, ".*") {
+			// These paths are actually filename prefixes, not directories.
+			// An extension of the form ".###" is appended by mysqld.
+			path += ".*"
+			log.Infof("Restore: removing files in %v (%v)", name, path)
+			matches, err := filepath.Glob(path)
+			if err != nil {
+				return fmt.Errorf("can't expand path glob %q: %v", path, err)
+			}
+			for _, match := range matches {
+				if err := os.Remove(match); err != nil {
+					return fmt.Errorf("can't remove existing file from %v (%v): %v", name, match, err)
+				}
+			}
+			continue
+		}
+
+		// Regular directory: delete recursively.
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			log.Infof("Restore: skipping removal of nonexistent %v (%v)", name, path)
+			continue
+		}
+		log.Infof("Restore: removing files in %v (%v)", name, path)
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("can't remove existing files in %v (%v): %v", name, path, err)
+		}
+	}
+	return nil
+}
+
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
-func Restore(ctx context.Context, mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
+func Restore(ctx context.Context, mysqld MysqlDaemon, dir string, restoreConcurrency int, hookExtraEnv map[string]string) (replication.Position, error) {
 	// find the right backup handle: most recent one, with a MANIFEST
 	log.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
-		return proto.ReplicationPosition{}, err
+		return replication.Position{}, err
 	}
-	bhs, err := bs.ListBackups(bucket)
+	defer bs.Close()
+	bhs, err := bs.ListBackups(dir)
 	if err != nil {
-		return proto.ReplicationPosition{}, fmt.Errorf("ListBackups failed: %v", err)
+		return replication.Position{}, fmt.Errorf("ListBackups failed: %v", err)
 	}
-	toRestore := len(bhs) - 1
 	var bh backupstorage.BackupHandle
 	var bm BackupManifest
-	for toRestore >= 0 {
+	var toRestore int
+	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
 		bh = bhs[toRestore]
-		if rc, err := bh.ReadFile(backupManifest); err == nil {
-			dec := json.NewDecoder(rc)
-			err := dec.Decode(&bm)
-			rc.Close()
-			if err != nil {
-				log.Warningf("Possibly incomplete backup %v in bucket %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), bucket, err)
-			} else {
-				log.Infof("Restore: found backup %v %v to restore with %v files", bh.Bucket(), bh.Name(), len(bm.FileEntries))
-				break
-			}
-		} else {
-			log.Warningf("Possibly incomplete backup %v in bucket %v on BackupStorage (cannot read MANIFEST)", bh.Name(), bucket)
+		rc, err := bh.ReadFile(backupManifest)
+		if err != nil {
+			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
+			continue
 		}
-		toRestore--
+
+		err = json.NewDecoder(rc).Decode(&bm)
+		rc.Close()
+		if err != nil {
+			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
+			continue
+		}
+
+		log.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
+		break
 	}
 	if toRestore < 0 {
-		log.Errorf("No backup to restore on BackupStorage for bucket %v", bucket)
-		return proto.ReplicationPosition{}, ErrNoBackup
+		log.Errorf("No backup to restore on BackupStorage for directory %v", dir)
+		return replication.Position{}, ErrNoBackup
 	}
 
 	log.Infof("Restore: checking no existing data is present")
-	if err := checkNoDB(mysqld); err != nil {
-		return proto.ReplicationPosition{}, err
+	ok, err := checkNoDB(ctx, mysqld)
+	if err != nil {
+		return replication.Position{}, err
+	}
+	if !ok {
+		return replication.Position{}, ErrExistingDB
 	}
 
 	log.Infof("Restore: shutdown mysqld")
 	err = mysqld.Shutdown(ctx, true)
 	if err != nil {
-		return proto.ReplicationPosition{}, err
+		return replication.Position{}, err
+	}
+
+	log.Infof("Restore: deleting existing files")
+	if err := removeExistingFiles(mysqld.Cnf()); err != nil {
+		return replication.Position{}, err
 	}
 
 	log.Infof("Restore: copying all files")
 	if err := restoreFiles(mysqld.Cnf(), bh, bm.FileEntries, restoreConcurrency); err != nil {
-		return proto.ReplicationPosition{}, err
+		return replication.Position{}, err
 	}
 
 	// mysqld needs to be running in order for mysql_upgrade to work.
 	log.Infof("Restore: starting mysqld for mysql_upgrade")
 	err = mysqld.Start(ctx)
 	if err != nil {
-		return proto.ReplicationPosition{}, err
+		return replication.Position{}, err
 	}
 
 	log.Infof("Restore: running mysql_upgrade")
 	if err := mysqld.RunMysqlUpgrade(); err != nil {
-		return proto.ReplicationPosition{}, fmt.Errorf("mysql_upgrade failed: %v", err)
+		return replication.Position{}, fmt.Errorf("mysql_upgrade failed: %v", err)
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
@@ -569,12 +646,12 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, bucket string, restoreConc
 	log.Infof("Restore: restarting mysqld after mysql_upgrade")
 	err = mysqld.Shutdown(ctx, true)
 	if err != nil {
-		return proto.ReplicationPosition{}, err
+		return replication.Position{}, err
 	}
 	err = mysqld.Start(ctx)
 	if err != nil {
-		return proto.ReplicationPosition{}, err
+		return replication.Position{}, err
 	}
 
-	return bm.ReplicationPosition, nil
+	return bm.Position, nil
 }

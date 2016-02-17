@@ -11,8 +11,14 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/vt/key"
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
+
+// KeyspaceShardString returns a "keyspace/shard" string taking
+// keyspace and shard as separate inputs.
+func KeyspaceShardString(keyspace, shard string) string {
+	return fmt.Sprintf("%v/%v", keyspace, shard)
+}
 
 // ParseKeyspaceShard parse a "keyspace/shard" string and extract
 // both keyspace and shard
@@ -25,12 +31,12 @@ func ParseKeyspaceShard(param string) (string, string, error) {
 }
 
 // SourceShardString returns a printable view of a SourceShard.
-func SourceShardString(source *pb.Shard_SourceShard) string {
+func SourceShardString(source *topodatapb.Shard_SourceShard) string {
 	return fmt.Sprintf("SourceShard(%v,%v/%v)", source.Uid, source.Keyspace, source.Shard)
 }
 
 // SourceShardAsHTML returns a HTML version of the object.
-func SourceShardAsHTML(source *pb.Shard_SourceShard) template.HTML {
+func SourceShardAsHTML(source *topodatapb.Shard_SourceShard) template.HTML {
 	result := fmt.Sprintf("<b>Uid</b>: %v</br>\n<b>Source</b>: %v/%v</br>\n", source.Uid, source.Keyspace, source.Shard)
 	if key.KeyRangeIsPartial(source.KeyRange) {
 		result += fmt.Sprintf("<b>KeyRange</b>: %v-%v</br>\n",
@@ -42,4 +48,14 @@ func SourceShardAsHTML(source *pb.Shard_SourceShard) template.HTML {
 			strings.Join(source.Tables, " "))
 	}
 	return template.HTML(result)
+}
+
+// ShardHasCell returns true if the cell is listed in the Cells for the shard.
+func ShardHasCell(shard *topodatapb.Shard, cell string) bool {
+	for _, c := range shard.Cells {
+		if c == cell {
+			return true
+		}
+	}
+	return false
 }

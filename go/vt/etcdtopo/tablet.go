@@ -8,15 +8,15 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CreateTablet implements topo.Server.
-func (s *Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
+func (s *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cell, err := s.getCell(tablet.Alias.Cell)
 	if err != nil {
 		return err
@@ -34,7 +34,7 @@ func (s *Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 }
 
 // UpdateTablet implements topo.Server.
-func (s *Server) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVersion int64) (int64, error) {
+func (s *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, existingVersion int64) (int64, error) {
 	cell, err := s.getCell(tablet.Alias.Cell)
 	if err != nil {
 		return -1, err
@@ -44,8 +44,14 @@ func (s *Server) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVe
 	if err != nil {
 		return -1, err
 	}
-	resp, err := cell.CompareAndSwap(tabletFilePath(tablet.Alias),
-		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	var resp *etcd.Response
+	if existingVersion == -1 {
+		// Set unconditionally.
+		resp, err = cell.Set(tabletFilePath(tablet.Alias), string(data), 0 /* ttl */)
+	} else {
+		resp, err = cell.CompareAndSwap(tabletFilePath(tablet.Alias),
+			string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	}
 	if err != nil {
 		return -1, convertError(err)
 	}
@@ -55,31 +61,8 @@ func (s *Server) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVe
 	return int64(resp.Node.ModifiedIndex), nil
 }
 
-// UpdateTabletFields implements topo.Server.
-func (s *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, updateFunc func(*pb.Tablet) error) (*pb.Tablet, error) {
-	var tablet *pb.Tablet
-	var err error
-
-	for {
-		var version int64
-		if tablet, version, err = s.GetTablet(ctx, tabletAlias); err != nil {
-			return nil, err
-		}
-		if err = updateFunc(tablet); err != nil {
-			return nil, err
-		}
-		if _, err = s.UpdateTablet(ctx, tablet, version); err != topo.ErrBadVersion {
-			break
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	return tablet, nil
-}
-
 // DeleteTablet implements topo.Server.
-func (s *Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) error {
+func (s *Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
 	cell, err := s.getCell(tabletAlias.Cell)
 	if err != nil {
 		return err
@@ -92,13 +75,13 @@ func (s *Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) 
 }
 
 // ValidateTablet implements topo.Server.
-func (s *Server) ValidateTablet(ctx context.Context, tabletAlias *pb.TabletAlias) error {
+func (s *Server) ValidateTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
 	_, _, err := s.GetTablet(ctx, tabletAlias)
 	return err
 }
 
 // GetTablet implements topo.Server.
-func (s *Server) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*pb.Tablet, int64, error) {
+func (s *Server) GetTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (*topodatapb.Tablet, int64, error) {
 	cell, err := s.getCell(tabletAlias.Cell)
 	if err != nil {
 		return nil, 0, err
@@ -112,7 +95,7 @@ func (s *Server) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*p
 		return nil, 0, ErrBadResponse
 	}
 
-	value := &pb.Tablet{}
+	value := &topodatapb.Tablet{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, 0, fmt.Errorf("bad tablet data (%v): %q", err, resp.Node.Value)
 	}
@@ -121,7 +104,7 @@ func (s *Server) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*p
 }
 
 // GetTabletsByCell implements topo.Server.
-func (s *Server) GetTabletsByCell(ctx context.Context, cellName string) ([]*pb.TabletAlias, error) {
+func (s *Server) GetTabletsByCell(ctx context.Context, cellName string) ([]*topodatapb.TabletAlias, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -137,7 +120,7 @@ func (s *Server) GetTabletsByCell(ctx context.Context, cellName string) ([]*pb.T
 		return nil, err
 	}
 
-	tablets := make([]*pb.TabletAlias, 0, len(nodes))
+	tablets := make([]*topodatapb.TabletAlias, 0, len(nodes))
 	for _, node := range nodes {
 		tabletAlias, err := topoproto.ParseTabletAlias(node)
 		if err != nil {

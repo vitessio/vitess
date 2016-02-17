@@ -116,7 +116,7 @@ func RegisterPushBackend(name string, backend PushBackend) {
 func emitToBackend(emitPeriod *time.Duration) {
 	ticker := time.NewTicker(*emitPeriod)
 	defer ticker.Stop()
-	for _ = range ticker.C {
+	for range ticker.C {
 		backend, ok := pushBackends[*statsBackend]
 		if !ok {
 			log.Errorf("No PushBackend registered with name %s", *statsBackend)

@@ -7,10 +7,8 @@ package vtgate
 import (
 	"sync"
 
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
-
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // SafeSession is a mutex-protected version of the Session.
@@ -19,11 +17,11 @@ import (
 // for a single shard)
 type SafeSession struct {
 	mu sync.Mutex
-	*proto.Session
+	*vtgatepb.Session
 }
 
 // NewSafeSession returns a new SafeSession based on the Session
-func NewSafeSession(sessn *proto.Session) *SafeSession {
+func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
 	return &SafeSession{Session: sessn}
 }
 
@@ -38,15 +36,14 @@ func (session *SafeSession) InTransaction() bool {
 }
 
 // Find returns the transactionId, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType pb.TabletType) int64 {
+func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) int64 {
 	if session == nil {
 		return 0
 	}
-	tt := topo.ProtoToTabletType(tabletType)
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	for _, shardSession := range session.ShardSessions {
-		if keyspace == shardSession.Keyspace && tt == shardSession.TabletType && shard == shardSession.Shard {
+		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
 			return shardSession.TransactionId
 		}
 	}
@@ -54,7 +51,7 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType pb.TabletTyp
 }
 
 // Append adds a new ShardSession
-func (session *SafeSession) Append(shardSession *proto.ShardSession) {
+func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.ShardSessions = append(session.ShardSessions, shardSession)

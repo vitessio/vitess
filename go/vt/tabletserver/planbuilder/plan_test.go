@@ -40,7 +40,7 @@ func TestPlan(t *testing.T) {
 			out = string(bout)
 		}
 		if out != tcase.output {
-			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out))
+			t.Errorf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out)
 		}
 		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}
@@ -106,7 +106,7 @@ func TestStreamPlan(t *testing.T) {
 			out = string(bout)
 		}
 		if out != tcase.output {
-			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out))
+			t.Errorf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out)
 		}
 		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}
@@ -129,7 +129,7 @@ func TestDDLPlan(t *testing.T) {
 func matchString(t *testing.T, line int, expected interface{}, actual string) {
 	if expected != nil {
 		if expected.(string) != actual {
-			t.Error(fmt.Sprintf("Line %d: expected: %v, received %s", line, expected, actual))
+			t.Errorf("Line %d: expected: %v, received %s", line, expected, actual)
 		}
 	}
 }

@@ -9,15 +9,18 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/query"
-	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 const (
+	// Refer to tabletserver/tablet_error.go for a more detailed explanation on
+	// what these errors mean from the VtTablet perspective.
 	ERR_NORMAL = iota
 	ERR_RETRY
 	ERR_FATAL
@@ -32,7 +35,7 @@ const (
 
 var (
 	// TabletProtocol is exported for unit tests
-	TabletProtocol = flag.String("tablet_protocol", "gorpc", "how to talk to the vttablets")
+	TabletProtocol = flag.String("tablet_protocol", "grpc", "how to talk to the vttablets")
 )
 
 // ServerError represents an error that was returned from
@@ -40,9 +43,14 @@ var (
 type ServerError struct {
 	Code int
 	Err  string
+	// ServerCode is the error code that we got from the server.
+	ServerCode vtrpcpb.ErrorCode
 }
 
 func (e *ServerError) Error() string { return e.Err }
+
+// VtErrorCode returns the underlying Vitess error code
+func (e *ServerError) VtErrorCode() vtrpcpb.ErrorCode { return e.ServerCode }
 
 // OperationalError represents an error due to a failure to
 // communicate with vttablet.
@@ -64,36 +72,27 @@ func (e OperationalError) Error() string { return string(e) }
 // 2 - using Target with each call (and never calling GetSessionId).
 // If tabletType is set to UNKNOWN, we'll use mode 1.
 // Mode 1 is being deprecated.
-type TabletDialer func(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (TabletConn, error)
+type TabletDialer func(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // not be concurrently used across goroutines.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
-	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
+	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*sqltypes.Result, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) (*tproto.QueryResultList, error)
+	ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionId int64) ([]sqltypes.Result, error)
 
 	// StreamExecute executes a streaming query on vttablet. It returns a channel, ErrFunc and error.
 	// If error is non-nil, it means that the StreamExecute failed to send the request. Otherwise,
 	// you can pull values from the channel till it's closed. Following this, you can call ErrFunc
 	// to see if the stream ended normally or due to a failure.
-	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc, error)
+	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *sqltypes.Result, ErrFunc, error)
 
 	// Transaction support
 	Begin(ctx context.Context) (transactionId int64, err error)
 	Commit(ctx context.Context, transactionId int64) error
 	Rollback(ctx context.Context, transactionId int64) error
-
-	// These should not be used for anything except tests for now; they will eventually
-	// replace the existing methods.
-	Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
-	ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) (*tproto.QueryResultList, error)
-	Begin2(ctx context.Context) (transactionId int64, err error)
-	Commit2(ctx context.Context, transactionId int64) error
-	Rollback2(ctx context.Context, transactionId int64) error
-	StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// Close must be called for releasing resources.
 	Close()
@@ -101,17 +100,17 @@ type TabletConn interface {
 	// SetTarget can be called to change the target used for
 	// subsequent calls. Can only be called if tabletType was not
 	// set to UNKNOWN in TabletDialer.
-	SetTarget(keyspace, shard string, tabletType pbt.TabletType) error
+	SetTarget(keyspace, shard string, tabletType topodatapb.TabletType) error
 
 	// GetEndPoint returns the end point info.
-	EndPoint() *pbt.EndPoint
+	EndPoint() *topodatapb.EndPoint
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error)
+	SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
 
 	// StreamHealth streams StreamHealthResponse to the client
-	StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, ErrFunc, error)
+	StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, ErrFunc, error)
 }
 
 type ErrFunc func() error

@@ -16,14 +16,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 //
@@ -50,8 +50,8 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 	ti, err = wr.TopoServer().GetTablet(shortCtx, si.MasterAlias)
 	cancel()
 	if err != nil {
-		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v",
-			topoproto.TabletAliasString(si.MasterAlias), keyspace, shard)
+		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v: %v",
+			topoproto.TabletAliasString(si.MasterAlias), keyspace, shard, err)
 	}
 	return ti, nil
 }
@@ -59,7 +59,7 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 // Does a topo lookup for a single shard, and returns:
 //	1. Slice of all tablet aliases for the shard.
 //	2. Map of tablet alias : tablet record for all tablets.
-func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []*pb.TabletAlias, reloadTablets map[pb.TabletAlias]*topo.TabletInfo, err error) {
+func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []*topodatapb.TabletAlias, reloadTablets map[topodatapb.TabletAlias]*topo.TabletInfo, err error) {
 	// Keep a long timeout, because we really don't want the copying to succeed, and then the worker to fail at the end.
 	shortCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	reloadAliases, err = wr.TopoServer().FindAllTabletAliasesInShard(shortCtx, keyspace, shard)
@@ -170,7 +170,7 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 	isRetry := false
 	for {
 		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0, false)
+		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0)
 		cancel()
 		if err == nil {
 			// success!
@@ -268,7 +268,7 @@ func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shar
 // "", "value1", "value2", ""
 // A non-split tablet will just return:
 // "", ""
-func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
+func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *tabletmanagerdatapb.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
 	result := []string{"", ""}
 
 	// eliminate a few cases we don't split tables for
@@ -284,7 +284,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, ti, query, 1, true)
+	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, ti, query, 1)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("ExecuteFetchAsApp: %v", err)
@@ -293,50 +293,54 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot get min and max", td.Name)
 		return result, nil
 	}
-	if qr.Rows[0][0].IsNull() || qr.Rows[0][1].IsNull() {
-		wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v %v", td.Name, qr.Rows[0][0], qr.Rows[0][1])
+
+	// FIXME(alainjobart) this code is a bit clunky. I'd like to
+	// convert the first row into an array of Values, and then
+	// see which type they are and go from there. Can only happen after
+	// Value has a full type.
+	l0 := qr.Rows[0].Lengths[0]
+	l1 := qr.Rows[0].Lengths[1]
+	if l0 < 0 || l1 < 0 {
+		wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v", td.Name, qr.Rows[0])
 		return result, nil
 	}
-	switch qr.Fields[0].Type {
-	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
-		minNumeric := sqltypes.MakeNumeric(qr.Rows[0][0].Raw())
-		maxNumeric := sqltypes.MakeNumeric(qr.Rows[0][1].Raw())
-		if (qr.Fields[0].Flags & mproto.VT_UNSIGNED_FLAG) == 0 {
-			// signed values, use int64
-			min, err := minNumeric.ParseInt64()
-			if err != nil {
-				wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
-				return result, nil
-			}
-			max, err := maxNumeric.ParseInt64()
-			if err != nil {
-				wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, maxNumeric, err)
-				return result, nil
-			}
-			interval := (max - min) / int64(sourceReaderCount)
-			if interval == 0 {
-				wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", td.Name, max, min)
-				return result, nil
-			}
-
-			result = make([]string, sourceReaderCount+1)
-			result[0] = ""
-			result[sourceReaderCount] = ""
-			for i := int64(1); i < int64(sourceReaderCount); i++ {
-				result[i] = fmt.Sprintf("%v", min+interval*i)
-			}
+	minValue := qr.Rows[0].Values[:l0]
+	maxValue := qr.Rows[0].Values[l0 : l0+l1]
+	switch {
+	case sqltypes.IsSigned(qr.Fields[0].Type):
+		min, err := strconv.ParseInt(string(minValue), 10, 64)
+		if err != nil {
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, string(minValue), err)
+			return result, nil
+		}
+		max, err := strconv.ParseInt(string(maxValue), 10, 64)
+		if err != nil {
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, string(maxValue), err)
+			return result, nil
+		}
+		interval := (max - min) / int64(sourceReaderCount)
+		if interval == 0 {
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", td.Name, max, min)
 			return result, nil
 		}
 
-		// unsigned values, use uint64
-		min, err := minNumeric.ParseUint64()
+		result = make([]string, sourceReaderCount+1)
+		result[0] = ""
+		result[sourceReaderCount] = ""
+		for i := int64(1); i < int64(sourceReaderCount); i++ {
+			result[i] = fmt.Sprintf("%v", min+interval*i)
+		}
+		return result, nil
+
+	case sqltypes.IsUnsigned(qr.Fields[0].Type):
+		min, err := strconv.ParseUint(string(minValue), 10, 64)
 		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, string(minValue), err)
 			return result, nil
 		}
-		max, err := maxNumeric.ParseUint64()
+		max, err := strconv.ParseUint(string(maxValue), 10, 64)
 		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, maxNumeric, err)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, string(maxValue), err)
 			return result, nil
 		}
 		interval := (max - min) / uint64(sourceReaderCount)
@@ -353,15 +357,15 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 		}
 		return result, nil
 
-	case mproto.VT_FLOAT, mproto.VT_DOUBLE:
-		min, err := strconv.ParseFloat(qr.Rows[0][0].String(), 64)
+	case sqltypes.IsFloat(qr.Fields[0].Type):
+		min, err := strconv.ParseFloat(string(minValue), 64)
 		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, qr.Rows[0][0], err)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, string(minValue), err)
 			return result, nil
 		}
-		max, err := strconv.ParseFloat(qr.Rows[0][1].String(), 64)
+		max, err := strconv.ParseFloat(string(maxValue), 64)
 		if err != nil {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, qr.Rows[0][1].String(), err)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, string(maxValue), err)
 			return result, nil
 		}
 		interval := (max - min) / float64(sourceReaderCount)
@@ -385,7 +389,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 
 // buildSQLFromChunks returns the SQL command to run to insert the data
 // using the chunks definitions into the provided table.
-func buildSQLFromChunks(wr *wrangler.Wrangler, td *myproto.TableDefinition, chunks []string, chunkIndex int, source string) string {
+func buildSQLFromChunks(wr *wrangler.Wrangler, td *tabletmanagerdatapb.TableDefinition, chunks []string, chunkIndex int, source string) string {
 	selectSQL := "SELECT " + strings.Join(td.Columns, ", ") + " FROM " + td.Name
 	if chunks[chunkIndex] != "" || chunks[chunkIndex+1] != "" {
 		wr.Logger().Infof("Starting to stream all data from tablet %v table %v between '%v' and '%v'", source, td.Name, chunks[chunkIndex], chunks[chunkIndex+1])
@@ -408,7 +412,7 @@ func buildSQLFromChunks(wr *wrangler.Wrangler, td *myproto.TableDefinition, chun
 
 // makeValueString returns a string that contains all the passed-in rows
 // as an insert SQL command's parameters.
-func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
+func makeValueString(fields []*querypb.Field, rows [][]sqltypes.Value) string {
 	buf := bytes.Buffer{}
 	for i, row := range rows {
 		if i > 0 {
@@ -420,16 +424,7 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 			if j > 0 {
 				buf.WriteByte(',')
 			}
-			// convert value back to its original type
-			if !value.IsNull() {
-				switch fields[j].Type {
-				case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
-					value = sqltypes.MakeNumeric(value.Raw())
-				case mproto.VT_FLOAT, mproto.VT_DOUBLE:
-					value = sqltypes.MakeFractional(value.Raw())
-				}
-			}
-			value.EncodeSql(&buf)
+			value.EncodeSQL(&buf)
 		}
 		buf.WriteByte(')')
 	}

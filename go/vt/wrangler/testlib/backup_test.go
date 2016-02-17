@@ -5,32 +5,34 @@
 package testlib
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
-	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 	"github.com/youtube/vitess/go/vt/mysqlctl/filebackupstorage"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestBackupRestore(t *testing.T) {
 	// Initialize our environment
 	ctx := context.Background()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	db := fakesqldb.Register()
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
@@ -67,14 +69,14 @@ func TestBackupRestore(t *testing.T) {
 	}
 
 	// create a master tablet, not started, just for shard health
-	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
+	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
 
 	// create a single tablet, set it up so we can do backups
-	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
+	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
-	sourceTablet.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	sourceTablet.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 457,
@@ -109,11 +111,11 @@ func TestBackupRestore(t *testing.T) {
 	}
 
 	// create a destination tablet, set it up so we can do restores
-	destTablet := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
+	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
-	destTablet.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
+	destTablet.FakeMysqlDaemon.CurrentMasterPosition = replication.Position{
+		GTIDSet: replication.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 457,
@@ -121,22 +123,25 @@ func TestBackupRestore(t *testing.T) {
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"cmd1",
+		"set master cmd 1",
+		"START SLAVE",
 	}
 	destTablet.FakeMysqlDaemon.Mycnf = &mysqlctl.Mycnf{
 		DataDir:               sourceDataDir,
 		InnodbDataHomeDir:     sourceInnodbDataDir,
 		InnodbLogGroupHomeDir: sourceInnodbLogDir,
+		BinLogPath:            path.Join(root, "bin-logs/filename_prefix"),
+		RelayLogPath:          path.Join(root, "relay-logs/filename_prefix"),
+		RelayLogIndexPath:     path.Join(root, "relay-log.index"),
+		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
-	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
-		"SHOW DATABASES": &mproto.QueryResult{},
+	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES": {},
 	}
-	destTablet.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
-		Position:           sourceTablet.FakeMysqlDaemon.CurrentMasterPosition,
-		MasterHost:         master.Tablet.Hostname,
-		MasterPort:         int(master.Tablet.PortMap["mysql"]),
-		MasterConnectRetry: 10,
-	}
-	destTablet.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1"}
+	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsPos = sourceTablet.FakeMysqlDaemon.CurrentMasterPosition
+	destTablet.FakeMysqlDaemon.SetSlavePositionCommandsResult = []string{"cmd1"}
+	destTablet.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
+	destTablet.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)

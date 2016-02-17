@@ -10,7 +10,6 @@ package grpcvtctlserver
 
 import (
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 
@@ -21,8 +20,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/vtctldata"
-	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
+	vtctldatapb "github.com/youtube/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "github.com/youtube/vitess/go/vt/proto/vtctlservice"
 )
 
 // VtctlServer is our RPC server
@@ -35,8 +34,8 @@ func NewVtctlServer(ts topo.Server) *VtctlServer {
 	return &VtctlServer{ts}
 }
 
-// ExecuteVtctlCommand is part of the pb.VtctlServer interface
-func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, stream pbs.Vtctl_ExecuteVtctlCommandServer) (err error) {
+// ExecuteVtctlCommand is part of the vtctldatapb.VtctlServer interface
+func (s *VtctlServer) ExecuteVtctlCommand(args *vtctldatapb.ExecuteVtctlCommandRequest, stream vtctlservicepb.Vtctl_ExecuteVtctlCommandServer) (err error) {
 	defer servenv.HandlePanic("vtctl", &err)
 
 	// create a logger, send the result back to the caller
@@ -52,15 +51,15 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 			// we still need to flush and finish the
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
-			stream.Send(&pb.ExecuteVtctlCommandResponse{
-				Event: logutil.LoggerEventToProto(&e),
+			stream.Send(&vtctldatapb.ExecuteVtctlCommandResponse{
+				Event: e,
 			})
 		}
 		wg.Done()
 	}()
 
 	// create the wrangler
-	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient(), time.Duration(args.LockTimeout))
+	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient())
 
 	// execute the command
 	err = vtctl.RunCommand(stream.Context(), wr, args.Args)
@@ -74,5 +73,5 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 
 // StartServer registers the VtctlServer for RPCs
 func StartServer(s *grpc.Server, ts topo.Server) {
-	pbs.RegisterVtctlServer(s, NewVtctlServer(ts))
+	vtctlservicepb.RegisterVtctlServer(s, NewVtctlServer(ts))
 }

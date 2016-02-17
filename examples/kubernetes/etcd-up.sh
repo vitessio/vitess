@@ -14,29 +14,25 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 replicas=${ETCD_REPLICAS:-3}
-
+VITESS_NAME=${VITESS_NAME:-'default'}
 CELLS=${CELLS:-'test'}
 cells=`echo $CELLS | tr ',' ' '`
 
 for cell in 'global' $cells; do
-  # Generate a discovery token.
-  echo "Generating discovery token for $cell cell..."
-  discovery=$(curl -sL https://discovery.etcd.io/new?size=$replicas)
-
   # Create the client service, which will load-balance across all replicas.
   echo "Creating etcd service for $cell cell..."
   cat etcd-service-template.yaml | \
     sed -e "s/{{cell}}/$cell/g" | \
-    $KUBECTL create -f -
+    $KUBECTL create --namespace=$VITESS_NAME -f -
 
   # Expand template variables
   sed_script=""
-  for var in cell discovery replicas; do
+  for var in cell replicas; do
     sed_script+="s,{{$var}},${!var},g;"
   done
 
   # Create the replication controller.
   echo "Creating etcd replicationcontroller for $cell cell..."
-  cat etcd-controller-template.yaml | sed -e "$sed_script" | $KUBECTL create -f -
+  cat etcd-controller-template.yaml | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
 done
 

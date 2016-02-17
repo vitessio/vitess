@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 )
@@ -20,14 +20,13 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	tableName := "test_table"
 	sql := fmt.Sprintf("alter table %s add test_column int", tableName)
 	db := fakesqldb.Register()
-	db.AddQuery("begin", &proto.QueryResult{})
-	db.AddQuery(sql, &proto.QueryResult{})
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery(sql, &sqltypes.Result{})
 
 	txPool := newTxPool(true)
 	txPool.SetTimeout(1 * time.Second)
-	txPool.SetPoolTimeout(1 * time.Second)
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
 	ctx := context.Background()
@@ -53,13 +52,13 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 func TestTxPoolExecuteRollback(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db := fakesqldb.Register()
-	db.AddQuery(sql, &proto.QueryResult{})
-	db.AddQuery("begin", &proto.QueryResult{})
-	db.AddQuery("rollback", &proto.QueryResult{})
+	db.AddQuery(sql, &sqltypes.Result{})
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
 
 	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
 	ctx := context.Background()
@@ -77,14 +76,14 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 func TestTxPoolTransactionKiller(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db := fakesqldb.Register()
-	db.AddQuery(sql, &proto.QueryResult{})
-	db.AddQuery("begin", &proto.QueryResult{})
+	db.AddQuery(sql, &sqltypes.Result{})
+	db.AddQuery("begin", &sqltypes.Result{})
 
 	txPool := newTxPool(false)
 	// make sure transaction killer will run frequent enough
 	txPool.SetTimeout(time.Duration(10))
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
 	ctx := context.Background()
@@ -102,11 +101,11 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 }
 
 func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
-	fakesqldb.Register()
+	db := fakesqldb.Register()
 	txPool := newTxPool(false)
 	txPool.SetTimeout(time.Duration(10))
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	txPool.Close()
 	ctx := context.Background()
@@ -123,31 +122,11 @@ func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
 	txPool.Begin(ctx)
 }
 
-func TestTxPoolBeginWithPoolTimeout(t *testing.T) {
-	db := fakesqldb.Register()
-	db.AddQuery("begin", &proto.QueryResult{})
-
-	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
-	txPool.Open(&appParams, &dbaParams)
-	// set pool capacity to 1
-	txPool.pool.SetCapacity(1)
-	defer txPool.Close()
-	// start the first transaction
-	txPool.Begin(context.Background())
-	// start the second transaction, which should fail due to
-	// ErrTxPoolFull error
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer handleAndVerifyTabletError(t, "expect to get an error", ErrTxPoolFull)
-	txPool.Begin(ctx)
-}
-
 func TestTxPoolBeginWithShortDeadline(t *testing.T) {
-	fakesqldb.Register()
+	db := fakesqldb.Register()
 	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	// set pool capacity to 1
 	txPool.pool.SetCapacity(1)
@@ -163,8 +142,8 @@ func TestTxPoolBeginWithPoolConnectionError(t *testing.T) {
 	db := fakesqldb.Register()
 	db.EnableConnFail()
 	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
 	defer handleAndVerifyTabletError(t, "expect to get an error", ErrFatal)
@@ -176,8 +155,8 @@ func TestTxPoolBeginWithExecError(t *testing.T) {
 	db := fakesqldb.Register()
 	db.AddRejectedQuery("begin", errRejected)
 	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
 	defer handleAndVerifyTabletError(t, "expect to get an error", ErrFail)
@@ -188,12 +167,12 @@ func TestTxPoolBeginWithExecError(t *testing.T) {
 func TestTxPoolSafeCommitFail(t *testing.T) {
 	db := fakesqldb.Register()
 	sql := fmt.Sprintf("alter table test_table add test_column int")
-	db.AddQuery("begin", &proto.QueryResult{})
-	db.AddQuery(sql, &proto.QueryResult{})
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery(sql, &sqltypes.Result{})
 	db.AddRejectedQuery("commit", errRejected)
 	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
 	ctx := context.Background()
@@ -213,13 +192,13 @@ func TestTxPoolSafeCommitFail(t *testing.T) {
 func TestTxPoolRollbackFail(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db := fakesqldb.Register()
-	db.AddQuery(sql, &proto.QueryResult{})
-	db.AddQuery("begin", &proto.QueryResult{})
+	db.AddQuery(sql, &sqltypes.Result{})
+	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddRejectedQuery("rollback", errRejected)
 
 	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
 	ctx := context.Background()
@@ -236,10 +215,10 @@ func TestTxPoolRollbackFail(t *testing.T) {
 }
 
 func TestTxPoolGetConnFail(t *testing.T) {
-	fakesqldb.Register()
+	db := fakesqldb.Register()
 	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
 	defer handleAndVerifyTabletError(t, "txpool.Get should fail", ErrNotInTx)
@@ -248,11 +227,11 @@ func TestTxPoolGetConnFail(t *testing.T) {
 
 func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	db := fakesqldb.Register()
-	db.AddQuery("begin", &proto.QueryResult{})
+	db.AddQuery("begin", &sqltypes.Result{})
 
 	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
 	ctx := context.Background()
@@ -275,7 +254,6 @@ func newTxPool(enablePublishStats bool) *TxPool {
 	txStatsPrefix := fmt.Sprintf("TxStats-%d-", randID)
 	transactionCap := 300
 	transactionTimeout := time.Duration(30 * time.Second)
-	txPoolTimeout := time.Duration(30 * time.Second)
 	idleTimeout := time.Duration(30 * time.Second)
 	queryServiceStats := NewQueryServiceStats("", enablePublishStats)
 	return NewTxPool(
@@ -283,9 +261,9 @@ func newTxPool(enablePublishStats bool) *TxPool {
 		txStatsPrefix,
 		transactionCap,
 		transactionTimeout,
-		txPoolTimeout,
 		idleTimeout,
 		enablePublishStats,
 		queryServiceStats,
+		DummyChecker,
 	)
 }

@@ -10,15 +10,17 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")
 
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
-func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
-	sd := &proto.SchemaDefinition{}
+func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	sd := &tabletmanagerdatapb.SchemaDefinition{}
 
 	// get the database creation command
 	qr, fetchErr := mysqld.FetchSuperQuery("SHOW CREATE DATABASE IF NOT EXISTS " + dbName)
@@ -33,7 +35,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	// get the list of tables we're interested in
 	sql := "SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
 	if !includeViews {
-		sql += " AND table_type = '" + proto.TableBaseTable + "'"
+		sql += " AND table_type = '" + tmutils.TableBaseTable + "'"
 	}
 	qr, err := mysqld.FetchSuperQuery(sql)
 	if err != nil {
@@ -43,7 +45,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		return sd, nil
 	}
 
-	sd.TableDefinitions = make([]*proto.TableDefinition, 0, len(qr.Rows))
+	sd.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		tableName := row[0].String()
 		tableType := row[1].String()
@@ -80,13 +82,13 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		// vt/tabletserver/table_info.go:162
 		norm := qr.Rows[0][1].String()
 		norm = autoIncr.ReplaceAllLiteralString(norm, "")
-		if tableType == proto.TableView {
+		if tableType == tmutils.TableView {
 			// Views will have the dbname in there, replace it
 			// with {{.DatabaseName}}
 			norm = strings.Replace(norm, "`"+dbName+"`", "`{{.DatabaseName}}`", -1)
 		}
 
-		td := &proto.TableDefinition{}
+		td := &tabletmanagerdatapb.TableDefinition{}
 		td.Name = tableName
 		td.Schema = norm
 
@@ -104,11 +106,11 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		sd.TableDefinitions = append(sd.TableDefinitions, td)
 	}
 
-	sd, err = sd.FilterTables(tables, excludeTables, includeViews)
+	sd, err = tmutils.FilterTables(sd, tables, excludeTables, includeViews)
 	if err != nil {
 		return nil, err
 	}
-	sd.GenerateSchemaVersion()
+	tmutils.GenerateSchemaVersion(sd)
 	return sd, nil
 }
 
@@ -199,7 +201,7 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 // PreflightSchemaChange will apply the schema change to a fake
 // database that has the same schema as the target database, see if it
 // works.
-func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error) {
+func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*tmutils.SchemaChangeResult, error) {
 	// gather current schema on real database
 	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
 	if err != nil {
@@ -212,11 +214,11 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	sql += "CREATE DATABASE _vt_preflight;\n"
 	sql += "USE _vt_preflight;\n"
 	for _, td := range beforeSchema.TableDefinitions {
-		if td.Type == proto.TableBaseTable {
+		if td.Type == tmutils.TableBaseTable {
 			sql += td.Schema + ";\n"
 		}
 	}
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 
@@ -224,7 +226,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	sql = "SET sql_log_bin = 0;\n"
 	sql += "USE _vt_preflight;\n"
 	sql += change
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 
@@ -237,22 +239,22 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	// and clean up the extra database
 	sql = "SET sql_log_bin = 0;\n"
 	sql += "DROP DATABASE _vt_preflight;\n"
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 
-	return &proto.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
+	return &tmutils.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
 
 // ApplySchemaChange will apply the schema change to the given database.
-func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error) {
+func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	// check current schema matches
 	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, false)
 	if err != nil {
 		return nil, err
 	}
 	if change.BeforeSchema != nil {
-		schemaDiffs := proto.DiffSchemaToArray("actual", beforeSchema, "expected", change.BeforeSchema)
+		schemaDiffs := tmutils.DiffSchemaToArray("actual", beforeSchema, "expected", change.BeforeSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
 				log.Warningf("BeforeSchema differs: %v", msg)
@@ -260,12 +262,14 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 
 			// let's see if the schema was already applied
 			if change.AfterSchema != nil {
-				schemaDiffs = proto.DiffSchemaToArray("actual", beforeSchema, "expected", change.AfterSchema)
+				schemaDiffs = tmutils.DiffSchemaToArray("actual", beforeSchema, "expected", change.AfterSchema)
 				if len(schemaDiffs) == 0 {
 					// no diff between the schema we expect
 					// after the change and the current
 					// schema, we already applied it
-					return &proto.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: beforeSchema}, nil
+					return &tmutils.SchemaChangeResult{
+						BeforeSchema: beforeSchema,
+						AfterSchema:  beforeSchema}, nil
 				}
 			}
 
@@ -277,7 +281,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 		}
 	}
 
-	sql := change.Sql
+	sql := change.SQL
 	if !change.AllowReplication {
 		sql = "SET sql_log_bin = 0;\n" + sql
 	}
@@ -287,7 +291,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)
-	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
 		return nil, err
 	}
 
@@ -299,7 +303,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 
 	// compare to the provided AfterSchema
 	if change.AfterSchema != nil {
-		schemaDiffs := proto.DiffSchemaToArray("actual", afterSchema, "expected", change.AfterSchema)
+		schemaDiffs := tmutils.DiffSchemaToArray("actual", afterSchema, "expected", change.AfterSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
 				log.Warningf("AfterSchema differs: %v", msg)
@@ -312,5 +316,5 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 		}
 	}
 
-	return &proto.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
+	return &tmutils.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }

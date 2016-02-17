@@ -14,13 +14,15 @@ import (
 
 	log "github.com/golang/glog"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 var resetDownConnDelay = flag.Duration("reset-down-conn-delay", 10*time.Minute, "delay to reset a marked down tabletconn")
 
 // GetEndPointsFunc defines the callback to topo server.
-type GetEndPointsFunc func() (*pb.EndPoints, error)
+type GetEndPointsFunc func() (*topodatapb.EndPoints, error)
 
 // Balancer is a simple round-robin load balancer.
 // It allows you to temporarily mark down nodes that
@@ -35,7 +37,7 @@ type Balancer struct {
 }
 
 type addressStatus struct {
-	endPoint  *pb.EndPoint
+	endPoint  *topodatapb.EndPoint
 	timeRetry time.Time
 	balancer  *Balancer
 }
@@ -58,7 +60,7 @@ func NewBalancer(getEndPoints GetEndPointsFunc, retryDelay time.Duration) *Balan
 // it refreshes the list of addresses and returns the next available
 // node. If all addresses are marked down, it waits and retries.
 // If a refresh fails, it returns an error.
-func (blc *Balancer) Get() (endPoints []*pb.EndPoint, err error) {
+func (blc *Balancer) Get() (endPoints []*topodatapb.EndPoint, err error) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
 
@@ -72,12 +74,12 @@ func (blc *Balancer) Get() (endPoints []*pb.EndPoint, err error) {
 	// Get the latest endpoints
 	err = blc.refresh()
 	if err != nil {
-		return []*pb.EndPoint{}, err
+		return []*topodatapb.EndPoint{}, err
 	}
 
 	// Return all endpoints without markdown and timeRetry < now(),
 	// so endpoints just marked down (within retryDelay) are ignored.
-	validEndPoints := make([]*pb.EndPoint, 0, 1)
+	validEndPoints := make([]*topodatapb.EndPoint, 0, 1)
 	for _, addrNode := range blc.addressNodes {
 		if addrNode.timeRetry.IsZero() || addrNode.timeRetry.Before(time.Now()) {
 			validEndPoints = append(validEndPoints, addrNode.endPoint)
@@ -129,7 +131,10 @@ func (blc *Balancer) refresh() error {
 		i++
 	}
 	if len(blc.addressNodes) == 0 {
-		return fmt.Errorf("no available addresses")
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_INTERNAL_ERROR,
+			fmt.Errorf("no available addresses"),
+		)
 	}
 	// Sort endpoints by timeRetry (from ZERO to largest)
 	sort.Sort(AddressList(blc.addressNodes))
@@ -171,7 +176,7 @@ func findAddrNode(addressNodes []*addressStatus, uid uint32) (index int) {
 	return -1
 }
 
-func findAddress(endPoints *pb.EndPoints, uid uint32) (index int) {
+func findAddress(endPoints *topodatapb.EndPoints, uid uint32) (index int) {
 	if endPoints == nil {
 		return -1
 	}
@@ -195,9 +200,4 @@ func shuffle(addressNodes []*addressStatus, length int) {
 		index = rand.Intn(i + 1)
 		addressNodes[i], addressNodes[index] = addressNodes[index], addressNodes[i]
 	}
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	idGen.Set(rand.Int63())
 }

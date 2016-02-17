@@ -43,9 +43,6 @@ const (
 	// TabletActionChangeType changes the type of the tablet
 	TabletActionChangeType = "ChangeType"
 
-	// TabletActionScrap scraps the live running tablet
-	TabletActionScrap = "Scrap"
-
 	// TabletActionResetReplication tells the tablet it should
 	// reset its replication state
 	TabletActionResetReplication = "ResetReplication"
@@ -182,9 +179,6 @@ const (
 	// ShardActionCheck takes a generic read lock for inexpensive
 	// shard-wide actions.
 	ShardActionCheck = "CheckShard"
-
-	// ShardActionApplySchema applies a schema change on an entire shard
-	ShardActionApplySchema = "ApplySchemaShard"
 
 	// ShardActionSetServedTypes changes the ServedTypes inside a shard
 	ShardActionSetServedTypes = "SetShardServedTypes"

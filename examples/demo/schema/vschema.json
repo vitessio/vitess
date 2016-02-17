@@ -1,0 +1,99 @@
+{
+  "Keyspaces": {
+    "user": {
+      "Sharded": true,
+      "Vindexes": {
+        "user_idx": {
+          "Type": "hash_autoinc",
+          "Params": {
+            "Table": "user_idx",
+            "Column": "user_id"
+          },
+          "Owner": "user"
+        },
+        "name_user_idx": {
+          "Type": "lookup_hash",
+          "Params": {
+            "Table": "name_user_idx",
+            "From": "name",
+            "To": "user_id"
+          },
+          "Owner": "user"
+        },
+        "music_user_idx": {
+          "Type": "lookup_hash_unique_autoinc",
+          "Params": {
+            "Table": "music_user_idx",
+            "From": "music_id",
+            "To": "user_id"
+          },
+          "Owner": "music"
+        },
+        "keyspace_idx": {
+          "Type": "numeric"
+        }
+      },
+      "Classes": {
+        "user": {
+          "ColVindexes": [
+            {
+              "Col": "user_id",
+              "Name": "user_idx"
+            },
+            {
+              "Col": "name",
+              "Name": "name_user_idx"
+            }
+          ]
+        },
+        "user_extra": {
+          "ColVindexes": [
+            {
+              "Col": "user_id",
+              "Name": "user_idx"
+            }
+          ]
+        },
+        "music": {
+          "ColVindexes": [
+            {
+              "Col": "user_id",
+              "Name": "user_idx"
+            },
+            {
+              "Col": "music_id",
+              "Name": "music_user_idx"
+            }
+          ]
+        },
+        "music_extra": {
+          "ColVindexes": [
+            {
+              "Col": "music_id",
+              "Name": "music_user_idx"
+            },
+            {
+              "Col": "keyspace_id",
+              "Name": "keyspace_idx"
+            }
+          ]
+        }
+      },
+      "Tables": {
+        "user": "user",
+        "user_extra": "user_extra",
+        "music": "music",
+        "music_extra": "music_extra"
+      }
+    },
+    "lookup": {
+      "Sharded": false,
+      "Tables": {
+        "user_idx": "",
+        "music_user_idx": "",
+        "name_user_idx": ""
+      }
+    }
+  }
+}
+

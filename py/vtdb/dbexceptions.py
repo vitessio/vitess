@@ -1,40 +1,52 @@
 import exceptions
 
+
 class Error(exceptions.StandardError):
   pass
+
 
 class DatabaseError(exceptions.StandardError):
   pass
 
+
 class DataError(DatabaseError):
   pass
+
 
 class Warning(exceptions.StandardError):
   pass
 
+
 class InterfaceError(Error):
   pass
+
 
 class InternalError(DatabaseError):
   pass
 
+
 class OperationalError(DatabaseError):
   pass
+
 
 class ProgrammingError(DatabaseError):
   pass
 
+
 class NotSupportedError(ProgrammingError):
   pass
 
+
 class IntegrityError(DatabaseError):
   pass
+
 
 class PartialCommitError(IntegrityError):
   pass
 
 
 # Below errors are VT specific
+
 
 # Retry means a simple and immediate reconnect to the same host/port
 # will likely fix things. This is initiated by a graceful restart on
@@ -51,8 +63,8 @@ class FatalError(OperationalError):
   pass
 
 
-# This failure is operational in the sense that we must teardown the connection to
-# ensure future RPCs are handled correctly.
+# This failure is operational in the sense that we must teardown the
+# connection to ensure future RPCs are handled correctly.
 class TimeoutError(OperationalError):
   pass
 
@@ -60,12 +72,15 @@ class TimeoutError(OperationalError):
 class TxPoolFull(DatabaseError):
   pass
 
-
-class RequestBacklog(DatabaseError):
+# TransientError is raised for an error that is expected to go away soon. These
+# errors should be retried. Examples: when a client exceedes allocated quota on
+# a server, or when there's a backlog of requests and new ones are temporarily
+# being rejected.
+class TransientError(DatabaseError):
   pass
 
 
+# TODO(aaijazi): These are deprecated. They will be replaced by TransientError.
 # ThrottledError is raised when client exceeds allocated quota on the server
 class ThrottledError(DatabaseError):
   pass
-

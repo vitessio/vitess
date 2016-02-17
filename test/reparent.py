@@ -1,19 +1,17 @@
 #!/usr/bin/env python
 
-import warnings
-# Dropping a table inexplicably produces a warning despite
-# the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter('ignore')
-
 import logging
 import time
 import unittest
+
+from vtproto import topodata_pb2
 
 import environment
 import utils
 import tablet
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
+
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
@@ -78,21 +76,21 @@ class TestReparent(unittest.TestCase):
   ) Engine=InnoDB'''
 
   def _populate_vt_insert_test(self, master_tablet, index):
-    q = "insert into vt_insert_test(id, msg) values (%d, 'test %d')" % \
-        (index, index)
+    q = ("insert into vt_insert_test(id, msg) values (%d, 'test %d')" %
+         (index, index))
     master_tablet.mquery('vt_test_keyspace', q, write=True)
 
-  def _check_vt_insert_test(self, tablet, index):
+  def _check_vt_insert_test(self, tablet_obj, index):
     # wait until it gets the data
     timeout = 10.0
     while True:
-      result = tablet.mquery('vt_test_keyspace',
-                             'select msg from vt_insert_test where id=%d' %
-                             index)
+      result = tablet_obj.mquery(
+          'vt_test_keyspace',
+          'select msg from vt_insert_test where id=%d' % index)
       if len(result) == 1:
         break
       timeout = utils.wait_step('waiting for replication to catch up on %s' %
-                                tablet.tablet_alias,
+                                tablet_obj.tablet_alias,
                                 timeout, sleep_time=0.1)
 
   def _check_db_addr(self, shard, db_type, expected_port, cell='test_nj'):
@@ -101,20 +99,20 @@ class TestReparent(unittest.TestCase):
     self.assertEqual(
         len(ep['entries']), 1, 'Wrong number of entries: %s' % str(ep))
     port = ep['entries'][0]['port_map']['vt']
-    self.assertEqual(port, expected_port,
-                     'Unexpected port: %d != %d from %s' % (port, expected_port,
-                                                            str(ep)))
+    self.assertEqual(
+        port, expected_port,
+        'Unexpected port: %d != %d from %s' % (port, expected_port, str(ep)))
     host = ep['entries'][0]['host']
-    # Hostname was set explicitly to "localhost" with -tablet_hostname flag.
+    # Hostname was set explicitly to 'localhost' with -tablet_hostname flag.
     if not host.startswith('localhost'):
       self.fail(
           'Invalid hostname %s was expecting something starting with %s' %
           (host, 'localhost'))
 
   def _check_master_cell(self, cell, shard_id, master_cell):
-    srvShard = utils.run_vtctl_json(['GetSrvShard', cell,
-                                     'test_keyspace/%s' % (shard_id)])
-    self.assertEqual(srvShard['master_cell'], master_cell)
+    srv_shard = utils.run_vtctl_json(['GetSrvShard', cell,
+                                      'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srv_shard['master_cell'], master_cell)
 
   def test_master_to_spare_state_change_impossible(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -126,8 +124,6 @@ class TestReparent(unittest.TestCase):
 
     utils.run_vtctl(['ChangeSlaveType', tablet_62344.tablet_alias, 'spare'],
                     expect_fail=True)
-    utils.run_vtctl(['ChangeSlaveType', '--force', tablet_62344.tablet_alias,
-                     'spare'], expect_fail=True)
     tablet_62344.kill_vttablet()
 
   def test_reparent_down_master(self):
@@ -160,7 +156,8 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
-    # Force the slaves to reparent assuming that all the datasets are identical.
+    # Force the slaves to reparent assuming that all the datasets are
+    # identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
@@ -182,19 +179,7 @@ class TestReparent(unittest.TestCase):
                                 expect_fail=True)
     self.assertIn('DemoteMaster failed', stderr)
 
-    # Should fail to connect and fail
-    _, stderr = utils.run_vtctl(['-wait-time', '10s', 'ScrapTablet',
-                                 tablet_62344.tablet_alias],
-                                expect_fail=True)
-    logging.debug('Failed ScrapTablet output:\n' + stderr)
-    if 'connection refused' not in stderr and protocols_flavor().rpc_timeout_message() not in stderr:
-      self.fail("didn't find the right error strings in failed ScrapTablet: " +
-                stderr)
-
-    # Force the scrap action in zk even though tablet is not accessible.
-    tablet_62344.scrap(force=True)
-
-    # Re-run forced reparent operation, this should now proceed unimpeded.
+    # Run forced reparent operation, this should now proceed unimpeded.
     utils.run_vtctl(['EmergencyReparentShard', 'test_keyspace/0',
                      tablet_62044.tablet_alias], auto_log=True)
 
@@ -205,14 +190,6 @@ class TestReparent(unittest.TestCase):
     self._populate_vt_insert_test(tablet_62044, 2)
     self._check_vt_insert_test(tablet_41983, 2)
     self._check_vt_insert_test(tablet_31981, 2)
-
-    utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias,
-                     'idle'])
-
-    idle_tablets, _ = utils.run_vtctl(['ListAllTablets', 'test_nj'],
-                                      trap_output=True)
-    if '0000062344 <null> <null> idle' not in idle_tablets:
-      self.fail('idle tablet not found: %s' % idle_tablets)
 
     tablet.kill_tablets([tablet_62044, tablet_41983, tablet_31981])
 
@@ -254,7 +231,8 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
-    # Force the slaves to reparent assuming that all the datasets are identical.
+    # Force the slaves to reparent assuming that all the datasets are
+    # identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/' + shard_id,
@@ -283,16 +261,17 @@ class TestReparent(unittest.TestCase):
                          tablet_31981])
 
   def test_reparent_graceful_range_based(self):
-    shard_id = '0000000000000000-ffffffffffffffff'
-    self._test_reparent_graceful(shard_id)
+    utils.run_vtctl(['CreateKeyspace',
+                     '--sharding_column_name', 'keyspace_id',
+                     '--sharding_column_type', 'uint64',
+                     'test_keyspace'])
+    self._test_reparent_graceful('0000000000000000-ffffffffffffffff')
 
   def test_reparent_graceful(self):
-    shard_id = '0'
-    self._test_reparent_graceful(shard_id)
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+    self._test_reparent_graceful('0')
 
   def _test_reparent_graceful(self, shard_id):
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-
     # create the database so vttablets start, as they are serving
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62044.create_db('vt_test_keyspace')
@@ -325,7 +304,8 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
-    # Force the slaves to reparent assuming that all the datasets are identical.
+    # Force the slaves to reparent assuming that all the datasets are
+    # identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/' + shard_id,
@@ -339,8 +319,9 @@ class TestReparent(unittest.TestCase):
     self._check_master_cell('test_nj', shard_id, 'test_nj')
     self._check_master_cell('test_ny', shard_id, 'test_nj')
 
-    # Convert two replica to spare. That should leave only one node serving traffic,
-    # but still needs to appear in the replication graph.
+    # Convert two replica to spare. That should leave only one node
+    # serving traffic, but still needs to appear in the replication
+    # graph.
     utils.run_vtctl(['ChangeSlaveType', tablet_41983.tablet_alias, 'spare'])
     utils.run_vtctl(['ChangeSlaveType', tablet_31981.tablet_alias, 'spare'])
     utils.validate_topology()
@@ -380,7 +361,7 @@ class TestReparent(unittest.TestCase):
       try:
         self._check_db_addr(shard_id, 'master', new_port)
         break
-      except:
+      except protocols_flavor().client_error_exception_type():
         timeout = utils.wait_step('waiting for new port to register',
                                   timeout, sleep_time=0.1)
 
@@ -417,7 +398,8 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
-    # Force the slaves to reparent assuming that all the datasets are identical.
+    # Force the slaves to reparent assuming that all the datasets are
+    # identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/' + shard_id,
@@ -444,14 +426,16 @@ class TestReparent(unittest.TestCase):
     self._test_reparent_from_outside(brutal=True)
 
   def _test_reparent_from_outside(self, brutal=False):
-    """This test will start a master and 3 slaves. Then:
+    """This test will start a master and 3 slaves.
+
+    Then:
     - one slave will be the new master
     - one slave will be reparented to that new master
     - one slave will be busted and dead in the water
     and we'll call TabletExternallyReparented.
 
     Args:
-      brutal: scraps the old master first
+      brutal: kills the old master first
     """
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
@@ -487,25 +471,29 @@ class TestReparent(unittest.TestCase):
     tablet_62044.mquery('', mysql_flavor().promote_slave_commands())
     new_pos = mysql_flavor().master_position(tablet_62044)
     logging.debug('New master position: %s', str(new_pos))
-    # Use "localhost" as hostname because Travis CI worker hostnames are too long for MySQL replication.
-    changeMasterCmds = mysql_flavor().change_master_commands(
+    # Use 'localhost' as hostname because Travis CI worker hostnames
+    # are too long for MySQL replication.
+    change_master_cmds = mysql_flavor().change_master_commands(
         'localhost',
         tablet_62044.mysql_port,
         new_pos)
 
     # 62344 will now be a slave of 62044
     tablet_62344.mquery('', ['RESET MASTER', 'RESET SLAVE'] +
-                        changeMasterCmds +
+                        change_master_cmds +
                         ['START SLAVE'])
 
     # 41983 will be a slave of 62044
     tablet_41983.mquery('', ['STOP SLAVE'] +
-                        changeMasterCmds +
+                        change_master_cmds +
                         ['START SLAVE'])
 
-    # in brutal mode, we scrap the old master first
+    # in brutal mode, we kill the old master first
+    # and delete its tablet record
     if brutal:
-      tablet_62344.scrap(force=True)
+      tablet_62344.kill_vttablet()
+      utils.run_vtctl(['DeleteTablet', '-allow_master',
+                       tablet_62344.tablet_alias], auto_log=True)
 
     base_time = time.time()
 
@@ -521,8 +509,9 @@ class TestReparent(unittest.TestCase):
 
     self._test_reparent_from_outside_check(brutal, base_time)
 
-    tablet.kill_tablets([tablet_31981, tablet_62344, tablet_62044,
-                         tablet_41983])
+    if not brutal:
+      tablet_62344.kill_vttablet()
+    tablet.kill_tablets([tablet_31981, tablet_62044, tablet_41983])
 
   def _test_reparent_from_outside_check(self, brutal, base_time):
 
@@ -551,14 +540,14 @@ class TestReparent(unittest.TestCase):
 
     # make sure the master health stream says it's the master too
     # (health check is disabled on these servers, force it first)
-    utils.run_vtctl(["RunHealthCheck", tablet_62044.tablet_alias, "replica"])
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'])
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                    '-count', '1',
                                    tablet_62044.tablet_alias])
-    self.assertEqual(health['target']['tablet_type'],
-                     tablet.Tablet.tablet_type_value['MASTER'])
+    self.assertEqual(health['target']['tablet_type'], topodata_pb2.MASTER)
     # have to compare the int version, or the rounding errors can break
-    self.assertTrue(health['tablet_externally_reparented_timestamp'] >= int(base_time))
+    self.assertTrue(
+        health['tablet_externally_reparented_timestamp'] >= int(base_time))
 
   # See if a missing slave can be safely reparented after the fact.
   def test_reparent_with_down_slave(self, shard_id='0'):

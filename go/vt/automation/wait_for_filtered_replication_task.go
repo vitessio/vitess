@@ -5,9 +5,8 @@
 package automation
 
 import (
-	"fmt"
-
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 )
 
@@ -17,8 +16,8 @@ type WaitForFilteredReplicationTask struct {
 }
 
 // Run is part of the Task interface.
-func (t *WaitForFilteredReplicationTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
-	keyspaceAndShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["shard"])
+func (t *WaitForFilteredReplicationTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
+	keyspaceAndShard := topoproto.KeyspaceShardString(parameters["keyspace"], parameters["shard"])
 	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"],
 		[]string{"WaitForFilteredReplication", "-max_delay", parameters["max_delay"], keyspaceAndShard})
 	return nil, output, err

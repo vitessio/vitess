@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CopyKeyspaces will create the keyspaces in the destination topo
@@ -83,7 +83,7 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl, deleteKeyspaceShard
 				wg.Add(1)
 				go func(keyspace, shard string) {
 					defer wg.Done()
-					if err := toTS.CreateShard(ctx, keyspace, shard, &pb.Shard{}); err != nil {
+					if err := toTS.CreateShard(ctx, keyspace, shard, &topodatapb.Shard{}); err != nil {
 						if err == topo.ErrNodeExists {
 							log.Warningf("shard %v/%v already exists", keyspace, shard)
 						} else {
@@ -123,6 +123,9 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 	if err != nil {
 		log.Fatalf("fromTS.GetKnownCells: %v", err)
 	}
+	tts := topo.Server{
+		Impl: toTS,
+	}
 
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
@@ -136,7 +139,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 			} else {
 				for _, tabletAlias := range tabletAliases {
 					wg.Add(1)
-					go func(tabletAlias *pb.TabletAlias) {
+					go func(tabletAlias *topodatapb.TabletAlias) {
 						defer wg.Done()
 
 						// read the source tablet
@@ -151,7 +154,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 						if err == topo.ErrNodeExists {
 							// update the destination tablet
 							log.Warningf("tablet %v already exists, updating it", tabletAlias)
-							_, err = toTS.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
+							_, err = tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 								*t = *tablet
 								return nil
 							})
@@ -177,6 +180,9 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)
+	}
+	tts := topo.Server{
+		Impl: toTS,
 	}
 
 	wg := sync.WaitGroup{}
@@ -210,7 +216,7 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
 							continue
 						}
 
-						if err := toTS.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(oldSR *pb.ShardReplication) error {
+						if err := tts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(oldSR *topodatapb.ShardReplication) error {
 							*oldSR = *sri.ShardReplication
 							return nil
 						}); err != nil {

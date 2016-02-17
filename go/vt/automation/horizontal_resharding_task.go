@@ -7,7 +7,8 @@ package automation
 import (
 	"strings"
 
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
 // HorizontalReshardingTask is a cluster operation which allows to increase the number of shards.
@@ -15,7 +16,7 @@ type HorizontalReshardingTask struct {
 }
 
 // Run is part of the Task interface.
-func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
+func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
 	// Example: test_keyspace
 	keyspace := parameters["keyspace"]
 	// Example: 10-20
@@ -27,14 +28,14 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*pb.Task
 	// Example: localhost:15001
 	vtworkerEndpoint := parameters["vtworker_endpoint"]
 
-	var newTasks []*pb.TaskContainer
+	var newTasks []*automationpb.TaskContainer
 	copySchemaTasks := NewTaskContainer()
 	for _, destShard := range destShards {
 		AddTask(copySchemaTasks, "CopySchemaShardTask", map[string]string{
-			"keyspace":        keyspace,
-			"source_shard":    sourceShards[0],
-			"dest_shard":      destShard,
-			"vtctld_endpoint": vtctldEndpoint,
+			"source_keyspace_and_shard": topoproto.KeyspaceShardString(keyspace, sourceShards[0]),
+			"dest_keyspace_and_shard":   topoproto.KeyspaceShardString(keyspace, destShard),
+			"exclude_tables":            parameters["exclude_tables"],
+			"vtctld_endpoint":           vtctldEndpoint,
 		})
 	}
 	newTasks = append(newTasks, copySchemaTasks)
@@ -73,18 +74,18 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*pb.Task
 		newTasks = append(newTasks, splitDiffTask)
 	}
 
-	// TODO(mberlin): Implement "MigrateServedTypes" task and uncomment this.
-	//	for _, servedType := range []string{"rdonly", "replica", "master"} {
-	//		migrateServedTypesTasks := NewTaskContainer()
-	//		for _, sourceShard := range sourceShards {
-	//			AddTask(migrateServedTypesTasks, "MigrateServedTypes", map[string]string{
-	//				"keyspace":    keyspace,
-	//				"shard":       sourceShard,
-	//				"served_type": servedType,
-	//			})
-	//		}
-	//		newTasks = append(newTasks, migrateServedTypesTasks)
-	//	}
+	for _, servedType := range []string{"rdonly", "replica", "master"} {
+		migrateServedTypesTasks := NewTaskContainer()
+		for _, sourceShard := range sourceShards {
+			AddTask(migrateServedTypesTasks, "MigrateServedTypesTask", map[string]string{
+				"keyspace":        keyspace,
+				"source_shard":    sourceShard,
+				"type":            servedType,
+				"vtctld_endpoint": vtctldEndpoint,
+			})
+		}
+		newTasks = append(newTasks, migrateServedTypesTasks)
+	}
 
 	return newTasks, "", nil
 }

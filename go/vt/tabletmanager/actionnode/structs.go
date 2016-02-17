@@ -4,7 +4,7 @@
 
 package actionnode
 
-import pb "github.com/youtube/vitess/go/vt/proto/topodata"
+import topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 /*
 This file defines all the payload structures for the ActionNode objects.
@@ -21,27 +21,20 @@ Note it's OK to rename the structures as the type name is not saved in json.
 
 // SlaveWasRestartedArgs is the paylod for SlaveWasRestarted
 type SlaveWasRestartedArgs struct {
-	Parent *pb.TabletAlias
+	Parent *topodatapb.TabletAlias
 }
 
 // shard action node structures
 
-// ApplySchemaShardArgs is the payload for ApplySchemaShard
-type ApplySchemaShardArgs struct {
-	MasterTabletAlias *pb.TabletAlias
-	Change            string
-	Simple            bool
-}
-
 // SetShardServedTypesArgs is the payload for SetShardServedTypes
 type SetShardServedTypesArgs struct {
 	Cells      []string
-	ServedType pb.TabletType
+	ServedType topodatapb.TabletType
 }
 
 // MigrateServedTypesArgs is the payload for MigrateServedTypes
 type MigrateServedTypesArgs struct {
-	ServedType pb.TabletType
+	ServedType topodatapb.TabletType
 }
 
 // keyspace action node structures
@@ -49,12 +42,11 @@ type MigrateServedTypesArgs struct {
 // ApplySchemaKeyspaceArgs is the payload for ApplySchemaKeyspace
 type ApplySchemaKeyspaceArgs struct {
 	Change string
-	Simple bool
 }
 
 // MigrateServedFromArgs is the payload for MigrateServedFrom
 type MigrateServedFromArgs struct {
-	ServedType pb.TabletType
+	ServedType topodatapb.TabletType
 }
 
 // methods to build the shard action nodes
@@ -62,11 +54,11 @@ type MigrateServedFromArgs struct {
 // ReparentShardArgs is the payload for ReparentShard
 type ReparentShardArgs struct {
 	Operation        string
-	MasterElectAlias *pb.TabletAlias
+	MasterElectAlias *topodatapb.TabletAlias
 }
 
 // ReparentShard returns an ActionNode
-func ReparentShard(operation string, masterElectAlias *pb.TabletAlias) *ActionNode {
+func ReparentShard(operation string, masterElectAlias *topodatapb.TabletAlias) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionReparent,
 		Args: &ReparentShardArgs{
@@ -77,7 +69,7 @@ func ReparentShard(operation string, masterElectAlias *pb.TabletAlias) *ActionNo
 }
 
 // ShardExternallyReparented returns an ActionNode
-func ShardExternallyReparented(tabletAlias *pb.TabletAlias) *ActionNode {
+func ShardExternallyReparented(tabletAlias *topodatapb.TabletAlias) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionExternallyReparented,
 		Args:   &tabletAlias,
@@ -98,20 +90,8 @@ func CheckShard() *ActionNode {
 	}).SetGuid()
 }
 
-// ApplySchemaShard returns an ActionNode
-func ApplySchemaShard(masterTabletAlias *pb.TabletAlias, change string, simple bool) *ActionNode {
-	return (&ActionNode{
-		Action: ShardActionApplySchema,
-		Args: &ApplySchemaShardArgs{
-			MasterTabletAlias: masterTabletAlias,
-			Change:            change,
-			Simple:            simple,
-		},
-	}).SetGuid()
-}
-
 // SetShardServedTypes returns an ActionNode
-func SetShardServedTypes(cells []string, servedType pb.TabletType) *ActionNode {
+func SetShardServedTypes(cells []string, servedType topodatapb.TabletType) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionSetServedTypes,
 		Args: &SetShardServedTypesArgs{
@@ -122,7 +102,7 @@ func SetShardServedTypes(cells []string, servedType pb.TabletType) *ActionNode {
 }
 
 // MigrateServedTypes returns an ActionNode
-func MigrateServedTypes(servedType pb.TabletType) *ActionNode {
+func MigrateServedTypes(servedType topodatapb.TabletType) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionMigrateServedTypes,
 		Args: &MigrateServedTypesArgs{
@@ -162,18 +142,17 @@ func SetKeyspaceServedFrom() *ActionNode {
 }
 
 // ApplySchemaKeyspace returns an ActionNode
-func ApplySchemaKeyspace(change string, simple bool) *ActionNode {
+func ApplySchemaKeyspace(change string) *ActionNode {
 	return (&ActionNode{
 		Action: KeyspaceActionApplySchema,
 		Args: &ApplySchemaKeyspaceArgs{
 			Change: change,
-			Simple: simple,
 		},
 	}).SetGuid()
 }
 
 // MigrateServedFrom returns an ActionNode
-func MigrateServedFrom(servedType pb.TabletType) *ActionNode {
+func MigrateServedFrom(servedType topodatapb.TabletType) *ActionNode {
 	return (&ActionNode{
 		Action: KeyspaceActionMigrateServedFrom,
 		Args: &MigrateServedFromArgs{

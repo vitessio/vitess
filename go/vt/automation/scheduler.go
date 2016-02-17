@@ -15,7 +15,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
 )
 
@@ -63,6 +63,7 @@ type Scheduler struct {
 func NewScheduler() (*Scheduler, error) {
 	defaultClusterOperations := map[string]bool{
 		"HorizontalReshardingTask": true,
+		"VerticalSplitTask":        true,
 	}
 
 	s := &Scheduler{
@@ -112,7 +113,7 @@ func (s *Scheduler) processRequestsLoop() {
 }
 
 func (s *Scheduler) processClusterOperation(clusterOp ClusterOperationInstance) {
-	if clusterOp.State == pb.ClusterOperationState_CLUSTER_OPERATION_DONE {
+	if clusterOp.State == automationpb.ClusterOperationState_CLUSTER_OPERATION_DONE {
 		log.Infof("ClusterOperation: %v skipping because it is already done. Details: %v", clusterOp.Id, clusterOp)
 		return
 	}
@@ -136,7 +137,8 @@ clusterOpLoop:
 				// Make sure all new tasks do not miss any required parameters.
 				err := s.validateTaskContainers(newTaskContainers)
 				if err != nil {
-					log.Errorf("Task: %v (%v/%v) emitted a new task which is not valid. Error: %v", taskProto.Name, clusterOp.Id, taskProto.Id, err)
+					err = fmt.Errorf("Task: %v (%v/%v) emitted a new task which is not valid. Error: %v", taskProto.Name, clusterOp.Id, taskProto.Id, err)
+					log.Error(err)
 					MarkTaskFailed(taskProto, output, err)
 					clusterOp.Error = err.Error()
 					break clusterOpLoop
@@ -150,7 +152,7 @@ clusterOpLoop:
 		}
 	}
 
-	clusterOp.State = pb.ClusterOperationState_CLUSTER_OPERATION_DONE
+	clusterOp.State = automationpb.ClusterOperationState_CLUSTER_OPERATION_DONE
 	log.Infof("ClusterOperation: %v finished. Details: %v", clusterOp.Id, clusterOp)
 	s.Checkpoint(clusterOp)
 
@@ -164,8 +166,8 @@ clusterOpLoop:
 	s.finishedClusterOperations[clusterOp.Id] = clusterOp
 }
 
-func (s *Scheduler) runTask(taskProto *pb.Task, clusterOpID string) ([]*pb.TaskContainer, string, error) {
-	if taskProto.State == pb.TaskState_DONE {
+func (s *Scheduler) runTask(taskProto *automationpb.Task, clusterOpID string) ([]*automationpb.TaskContainer, string, error) {
+	if taskProto.State == automationpb.TaskState_DONE {
 		// Task is already done (e.g. because we resume from a checkpoint).
 		if taskProto.Error != "" {
 			log.Errorf("Task: %v (%v/%v) failed before. Aborting the ClusterOperation. Error: %v Details: %v", taskProto.Name, clusterOpID, taskProto.Id, taskProto.Error, taskProto)
@@ -181,7 +183,7 @@ func (s *Scheduler) runTask(taskProto *pb.Task, clusterOpID string) ([]*pb.TaskC
 		return nil, "", err
 	}
 
-	taskProto.State = pb.TaskState_RUNNING
+	taskProto.State = automationpb.TaskState_RUNNING
 	log.Infof("Task: %v (%v/%v) running. Details: %v", taskProto.Name, clusterOpID, taskProto.Id, taskProto)
 	newTaskContainers, output, err := task.Run(taskProto.Parameters)
 	log.Infof("Task: %v (%v/%v) finished. newTaskContainers: %v, output: %v, error: %v", taskProto.Name, clusterOpID, taskProto.Id, newTaskContainers, output, err)
@@ -189,7 +191,7 @@ func (s *Scheduler) runTask(taskProto *pb.Task, clusterOpID string) ([]*pb.TaskC
 	return newTaskContainers, output, err
 }
 
-func (s *Scheduler) validateTaskContainers(newTaskContainers []*pb.TaskContainer) error {
+func (s *Scheduler) validateTaskContainers(newTaskContainers []*automationpb.TaskContainer) error {
 	for _, newTaskContainer := range newTaskContainers {
 		for _, newTaskProto := range newTaskContainer.ParallelTasks {
 			err := s.validateTaskSpecification(newTaskProto.Name, newTaskProto.Parameters)
@@ -205,14 +207,26 @@ func defaultTaskCreator(taskName string) Task {
 	switch taskName {
 	case "HorizontalReshardingTask":
 		return &HorizontalReshardingTask{}
+	case "VerticalSplitTask":
+		return &VerticalSplitTask{}
 	case "CopySchemaShardTask":
 		return &CopySchemaShardTask{}
-	case "WaitForFilteredReplicationTask":
-		return &WaitForFilteredReplicationTask{}
+	case "MigrateServedFromTask":
+		return &MigrateServedFromTask{}
+	case "MigrateServedTypesTask":
+		return &MigrateServedTypesTask{}
+	case "RebuildKeyspaceGraph":
+		return &RebuildKeyspaceGraphTask{}
 	case "SplitCloneTask":
 		return &SplitCloneTask{}
 	case "SplitDiffTask":
 		return &SplitDiffTask{}
+	case "VerticalSplitCloneTask":
+		return &VerticalSplitCloneTask{}
+	case "VerticalSplitDiffTask":
+		return &VerticalSplitDiffTask{}
+	case "WaitForFilteredReplicationTask":
+		return &WaitForFilteredReplicationTask{}
 	default:
 		return nil
 	}
@@ -277,7 +291,7 @@ func validateParameters(task Task, parameters map[string]string) error {
 }
 
 // EnqueueClusterOperation can be used to start a new cluster operation.
-func (s *Scheduler) EnqueueClusterOperation(ctx context.Context, req *pb.EnqueueClusterOperationRequest) (*pb.EnqueueClusterOperationResponse, error) {
+func (s *Scheduler) EnqueueClusterOperation(ctx context.Context, req *automationpb.EnqueueClusterOperationRequest) (*automationpb.EnqueueClusterOperationResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -304,7 +318,7 @@ func (s *Scheduler) EnqueueClusterOperation(ctx context.Context, req *pb.Enqueue
 	s.muOpList.Unlock()
 	s.toBeScheduledClusterOperations <- clusterOp
 
-	return &pb.EnqueueClusterOperationResponse{
+	return &automationpb.EnqueueClusterOperationResponse{
 		Id: clusterOp.Id,
 	}, nil
 }
@@ -336,12 +350,12 @@ func (s *Scheduler) Checkpoint(clusterOp ClusterOperationInstance) {
 }
 
 // GetClusterOperationDetails can be used to query the full details of active or finished operations.
-func (s *Scheduler) GetClusterOperationDetails(ctx context.Context, req *pb.GetClusterOperationDetailsRequest) (*pb.GetClusterOperationDetailsResponse, error) {
+func (s *Scheduler) GetClusterOperationDetails(ctx context.Context, req *automationpb.GetClusterOperationDetailsRequest) (*automationpb.GetClusterOperationDetailsResponse, error) {
 	clusterOp, err := s.findClusterOp(req.Id)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.GetClusterOperationDetailsResponse{
+	return &automationpb.GetClusterOperationDetailsResponse{
 		ClusterOp: &clusterOp.ClusterOperation,
 	}, nil
 }

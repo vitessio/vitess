@@ -11,7 +11,8 @@ logdir="$1"
 config="$2"
 pidfile="$3"
 
-classpath="$VTROOT/dist/vt-zookeeper-3.3.5/lib/zookeeper-3.3.5-fatjar.jar:/usr/local/lib/zookeeper-3.3.5-fatjar.jar:/usr/share/java/zookeeper-3.3.5.jar"
+zk_ver=3.4.6
+classpath="$VTROOT/dist/vt-zookeeper-$zk_ver/lib/zookeeper-$zk_ver-fatjar.jar:/usr/local/lib/zookeeper-$zk_ver-fatjar.jar:/usr/share/java/zookeeper-$zk_ver.jar"
 
 mkdir -p "$logdir"
 touch "$logdir/zksrv.log"

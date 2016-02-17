@@ -10,12 +10,16 @@ import (
 	"strings"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // MysqlDaemon is the interface we use for abstracting Mysqld.
@@ -27,37 +31,38 @@ type MysqlDaemon interface {
 	Start(ctx context.Context) error
 	Shutdown(ctx context.Context, waitForMysqld bool) error
 	RunMysqlUpgrade() error
+	Wait(ctx context.Context) error
 
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int32, error)
 
 	// replication related methods
-	SlaveStatus() (proto.ReplicationStatus, error)
+	SlaveStatus() (replication.Status, error)
 
 	// reparenting related methods
 	ResetReplicationCommands() ([]string, error)
-	MasterPosition() (proto.ReplicationPosition, error)
+	MasterPosition() (replication.Position, error)
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
-	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
+	SetSlavePositionCommands(pos replication.Position) ([]string, error)
 	SetMasterCommands(masterHost string, masterPort int) ([]string, error)
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	// DemoteMaster waits for all current transactions to finish,
 	// and returns the current replication position. It will not
 	// change the read_only state of the server.
-	DemoteMaster() (proto.ReplicationPosition, error)
+	DemoteMaster() (replication.Position, error)
 
-	WaitMasterPos(proto.ReplicationPosition, time.Duration) error
+	WaitMasterPos(replication.Position, time.Duration) error
 
 	// PromoteSlave makes the slave the new master. It will not change
 	// the read_only state of the server.
-	PromoteSlave(map[string]string) (proto.ReplicationPosition, error)
+	PromoteSlave(map[string]string) (replication.Position, error)
 
 	// Schema related methods
-	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
-	PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error)
-	ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error)
+	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	PreflightSchemaChange(dbName string, change string) (*tmutils.SchemaChangeResult, error)
+	ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error)
 
 	// GetAppConnection returns a app connection to be able to talk to the database.
 	GetAppConnection() (dbconnpool.PoolConnection, error)
@@ -68,7 +73,7 @@ type MysqlDaemon interface {
 	ExecuteSuperQueryList(queryList []string) error
 
 	// FetchSuperQuery executes one query, returns the result
-	FetchSuperQuery(query string) (*mproto.QueryResult, error)
+	FetchSuperQuery(query string) (*sqltypes.Result, error)
 
 	// NewSlaveConnection returns a SlaveConnection to the database.
 	NewSlaveConnection() (*SlaveConnection, error)
@@ -87,6 +92,8 @@ type MysqlDaemon interface {
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
+	db *fakesqldb.DB
+
 	// Mycnf will be returned by Cnf()
 	Mycnf *Mycnf
 
@@ -110,7 +117,7 @@ type FakeMysqlDaemon struct {
 
 	// CurrentMasterPosition is returned by MasterPosition
 	// and SlaveStatus
-	CurrentMasterPosition proto.ReplicationPosition
+	CurrentMasterPosition replication.Position
 
 	// CurrentMasterHost is returned by SlaveStatus
 	CurrentMasterHost string
@@ -121,14 +128,14 @@ type FakeMysqlDaemon struct {
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
 
-	// StartReplicationCommandsStatus is matched against the input
-	// of StartReplicationCommands. If it doesn't match,
-	// StartReplicationCommands will return an error.
-	StartReplicationCommandsStatus *proto.ReplicationStatus
+	// SetSlavePositionCommandsPos is matched against the input
+	// of SetSlavePositionCommands. If it doesn't match,
+	// SetSlavePositionCommands will return an error.
+	SetSlavePositionCommandsPos replication.Position
 
-	// StartReplicationCommandsResult is what
-	// StartReplicationCommands will return
-	StartReplicationCommandsResult []string
+	// SetSlavePositionCommandsResult is what
+	// SetSlavePositionCommands will return
+	SetSlavePositionCommandsResult []string
 
 	// SetMasterCommandsInput is matched against the input
 	// of SetMasterCommands (as "%v:%v"). If it doesn't match,
@@ -140,26 +147,30 @@ type FakeMysqlDaemon struct {
 	SetMasterCommandsResult []string
 
 	// DemoteMasterPosition is returned by DemoteMaster
-	DemoteMasterPosition proto.ReplicationPosition
+	DemoteMasterPosition replication.Position
 
 	// WaitMasterPosition is checked by WaitMasterPos, if the
 	// same it returns nil, if different it returns an error
-	WaitMasterPosition proto.ReplicationPosition
+	WaitMasterPosition replication.Position
 
 	// PromoteSlaveResult is returned by PromoteSlave
-	PromoteSlaveResult proto.ReplicationPosition
+	PromoteSlaveResult replication.Position
+
+	// SchemaFunc provides the return value for GetSchema.
+	// If not defined, the "Schema" field will be used instead, see below.
+	SchemaFunc func() (*tabletmanagerdatapb.SchemaDefinition, error)
 
 	// Schema will be returned by GetSchema. If nil we'll
 	// return an error.
-	Schema *proto.SchemaDefinition
+	Schema *tabletmanagerdatapb.SchemaDefinition
 
 	// PreflightSchemaChangeResult will be returned by PreflightSchemaChange.
 	// If nil we'll return an error.
-	PreflightSchemaChangeResult *proto.SchemaChangeResult
+	PreflightSchemaChangeResult *tmutils.SchemaChangeResult
 
 	// ApplySchemaChangeResult will be returned by ApplySchemaChange.
 	// If nil we'll return an error.
-	ApplySchemaChangeResult *proto.SchemaChangeResult
+	ApplySchemaChangeResult *tmutils.SchemaChangeResult
 
 	// DbAppConnectionFactory is the factory for making fake db app connections
 	DbAppConnectionFactory func() (dbconnpool.PoolConnection, error)
@@ -177,7 +188,7 @@ type FakeMysqlDaemon struct {
 	ExpectedExecuteSuperQueryCurrent int
 
 	// FetchSuperQueryResults is used by FetchSuperQuery
-	FetchSuperQueryMap map[string]*mproto.QueryResult
+	FetchSuperQueryMap map[string]*sqltypes.Result
 
 	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
 	BinlogPlayerEnabled bool
@@ -185,8 +196,9 @@ type FakeMysqlDaemon struct {
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
 // to be running
-func NewFakeMysqlDaemon() *FakeMysqlDaemon {
+func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	return &FakeMysqlDaemon{
+		db:      db,
 		Running: true,
 	}
 }
@@ -219,6 +231,11 @@ func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
 	return nil
 }
 
+// Wait is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) Wait(ctx context.Context) error {
+	return nil
+}
+
 // GetMysqlPort is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 	if fmd.MysqlPort == -1 {
@@ -228,8 +245,8 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 }
 
 // SlaveStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SlaveStatus() (proto.ReplicationStatus, error) {
-	return proto.ReplicationStatus{
+func (fmd *FakeMysqlDaemon) SlaveStatus() (replication.Status, error) {
+	return replication.Status{
 		Position:        fmd.CurrentMasterPosition,
 		SlaveIORunning:  fmd.Replicating,
 		SlaveSQLRunning: fmd.Replicating,
@@ -244,7 +261,7 @@ func (fmd *FakeMysqlDaemon) ResetReplicationCommands() ([]string, error) {
 }
 
 // MasterPosition is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) MasterPosition() (proto.ReplicationPosition, error) {
+func (fmd *FakeMysqlDaemon) MasterPosition() (replication.Position, error) {
 	return fmd.CurrentMasterPosition, nil
 }
 
@@ -259,13 +276,12 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 	return nil
 }
 
-// StartReplicationCommands is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error) {
-	status.MasterConnectRetry = int(masterConnectRetry.Seconds())
-	if !reflect.DeepEqual(fmd.StartReplicationCommandsStatus, status) {
-		return nil, fmt.Errorf("wrong status for StartReplicationCommands: expected %v got %v", fmd.StartReplicationCommandsStatus, status)
+// SetSlavePositionCommands is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
+	if !reflect.DeepEqual(fmd.SetSlavePositionCommandsPos, pos) {
+		return nil, fmt.Errorf("wrong pos for SetSlavePositionCommands: expected %v got %v", fmd.SetSlavePositionCommandsPos, pos)
 	}
-	return fmd.StartReplicationCommandsResult, nil
+	return fmd.SetSlavePositionCommandsResult, nil
 }
 
 // SetMasterCommands is part of the MysqlDaemon interface
@@ -283,12 +299,12 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 }
 
 // DemoteMaster is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) DemoteMaster() (proto.ReplicationPosition, error) {
+func (fmd *FakeMysqlDaemon) DemoteMaster() (replication.Position, error) {
 	return fmd.DemoteMasterPosition, nil
 }
 
 // WaitMasterPos is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) WaitMasterPos(pos proto.ReplicationPosition, waitTimeout time.Duration) error {
+func (fmd *FakeMysqlDaemon) WaitMasterPos(pos replication.Position, waitTimeout time.Duration) error {
 	if reflect.DeepEqual(fmd.WaitMasterPosition, pos) {
 		return nil
 	}
@@ -296,7 +312,7 @@ func (fmd *FakeMysqlDaemon) WaitMasterPos(pos proto.ReplicationPosition, waitTim
 }
 
 // PromoteSlave is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PromoteSlave(hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
+func (fmd *FakeMysqlDaemon) PromoteSlave(hookExtraEnv map[string]string) (replication.Position, error) {
 	return fmd.PromoteSlaveResult, nil
 }
 
@@ -335,7 +351,7 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
 }
 
 // FetchSuperQuery returns the results from the map, if any
-func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*mproto.QueryResult, error) {
+func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*sqltypes.Result, error) {
 	if fmd.FetchSuperQueryMap == nil {
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}
@@ -384,15 +400,18 @@ func (fmd *FakeMysqlDaemon) CheckSuperQueryList() error {
 }
 
 // GetSchema is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
+func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	if fmd.SchemaFunc != nil {
+		return fmd.SchemaFunc()
+	}
 	if fmd.Schema == nil {
 		return nil, fmt.Errorf("no schema defined")
 	}
-	return fmd.Schema.FilterTables(tables, excludeTables, includeViews)
+	return tmutils.FilterTables(fmd.Schema, tables, excludeTables, includeViews)
 }
 
 // PreflightSchemaChange is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error) {
+func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, change string) (*tmutils.SchemaChangeResult, error) {
 	if fmd.PreflightSchemaChangeResult == nil {
 		return nil, fmt.Errorf("no preflight result defined")
 	}
@@ -400,7 +419,7 @@ func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, change string) 
 }
 
 // ApplySchemaChange is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error) {
+func (fmd *FakeMysqlDaemon) ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	if fmd.ApplySchemaChangeResult == nil {
 		return nil, fmt.Errorf("no apply schema defined")
 	}
@@ -417,5 +436,5 @@ func (fmd *FakeMysqlDaemon) GetAppConnection() (dbconnpool.PoolConnection, error
 
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&sqldb.ConnParams{}, stats.NewTimings(""))
+	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
 }

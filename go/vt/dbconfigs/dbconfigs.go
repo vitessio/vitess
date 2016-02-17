@@ -126,10 +126,8 @@ func MysqlParams(cp *sqldb.ConnParams) (sqldb.ConnParams, error) {
 // shard.
 type DBConfig struct {
 	sqldb.ConnParams
-	Keyspace          string
-	Shard             string
-	EnableRowcache    bool
-	EnableInvalidator bool
+	Keyspace string
+	Shard    string
 }
 
 func (d *DBConfig) String() string {
@@ -171,29 +169,34 @@ func (dbcfgs *DBConfigs) Redact() {
 	dbcfgs.Repl.Pass = mysql.RedactedPassword
 }
 
+// IsZero returns true if DBConfigs was uninitialized.
+func (dbcfgs *DBConfigs) IsZero() bool {
+	return dbcfgs.App.ConnParams.Uname == ""
+}
+
 // Init will initialize app, dba, filterec and repl configs
-func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
+func Init(socketFile string, flags DBConfigFlag) (DBConfigs, error) {
 	if flags == EmptyConfig {
 		panic("No DB config is provided.")
 	}
 	if AppConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.App.ConnParams, socketFile); err != nil {
-			return nil, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
+			return DBConfigs{}, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if DbaConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.Dba, socketFile); err != nil {
-			return nil, fmt.Errorf("dba dbconfig cannot be initialized: %v", err)
+			return DBConfigs{}, fmt.Errorf("dba dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if FilteredConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.Filtered, socketFile); err != nil {
-			return nil, fmt.Errorf("filtered dbconfig cannot be initialized: %v", err)
+			return DBConfigs{}, fmt.Errorf("filtered dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if ReplConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.Repl, socketFile); err != nil {
-			return nil, fmt.Errorf("repl dbconfig cannot be initialized: %v", err)
+			return DBConfigs{}, fmt.Errorf("repl dbconfig cannot be initialized: %v", err)
 		}
 	}
 	// the Dba connection is not linked to a specific database
@@ -206,5 +209,5 @@ func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
 	toLog := dbConfigs
 	toLog.Redact()
 	log.Infof("DBConfigs: %v\n", toLog.String())
-	return &dbConfigs, nil
+	return dbConfigs, nil
 }

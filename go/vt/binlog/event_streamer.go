@@ -5,43 +5,44 @@
 package binlog
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"strconv"
+	"strings"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
-	binlogSetInsertID     = []byte("SET INSERT_ID=")
+	binlogSetInsertID     = "SET INSERT_ID="
 	binlogSetInsertIDLen  = len(binlogSetInsertID)
-	streamCommentStart    = []byte("/* _stream ")
+	streamCommentStart    = "/* _stream "
 	streamCommentStartLen = len(streamCommentStart)
 )
 
-type sendEventFunc func(event *proto.StreamEvent) error
+type sendEventFunc func(event *binlogdatapb.StreamEvent) error
 
-// EventStreamer is an adapter on top of a BinlogStreamer that convert
+// EventStreamer is an adapter on top of a binlog Streamer that convert
 // the events into StreamEvent objects.
 type EventStreamer struct {
-	bls       *BinlogStreamer
+	bls       *Streamer
 	sendEvent sendEventFunc
 }
 
-// NewEventStreamer returns a new EventStreamer on top of a BinlogStreamer
-func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos myproto.ReplicationPosition, sendEvent sendEventFunc) *EventStreamer {
+// NewEventStreamer returns a new EventStreamer on top of a Streamer
+func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos replication.Position, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}
-	evs.bls = NewBinlogStreamer(dbname, mysqld, nil, startPos, evs.transactionToEvent)
+	evs.bls = NewStreamer(dbname, mysqld, nil, startPos, evs.transactionToEvent)
 	return evs
 }
 
@@ -50,45 +51,45 @@ func (evs *EventStreamer) Stream(ctx *sync2.ServiceContext) error {
 	return evs.bls.Stream(ctx)
 }
 
-func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) error {
+func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransaction) error {
 	var err error
 	var insertid int64
 	for _, stmt := range trans.Statements {
 		switch stmt.Category {
-		case proto.BL_SET:
-			if bytes.HasPrefix(stmt.Sql, binlogSetInsertID) {
-				insertid, err = strconv.ParseInt(string(stmt.Sql[binlogSetInsertIDLen:]), 10, 64)
+		case binlogdatapb.BinlogTransaction_Statement_BL_SET:
+			if strings.HasPrefix(stmt.Sql, binlogSetInsertID) {
+				insertid, err = strconv.ParseInt(stmt.Sql[binlogSetInsertIDLen:], 10, 64)
 				if err != nil {
 					binlogStreamerErrors.Add("EventStreamer", 1)
 					log.Errorf("%v: %s", err, stmt.Sql)
 				}
 			}
-		case proto.BL_DML:
-			var dmlEvent *proto.StreamEvent
+		case binlogdatapb.BinlogTransaction_Statement_BL_DML:
+			var dmlEvent *binlogdatapb.StreamEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
-				dmlEvent = &proto.StreamEvent{
-					Category: "ERR",
-					Sql:      string(stmt.Sql),
+				dmlEvent = &binlogdatapb.StreamEvent{
+					Category: binlogdatapb.StreamEvent_SE_ERR,
+					Sql:      stmt.Sql,
 				}
 			}
 			dmlEvent.Timestamp = trans.Timestamp
 			if err = evs.sendEvent(dmlEvent); err != nil {
 				return err
 			}
-		case proto.BL_DDL:
-			ddlEvent := &proto.StreamEvent{
-				Category:  "DDL",
-				Sql:       string(stmt.Sql),
+		case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
+			ddlEvent := &binlogdatapb.StreamEvent{
+				Category:  binlogdatapb.StreamEvent_SE_DDL,
+				Sql:       stmt.Sql,
 				Timestamp: trans.Timestamp,
 			}
 			if err = evs.sendEvent(ddlEvent); err != nil {
 				return err
 			}
-		case proto.BL_UNRECOGNIZED:
-			unrecognized := &proto.StreamEvent{
-				Category:  "ERR",
-				Sql:       string(stmt.Sql),
+		case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
+			unrecognized := &binlogdatapb.StreamEvent{
+				Category:  binlogdatapb.StreamEvent_SE_ERR,
+				Sql:       stmt.Sql,
 				Timestamp: trans.Timestamp,
 			}
 			if err = evs.sendEvent(unrecognized); err != nil {
@@ -99,9 +100,9 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 			log.Errorf("Unrecognized event: %v: %s", stmt.Category, stmt.Sql)
 		}
 	}
-	posEvent := &proto.StreamEvent{
-		Category:      "POS",
-		TransactionID: trans.TransactionID,
+	posEvent := &binlogdatapb.StreamEvent{
+		Category:      binlogdatapb.StreamEvent_SE_POS,
+		TransactionId: trans.TransactionId,
 		Timestamp:     trans.Timestamp,
 	}
 	if err = evs.sendEvent(posEvent); err != nil {
@@ -114,19 +115,19 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 buildDMLEvent parses the tuples of the full stream comment.
 The _stream comment is extracted into a StreamEvent.
 */
-// Example query: insert into vtocc_e(foo) values ('foo') /* _stream vtocc_e (eid id name ) (null 1 'bmFtZQ==' ); */
+// Example query: insert into _table_(foo) values ('foo') /* _stream _table_ (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
-func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (*proto.StreamEvent, int64, error) {
+func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*binlogdatapb.StreamEvent, int64, error) {
 	// first extract the comment
-	commentIndex := bytes.LastIndex(sql, streamCommentStart)
+	commentIndex := strings.LastIndex(sql, streamCommentStart)
 	if commentIndex == -1 {
 		return nil, insertid, fmt.Errorf("missing stream comment")
 	}
-	dmlComment := string(sql[commentIndex+streamCommentStartLen:])
+	dmlComment := sql[commentIndex+streamCommentStartLen:]
 
 	// then strat building the response
-	dmlEvent := &proto.StreamEvent{
-		Category: "DML",
+	dmlEvent := &binlogdatapb.StreamEvent{
+		Category: binlogdatapb.StreamEvent_SE_DML,
 	}
 	tokenizer := sqlparser.NewStringTokenizer(dmlComment)
 
@@ -140,6 +141,7 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (*proto.Stre
 	// then parse the PK names
 	var err error
 	dmlEvent.PrimaryKeyFields, err = parsePkNames(tokenizer)
+	hasNegatives := make([]bool, len(dmlEvent.PrimaryKeyFields))
 	if err != nil {
 		return nil, insertid, err
 	}
@@ -149,8 +151,8 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (*proto.Stre
 		switch typ {
 		case '(':
 			// pkTuple is a list of pk values
-			var pkTuple []sqltypes.Value
-			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid, dmlEvent.PrimaryKeyFields)
+			var pkTuple *querypb.Row
+			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid, dmlEvent.PrimaryKeyFields, hasNegatives)
 			if err != nil {
 				return nil, insertid, err
 			}
@@ -164,15 +166,15 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (*proto.Stre
 }
 
 // parsePkNames parses something like (eid id name )
-func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]mproto.Field, error) {
-	var columns []mproto.Field
+func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*querypb.Field, error) {
+	var columns []*querypb.Field
 	if typ, _ := tokenizer.Scan(); typ != '(' {
 		return nil, fmt.Errorf("expecting '('")
 	}
 	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
 		switch typ {
 		case sqlparser.ID:
-			columns = append(columns, mproto.Field{
+			columns = append(columns, &querypb.Field{
 				Name: string(val),
 			})
 		default:
@@ -182,11 +184,13 @@ func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]mproto.Field, error) {
 	return columns, nil
 }
 
-// parsePkTuple parses something like (null 1 'bmFtZQ==' )
-func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []mproto.Field) ([]sqltypes.Value, int64, error) {
-	var result []sqltypes.Value
+// parsePkTuple parses something like (null 1 'bmFtZQ==' ). For numbers, the default
+// type is Int64. If an unsigned number that can't fit in an int64 is seen, then the
+// type is set to Uint64. In such cases, if a negative number was previously seen, the
+// function returns an error.
+func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*querypb.Field, hasNegatives []bool) (*querypb.Row, int64, error) {
+	result := &querypb.Row{}
 
-	// start scanning the list
 	index := 0
 	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
 		if index >= len(fields) {
@@ -195,93 +199,92 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []mprot
 
 		switch typ {
 		case '-':
-			// handle negative numbers
+			hasNegatives[index] = true
 			typ2, val2 := tokenizer.Scan()
 			if typ2 != sqlparser.NUMBER {
 				return nil, insertid, fmt.Errorf("expecting number after '-'")
 			}
-
-			// check value
 			fullVal := append([]byte{'-'}, val2...)
 			if _, err := strconv.ParseInt(string(fullVal), 0, 64); err != nil {
 				return nil, insertid, err
 			}
-
-			// update type
 			switch fields[index].Type {
-			case mproto.VT_DECIMAL:
-				// we haven't updated the type yet
-				fields[index].Type = mproto.VT_LONGLONG
-			case mproto.VT_LONGLONG:
-				// nothing to do there
+			case sqltypes.Null:
+				fields[index].Type = sqltypes.Int64
+			case sqltypes.Int64:
+				// no-op
 			default:
-				// we already set this to something incompatible!
 				return nil, insertid, fmt.Errorf("incompatible negative number field with type %v", fields[index].Type)
 			}
 
-			// update value
-			result = append(result, sqltypes.MakeNumeric(fullVal))
-
+			result.Lengths = append(result.Lengths, int64(len(fullVal)))
+			result.Values = append(result.Values, fullVal...)
 		case sqlparser.NUMBER:
-			// check value
-			if _, err := strconv.ParseUint(string(val), 0, 64); err != nil {
+			unsigned, err := strconv.ParseUint(string(val), 0, 64)
+			if err != nil {
 				return nil, insertid, err
 			}
-
-			// update type
-			switch fields[index].Type {
-			case mproto.VT_DECIMAL:
-				// we haven't updated the type yet
-				fields[index].Type = mproto.VT_LONGLONG
-			case mproto.VT_LONGLONG:
-				// nothing to do there
-			default:
-				// we already set this to something incompatible!
-				return nil, insertid, fmt.Errorf("incompatible number field with type %v", fields[index].Type)
+			if unsigned > uint64(9223372036854775807) {
+				// Number is a uint64 that can't fit in an int64.
+				if hasNegatives[index] {
+					return nil, insertid, fmt.Errorf("incompatible unsigned number field with type %v", fields[index].Type)
+				}
+				switch fields[index].Type {
+				case sqltypes.Null, sqltypes.Int64:
+					fields[index].Type = sqltypes.Uint64
+				case sqltypes.Uint64:
+					// no-op
+				default:
+					return nil, insertid, fmt.Errorf("incompatible number field with type %v", fields[index].Type)
+				}
+			} else {
+				// Could be int64 or uint64.
+				switch fields[index].Type {
+				case sqltypes.Null:
+					fields[index].Type = sqltypes.Int64
+				case sqltypes.Int64, sqltypes.Uint64:
+					// no-op
+				default:
+					return nil, insertid, fmt.Errorf("incompatible number field with type %v", fields[index].Type)
+				}
 			}
 
-			// update value
-			result = append(result, sqltypes.MakeNumeric(val))
+			result.Lengths = append(result.Lengths, int64(len(val)))
+			result.Values = append(result.Values, val...)
 		case sqlparser.NULL:
-			// update type
 			switch fields[index].Type {
-			case mproto.VT_DECIMAL:
-				// we haven't updated the type yet
-				fields[index].Type = mproto.VT_LONGLONG
-			case mproto.VT_LONGLONG:
-				// nothing to do there
+			case sqltypes.Null:
+				fields[index].Type = sqltypes.Int64
+			case sqltypes.Int64, sqltypes.Uint64:
+				// no-op
 			default:
-				// we already set this to something incompatible!
 				return nil, insertid, fmt.Errorf("incompatible auto-increment field with type %v", fields[index].Type)
 			}
 
-			// update value
-			result = append(result, sqltypes.MakeNumeric(strconv.AppendInt(nil, insertid, 10)))
+			v := strconv.AppendInt(nil, insertid, 10)
+			result.Lengths = append(result.Lengths, int64(len(v)))
+			result.Values = append(result.Values, v...)
 			insertid++
 		case sqlparser.STRING:
-			// update type
 			switch fields[index].Type {
-			case mproto.VT_DECIMAL:
-				// we haven't updated the type yet
-				fields[index].Type = mproto.VT_VARCHAR
-			case mproto.VT_VARCHAR:
-				// nothing to do there
+			case sqltypes.Null:
+				fields[index].Type = sqltypes.VarBinary
+			case sqltypes.VarBinary:
+				// no-op
 			default:
-				// we already set this to something incompatible!
 				return nil, insertid, fmt.Errorf("incompatible string field with type %v", fields[index].Type)
 			}
 
-			// update value
 			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(val)))
 			numDecoded, err := base64.StdEncoding.Decode(decoded, val)
 			if err != nil {
 				return nil, insertid, err
 			}
-			result = append(result, sqltypes.MakeString(decoded[:numDecoded]))
+			result.Lengths = append(result.Lengths, int64(numDecoded))
+			result.Values = append(result.Values, decoded[:numDecoded]...)
 		default:
 			return nil, insertid, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
 		}
-
 		index++
 	}
 

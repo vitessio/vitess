@@ -5,44 +5,48 @@
 package binlog
 
 import (
-	"bytes"
+	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
-var STREAM_COMMENT = []byte("/* _stream ")
+const (
+	streamComment = "/* _stream "
+	space         = " "
+)
 
 // TablesFilterFunc returns a function that calls sendReply only if statements
 // in the transaction match the specified tables. The resulting function can be
-// passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
+// passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, TablesFilterFunc(sendTransaction))
 func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransactionFunc {
-	return func(reply *proto.BinlogTransaction) error {
+	return func(reply *binlogdatapb.BinlogTransaction) error {
 		matched := false
-		filtered := make([]proto.Statement, 0, len(reply.Statements))
+		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(reply.Statements))
 		for _, statement := range reply.Statements {
 			switch statement.Category {
-			case proto.BL_SET:
+			case binlogdatapb.BinlogTransaction_Statement_BL_SET:
 				filtered = append(filtered, statement)
-			case proto.BL_DDL:
-				log.Warningf("Not forwarding DDL: %s", string(statement.Sql))
+			case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
+				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
-			case proto.BL_DML:
-				tableIndex := bytes.LastIndex(statement.Sql, STREAM_COMMENT)
+			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
+				tableIndex := strings.LastIndex(statement.Sql, streamComment)
 				if tableIndex == -1 {
 					updateStreamErrors.Add("TablesStream", 1)
-					log.Errorf("Error parsing table name: %s", string(statement.Sql))
+					log.Errorf("Error parsing table name: %s", statement.Sql)
 					continue
 				}
-				tableStart := tableIndex + len(STREAM_COMMENT)
-				tableEnd := bytes.Index(statement.Sql[tableStart:], SPACE)
+				tableStart := tableIndex + len(streamComment)
+				tableEnd := strings.Index(statement.Sql[tableStart:], space)
 				if tableEnd == -1 {
 					updateStreamErrors.Add("TablesStream", 1)
-					log.Errorf("Error parsing table name: %s", string(statement.Sql))
+					log.Errorf("Error parsing table name: %s", statement.Sql)
 					continue
 				}
-				tableName := string(statement.Sql[tableStart : tableStart+tableEnd])
+				tableName := statement.Sql[tableStart : tableStart+tableEnd]
 				for _, t := range tables {
 					if t == tableName {
 						filtered = append(filtered, statement)
@@ -50,9 +54,9 @@ func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransa
 						break
 					}
 				}
-			case proto.BL_UNRECOGNIZED:
+			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("TablesStream", 1)
-				log.Errorf("Error parsing table name: %s", string(statement.Sql))
+				log.Errorf("Error parsing table name: %s", statement.Sql)
 				continue
 			}
 		}

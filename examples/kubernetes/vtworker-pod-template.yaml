@@ -3,7 +3,8 @@ apiVersion: v1
 metadata:
   name: vtworker
   labels:
-    name: vtworker
+    component: vtworker
+    app: vitess
 spec:
   containers:
     - name: vtworker
@@ -24,9 +25,11 @@ spec:
           -alsologtostderr
           -port {{port}}
           -topo_implementation etcd
-          -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
+          -etcd_global_addrs http://etcd-global:4001
           -min_healthy_rdonly_endpoints 1
           -cell {{cell}}
+          -tablet_protocol grpc
+          -tablet_manager_protocol grpc
           {{vtworker_command}}" vitess
   restartPolicy: Never
   volumes:

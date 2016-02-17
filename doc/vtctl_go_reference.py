@@ -19,6 +19,10 @@ def get_all_files(directory, filenames):
       filenames[os.path.join(path, filename)] = True
   return filenames
 
+# This needs to produce the same anchor ID as the Markdown processor.
+def anchor_id(heading):
+  return heading.lower().replace(' ', '-').replace(',', '')
+
 def write_header(doc, commands):
   doc.write('This reference guide explains the commands that the ' +
             '<b>vtctl</b> tool supports. **vtctl** is a command-line tool ' +
@@ -27,7 +31,7 @@ def write_header(doc, commands):
             'implementation.\n\nCommands are listed in the ' +
             'following groups:\n\n')
   for group in sorted(commands):
-    group_link = group.lower().replace(' ', '-')
+    group_link = anchor_id(group)
     doc.write('* [' + group + '](#' + group_link + ')\n')
   doc.write('\n\n')
 
@@ -48,7 +52,7 @@ def create_reference_doc(root_directory, commands, arg_definitions):
           re.search(r'HIDDEN', commands[group][command]['definition'])):
         print '\n\n****** ' + command + ' is hidden *******\n\n'
         continue
-      command_link = command.lower().replace(' ', '-')
+      command_link = anchor_id(command)
       doc.write('* [' + command + '](#' + command_link + ')\n')
 
     doc.write('\n')
@@ -365,13 +369,17 @@ def main(root_directory):
     # Add logic to capture command data from those commands.
     for line in vtctl_go_data:
 
+      # skip comments and empty lines
+      if line.strip() == '' or line.strip().startswith('//'):
+        continue
+
       if is_func_init and line.strip() == '}':
         #get_commands = False
         is_func_init = False
       elif get_commands:
         # This line precedes a command group's name, e.g. "Tablets" or "Shards."
         # Capture the group name on the next line.
-        if line.strip() == 'commandGroup{':
+        if line.strip() == '{':
           get_group_name = True
         # Capture the name of a command group.
         elif get_group_name:
@@ -441,8 +449,8 @@ def main(root_directory):
         # First line of a command. This contains the command name and the
         # function used to process the command. Line in code looks like:
         #   command{"ScrapTablet", commandScrapTablet,
-        elif re.search(r'^command{', line.strip()):
-          command_data = re.findall(r'command\s*\{\s*\"([^\"]+)\",\s*([^\,]+)\,',
+        elif re.search(r'^\{\s*\"[^\"]+\",\s*command[^\,]+\,', line.strip()):
+          command_data = re.findall(r'\{\s*\"([^\"]+)\",\s*([^\,]+)\,',
                                     line)
           if command_data:
             # Capture the command name and associate it with its function.

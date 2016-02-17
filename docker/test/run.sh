@@ -46,7 +46,7 @@ fi
 
 # Run tests
 echo "Running tests in vitess/bootstrap:$flavor image..."
-bashcmd="rm -rf * && cp -R /tmp/src/* . && rm -rf Godeps/_workspace/pkg && $cmd"
+bashcmd="mv php/vendor /vt/dist/php-vendor && rm -rf * && cp -R /tmp/src/* . && ln -sf /vt/dist/php-vendor php/vendor && rm -rf Godeps/_workspace/pkg && $cmd"
 
 if tty -s; then
   # interactive shell
@@ -63,7 +63,8 @@ fi
 # Clean up host dir mounted VTDATAROOT
 if [[ -n "$hostdir" ]]; then
   # Use Docker user to clean up first, to avoid permission errors.
-  docker run --rm -v $hostdir:/vt/vtdataroot vitess/bootstrap:$flavor bash -c 'rm -rf /vt/vtdataroot/*'
+  docker run --name=rm_$testid -v $hostdir:/vt/vtdataroot vitess/bootstrap:$flavor bash -c 'rm -rf /vt/vtdataroot/*'
+  docker rm -f rm_$testid &>/dev/null
   rm -rf $hostdir
 fi
 

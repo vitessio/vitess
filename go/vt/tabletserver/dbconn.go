@@ -10,10 +10,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
 )
 
@@ -38,7 +40,7 @@ func NewDBConn(
 	qStats *QueryServiceStats) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(appParams, qStats.MySQLStats)
 	if err != nil {
-		go checkMySQL()
+		cp.checker.CheckMySQL()
 		return nil, err
 	}
 	return &DBConn{
@@ -51,27 +53,35 @@ func NewDBConn(
 
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
-func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("DBConn.Exec")
+	defer span.Finish()
+
 	for attempt := 1; attempt <= 2; attempt++ {
 		r, err := dbc.execOnce(ctx, query, maxrows, wantfields)
 		switch {
 		case err == nil:
 			return r, nil
 		case !IsConnErr(err):
-			return nil, NewTabletErrorSql(ErrFail, err)
+			// MySQL error that isn't due to a connection issue
+			return nil, NewTabletErrorSQL(ErrFail, vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 		case attempt == 2:
-			return nil, NewTabletErrorSql(ErrFatal, err)
+			// If the MySQL connection is bad, we assume that there is nothing wrong with
+			// the query itself, and retrying it might succeed. The MySQL connection might
+			// fix itself, or the query could succeed on a different VtTablet.
+			return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
 		err2 := dbc.reconnect()
 		if err2 != nil {
-			go checkMySQL()
-			return nil, NewTabletErrorSql(ErrFatal, err)
+			dbc.pool.checker.CheckMySQL()
+			return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
 	}
-	return nil, NewTabletErrorSql(ErrFatal, errors.New("dbconn.Exec: unreachable code"))
+	return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Exec: unreachable code"))
 }
 
-func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
@@ -85,12 +95,12 @@ func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, want
 }
 
 // ExecOnce executes the specified query, but does not retry on connection errors.
-func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	return dbc.execOnce(ctx, query, maxrows, wantfields)
 }
 
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
@@ -128,20 +138,22 @@ func (dbc *DBConn) Recycle() {
 // Kill kills the currently executing query both on MySQL side
 // and on the connection side. If no query is executing, it's a no-op.
 // Kill will also not kill a query more than once.
-func (dbc *DBConn) Kill() error {
+func (dbc *DBConn) Kill(reason string) error {
 	dbc.queryServiceStats.KillStats.Add("Queries", 1)
-	log.Infof("killing query %s", dbc.Current())
+	log.Infof("Due to %s, killing query %s", reason, dbc.Current())
 	killConn, err := dbc.pool.dbaPool.Get(0)
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
-		return NewTabletError(ErrFail, "Failed to get conn from dba pool: %v", err)
+		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool: %v", err)
 	}
 	defer killConn.Recycle()
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
 		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
-		return NewTabletError(ErrFail, "Could not kill query %s: %v", dbc.Current(), err)
+		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
+		return NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not kill query %s: %v", dbc.Current(), err)
 	}
 	return nil
 }
@@ -172,6 +184,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) chan bool {
 	}
 	done := make(chan bool)
 	go func() {
+		startTime := time.Now()
 		select {
 		case <-ctx.Done():
 			// There is a possibility that the query returned very fast,
@@ -181,13 +194,15 @@ func (dbc *DBConn) setDeadline(ctx context.Context) chan bool {
 				return
 			default:
 			}
-			dbc.Kill()
+			dbc.Kill(ctx.Err().Error())
 		case <-done:
 			return
 		}
+		elapsed := time.Now().Sub(startTime)
 
-		// Verify the query got killed.
-		tmr2 := time.NewTimer(15 * time.Second)
+		// Give 2x the elapsed time and some buffer as grace period
+		// for the query to get killed.
+		tmr2 := time.NewTimer(2*elapsed + 5*time.Second)
 		defer tmr2.Stop()
 		select {
 		case <-tmr2.C:

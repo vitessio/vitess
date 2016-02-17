@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
 	. "github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TestCreateShard tests a few cases for CreateShard
@@ -25,7 +25,7 @@ func TestCreateShard(t *testing.T) {
 	cells := []string{"test_cell"}
 
 	// Set up topology.
-	ts := zktopo.NewTestServer(t, cells)
+	ts := zktestserver.New(t, cells)
 
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -36,7 +36,7 @@ func TestCreateShard(t *testing.T) {
 	}
 
 	// create keyspace
-	if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
@@ -53,11 +53,11 @@ func TestCreateShardCustomSharding(t *testing.T) {
 	cells := []string{"test_cell"}
 
 	// Set up topology.
-	ts := zktopo.NewTestServer(t, cells)
+	ts := zktestserver.New(t, cells)
 
 	// create keyspace
 	keyspace := "test_keyspace"
-	if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
@@ -96,7 +96,7 @@ func TestGetOrCreateShard(t *testing.T) {
 	cells := []string{"test_cell"}
 
 	// Set up topology.
-	ts := zktopo.NewTestServer(t, cells)
+	ts := zktestserver.New(t, cells)
 
 	// and do massive parallel GetOrCreateShard
 	keyspace := "test_keyspace"

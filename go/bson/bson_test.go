@@ -63,13 +63,13 @@ func (a *alltypes) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 			verifyKind("Int64", Long, kind)
 			a.Int64 = DecodeInt64(buf, kind)
 		case "Uint64":
-			verifyKind("Uint64", Ulong, kind)
+			verifyKind("Uint64", Long, kind)
 			a.Uint64 = DecodeUint64(buf, kind)
 		case "Uint32":
-			verifyKind("Uint32", Ulong, kind)
+			verifyKind("Uint32", Long, kind)
 			a.Uint32 = DecodeUint32(buf, kind)
 		case "Uint":
-			verifyKind("Uint", Ulong, kind)
+			verifyKind("Uint", Long, kind)
 			a.Uint = DecodeUint(buf, kind)
 		case "Strings":
 			verifyKind("Strings", Array, kind)
@@ -156,9 +156,9 @@ func TestTypes(t *testing.T) {
 		"int64":   int64(-0x8000000000000000),
 		"int32":   int32(-0x80000000),
 		"int":     int64(-0x80000000),
-		"uint64":  uint64(0xFFFFFFFFFFFFFFFF),
-		"uint32":  uint64(0xFFFFFFFF),
-		"uint":    uint64(0xFFFFFFFF),
+		"uint64":  int64(-1),
+		"uint32":  int64(0xFFFFFFFF),
+		"uint":    int64(0xFFFFFFFF),
 		"slice":   []interface{}{int64(1), nil},
 		"nil":     nil,
 	}
@@ -194,7 +194,7 @@ func (ps *PrivateStruct) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 		key := ReadCString(buf)
 		switch key {
 		case "Type":
-			verifyKind("Type", Ulong, kind)
+			verifyKind("Type", Long, kind)
 			ps.veryPrivate = DecodeUint64(buf, kind)
 		default:
 			Skip(buf, kind)
@@ -220,7 +220,7 @@ func TestCustomStruct(t *testing.T) {
 	// This should use the custom marshaler & unmarshaler
 	s := PrivateStruct{1}
 	got := verifyMarshal(t, &s)
-	want := "\x13\x00\x00\x00?Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
+	want := "\x13\x00\x00\x00\x12Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
 	if string(got) != want {
 		t.Errorf("got %q, want %q", string(got), want)
 	}
@@ -234,7 +234,7 @@ func TestCustomStruct(t *testing.T) {
 	sl := PrivateStructList{make([]PrivateStruct, 1)}
 	sl.List[0] = s
 	got = verifyMarshal(t, &sl)
-	want = "&\x00\x00\x00\x04List\x00\x1b\x00\x00\x00\x030\x00\x13\x00\x00\x00?Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+	want = "&\x00\x00\x00\x04List\x00\x1b\x00\x00\x00\x030\x00\x13\x00\x00\x00\x12Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 	if string(got) != want {
 		t.Errorf("got %q, want %q", string(got), want)
 	}
@@ -248,7 +248,7 @@ func TestCustomStruct(t *testing.T) {
 	smp := make(map[string]*PrivateStruct)
 	smp["first"] = &s
 	got = verifyMarshal(t, smp)
-	want = "\x1f\x00\x00\x00\x03first\x00\x13\x00\x00\x00?Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+	want = "\x1f\x00\x00\x00\x03first\x00\x13\x00\x00\x00\x12Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 	if string(got) != want {
 		t.Errorf("got %q, want %q", string(got), want)
 	}

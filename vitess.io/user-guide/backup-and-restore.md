@@ -1,5 +1,5 @@
 ---
-layout: default
+layout: doc
 title: "Backing Up Data"
 description:
 modified:

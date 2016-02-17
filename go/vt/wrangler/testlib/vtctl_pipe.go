@@ -5,6 +5,7 @@
 package testlib
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl/grpcvtctlserver"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
@@ -24,7 +26,7 @@ import (
 
 func init() {
 	// make sure we use the right protocol
-	*vtctlclient.VtctlClientProtocol = "grpc"
+	flag.Set("vtctl_client_protocol", "grpc")
 }
 
 // VtctlPipe is a vtctl server based on a topo server, and a client that
@@ -71,10 +73,9 @@ func (vp *VtctlPipe) Close() {
 // test logs, and returns the command error.
 func (vp *VtctlPipe) Run(args []string) error {
 	actionTimeout := 30 * time.Second
-	lockTimeout := 10 * time.Second
 	ctx := context.Background()
 
-	c, errFunc, err := vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockTimeout)
+	c, errFunc, err := vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout)
 	if err != nil {
 		return fmt.Errorf("VtctlPipe.Run() failed: %v", err)
 	}
@@ -82,4 +83,13 @@ func (vp *VtctlPipe) Run(args []string) error {
 		vp.t.Logf(le.String())
 	}
 	return errFunc()
+}
+
+// RunAndStreamOutput returns the output of the vtctl command as a channel.
+// When the channcel is closed, the command did finish.
+func (vp *VtctlPipe) RunAndStreamOutput(args []string) (<-chan *logutilpb.Event, vtctlclient.ErrFunc, error) {
+	actionTimeout := 30 * time.Second
+	ctx := context.Background()
+
+	return vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout)
 }

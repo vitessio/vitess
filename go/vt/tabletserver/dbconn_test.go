@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -20,16 +19,16 @@ func TestDBConnExec(t *testing.T) {
 	db := fakesqldb.Register()
 	testUtils := newTestUtils()
 	sql := "select * from test_table limit 1000"
-	expectedResult := &mproto.QueryResult{
+	expectedResult := &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeString([]byte("123"))},
+			{sqltypes.MakeString([]byte("123"))},
 		},
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := testUtils.newConnPool()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
+	appParams := &sqldb.ConnParams{Engine: db.Name}
+	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
@@ -57,23 +56,23 @@ func TestDBConnKill(t *testing.T) {
 	db := fakesqldb.Register()
 	testUtils := newTestUtils()
 	connPool := testUtils.newConnPool()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
+	appParams := &sqldb.ConnParams{Engine: db.Name}
+	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
 	queryServiceStats := NewQueryServiceStats("", false)
 	dbConn, err := NewDBConn(connPool, appParams, dbaParams, queryServiceStats)
 	defer dbConn.Close()
 	query := fmt.Sprintf("kill %d", dbConn.ID())
-	db.AddQuery(query, &mproto.QueryResult{})
+	db.AddQuery(query, &sqltypes.Result{})
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
-	err = dbConn.Kill()
+	err = dbConn.Kill("test kill")
 	testUtils.checkTabletError(t, err, ErrFail, "Failed to get conn from dba pool")
 	db.DisableConnFail()
 
 	// Kill succeed
-	err = dbConn.Kill()
+	err = dbConn.Kill("test kill")
 	if err != nil {
 		t.Fatalf("kill should succeed, but got error: %v", err)
 	}
@@ -85,7 +84,7 @@ func TestDBConnKill(t *testing.T) {
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errRejected)
-	err = dbConn.Kill()
+	err = dbConn.Kill("test kill")
 	testUtils.checkTabletError(t, err, ErrFail, "Could not kill query")
 
 }
@@ -94,16 +93,16 @@ func TestDBConnStream(t *testing.T) {
 	db := fakesqldb.Register()
 	testUtils := newTestUtils()
 	sql := "select * from test_table limit 1000"
-	expectedResult := &mproto.QueryResult{
+	expectedResult := &sqltypes.Result{
 		RowsAffected: 0,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{sqltypes.MakeString([]byte("123"))},
+			{sqltypes.MakeString([]byte("123"))},
 		},
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := testUtils.newConnPool()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
+	appParams := &sqldb.ConnParams{Engine: db.Name}
+	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
@@ -111,9 +110,9 @@ func TestDBConnStream(t *testing.T) {
 	queryServiceStats := NewQueryServiceStats("", false)
 	dbConn, err := NewDBConn(connPool, appParams, dbaParams, queryServiceStats)
 	defer dbConn.Close()
-	var result mproto.QueryResult
+	var result sqltypes.Result
 	err = dbConn.Stream(
-		ctx, sql, func(r *mproto.QueryResult) error {
+		ctx, sql, func(r *sqltypes.Result) error {
 			result = *r
 			return nil
 		}, 10)

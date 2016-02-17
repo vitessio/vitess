@@ -9,21 +9,31 @@ if [ "$1" = "--skip_root_installs" ]; then
   SKIP_ROOT_INSTALLS=True
 fi
 
-if [ ! -f bootstrap.sh ]; then
-  echo "bootstrap.sh must be run from its current directory" 1>&2
-  exit 1
+# Run parallel make, based on number of cores available.
+NB_CORES=$(grep -c '^processor' /proc/cpuinfo)
+if [ -n "$NB_CORES" ]; then
+  export MAKEFLAGS="-j$((NB_CORES+1)) -l${NB_CORES}"
 fi
 
-if [ "$USER" == "root" ]; then
-  echo "Vitess cannot run as root. Please bootstrap with a non-root user."
+function fail() {
+  echo "ERROR: $1"
   exit 1
-fi
+}
 
-go version 2>&1 >/dev/null
-if [ $? != 0 ]; then
-    echo "Go is not installed or is not on \$PATH"
-    exit 1
-fi
+function zk_patch_mac() {
+  if [ `uname -s` == "Darwin" ]; then
+    cd zookeeper-$zk_ver && \
+    wget https://issues.apache.org/jira/secure/attachment/12673210/ZOOKEEPER-2049.noprefix.branch-3.4.patch && \
+    patch -p0 < ZOOKEEPER-2049.noprefix.branch-3.4.patch && \
+    cd ..
+  fi
+}
+
+[ -f bootstrap.sh ] || fail "bootstrap.sh must be run from its current directory"
+
+[ "$USER" != "root" ] || fail "Vitess cannot run as root. Please bootstrap with a non-root user."
+
+go version 2>&1 >/dev/null || fail "Go is not installed or is not on \$PATH"
 
 . ./dev.env
 
@@ -33,61 +43,62 @@ mkdir -p $VTROOT/lib
 mkdir -p $VTROOT/vthook
 
 # install zookeeper
-zk_dist=$VTROOT/dist/vt-zookeeper-3.3.5
+zk_ver=3.4.6
+zk_dist=$VTROOT/dist/vt-zookeeper-$zk_ver
 if [ -f $zk_dist/.build_finished ]; then
   echo "skipping zookeeper build. remove $zk_dist to force rebuild."
 else
   rm -rf $zk_dist
-  (cd $VTTOP/third_party/zookeeper && \
-    tar -xjf zookeeper-3.3.5.tbz && \
+  (cd $VTROOT/dist && \
+    wget http://archive.apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
+    tar -xzf zookeeper-$zk_ver.tar.gz && \
+    zk_patch_mac && \
     mkdir -p $zk_dist/lib && \
-    cp zookeeper-3.3.5/contrib/fatjar/zookeeper-3.3.5-fatjar.jar $zk_dist/lib && \
-    (cd zookeeper-3.3.5/src/c && \
+    cp zookeeper-$zk_ver/contrib/fatjar/zookeeper-$zk_ver-fatjar.jar $zk_dist/lib && \
+    (cd zookeeper-$zk_ver/src/c && \
     ./configure --prefix=$zk_dist && \
-    make -j3 install) && rm -rf zookeeper-3.3.5)
-  if [ $? -ne 0 ]; then
-    echo "zookeeper build failed"
-    exit 1
-  fi
+    make install) && rm -rf zookeeper-$zk_ver zookeeper-$zk_ver.tar.gz)
+  [ $? -eq 0 ] || fail "zookeeper build failed"
   touch $zk_dist/.build_finished
 fi
 
-# install protoc and proto python libraries
-protobuf_dist=$VTROOT/dist/protobuf
-if [ $SKIP_ROOT_INSTALLS == "True" ]; then
-  echo "skipping protobuf build, as root version was already installed."
-elif [ -f $protobuf_dist/.build_finished ]; then
-  echo "skipping protobuf build. remove $protobuf_dist to force rebuild."
-else
-  rm -rf $protobuf_dist
-  mkdir -p $protobuf_dist/lib/python2.7/site-packages
-  # The directory may not have existed yet, so it may not have been
-  # picked up by dev.env yet, but the install needs it to exist first,
-  # and be in PYTHONPATH.
-  export PYTHONPATH=$(prepend_path $PYTHONPATH $protobuf_dist/lib/python2.7/site-packages)
-  ./travis/install_protobuf.sh $protobuf_dist
-  if [ $? -ne 0 ]; then
-    echo "protobuf build failed"
-    exit 1
-  fi
-  touch $protobuf_dist/.build_finished
-fi
-
-# install gRPC C++ base, so we can install the python adapters
+# install gRPC C++ base, so we can install the python adapters.
+# this also installs protobufs
 grpc_dist=$VTROOT/dist/grpc
+grpc_ver=release-0_12_0
 if [ $SKIP_ROOT_INSTALLS == "True" ]; then
   echo "skipping grpc build, as root version was already installed."
-elif [ -f $grpc_dist/.build_finished ]; then
+elif [[ -f $grpc_dist/.build_finished && "$(cat $grpc_dist/.build_finished)" == "$grpc_ver" ]]; then
   echo "skipping gRPC build. remove $grpc_dist to force rebuild."
 else
-  rm -rf $grpc_dist
-  mkdir -p $grpc_dist
-  ./travis/install_grpc.sh $grpc_dist
-  if [ $? -ne 0 ]; then
-    echo "gRPC build failed"
-    exit 1
+  # unlink homebrew's protobuf, to be able to compile the downloaded protobuf package
+  if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
+    brew unlink grpc/grpc/google-protobuf
   fi
-  touch $grpc_dist/.build_finished
+  # protobuf used to be a separate package, now we use the gRPC one
+  rm -rf $VTROOT/dist/protobuf
+  rm -rf $grpc_dist
+  mkdir -p $grpc_dist/usr/local/bin
+  mkdir -p $grpc_dist/usr/local/lib/python2.7/dist-packages
+  # The directory may not have existed yet, so it may not have been
+  # picked up by dev.env yet, but the install needs it to be in
+  # PYTHONPATH.
+  export PYTHONPATH=$(prepend_path $PYTHONPATH $grpc_dist/usr/local/lib/python2.7/dist-packages)
+  export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
+  export LD_LIBRARY_PATH=$(prepend_path $LD_LIBRARY_PATH $grpc_dist/usr/local/lib)
+
+  if [ `uname -s` == "Darwin" ]; then
+    # on OSX tox is installed in the following path
+    export PATH=$(prepend_path $PATH /usr/local/Cellar/python/2.7.11/Frameworks/Python.framework/Versions/2.7/bin)
+  fi
+
+  ./travis/install_grpc.sh $grpc_dist || fail "gRPC build failed"
+  echo "$grpc_ver" > $grpc_dist/.build_finished
+
+  # link homebrew's protobuf back
+  if [[ `uname -s` == "Darwin" && "$(brew list -1 | grep google-protobuf)" ]]; then
+    brew link grpc/grpc/google-protobuf
+  fi
 fi
 
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
@@ -101,8 +112,12 @@ repos="github.com/golang/glog \
        github.com/golang/protobuf/protoc-gen-go \
        github.com/tools/godep \
        golang.org/x/net/context \
+       golang.org/x/oauth2/google \
        golang.org/x/tools/cmd/goimports \
        google.golang.org/grpc \
+       google.golang.org/cloud \
+       google.golang.org/cloud/storage \
+       golang.org/x/crypto/ssh/terminal \
 "
 
 # Packages for uploading code coverage to coveralls.io (used by Travis CI).
@@ -116,7 +131,7 @@ else
   repos+=" code.google.com/p/go.tools/cmd/cover"
 fi
 
-go get -u $repos
+go get -u $repos || fail "Failed to download some Go dependencies with 'go get'. Please re-run bootstrap.sh in case of transient errors."
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
@@ -131,25 +146,18 @@ fi
 case "$MYSQL_FLAVOR" in
   "MySQL56")
     myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep 'Distrib 5\.6'`
-    if [ "$myversion" == "" ]; then
-      echo "Couldn't find MySQL 5.6 in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      exit 1
-    fi
+    [ "$myversion" != "" ] || fail "Couldn't find MySQL 5.6 in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
     echo "Found MySQL 5.6 installation in $VT_MYSQL_ROOT."
     ;;
 
   "MariaDB")
     myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep MariaDB`
-    if [ "$myversion" == "" ]; then
-      echo "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      exit 1
-    fi
+    [ "$myversion" != "" ] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
     echo "Found MariaDB installation in $VT_MYSQL_ROOT."
     ;;
 
   *)
-    echo "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
-    exit 1
+    fail "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
     ;;
 
 esac
@@ -159,10 +167,7 @@ esac
 echo "$MYSQL_FLAVOR" > $VTROOT/dist/MYSQL_FLAVOR
 
 # generate pkg-config, so go can use mysql C client
-if [ ! -x $VT_MYSQL_ROOT/bin/mysql_config ]; then
-  echo "Cannot execute $VT_MYSQL_ROOT/bin/mysql_config. Did you install a client dev package?" 1>&2
-  exit 1
-fi
+[ -x $VT_MYSQL_ROOT/bin/mysql_config ] || fail "Cannot execute $VT_MYSQL_ROOT/bin/mysql_config. Did you install a client dev package?"
 
 cp $VTTOP/config/gomysql.pc.tmpl $VTROOT/lib/gomysql.pc
 echo "Version:" "$($VT_MYSQL_ROOT/bin/mysql_config --version)" >> $VTROOT/lib/gomysql.pc
@@ -170,7 +175,7 @@ echo "Cflags:" "$($VT_MYSQL_ROOT/bin/mysql_config --cflags) -ggdb -fPIC" >> $VTR
 if [ "$MYSQL_FLAVOR" == "MariaDB" ]; then
   # Use static linking because the shared library doesn't export
   # some internal functions we use, like cli_safe_read.
-  echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed 's,-lmysqlclient_r,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
+  echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed -r 's,-lmysqlclient(_r)?,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
 else
   echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
 fi
@@ -205,19 +210,10 @@ else
     rm -r mock-1.0.1
 fi
 
-# install cbson
-cbson_dist=$VTROOT/dist/py-cbson
-if [ -f $cbson_dist/lib/python2.7/site-packages/cbson.so ]; then
-  echo "skipping cbson python build"
-else
-  cd $VTTOP/py/cbson && \
-    python ./setup.py install --prefix=$cbson_dist
-fi
-
 # create pre-commit hooks
 echo "creating git pre-commit hooks"
+mkdir -p $VTTOP/.git/hooks
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 
 echo
 echo "bootstrap finished - run 'source dev.env' in your shell before building."
-

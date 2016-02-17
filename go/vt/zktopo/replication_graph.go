@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /*
@@ -30,7 +30,7 @@ func shardReplicationPath(cell, keyspace, shard string) string {
 }
 
 // UpdateShardReplicationFields is part of the topo.Server interface
-func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*pb.ShardReplication) error) error {
+func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topodatapb.ShardReplication) error) error {
 	// create the parent directory to be sure it's here
 	zkDir := path.Join("/zk", cell, "vt", "replication", keyspace)
 	if _, err := zk.CreateRecursive(zkts.zconn, zkDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
@@ -40,7 +40,7 @@ func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keys
 	// now update the data
 	zkPath := shardReplicationPath(cell, keyspace, shard)
 	f := func(oldValue string, oldStat zk.Stat) (string, error) {
-		sr := &pb.ShardReplication{}
+		sr := &topodatapb.ShardReplication{}
 		if oldValue != "" {
 			if err := json.Unmarshal([]byte(oldValue), sr); err != nil {
 				return "", err
@@ -77,7 +77,7 @@ func (zkts *Server) GetShardReplication(ctx context.Context, cell, keyspace, sha
 		return nil, err
 	}
 
-	sr := &pb.ShardReplication{}
+	sr := &topodatapb.ShardReplication{}
 	if err = json.Unmarshal([]byte(data), sr); err != nil {
 		return nil, fmt.Errorf("bad ShardReplication data %v", err)
 	}

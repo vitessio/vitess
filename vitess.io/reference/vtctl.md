@@ -1,5 +1,5 @@
 ---
-layout: default
+layout: doc
 title: "vtctl Reference"
 description:
 modified:
@@ -10,6 +10,8 @@ image:
   teaser:
   thumb:
 toc: true
+nav: reference
+apimenu: false
 share: false
 ---
 

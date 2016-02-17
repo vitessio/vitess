@@ -35,15 +35,6 @@ func InitServiceMap(protocol, name string) {
 	serviceMap[protocol+"-"+name] = true
 }
 
-// InitServiceMapForBsonRpcService will set the default entries for a
-// bson rpc to serve the service.
-func InitServiceMapForBsonRpcService(name string) {
-	serviceMap["bsonrpc-vt-"+name] = true
-	serviceMap["bsonrpc-auth-vt-"+name] = true
-	serviceMap["bsonrpc-unix-"+name] = true
-	serviceMap["bsonrpc-auth-unix-"+name] = true
-}
-
 // updateServiceMap takes the command line parameter, and updates the
 // ServiceMap accordingly
 func updateServiceMap() {

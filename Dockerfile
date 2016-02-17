@@ -1,4 +1,4 @@
-FROM vitess/bootstrap:mariadb
+FROM vitess/bootstrap:mysql56
 
 # Clear out old tree from bootstrap image.
 USER root

@@ -25,8 +25,7 @@ import (
 )
 
 var (
-	waitTime        = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
-	lockWaitTimeout = flag.Duration("lock-wait-timeout", time.Minute, "time to wait for a lock before starting an action")
+	waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
 )
 
 func init() {
@@ -82,7 +81,7 @@ func main() {
 	defer topo.CloseServers()
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
-	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, tmclient.NewTabletManagerClient(), *lockWaitTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, tmclient.NewTabletManagerClient())
 	installSignalHandlers(cancel)
 
 	for _, f := range initFuncs {

@@ -5,9 +5,8 @@
 package automation
 
 import (
-	"fmt"
-
-	pb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 )
 
@@ -16,13 +15,12 @@ type SplitDiffTask struct {
 }
 
 // Run is part of the Task interface.
-func (t *SplitDiffTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
-	keyspaceAndDestShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["dest_shard"])
+func (t *SplitDiffTask) Run(parameters map[string]string) ([]*automationpb.TaskContainer, string, error) {
 	args := []string{"SplitDiff"}
-	if excludeTables, ok := parameters["exclude_tables"]; ok {
+	if excludeTables := parameters["exclude_tables"]; excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
-	args = append(args, keyspaceAndDestShard)
+	args = append(args, topoproto.KeyspaceShardString(parameters["keyspace"], parameters["dest_shard"]))
 	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 
 	// TODO(mberlin): Remove explicit reset when vtworker supports it implicility.

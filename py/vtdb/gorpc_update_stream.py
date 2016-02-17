@@ -1,33 +1,34 @@
+
 # Copyright 2015, Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-from itertools import izip
-import logging
-
-from net import gorpc
 from net import bsonrpc
+from net import gorpc
 from vtdb import dbexceptions
-from vtdb import field_types
+from vtdb import field_types_proto3
 from vtdb import update_stream
 
 
 def _make_row(row, conversions):
+  """Builds a python native row from proto3 over bsonrpc row."""
   converted_row = []
-  for conversion_func, field_data in izip(conversions, row):
-    if field_data is None:
-      v = None
-    elif conversion_func:
-      v = conversion_func(field_data)
+  offset = 0
+  for i, l in enumerate(row['Lengths']):
+    if l == -1:
+      converted_row.append(None)
+    elif conversions[i]:
+      converted_row.append(conversions[i](row['Values'][offset:offset+l]))
+      offset += l
     else:
-      v = field_data
-    converted_row.append(v)
+      converted_row.append(row['Values'][offset:offset+l])
+      offset += l
   return converted_row
 
 
 class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
-  """GoRpcUpdateStreamConnection is the go rpc implementation of
-  UpdateStreamConnection.
+  """The go rpc implementation of UpdateStreamConnection.
+
   It is registered as 'gorpc' protocol.
   """
 
@@ -61,22 +62,12 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
     """Note this implementation doesn't honor the timeout."""
     try:
       self.client.stream_call('UpdateStream.ServeUpdateStream',
-                              {"Position": position})
+                              {'Position': position})
       while True:
         response = self.client.stream_next()
         if response is None:
           break
         reply = response.reply
-
-        str_category = reply['Category']
-        if str_category == 'DML':
-          category = update_stream.StreamEvent.DML
-        elif str_category == 'DDL':
-          category = update_stream.StreamEvent.DDL
-        elif str_category == 'POS':
-          category = update_stream.StreamEvent.POS
-        else:
-          category = update_stream.StreamEvent.ERR
 
         fields = []
         rows = []
@@ -84,21 +75,22 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
           conversions = []
           for field in reply['PrimaryKeyFields']:
             fields.append(field['Name'])
-            conversions.append(field_types.conversions.get(field['Type']))
+            conversions.append(field_types_proto3.conversions.get(
+                field['Type']))
 
           for pk_list in reply['PrimaryKeyValues']:
             if not pk_list:
               continue
-            row = tuple(_make_row(pk_list, conversions))
-            rows.append(row)
+            decoded_row = tuple(_make_row(pk_list, conversions))
+            rows.append(decoded_row)
 
-        yield update_stream.StreamEvent(category=category,
+        yield update_stream.StreamEvent(category=reply['Category'],
                                         table_name=reply['TableName'],
                                         fields=fields,
                                         rows=rows,
                                         sql=reply['Sql'],
                                         timestamp=reply['Timestamp'],
-                                        transaction_id=reply['TransactionID'])
+                                        transaction_id=reply['TransactionId'])
     except gorpc.AppError as e:
       raise dbexceptions.DatabaseError(*e.args)
     except gorpc.GoRpcError as e:

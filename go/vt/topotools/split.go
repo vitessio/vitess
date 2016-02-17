@@ -89,7 +89,7 @@ func findOverlappingShards(shardMap map[string]*topo.ShardInfo) ([]*OverlappingS
 			si := findIntersectingShard(shardMap, left)
 			if si != nil {
 				if intersect(si, right) {
-					return nil, fmt.Errorf("Shard %v interesect with more than one shard, this is not supported", si.ShardName)
+					return nil, fmt.Errorf("Shard %v intersects with more than one shard, this is not supported", si.ShardName)
 				}
 				foundOne = true
 				right = append(right, si)
@@ -99,7 +99,7 @@ func findOverlappingShards(shardMap map[string]*topo.ShardInfo) ([]*OverlappingS
 			si = findIntersectingShard(shardMap, right)
 			if si != nil {
 				if intersect(si, left) {
-					return nil, fmt.Errorf("Shard %v interesect with more than one shard, this is not supported", si.ShardName)
+					return nil, fmt.Errorf("Shard %v intersects with more than one shard, this is not supported", si.ShardName)
 				}
 				foundOne = true
 				left = append(left, si)
@@ -157,7 +157,7 @@ func findOverlappingShards(shardMap map[string]*topo.ShardInfo) ([]*OverlappingS
 func findIntersectingShard(shardMap map[string]*topo.ShardInfo, sourceArray []*topo.ShardInfo) *topo.ShardInfo {
 	for name, si := range shardMap {
 		for _, sourceShardInfo := range sourceArray {
-			if si.KeyRange == nil || sourceShardInfo.KeyRange == nil || key.KeyRangesIntersect3(si.KeyRange, sourceShardInfo.KeyRange) {
+			if si.KeyRange == nil || sourceShardInfo.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, sourceShardInfo.KeyRange) {
 				delete(shardMap, name)
 				return si
 			}
@@ -170,7 +170,7 @@ func findIntersectingShard(shardMap map[string]*topo.ShardInfo, sourceArray []*t
 // in the destination array
 func intersect(si *topo.ShardInfo, allShards []*topo.ShardInfo) bool {
 	for _, shard := range allShards {
-		if key.KeyRangesIntersect3(si.KeyRange, shard.KeyRange) {
+		if key.KeyRangesIntersect(si.KeyRange, shard.KeyRange) {
 			return true
 		}
 	}

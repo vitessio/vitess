@@ -9,15 +9,16 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CreateKeyspace implements topo.Server.
-func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
+func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
@@ -27,21 +28,24 @@ func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.
 	if _, err = global.Create(keyspaceFilePath(keyspace), string(data), 0 /* ttl */); err != nil {
 		return convertError(err)
 	}
-	if err = initLockFile(global, keyspaceDirPath(keyspace)); err != nil {
-		return err
-	}
 	return nil
 }
 
 // UpdateKeyspace implements topo.Server.
-func (s *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (int64, error) {
+func (s *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (int64, error) {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
 	}
 
-	resp, err := s.getGlobal().CompareAndSwap(keyspaceFilePath(keyspace),
-		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	var resp *etcd.Response
+	if existingVersion == -1 {
+		// Set unconditionally.
+		resp, err = s.getGlobal().Set(keyspaceFilePath(keyspace), string(data), 0 /* ttl */)
+	} else {
+		resp, err = s.getGlobal().CompareAndSwap(keyspaceFilePath(keyspace),
+			string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+	}
 	if err != nil {
 		return -1, convertError(err)
 	}
@@ -52,7 +56,7 @@ func (s *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.
 }
 
 // GetKeyspace implements topo.Server.
-func (s *Server) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error) {
+func (s *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodatapb.Keyspace, int64, error) {
 	resp, err := s.getGlobal().Get(keyspaceFilePath(keyspace), false /* sort */, false /* recursive */)
 	if err != nil {
 		return nil, 0, convertError(err)
@@ -61,7 +65,7 @@ func (s *Server) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace
 		return nil, 0, ErrBadResponse
 	}
 
-	value := &pb.Keyspace{}
+	value := &topodatapb.Keyspace{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, 0, fmt.Errorf("bad keyspace data (%v): %q", err, resp.Node.Value)
 	}

@@ -8,60 +8,58 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
-
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var testKeyRange = &pb.KeyRange{
-	Start: key.Uint64Key(0).Bytes(),
-	End:   key.Uint64Key(10).Bytes(),
+var testKeyRange = &topodatapb.KeyRange{
+	Start: []byte{},
+	End:   []byte{0x10},
 }
 
 func TestKeyRangeFilterPass(t *testing.T) {
-	input := proto.BinlogTransaction{
-		Statements: []proto.Statement{
+	input := binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      "set1",
 			}, {
-				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Sql:      "dml1 /* vtgate:: keyspace_id:20 */",
 			}, {
-				Category: proto.BL_DML,
-				Sql:      []byte("dml2 /* EMD keyspace_id:2 */"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Sql:      "dml2 /* vtgate:: keyspace_id:02 */",
 			},
 		},
-		TransactionID: "MariaDB/0-41983-1",
+		TransactionId: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml2 /* EMD keyspace_id:2 */"> transaction_id: "MariaDB/0-41983-1" `
+	want := `statement: <6, "set1"> statement: <4, "dml2 /* vtgate:: keyspace_id:02 */"> transaction_id: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
 }
 
 func TestKeyRangeFilterSkip(t *testing.T) {
-	input := proto.BinlogTransaction{
-		Statements: []proto.Statement{
+	input := binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      "set1",
 			}, {
-				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Sql:      "dml1 /* vtgate:: keyspace_id:20 */",
 			},
 		},
-		TransactionID: "MariaDB/0-41983-1",
+		TransactionId: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -73,20 +71,20 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 }
 
 func TestKeyRangeFilterDDL(t *testing.T) {
-	input := proto.BinlogTransaction{
-		Statements: []proto.Statement{
+	input := binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      "set1",
 			}, {
-				Category: proto.BL_DDL,
-				Sql:      []byte("ddl"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DDL,
+				Sql:      "ddl",
 			},
 		},
-		TransactionID: "MariaDB/0-41983-1",
+		TransactionId: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -98,26 +96,26 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 }
 
 func TestKeyRangeFilterMalformed(t *testing.T) {
-	input := proto.BinlogTransaction{
-		Statements: []proto.Statement{
+	input := binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      "set1",
 			}, {
-				Category: proto.BL_DML,
-				Sql:      []byte("ddl"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Sql:      "ddl",
 			}, {
-				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:20*/"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Sql:      "dml1 /* vtgate:: keyspace_id:20*/",
 			}, {
-				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:2a */"),
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Sql:      "dml1 /* vtgate:: keyspace_id:2 */", // Odd-length hex string.
 			},
 		},
-		TransactionID: "MariaDB/0-41983-1",
+		TransactionId: "MariaDB/0-41983-1",
 	}
 	var got string
-	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -128,11 +126,11 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 	}
 }
 
-func bltToString(tx *proto.BinlogTransaction) string {
+func bltToString(tx *binlogdatapb.BinlogTransaction) string {
 	result := ""
 	for _, statement := range tx.Statements {
 		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, statement.Sql)
 	}
-	result += fmt.Sprintf("transaction_id: \"%v\" ", tx.TransactionID)
+	result += fmt.Sprintf("transaction_id: \"%v\" ", tx.TransactionId)
 	return result
 }

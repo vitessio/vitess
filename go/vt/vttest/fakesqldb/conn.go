@@ -12,9 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Conn provides a fake implementation of sqldb.Conn.
@@ -22,23 +24,24 @@ type Conn struct {
 	db             *DB
 	isClosed       bool
 	id             int64
-	curQueryResult *proto.QueryResult
+	curQueryResult *sqltypes.Result
 	curQueryRow    int64
-	charset        *proto.Charset
+	charset        *binlogdatapb.Charset
 }
 
 // DB is a fake database and all its methods are thread safe.
 type DB struct {
+	Name         string
 	isConnFail   bool
-	data         map[string]*proto.QueryResult
+	data         map[string]*sqltypes.Result
 	rejectedData map[string]error
 	queryCalled  map[string]int
 	mu           sync.Mutex
 }
 
 // AddQuery adds a query and its expected result.
-func (db *DB) AddQuery(query string, expectedResult *proto.QueryResult) {
-	result := &proto.QueryResult{}
+func (db *DB) AddQuery(query string, expectedResult *sqltypes.Result) {
+	result := &sqltypes.Result{}
 	*result = *expectedResult
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -48,7 +51,7 @@ func (db *DB) AddQuery(query string, expectedResult *proto.QueryResult) {
 }
 
 // GetQuery gets a query from the fake DB.
-func (db *DB) GetQuery(query string) (*proto.QueryResult, bool) {
+func (db *DB) GetQuery(query string) (*sqltypes.Result, bool) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	key := strings.ToLower(query)
@@ -112,8 +115,8 @@ func (db *DB) IsConnFail() bool {
 	return db.isConnFail
 }
 
-// NewFakeSqlDBConn creates a new FakeSqlDBConn instance
-func NewFakeSqlDBConn(db *DB) *Conn {
+// NewFakeSQLDBConn creates a new FakeSqlDBConn instance
+func NewFakeSQLDBConn(db *DB) *Conn {
 	return &Conn{
 		db:       db,
 		isClosed: false,
@@ -122,7 +125,7 @@ func NewFakeSqlDBConn(db *DB) *Conn {
 }
 
 // ExecuteFetch executes the query on the connection
-func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if conn.db.IsConnFail() {
 		return nil, newConnError()
 	}
@@ -137,16 +140,16 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 	if !ok {
 		return nil, fmt.Errorf("query: %s is not supported", query)
 	}
-	qr := &proto.QueryResult{}
+	qr := &sqltypes.Result{}
 	qr.RowsAffected = result.RowsAffected
-	qr.InsertId = result.InsertId
+	qr.InsertID = result.InsertID
 
 	if qr.RowsAffected > uint64(maxrows) {
 		return nil, fmt.Errorf("row count exceeded %d", maxrows)
 	}
 
 	if wantfields {
-		qr.Fields = make([]proto.Field, len(result.Fields))
+		qr.Fields = make([]*querypb.Field, len(result.Fields))
 		copy(qr.Fields, result.Fields)
 	}
 
@@ -225,8 +228,8 @@ func (conn *Conn) Shutdown() {
 }
 
 // Fields returns the current fields description for the query
-func (conn *Conn) Fields() []proto.Field {
-	return make([]proto.Field, 0)
+func (conn *Conn) Fields() []*querypb.Field {
+	return make([]*querypb.Field, 0)
 }
 
 // ID returns the connection id.
@@ -257,13 +260,13 @@ func (conn *Conn) SendCommand(command uint32, data []byte) error {
 
 // GetCharset returns the current numerical values of the per-session character
 // set variables.
-func (conn *Conn) GetCharset() (cs proto.Charset, err error) {
-	return *conn.charset, nil
+func (conn *Conn) GetCharset() (cs *binlogdatapb.Charset, err error) {
+	return conn.charset, nil
 }
 
 // SetCharset changes the per-session character set variables.
-func (conn *Conn) SetCharset(cs proto.Charset) error {
-	*conn.charset = cs
+func (conn *Conn) SetCharset(cs *binlogdatapb.Charset) error {
+	conn.charset = cs
 	return nil
 }
 
@@ -271,7 +274,8 @@ func (conn *Conn) SetCharset(cs proto.Charset) error {
 func Register() *DB {
 	name := fmt.Sprintf("fake-%d", rand.Int63())
 	db := &DB{
-		data:         make(map[string]*proto.QueryResult),
+		Name:         name,
+		data:         make(map[string]*sqltypes.Result),
 		rejectedData: make(map[string]error),
 		queryCalled:  make(map[string]int),
 	}
@@ -279,14 +283,13 @@ func Register() *DB {
 		if db.IsConnFail() {
 			return nil, newConnError()
 		}
-		return NewFakeSqlDBConn(db), nil
+		return NewFakeSQLDBConn(db), nil
 	})
-	sqldb.DefaultDB = name
 	return db
 }
 
 func newConnError() error {
-	return &sqldb.SqlError{
+	return &sqldb.SQLError{
 		Num:     2012,
 		Message: "connection fail",
 		Query:   "",

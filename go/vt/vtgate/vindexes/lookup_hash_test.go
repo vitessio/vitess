@@ -8,8 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -35,12 +34,12 @@ func TestLookupHashMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := [][]key.KeyspaceId{{
-		"\x16k@\xb4J\xbaK\xd6",
-		"\x06\xe7\xea\"Βp\x8f",
+	want := [][][]byte{{
+		[]byte("\x16k@\xb4J\xbaK\xd6"),
+		[]byte("\x06\xe7\xea\"Βp\x8f"),
 	}, {
-		"\x16k@\xb4J\xbaK\xd6",
-		"\x06\xe7\xea\"Βp\x8f",
+		[]byte("\x16k@\xb4J\xbaK\xd6"),
+		[]byte("\x06\xe7\xea\"Βp\x8f"),
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -49,7 +48,7 @@ func TestLookupHashMap(t *testing.T) {
 
 func TestLookupHashVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lhm.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	success, err := lhm.Verify(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -60,11 +59,11 @@ func TestLookupHashVerify(t *testing.T) {
 
 func TestLookupHashCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhm.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	err := lhm.(planbuilder.Lookup).Create(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
 		BindVariables: map[string]interface{}{
 			"fromc": 1,
@@ -92,11 +91,11 @@ func TestLookupHashReverse(t *testing.T) {
 
 func TestLookupHashDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lhm.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
+	err := lhm.(planbuilder.Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "delete from t where fromc in ::fromc and toc = :toc",
 		BindVariables: map[string]interface{}{
 			"fromc": []interface{}{1},

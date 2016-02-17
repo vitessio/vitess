@@ -33,16 +33,3 @@ func TestGetDialerWithProtocol(t *testing.T) {
 		t.Fatalf("dialerFunc has been registered, should not get nil: %v %v", err, c)
 	}
 }
-
-func TestServerError(t *testing.T) {
-	serverError := &ServerError{Code: 12, Err: "error"}
-	if serverError.Error() == "" {
-		t.Fatalf("server error is not empty, should not return empty error")
-	}
-}
-
-func TestOperationalError(t *testing.T) {
-	if OperationalError("error").Error() == "" {
-		t.Fatal("operational error is not empty, should not return empty error")
-	}
-}

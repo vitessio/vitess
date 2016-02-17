@@ -1,4 +1,4 @@
-# Vitess <p align="right">[![Build Status](https://travis-ci.org/youtube/vitess.svg?branch=master)](https://travis-ci.org/youtube/vitess/builds) [![Coverage Status](https://coveralls.io/repos/youtube/vitess/badge.png)](https://coveralls.io/r/youtube/vitess)</p>
+# Vitess <p align="right">[![Build Status](https://travis-ci.org/youtube/vitess.svg?branch=master)](https://travis-ci.org/youtube/vitess/builds)</p>
 
 Vitess is a storage platform for scaling MySQL.
 It is optimized to run as effectively in cloud architectures as it does on dedicated hardware.
@@ -39,7 +39,7 @@ and a more [detailed presentation from @Scale '14](http://youtu.be/5yDO-tmIoXY).
 
  * [General Concepts](http://vitess.io/overview/concepts.html)
  * [Topology Service](http://vitess.io/doc/TopologyService)
- * [V3 design](http://vitess.io/doc/VTGateV3)
+ * [VTGate V3](http://vitess.io/doc/VTGateV3Features/)
 
 ## Contact
 

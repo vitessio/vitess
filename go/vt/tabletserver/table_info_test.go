@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -30,7 +30,7 @@ func TestTableInfoNew(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}
@@ -53,7 +53,7 @@ func TestTableInfoFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	_, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	_, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err == nil {
 		t.Fatalf("table info creation should fail because it is unable to get test_table index")
 	}
@@ -68,7 +68,7 @@ func TestTableInfoWithoutRowCacheViaComment(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "vtocc_nocache")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "vitess_nocache", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}
@@ -89,7 +89,7 @@ func TestTableInfoWithoutRowCacheViaTableType(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "VIEW", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "VIEW", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}
@@ -101,11 +101,17 @@ func TestTableInfoWithoutRowCacheViaTableType(t *testing.T) {
 func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 	fakecacheservice.Register()
 	db := fakesqldb.Register()
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{})
-	db.AddQuery("describe `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{})
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
+	db.AddQuery("describe `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte("pk")),
 				sqltypes.MakeString([]byte("int")),
 				sqltypes.MakeString([]byte{}),
@@ -119,7 +125,7 @@ func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}
@@ -131,10 +137,10 @@ func TestTableInfoWithoutRowCacheViaNoPKColumn(t *testing.T) {
 func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 	fakecacheservice.Register()
 	db := fakesqldb.Register()
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte("PRIMARY")),
@@ -145,12 +151,18 @@ func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 			},
 		},
 	})
-	db.AddQuery("describe `test_table`", &mproto.QueryResult{
+	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Decimal,
+		}},
+	})
+	db.AddQuery("describe `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte("pk")),
-				sqltypes.MakeString([]byte("unknown_type")),
+				sqltypes.MakeString([]byte("decimal")),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte("1")),
@@ -162,7 +174,7 @@ func TestTableInfoWithoutRowCacheViaUnknownPKColumnType(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a test table info")
 	}
@@ -180,7 +192,7 @@ func TestTableInfoReplacePKColumn(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a table info")
 	}
@@ -202,10 +214,10 @@ func TestTableInfoSetPKColumn(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte("INDEX")),
@@ -219,7 +231,7 @@ func TestTableInfoSetPKColumn(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatalf("failed to create a table info")
 	}
@@ -241,10 +253,10 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery("show index from `test_table`", &mproto.QueryResult{
+	db.AddQuery("show index from `test_table`", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte{}),
 				sqltypes.MakeString([]byte("PRIMARY")),
@@ -258,22 +270,22 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table")
+	tableInfo, err := newTestTableInfo(cachePool, "USER_TABLE", "test table", db)
 	if err != nil {
-		t.Fatalf("failed to create a table info")
+		t.Fatalf("failed to create a table info: %v", err)
 	}
 	if len(tableInfo.PKColumns) != 1 {
 		t.Fatalf("table should have one PK column although the cardinality is invalid")
 	}
 }
 
-func newTestTableInfo(cachePool *CachePool, tableType string, comment string) (*TableInfo, error) {
+func newTestTableInfo(cachePool *CachePool, tableType string, comment string, db *fakesqldb.DB) (*TableInfo, error) {
 	ctx := context.Background()
-	appParams := sqldb.ConnParams{}
-	dbaParams := sqldb.ConnParams{}
+	appParams := sqldb.ConnParams{Engine: db.Name}
+	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	queryServiceStats := NewQueryServiceStats("", false)
 	connPoolIdleTimeout := 10 * time.Second
-	connPool := NewConnPool("", 2, connPoolIdleTimeout, false, queryServiceStats)
+	connPool := NewConnPool("", 2, connPoolIdleTimeout, false, queryServiceStats, DummyChecker)
 	connPool.Open(&appParams, &dbaParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {
@@ -282,8 +294,7 @@ func newTestTableInfo(cachePool *CachePool, tableType string, comment string) (*
 	defer conn.Recycle()
 
 	tableName := "test_table"
-	createTime := sqltypes.MakeString([]byte("1427325875"))
-	tableInfo, err := NewTableInfo(conn, tableName, tableType, createTime, comment, cachePool)
+	tableInfo, err := NewTableInfo(conn, tableName, tableType, comment, cachePool)
 	if err != nil {
 		return nil, err
 	}
@@ -308,12 +319,24 @@ func newTestTableInfoCachePool() *CachePool {
 	)
 }
 
-func getTestTableInfoQueries() map[string]*mproto.QueryResult {
-	return map[string]*mproto.QueryResult{
-		"describe `test_table`": &mproto.QueryResult{
+func getTestTableInfoQueries() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
+		"select * from `test_table` where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "name",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "addr",
+				Type: sqltypes.Int32,
+			}},
+		},
+		"describe `test_table`": {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("pk")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -321,7 +344,7 @@ func getTestTableInfoQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeString([]byte("1")),
 					sqltypes.MakeString([]byte{}),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("name")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -329,7 +352,7 @@ func getTestTableInfoQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeString([]byte("1")),
 					sqltypes.MakeString([]byte{}),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte("addr")),
 					sqltypes.MakeString([]byte("int")),
 					sqltypes.MakeString([]byte{}),
@@ -339,10 +362,10 @@ func getTestTableInfoQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
-		"show index from `test_table`": &mproto.QueryResult{
+		"show index from `test_table`": {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("PRIMARY")),
@@ -351,7 +374,7 @@ func getTestTableInfoQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("300")),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("INDEX")),
@@ -360,7 +383,7 @@ func getTestTableInfoQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("300")),
 				},
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("INDEX")),

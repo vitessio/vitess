@@ -6,12 +6,13 @@ package tableacl
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"os"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/testfiles"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
@@ -31,25 +32,53 @@ func (acl *fakeACL) IsMember(principal string) bool {
 
 func TestInitWithInvalidFilePath(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
-	defer func() {
-		err := recover()
-		if err == nil {
-			t.Fatalf("init should fail for an invalid config file path")
-		}
-	}()
-	Init("/invalid_file_path")
+	if err := Init("/invalid_file_path", func() {}); err == nil {
+		t.Fatalf("init should fail for an invalid config file path")
+	}
 }
+
+var aclJSON = `{
+  "table_groups": [
+    {
+      "name": "group01",
+      "table_names_or_prefixes": ["test_table"],
+      "readers": ["vt"],
+      "writers": ["vt"]
+    }
+  ]
+}`
 
 func TestInitWithValidConfig(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
-	Init(testfiles.Locate("tableacl/test_table_tableacl_config.json"))
+	f, err := ioutil.TempFile("", "tableacl")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.Remove(f.Name())
+	n, err := f.WriteString(aclJSON)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if n != len(aclJSON) {
+		t.Error("short write")
+		return
+	}
+	err = f.Close()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	Init(f.Name(), func() {})
 }
 
 func TestInitFromProto(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
 	readerACL := Authorized("my_test_table", READER)
-	if !reflect.DeepEqual(readerACL, acl.DenyAllACL{}) {
-		t.Fatalf("tableacl has not been initialized, got: %v, want: %v", readerACL, acl.DenyAllACL{})
+	want := &ACLResult{ACL: acl.DenyAllACL{}, GroupName: ""}
+	if !reflect.DeepEqual(readerACL, want) {
+		t.Fatalf("tableacl has not been initialized, got: %v, want: %v", readerACL, want)
 	}
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
@@ -67,7 +96,7 @@ func TestInitFromProto(t *testing.T) {
 	}
 
 	readerACL = Authorized("unknown_table", READER)
-	if !reflect.DeepEqual(acl.DenyAllACL{}, readerACL) {
+	if !reflect.DeepEqual(readerACL, want) {
 		t.Fatalf("there is no config for unknown_table, should deny by default")
 	}
 
@@ -232,17 +261,18 @@ func TestGetAclFactory(t *testing.T) {
 	name := fmt.Sprintf("tableacl-name-%d", rand.Int63())
 	aclFactory := &simpleacl.Factory{}
 	Register(name, aclFactory)
-	if !reflect.DeepEqual(aclFactory, GetCurrentAclFactory()) {
+	f, err := GetCurrentAclFactory()
+	if err != nil {
+		t.Errorf("Fail to get current ACL Factory: %v", err)
+	}
+	if !reflect.DeepEqual(aclFactory, f) {
 		t.Fatalf("should return registered acl factory even if default acl is not set.")
 	}
 	Register(name+"2", aclFactory)
-	defer func() {
-		err := recover()
-		if err == nil {
-			t.Fatalf("there are more than one acl factories, but the default is not set")
-		}
-	}()
-	GetCurrentAclFactory()
+	_, err = GetCurrentAclFactory()
+	if err == nil {
+		t.Fatalf("there are more than one acl factories, but the default is not set")
+	}
 }
 
 func TestGetAclFactoryWithWrongDefault(t *testing.T) {
@@ -253,13 +283,10 @@ func TestGetAclFactoryWithWrongDefault(t *testing.T) {
 	Register(name, aclFactory)
 	Register(name+"2", aclFactory)
 	SetDefaultACL("wrong_name")
-	defer func() {
-		err := recover()
-		if err == nil {
-			t.Fatalf("there are more than one acl factories, but the default given does not match any of these.")
-		}
-	}()
-	GetCurrentAclFactory()
+	_, err := GetCurrentAclFactory()
+	if err == nil {
+		t.Fatalf("there are more than one acl factories, but the default given does not match any of these.")
+	}
 }
 
 func setUpTableACL(factory acl.Factory) {

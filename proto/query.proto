@@ -30,36 +30,130 @@ message VTGateCallerID {
   string username = 1;
 }
 
-// BindVariable represents a single bind variable in a Query
-message BindVariable {
-  enum Type {
-    TYPE_NULL = 0;
-    TYPE_BYTES = 1;
-    TYPE_INT = 2;
-    TYPE_UINT = 3;
-    TYPE_FLOAT = 4;
-    TYPE_BYTES_LIST = 5;
-    TYPE_INT_LIST = 6;
-    TYPE_UINT_LIST = 7;
-    TYPE_FLOAT_LIST = 8;
+// Flag allows us to qualify types by their common properties.
+enum Flag {
+  NONE = 0;
+  ISINTEGRAL = 256;
+  ISUNSIGNED = 512;
+  ISFLOAT = 1024;
+  ISQUOTED = 2048;
+  ISTEXT = 4096;
+  ISBINARY = 8192;
+}
 
-  }
+// Type defines the various supported data types in bind vars
+// and query results.
+enum Type {
+  // NULL_TYPE specifies a NULL type.
+  NULL_TYPE = 0;
+  // INT8 specifies a TINYINT type.
+  // Properties: 1, IsNumber.
+  INT8 = 257;
+  // UINT8 specifies a TINYINT UNSIGNED type.
+  // Properties: 2, IsNumber, IsUnsigned.
+  UINT8 = 770;
+  // INT16 specifies a SMALLINT type.
+  // Properties: 3, IsNumber.
+  INT16 = 259;
+  // UINT16 specifies a SMALLINT UNSIGNED type.
+  // Properties: 4, IsNumber, IsUnsigned.
+  UINT16 = 772;
+  // INT24 specifies a MEDIUMINT type.
+  // Properties: 5, IsNumber.
+  INT24 = 261;
+  // UINT24 specifies a MEDIUMINT UNSIGNED type.
+  // Properties: 6, IsNumber, IsUnsigned.
+  UINT24 = 774;
+  // INT32 specifies a INTEGER type.
+  // Properties: 7, IsNumber.
+  INT32 = 263;
+  // UINT32 specifies a INTEGER UNSIGNED type.
+  // Properties: 8, IsNumber, IsUnsigned.
+  UINT32 = 776;
+  // INT64 specifies a BIGINT type.
+  // Properties: 9, IsNumber.
+  INT64 = 265;
+  // UINT64 specifies a BIGINT UNSIGNED type.
+  // Properties: 10, IsNumber, IsUnsigned.
+  UINT64 = 778;
+  // FLOAT32 specifies a FLOAT type.
+  // Properties: 11, IsFloat.
+  FLOAT32 = 1035;
+  // FLOAT64 specifies a DOUBLE or REAL type.
+  // Properties: 12, IsFloat.
+  FLOAT64 = 1036;
+  // TIMESTAMP specifies a TIMESTAMP type.
+  // Properties: 13, IsQuoted.
+  TIMESTAMP = 2061;
+  // DATE specifies a DATE type.
+  // Properties: 14, IsQuoted.
+  DATE = 2062;
+  // TIME specifies a TIME type.
+  // Properties: 15, IsQuoted.
+  TIME = 2063;
+  // DATETIME specifies a DATETIME type.
+  // Properties: 16, IsQuoted.
+  DATETIME = 2064;
+  // YEAR specifies a YEAR type.
+  // Properties: 17, IsNumber, IsUnsigned.
+  YEAR = 785;
+  // DECIMAL specifies a DECIMAL or NUMERIC type.
+  // Properties: 18, None.
+  DECIMAL = 18;
+  // TEXT specifies a TEXT type.
+  // Properties: 19, IsQuoted, IsText.
+  TEXT = 6163;
+  // BLOB specifies a BLOB type.
+  // Properties: 20, IsQuoted, IsBinary.
+  BLOB = 10260;
+  // VARCHAR specifies a VARCHAR type.
+  // Properties: 21, IsQuoted, IsText.
+  VARCHAR = 6165;
+  // VARBINARY specifies a VARBINARY type.
+  // Properties: 22, IsQuoted, IsBinary.
+  VARBINARY = 10262;
+  // CHAR specifies a CHAR type.
+  // Properties: 23, IsQuoted, IsText.
+  CHAR = 6167;
+  // BINARY specifies a BINARY type.
+  // Properties: 24, IsQuoted, IsBinary.
+  BINARY = 10264;
+  // BIT specifies a BIT type.
+  // Properties: 25, IsQuoted.
+  BIT = 2073;
+  // ENUM specifies an ENUM type.
+  // Properties: 26, IsQuoted.
+  ENUM = 2074;
+  // SET specifies a SET type.
+  // Properties: 27, IsQuoted.
+  SET = 2075;
+  // TUPLE specifies a a tuple. This cannot
+  // be returned in a QueryResult, but it can
+  // be sent as a bind var.
+  // Properties: 28, None.
+  TUPLE = 28;
+}
+
+// Value represents a typed value.
+message Value {
   Type type = 1;
+  bytes value = 2;
+}
 
-  // Depending on type, only one value below is set.
-  bytes value_bytes = 2;
-  int64 value_int = 3;
-  uint64 value_uint = 4;
-  double value_float = 5;
-  repeated bytes value_bytes_list = 6;
-  repeated int64 value_int_list = 7;
-  repeated uint64 value_uint_list = 8;
-  repeated double value_float_list = 9;
+// BindVariable represents a single bind variable in a Query.
+message BindVariable {
+  Type type = 1;
+  bytes value = 2;
+  // values are set if type is TUPLE.
+  repeated Value values = 3;
 }
 
 // BoundQuery is a query with its bind variables
 message BoundQuery {
-  bytes sql = 1;
+  // sql is the SQL query to execute
+  string sql = 1;
+
+  // bind_variables is a map of all bind variables to expand in the query
   map<string, BindVariable> bind_variables = 2;
 }
 
@@ -68,69 +162,19 @@ message Field {
   // name of the field as returned by mysql C API
   string name = 1;
 
-  // Type follows enum_field_types from mysql.h.
-  enum Type {
-    TYPE_DECIMAL = 0;
-    TYPE_TINY = 1;
-    TYPE_SHORT = 2;
-    TYPE_LONG = 3;
-    TYPE_FLOAT = 4;
-    TYPE_DOUBLE = 5;
-    TYPE_NULL = 6;
-    TYPE_TIMESTAMP = 7;
-    TYPE_LONGLONG = 8;
-    TYPE_INT24 = 9;
-    TYPE_DATE = 10;
-    TYPE_TIME = 11;
-    TYPE_DATETIME = 12;
-    TYPE_YEAR = 13;
-    TYPE_NEWDATE = 14;
-    TYPE_VARCHAR = 15;
-    TYPE_BIT = 16;
-    TYPE_NEWDECIMAL = 246;
-    TYPE_ENUM = 247;
-    TYPE_SET = 248;
-    TYPE_TINY_BLOB = 249;
-    TYPE_MEDIUM_BLOB = 250;
-    TYPE_LONG_BLOB = 251;
-    TYPE_BLOB = 252;
-    TYPE_VAR_STRING = 253;
-    TYPE_STRING = 254;
-    TYPE_GEOMETRY = 255;
-  }
+  // vitess-defined type. Conversion function is in sqltypes package.
   Type type = 2;
-
-  // Flag contains the MySQL field flags bitset values e.g. to
-  // distinguish between signed and unsigned integer.  These numbers
-  // should exactly match values defined in
-  // dist/mysql-5.1.52/include/mysql_com.h
-  enum Flag {
-    // ZEROVALUE_FLAG is not part of the MySQL specification and only
-    // used in unit tests.
-    VT_ZEROVALUE_FLAG        = 0;
-    VT_NOT_NULL_FLAG         = 1;
-    VT_PRI_KEY_FLAG          = 2;
-    VT_UNIQUE_KEY_FLAG       = 4;
-    VT_MULTIPLE_KEY_FLAG     = 8;
-    VT_BLOB_FLAG             = 16;
-    VT_UNSIGNED_FLAG         = 32;
-    VT_ZEROFILL_FLAG         = 64;
-    VT_BINARY_FLAG           = 128;
-    VT_ENUM_FLAG             = 256;
-    VT_AUTO_INCREMENT_FLAG   = 512;
-    VT_TIMESTAMP_FLAG        = 1024;
-    VT_SET_FLAG              = 2048;
-    VT_NO_DEFAULT_VALUE_FLAG = 4096;
-    VT_ON_UPDATE_NOW_FLAG    = 8192;
-    VT_NUM_FLAG              = 32768;
-  }
-  // flags is essentially a bitset<Flag>.
-  int64 flags = 3;
 }
 
 // Row is a database row.
 message Row {
-  repeated bytes values = 1;
+  // lengths contains the length of each value in values.
+  // A length of -1 means that the field is NULL. While
+  // reading values, you have to accummulate the length
+  // to know the offset where the next value begins in values.
+  repeated sint64 lengths = 1;
+  // values contains a concatenation of all values in the row.
+  bytes values = 2;
 }
 
 // QueryResult is returned by Execute and ExecuteStream.
@@ -304,6 +348,10 @@ message RealtimeStats {
 
   // cpu_usage is used for load-based balancing
   double cpu_usage = 5;
+
+  // qps is the average QPS (queries per second) rate in the last XX seconds
+  // where XX is usually 60 (See query_service_stats.go).
+  double qps = 6;
 }
 
 // StreamHealthResponse is streamed by StreamHealth on a regular basis
@@ -312,13 +360,18 @@ message StreamHealthResponse {
   // record will be accepted.
   Target target = 1;
 
+  // serving is true iff the tablet is serving. A tablet may not be serving
+  // if filtered replication is enabled on a master for instance,
+  // or if a replica should not be used because the keyspace is being resharded.
+  bool serving = 2;
+
   // tablet_externally_reparented_timestamp contains the last time
   // tabletmanager.TabletExternallyReparented was called on this tablet,
   // or 0 if it was never called. This is meant to differentiate two tablets
   // that report a target.TabletType of MASTER, only the one with the latest
   // timestamp should be trusted.
-  int64 tablet_externally_reparented_timestamp = 2;
+  int64 tablet_externally_reparented_timestamp = 3;
 
   // realtime_stats contains information about the tablet status
-  RealtimeStats realtime_stats = 3;
+  RealtimeStats realtime_stats = 4;
 }

@@ -7,8 +7,10 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-echo "Deleting vtctld pod..."
-$KUBECTL delete pod vtctld
+VITESS_NAME=${VITESS_NAME:-'default'}
+
+echo "Stopping vtctld replicationcontroller..."
+$KUBECTL stop replicationcontroller vtctld --namespace=$VITESS_NAME
 
 echo "Deleting vtctld service..."
-$KUBECTL delete service vtctld
+$KUBECTL delete service vtctld --namespace=$VITESS_NAME

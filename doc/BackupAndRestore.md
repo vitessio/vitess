@@ -4,36 +4,69 @@ Vitess. Vitess uses backups for two purposes:
 * Provide a point-in-time backup of the data on a tablet
 * Bootstrap new tablets in an existing shard
 
-**Contents:**
-
-* [Prerequisites](#prerequisites)
-* [Creating a backup](#creating-a-backup)
-* [Restoring a backup](#restoring-a-backup)
-* [Managing backups](#managing-backups)
-* [Bootstrapping a new tablet](#bootstrapping-a-new-tablet)
-* [Concurrency](#concurrency)
-
 ## Prerequisites
 
 Vitess stores data backups on a Backup Storage service. Currently,
-Vitess only supports backups to an NFS directory and can use any
-network-mounted drive as the backup repository. The core Vitess software's
-[interface.go](https://github.com/youtube/vitess/blob/master/go/vt/mysqlctl/backupstorage/interface.go)
-file defines an interface for the Backup Storage service. The interface
-defines methods for creating, listing, and removing backups.
+Vitess supports backups to either [Google Cloud Storage](https://cloud.google.com/storage/)
+or any network-mounted drive (such as NFS). The core Vitess software's
+[BackupStorage interface](https://github.com/youtube/vitess/blob/master/go/vt/mysqlctl/backupstorage/interface.go)
+defines methods for creating, listing, and removing backups. Plugins for other
+storage services just need to implement the interface.
 
 Before you can back up or restore a tablet, you need to ensure that the
 tablet is aware of the Backup Storage system that you are using. To do so,
 use the following command-line flags when starting a vttablet that has
-access to a local file system where you are storing backups. In practice,
-you should always use these flags when starting a tablet that has access
-to backups on a local file system.
+access to the location where you are storing backups.
 
-| Flag | Description
-| ---- | -----------
-| <nobr><code>--backup_storage_implementation</code></nobr> | Specifies the implementation of the Backup Storage interface to use.<br><br>If you run Vitess on a machine that has access to an NFS directory where you store backups, set the flag's value to file. Otherwise, do not set this flag or either of the other remaining flags.</li></ul>
-| <code>--file_backup_storage_root</code> | Identifies the root directory for backups. Set this flag if the backup_storage_implementation flag is set to file.
-| <code>--restore_from_backup</code> | Indicates that, when started, the tablet should restore the most recent backup from the file_backup_storage_root directory. This flag is only relevant if the other two flags listed above are also set.
+<table class="responsive">
+  <thead>
+    <tr>
+      <th colspan="2">Flags</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><nobr><code>-backup_storage_implementation</code></nobr></td>
+      <td>Specifies the implementation of the Backup Storage interface to use.<br><br>
+          Current plugin options available are:
+          <ul>
+          <li><code>gcs</code>: For Google Cloud Storage.</li>
+          <li><code>file</code>: For NFS or any other filesystem-mounted network drive.</li>
+          </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><nobr><code>-file_backup_storage_root</code></nobr></td>
+      <td>For the <code>file</code> plugin, this identifies the root directory for backups.</td>
+    </tr>
+    <tr>
+      <td><nobr><code>-gcs_backup_storage_project</code></nobr></td>
+      <td>For the <code>gcs</code> plugin, this identifies the <a href="https://cloud.google.com/storage/docs/projects">project</a> to use.</td>
+    </tr>
+    <tr>
+      <td><nobr><code>-gcs_backup_storage_bucket</code></nobr></td>
+      <td>For the <code>gcs</code> plugin, this identifies the <a href="https://cloud.google.com/storage/docs/concepts-techniques#concepts">bucket</a> to use.</td>
+    </tr>
+    <tr>
+      <td><nobr><code>-restore_from_backup</code></nobr></td>
+      <td>Indicates that, when started with an empty MySQL instance, the tablet should restore the most recent backup from the specified storage plugin.</td>
+    </tr>
+  </tbody>
+</table>
+
+### Authentication
+
+Note that for the Google Cloud Storage plugin, we currently only support
+[Application Default Credentials](https://developers.google.com/identity/protocols/application-default-credentials),
+which means that access to Cloud Storage is automatically granted by virtue of
+the fact that you're already running within Google Compute Engine or Container Engine.
+
+For this to work, the GCE instances must have been created with the
+[scope](https://cloud.google.com/compute/docs/authentication#using) that grants
+read-write access to Cloud Storage. When using Container Engine, you can do this
+for all the instances it creates by adding `--scopes storage-rw` to the
+`gcloud container clusters create` command as shown in the [Vitess on Kubernetes guide]
+(http://vitess.io/getting-started/#start-a-container-engine-cluster).
 
 ## Creating a backup
 
@@ -67,7 +100,7 @@ In response to this command, the designated tablet performs the following sequen
 ## Restoring a backup
 
 When a tablet starts, Vitess checks the value of the
-<code>--restore_from_backup</code> command-line flag to determine whether
+<code>-restore_from_backup</code> command-line flag to determine whether
 to restore a backup to that tablet.
 
 * If the flag is present, Vitess tries to restore the most recent backup
@@ -94,7 +127,7 @@ vttablet ... -backup_storage_implementation=file \
     existing backups for a keyspace/shard in chronological order.
 
     ``` sh
-'vtctl ListBackups <keyspace/shard>
+vtctl ListBackups <keyspace/shard>
 ```
 
 * [RemoveBackup](/reference/vtctl.html#removebackup) deletes a
@@ -102,7 +135,7 @@ vttablet ... -backup_storage_implementation=file \
 
     ``` sh
 RemoveBackup <keyspace/shard> <backup name>
-``
+```
 
 ## Bootstrapping a new tablet
 
@@ -136,12 +169,12 @@ new tablets as part of the normal lifecyle of a shard:
 
 1. Once the shard is accumulating data, a cron job runs regularly to
     create new backups. Backups are created frequently enough to ensure
-    that one is always available if needed.<br><br>
+    that one is always available if needed.
 
     To determine the proper frequency for creating backups, consider
     the amount of time that you keep replication logs and allow enough
     time to investigate and fix problems in the event that a backup
-    operation fails.<br><br>
+    operation fails.
 
     For example, suppose you typically keep four days of replication logs
     and you create daily backups. In that case, even if a backup fails,
@@ -151,7 +184,7 @@ new tablets as part of the normal lifecyle of a shard:
 1. When a spare tablet comes up, it restores the latest backup, which
     contains data as well as the backup's replication position. The
     tablet then resets its master to the current shard master and starts
-    replicating.<br><br>
+    replicating.
 
     This process is the same for new slave tablets and slave tablets that
     are being restarted. For example, to add a new rdonly tablet to your
@@ -180,3 +213,4 @@ can control the concurrency using command-line flags:
 
 If the network link is fast enough, the concurrency matches the CPU
 usage of the process during the backup or restore process.
+

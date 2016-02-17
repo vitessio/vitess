@@ -12,23 +12,27 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"golang.org/x/net/context"
 )
 
+// TableInfo contains the tabletserver related info for a table.
+// It's a superset of schema.Table.
 type TableInfo struct {
 	*schema.Table
 	Cache *RowCache
-	// stats updated by sqlquery.go
+	// rowcache stats updated by query_executor.go and query_engine.go.
 	hits, absent, misses, invalidations sync2.AtomicInt64
 }
 
-func NewTableInfo(conn *DBConn, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo, err error) {
+// NewTableInfo creates a new TableInfo.
+func NewTableInfo(conn *DBConn, tableName string, tableType string, comment string, cachePool *CachePool) (ti *TableInfo, err error) {
 	ti, err = loadTableInfo(conn, tableName)
 	if err != nil {
 		return nil, err
 	}
-	ti.initRowCache(conn, tableType, createTime, comment, cachePool)
+	ti.initRowCache(conn, tableType, comment, cachePool)
 	return ti, nil
 }
 
@@ -44,16 +48,31 @@ func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
 }
 
 func (ti *TableInfo) fetchColumns(conn *DBConn) error {
+	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select * from `%s` where 1 != 1", ti.Name), 10000, true)
+	if err != nil {
+		return err
+	}
+	fieldTypes := make(map[string]querypb.Type, len(qr.Fields))
+	for _, field := range qr.Fields {
+		fieldTypes[field.Name] = field.Type
+	}
 	columns, err := conn.Exec(context.Background(), fmt.Sprintf("describe `%s`", ti.Name), 10000, false)
 	if err != nil {
 		return err
 	}
 	for _, row := range columns.Rows {
-		ti.AddColumn(row[0].String(), row[1].String(), row[4], row[5].String())
+		name := row[0].String()
+		columnType, ok := fieldTypes[name]
+		if !ok {
+			log.Warningf("Table: %s, column %s not found in select list, skipping.", ti.Name, name)
+			continue
+		}
+		ti.AddColumn(name, columnType, row[4], row[5].String())
 	}
 	return nil
 }
 
+// SetPK sets the pk columns for a TableInfo.
 func (ti *TableInfo) SetPK(colnames []string) error {
 	pkIndex := schema.NewIndex("PRIMARY")
 	colnums := make([]int, len(colnames))
@@ -132,13 +151,13 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
 	return nil
 }
 
-func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
+func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, comment string, cachePool *CachePool) {
 	if cachePool.IsClosed() {
 		return
 	}
 
-	if strings.Contains(comment, "vtocc_nocache") {
-		log.Infof("%s commented as vtocc_nocache. Will not be cached.", ti.Name)
+	if strings.Contains(comment, "vitess_nocache") {
+		log.Infof("%s commented as vitess_nocache. Will not be cached.", ti.Name)
 		return
 	}
 
@@ -152,16 +171,18 @@ func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, createTime sql
 		return
 	}
 	for _, col := range ti.PKColumns {
-		if ti.Columns[col].Category == schema.CAT_OTHER {
-			log.Infof("Table %s pk has unsupported column types. Will not be cached.", ti.Name)
-			return
+		if sqltypes.IsIntegral(ti.Columns[col].Type) || ti.Columns[col].Type == sqltypes.VarBinary {
+			continue
 		}
+		log.Infof("Table %s pk has unsupported column types. Will not be cached.", ti.Name)
+		return
 	}
 
-	ti.CacheType = schema.CACHE_RW
+	ti.CacheType = schema.CacheRW
 	ti.Cache = NewRowCache(ti, cachePool)
 }
 
+// StatsJSON returns a JSON representation of the TableInfo stats.
 func (ti *TableInfo) StatsJSON() string {
 	if ti.Cache == nil {
 		return fmt.Sprintf("null")
@@ -170,6 +191,7 @@ func (ti *TableInfo) StatsJSON() string {
 	return fmt.Sprintf("{\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v}", h, a, m, i)
 }
 
+// Stats returns the stats for TableInfo.
 func (ti *TableInfo) Stats() (hits, absent, misses, invalidations int64) {
 	return ti.hits.Get(), ti.absent.Get(), ti.misses.Get(), ti.invalidations.Get()
 }

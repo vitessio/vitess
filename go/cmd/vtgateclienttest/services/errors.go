@@ -5,131 +5,267 @@
 package services
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // errorClient implements vtgateservice.VTGateService
 // and returns specific errors. It is meant to test all possible error cases,
 // and make sure all clients handle the errors correctly.
-//
-// So far, we understand:
-// - "return integrity error": Execute* will return an integrity error.
-// - "error": GetSrvKeyspace will return an error.
-//
-// TODO(alainjobart) Add throttling error.
-// TODO(alainjobart) Add all errors the client may care about.
+
+const (
+	// ErrorPrefix is the prefix to send with queries so they go through this service handler.
+	ErrorPrefix = "error://"
+	// PartialErrorPrefix is the prefix to send with queries so the RPC returns a partial error.
+	// A partial error is when we return an error as part of the RPC response instead of via
+	// the regular error channels. This occurs if an RPC partially succeeds, and therefore
+	// requires some kind of response, but still needs to return an error.
+	// VTGate Execute* calls do this: they always return a new session ID, but might also
+	// return an error in the response.
+	PartialErrorPrefix = "partialerror://"
+)
+
 type errorClient struct {
-	fallback vtgateservice.VTGateService
+	fallbackClient
 }
 
 func newErrorClient(fallback vtgateservice.VTGateService) *errorClient {
 	return &errorClient{
-		fallback: fallback,
+		fallbackClient: newFallbackClient(fallback),
 	}
 }
 
-func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.Execute returning integrity error (errno 1062)")
+// requestToError returns an error for the given request, by looking at the
+// request's prefix and requested error type. If the request doesn't match an
+// error request, return nil.
+func requestToError(request string) error {
+	if !strings.HasPrefix(request, ErrorPrefix) {
+		return nil
 	}
-	return c.fallback.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
+	return trimmedRequestToError(strings.TrimPrefix(request, ErrorPrefix))
 }
 
-func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteShard returning integrity error (errno 1062)")
+// requestToPartialError fills reply for a partial error if requested
+// (that is, an error that may change the session).
+// It returns true if a partial error was requested, false otherwise.
+// This partial error should only be returned by Execute* calls.
+func requestToPartialError(request string, session *vtgatepb.Session) error {
+	if !strings.HasPrefix(request, PartialErrorPrefix) {
+		return nil
 	}
-	return c.fallback.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction, reply)
-}
-
-func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteKeyspaceIds returning integrity error (errno 1062)")
+	request = strings.TrimPrefix(request, PartialErrorPrefix)
+	parts := strings.Split(request, "/")
+	if len(parts) > 1 && parts[1] == "close transaction" {
+		session.InTransaction = false
 	}
-	return c.fallback.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction, reply)
+	return trimmedRequestToError(parts[0])
 }
 
-func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteKeyRanges returning integrity error (errno 1062)")
+// trimmedRequestToError returns an error for a trimmed request by looking at the
+// requested error type. It assumes that prefix checking has already been done.
+// If the received string doesn't match a known error, returns an unknown error.
+func trimmedRequestToError(received string) error {
+	switch received {
+	case "bad input":
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			errors.New("vtgate test client forced error: bad input"),
+		)
+	case "deadline exceeded":
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+			errors.New("vtgate test client forced error: deadline exceeded"),
+		)
+	case "integrity error":
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_INTEGRITY_ERROR,
+			errors.New("vtgate test client forced error: integrity error (errno 1062)"),
+		)
+	// request backlog and general throttling type errors
+	case "transient error":
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+			errors.New("request_backlog: too many requests in flight: vtgate test client forced error: transient error"),
+		)
+	case "unauthenticated":
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_UNAUTHENTICATED,
+			errors.New("vtgate test client forced error: unauthenticated"),
+		)
+	case "unknown error":
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_UNKNOWN_ERROR,
+			errors.New("vtgate test client forced error: unknown error"),
+		)
+	default:
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_UNKNOWN_ERROR,
+			fmt.Errorf("vtgate test client error request unrecognized: %v", received),
+		)
 	}
-	return c.fallback.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction, reply)
 }
 
-func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
-	if sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteEntityIds returning integrity error (errno 1062)")
+func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+	if err := requestToPartialError(sql, session); err != nil {
+		return nil, err
 	}
-	return c.fallback.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, reply)
-}
-
-func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
-	if len(queries) == 1 && queries[0].Sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteBatchShards returning integrity error (errno 1062)")
+	if err := requestToError(sql); err != nil {
+		return nil, err
 	}
-	return c.fallback.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, session, reply)
+	return c.fallbackClient.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction)
 }
 
-func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
-	if len(queries) == 1 && queries[0].Sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteBatchKeyspaceIds returning integrity error (errno 1062)")
+func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+	if err := requestToPartialError(sql, session); err != nil {
+		return nil, err
 	}
-	return c.fallback.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session, reply)
-}
-
-func (c *errorClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
-	return c.fallback.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
-}
-
-func (c *errorClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
-	return c.fallback.StreamExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, sendReply)
-}
-
-func (c *errorClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
-	return c.fallback.StreamExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, sendReply)
-}
-
-func (c *errorClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
-	return c.fallback.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
-}
-
-func (c *errorClient) Begin(ctx context.Context, outSession *proto.Session) error {
-	return c.fallback.Begin(ctx, outSession)
-}
-
-func (c *errorClient) Commit(ctx context.Context, inSession *proto.Session) error {
-	return c.fallback.Commit(ctx, inSession)
-}
-
-func (c *errorClient) Rollback(ctx context.Context, inSession *proto.Session) error {
-	return c.fallback.Rollback(ctx, inSession)
-}
-
-func (c *errorClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
-	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount, reply)
-}
-
-func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
-	if keyspace == "error" {
-		return nil, fmt.Errorf("vtgate test client, errorClient.GetSrvKeyspace returning error")
+	if err := requestToError(sql); err != nil {
+		return nil, err
 	}
-	return c.fallback.GetSrvKeyspace(ctx, keyspace)
+	return c.fallbackClient.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction)
 }
 
-func (c *errorClient) HandlePanic(err *error) {
-	if x := recover(); x != nil {
-		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-		*err = fmt.Errorf("uncaught panic: %v", x)
+func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+	if err := requestToPartialError(sql, session); err != nil {
+		return nil, err
 	}
+	if err := requestToError(sql); err != nil {
+		return nil, err
+	}
+	return c.fallbackClient.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction)
+}
+
+func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+	if err := requestToPartialError(sql, session); err != nil {
+		return nil, err
+	}
+	if err := requestToError(sql); err != nil {
+		return nil, err
+	}
+	return c.fallbackClient.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction)
+}
+
+func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
+	if err := requestToPartialError(sql, session); err != nil {
+		return nil, err
+	}
+	if err := requestToError(sql); err != nil {
+		return nil, err
+	}
+	return c.fallbackClient.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction)
+}
+
+func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session) ([]sqltypes.Result, error) {
+	if len(queries) == 1 {
+		if err := requestToPartialError(queries[0].Query.Sql, session); err != nil {
+			return nil, err
+		}
+		if err := requestToError(queries[0].Query.Sql); err != nil {
+			return nil, err
+		}
+	}
+	return c.fallbackClient.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, session)
+}
+
+func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session) ([]sqltypes.Result, error) {
+	if len(queries) == 1 {
+		if err := requestToPartialError(queries[0].Query.Sql, session); err != nil {
+			return nil, err
+		}
+		if err := requestToError(queries[0].Query.Sql); err != nil {
+			return nil, err
+		}
+	}
+	return c.fallbackClient.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session)
+}
+
+func (c *errorClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+	if err := requestToError(sql); err != nil {
+		return err
+	}
+	return c.fallbackClient.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
+}
+
+func (c *errorClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+	if err := requestToError(sql); err != nil {
+		return err
+	}
+	return c.fallbackClient.StreamExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, sendReply)
+}
+
+func (c *errorClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+	if err := requestToError(sql); err != nil {
+		return err
+	}
+	return c.fallbackClient.StreamExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, sendReply)
+}
+
+func (c *errorClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, sendReply func(*sqltypes.Result) error) error {
+	if err := requestToError(sql); err != nil {
+		return err
+	}
+	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
+}
+
+func (c *errorClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+	// The client sends the error request through the callerid, as there are no other parameters
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return nil, err
+	}
+	return c.fallbackClient.Begin(ctx)
+}
+
+func (c *errorClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
+	// The client sends the error request through the callerid, as there are no other parameters
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return err
+	}
+	return c.fallbackClient.Commit(ctx, session)
+}
+
+func (c *errorClient) Rollback(ctx context.Context, session *vtgatepb.Session) error {
+	// The client sends the error request through the callerid, as there are no other parameters
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return err
+	}
+	return c.fallbackClient.Rollback(ctx, session)
+}
+
+func (c *errorClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+	if err := requestToError(sql); err != nil {
+		return nil, err
+	}
+	return c.fallbackClient.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
+}
+
+func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	if err := requestToError(keyspace); err != nil {
+		return nil, err
+	}
+	return c.fallbackClient.GetSrvKeyspace(ctx, keyspace)
+}
+
+func (c *errorClient) GetSrvShard(ctx context.Context, keyspace, shard string) (*topodatapb.SrvShard, error) {
+	if err := requestToError(keyspace); err != nil {
+		return nil, err
+	}
+	return c.fallbackClient.GetSrvShard(ctx, keyspace, shard)
 }

@@ -12,10 +12,10 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func tabletEqual(left, right *pb.Tablet) (bool, error) {
+func tabletEqual(left, right *topodatapb.Tablet) (bool, error) {
 	lj, err := json.Marshal(left)
 	if err != nil {
 		return false, err
@@ -29,9 +29,11 @@ func tabletEqual(left, right *pb.Tablet) (bool, error) {
 
 // CheckTablet verifies the topo server API is correct for managing tablets.
 func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
+	tts := topo.Server{Impl: ts}
+
 	cell := getLocalCell(ctx, t, ts)
-	tablet := &pb.Tablet{
-		Alias:    &pb.TabletAlias{Cell: cell, Uid: 1},
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: 1},
 		Hostname: "localhost",
 		Ip:       "10.11.12.13",
 		PortMap: map[string]int32{
@@ -41,8 +43,8 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
-		Type:     pb.TabletType_MASTER,
-		KeyRange: newKeyRange3("-10"),
+		Type:     topodatapb.TabletType_MASTER,
+		KeyRange: newKeyRange("-10"),
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
@@ -51,7 +53,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("CreateTablet(again): %v", err)
 	}
 
-	if _, _, err := ts.GetTablet(ctx, &pb.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
+	if _, _, err := ts.GetTablet(ctx, &topodatapb.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
 		t.Errorf("GetTablet(666): %v", err)
 	}
 
@@ -90,15 +92,47 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
 	}
 
-	if _, err := ts.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
+	// unconditional tablet update
+	nt.Hostname = "remotehost2"
+	if _, err := ts.UpdateTablet(ctx, nt, -1); err != nil {
+		t.Errorf("UpdateTablet(-1): %v", err)
+	}
+
+	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
+	if err != nil {
+		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+	}
+	if want := "remotehost2"; nt.Hostname != want {
+		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
+	}
+
+	// test UpdateTabletFields works
+	updatedTablet, err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.Hostname = "anotherhost"
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)
+	}
+	if got, want := updatedTablet.Hostname, "anotherhost"; got != want {
+		t.Errorf("updatedTablet.Hostname = %q, want %q", got, want)
 	}
 	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+	}
+	if got, want := nt.Hostname, "anotherhost"; got != want {
+		t.Errorf("nt.Hostname = %q, want %q", got, want)
+	}
+
+	// test UpdateTabletFields that returns ErrNoUpdateNeeded works
+	if _, err := tts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+		return topo.ErrNoUpdateNeeded
+	}); err != nil {
+		t.Errorf("UpdateTabletFields: %v", err)
+	}
+	if nnt, nnv, nnerr := ts.GetTablet(ctx, tablet.Alias); nnv != nv {
+		t.Errorf("GetTablet %v: %v %v %v", tablet.Alias, nnt, nnv, nnerr)
 	}
 
 	if want := "anotherhost"; nt.Hostname != want {
