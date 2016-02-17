@@ -195,7 +195,10 @@ public class Proto {
         // Bytes
         this.type = Query.Type.VARBINARY;
         this.value = ByteString.copyFrom((byte[]) value);
-      } else if (value instanceof Integer || value instanceof Long || value instanceof Short || value instanceof Byte) {
+      } else if (value instanceof Integer
+          || value instanceof Long
+          || value instanceof Short
+          || value instanceof Byte) {
         // Int32, Int64, Short, Byte
         this.type = Query.Type.INT64;
         this.value = ByteString.copyFromUtf8(value.toString());
@@ -207,14 +210,20 @@ public class Proto {
         // Float, Double
         this.type = Query.Type.FLOAT64;
         this.value = ByteString.copyFromUtf8(value.toString());
-      } else if (value instanceof Boolean ) {
+      } else if (value instanceof Boolean) {
         // Boolean
         this.type = Query.Type.INT64;
-        this.value = ByteString.copyFromUtf8(((boolean)value) ? String.valueOf(1) : String.valueOf(0));
+        this.value =
+            ByteString.copyFromUtf8(((boolean) value) ? String.valueOf(1) : String.valueOf(0));
       } else if (value instanceof BigDecimal) {
         // BigDecimal
+        BigDecimal bigDecimal = (BigDecimal) value;
+        if (bigDecimal.scale() > MAX_DECIMAL_UNIT) {
+          // MySQL only supports scale up to 30.
+          bigDecimal = bigDecimal.setScale(MAX_DECIMAL_UNIT, BigDecimal.ROUND_HALF_UP);
+        }
         this.type = Query.Type.DECIMAL;
-        this.value = ByteString.copyFromUtf8(((BigDecimal) value).setScale(MAX_DECIMAL_UNIT,BigDecimal.ROUND_HALF_UP).toString());
+        this.value = ByteString.copyFromUtf8(bigDecimal.toPlainString());
       } else {
         throw new IllegalArgumentException(
             "unsupported type for Query.Value proto: " + value.getClass());
