@@ -210,25 +210,13 @@ public class Proto {
         // Float, Double
         this.type = Query.Type.FLOAT64;
         this.value = ByteString.copyFromUtf8(value.toString());
-      } else if (value instanceof Date) {
-        // Date
-        this.type = Query.Type.DATE;
-        this.value = ByteString.copyFromUtf8(value.toString());
-      } else if (value instanceof Time) {
-        // Time
-        this.type = Query.Type.TIME;
-        this.value = ByteString.copyFromUtf8(value.toString());
-      } else if (value instanceof Timestamp) {
-        // DateTime, TimeStamp
-        this.type = Query.Type.TIMESTAMP;
-        this.value = ByteString.copyFromUtf8(value.toString());
       } else if (value instanceof Boolean ) {
         // Boolean
         this.type = Query.Type.INT64;
         this.value = ByteString.copyFromUtf8(((boolean)value) ? String.valueOf(1) : String.valueOf(0));
       } else if (value instanceof BigDecimal) {
         // BigDecimal
-        this.type = Query.Type.FLOAT64;
+        this.type = Query.Type.DECIMAL;
         this.value = ByteString.copyFromUtf8(((BigDecimal) value).setScale(MAX_DECIMAL_UNIT,BigDecimal.ROUND_HALF_UP).toString());
       } else {
         throw new IllegalArgumentException(
