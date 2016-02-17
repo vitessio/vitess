@@ -33,7 +33,7 @@ func (acl *fakeACL) IsMember(principal string) bool {
 func TestInitWithInvalidFilePath(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
 	if err := Init("/invalid_file_path", func() {}); err == nil {
-		t.Fatalf("init should fail for an invalid config file path")
+		t.Fatalf("Expect Init to fail for an invalid config file path, but got %v error", err)
 	}
 }
 
@@ -78,7 +78,7 @@ func TestInitFromProto(t *testing.T) {
 	readerACL := Authorized("my_test_table", READER)
 	want := &ACLResult{ACL: acl.DenyAllACL{}, GroupName: ""}
 	if !reflect.DeepEqual(readerACL, want) {
-		t.Fatalf("tableacl has not been initialized, got: %v, want: %v", readerACL, want)
+		t.Fatalf("Expect ACL checking to return %v when tableacl hasn't been initalized, but got %v", want, readerACL)
 	}
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
@@ -97,12 +97,12 @@ func TestInitFromProto(t *testing.T) {
 
 	readerACL = Authorized("unknown_table", READER)
 	if !reflect.DeepEqual(readerACL, want) {
-		t.Fatalf("there is no config for unknown_table, should deny by default")
+		t.Fatalf("There is no config for unknown_table, expect Authorized to return Deny ACL %v, but got %v", want, readerACL)
 	}
 
 	readerACL = Authorized("test_table", READER)
 	if !readerACL.IsMember("vt") {
-		t.Fatalf("user: vt should have reader permission to table: test_table")
+		t.Fatalf("Expect user vt to have read access to table test_table, but got denied")
 	}
 }
 
@@ -220,10 +220,10 @@ func TestTableACLAuthorize(t *testing.T) {
 
 	readerACL := Authorized("test_data_any", READER)
 	if !readerACL.IsMember("u1") {
-		t.Fatalf("user u1 should have reader permission to table test_data_any")
+		t.Fatalf("Expect user u1 to have reader permission to table test_data_any, but got denied")
 	}
 	if !readerACL.IsMember("u2") {
-		t.Fatalf("user u2 should have reader permission to table test_data_any")
+		t.Fatalf("Expect user u2 should have reader permission to table test_data_any, but got denied")
 	}
 }
 
@@ -238,7 +238,7 @@ func TestFailedToCreateACL(t *testing.T) {
 		}},
 	}
 	if err := InitFromProto(config); err == nil {
-		t.Fatalf("tableacl init should fail because fake ACL returns an error")
+		t.Fatalf("Expect InitFromProto to fail because fake ACL returns an error, but got %v error", err)
 	}
 }
 
@@ -249,7 +249,7 @@ func TestDoubleRegisterTheSameKey(t *testing.T) {
 	defer func() {
 		err := recover()
 		if err == nil {
-			t.Fatalf("the second tableacl register should fail")
+			t.Fatalf("Expect the second tableacl registeration to fail, but it succeeded")
 		}
 	}()
 	Register(name, &simpleacl.Factory{})
@@ -263,15 +263,16 @@ func TestGetAclFactory(t *testing.T) {
 	Register(name, aclFactory)
 	f, err := GetCurrentAclFactory()
 	if err != nil {
-		t.Errorf("Fail to get current ACL Factory: %v", err)
+		t.Errorf("Expect GetCurrentAclFactory() to return valid ACL factory when there is only one registered, but got error: %v", err)
 	}
 	if !reflect.DeepEqual(aclFactory, f) {
-		t.Fatalf("should return registered acl factory even if default acl is not set.")
+		t.Fatalf("Expect GetCurrentAclFactory() to return %v, which is the only registered ACL factory, but got %v.",
+			aclFactory, f)
 	}
 	Register(name+"2", aclFactory)
 	_, err = GetCurrentAclFactory()
 	if err == nil {
-		t.Fatalf("there are more than one acl factories, but the default is not set")
+		t.Fatalf("Expect GetCurrentAclFactory() to fail because multiple ACL factories are registered and no default is given, but it succeeded")
 	}
 }
 
@@ -285,7 +286,7 @@ func TestGetAclFactoryWithWrongDefault(t *testing.T) {
 	SetDefaultACL("wrong_name")
 	_, err := GetCurrentAclFactory()
 	if err == nil {
-		t.Fatalf("there are more than one acl factories, but the default given does not match any of these.")
+		t.Fatalf("Expect GetCurrentAclFactory to return error because no valid ACL factory is set to default, but got %v error", err)
 	}
 }
 
