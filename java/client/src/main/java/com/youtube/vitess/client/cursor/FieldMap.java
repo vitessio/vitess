@@ -14,8 +14,8 @@ import java.util.Map;
  * index is also used to find the value in a separate list.
  */
 public class FieldMap {
-  private List<Field> fields;
-  private Map<String, Integer> indexMap;
+  private final List<Field> fields;
+  private final Map<String, Integer> indexMap;
 
   public FieldMap(List<Field> fields) {
     ImmutableMap.Builder<String, Integer> builder = new ImmutableMap.Builder<>();

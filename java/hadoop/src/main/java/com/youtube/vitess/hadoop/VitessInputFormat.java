@@ -54,7 +54,7 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
       try {
         splitResult = vtgate.splitQuery(
                 Context.getDefault(), conf.getKeyspace(), conf.getInputQuery(),
-                null, conf.getSplitColumn(), conf.getSplits());
+                null, conf.getSplitColumn(), conf.getSplits()).checkedGet();
       } catch (SQLException e) {
         throw new RuntimeException(e);
       }
