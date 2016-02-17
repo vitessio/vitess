@@ -85,21 +85,6 @@ public class BindVarTest {
                      .setValue(ByteString.copyFrom(new byte[] {4, 5, 6}))
                      .build())
              .build()},
-        // Date
-        {new Date(0), BindVariable.newBuilder()
-            .setType(Query.Type.DATE)
-            .setValue(ByteString.copyFromUtf8("1970-01-01"))
-            .build()},
-        // Time
-        {Time.valueOf("00:00:00"), BindVariable.newBuilder()
-            .setType(Query.Type.TIME)
-            .setValue(ByteString.copyFromUtf8("00:00:00"))
-            .build()},
-        // TimeStamp
-        {Timestamp.valueOf("1970-01-01 00:00:00.0"), BindVariable.newBuilder()
-            .setType(Query.Type.TIMESTAMP)
-            .setValue(ByteString.copyFromUtf8("1970-01-01 00:00:00.0"))
-            .build()},
         // Boolean
         {true, BindVariable.newBuilder()
             .setType(Query.Type.BIT)

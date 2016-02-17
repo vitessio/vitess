@@ -17,9 +17,6 @@ import com.youtube.vitess.proto.Vtgate.BoundShardQuery;
 import com.youtube.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import com.youtube.vitess.proto.Vtrpc.RPCError;
 
-import java.sql.Date;
-import java.sql.Time;
-import java.sql.Timestamp;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.SQLInvalidAuthorizationSpecException;
