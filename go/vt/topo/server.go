@@ -242,15 +242,17 @@ type Impl interface {
 	// It should receive a notification with the initial value fairly
 	// quickly after this is set. A value of nil means the SrvKeyspace
 	// object doesn't exist or is empty. To stop watching this
-	// SrvKeyspace object, close the stopWatching channel.
+	// SrvKeyspace object, cancel the context.
 	// If the underlying topo.Server encounters an error watching the node,
 	// it should retry on a regular basis until it can succeed.
 	// The initial error returned by this method is meant to catch
 	// the obvious bad cases (invalid cell, invalid tabletType, ...)
 	// that are never going to work. Mutiple notifications with the
-	// same contents may be sent (for instance when the serving graph
-	// is rebuilt, but the content hasn't changed).
-	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *topodatapb.SrvKeyspace, stopWatching chan<- struct{}, err error)
+	// same contents may be sent (for instance, when the serving graph
+	// is rebuilt, but the content of SrvKeyspace is the same,
+	// the object version will change, most likely triggering the
+	// notification, but the content hasn't changed).
+	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *topodatapb.SrvKeyspace, err error)
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.
