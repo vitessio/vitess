@@ -366,13 +366,15 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 
 	// now send an updated real value, see it come through
-	ft.notifications <- &topodatapb.SrvKeyspace{
-		ShardingColumnName: "test_matching",
+	want = &topodatapb.SrvKeyspace{
+		ShardingColumnName: "id2",
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
+	ft.notifications <- want
 	expiry = time.Now().Add(5 * time.Second)
 	for {
 		got, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
-		if err == nil && got.ShardingColumnName == "test_matching" {
+		if err == nil && proto.Equal(want, got) {
 			break
 		}
 		if time.Now().After(expiry) {
