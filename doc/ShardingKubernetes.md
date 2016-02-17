@@ -241,34 +241,3 @@ vitess/examples/kubernetes$ ./kvtctl.sh DeleteShard test_keyspace/0
 You should then see in the vtctld **Topology** page, or in the output of
 `kvtctl.sh ListAllTablets test` that the tablets for shard *0* are gone.
 
-## Tear down and clean up
-
-Before stopping the Container Engine cluster, you should tear down the Vitess
-services. Kubernetes will then take care of cleaning up any entities it created
-for those services, like external load balancers.
-
-Since you already cleaned up the tablets from the original unsharded example by
-running `./vttablet-down.sh`, that step has been replaced with
-`./sharded-vttablet-down.sh` to clean up the new sharded tablets.
-
-``` sh
-vitess/examples/kubernetes$ ./guestbook-down.sh
-vitess/examples/kubernetes$ ./vtgate-down.sh
-vitess/examples/kubernetes$ ./sharded-vttablet-down.sh
-vitess/examples/kubernetes$ ./vtctld-down.sh
-vitess/examples/kubernetes$ ./etcd-down.sh
-```
-
-Then tear down the Container Engine cluster itself, which will stop the virtual
-machines running on Compute Engine:
-
-``` sh
-$ gcloud container clusters delete example
-```
-
-It's also a good idea to remove the firewall rules you created, unless you plan
-to use them again soon:
-
-``` sh
-$ gcloud compute firewall-rules delete vtctld guestbook
-```
