@@ -273,15 +273,14 @@ func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]st
 }
 
 // WatchSrvKeyspace is part of the topo.Server interface
-func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
+func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("WatchSrvKeyspace cannot get cell: %v", err)
+		return nil, fmt.Errorf("WatchSrvKeyspace cannot get cell: %v", err)
 	}
 	filePath := srvKeyspaceFilePath(keyspace)
 
 	notifications := make(chan *topodatapb.SrvKeyspace, 10)
-	stopWatching := make(chan struct{})
 
 	// The watch go routine will stop if the 'stop' channel is closed.
 	// Otherwise it will try to watch everything in a loop, and send events
@@ -328,7 +327,7 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 	}()
 
 	// This go routine is the main event handling routine:
-	// - it will stop if stopWatching is closed.
+	// - it will stop if ctx.Done() is closed.
 	// - if it receives a notification from the watch, it will forward it
 	// to the notifications channel.
 	go func() {
@@ -344,7 +343,7 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 					}
 				}
 				notifications <- srvKeyspace
-			case <-stopWatching:
+			case <-ctx.Done():
 				close(stop)
 				close(notifications)
 				return
@@ -352,5 +351,5 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 		}
 	}()
 
-	return notifications, stopWatching, nil
+	return notifications, nil
 }
