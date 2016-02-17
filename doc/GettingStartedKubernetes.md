@@ -65,14 +65,13 @@ account with a project in the Google Developers Console.
 
 1.  Create a project in the Google Developers Console that uses
     your billing account:
-    1.  In the Google Developers Console, click the **Projects** pane.
-    1.  Click the Create Project button.
+    1.  At the top of the Google Developers Console, click the **Projects** dropdown.
+    1.  Click the Create a Project... link.
     1.  Assign a name to your project. Then click the **Create** button.
         Your project should be created and associated with your
         billing account. (If you have multiple billing accounts,
         confirm that the project is associated with the correct account.)
-    1.  After creating your project, click **APIs & auth** in the left menu.
-    1.  Click **APIs**.
+    1.  After creating your project, click **API Manager** in the left menu.
     1.  Find **Google Compute Engine** and **Google Container Engine API**.
         (Both should be listed under "Google Cloud APIs".)
         For each, click on it, then click the **"Enable API"** button.
