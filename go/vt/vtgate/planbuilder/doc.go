@@ -11,7 +11,7 @@ The main entry point for the planbuilder is the
 BuildPlan function that accepts a query and vschema
 and returns the plan.
 
-This package also provides various conevenience functions
+This package also provides various convenience functions
 to build the VSchema object, which it can later utilize
 to build query plans.
 
@@ -36,7 +36,24 @@ If there is a join condition, it's actually executed
 as a constraint on the second (RHS) query. The Join
 primitive specifies the join variables (bind vars)
 that need to be built from the results of the first
-(LHS) query.
+(LHS) query. For example:
+
+	select ... from a join b on b.col = a.col
+
+will be executed as:
+
+	select ..., a.col from a (produce "a_col" from a.col)
+	select ... from b where b.col = :a_col
+
+The act of breaking up a join into two such statements
+like the above example is called a vertical break.
+As opposed to this, a horizontal break is one
+that breaks the individual clauses of a statement.
+For example, separating out a where clause from
+the select expressions would be a horizontal break.
+Breaking out a subquery would also be considered
+a horizontal break. The current set of primitives
+only allow for vertical breaks.
 
 The planbuilder tries to push all the constructs of
 the original request into these two primitives. If
@@ -46,6 +63,13 @@ an error.
 The central design element for analyzing queries and
 building plans is the symbol table (symtab). This data
 structure contains tableAlias and colsym elements.
+A tableAlias element represents a table alias defined
+in the FROM clause. A tableAlias must always point
+to a routeBuilder, which is responsible for building
+the SELECT statement for that alias.
+A colsym represents a result column. It can can optionally
+point to a tableAlias if it's a plain column reference
+of that alias.
 One symtab is created per SELECT statement. tableAlias
 names must be unique within each symtab. Currently,
 duplicates are allowed among colsyms, just like MySQL
@@ -56,7 +80,7 @@ Therefore, we use the conservative rule that no
 tableAlias can be seen if colsyms are present.
 
 There's some criss-crossing of pointers for the sake
-of code simplification and efficiency. The objections
+of code simplification and efficiency. The objects
 of symtab point back to the symtab. This is because
 column references directly point to the objects, and
 we need to know the symtab to which they belong.
@@ -66,6 +90,17 @@ symtab simplifies parameter passing. Otherwise, function
 calls were getting long. The symbols need to point to
 the routeBuilder because we have to know which primitive is
 supplying those values.
+When two routes get merged, the symbols that were pointing
+to the older route need to be repointed to the merged
+route. This is non-trivial because a query might have
+many subqueries and many levels of them. Keeping track
+of those different symbol tables would lead to fragile
+code. Instead, we introduce the concept of a redirect:
+If a route merges into another, we just "redirect" the
+the original route to the new one. When getting a route
+for a symbol, we chase the redirect pointer till the end
+and only return the final route.
+
 
 The symbol table is modified as various sections of the
 query are parsed. The parsing of the FROM clause
@@ -87,11 +122,18 @@ of the outer query, because those have not been created
 yet. But a subquery in the HAVING clause will be able
 to see them.
 
+The plan builder builds the plan in two phases. In the
+first phase (break-up and push-down), the query is
+broken into smaller parts and pushed down into
+Join or Route primitives. In the second phase (generator),
+external references are wired up using bind vars, and
+the individual ASTs are converted into actual queries.
+
 In the case of joins, the plan builder effectively
 performs a vertical break of the query. This gives rise
 to a possible conflict in the symbol tables. Specifically,
 a WHERE clause was only able to see tableAlias symbols
-during analysis. However, once the query is partioned
+during analysis. However, once the query is partitioned
 vertically, the query actually becomes a SELECT statement feeding
 into another. This means that symbols that were previously
 not visible during analysis are now visible. It's very important
@@ -100,7 +142,7 @@ risk that incorrent values are used when the RHS of a join
 requests values from the LHS. In order to achieve this,
 the sqlparser.ColName type has been ammended with a Metadata
 field that is populated as soon as a symbol is resolved.
-During the wire-up phase, we do not perform any more symtab
+During the generator phase, we do not perform any more symtab
 lookups, but rely on the previously stored Metadata instead.
 
 In the case of a vertical break, we split a select into
@@ -134,10 +176,10 @@ about it right now.
 
 Due to the absence of the column list, we assume that
 any qualified or implicit column reference of a table
-to be valid. In terms of data structure, the Metadata
+is valid. In terms of data structure, the Metadata
 only points to the table alias. Therefore, a unique
 column reference is a pointer to a table alias and a
-column name. This the basis for the definition of the
+column name. This is the basis for the definition of the
 colref type. If the colref points to a colsym, then
 the column name is irrelevant.
 */
