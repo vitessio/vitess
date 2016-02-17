@@ -232,8 +232,8 @@ Makes the &lt;destination keyspace/shard&gt; serve the given type. This command 
     * <code>master</code> &ndash; A primary copy of data
     * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
     * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state..
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is not applying a schema change. Following the change, the tablet will revert to its serving type.
+    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
+    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
     * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
@@ -275,8 +275,8 @@ Migrates a serving type from the source shard to the shards that it replicates t
     * <code>master</code> &ndash; A primary copy of data
     * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
     * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state..
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is not applying a schema change. Following the change, the tablet will revert to its serving type.
+    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
+    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
     * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
@@ -369,8 +369,8 @@ Changes the ServedFromMap manually. This command is intended for emergency fixes
     * <code>master</code> &ndash; A primary copy of data
     * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
     * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state..
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is not applying a schema change. Following the change, the tablet will revert to its serving type.
+    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
+    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
     * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
@@ -1109,8 +1109,8 @@ Outputs a JSON structure that contains information about the EndPoints.
     * <code>master</code> &ndash; A primary copy of data
     * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
     * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state..
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is not applying a schema change. Following the change, the tablet will revert to its serving type.
+    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
+    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
     * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
@@ -1292,7 +1292,7 @@ Outputs a JSON structure that contains information about the Shard.
 
 ### InitShardMaster
 
-Sets the initial master for a shard. Will make all other tablets in the shard slaves of the provided master. WARNING: this could cause data loss on an already replicating shard, then PlannedReparentShard or EmergencyReparentShard should be used instead.
+Sets the initial master for a shard. Will make all other tablets in the shard slaves of the provided master. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead.
 
 #### Example
 
@@ -1466,8 +1466,8 @@ Sets a given shard's served tablet types. Does not rebuild any serving graph.
     * <code>master</code> &ndash; A primary copy of data
     * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
     * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state..
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is not applying a schema change. Following the change, the tablet will revert to its serving type.
+    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
+    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
     * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
@@ -1509,8 +1509,8 @@ Sets the TabletControl record for a shard and type. Only use this for an emergen
     * <code>master</code> &ndash; A primary copy of data
     * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
     * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state..
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is not applying a schema change. Following the change, the tablet will revert to its serving type.
+    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
+    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
     * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
@@ -1720,7 +1720,7 @@ Stops mysqld and uses the BackupStorage service to store a new backup. This func
 
 ### ChangeSlaveType
 
-Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.<br><br>NOTE: This command automatically updates the serving graph.<br><br>Valid &lt;tablet type&gt; values are:<br><br>  strings.Join(topoproto.MakeStringTypeList(topoproto.SlaveTabletTypes), " ")},
+Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.<br><br>NOTE: This command automatically updates the serving graph.<br><br>
 
 #### Example
 
@@ -1744,8 +1744,8 @@ Changes the db type for the specified tablet, if possible. This command is used 
     * <code>master</code> &ndash; A primary copy of data
     * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
     * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state..
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is not applying a schema change. Following the change, the tablet will revert to its serving type.
+    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
+    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
     * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
@@ -1864,7 +1864,7 @@ Outputs a JSON structure that contains information about the Tablet.
 
 ### InitTablet
 
-Initializes a tablet in the topology.<br><br>Valid &lt;tablet type&gt; values are:<br><br>  strings.Join(topoproto.MakeStringTypeList(topoproto.AllTabletTypes), " ")},
+Initializes a tablet in the topology.<br><br>
 
 #### Example
 
@@ -1899,8 +1899,8 @@ Initializes a tablet in the topology.<br><br>Valid &lt;tablet type&gt; values ar
     * <code>master</code> &ndash; A primary copy of data
     * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
     * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state..
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is not applying a schema change. Following the change, the tablet will revert to its serving type.
+    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
+    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
     * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
@@ -1980,8 +1980,8 @@ Runs a health check on a remote tablet with the specified target type.
     * <code>master</code> &ndash; A primary copy of data
     * <code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns
     * <code>replica</code> &ndash; A slaved copy of data ready to be promoted to master
-    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state..
-    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is not applying a schema change. Following the change, the tablet will revert to its serving type.
+    * <code>restore</code> &ndash; A tablet that is restoring from a snapshot. Typically, this happens at tablet startup, then it goes to its right state.
+    * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
     * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
