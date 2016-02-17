@@ -34,12 +34,20 @@ public class GrpcClientTest extends RpcClientTest {
 
     vtgateclienttest =
         new ProcessBuilder(
-            Arrays.asList(vtRoot + "/bin/vtgateclienttest", "-logtostderr", "-grpc_port",
-                Integer.toString(port), "-service_map", "grpc-vtgateservice")).start();
+                Arrays.asList(
+                    vtRoot + "/bin/vtgateclienttest",
+                    "-logtostderr",
+                    "-grpc_port",
+                    Integer.toString(port),
+                    "-service_map",
+                    "grpc-vtgateservice"))
+            .start();
 
-    client = new GrpcClientFactory().create(
-        Context.getDefault().withDeadlineAfter(Duration.millis(5000)),
-        new InetSocketAddress("localhost", port));
+    client =
+        new GrpcClientFactory()
+            .create(
+                Context.getDefault().withDeadlineAfter(Duration.millis(5000)),
+                new InetSocketAddress("localhost", port));
   }
 
   @AfterClass
