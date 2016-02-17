@@ -33,3 +33,18 @@ func (cl ConsoleLogger) Errorf(format string, v ...interface{}) {
 func (cl ConsoleLogger) Printf(format string, v ...interface{}) {
 	fmt.Printf(format, v...)
 }
+
+// InfoDepth is part of the Logger interface.
+func (cl ConsoleLogger) InfoDepth(depth int, s string) {
+	log.InfoDepth(1+depth, s)
+}
+
+// WarningDepth is part of the Logger interface.
+func (cl ConsoleLogger) WarningDepth(depth int, s string) {
+	log.WarningDepth(1+depth, s)
+}
+
+// ErrorDepth is part of the Logger interface.
+func (cl ConsoleLogger) ErrorDepth(depth int, s string) {
+	log.ErrorDepth(1+depth, s)
+}

@@ -6,7 +6,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"time"
 
@@ -31,19 +30,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), *actionTimeout)
 	defer cancel()
 
+	logger := logutil.NewConsoleLogger()
+
 	err := vtworkerclient.RunCommandAndWait(
 		ctx, *server, flag.Args(),
 		func(e *logutilpb.Event) {
-			switch e.Level {
-			case logutilpb.Level_INFO:
-				log.Info(logutil.EventString(e))
-			case logutilpb.Level_WARNING:
-				log.Warning(logutil.EventString(e))
-			case logutilpb.Level_ERROR:
-				log.Error(logutil.EventString(e))
-			case logutilpb.Level_CONSOLE:
-				fmt.Print(logutil.EventString(e))
-			}
+			logutil.LogEvent(logger, e)
 		})
 	if err != nil {
 		log.Error(err)
