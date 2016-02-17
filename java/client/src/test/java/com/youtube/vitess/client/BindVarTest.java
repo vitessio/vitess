@@ -87,24 +87,24 @@ public class BindVarTest {
              .build()},
         // Boolean
         {true, BindVariable.newBuilder()
-            .setType(Query.Type.BIT)
+            .setType(Query.Type.INT64)
             .setValue(ByteString.copyFromUtf8("1"))
             .build()},
         {false, BindVariable.newBuilder()
-            .setType(Query.Type.BIT)
+            .setType(Query.Type.INT64)
             .setValue(ByteString.copyFromUtf8("0"))
             .build()},
         // BigDecimal
         {new BigDecimal("123.123456789"), BindVariable.newBuilder()
-            .setType(Query.Type.FLOAT64)
+            .setType(Query.Type.DECIMAL)
             .setValue(ByteString.copyFromUtf8("123.123456789000000000000000000000"))
             .build()},
         {new BigDecimal("123.1999999999999999999999999999994"), BindVariable.newBuilder()
-            .setType(Query.Type.FLOAT64)
+            .setType(Query.Type.DECIMAL)
             .setValue(ByteString.copyFromUtf8("123.199999999999999999999999999999"))
             .build()},
         {new BigDecimal("123.1999999999999999999999999999995"), BindVariable.newBuilder()
-            .setType(Query.Type.FLOAT64)
+            .setType(Query.Type.DECIMAL)
             .setValue(ByteString.copyFromUtf8("123.200000000000000000000000000000"))
             .build()},
         // List of Int
