@@ -273,7 +273,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _execute(
-      self, sql, bind_variables, keyspace_name, tablet_type,
+      self, sql, bind_variables, tablet_type, keyspace_name=None,
       shards=None, keyspace_ids=None, keyranges=None,
       entity_keyspace_id_map=None, entity_column_name=None,
       not_in_transaction=False, effective_caller_id=None, **kwargs):
@@ -283,8 +283,8 @@ class VTGateConnection(vtgate_client.VTGateClient):
       sql: The sql text, with %(format)s-style tokens.
       bind_variables: (str: value) dict of bind variables corresponding
         to sql %(format)s tokens.
-      keyspace_name: Str name of keyspace.
       tablet_type: Str tablet type (e.g. master, rdonly, replica).
+      keyspace_name: Str name of keyspace.
       shards: list of shard names as strings.
       keyspace_ids: bytes list of keyspace ID lists.
       keyranges: KeyRange objects.
@@ -495,7 +495,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _stream_execute(
-      self, sql, bind_variables, keyspace_name, tablet_type,
+      self, sql, bind_variables, tablet_type, keyspace_name=None,
       shards=None, keyspace_ids=None, keyranges=None,
       not_in_transaction=False, effective_caller_id=None,
       **kwargs):
@@ -507,8 +507,8 @@ class VTGateConnection(vtgate_client.VTGateClient):
     Args:
       sql: Str sql.
       bind_variables: A (str: value) dict.
-      keyspace_name: Str keyspace name.
       tablet_type: Str tablet_type.
+      keyspace_name: Str keyspace name.
       shards: List of strings.
       keyspace_ids: List of uint64 or bytes keyspace_ids.
       keyranges: KeyRange objects.
@@ -734,7 +734,7 @@ def connect(vtgate_addrs, timeout, user=None, password=None):
       conn = VTGateConnection(**db_params)
       conn.dial()
       return conn
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
       db_exception = e
       logging.warning('db connection failed: %s, %s', host_addr, e)
 

@@ -180,7 +180,7 @@ class VTGateClient(object):
     raise NotImplementedError('Child class needs to implement this')
 
   def _execute(self, sql, bind_variables, tablet_type,
-               keyspace=None,
+               keyspace_name=None,
                shards=None,
                keyspace_ids=None,
                keyranges=None,
@@ -195,7 +195,7 @@ class VTGateClient(object):
       sql: query to execute.
       bind_variables: map of bind variables for the query.
       tablet_type: the (string) version of the tablet type.
-      keyspace: if specified, the keyspace to send the query to.
+      keyspace_name: if specified, the keyspace to send the query to.
         Required if any of the routing parameters is used.
         Not required only if using vtgate v3 API.
       shards: if specified, use this list of shards names to route the query.

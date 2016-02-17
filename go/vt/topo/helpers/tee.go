@@ -680,7 +680,7 @@ func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string,
 
 // WatchSrvKeyspace is part of the topo.Server interface.
 // We only watch for changes on the primary.
-func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
+func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
 	return tee.primary.WatchSrvKeyspace(ctx, cell, keyspace)
 }
 

@@ -35,8 +35,9 @@ conn = vtgate_client.connect('grpc', args.server, args.timeout)
 try:
   # Insert something.
   print 'Inserting into master...'
-  cursor = conn.cursor('test_keyspace', 'master',
-                       keyranges=UNSHARDED, writable=True)
+  cursor = conn.cursor(
+      tablet_type='master', keyspace='test_keyspace',
+      keyranges=UNSHARDED, writable=True)
   cursor.begin()
   cursor.execute(
       'INSERT INTO test_table (msg) VALUES (%(msg)s)',
@@ -54,8 +55,8 @@ try:
   # Read from a replica.
   # Note that this may be behind master due to replication lag.
   print 'Reading from replica...'
-  cursor = conn.cursor('test_keyspace', 'replica',
-                       keyranges=UNSHARDED)
+  cursor = conn.cursor(
+      tablet_type='replica', keyspace='test_keyspace', keyranges=UNSHARDED)
   cursor.execute('SELECT * FROM test_table', {})
   for row in cursor.fetchall():
     print row

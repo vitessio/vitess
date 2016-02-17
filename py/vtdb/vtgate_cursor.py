@@ -35,14 +35,15 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
   """
 
   def __init__(
-      self, connection, keyspace, tablet_type, shards=None, keyspace_ids=None,
-      keyranges=None, writable=False, as_transaction=False):
+      self, connection, tablet_type, keyspace=None,
+      shards=None, keyspace_ids=None, keyranges=None,
+      writable=False, as_transaction=False):
     """Init VTGateCursor.
 
     Args:
       connection: A PEP0249 connection object.
-      keyspace: Str keyspace or None if batch API will be used.
       tablet_type: Str tablet_type.
+      keyspace: Str keyspace or None if batch API will be used.
       shards: List of strings.
       keyspace_ids: Struct('!Q').packed keyspace IDs.
       keyranges: Str keyranges.
@@ -89,8 +90,8 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
         self.connection._execute(  # pylint: disable=protected-access
             sql,
             bind_variables,
-            self.keyspace,
-            self.tablet_type,
+            tablet_type=self.tablet_type,
+            keyspace_name=self.keyspace,
             shards=self.shards,
             keyspace_ids=self.keyspace_ids,
             keyranges=self.keyranges,
@@ -215,7 +216,8 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
   """
 
   def __init__(
-      self, connection, keyspace, tablet_type, shards=None, keyspace_ids=None,
+      self, connection, tablet_type, keyspace=None,
+      shards=None, keyspace_ids=None,
       keyranges=None, writable=False):
     super(StreamVTGateCursor, self).__init__()
     self._conn = connection
@@ -240,8 +242,8 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
     self.generator, self.description = self.connection._stream_execute(  # pylint: disable=protected-access
         sql,
         bind_variables,
-        self.keyspace,
-        self.tablet_type,
+        tablet_type=self.tablet_type,
+        keyspace_name=self.keyspace,
         shards=self.shards,
         keyspace_ids=self.keyspace_ids,
         keyranges=self.keyranges,

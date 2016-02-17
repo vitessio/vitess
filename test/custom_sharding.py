@@ -74,7 +74,7 @@ class TestCustomSharding(unittest.TestCase):
     sql = 'insert into ' + table + '(id, name) values (%(id)s, %(name)s)'
     conn = self._vtdb_conn()
     cursor = conn.cursor(
-        'test_keyspace', 'master',
+        tablet_type='master', keyspace='test_keyspace',
         shards=[shard],
         writable=True)
     for x in xrange(count):
@@ -91,7 +91,7 @@ class TestCustomSharding(unittest.TestCase):
     sql = 'select name from ' + table + ' where id=%(id)s'
     conn = self._vtdb_conn()
     cursor = conn.cursor(
-        'test_keyspace', 'master',
+        tablet_type='master', keyspace='test_keyspace',
         shards=[shard])
     for x in xrange(count):
       bindvars = {

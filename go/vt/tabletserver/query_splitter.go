@@ -203,7 +203,7 @@ func (qs *QuerySplitter) splitBoundaries(columnType querypb.Type, pkMinMax *sqlt
 		return qs.splitBoundariesUintColumn(pkMinMax)
 	case sqltypes.IsFloat(columnType):
 		return qs.splitBoundariesFloatColumn(pkMinMax)
-	case sqltypes.IsBinary(columnType) || sqltypes.IsText(columnType):
+	case sqltypes.IsBinary(columnType):
 		return qs.splitBoundariesStringColumn()
 	}
 	return []sqltypes.Value{}, nil
