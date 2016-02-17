@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+var timeNow = time.Now
+
 // CountTracker defines the interface that needs to
 // be supported by a variable for being tracked by
 // Rates.
@@ -47,8 +49,10 @@ type Rates struct {
 // NewRates reports rolling rate information for countTracker. samples specifies
 // the number of samples to report, and interval specifies the time interval
 // between samples. The minimum interval is 1 second.
+// If passing the special value of -1s as interval, we don't snapshot.
+// (use this for tests).
 func NewRates(name string, countTracker CountTracker, samples int, interval time.Duration) *Rates {
-	if interval < 1*time.Second {
+	if interval < 1*time.Second && interval != -1*time.Second {
 		panic("interval too small")
 	}
 	rt := &Rates{
@@ -57,12 +61,14 @@ func NewRates(name string, countTracker CountTracker, samples int, interval time
 		countTracker:          countTracker,
 		samples:               samples + 1,
 		interval:              interval,
-		timestampLastSampling: time.Now(),
+		timestampLastSampling: timeNow(),
 	}
 	if name != "" {
 		Publish(name, rt)
 	}
-	go rt.track()
+	if interval > 0 {
+		go rt.track()
+	}
 	return rt
 }
 
@@ -77,7 +83,7 @@ func (rt *Rates) snapshot() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	now := time.Now()
+	now := timeNow()
 	rt.timeStamps.Add(now.UnixNano())
 
 	// Record current count for each category.

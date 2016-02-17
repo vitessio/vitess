@@ -972,7 +972,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		return err
 	}
 	for e := range logStream {
-		wr.Logger().Infof("%v", e)
+		logutil.LogEvent(wr.Logger(), e)
 	}
 	return errFunc()
 }

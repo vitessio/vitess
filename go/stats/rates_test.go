@@ -10,29 +10,52 @@ import (
 	"time"
 )
 
+// For tests, we want to control exactly the time used by Rates.
+// The way Rates works is:
+// - at creation, do a snapshot.
+// - every interval, do a snapshot.
+// So in these tests, we make sure to always call snapshot() every interval.
+// We do other actions after epsilon, but then wait for intervalMinusEpsilon
+// and call snapshot().
+const (
+	interval             = 1 * time.Second
+	epsilon              = 50 * time.Millisecond
+	intervalMinusEpsilon = interval - epsilon
+)
+
 func TestRates(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping wait-based test in short mode.")
+	now := time.Now()
+	timeNow = func() time.Time {
+		return now
 	}
 
 	clear()
 	c := NewCounters("rcounter1")
-	r := NewRates("rates1", c, 3, 1*time.Second)
-	time.Sleep(50 * time.Millisecond)
+	r := NewRates("rates1", c, 3, -1*time.Second)
+	r.snapshot()
+	now = now.Add(epsilon)
 	c.Add("tag1", 0)
 	c.Add("tag2", 0)
-	time.Sleep(1 * time.Second)
+	now = now.Add(intervalMinusEpsilon)
+	r.snapshot()
+	now = now.Add(epsilon)
 	checkRates(t, r, "after 1s", 0.0, `{"tag1":[0],"tag2":[0]}`)
 
 	c.Add("tag1", 10)
 	c.Add("tag2", 20)
-	time.Sleep(1 * time.Second)
+	now = now.Add(intervalMinusEpsilon)
+	r.snapshot()
+	now = now.Add(epsilon)
 	checkRates(t, r, "after 2s", 30.0, `{"tag1":[0,10],"tag2":[0,20]}`)
 
-	time.Sleep(1 * time.Second)
+	now = now.Add(intervalMinusEpsilon)
+	r.snapshot()
+	now = now.Add(epsilon)
 	checkRates(t, r, "after 3s", 0.0, `{"tag1":[0,10,0],"tag2":[0,20,0]}`)
 
-	time.Sleep(1 * time.Second)
+	now = now.Add(intervalMinusEpsilon)
+	r.snapshot()
+	now = now.Add(epsilon)
 	checkRates(t, r, "after 4s", 0.0, `{"tag1":[10,0,0],"tag2":[20,0,0]}`)
 }
 
@@ -46,27 +69,28 @@ func checkRates(t *testing.T, r *Rates, desc string, wantRate float64, wantRateM
 }
 
 func TestRatesConsistency(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping wait-based test in short mode.")
+	now := time.Now()
+	timeNow = func() time.Time {
+		return now
 	}
 
 	// This tests the following invariant: in the time window
 	// covered by rates, the sum of the rates reported must be
 	// equal to the count reported by the counter.
-	const (
-		interval = 1 * time.Second
-		epsilon  = 50 * time.Millisecond
-	)
-
 	clear()
 	c := NewCounters("rcounter4")
-	r := NewRates("rates4", c, 100, interval)
+	r := NewRates("rates4", c, 100, -1*time.Second)
+	r.snapshot()
 
-	time.Sleep(epsilon)
+	now = now.Add(epsilon)
 	c.Add("a", 1000)
-	time.Sleep(interval)
+	now = now.Add(intervalMinusEpsilon)
+	r.snapshot()
+	now = now.Add(epsilon)
 	c.Add("a", 1)
-	time.Sleep(interval)
+	now = now.Add(intervalMinusEpsilon)
+	r.snapshot()
+	now = now.Add(epsilon)
 
 	result := r.Get()
 	counts := c.Counts()

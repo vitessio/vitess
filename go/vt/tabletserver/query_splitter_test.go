@@ -426,11 +426,11 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 	}
 }
 
-func TestSplitQueryStringColumn(t *testing.T) {
+func TestSplitQueryVarBinaryColumn(t *testing.T) {
 	schemaInfo := getSchemaInfo()
 	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
 	splitter.validateQuery()
-	splits, err := splitter.split(sqltypes.VarChar, nil)
+	splits, err := splitter.split(sqltypes.VarBinary, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -456,6 +456,32 @@ func TestSplitQueryStringColumn(t *testing.T) {
 		{
 			Sql:           "select * from test_table where (count > :count) and (id >= :" + startBindVarName + ")",
 			BindVariables: map[string]interface{}{startBindVarName: hexToByteUInt32(0xAAAAAAAA)},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("wrong splits, got: %v, want: %v", got, want)
+	}
+}
+
+func TestSplitQueryVarCharColumn(t *testing.T) {
+	schemaInfo := getSchemaInfo()
+	splitter := NewQuerySplitter("select * from test_table where count > :count", map[string]interface{}{"count": 123}, "", 3, schemaInfo)
+	splitter.validateQuery()
+	splits, err := splitter.split(sqltypes.VarChar, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := []querytypes.BoundQuery{}
+	for _, split := range splits {
+		got = append(got, querytypes.BoundQuery{
+			Sql:           split.Sql,
+			BindVariables: split.BindVariables,
+		})
+	}
+	want := []querytypes.BoundQuery{
+		{
+			Sql:           "select * from test_table where count > :count",
+			BindVariables: map[string]interface{}{"count": 123},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
