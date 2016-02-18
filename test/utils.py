@@ -192,15 +192,17 @@ def _add_proc(proc):
     print >> f, proc.pid, os.path.basename(proc.args[0])
 
 
-def kill_sub_processes():
-  # FIXME(alainjobart): this part is not really related to sub-processes,
-  # but it's a general clean-up. Maybe a utils.clean_up() might be better,
-  # as all integration tests end up running this anyway.
+def required_teardown():
+  """Required cleanup steps that can't be skipped with --skip-teardown."""
+  # We can't skip closing of gRPC connections, because the Python interpreter
+  # won't let us die if any connections are left open.
   global vtctld_connection
   if vtctld_connection:
     vtctld_connection.close()
     vtctld_connection = None
 
+
+def kill_sub_processes():
   for proc in pid_map.values():
     if proc.pid and proc.returncode is None:
       proc.kill()
@@ -1152,6 +1154,7 @@ def uint64_to_hex(integer):
   if integer > (1<<64)-1 or integer < 0:
     raise ValueError('Integer out of range: %d' % integer)
   return '%016X' % integer
+
 
 def get_shard_name(shard, num_shards):
   """Returns an appropriate shard name, as a string.
