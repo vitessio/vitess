@@ -7,7 +7,6 @@ package worker
 import (
 	"fmt"
 	"html/template"
-	"regexp"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -28,12 +27,11 @@ import (
 type VerticalSplitDiffWorker struct {
 	StatusWorker
 
-	wr            *wrangler.Wrangler
-	cell          string
-	keyspace      string
-	shard         string
-	excludeTables []string
-	cleaner       *wrangler.Cleaner
+	wr       *wrangler.Wrangler
+	cell     string
+	keyspace string
+	shard    string
+	cleaner  *wrangler.Cleaner
 
 	// all subsequent fields are protected by the mutex
 
@@ -51,15 +49,14 @@ type VerticalSplitDiffWorker struct {
 }
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
-func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string) Worker {
+func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string) Worker {
 	return &VerticalSplitDiffWorker{
-		StatusWorker:  NewStatusWorker(),
-		wr:            wr,
-		cell:          cell,
-		keyspace:      keyspace,
-		shard:         shard,
-		excludeTables: excludeTables,
-		cleaner:       &wrangler.Cleaner{},
+		StatusWorker: NewStatusWorker(),
+		wr:           wr,
+		cell:         cell,
+		keyspace:     keyspace,
+		shard:        shard,
+		cleaner:      &wrangler.Cleaner{},
 	}
 }
 
@@ -345,7 +342,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(
-			shortCtx, vsdw.destinationAlias, nil /* tables */, vsdw.excludeTables, false /* includeViews */)
+			shortCtx, vsdw.destinationAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from destination %v", topoproto.TabletAliasString(vsdw.destinationAlias))
@@ -356,7 +353,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(
-			shortCtx, vsdw.sourceAlias, nil /* tables */, vsdw.excludeTables, false /* includeViews */)
+			shortCtx, vsdw.sourceAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from source %v", topoproto.TabletAliasString(vsdw.sourceAlias))
@@ -366,34 +363,6 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	if rec.HasErrors() {
 		return rec.Error()
 	}
-
-	// Build a list of regexp to exclude tables from source schema
-	tableRegexps := make([]*regexp.Regexp, len(vsdw.shardInfo.SourceShards[0].Tables))
-	for i, table := range vsdw.shardInfo.SourceShards[0].Tables {
-		var err error
-		tableRegexps[i], err = regexp.Compile(table)
-		if err != nil {
-			return fmt.Errorf("cannot compile regexp %v for table: %v", table, err)
-		}
-	}
-
-	// Remove the tables we don't need from the source schema
-	newSourceTableDefinitions := make([]*tabletmanagerdatapb.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
-	for _, tableDefinition := range vsdw.sourceSchemaDefinition.TableDefinitions {
-		found := false
-		for _, tableRegexp := range tableRegexps {
-			if tableRegexp.MatchString(tableDefinition.Name) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			vsdw.wr.Logger().Infof("Removing table %v from source schema", tableDefinition.Name)
-			continue
-		}
-		newSourceTableDefinitions = append(newSourceTableDefinitions, tableDefinition)
-	}
-	vsdw.sourceSchemaDefinition.TableDefinitions = newSourceTableDefinitions
 
 	// Check the schema
 	vsdw.wr.Logger().Infof("Diffing the schema...")

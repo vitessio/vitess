@@ -110,9 +110,39 @@ type srvKeyspaceEntry struct {
 	// the mutex protects any access to this structure (read or write)
 	mutex sync.RWMutex
 
+	// watchRunning describes if the watch go routine is running.
+	// It is easier to have an explicit field instead of guessing
+	// based on value and lastError.
+	//
+	// if watchrunning is not set, the next time we try to access the
+	// keyspace, we will start a watch.
+	// if watchrunning is set, we are guaranteed to have exactly one of
+	// value or lastError be nil, and the other non-nil.
+	watchRunning bool
 	value        *topodatapb.SrvKeyspace
 	lastError    error
+
+	// lastErrorCtx tries to remember the context of the query
+	// that failed to get the SrvKeyspace, so we can display it in
+	// the status UI. The background routine that refreshes the
+	// keyspace will not populate this field.
+	// The intent is to have the source of a query that for instance
+	// has a bad keyspace or cell name.
 	lastErrorCtx context.Context
+}
+
+// setValueLocked remembers the current value (or nil if the node doesn't exist)
+// and sets lastError / lastErrorCtx if necessary. ske.mutex
+// must be held when calling this function.
+func (ske *srvKeyspaceEntry) setValueLocked(ctx context.Context, value *topodatapb.SrvKeyspace) {
+	ske.value = value
+	if value == nil {
+		ske.lastError = fmt.Errorf("no SrvKeyspace %v in cell %v", ske.keyspace, ske.cell)
+		ske.lastErrorCtx = ctx
+	} else {
+		ske.lastError = nil
+		ske.lastErrorCtx = nil
+	}
 }
 
 type srvShardEntry struct {
@@ -284,12 +314,12 @@ func (server *ResilientSrvTopoServer) getSrvKeyspaceEntry(cell, keyspace string)
 func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	entry := server.getSrvKeyspaceEntry(cell, keyspace)
 
-	// If the entry exists, return it
+	// If the watch is already running, return the value
 	entry.mutex.RLock()
-	if entry.value != nil {
-		v := entry.value
+	if entry.watchRunning {
+		v, e := entry.value, entry.lastError
 		entry.mutex.RUnlock()
-		return v, nil
+		return v, e
 	}
 	entry.mutex.RUnlock()
 
@@ -299,47 +329,57 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
-	// If the entry exists, return it
-	if entry.value != nil {
-		return entry.value, nil
+	// If the watch is already running, return the value
+	if entry.watchRunning {
+		return entry.value, entry.lastError
 	}
 
-	// not in cache, get the real value
+	// Watch is not running, let's try to start it.
+	// We use a background context, as the watch should last
+	// forever (as opposed to the current query's ctx getting
+	// the current value).
 	newCtx := context.Background()
-
-	// start watching
-	notifications, stopWatching, err := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
+	notifications, err := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
 	if err != nil {
+		// lastError and lastErrorCtx will be visible from the UI
+		// until the next try
+		entry.value = nil
 		entry.lastError = err
 		entry.lastErrorCtx = ctx
 		log.Errorf("WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, err)
-		return nil, entry.lastError
+		return nil, err
 	}
 	sk, ok := <-notifications
 	if !ok {
-		entry.lastError = fmt.Errorf("failed to receive from channel")
+		// lastError and lastErrorCtx will be visible from the UI
+		// until the next try
+		entry.value = nil
+		entry.lastError = fmt.Errorf("failed to receive initial value from topology watcher")
 		entry.lastErrorCtx = ctx
 		log.Errorf("WatchSrvKeyspace first result failed for %v/%v", cell, keyspace)
-		close(stopWatching)
 		return nil, entry.lastError
 	}
 
-	// cache the first notification
-	entry.value = sk
-	entry.lastError = nil
-	entry.lastErrorCtx = nil
+	// we are now watching, cache the first notification
+	entry.watchRunning = true
+	entry.setValueLocked(ctx, sk)
 
 	go func() {
 		for sk := range notifications {
 			entry.mutex.Lock()
-			entry.value = sk
+			entry.setValueLocked(nil, sk)
 			entry.mutex.Unlock()
 		}
 		log.Errorf("failed to receive from channel")
-		close(stopWatching)
+		entry.mutex.Lock()
+		entry.watchRunning = false
+		entry.value = nil
+		entry.lastError = fmt.Errorf("watch for SrvKeyspace %v in cell %v ended", keyspace, cell)
+		entry.lastErrorCtx = nil
+		entry.mutex.Unlock()
 	}()
 
-	return entry.value, nil
+	return entry.value, entry.lastError
 }
 
 // GetSrvShard returns SrvShard object for the given cell, keyspace, and shard.

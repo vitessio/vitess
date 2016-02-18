@@ -230,7 +230,8 @@ func CheckWatchSrvKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 	keyspace := "test_keyspace"
 
 	// start watching, should get nil first
-	notifications, stopWatching, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
+	ctx, cancel := context.WithCancel(ctx)
+	notifications, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {
 		t.Fatalf("WatchSrvKeyspace failed: %v", err)
 	}
@@ -319,9 +320,9 @@ func CheckWatchSrvKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 		break
 	}
 
-	// close the stopWatching channel, should eventually get a closed
+	// close the context, should eventually get a closed
 	// notifications channel too
-	close(stopWatching)
+	cancel()
 	for {
 		sk, ok := <-notifications
 		if !ok {
