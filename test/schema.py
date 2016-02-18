@@ -122,6 +122,7 @@ def _teardown_shard_2():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
