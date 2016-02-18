@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 
 import warnings
-# Dropping a table inexplicably produces a warning despite
-# the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter('ignore')
-
 import unittest
-
 import environment
 import tablet
 import utils
+
+# Dropping a table inexplicably produces a warning despite
+# the "IF EXISTS" clause. Squelch these warnings.
+warnings.simplefilter('ignore')
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
