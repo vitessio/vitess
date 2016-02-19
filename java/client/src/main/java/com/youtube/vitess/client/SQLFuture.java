@@ -23,9 +23,9 @@ import java.util.concurrent.TimeoutException;
  * so e.g. {@code vtgateConn.execute(...).checkedGet()} behaves the same as our
  * old synchronous API.
  *
- * <p>The additional methods are similar to the {@code CheckedFuture} interface,
- * but this class does not actually implement it because {@code CheckedFuture} is not
- * recommended for new projects. See the
+ * <p>The additional methods are similar to the {@code CheckedFuture} interface (marked as beta),
+ * but this class does not declare that it implements {@code CheckedFuture} because that interface
+ * is not recommended for new projects. See the
  * <a href="https://google.github.io/guava/releases/19.0/api/docs/com/google/common/util/concurrent/CheckedFuture.html">CheckedFuture docs</a>
  * for more information.
  */
