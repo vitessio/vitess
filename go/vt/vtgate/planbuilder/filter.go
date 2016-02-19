@@ -132,6 +132,9 @@ func computeINPlan(route *routeBuilder, comparison *sqlparser.ComparisonExpr) (p
 // and appends them to filters, which can be shuffled and recombined
 // as needed.
 func splitAndExpression(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) []sqlparser.BoolExpr {
+	if node == nil {
+		return filters
+	}
 	if node, ok := node.(*sqlparser.AndExpr); ok {
 		filters = splitAndExpression(filters, node.Left)
 		return splitAndExpression(filters, node.Right)

@@ -78,8 +78,10 @@ func TestPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	testFile(t, "select_cases.txt", vschema)
+	testFile(t, "join_cases.txt", vschema)
 	testFile(t, "filter_cases.txt", vschema)
 	testFile(t, "dml_cases.txt", vschema)
+	testFile(t, "unsupported_cases.txt", vschema)
 }
 
 func testFile(t *testing.T, filename string, vschema *VSchema) {
@@ -95,15 +97,13 @@ func testFile(t *testing.T, filename string, vschema *VSchema) {
 		if out != tcase.output {
 			t.Errorf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out)
 			// Uncomment these lines to re-generate input files
-			/*
-				if err != nil {
-					out = fmt.Sprintf("\"%s\"", out)
-				} else {
-					bout, _ := json.MarshalIndent(plan, "", "  ")
-					out = string(bout)
-				}
-				fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
-			*/
+			if err != nil {
+				out = fmt.Sprintf("\"%s\"", out)
+			} else {
+				bout, _ := json.MarshalIndent(plan, "", "  ")
+				out = string(bout)
+			}
+			fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
 		}
 	}
 }

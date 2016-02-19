@@ -6,6 +6,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -14,8 +15,7 @@ import (
 // and the associated symtab with all the routes identified.
 func processTableExprs(tableExprs sqlparser.TableExprs, vschema *VSchema) (planBuilder, error) {
 	if len(tableExprs) != 1 {
-		// TODO(sougou): better error message.
-		return nil, errors.New("lists are not supported")
+		return nil, errors.New("',' operator not supported for joins")
 	}
 	return processTableExpr(tableExprs[0], vschema)
 }
@@ -65,7 +65,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema
 	case *sqlparser.Subquery:
 		sel, ok := expr.Select.(*sqlparser.Select)
 		if !ok {
-			return nil, errors.New("complex selects not allowd in subqueries")
+			return nil, errors.New("union operations not supported in subqueries")
 		}
 		subplan, err := processSelect(sel, vschema, nil)
 		if err != nil {
@@ -105,8 +105,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema
 // it can be used to create the symbol table entry.
 func getTablePlan(tableName *sqlparser.TableName, vschema *VSchema) (*Route, *Table, error) {
 	if tableName.Qualifier != "" {
-		// TODO(sougou): better error message.
-		return nil, nil, errors.New("tablename qualifier not allowed")
+		return nil, nil, errors.New("keyspace name qualifier not allowed for table names")
 	}
 	table, err := vschema.FindTable(string(tableName.Name))
 	if err != nil {
@@ -134,8 +133,7 @@ func processJoin(join *sqlparser.JoinTableExpr, vschema *VSchema) (planBuilder, 
 	switch join.Join {
 	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
 	default:
-		// TODO(sougou): better error message.
-		return nil, errors.New("unsupported join")
+		return nil, fmt.Errorf("unsupported join operator: %s", join.Join)
 	}
 	lplan, err := processTableExpr(join.LeftExpr, vschema)
 	if err != nil {
