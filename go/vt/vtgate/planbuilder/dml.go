@@ -42,6 +42,12 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
 	return route, nil
 }
 
+func generateQuery(statement sqlparser.Statement) string {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	statement.Format(buf)
+	return buf.String()
+}
+
 func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex) bool {
 	vindexCols := make([]string, len(colVindexes))
 	for i, index := range colVindexes {

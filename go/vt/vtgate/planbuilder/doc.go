@@ -69,7 +69,7 @@ to a routeBuilder, which is responsible for building
 the SELECT statement for that alias.
 A colsym represents a result column. It can can optionally
 point to a tableAlias if it's a plain column reference
-of that alias.
+of that alias. A colsym must always point to a routeBuilder.
 One symtab is created per SELECT statement. tableAlias
 names must be unique within each symtab. Currently,
 duplicates are allowed among colsyms, just like MySQL

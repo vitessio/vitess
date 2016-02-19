@@ -169,7 +169,7 @@ func makejoinBuilder(lplan, rplan planBuilder, join *sqlparser.JoinTableExpr) (p
 	// external references, and the FROM clause doesn't allow duplicates,
 	// it's safe to perform this conversion and still expect the same behavior.
 
-	err := lplan.Symtab().Add(rplan.Symtab())
+	err := lplan.Symtab().Merge(rplan.Symtab())
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +291,7 @@ func mergeRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (p
 		rRoute.Symtab().SetRHS()
 	}
 	rRoute.Redirect = lRoute
-	err := lRoute.Symtab().Add(rRoute.Symtab())
+	err := lRoute.Symtab().Merge(rRoute.Symtab())
 	if err != nil {
 		return nil, err
 	}
