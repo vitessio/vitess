@@ -32,6 +32,19 @@ import (
 // reference is added to the Externs field. This information will
 // be used by the outer query to compute the correct target route
 // that a subquery can be merged with, if possible.
+// In the case of a subquery, a symtab exists only while it's
+// analyzed. Although it's discarded after the analysis, column
+// references continue to point to the symbols created by the
+// symtab. These symbols, in turn, point to the route that they're part of.
+// If a decision is made to merge a subquery with an outer query's
+// route, then the associated route is redirected to the outer route.
+// Effectively, this makes the inner route the same as the outer
+// route. Consequently, this makes other routes that point to
+// the inner route to be the same as the outermost route also.
+// This method of redirection allows us to handle multiple levels
+// of nested subqueries. Without this redirection, we'd have to
+// keep track of every symtab created, and recursively chase them
+// down every time a subquery merges with an outer query.
 type symtab struct {
 	tables  []*tableAlias
 	Colsyms []*colsym

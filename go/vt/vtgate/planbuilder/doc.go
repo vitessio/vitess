@@ -79,29 +79,6 @@ symbols. The rules used by MySQL are not well documented.
 Therefore, we use the conservative rule that no
 tableAlias can be seen if colsyms are present.
 
-There's some criss-crossing of pointers for the sake
-of code simplification and efficiency. The objects
-of symtab point back to the symtab. This is because
-column references directly point to the objects, and
-we need to know the symtab to which they belong.
-PlanBuilders point to the symtab, and the symtab objects
-also point to planBuilders. The planBuilder pointing to
-symtab simplifies parameter passing. Otherwise, function
-calls were getting long. The symbols need to point to
-the routeBuilder because we have to know which primitive is
-supplying those values.
-When two routes get merged, the symbols that were pointing
-to the older route need to be repointed to the merged
-route. This is non-trivial because a query might have
-many subqueries and many levels of them. Keeping track
-of those different symbol tables would lead to fragile
-code. Instead, we introduce the concept of a redirect:
-If a route merges into another, we just "redirect" the
-the original route to the new one. When getting a route
-for a symbol, we chase the redirect pointer till the end
-and only return the final route.
-
-
 The symbol table is modified as various sections of the
 query are parsed. The parsing of the FROM clause
 populates the table aliases. These are then used

@@ -10,22 +10,21 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-// This file contains routines for processing the FROM
-// clause. Functions in this file manipulate various data
-// structures. If they return an error, one should assume
-// that the data structures may be in an inconsistent state.
-// In general, the error should just be returned back to the
-// application.
-
 // joinBuilder is used to build a Join primitive.
 // It's used to buid a normal join or a left join
 // operation.
 type joinBuilder struct {
+	// LeftOrder and RightOrder store the order
+	// of the left node and right node. The Order
+	// of this join will be the same as RightOrder.
+	// This information is used for traversal.
 	LeftOrder, RightOrder int
 	// Left and Right are the nodes for the join.
 	Left, Right planBuilder
 	symtab      *symtab
-	Colsyms     []*colsym
+	// Colsyms specifies the colsyms supplied by this
+	// join.
+	Colsyms []*colsym
 	// Join is the join plan.
 	Join *Join
 }
@@ -40,6 +39,9 @@ func (jb *joinBuilder) Order() int {
 	return jb.RightOrder
 }
 
+// SupplyVar updates the join to make it supply the requested
+// column as a join variable. If the column is not already in
+// its list, it requests the LHS node to supply it using SupplyCol.
 func (jb *joinBuilder) SupplyVar(col *sqlparser.ColName, varname string) {
 	switch meta := col.Metadata.(type) {
 	case *colsym:
@@ -70,6 +72,9 @@ func (jb *joinBuilder) SupplyVar(col *sqlparser.ColName, varname string) {
 	panic("unexpected")
 }
 
+// SupplyCol changes the join to supply the requested column
+// name, and returns the result column number. If the column
+// is already in the list, it's reused.
 func (jb *joinBuilder) SupplyCol(col *sqlparser.ColName) int {
 	switch meta := col.Metadata.(type) {
 	case *colsym:

@@ -19,7 +19,15 @@ import (
 // Each Builder object builds a Plan object, and they
 // will mirror the same tree. Once all the plans are built,
 // the builder objects will be discarded, and only
-// the Plan objects will remain.
+// the Plan objects will remain. Because of the near-equivalent
+// meaning of a planBuilder object and its plan, the variable
+// names are overloaded. The separation exists only because the
+// information in the planBuilder objects are not ultimately
+// required externally.
+// For example, a route variable usually refers to a
+// routeBuilder object, which in turn, has a Route field.
+// This should not cause confusion because we almost never
+// reference the inner Route directly.
 type planBuilder interface {
 	// Symtab returns the associated symtab.
 	Symtab() *symtab
@@ -27,8 +35,14 @@ type planBuilder interface {
 	// A lower Order number Route is executed before a
 	// higher one. For a node that contains other nodes,
 	// the Order represents the highest order of the leaf
-	// nodes.
+	// nodes. This function is used to travel from a root
+	// node to a target node.
 	Order() int
+	// SupplyCol will be used for the wire-up process. This function
+	// takes a column reference as input, changes the plan
+	// to supply the requested column and returns the column number of
+	// the result for it. The request is passed down recursively
+	// as needed.
 	SupplyCol(col *sqlparser.ColName) int
 }
 
@@ -38,21 +52,27 @@ type planBuilder interface {
 // are moved into this node, which will be used to build
 // the final SQL for this route.
 type routeBuilder struct {
+	// Redirect may point to another route if this route
+	// was merged with it. The Resolve function chases
+	// this pointer till the last un-redirected route.
 	Redirect *routeBuilder
 	// IsRHS is true if the routeBuilder is the RHS of a
 	// LEFT JOIN. If so, many restrictions come into play.
 	IsRHS bool
 	// Select is the AST for the query fragment that will be
 	// executed by this route.
-	Select  sqlparser.Select
-	order   int
-	symtab  *symtab
+	Select sqlparser.Select
+	order  int
+	symtab *symtab
+	// Colsyms represent the columns returned by this route.
 	Colsyms []*colsym
 	// Route is the plan object being built. It will contain all the
 	// information necessary to execute the route operation.
 	Route *Route
 }
 
+// Resolve resolves redirects, and returns the last
+// un-redirected route.
 func (rtb *routeBuilder) Resolve() *routeBuilder {
 	for rtb.Redirect != nil {
 		rtb = rtb.Redirect
@@ -70,6 +90,9 @@ func (rtb *routeBuilder) Order() int {
 	return rtb.order
 }
 
+// SupplyCol changes the router to supply the requested column
+// name, and returns the result column number. If the column
+// is already in the list, it's reused.
 func (rtb *routeBuilder) SupplyCol(col *sqlparser.ColName) int {
 	switch meta := col.Metadata.(type) {
 	case *colsym:
