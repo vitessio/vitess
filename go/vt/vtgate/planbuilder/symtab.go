@@ -5,7 +5,6 @@
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -64,7 +63,7 @@ func newSymtab(vschema *VSchema) *symtab {
 // AddAlias adds a table alias to symtab.
 func (st *symtab) AddAlias(alias sqlparser.SQLName, table *Table, route *routeBuilder) error {
 	if found := st.findTable(alias); found != nil {
-		return errors.New("duplicate symbols")
+		return fmt.Errorf("duplicate symbol: %s", alias)
 	}
 	st.tables = append(st.tables, &tableAlias{
 		Alias:       alias,
@@ -90,7 +89,7 @@ func (st *symtab) Merge(newsyms *symtab) error {
 	}
 	for _, t := range newsyms.tables {
 		if found := st.findTable(t.Alias); found != nil {
-			return errors.New("duplicate symbols")
+			return fmt.Errorf("duplicate symbol: %s", t.Alias)
 		}
 		t.symtab = st
 		st.tables = append(st.tables, t)
@@ -149,7 +148,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 		if st.Outer != nil {
 			// autoResolve only allowed for innermost scope.
 			route, _, err = st.Outer.Find(col, false)
-			if err != nil {
+			if err == nil {
 				st.Externs = append(st.Externs, col)
 			}
 			return route, false, err
@@ -157,10 +156,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
 	qualifier := col.Qualifier
-	if qualifier == "" && autoResolve {
-		if len(st.tables) != 1 {
-			return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
-		}
+	if qualifier == "" && autoResolve && len(st.tables) == 1 {
 		for _, t := range st.tables {
 			qualifier = t.Alias
 			break
@@ -171,7 +167,7 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (route *routeBu
 		if st.Outer != nil {
 			// autoResolve only allowed for innermost scope.
 			route, _, err = st.Outer.Find(col, false)
-			if err != nil {
+			if err == nil {
 				st.Externs = append(st.Externs, col)
 			}
 			return route, false, err
@@ -207,7 +203,7 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve b
 		}
 		return meta.FindVindex(col.Name)
 	}
-	return nil
+	panic("Unexpected")
 }
 
 // tableAlias is part of symtab.

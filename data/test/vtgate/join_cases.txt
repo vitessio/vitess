@@ -72,10 +72,6 @@
   }
 }
 
-# Sharded & Unsharded join
-"select main.col from user join main1"
-"symbol main.col not found"
-
 # Left join, single chunk
 "select m1.col from main1 as m1 left join main1 as m2 on m1.a=m2.b"
 {
@@ -714,3 +710,7 @@
     "Values": 5
   }
 }
+
+# duplicate symbols
+"select user.id from user join user"
+"duplicate symbol: user"
