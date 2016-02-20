@@ -6,6 +6,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -60,6 +61,10 @@ func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 	}
 	routeNumber := 0
 	for _, order := range orderBy {
+		// Only generator is allowed to change the AST.
+		// If we have to change the order by expression,
+		// we have to build a new node.
+		pushOrder := order
 		var route *routeBuilder
 		switch node := order.Expr.(type) {
 		case *sqlparser.ColName:
@@ -70,34 +75,41 @@ func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 				return err
 			}
 			if !isLocal {
-				// TODO(sougou): better error.
 				return errors.New("unsupported: subquery references outer query in order by")
 			}
 		case sqlparser.NumVal:
 			num, err := strconv.ParseInt(string(node), 0, 64)
 			if err != nil {
-				// TODO(sougou): better error.
-				return errors.New("error parsing order by clause")
+				return fmt.Errorf("error parsing order by clause: %s", string(node))
 			}
 			if num < 1 || num > int64(len(plan.Symtab().Colsyms)) {
-				// TODO(sougou): better error.
 				return errors.New("order by column number out of range")
 			}
-			route = plan.Symtab().Colsyms[num-1].Route()
+			colsym := plan.Symtab().Colsyms[num-1]
+			route = colsym.Route()
+			// We have to recompute the column number.
+			for num, s := range route.Colsyms {
+				if s == colsym {
+					pushOrder = &sqlparser.Order{
+						Expr:      sqlparser.NumVal(strconv.AppendInt(nil, int64(num+1), 10)),
+						Direction: order.Direction,
+					}
+				}
+			}
+			if pushOrder == order {
+				panic("unexpected")
+			}
 		default:
-			// TODO(sougou): better error.
-			return errors.New("order by clause is too complex")
+			return errors.New("order by clause is too complex: complex expression")
 		}
 		if route.Order() < routeNumber {
-			// TODO(sougou): better error.
-			return errors.New("order by clause is too complex")
+			return errors.New("order by clause is too complex: complex sequence")
 		}
 		if !route.IsSingle() {
-			// TODO(sougou): better error.
-			return errors.New("order by clause is too complex")
+			return errors.New("order by clause is too complex: scatter route")
 		}
 		routeNumber = route.Order()
-		route.Select.OrderBy = append(route.Select.OrderBy, order)
+		route.Select.OrderBy = append(route.Select.OrderBy, pushOrder)
 	}
 	return nil
 }
@@ -108,10 +120,10 @@ func processLimit(limit *sqlparser.Limit, plan planBuilder) error {
 	}
 	route, ok := plan.(*routeBuilder)
 	if !ok {
-		return errors.New("query is too complex to allow limits")
+		return errors.New("unsupported: limits with complex joins")
 	}
 	if !route.IsSingle() {
-		return errors.New("query is too complex to allow limits")
+		return errors.New("unsupported: limits with scatter")
 	}
 	route.Select.Limit = limit
 	return nil
