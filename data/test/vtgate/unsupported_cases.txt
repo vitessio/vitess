@@ -1,16 +1,16 @@
-# Unions not supported.
+# Unions
 "select * from user union select * from user_extra"
 "cannot build a plan for this construct"
 
-# SET not supported
+# SET
 "set a=1"
 "cannot build a plan for this construct"
 
-# DDL not supported
+# DDL
 "create table a(id int)"
 "cannot build a plan for this construct"
 
-# DBA statements not supported
+# DBA statements
 "explain select * from user"
 "cannot build a plan for this construct"
 
@@ -18,34 +18,38 @@
 "the quick brown fox"
 "syntax error at position 4 near 'the'"
 
-# ',' operator not supported for joins
+# ',' operator for joins
 "select * from user, user_extra"
 "',' operator not supported for joins"
 
-# union operations not supported in subqueries
+# union operations in subqueries
 "select * from (select * from user union select * from user_extra) as t"
 "union operations not supported in subqueries"
 
-# subquery with join primitive not supported
+# subquery with join primitive
 "select * from (select user.id from user join user_extra) as t"
 "subquery is too complex"
 
-# keyspace name not allowed yet
+# keyspace name
 "select * from user.user"
 "keyspace name qualifier not allowed for table names"
 
-# right join not supported
+# right join
 "select * from user right join user_extra on a=b"
 "unsupported join operator: right join"
 
-# natural join not supported
+# natural join
 "select * from user natural join user_extra"
 "unsupported join operator: natural join"
 
-# natural left join not supported
+# natural left join
 "select * from user natural left join user_extra"
 "unsupported join operator: natural left join"
 
-# natural right join not supported
+# natural right join
 "select * from user natural right join user_extra"
 "unsupported join operator: natural right join"
+
+# left join where clauses
+"select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
+"where clause not supported for left join tables"

@@ -66,10 +66,27 @@ func newMultiIndex(name string, _ map[string]interface{}) (Vindex, error) {
 	return &multiIndex{name: name}, nil
 }
 
+// costlyIndex satisfies Lookup, NonUnique.
+type costlyIndex struct{ name string }
+
+func (v *costlyIndex) String() string { return v.name }
+func (*costlyIndex) Cost() int        { return 10 }
+func (*costlyIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
+	return false, nil
+}
+func (*costlyIndex) Map(VCursor, []interface{}) ([][][]byte, error) { return nil, nil }
+func (*costlyIndex) Create(VCursor, interface{}, []byte) error      { return nil }
+func (*costlyIndex) Delete(VCursor, []interface{}, []byte) error    { return nil }
+
+func newCostlyIndex(name string, _ map[string]interface{}) (Vindex, error) {
+	return &costlyIndex{name: name}, nil
+}
+
 func init() {
 	Register("hash", newHashIndex)
 	Register("lookup", newLookupIndex)
 	Register("multi", newMultiIndex)
+	Register("costly", newCostlyIndex)
 }
 
 func TestPlan(t *testing.T) {
@@ -78,7 +95,7 @@ func TestPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	testFile(t, "select_cases.txt", vschema)
-	testFile(t, "join_cases.txt", vschema)
+	testFile(t, "from_cases.txt", vschema)
 	testFile(t, "filter_cases.txt", vschema)
 	testFile(t, "dml_cases.txt", vschema)
 	testFile(t, "unsupported_cases.txt", vschema)

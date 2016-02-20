@@ -27,8 +27,7 @@ func processFilter(filter sqlparser.BoolExpr, plan planBuilder, whereType string
 		return err
 	}
 	if route.IsRHS {
-		// TODO(sougou): improve error.
-		return errors.New("cannot push where clause into a LEFT JOIN route")
+		return errors.New("where clause not supported for left join tables")
 	}
 	switch whereType {
 	case sqlparser.WhereStr:
