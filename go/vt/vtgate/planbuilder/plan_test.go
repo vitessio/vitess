@@ -94,9 +94,10 @@ func TestPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testFile(t, "select_cases.txt", vschema)
 	testFile(t, "from_cases.txt", vschema)
 	testFile(t, "filter_cases.txt", vschema)
+	testFile(t, "select_cases.txt", vschema)
+	testFile(t, "postprocess_cases.txt", vschema)
 	testFile(t, "dml_cases.txt", vschema)
 	testFile(t, "unsupported_cases.txt", vschema)
 }

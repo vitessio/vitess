@@ -17,7 +17,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 	}
 	route, ok := plan.(*routeBuilder)
 	if !ok {
-		return errors.New("query is too complex to allow aggregates")
+		return errors.New("query is too complex to allow group by")
 	}
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -27,7 +27,6 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 				return false, err
 			}
 			if !isLocal {
-				// TODO(sougou): better error.
 				return false, errors.New("unsupported: subquery references outer query in group by")
 			}
 		case *sqlparser.Subquery:
@@ -52,7 +51,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 			return nil
 		}
 	}
-	return errors.New("query is too complex to allow aggregates")
+	return errors.New("query is too complex to allow group by")
 }
 
 func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {

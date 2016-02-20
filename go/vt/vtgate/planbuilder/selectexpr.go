@@ -77,7 +77,7 @@ func findSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*c
 	for i, node := range selectExprs {
 		node, ok := node.(*sqlparser.NonStarExpr)
 		if !ok {
-			return nil, errors.New("* expressions not allowed")
+			return nil, errors.New("* expressions not allowed in select")
 		}
 		route, err := findRoute(node.Expr, plan)
 		if err != nil {
