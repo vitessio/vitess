@@ -46,7 +46,7 @@ type planBuilder interface {
 	// column. This is required because the ORDER BY clause
 	// may refer to columns by number. The function must return
 	// a colsym for the expression and the column number of the result.
-	PushSelect(expr *sqlparser.NonStarExpr, route *routeBuilder) (*colsym, int)
+	PushSelect(expr *sqlparser.NonStarExpr, route *routeBuilder) (colsym *colsym, colnum int, err error)
 	// SupplyCol will be used for the wire-up process. This function
 	// takes a column reference as input, changes the plan
 	// to supply the requested column and returns the column number of
@@ -103,7 +103,7 @@ func (rtb *routeBuilder) Order() int {
 // be updated if the new filter improves it.
 func (rtb *routeBuilder) PushFilter(filter sqlparser.BoolExpr, whereType string) error {
 	if rtb.IsRHS {
-		return errors.New("where clause not supported for left join tables")
+		return errors.New("unsupported: complex left join and where claused")
 	}
 	switch whereType {
 	case sqlparser.WhereStr:
@@ -220,7 +220,7 @@ func (rtb *routeBuilder) computeINPlan(comparison *sqlparser.ComparisonExpr) (pl
 }
 
 // PushSelect pushes the select expression into the route.
-func (rtb *routeBuilder) PushSelect(expr *sqlparser.NonStarExpr, _ *routeBuilder) (colsym *colsym, colnum int) {
+func (rtb *routeBuilder) PushSelect(expr *sqlparser.NonStarExpr, _ *routeBuilder) (colsym *colsym, colnum int, err error) {
 	colsym = newColsym(rtb, rtb.Symtab())
 	if expr.As != "" {
 		colsym.Alias = expr.As
@@ -231,10 +231,14 @@ func (rtb *routeBuilder) PushSelect(expr *sqlparser.NonStarExpr, _ *routeBuilder
 		}
 		colsym.Vindex = rtb.Symtab().Vindex(col, rtb, true)
 		colsym.Underlying = newColref(col)
+	} else {
+		if rtb.IsRHS {
+			return nil, 0, errors.New("unsupported: complex left join and column expressions")
+		}
 	}
 	rtb.Select.SelectExprs = append(rtb.Select.SelectExprs, expr)
 	rtb.Colsyms = append(rtb.Colsyms, colsym)
-	return colsym, len(rtb.Colsyms) - 1
+	return colsym, len(rtb.Colsyms) - 1, nil
 }
 
 // MakeDistinct sets the DISTINCT property to the select.
@@ -248,8 +252,12 @@ func (rtb *routeBuilder) SetGroupBy(groupBy sqlparser.GroupBy) {
 }
 
 // AddOrder adds an ORDER BY expression to the route.
-func (rtb *routeBuilder) AddOrderBy(order *sqlparser.Order) {
+func (rtb *routeBuilder) AddOrder(order *sqlparser.Order) error {
+	if rtb.IsRHS {
+		return errors.New("unsupported: complex left join and order by")
+	}
 	rtb.Select.OrderBy = append(rtb.Select.OrderBy, order)
+	return nil
 }
 
 // SetLimit adds a LIMIT clause to the route.

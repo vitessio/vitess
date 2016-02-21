@@ -21,7 +21,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 	}
 	route, ok := plan.(*routeBuilder)
 	if !ok {
-		return errors.New("query is too complex to allow group by")
+		return errors.New("unsupported: complex join and group by")
 	}
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -35,7 +35,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 			}
 		case *sqlparser.Subquery:
 			// TODO(sougou): better error.
-			return false, errors.New("subqueries not supported in group by")
+			return false, errors.New("unsupported: subqueries in group by expression")
 		}
 		return true, nil
 	}, groupBy)
@@ -55,7 +55,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 			return nil
 		}
 	}
-	return errors.New("query is too complex to allow group by")
+	return errors.New("unsupported: scatter and group by")
 }
 
 func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
@@ -103,16 +103,18 @@ func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 				panic("unexpected")
 			}
 		default:
-			return errors.New("order by clause is too complex: complex expression")
+			return errors.New("unsupported: complex expression in order by")
 		}
 		if route.Order() < routeNumber {
-			return errors.New("order by clause is too complex: complex sequence")
+			return errors.New("unsupported: complex join and out of sequence order by")
 		}
 		if !route.IsSingle() {
-			return errors.New("order by clause is too complex: scatter route")
+			return errors.New("unsupported: scatter and order by")
 		}
 		routeNumber = route.Order()
-		route.AddOrderBy(pushOrder)
+		if err := route.AddOrder(pushOrder); err != nil {
+			return err
+		}
 	}
 	return nil
 }

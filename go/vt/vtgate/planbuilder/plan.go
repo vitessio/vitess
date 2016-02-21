@@ -235,7 +235,7 @@ func BuildPlan(query string, vschema *VSchema) (*Plan, error) {
 	case *sqlparser.Delete:
 		plan.Instructions, err = buildDeletePlan(statement, vschema)
 	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
-		return nil, errors.New("cannot build a plan for this construct")
+		return nil, errors.New("unsupported construct")
 	default:
 		panic("unexpected")
 	}

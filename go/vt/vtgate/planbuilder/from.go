@@ -18,7 +18,7 @@ import (
 // and the associated symtab with all the routes identified.
 func processTableExprs(tableExprs sqlparser.TableExprs, vschema *VSchema) (planBuilder, error) {
 	if len(tableExprs) != 1 {
-		return nil, errors.New("',' operator not supported for joins")
+		return nil, errors.New("unsupported: ',' join operator")
 	}
 	return processTableExpr(tableExprs[0], vschema)
 }
@@ -68,7 +68,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema
 	case *sqlparser.Subquery:
 		sel, ok := expr.Select.(*sqlparser.Select)
 		if !ok {
-			return nil, errors.New("union operations not supported in subqueries")
+			return nil, errors.New("unsupported: union operator in subqueries")
 		}
 		subplan, err := processSelect(sel, vschema, nil)
 		if err != nil {
@@ -76,7 +76,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema
 		}
 		subroute, ok := subplan.(*routeBuilder)
 		if !ok {
-			return nil, errors.New("subquery is too complex")
+			return nil, errors.New("unsupported: complex join in subqueries")
 		}
 		rtb := &routeBuilder{
 			Select: sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
@@ -108,7 +108,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema
 // it can be used to create the symbol table entry.
 func getTablePlan(tableName *sqlparser.TableName, vschema *VSchema) (*Route, *Table, error) {
 	if tableName.Qualifier != "" {
-		return nil, nil, errors.New("keyspace name qualifier not allowed for table names")
+		return nil, nil, errors.New("unsupported: keyspace name qualifier for tables")
 	}
 	table, err := vschema.FindTable(string(tableName.Name))
 	if err != nil {
@@ -136,7 +136,7 @@ func processJoin(join *sqlparser.JoinTableExpr, vschema *VSchema) (planBuilder, 
 	switch join.Join {
 	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
 	default:
-		return nil, fmt.Errorf("unsupported join operator: %s", join.Join)
+		return nil, fmt.Errorf("unsupported: %s", join.Join)
 	}
 	lplan, err := processTableExpr(join.LeftExpr, vschema)
 	if err != nil {

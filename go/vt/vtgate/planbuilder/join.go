@@ -41,16 +41,22 @@ func (jb *joinBuilder) Order() int {
 
 // PushSelect pushes the select expression into the join and
 // recursively down.
-func (jb *joinBuilder) PushSelect(expr *sqlparser.NonStarExpr, route *routeBuilder) (colsym *colsym, colnum int) {
+func (jb *joinBuilder) PushSelect(expr *sqlparser.NonStarExpr, route *routeBuilder) (colsym *colsym, colnum int, err error) {
 	if route.Order() <= jb.LeftOrder {
-		colsym, colnum = jb.Left.PushSelect(expr, route)
+		colsym, colnum, err = jb.Left.PushSelect(expr, route)
+		if err != nil {
+			return nil, 0, err
+		}
 		jb.Join.Cols = append(jb.Join.Cols, -colnum-1)
 	} else {
-		colsym, colnum = jb.Right.PushSelect(expr, route)
+		colsym, colnum, err = jb.Right.PushSelect(expr, route)
+		if err != nil {
+			return nil, 0, err
+		}
 		jb.Join.Cols = append(jb.Join.Cols, colnum+1)
 	}
 	jb.Colsyms = append(jb.Colsyms, colsym)
-	return colsym, len(jb.Colsyms) - 1
+	return colsym, len(jb.Colsyms) - 1, nil
 }
 
 // SupplyVar updates the join to make it supply the requested

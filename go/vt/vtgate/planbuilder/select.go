@@ -144,13 +144,16 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*c
 	for i, node := range selectExprs {
 		node, ok := node.(*sqlparser.NonStarExpr)
 		if !ok {
-			return nil, errors.New("* expressions not allowed in select")
+			return nil, errors.New("unsupported: '*' expression in select")
 		}
 		route, err := findRoute(node.Expr, plan)
 		if err != nil {
 			return nil, err
 		}
-		colsyms[i], _ = plan.PushSelect(node, route)
+		colsyms[i], _, err = plan.PushSelect(node, route)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return colsyms, nil
 }

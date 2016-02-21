@@ -1,18 +1,18 @@
 # Unions
 "select * from user union select * from user_extra"
-"cannot build a plan for this construct"
+"unsupported construct"
 
 # SET
 "set a=1"
-"cannot build a plan for this construct"
+"unsupported construct"
 
 # DDL
 "create table a(id int)"
-"cannot build a plan for this construct"
+"unsupported construct"
 
 # DBA statements
 "explain select * from user"
-"cannot build a plan for this construct"
+"unsupported construct"
 
 # syntax error
 "the quick brown fox"
@@ -20,43 +20,47 @@
 
 # ',' operator for joins
 "select * from user, user_extra"
-"',' operator not supported for joins"
+"unsupported: ',' join operator"
 
 # union operations in subqueries
 "select * from (select * from user union select * from user_extra) as t"
-"union operations not supported in subqueries"
+"unsupported: union operator in subqueries"
 
 # subquery with join primitive
 "select * from (select user.id from user join user_extra) as t"
-"subquery is too complex"
+"unsupported: complex join in subqueries"
 
 # keyspace name
 "select * from user.user"
-"keyspace name qualifier not allowed for table names"
+"unsupported: keyspace name qualifier for tables"
 
 # right join
 "select * from user right join user_extra on a=b"
-"unsupported join operator: right join"
+"unsupported: right join"
 
 # natural join
 "select * from user natural join user_extra"
-"unsupported join operator: natural join"
+"unsupported: natural join"
 
 # natural left join
 "select * from user natural left join user_extra"
-"unsupported join operator: natural left join"
+"unsupported: natural left join"
 
 # natural right join
 "select * from user natural right join user_extra"
-"unsupported join operator: natural right join"
+"unsupported: natural right join"
+
+# left join with expressions
+"select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
+"unsupported: complex left join and column expressions"
 
 # left join where clauses
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
-"where clause not supported for left join tables"
+"unsupported: complex left join and where claused"
 
 # * expresson not allowed
 "select * from user"
-"* expressions not allowed in select"
+"unsupported: '*' expression in select"
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
@@ -64,7 +68,7 @@
 
 # group by and joins
 "select user.id from user join user_extra group by id"
-"query is too complex to allow group by"
+"unsupported: complex join and group by"
 
 # Group by references outer query
 "select id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 group by id)"
@@ -72,11 +76,11 @@
 
 # Group by and scatter
 "select col from user group by col"
-"query is too complex to allow group by"
+"unsupported: scatter and group by"
 
 # subqueries not supported in group by
 "select id from user group by (select id from user_extra)"
-"subqueries not supported in group by"
+"unsupported: subqueries in group by expression"
 
 # Order by references outer query
 "select id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 order by id)"
@@ -84,15 +88,19 @@
 
 # Order by uses complex expression
 "select id from user order by id+1"
-"order by clause is too complex: complex expression"
+"unsupported: complex expression in order by"
 
 # Order by for join, but sequce is too complex
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
-"order by clause is too complex: complex sequence"
+"unsupported: complex join and out of sequence order by"
 
 # Order by for scatter routes
 "select col from user order by col"
-"order by clause is too complex: scatter route"
+"unsupported: scatter and order by"
+
+# Order by and left join
+"select user.col1 as a, user_extra.col2 as b from user left join user_extra on user_extra.user_id = 5 where user.id = 5 order by 1, 2"
+"unsupported: complex left join and order by"
 
 # limit for joins
 "select user.col from user join user_extra limit 1"
