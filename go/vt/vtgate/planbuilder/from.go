@@ -11,6 +11,9 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+// This file has functions to analyze the FROM clause
+// for select statements.
+
 // processTableExprs analyzes the FROM clause. It produces a planBuilder
 // and the associated symtab with all the routes identified.
 func processTableExprs(tableExprs sqlparser.TableExprs, vschema *VSchema) (planBuilder, error) {
@@ -295,12 +298,12 @@ func mergeRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (p
 	}
 	for _, filter := range splitAndExpression(nil, join.On) {
 		// If VTGate evolves, this section should be rewritten
-		// to use processBoolExpr.
+		// to use PushFilter.
 		_, err = findRoute(filter, lRoute)
 		if err != nil {
 			return nil, err
 		}
-		updateRoute(lRoute, filter)
+		lRoute.UpdatePlan(filter)
 	}
 	return lRoute, nil
 }

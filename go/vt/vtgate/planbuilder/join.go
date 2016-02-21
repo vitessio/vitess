@@ -39,6 +39,20 @@ func (jb *joinBuilder) Order() int {
 	return jb.RightOrder
 }
 
+// PushSelect pushes the select expression into the join and
+// recursively down.
+func (jb *joinBuilder) PushSelect(expr *sqlparser.NonStarExpr, route *routeBuilder) (colsym *colsym, colnum int) {
+	if route.Order() <= jb.LeftOrder {
+		colsym, colnum = jb.Left.PushSelect(expr, route)
+		jb.Join.Cols = append(jb.Join.Cols, -colnum-1)
+	} else {
+		colsym, colnum = jb.Right.PushSelect(expr, route)
+		jb.Join.Cols = append(jb.Join.Cols, colnum+1)
+	}
+	jb.Colsyms = append(jb.Colsyms, colsym)
+	return colsym, len(jb.Colsyms) - 1
+}
+
 // SupplyVar updates the join to make it supply the requested
 // column as a join variable. If the column is not already in
 // its list, it requests the LHS node to supply it using SupplyCol.
@@ -87,7 +101,6 @@ func (jb *joinBuilder) SupplyCol(col *sqlparser.ColName) int {
 			}
 		}
 		routeNumber := meta.Route().Order()
-		jb.Colsyms = append(jb.Colsyms, &colsym{Underlying: ref})
 		if routeNumber <= jb.LeftOrder {
 			ret := jb.Left.SupplyCol(col)
 			jb.Join.Cols = append(jb.Join.Cols, -ret-1)
@@ -95,6 +108,7 @@ func (jb *joinBuilder) SupplyCol(col *sqlparser.ColName) int {
 			ret := jb.Right.SupplyCol(col)
 			jb.Join.Cols = append(jb.Join.Cols, ret+1)
 		}
+		jb.Colsyms = append(jb.Colsyms, &colsym{Underlying: ref})
 		return len(jb.Join.Cols) - 1
 	}
 	panic("unexpected")

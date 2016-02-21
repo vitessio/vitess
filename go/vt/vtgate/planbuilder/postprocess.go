@@ -12,6 +12,9 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+// This file has functions to analyze postprocessing
+// clauses like GROUP BY, etc.
+
 func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 	if groupBy == nil {
 		return nil
@@ -40,7 +43,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 		return err
 	}
 	if route.IsSingle() {
-		route.Select.GroupBy = groupBy
+		route.SetGroupBy(groupBy)
 		return nil
 	}
 	// It's a scatter route. We can allow group by if it references a
@@ -48,7 +51,7 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 	for _, expr := range groupBy {
 		vindex := plan.Symtab().Vindex(expr, route, true)
 		if vindex != nil && IsUnique(vindex) {
-			route.Select.GroupBy = groupBy
+			route.SetGroupBy(groupBy)
 			return nil
 		}
 	}
@@ -109,7 +112,7 @@ func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 			return errors.New("order by clause is too complex: scatter route")
 		}
 		routeNumber = route.Order()
-		route.Select.OrderBy = append(route.Select.OrderBy, pushOrder)
+		route.AddOrderBy(pushOrder)
 	}
 	return nil
 }
@@ -125,7 +128,7 @@ func processLimit(limit *sqlparser.Limit, plan planBuilder) error {
 	if !route.IsSingle() {
 		return errors.New("unsupported: limits with scatter")
 	}
-	route.Select.Limit = limit
+	route.SetLimit(limit)
 	return nil
 }
 
@@ -135,7 +138,6 @@ func processMisc(sel *sqlparser.Select, plan planBuilder) {
 		processMisc(sel, plan.Left)
 		processMisc(sel, plan.Right)
 	case *routeBuilder:
-		plan.Select.Comments = sel.Comments
-		plan.Select.Lock = sel.Lock
+		plan.SetMisc(sel.Comments, sel.Lock)
 	}
 }

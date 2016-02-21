@@ -11,6 +11,20 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+// splitAndExpression breaks up the BoolExpr into AND-separated conditions
+// and appends them to filters, which can be shuffled and recombined
+// as needed.
+func splitAndExpression(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) []sqlparser.BoolExpr {
+	if node == nil {
+		return filters
+	}
+	if node, ok := node.(*sqlparser.AndExpr); ok {
+		filters = splitAndExpression(filters, node.Left)
+		return splitAndExpression(filters, node.Right)
+	}
+	return append(filters, node)
+}
+
 func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err error) {
 	highestRoute := leftmost(plan)
 	var subroutes []*routeBuilder

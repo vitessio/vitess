@@ -175,13 +175,6 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 	return json.Marshal(marshalPlan)
 }
 
-// SetPlan updates the plan info for the route.
-func (rt *Route) SetPlan(planID PlanID, vindex Vindex, values interface{}) {
-	rt.PlanID = planID
-	rt.Vindex = vindex
-	rt.Values = values
-}
-
 // prettyValue converts the Values field of a Route
 // to a form that will be human-readable when
 // converted to JSON. This is for testing and diagnostics.

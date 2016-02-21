@@ -306,7 +306,7 @@ func TestSelectEqualFail(t *testing.T) {
 	s := getSandbox("TestRouter")
 
 	_, err := routerExec(router, "select id from user where id = (select count(*) from music)", nil)
-	want := "query is too complex"
+	want := "unsupported"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, must start with %v", err, want)
 	}

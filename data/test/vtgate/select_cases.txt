@@ -209,3 +209,61 @@
     "FieldQuery": "select col, id from user where 1 != 1"
   }
 }
+
+# Comments
+"select /* comment */ user.col from user join user_extra"
+{
+  "Original": "select /* comment */ user.col from user join user_extra",
+  "Instructions": {
+    "Left": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select /* comment */ user.col from user",
+      "FieldQuery": "select user.col from user where 1 != 1"
+    },
+    "Right": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select /* comment */ 1 from user_extra",
+      "FieldQuery": "select 1 from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
+# for update
+"select user.col from user join user_extra for update"
+{
+  "Original": "select user.col from user join user_extra for update",
+  "Instructions": {
+    "Left": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col from user for update",
+      "FieldQuery": "select user.col from user where 1 != 1"
+    },
+    "Right": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user_extra for update",
+      "FieldQuery": "select 1 from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}

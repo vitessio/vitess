@@ -6,6 +6,7 @@ package planbuilder
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -38,6 +39,14 @@ type planBuilder interface {
 	// nodes. This function is used to travel from a root
 	// node to a target node.
 	Order() int
+	// PushSelect pushes the select expression through the tree
+	// all the way to the route that colsym points to.
+	// PushSelect is similar to SupplyCol except that it always
+	// adds a new column, whereas SupplyCol can reuse an existing
+	// column. This is required because the ORDER BY clause
+	// may refer to columns by number. The function must return
+	// a colsym for the expression and the column number of the result.
+	PushSelect(expr *sqlparser.NonStarExpr, route *routeBuilder) (*colsym, int)
 	// SupplyCol will be used for the wire-up process. This function
 	// takes a column reference as input, changes the plan
 	// to supply the requested column and returns the column number of
@@ -88,6 +97,170 @@ func (rtb *routeBuilder) Symtab() *symtab {
 // Order returns the order of the node.
 func (rtb *routeBuilder) Order() int {
 	return rtb.order
+}
+
+// PushFilter pushes the filter into the route. The plan will
+// be updated if the new filter improves it.
+func (rtb *routeBuilder) PushFilter(filter sqlparser.BoolExpr, whereType string) error {
+	if rtb.IsRHS {
+		return errors.New("where clause not supported for left join tables")
+	}
+	switch whereType {
+	case sqlparser.WhereStr:
+		rtb.Select.AddWhere(filter)
+	case sqlparser.HavingStr:
+		rtb.Select.AddHaving(filter)
+	}
+	rtb.UpdatePlan(filter)
+	return nil
+}
+
+// UpdatePlan evaluates the plan against the specified
+// filter. If it's an improvement, the plan is updated.
+// We assume that the filter has already been pushed into
+// the route. This function should only be used when merging
+// routes, where the ON clause gets implicitly pushed into
+// the merged route.
+func (rtb *routeBuilder) UpdatePlan(filter sqlparser.BoolExpr) {
+	planID, vindex, values := rtb.computePlan(filter)
+	if planID == SelectScatter {
+		return
+	}
+	switch rtb.Route.PlanID {
+	case SelectEqualUnique:
+		if planID == SelectEqualUnique && vindex.Cost() < rtb.Route.Vindex.Cost() {
+			rtb.setPlan(planID, vindex, values)
+		}
+	case SelectEqual:
+		switch planID {
+		case SelectEqualUnique:
+			rtb.setPlan(planID, vindex, values)
+		case SelectEqual:
+			if vindex.Cost() < rtb.Route.Vindex.Cost() {
+				rtb.setPlan(planID, vindex, values)
+			}
+		}
+	case SelectIN:
+		switch planID {
+		case SelectEqualUnique, SelectEqual:
+			rtb.setPlan(planID, vindex, values)
+		case SelectIN:
+			if vindex.Cost() < rtb.Route.Vindex.Cost() {
+				rtb.setPlan(planID, vindex, values)
+			}
+		}
+	case SelectScatter:
+		switch planID {
+		case SelectEqualUnique, SelectEqual, SelectIN:
+			rtb.setPlan(planID, vindex, values)
+		}
+	}
+}
+
+// setPlan updates the plan info for the route.
+func (rtb *routeBuilder) setPlan(planID PlanID, vindex Vindex, values interface{}) {
+	rtb.Route.PlanID = planID
+	rtb.Route.Vindex = vindex
+	rtb.Route.Values = values
+}
+
+// ComputePlan computes the plan for the specified filter.
+func (rtb *routeBuilder) computePlan(filter sqlparser.BoolExpr) (planID PlanID, vindex Vindex, values interface{}) {
+	switch node := filter.(type) {
+	case *sqlparser.ComparisonExpr:
+		switch node.Operator {
+		case sqlparser.EqualStr:
+			return rtb.computeEqualPlan(node)
+		case sqlparser.InStr:
+			return rtb.computeINPlan(node)
+		}
+	}
+	return SelectScatter, nil, nil
+}
+
+// computeEqualPlan computes the plan for an equality constraint.
+func (rtb *routeBuilder) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
+	left := comparison.Left
+	right := comparison.Right
+	vindex = rtb.Symtab().Vindex(left, rtb, true)
+	if vindex == nil {
+		left, right = right, left
+		vindex = rtb.Symtab().Vindex(left, rtb, true)
+		if vindex == nil {
+			return SelectScatter, nil, nil
+		}
+	}
+	if !exprIsValue(right, rtb) {
+		return SelectScatter, nil, nil
+	}
+	if IsUnique(vindex) {
+		return SelectEqualUnique, vindex, right
+	}
+	return SelectEqual, vindex, right
+}
+
+// computeINPlan computes the plan for an IN constraint.
+func (rtb *routeBuilder) computeINPlan(comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
+	vindex = rtb.Symtab().Vindex(comparison.Left, rtb, true)
+	if vindex == nil {
+		return SelectScatter, nil, nil
+	}
+	switch node := comparison.Right.(type) {
+	case sqlparser.ValTuple:
+		for _, n := range node {
+			if !exprIsValue(n, rtb) {
+				return SelectScatter, nil, nil
+			}
+		}
+		return SelectIN, vindex, comparison
+	case sqlparser.ListArg:
+		return SelectIN, vindex, comparison
+	}
+	return SelectScatter, nil, nil
+}
+
+// PushSelect pushes the select expression into the route.
+func (rtb *routeBuilder) PushSelect(expr *sqlparser.NonStarExpr, _ *routeBuilder) (colsym *colsym, colnum int) {
+	colsym = newColsym(rtb, rtb.Symtab())
+	if expr.As != "" {
+		colsym.Alias = expr.As
+	}
+	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
+		if colsym.Alias == "" {
+			colsym.Alias = sqlparser.SQLName(sqlparser.String(col))
+		}
+		colsym.Vindex = rtb.Symtab().Vindex(col, rtb, true)
+		colsym.Underlying = newColref(col)
+	}
+	rtb.Select.SelectExprs = append(rtb.Select.SelectExprs, expr)
+	rtb.Colsyms = append(rtb.Colsyms, colsym)
+	return colsym, len(rtb.Colsyms) - 1
+}
+
+// MakeDistinct sets the DISTINCT property to the select.
+func (rtb *routeBuilder) MakeDistinct() {
+	rtb.Select.Distinct = sqlparser.DistinctStr
+}
+
+// SetGroupBy sets the GROUP BY clause for the route.
+func (rtb *routeBuilder) SetGroupBy(groupBy sqlparser.GroupBy) {
+	rtb.Select.GroupBy = groupBy
+}
+
+// AddOrder adds an ORDER BY expression to the route.
+func (rtb *routeBuilder) AddOrderBy(order *sqlparser.Order) {
+	rtb.Select.OrderBy = append(rtb.Select.OrderBy, order)
+}
+
+// SetLimit adds a LIMIT clause to the route.
+func (rtb *routeBuilder) SetLimit(limit *sqlparser.Limit) {
+	rtb.Select.Limit = limit
+}
+
+// SetMisc updates the comments & 'for update' sections of the route.
+func (rtb *routeBuilder) SetMisc(comments sqlparser.Comments, lock string) {
+	rtb.Select.Comments = comments
+	rtb.Select.Lock = lock
 }
 
 // SupplyCol changes the router to supply the requested column

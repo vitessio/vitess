@@ -60,7 +60,7 @@
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
-"query is too complex to allow aggregates"
+"unsupported: complex join with aggregates"
 
 # group by and joins
 "select user.id from user join user_extra group by id"
