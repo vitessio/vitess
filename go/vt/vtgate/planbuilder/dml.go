@@ -37,7 +37,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
 	}
 	route.PlanID = UpdateEqual
 	if isIndexChanging(upd.Exprs, route.Table.ColVindexes) {
-		return nil, errors.New("index is changing")
+		return nil, errors.New("unsupported: DML cannot change vindex column")
 	}
 	return route, nil
 }
@@ -110,7 +110,7 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
 func checkSubquery(node sqlparser.SQLNode) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		if _, ok := node.(*sqlparser.Subquery); ok {
-			return false, errors.New("statement has subqueries")
+			return false, errors.New("unsupported: subqueries in DML")
 		}
 		return true, nil
 	}, node)
@@ -118,7 +118,7 @@ func checkSubquery(node sqlparser.SQLNode) error {
 
 func getDMLRouting(where *sqlparser.Where, route *Route) error {
 	if where == nil {
-		return errors.New("DML has multi-shard where clause")
+		return errors.New("unsupported: multi-shard where clause in DML")
 	}
 	for _, index := range route.Table.Ordered {
 		if !IsUnique(index.Vindex) {
@@ -130,7 +130,7 @@ func getDMLRouting(where *sqlparser.Where, route *Route) error {
 			return nil
 		}
 	}
-	return errors.New("DML has multi-shard where clause")
+	return errors.New("unsupported: multi-shard where clause in DML")
 }
 
 func getMatch(node sqlparser.BoolExpr, col string) interface{} {

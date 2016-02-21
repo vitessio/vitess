@@ -63,6 +63,10 @@ func (jb *joinBuilder) PushSelect(expr *sqlparser.NonStarExpr, route *routeBuild
 // column as a join variable. If the column is not already in
 // its list, it requests the LHS node to supply it using SupplyCol.
 func (jb *joinBuilder) SupplyVar(col *sqlparser.ColName, varname string) {
+	if _, ok := jb.Join.Vars[varname]; ok {
+		// Looks like somebody else already requested this.
+		return
+	}
 	switch meta := col.Metadata.(type) {
 	case *colsym:
 		for i, colsym := range jb.Colsyms {

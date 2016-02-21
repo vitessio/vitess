@@ -36,14 +36,6 @@
   }
 }
 
-# update with no where clause
-"update user set val = 1"
-"DML has multi-shard where clause"
-
-# delete from with no where clause
-"delete from user"
-"DML has multi-shard where clause"
-
 # update by primary keyspace id
 "update user set val = 1 where id = 1"
 {
@@ -55,6 +47,40 @@
       "Sharded": true
     },
     "Query": "update user set val = 1 where id = 1",
+    "Vindex": "user_index",
+    "Values": 1,
+    "Table": "user"
+  }
+}
+
+# update by primary keyspace id, stray where clause
+"update user set val = 1 where  id = id2 and id = 1"
+{
+  "Original": "update user set val = 1 where  id = id2 and id = 1",
+  "Instructions": {
+    "PlanID": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set val = 1 where id = id2 and id = 1",
+    "Vindex": "user_index",
+    "Values": 1,
+    "Table": "user"
+  }
+}
+
+# update by primary keyspace id, stray where clause with conversion error
+"update user set val = 1 where  id = 1.1 and id = 1"
+{
+  "Original": "update user set val = 1 where  id = 1.1 and id = 1",
+  "Instructions": {
+    "PlanID": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set val = 1 where id = 1.1 and id = 1",
     "Vindex": "user_index",
     "Values": 1,
     "Table": "user"
@@ -78,38 +104,6 @@
     "Subquery": "select id, name, costly from user where id = 1 for update"
   }
 }
-
-# update KEYRANGE
-"update user set val = 1 where keyrange(1, 2)"
-"DML has multi-shard where clause"
-
-# delete KEYRANGE
-"delete from user where keyrange(1, 2)"
-"DML has multi-shard where clause"
-
-# update with primary id through IN clause
-"update user set val = 1 where id in (1, 2)"
-"DML has multi-shard where clause"
-
-# delete from with primary id through IN clause
-"delete from user where id in (1, 2)"
-"DML has multi-shard where clause"
-
-# update with non-unique key
-"update user set val = 1 where name = 'foo'"
-"DML has multi-shard where clause"
-
-# delete from with primary id through IN clause
-"delete from user where name = 'foo'"
-"DML has multi-shard where clause"
-
-# update with no index match
-"update user set val = 1 where user_id = 1"
-"DML has multi-shard where clause"
-
-# delete from with no index match
-"delete from user where user_id = 1"
-"DML has multi-shard where clause"
 
 # update by lookup
 "update music set val = 1 where id = 1"
@@ -163,18 +157,6 @@
   }
 }
 
-# update by lookup with IN clause
-"update music set val = 1 where id in (1, 2)"
-"DML has multi-shard where clause"
-
-# delete from by lookup with IN clause
-"delete from music where id in (1, 2)"
-"DML has multi-shard where clause"
-
-# update changes index column
-"update music set id = 1 where id = 1"
-"index is changing"
-
 # insert unsharded
 "insert into main1 values(1, 2)"
 {
@@ -193,18 +175,6 @@
 # insert no column list
 "insert into user values(1, 2, 3)"
 "no column list"
-
-# insert from select
-"insert into user(id) select 1 from dual"
-"subqueries not allowed"
-
-# insert with multiple rows
-"insert into user(id) values (1), (2)"
-"multi-row inserts not supported"
-
-# insert with subquery as value
-"insert into user(id) values (select 1 from dual)"
-"subqueries not allowed"
 
 # insert with mimatched column list
 "insert into user(id) values (1, 2)"

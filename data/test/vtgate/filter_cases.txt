@@ -99,6 +99,40 @@
   }
 }
 
+# Single table equality route with val arg
+"select id from user where name = :a"
+{
+  "Original": "select id from user where name = :a",
+  "Instructions": {
+    "PlanID": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from user where name = :a",
+    "FieldQuery": "select id from user where 1 != 1",
+    "Vindex": "name_user_map",
+    "Values": ":a"
+  }
+}
+
+# Single table equality route with unsigned value
+"select id from user where name = 0xFFFFFFFFFFFFFFFF"
+{
+  "Original": "select id from user where name = 0xFFFFFFFFFFFFFFFF",
+  "Instructions": {
+    "PlanID": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from user where name = 0xFFFFFFFFFFFFFFFF",
+    "FieldQuery": "select id from user where 1 != 1",
+    "Vindex": "name_user_map",
+    "Values": 18446744073709551615
+  }
+}
+
 # Single table in clause list arg
 "select id from user where name in ::list"
 {
@@ -543,5 +577,403 @@
     },
     "Query": "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)",
     "FieldQuery": "select id from user where 1 != 1"
+  }
+}
+
+# outer and inner subquery route by same int val
+"select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)"
+{
+  "Original": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+  "Instructions": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+    "FieldQuery": "select id from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# outer and inner subquery route by same str val
+"select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')"
+{
+  "Original": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
+  "Instructions": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
+    "FieldQuery": "select id from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": "aa"
+  }
+}
+
+# outer and inner subquery route by same val arg
+"select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)"
+{
+  "Original": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
+  "Instructions": {
+    "PlanID": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
+    "FieldQuery": "select id from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": ":a"
+  }
+}
+
+# outer and inner subquery route by same outermost column value
+"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"
+{
+  "Original": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
+  "Instructions": {
+    "PlanID": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id2 from user as uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
+    "FieldQuery": "select id2 from user as uu where 1 != 1"
+  }
+}
+
+# outer and inner subquery route reference the same "uu.id" name
+# but they refer to different things. The first reference is to the outermost query,
+# and the second reference is to the the innermost 'from' subquery.
+"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
+"unsupported: subquery and parent route to different shards"
+
+# outer and inner subquery match different types
+"select id from user where id = 1 and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)"
+"unsupported: subquery and parent route to different shards"
+
+# join on having clause
+"select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid"
+{
+  "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid",
+  "Instructions": {
+    "Left": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select u.id as uid from user as u",
+      "FieldQuery": "select u.id as uid from user as u where 1 != 1"
+    },
+    "Right": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select e.col, e.id as eid from user_extra as e having eid = :uid",
+      "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
+      "JoinVars": {
+        "uid": {}
+      }
+    },
+    "Cols": [
+      1,
+      -1,
+      2
+    ],
+    "Vars": {
+      "uid": 0
+    }
+  }
+}
+
+# wire-up join with join, going left
+"select u1.id from user u1 join user u2 join user u3 where u3.col = u1.col"
+{
+  "Original": "select u1.id from user u1 join user u2 join user u3 where u3.col = u1.col",
+  "Instructions": {
+    "Left": {
+      "Left": {
+        "PlanID": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select u1.id, u1.col from user as u1",
+        "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
+      },
+      "Right": {
+        "PlanID": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user as u2",
+        "FieldQuery": "select 1 from user as u2 where 1 != 1"
+      },
+      "Cols": [
+        -1,
+        -2
+      ]
+    },
+    "Right": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user as u3 where u3.col = :col",
+      "FieldQuery": "select 1 from user as u3 where 1 != 1",
+      "JoinVars": {
+        "col": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "col": 1
+    }
+  }
+}
+
+# wire-up join with join, going left, then right
+"select u1.id from user u1 join user u2 join user u3 where u3.col = u2.col"
+{
+  "Original": "select u1.id from user u1 join user u2 join user u3 where u3.col = u2.col",
+  "Instructions": {
+    "Left": {
+      "Left": {
+        "PlanID": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select u1.id from user as u1",
+        "FieldQuery": "select u1.id from user as u1 where 1 != 1"
+      },
+      "Right": {
+        "PlanID": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select u2.col from user as u2",
+        "FieldQuery": "select u2.col from user as u2 where 1 != 1"
+      },
+      "Cols": [
+        -1,
+        1
+      ]
+    },
+    "Right": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user as u3 where u3.col = :col",
+      "FieldQuery": "select 1 from user as u3 where 1 != 1",
+      "JoinVars": {
+        "col": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "col": 1
+    }
+  }
+}
+
+# wire-up join with join, reuse existing result from a lower join
+"select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col"
+{
+  "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
+  "Instructions": {
+    "Left": {
+      "Left": {
+        "PlanID": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select u1.id, u1.col from user as u1",
+        "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
+      },
+      "Right": {
+        "PlanID": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user as u2 where u2.col = :col",
+        "FieldQuery": "select 1 from user as u2 where 1 != 1",
+        "JoinVars": {
+          "col": {}
+        }
+      },
+      "Cols": [
+        -1,
+        -2
+      ],
+      "Vars": {
+        "col": 1
+      }
+    },
+    "Right": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user as u3 where u3.col = :col",
+      "FieldQuery": "select 1 from user as u3 where 1 != 1",
+      "JoinVars": {
+        "col": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "col": 1
+    }
+  }
+}
+
+# wire-up join with join, reuse existing result from a lower join.
+# You need two levels of join nesting to test this: when u3 requests
+# col from u1, the u1-u2 joins exports the column to u2-u3. When
+# u4 requests it, it should be reused from the u1-u2 join.
+"select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col"
+{
+  "Original": "select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col",
+  "Instructions": {
+    "Left": {
+      "Left": {
+        "Left": {
+          "PlanID": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select u1.id, u1.col from user as u1",
+          "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
+        },
+        "Right": {
+          "PlanID": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select 1 from user as u2",
+          "FieldQuery": "select 1 from user as u2 where 1 != 1"
+        },
+        "Cols": [
+          -1,
+          -2
+        ]
+      },
+      "Right": {
+        "PlanID": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user as u3 where u3.id = :col",
+        "FieldQuery": "select 1 from user as u3 where 1 != 1",
+        "Vindex": "user_index",
+        "Values": ":col",
+        "JoinVars": {
+          "col": {}
+        }
+      },
+      "Cols": [
+        -1,
+        -2
+      ],
+      "Vars": {
+        "col": 1
+      }
+    },
+    "Right": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user as u4 where u4.col = :col",
+      "FieldQuery": "select 1 from user as u4 where 1 != 1",
+      "JoinVars": {
+        "col": {}
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "col": 1
+    }
+  }
+}
+
+# Test reuse of join var already being supplied to the right of a node.
+"select u1.id from user u1 join (user u2 join user u3) where u2.id = u1.col and u3.id = u1.col"
+{
+  "Original": "select u1.id from user u1 join (user u2 join user u3) where u2.id = u1.col and u3.id = u1.col",
+  "Instructions": {
+    "Left": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select u1.id, u1.col from user as u1",
+      "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
+    },
+    "Right": {
+      "Left": {
+        "PlanID": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user as u2 where u2.id = :col",
+        "FieldQuery": "select 1 from user as u2 where 1 != 1",
+        "Vindex": "user_index",
+        "Values": ":col",
+        "JoinVars": {
+          "col": {}
+        }
+      },
+      "Right": {
+        "PlanID": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user as u3 where u3.id = :col",
+        "FieldQuery": "select 1 from user as u3 where 1 != 1",
+        "Vindex": "user_index",
+        "Values": ":col",
+        "JoinVars": {
+          "col": {}
+        }
+      }
+    },
+    "Cols": [
+      -1
+    ],
+    "Vars": {
+      "col": 1
+    }
   }
 }

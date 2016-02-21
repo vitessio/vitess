@@ -188,8 +188,6 @@ func prettyValue(value interface{}) interface{} {
 			newvals[i] = prettyValue(old)
 		}
 		return newvals
-	case sqlparser.SQLNode:
-		return sqlparser.String(value)
 	}
 	return value
 }

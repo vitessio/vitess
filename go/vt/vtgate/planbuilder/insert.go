@@ -33,18 +33,18 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
 	var values sqlparser.Values
 	switch rows := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
-		return nil, errors.New("subqueries not allowed")
+		return nil, errors.New("unsupported: insert into select")
 	case sqlparser.Values:
 		values = rows
 	default:
 		panic("unexpected")
 	}
 	if len(values) != 1 {
-		return nil, errors.New("multi-row inserts not supported")
+		return nil, errors.New("unsupported: multi-row insert")
 	}
 	switch values[0].(type) {
 	case *sqlparser.Subquery:
-		return nil, errors.New("subqueries not allowed")
+		return nil, errors.New("unsupported: subqueries in insert")
 	}
 	row := values[0].(sqlparser.ValTuple)
 	if len(ins.Columns) != len(row) {

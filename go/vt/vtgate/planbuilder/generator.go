@@ -5,7 +5,6 @@
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -105,10 +104,11 @@ func (gen *generator) resolve(col *sqlparser.ColName, toRoute *routeBuilder) {
 	if fromRoute == toRoute {
 		return
 	}
-	if joinVar != "" {
+	if _, ok := toRoute.Route.JoinVars[joinVar]; ok {
+		// Already using.
 		return
 	}
-	gen.join(fromRoute, col, toRoute)
+	gen.join(fromRoute, col, joinVar, toRoute)
 }
 
 func (gen *generator) lookup(col *sqlparser.ColName) (route *routeBuilder, joinVar string) {
@@ -122,17 +122,18 @@ func (gen *generator) lookup(col *sqlparser.ColName) (route *routeBuilder, joinV
 	panic("unreachable")
 }
 
-func (gen *generator) join(fromRoute *routeBuilder, col *sqlparser.ColName, toRoute *routeBuilder) {
+func (gen *generator) join(fromRoute *routeBuilder, col *sqlparser.ColName, joinVar string, toRoute *routeBuilder) {
 	suffix := ""
 	i := 0
-	var joinVar string
-	for {
-		joinVar = string(col.Name) + suffix
-		if _, ok := gen.vars[joinVar]; !ok {
-			break
+	if joinVar == "" {
+		for {
+			joinVar = string(col.Name) + suffix
+			if _, ok := gen.vars[joinVar]; !ok {
+				break
+			}
+			i++
+			suffix = strconv.Itoa(i)
 		}
-		i++
-		suffix = strconv.Itoa(i)
 	}
 	gen.vars[joinVar] = struct{}{}
 	gen.refs[newColref(col)] = joinVar
@@ -216,7 +217,7 @@ func (gen *generator) convert(route *routeBuilder, val interface{}) (interface{}
 	case sqlparser.ValExpr:
 		return valConvert(val)
 	}
-	return nil, errors.New("unrecognized symbol")
+	panic("unrecognized symbol")
 }
 
 func (gen *generator) generateFieldQuery(route *routeBuilder, sel *sqlparser.Select) string {

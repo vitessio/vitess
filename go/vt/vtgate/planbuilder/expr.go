@@ -41,7 +41,7 @@ func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err 
 		case *sqlparser.Subquery:
 			sel, ok := node.Select.(*sqlparser.Select)
 			if !ok {
-				return false, errors.New("complex selects not allowd in subqueries")
+				return false, errors.New("unsupported: union operator in subqueries")
 			}
 			subplan, err := processSelect(sel, plan.Symtab().VSchema, plan)
 			if err != nil {
@@ -49,7 +49,7 @@ func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err 
 			}
 			subroute, ok := subplan.(*routeBuilder)
 			if !ok {
-				return false, errors.New("subquery is too complex")
+				return false, errors.New("unsupported: complex join in subqueries")
 			}
 			for _, extern := range subroute.Symtab().Externs {
 				newRoute, isLocal, err := plan.Symtab().Find(extern, false)
@@ -82,10 +82,10 @@ func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err 
 
 func subqueryCanMerge(outer, inner *routeBuilder) error {
 	if outer.Route.Keyspace.Name != inner.Route.Keyspace.Name {
-		return errors.New("subquery keyspaces don't match")
+		return errors.New("unsupported: subquery keyspace different from outer query")
 	}
 	if !inner.IsSingle() {
-		return errors.New("subquery is not a single route")
+		return errors.New("unsupported: scatter subquery")
 	}
 	if inner.Route.PlanID == SelectUnsharded {
 		return nil
@@ -93,17 +93,16 @@ func subqueryCanMerge(outer, inner *routeBuilder) error {
 	// SelectEqualUnique
 	switch vals := inner.Route.Values.(type) {
 	case *sqlparser.ColName:
-		mergeRoute, _, _ := outer.Symtab().Find(vals, false)
-		if mergeRoute != outer {
-			return errors.New("subquery dependency doesn't match parent route")
+		outerVindex := outer.Symtab().Vindex(vals, outer, false)
+		if outerVindex == inner.Route.Vindex {
+			return nil
 		}
-		return nil
 	}
 	if outer.Route.PlanID != SelectEqualUnique {
-		return errors.New("subquery and parent don't have the same route")
+		return errors.New("unsupported: subquery does not depend on scatter outer query")
 	}
 	if !valEqual(outer.Route.Values, inner.Route.Values) {
-		return errors.New("subquery and parent route to different shards")
+		return errors.New("unsupported: subquery and parent route to different shards")
 	}
 	return nil
 }
@@ -128,6 +127,10 @@ func exprIsValue(expr sqlparser.ValExpr, route *routeBuilder) bool {
 
 func valEqual(a, b interface{}) bool {
 	switch a := a.(type) {
+	case *sqlparser.ColName:
+		if b, ok := b.(*sqlparser.ColName); ok {
+			return newColref(a) == newColref(b)
+		}
 	case sqlparser.ValArg:
 		if b, ok := b.(sqlparser.ValArg); ok {
 			return bytes.Equal([]byte(a), []byte(b))

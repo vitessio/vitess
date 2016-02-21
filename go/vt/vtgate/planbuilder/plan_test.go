@@ -102,6 +102,14 @@ func TestPlan(t *testing.T) {
 	testFile(t, "unsupported_cases.txt", vschema)
 }
 
+func TestOne(t *testing.T) {
+	vschema, err := LoadFile(locateFile("schema_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	testFile(t, "onecase.txt", vschema)
+}
+
 func testFile(t *testing.T, filename string, vschema *VSchema) {
 	for tcase := range iterateExecFile(filename) {
 		plan, err := BuildPlan(tcase.input, vschema)
