@@ -38,6 +38,8 @@ type MysqlDaemon interface {
 
 	// replication related methods
 	SlaveStatus() (replication.Status, error)
+	SetSemiSyncEnabled(master, slave bool) error
+	SemiSyncEnabled() (master, slave bool)
 
 	// reparenting related methods
 	ResetReplicationCommands() ([]string, error)
@@ -437,4 +439,14 @@ func (fmd *FakeMysqlDaemon) GetAppConnection() (dbconnpool.PoolConnection, error
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
 	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
+}
+
+// SetSemiSyncEnabled is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, slave bool) error {
+	return nil
+}
+
+// SemiSyncEnabled is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (master, slave bool) {
+	return false, false
 }
