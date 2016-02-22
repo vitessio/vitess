@@ -520,7 +520,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select u.m from user as u where u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col) and u.id in ::_vals",
+      "Query": "select u.m from user as u where u.id in ::_vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col)",
       "FieldQuery": "select u.m from user as u where 1 != 1",
       "Vindex": "user_index",
       "Values": [
@@ -537,6 +537,37 @@
     "Vars": {
       "user_extra_col": 0
     }
+  }
+}
+
+# ensure subquery reordering gets us a better plan
+"select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5"
+{
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5",
+  "Instructions": {
+    "Left": {
+      "PlanID": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user_extra",
+      "FieldQuery": "select 1 from user_extra where 1 != 1"
+    },
+    "Right": {
+      "PlanID": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select u.m from user as u where u.id = 5 and u.id in (select m2 from user where user.id = 5)",
+      "FieldQuery": "select u.m from user as u where 1 != 1",
+      "Vindex": "user_index",
+      "Values": 5
+    },
+    "Cols": [
+      1
+    ]
   }
 }
 
@@ -560,7 +591,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select u.m from user as u where u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in ::_vals",
+      "Query": "select u.m from user as u where u.id in ::_vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col and user.id in (select m3 from user_extra where user_extra.user_id = user.id))",
       "FieldQuery": "select u.m from user as u where 1 != 1",
       "Vindex": "user_index",
       "Values": [

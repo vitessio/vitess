@@ -105,6 +105,18 @@ func subqueryCanMerge(outer, inner *routeBuilder) error {
 	return nil
 }
 
+func hasSubquery(node sqlparser.SQLNode) bool {
+	has := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			has = true
+			return false, errors.New("dummy")
+		}
+		return true, nil
+	}, node)
+	return has
+}
+
 // exprIsValue returns true if the expression can be treated as a value
 // for the current route. External references are treated as value.
 func exprIsValue(expr sqlparser.ValExpr, route *routeBuilder) bool {

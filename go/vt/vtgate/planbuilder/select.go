@@ -78,6 +78,7 @@ func processSelect(sel *sqlparser.Select, vschema *VSchema, outer planBuilder) (
 
 func processBoolExpr(boolExpr sqlparser.BoolExpr, plan planBuilder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
+	reorderBySubquery(filters)
 	for _, filter := range filters {
 		route, err := findRoute(filter, plan)
 		if err != nil {
@@ -89,6 +90,21 @@ func processBoolExpr(boolExpr sqlparser.BoolExpr, plan planBuilder, whereType st
 		}
 	}
 	return nil
+}
+
+func reorderBySubquery(filters []sqlparser.BoolExpr) {
+	max := len(filters)
+	for i := 0; i < max; i++ {
+		if !hasSubquery(filters[i]) {
+			continue
+		}
+		saved := filters[i]
+		for j := i; j < len(filters)-1; j++ {
+			filters[j] = filters[j+1]
+		}
+		filters[len(filters)-1] = saved
+		max--
+	}
 }
 
 func processSelectExprs(sel *sqlparser.Select, plan planBuilder) error {

@@ -23,8 +23,8 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
 		return nil, err
 	}
 	route.Keyspace = route.Table.Keyspace
-	if err := checkSubquery(upd); err != nil {
-		return nil, err
+	if hasSubquery(upd) {
+		return nil, errors.New("unsupported: subqueries in DML")
 	}
 	if !route.Keyspace.Sharded {
 		route.PlanID = UpdateUnsharded
@@ -72,8 +72,8 @@ func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
 		return nil, err
 	}
 	route.Keyspace = route.Table.Keyspace
-	if err := checkSubquery(del); err != nil {
-		return nil, err
+	if hasSubquery(del) {
+		return nil, errors.New("unsupported: subqueries in DML")
 	}
 	if !route.Keyspace.Sharded {
 		route.PlanID = DeleteUnsharded
@@ -105,15 +105,6 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
 	buf.WriteString(sqlparser.String(del.Where))
 	buf.WriteString(" for update")
 	return buf.String()
-}
-
-func checkSubquery(node sqlparser.SQLNode) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if _, ok := node.(*sqlparser.Subquery); ok {
-			return false, errors.New("unsupported: subqueries in DML")
-		}
-		return true, nil
-	}, node)
 }
 
 func getDMLRouting(where *sqlparser.Where, route *Route) error {
