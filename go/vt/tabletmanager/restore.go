@@ -101,6 +101,13 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.
 		return fmt.Errorf("Cannot read master tablet %v: %v", si.MasterAlias, err)
 	}
 
+	// If using semi-sync, we need to enable it before connecting to master.
+	if *enableSemiSync {
+		if err := agent.enableSemiSync(false); err != nil {
+			return err
+		}
+	}
+
 	// Set master and start slave.
 	cmds, err = agent.MysqlDaemon.SetMasterCommands(ti.Hostname, int(ti.PortMap["mysql"]))
 	if err != nil {
