@@ -12,15 +12,31 @@ import (
 
 // buildSelectPlan2 is the new function to build a Select plan.
 func buildSelectPlan(sel *sqlparser.Select, vschema *VSchema) (plan interface{}, err error) {
+	bindvars := getBindvars(sel)
 	builder, err := processSelect(sel, vschema, nil)
 	if err != nil {
 		return nil, err
 	}
-	err = newGenerator(builder).Generate()
+	err = newGenerator(builder, bindvars).Generate()
 	if err != nil {
 		return nil, err
 	}
 	return getUnderlyingPlan(builder), nil
+}
+
+// getBindvars returns a map of the bind vars referenced in the statement.
+func getBindvars(node sqlparser.SQLNode) map[string]struct{} {
+	bindvars := make(map[string]struct{})
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case sqlparser.ValArg:
+			bindvars[string(node[1:])] = struct{}{}
+		case sqlparser.ListArg:
+			bindvars[string(node[2:])] = struct{}{}
+		}
+		return true, nil
+	}, node)
+	return bindvars
 }
 
 // processSelect builds a plan for the given query or subquery.

@@ -22,10 +22,10 @@ type generator struct {
 	plan planBuilder
 }
 
-func newGenerator(plan planBuilder) *generator {
+func newGenerator(plan planBuilder, bindvars map[string]struct{}) *generator {
 	return &generator{
 		refs: make(map[colref]string),
-		vars: make(map[string]struct{}),
+		vars: bindvars,
 		plan: plan,
 	}
 }
@@ -127,17 +127,22 @@ func (gen *generator) join(fromRoute *routeBuilder, col *sqlparser.ColName, join
 	i := 0
 	if joinVar == "" {
 		for {
-			joinVar = string(col.Name) + suffix
+			if col.Qualifier != "" {
+				joinVar = string(col.Qualifier) + "_" + string(col.Name) + suffix
+			} else {
+				joinVar = string(col.Name) + suffix
+			}
 			if _, ok := gen.vars[joinVar]; !ok {
 				break
 			}
 			i++
 			suffix = strconv.Itoa(i)
 		}
+		gen.vars[joinVar] = struct{}{}
+		gen.refs[newColref(col)] = joinVar
 	}
-	gen.vars[joinVar] = struct{}{}
-	gen.refs[newColref(col)] = joinVar
-	gen.commonJoin(fromRoute, toRoute).SupplyVar(col, joinVar)
+	join := gen.commonJoin(fromRoute, toRoute)
+	join.SupplyVar(col, joinVar)
 	toRoute.Route.JoinVars[joinVar] = struct{}{}
 }
 

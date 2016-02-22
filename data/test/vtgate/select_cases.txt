@@ -288,10 +288,10 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select (select :id + outm.m + main1.m from main1) from main1 as outm",
-      "FieldQuery": "select (select :id + outm.m + main1.m from main1 where 1 != 1) from main1 as outm where 1 != 1",
+      "Query": "select (select :user_id + outm.m + main1.m from main1) from main1 as outm",
+      "FieldQuery": "select (select :user_id + outm.m + main1.m from main1 where 1 != 1) from main1 as outm where 1 != 1",
       "JoinVars": {
-        "id": {}
+        "user_id": {}
       }
     },
     "Cols": [
@@ -299,7 +299,7 @@
       1
     ],
     "Vars": {
-      "id": 0
+      "user_id": 0
     }
   }
 }

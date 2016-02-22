@@ -158,12 +158,12 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select music.col3 from music where music.id = :id order by music.col3 asc",
+      "Query": "select music.col3 from music where music.id = :user_id order by music.col3 asc",
       "FieldQuery": "select music.col3 from music where 1 != 1",
       "Vindex": "music_user_map",
-      "Values": ":id",
+      "Values": ":user_id",
       "JoinVars": {
-        "id": {}
+        "user_id": {}
       }
     },
     "Cols": [
@@ -172,7 +172,7 @@
       1
     ],
     "Vars": {
-      "id": 2
+      "user_id": 2
     }
   }
 }
@@ -199,12 +199,12 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select music.col3 from music where music.id = :id order by 1 asc",
+      "Query": "select music.col3 from music where music.id = :user_id order by 1 asc",
       "FieldQuery": "select music.col3 from music where 1 != 1",
       "Vindex": "music_user_map",
-      "Values": ":id",
+      "Values": ":user_id",
       "JoinVars": {
-        "id": {}
+        "user_id": {}
       }
     },
     "Cols": [
@@ -213,7 +213,7 @@
       1
     ],
     "Vars": {
-      "id": 2
+      "user_id": 2
     }
   }
 }

@@ -253,17 +253,17 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user_extra.id from user_extra where user_extra.col = :col",
+      "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
       "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
       "JoinVars": {
-        "col": {}
+        "user_col": {}
       }
     },
     "Cols": [
       1
     ],
     "Vars": {
-      "col": 0
+      "user_col": 0
     }
   }
 }
@@ -290,19 +290,19 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user_extra.id from user_extra where user_extra.col = :col and user_extra.user_id = 5",
+      "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = 5",
       "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
       "Vindex": "user_index",
       "Values": 5,
       "JoinVars": {
-        "col": {}
+        "user_col": {}
       }
     },
     "Cols": [
       1
     ],
     "Vars": {
-      "col": 0
+      "user_col": 0
     }
   }
 }
@@ -327,19 +327,19 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user_extra.id from user_extra where user_extra.col = :col and user_extra.user_id = :col",
+      "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = :user_col",
       "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
       "Vindex": "user_index",
-      "Values": ":col",
+      "Values": ":user_col",
       "JoinVars": {
-        "col": {}
+        "user_col": {}
       }
     },
     "Cols": [
       1
     ],
     "Vars": {
-      "col": 0
+      "user_col": 0
     }
   }
 }
@@ -364,17 +364,17 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user_extra.id from user_extra where user_extra.col = :col",
+      "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
       "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
       "JoinVars": {
-        "col": {}
+        "user_col": {}
       }
     },
     "Cols": [
       1
     ],
     "Vars": {
-      "col": 0
+      "user_col": 0
     }
   }
 }
@@ -485,17 +485,17 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select main1.id from main1 where main1.id = :id",
+      "Query": "select main1.id from main1 where main1.id = :user_id",
       "FieldQuery": "select main1.id from main1 where 1 != 1",
       "JoinVars": {
-        "id": {}
+        "user_id": {}
       }
     },
     "Cols": [
       1
     ],
     "Vars": {
-      "id": 0
+      "user_id": 0
     }
   }
 }
@@ -520,22 +520,22 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select u.m from user as u where u.id in (select m2 from user where user.id = u.id and user.col = :col) and u.id in ::_vals",
+      "Query": "select u.m from user as u where u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col) and u.id in ::_vals",
       "FieldQuery": "select u.m from user as u where 1 != 1",
       "Vindex": "user_index",
       "Values": [
-        ":col",
+        ":user_extra_col",
         1
       ],
       "JoinVars": {
-        "col": {}
+        "user_extra_col": {}
       }
     },
     "Cols": [
       1
     ],
     "Vars": {
-      "col": 0
+      "user_extra_col": 0
     }
   }
 }
@@ -560,22 +560,22 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select u.m from user as u where u.id in (select m2 from user where user.id = u.id and user.col = :col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in ::_vals",
+      "Query": "select u.m from user as u where u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in ::_vals",
       "FieldQuery": "select u.m from user as u where 1 != 1",
       "Vindex": "user_index",
       "Values": [
-        ":col",
+        ":user_extra_col",
         1
       ],
       "JoinVars": {
-        "col": {}
+        "user_extra_col": {}
       }
     },
     "Cols": [
       1
     ],
     "Vars": {
-      "col": 0
+      "user_extra_col": 0
     }
   }
 }

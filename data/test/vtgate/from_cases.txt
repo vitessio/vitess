@@ -108,17 +108,17 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select 1 from main1 as m where m.b = :a",
+      "Query": "select 1 from main1 as m where m.b = :u_a",
       "FieldQuery": "select 1 from main1 as m where 1 != 1",
       "JoinVars": {
-        "a": {}
+        "u_a": {}
       }
     },
     "Cols": [
       -1
     ],
     "Vars": {
-      "a": 1
+      "u_a": 1
     }
   }
 }
@@ -146,10 +146,10 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "select m1.col from main1 as m1 where m1.co = :col",
+        "Query": "select m1.col from main1 as m1 where m1.co = :user_col",
         "FieldQuery": "select m1.col from main1 as m1 where 1 != 1",
         "JoinVars": {
-          "col": {}
+          "user_col": {}
         }
       },
       "Cols": [
@@ -157,7 +157,7 @@
         1
       ],
       "Vars": {
-        "col": 0
+        "user_col": 0
       }
     },
     "Right": {
@@ -166,17 +166,17 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select 1 from main1 as m2 where m2.col = :col1",
+      "Query": "select 1 from main1 as m2 where m2.col = :m1_col",
       "FieldQuery": "select 1 from main1 as m2 where 1 != 1",
       "JoinVars": {
-        "col1": {}
+        "m1_col": {}
       }
     },
     "Cols": [
       -1
     ],
     "Vars": {
-      "col1": 1
+      "m1_col": 1
     }
   }
 }
@@ -204,10 +204,10 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "select e.col from user_extra as e where e.col = :col",
+        "Query": "select e.col from user_extra as e where e.col = :user_col",
         "FieldQuery": "select e.col from user_extra as e where 1 != 1",
         "JoinVars": {
-          "col": {}
+          "user_col": {}
         }
       },
       "Right": {
@@ -216,21 +216,21 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "select 1 from main1 as m1 where m1.col = :col1",
+        "Query": "select 1 from main1 as m1 where m1.col = :e_col",
         "FieldQuery": "select 1 from main1 as m1 where 1 != 1",
         "JoinVars": {
-          "col1": {}
+          "e_col": {}
         }
       },
       "Vars": {
-        "col1": 0
+        "e_col": 0
       }
     },
     "Cols": [
       -1
     ],
     "Vars": {
-      "col": 0
+      "user_col": 0
     }
   }
 }
@@ -459,17 +459,17 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select 1 from user_extra where :id \u003c user_extra.user_id",
+      "Query": "select 1 from user_extra where :user_id \u003c user_extra.user_id",
       "FieldQuery": "select 1 from user_extra where 1 != 1",
       "JoinVars": {
-        "id": {}
+        "user_id": {}
       }
     },
     "Cols": [
       -1
     ],
     "Vars": {
-      "id": 1
+      "user_id": 1
     }
   }
 }
@@ -556,17 +556,17 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select 1 from user_extra where user_extra.col = :id",
+      "Query": "select 1 from user_extra where user_extra.col = :user_id",
       "FieldQuery": "select 1 from user_extra where 1 != 1",
       "JoinVars": {
-        "id": {}
+        "user_id": {}
       }
     },
     "Cols": [
       -1
     ],
     "Vars": {
-      "id": 1
+      "user_id": 1
     }
   }
 }
@@ -591,19 +591,19 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col from user where user.name = :user_id",
+      "Query": "select user.col from user where user.name = :user_extra_user_id",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "name_user_map",
-      "Values": ":user_id",
+      "Values": ":user_extra_user_id",
       "JoinVars": {
-        "user_id": {}
+        "user_extra_user_id": {}
       }
     },
     "Cols": [
       1
     ],
     "Vars": {
-      "user_id": 0
+      "user_extra_user_id": 0
     }
   }
 }
@@ -679,17 +679,17 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select 1 from user_extra where user_extra.col = :id",
+      "Query": "select 1 from user_extra where user_extra.col = :t_id",
       "FieldQuery": "select 1 from user_extra where 1 != 1",
       "JoinVars": {
-        "id": {}
+        "t_id": {}
       }
     },
     "Cols": [
       -1
     ],
     "Vars": {
-      "id": 0
+      "t_id": 0
     }
   }
 }

@@ -19,10 +19,10 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "select 1 from user as u2 where u2.col = :col",
+        "Query": "select 1 from user as u2 where u2.col = :u1_col",
         "FieldQuery": "select 1 from user as u2 where 1 != 1",
         "JoinVars": {
-          "col": {}
+          "u1_col": {}
         }
       },
       "Cols": [
@@ -30,7 +30,7 @@
         -2
       ],
       "Vars": {
-        "col": 1
+        "u1_col": 1
       }
     },
     "Right": {
@@ -39,17 +39,17 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select 1 from user as u3 where u3.col = :col",
+      "Query": "select 1 from user as u3 where u3.col = :u1_col",
       "FieldQuery": "select 1 from user as u3 where 1 != 1",
       "JoinVars": {
-        "col": {}
+        "u1_col": {}
       }
     },
     "Cols": [
       -1
     ],
     "Vars": {
-      "col": 1
+      "u1_col": 1
     }
   }
 }
