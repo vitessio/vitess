@@ -5,7 +5,6 @@
 package planbuilder
 
 import (
-	"encoding/json"
 	"errors"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -275,56 +274,29 @@ func (rtb *routeBuilder) SetMisc(comments sqlparser.Comments, lock string) {
 // name, and returns the result column number. If the column
 // is already in the list, it's reused.
 func (rtb *routeBuilder) SupplyCol(col *sqlparser.ColName) int {
-	switch meta := col.Metadata.(type) {
-	case *colsym:
-		for i, colsym := range rtb.Colsyms {
-			if meta == colsym {
-				return i
-			}
+	// We already know it's a tableAlias.
+	meta := col.Metadata.(*tableAlias)
+	ref := newColref(col)
+	for i, colsym := range rtb.Colsyms {
+		if colsym.Underlying == ref {
+			return i
 		}
-		panic("unexpected")
-	case *tableAlias:
-		ref := newColref(col)
-		for i, colsym := range rtb.Colsyms {
-			if colsym.Underlying == ref {
-				return i
-			}
-		}
-		rtb.Colsyms = append(rtb.Colsyms, &colsym{
-			Alias:      sqlparser.SQLName(sqlparser.String(col)),
-			Underlying: ref,
-		})
-		rtb.Select.SelectExprs = append(
-			rtb.Select.SelectExprs,
-			&sqlparser.NonStarExpr{
-				Expr: &sqlparser.ColName{
-					Metadata:  col.Metadata,
-					Qualifier: meta.Alias,
-					Name:      col.Name,
-				},
+	}
+	rtb.Colsyms = append(rtb.Colsyms, &colsym{
+		Alias:      sqlparser.SQLName(sqlparser.String(col)),
+		Underlying: ref,
+	})
+	rtb.Select.SelectExprs = append(
+		rtb.Select.SelectExprs,
+		&sqlparser.NonStarExpr{
+			Expr: &sqlparser.ColName{
+				Metadata:  col.Metadata,
+				Qualifier: meta.Alias,
+				Name:      col.Name,
 			},
-		)
-		return len(rtb.Colsyms) - 1
-	}
-	panic("unexpected")
-}
-
-// MarshalJSON marshals routeBuilder into a readable form.
-// It's used for testing and diagnostics. The representation
-// cannot be used to reconstruct a routeBuilder.
-func (rtb *routeBuilder) MarshalJSON() ([]byte, error) {
-	marshalRoute := struct {
-		IsRHS  bool   `json:",omitempty"`
-		Select string `json:",omitempty"`
-		Order  int
-		Route  *Route
-	}{
-		IsRHS:  rtb.IsRHS,
-		Select: sqlparser.String(&rtb.Select),
-		Order:  rtb.order,
-		Route:  rtb.Route,
-	}
-	return json.Marshal(marshalRoute)
+		},
+	)
+	return len(rtb.Colsyms) - 1
 }
 
 // IsSingle returns true if the route targets only one database.

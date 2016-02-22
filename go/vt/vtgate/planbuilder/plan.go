@@ -235,7 +235,7 @@ func BuildPlan(query string, vschema *VSchema) (*Plan, error) {
 	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
 		return nil, errors.New("unsupported construct")
 	default:
-		panic("unexpected")
+		panic("unexpected statement type")
 	}
 	if err != nil {
 		return nil, err

@@ -100,7 +100,7 @@ func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 				}
 			}
 			if pushOrder == order {
-				panic("unexpected")
+				panic("unexpected: column not found for order by")
 			}
 		default:
 			return errors.New("unsupported: complex expression in order by")

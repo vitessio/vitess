@@ -54,6 +54,10 @@
 "select id from user where id = 5 and id in (select user_id from user_extra where user_extra.user_id = 4)"
 "unsupported: subquery and parent route to different shards"
 
+# scatter subquery in select
+"select id, (select id from user) from user"
+"unsupported: scatter subquery"
+
 # keyspace name
 "select * from user.user"
 "unsupported: keyspace name qualifier for tables"
@@ -142,9 +146,17 @@
 "select col from user limit 1"
 "unsupported: limits with scatter"
 
-# subqueries in DMLs
+# subqueries in update
 "update user set col = (select id from main1)"
 "unsupported: subqueries in DML"
+
+# subqueries in delete
+"delete from user where col = (select id from main1)"
+"unsupported: subqueries in DML"
+
+# qualified table name in DMLs
+"update u.user set id = 1"
+"unsupported: compex table expression in DML"
 
 # update with no where clause
 "update user set val = 1"

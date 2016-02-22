@@ -57,7 +57,7 @@ func (gen *generator) generateQueries(plan planBuilder) error {
 	case *routeBuilder:
 		return gen.generateQuery(plan)
 	}
-	return nil
+	panic("unreachable")
 }
 
 func (gen *generator) fixupSelect(plan planBuilder) {
@@ -174,10 +174,8 @@ func (gen *generator) generateQuery(route *routeBuilder) error {
 			return err
 		}
 	}
-	query, err := gen.convert(route, &route.Select)
-	if err != nil {
-		return err
-	}
+	// Generation of select cannot fail.
+	query, _ := gen.convert(route, &route.Select)
 	route.Route.Query = query.(string)
 	route.Route.FieldQuery = gen.generateFieldQuery(route, &route.Select)
 	return nil

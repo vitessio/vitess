@@ -127,7 +127,7 @@ func BuildVSchema(source *VSchemaFormal) (vschema *VSchema, err error) {
 // Otherwise, it returns a reason, which is equivalent to an error.
 func (vschema *VSchema) FindTable(tablename string) (table *Table, err error) {
 	if tablename == "" {
-		return nil, errors.New("complex table expression")
+		return nil, errors.New("unsupported: compex table expression in DML")
 	}
 	table = vschema.Tables[tablename]
 	if table == nil {

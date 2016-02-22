@@ -37,7 +37,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
 	case sqlparser.Values:
 		values = rows
 	default:
-		panic("unexpected")
+		panic("unexpected construct in insert")
 	}
 	if len(values) != 1 {
 		return nil, errors.New("unsupported: multi-row insert")

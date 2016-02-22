@@ -203,7 +203,7 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeBuilder, autoResolve b
 		}
 		return meta.FindVindex(col.Name)
 	}
-	panic("Unexpected")
+	panic("unreachable")
 }
 
 // tableAlias is part of symtab.
@@ -289,7 +289,7 @@ type colref struct {
 // previously resolved. Otherwise, it panics.
 func newColref(col *sqlparser.ColName) colref {
 	if col.Metadata == nil {
-		panic("unexpected")
+		panic("unexpected nil in metadata")
 	}
 	return colref{
 		metadata: col.Metadata,

@@ -52,10 +52,8 @@ func findRoute(expr sqlparser.Expr, plan planBuilder) (route *routeBuilder, err 
 				return false, errors.New("unsupported: complex join in subqueries")
 			}
 			for _, extern := range subroute.Symtab().Externs {
-				newRoute, isLocal, err := plan.Symtab().Find(extern, false)
-				if err != nil {
-					return false, err
-				}
+				// No error expected. These are resolved externs.
+				newRoute, isLocal, _ := plan.Symtab().Find(extern, false)
 				if isLocal && newRoute.Order() > highestRoute.Order() {
 					highestRoute = newRoute
 				}
@@ -154,5 +152,5 @@ func leftmost(plan planBuilder) *routeBuilder {
 	case *routeBuilder:
 		return plan
 	}
-	panic("unexpected")
+	panic("unreachable")
 }

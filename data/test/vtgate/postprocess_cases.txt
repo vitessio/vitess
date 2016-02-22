@@ -222,6 +222,10 @@
 "select col from user order by 1.1"
 "error parsing order by clause: 1.1"
 
+# Order by, invalid column name
+"select col from user order by aa"
+"symbol aa not found"
+
 # Order by, out of range column number
 "select col from user order by 2"
 "order by column number out of range"
