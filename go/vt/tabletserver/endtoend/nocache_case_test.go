@@ -618,6 +618,30 @@ func TestNocacheCases(t *testing.T) {
 			},
 		},
 		&framework.MultiCase{
+			Name: "insert with null auto_increment",
+			Cases: []framework.Testable{
+				framework.TestQuery("alter table vitess_e auto_increment = 1"),
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert /* auto_increment */ into vitess_e(eid, name, foo) values (NULL, 'aaaa', 'cccc')",
+					Rewritten: []string{
+						"insert /* auto_increment */ into vitess_e(eid, name, foo) values (null, 'aaaa', 'cccc') /* _stream vitess_e (eid id name ) (null 1 'YWFhYQ==' )",
+					},
+					RowsAffected: 1,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_e",
+					Result: [][]string{
+						{"1", "1", "aaaa", "cccc"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_e"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
 			Name: "insert with number default value",
 			Cases: []framework.Testable{
 				framework.TestQuery("begin"),
