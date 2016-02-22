@@ -47,7 +47,7 @@ func IsValue(node ValExpr) bool {
 	return false
 }
 
-// IsNull returns true if the ValExpr is nil.
+// IsNull returns true if the ValExpr is SQL NULL
 func IsNull(node ValExpr) bool {
 	switch node.(type) {
 	case *NullVal:
