@@ -13,19 +13,21 @@ import java.util.concurrent.TimeUnit;
  */
 class GrpcContext implements AutoCloseable {
   private io.grpc.Context ctx;
+  private io.grpc.Context previous;
 
   public GrpcContext(Context ctx) {
     if (ctx != null && ctx.getDeadline() != null) {
-      this.ctx = io.grpc.Context.current().withDeadlineAfter(
-          ctx.getDeadline().getMillis(), TimeUnit.MILLISECONDS);
-      this.ctx.attach();
+      this.ctx =
+          io.grpc.Context.current()
+              .withDeadlineAfter(ctx.getDeadline().getMillis(), TimeUnit.MILLISECONDS);
+      previous = this.ctx.attach();
     }
   }
 
   @Override
   public void close() throws Exception {
     if (ctx != null) {
-      ctx.detach();
+      ctx.detach(previous);
     }
   }
 }

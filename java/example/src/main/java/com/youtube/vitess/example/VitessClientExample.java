@@ -51,7 +51,7 @@ public class VitessClientExample {
 
       // Insert something.
       System.out.println("Inserting into master...");
-      VTGateTx tx = conn.begin(ctx);
+      VTGateTx tx = conn.begin(ctx).checkedGet();
       tx.executeShards(ctx, "INSERT INTO test_table (msg) VALUES (:msg)", keyspace, shards,
           bindVars, TabletType.MASTER);
       tx.commit(ctx);
@@ -60,7 +60,7 @@ public class VitessClientExample {
       System.out.println("Reading from master...");
       try (Cursor cursor =
           conn.executeShards(ctx, "SELECT id, msg FROM test_table", keyspace, shards,
-              null /* bindVars */, TabletType.MASTER)) {
+              null /* bindVars */, TabletType.MASTER).checkedGet()) {
         Row row;
         while ((row = cursor.next()) != null) {
           long id = row.getLong("id");

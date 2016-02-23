@@ -7,6 +7,8 @@ import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.util.List;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 /**
  * Provides access to the result rows of a query.
  *
@@ -24,6 +26,7 @@ import java.util.List;
  * However, two cursors from the same {@link com.youtube.vitess.client.VTGateConn VTGateConn} can be
  * accessed concurrently without additional synchronization.
  */
+@NotThreadSafe
 public abstract class Cursor implements AutoCloseable {
   private FieldMap fieldMap;
 
