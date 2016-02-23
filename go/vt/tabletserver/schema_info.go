@@ -132,7 +132,7 @@ func NewSchemaInfo(
 	queryServiceStats *QueryServiceStats) *SchemaInfo {
 	si := &SchemaInfo{
 		queries:           cache.NewLRUCache(int64(queryCacheSize)),
-		connPool:          NewConnPool("", 2, idleTimeout, enablePublishStats, queryServiceStats, checker),
+		connPool:          NewConnPool("", 3, idleTimeout, enablePublishStats, queryServiceStats, checker),
 		cachePool:         cachePool,
 		ticks:             timer.NewTimer(reloadTime),
 		endpoints:         endpoints,
