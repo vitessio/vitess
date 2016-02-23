@@ -510,7 +510,8 @@ message SplitQueryRequest {
   // SELECT <cols> FROM <table> WHERE <filter>.
   // It must not contain subqueries nor any of the keywords
   // JOIN, GROUP BY, ORDER BY, LIMIT, DISTINCT.
-  // Furthermore, <table> must be a “concrete” table. It cannot be a view.
+  // Furthermore, <table> must be a single “concrete” table.
+  // It cannot be a view.
   query.BoundQuery query = 3;
 
   // Each generated query-part will be restricted to rows whose values
@@ -555,6 +556,8 @@ message SplitQueryRequest {
   //    split_column be uniform in [min, max], for the number of rows
   //    returned by each query part to be roughly the same.
   //  FULL_SCAN
+  //    If this algorithm is used then the split_column must be the primary key
+  //    columns (in order).
   //    This algorithm performs a full-scan of the table-shard referenced
   //    in 'query' to get "boundary" rows that are num_rows_per_query_part
   //    apart when the table is ordered by the columns listed in
