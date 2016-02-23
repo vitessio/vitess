@@ -186,23 +186,37 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 
 	tables := make(map[string]*TableInfo, len(tableData.Rows)+1)
 	tables["dual"] = &TableInfo{Table: schema.NewTable("dual")}
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
 	for _, row := range tableData.Rows {
-		tableName := row[0].String()
-		tableInfo, err := NewTableInfo(
-			conn,
-			tableName,
-			row[1].String(), // table_type
-			row[3].String(), // table_comment
-			si.cachePool,
-		)
-		if err != nil {
-			si.recordSchemaError(err, tableName)
-			// Skip over the table that had an error and move on to the next one
-			continue
-		}
-		tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
-		tables[tableName] = tableInfo
+		wg.Add(1)
+		go func(row []sqltypes.Value) {
+			defer wg.Done()
+
+			conn := getOrPanic(ctx, si.connPool)
+			defer conn.Recycle()
+
+			tableName := row[0].String()
+			tableInfo, err := NewTableInfo(
+				conn,
+				tableName,
+				row[1].String(), // table_type
+				row[3].String(), // table_comment
+				si.cachePool,
+			)
+			if err != nil {
+				si.recordSchemaError(err, tableName)
+				// Skip over the table that had an error and move on to the next one
+				return
+			}
+			tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
+			mu.Lock()
+			tables[tableName] = tableInfo
+			mu.Unlock()
+		}(row)
 	}
+	wg.Wait()
+
 	// Fail if we can't load the schema for any tables, but we know that some tables exist. This points to a configuration problem.
 	if len(tableData.Rows) != 0 && len(tables) == 1 { // len(tables) is always at least 1 because of the "dual" table
 		panic(NewTabletError(ErrFail, vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not get schema for any tables"))
