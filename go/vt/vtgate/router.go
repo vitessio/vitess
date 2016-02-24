@@ -74,7 +74,8 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 func (rtr *Router) execInstruction(vcursor *requestContext, instruction interface{}, wantFields bool) (*sqltypes.Result, error) {
 	switch instruction := instruction.(type) {
 	case *planbuilder.Join:
-		return rtr.execJoin(vcursor, instruction, wantFields)
+		res, err := rtr.execJoin(vcursor, instruction, wantFields)
+		return res, err
 	case *planbuilder.Route:
 		return rtr.execRoute(vcursor, instruction)
 	}
@@ -117,8 +118,10 @@ func (rtr *Router) execJoin(vcursor *requestContext, join *planbuilder.Join, wan
 		}
 		if join.IsLeft && len(rresult.Rows) == 0 {
 			result.Rows = append(result.Rows, joinRows(lrow, nil, join.Cols))
+			result.RowsAffected++
+		} else {
+			result.RowsAffected += uint64(len(rresult.Rows))
 		}
-		result.RowsAffected += uint64(len(rresult.Rows))
 	}
 	return result, nil
 }
@@ -132,9 +135,6 @@ func copyBindVars(bindVars map[string]interface{}) map[string]interface{} {
 }
 
 func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field {
-	if lfields == nil || rfields == nil {
-		return nil
-	}
 	fields := make([]*querypb.Field, len(cols))
 	for i, index := range cols {
 		if index < 0 {
