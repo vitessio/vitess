@@ -289,192 +289,6 @@ func TestSelectEqualNotFound(t *testing.T) {
 	}
 }
 
-func TestSimpleJoin(t *testing.T) {
-	router, sbc1, sbc2, _ := createRouterEnv()
-	result, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries := []querytypes.BoundQuery{{
-		Sql:           "select u1.id from user as u1 where u1.id = 1",
-		BindVariables: map[string]interface{}{},
-	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
-	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select u2.id from user as u2 where u2.id = 3",
-		BindVariables: map[string]interface{}{},
-	}}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
-	wantResult := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			singleRowResult.Fields[0],
-			singleRowResult.Fields[0],
-		},
-		Rows: [][]sqltypes.Value{
-			{
-				singleRowResult.Rows[0][0],
-				singleRowResult.Rows[0][0],
-			},
-		},
-		RowsAffected: 1,
-	}
-	if !reflect.DeepEqual(result, wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
-}
-
-func TestVarJoin(t *testing.T) {
-	router, sbc1, sbc2, _ := createRouterEnv()
-	result1 := []*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		InsertID:     0,
-		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
-		}},
-	}}
-	sbc1.setResults(result1)
-	_, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries := []querytypes.BoundQuery{{
-		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
-		BindVariables: map[string]interface{}{},
-	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
-	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select u2.id from user as u2 where u2.id = :u1_col",
-		BindVariables: map[string]interface{}{},
-	}}
-	// We have to use string representation because bindvars type is too complex.
-	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := "[{Sql:select u2.id from user as u2 where u2.id = :u1_col BindVariables:map[u1_col:3]}]"
-	if got != want {
-		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
-	}
-}
-
-func TestLeftJoin(t *testing.T) {
-	router, sbc1, sbc2, _ := createRouterEnv()
-	result1 := []*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		InsertID:     0,
-		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
-		}},
-	}}
-	emptyResult := []*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-		},
-	}}
-	sbc1.setResults(result1)
-	sbc2.setResults(emptyResult)
-	result, err := routerExec(router, "select u1.id, u2.id from user u1 left join user u2 on u2.id = u1.col where u1.id = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantResult := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			singleRowResult.Fields[0],
-			singleRowResult.Fields[0],
-		},
-		Rows: [][]sqltypes.Value{
-			{
-				singleRowResult.Rows[0][0],
-				{},
-			},
-		},
-		RowsAffected: 1,
-	}
-	if !reflect.DeepEqual(result, wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
-}
-
-func TestEmptyJoin(t *testing.T) {
-	router, sbc1, _, _ := createRouterEnv()
-	// Empty result requires a field query for the second part of join,
-	// which is sent to shard 0.
-	sbc1.setResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-		},
-	}, {
-		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-		},
-	}})
-	_, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries := []querytypes.BoundQuery{{
-		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
-		BindVariables: map[string]interface{}{},
-	}, {
-		Sql: "select u2.id from user as u2 where 1 != 1",
-		BindVariables: map[string]interface{}{
-			"u1_col": nil,
-		},
-	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
-	sbc1.Queries = nil
-
-	// Make sure it also works recursively.
-	sbc1.setResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-		},
-	}, {
-		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
-		},
-	}, {
-		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-		},
-	}})
-	_, err = routerExec(router, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select u1.id from user as u1 where u1.id = 1",
-		BindVariables: map[string]interface{}{},
-	}, {
-		Sql:           "select u2.id, u2.col from user as u2 where 1 != 1",
-		BindVariables: map[string]interface{}{},
-	}, {
-		Sql: "select u3.id from user as u3 where 1 != 1",
-		BindVariables: map[string]interface{}{
-			"u2_col": nil,
-		},
-	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
-}
-
 func TestStreamSelectEqual(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
@@ -765,5 +579,421 @@ func TestSelectScatterFail(t *testing.T) {
 	want := "paramsSelectScatter: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+}
+
+// TODO(sougou): stream and non-stream testing are very similar.
+// Could reuse code,
+func TestSimpleJoin(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+	result, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id from user as u1 where u1.id = 1",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "select u2.id from user as u2 where u2.id = 3",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			singleRowResult.Fields[0],
+			singleRowResult.Fields[0],
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				singleRowResult.Rows[0][0],
+				singleRowResult.Rows[0][0],
+			},
+		},
+		RowsAffected: 1,
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestSimpleJoinStream(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+	result, err := routerStream(router, "select u1.id, u2.id from user u1 join user u2 where u1.id = 1 and u2.id = 3")
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id from user as u1 where u1.id = 1",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "select u2.id from user as u2 where u2.id = 3",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			singleRowResult.Fields[0],
+			singleRowResult.Fields[0],
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				singleRowResult.Rows[0][0],
+				singleRowResult.Rows[0][0],
+			},
+		},
+		RowsAffected: 0,
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestVarJoin(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"col", sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		}},
+	}}
+	sbc1.setResults(result1)
+	_, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "select u2.id from user as u2 where u2.id = :u1_col",
+		BindVariables: map[string]interface{}{},
+	}}
+	// We have to use string representation because bindvars type is too complex.
+	got := fmt.Sprintf("%+v", sbc2.Queries)
+	want := "[{Sql:select u2.id from user as u2 where u2.id = :u1_col BindVariables:map[u1_col:3]}]"
+	if got != want {
+		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
+	}
+}
+
+func TestVarJoinStream(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"col", sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		}},
+	}}
+	sbc1.setResults(result1)
+	_, err := routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "select u2.id from user as u2 where u2.id = :u1_col",
+		BindVariables: map[string]interface{}{},
+	}}
+	// We have to use string representation because bindvars type is too complex.
+	got := fmt.Sprintf("%+v", sbc2.Queries)
+	want := "[{Sql:select u2.id from user as u2 where u2.id = :u1_col BindVariables:map[u1_col:3]}]"
+	if got != want {
+		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
+	}
+}
+
+func TestLeftJoin(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"col", sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		}},
+	}}
+	emptyResult := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}}
+	sbc1.setResults(result1)
+	sbc2.setResults(emptyResult)
+	result, err := routerExec(router, "select u1.id, u2.id from user u1 left join user u2 on u2.id = u1.col where u1.id = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			singleRowResult.Fields[0],
+			singleRowResult.Fields[0],
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				singleRowResult.Rows[0][0],
+				{},
+			},
+		},
+		RowsAffected: 1,
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestLeftJoinStream(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"col", sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		}},
+	}}
+	emptyResult := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}}
+	sbc1.setResults(result1)
+	sbc2.setResults(emptyResult)
+	result, err := routerStream(router, "select u1.id, u2.id from user u1 left join user u2 on u2.id = u1.col where u1.id = 1")
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			singleRowResult.Fields[0],
+			singleRowResult.Fields[0],
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				singleRowResult.Rows[0][0],
+				{},
+			},
+		},
+		RowsAffected: 0,
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestEmptyJoin(t *testing.T) {
+	router, sbc1, _, _ := createRouterEnv()
+	// Empty result requires a field query for the second part of join,
+	// which is sent to shard 0.
+	sbc1.setResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}, {
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}})
+	result, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql: "select u2.id from user as u2 where 1 != 1",
+		BindVariables: map[string]interface{}{
+			"u1_col": nil,
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"id", sqltypes.Int32},
+		},
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestEmptyJoinStream(t *testing.T) {
+	router, sbc1, _, _ := createRouterEnv()
+	// Empty result requires a field query for the second part of join,
+	// which is sent to shard 0.
+	sbc1.setResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}, {
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}})
+	result, err := routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql: "select u2.id from user as u2 where 1 != 1",
+		BindVariables: map[string]interface{}{
+			"u1_col": nil,
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"id", sqltypes.Int32},
+		},
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestEmptyJoinRecursive(t *testing.T) {
+	router, sbc1, _, _ := createRouterEnv()
+	// Make sure it also works recursively.
+	sbc1.setResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}, {
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"col", sqltypes.Int32},
+		},
+	}, {
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}})
+	result, err := routerExec(router, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id from user as u1 where u1.id = 1",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql:           "select u2.id, u2.col from user as u2 where 1 != 1",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql: "select u3.id from user as u3 where 1 != 1",
+		BindVariables: map[string]interface{}{
+			"u2_col": nil,
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"id", sqltypes.Int32},
+			{"id", sqltypes.Int32},
+		},
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestEmptyJoinRecursiveStream(t *testing.T) {
+	router, sbc1, _, _ := createRouterEnv()
+	// Make sure it also works recursively.
+	sbc1.setResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}, {
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"col", sqltypes.Int32},
+		},
+	}, {
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}})
+	result, err := routerStream(router, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1")
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select u1.id from user as u1 where u1.id = 1",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql:           "select u2.id, u2.col from user as u2 where 1 != 1",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql: "select u3.id from user as u3 where 1 != 1",
+		BindVariables: map[string]interface{}{
+			"u2_col": nil,
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"id", sqltypes.Int32},
+			{"id", sqltypes.Int32},
+		},
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
