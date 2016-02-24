@@ -118,6 +118,8 @@ def _teardown_shard_2():
       ['DeleteShard', '-recursive', 'test_keyspace/2'], auto_log=True)
 
   for t in shard_2_tablets:
+    t.reset_replication()
+    t.set_semi_sync_enabled(master=False)
     t.clean_dbs()
 
 
