@@ -997,3 +997,91 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
+
+func TestJoinErrors(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+
+	// First query fails
+	sbc1.mustFailServer = 1
+	_, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
+	want := "error: err"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must start with %s", err, want)
+	}
+
+	// Field query fails
+	sbc2.setResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}})
+	sbc1.mustFailServer = 1
+	_, err = routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 3", nil)
+	want = "error: err"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must start with %s", err, want)
+	}
+
+	// Second query fails
+	sbc1.setResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"col", sqltypes.Int32},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		}},
+	}})
+	sbc2.mustFailServer = 1
+	_, err = routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
+	want = "error: err"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must start with %s", err, want)
+	}
+
+	// Nested join query fails on get fields
+	sbc2.setResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"col", sqltypes.Int32},
+		},
+	}})
+	sbc1.mustFailServer = 1
+	_, err = routerExec(router, "select u1.id, u2.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 3", nil)
+	want = "error: err"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must start with %s", err, want)
+	}
+
+	// Field query fails on stream join
+	sbc2.setResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+		},
+	}})
+	sbc1.mustFailServer = 1
+	_, err = routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 3")
+	want = "error: err"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must start with %s", err, want)
+	}
+
+	// Second query fails on stream join
+	sbc1.setResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{"id", sqltypes.Int32},
+			{"col", sqltypes.Int32},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+		}},
+	}})
+	sbc2.mustFailServer = 1
+	_, err = routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
+	want = "error: err"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must start with %s", err, want)
+	}
+}
