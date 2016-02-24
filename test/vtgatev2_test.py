@@ -829,8 +829,6 @@ class TestFailures(BaseTestCase):
     self.master_tablet = shard_1_master
     self.master_tablet.kill_vttablet()
     self.tablet_start(self.master_tablet, 'replica')
-    utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/-80',
-                     shard_0_master.tablet_alias], auto_log=True)
     self.master_tablet.wait_for_vttablet_state('SERVING')
     self.replica_tablet = shard_1_replica1
     self.replica_tablet.kill_vttablet()

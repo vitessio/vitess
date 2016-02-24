@@ -64,6 +64,7 @@ class TestMysqlctl(unittest.TestCase):
     tablet.Tablet.check_vttablet_count()
     for t in [master_tablet, replica_tablet]:
       t.reset_replication()
+      t.set_semi_sync_enabled(master=False)
       t.clean_dbs()
 
   def test_mysqlctl_restart(self):
