@@ -320,20 +320,17 @@ func (tl *TeeLogger) ErrorDepth(depth int, s string) {
 
 // Infof is part of the Logger interface
 func (tl *TeeLogger) Infof(format string, v ...interface{}) {
-	tl.One.InfoDepth(1, fmt.Sprintf(format, v...))
-	tl.Two.InfoDepth(1, fmt.Sprintf(format, v...))
+	tl.InfoDepth(1, fmt.Sprintf(format, v...))
 }
 
 // Warningf is part of the Logger interface
 func (tl *TeeLogger) Warningf(format string, v ...interface{}) {
-	tl.One.WarningDepth(1, fmt.Sprintf(format, v...))
-	tl.Two.WarningDepth(1, fmt.Sprintf(format, v...))
+	tl.WarningDepth(1, fmt.Sprintf(format, v...))
 }
 
 // Errorf is part of the Logger interface
 func (tl *TeeLogger) Errorf(format string, v ...interface{}) {
-	tl.One.ErrorDepth(1, fmt.Sprintf(format, v...))
-	tl.Two.ErrorDepth(1, fmt.Sprintf(format, v...))
+	tl.ErrorDepth(1, fmt.Sprintf(format, v...))
 }
 
 // Printf is part of the Logger interface
