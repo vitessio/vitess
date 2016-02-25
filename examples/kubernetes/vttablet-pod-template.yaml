@@ -76,6 +76,7 @@ spec:
           -db-config-filtered-dbname vt_{{keyspace}}
           -db-config-filtered-charset utf8
           -enable-rowcache
+          -enable_semi_sync
           -rowcache-bin /usr/bin/memcached
           -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock
           -restore_from_backup {{backup_flags}}" vitess
