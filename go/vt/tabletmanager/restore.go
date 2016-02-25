@@ -102,7 +102,7 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.
 	}
 
 	// If using semi-sync, we need to enable it before connecting to master.
-	if *enableSemiSync {
+	if *EnableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
 			return err
 		}

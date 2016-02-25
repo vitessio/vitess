@@ -194,6 +194,11 @@ type FakeMysqlDaemon struct {
 
 	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
 	BinlogPlayerEnabled bool
+
+	// SemiSyncMasterEnabled represents the state of rpl_semi_sync_master_enabled.
+	SemiSyncMasterEnabled bool
+	// SemiSyncSlaveEnabled represents the state of rpl_semi_sync_slave_enabled.
+	SemiSyncSlaveEnabled bool
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -443,10 +448,12 @@ func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error)
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, slave bool) error {
+	fmd.SemiSyncMasterEnabled = master
+	fmd.SemiSyncSlaveEnabled = slave
 	return nil
 }
 
 // SemiSyncEnabled is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (master, slave bool) {
-	return false, false
+	return fmd.SemiSyncMasterEnabled, fmd.SemiSyncSlaveEnabled
 }
