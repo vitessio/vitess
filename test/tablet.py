@@ -722,7 +722,7 @@ class Tablet(object):
       the result of running vtctl command.
     """
     args = [
-        'VtTabletExecute',
+        'VtTabletExecute', '-json',
         '-keyspace', self.keyspace,
         '-shard', self.shard,
     ]

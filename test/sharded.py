@@ -178,7 +178,7 @@ class TestSharded(unittest.TestCase):
     qr = shard_1_master.execute(sql)
     self.assertEqual(qr['Rows'], [[10, 'test 10'],])
 
-    _, stderr = utils.run_vtctl(['VtTabletExecute',
+    _, stderr = utils.run_vtctl(['VtTabletExecute', '-json',
                                  '-keyspace', 'test_keyspace',
                                  '-shard', '-90',
                                  shard_0_master.tablet_alias, sql],
