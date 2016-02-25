@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""Define abstractions for various MySQL flavors."""
 
 import environment
 import logging
@@ -27,6 +28,15 @@ class MysqlFlavor(object):
 
   def change_master_commands(self, host, port, pos):
     raise NotImplementedError()
+
+  def set_semi_sync_enabled_commands(self, master=None, slave=None):
+    """Returns commands to turn semi-sync on/off."""
+    cmds = []
+    if master is not None:
+      cmds.append("SET GLOBAL rpl_semi_sync_master_enabled = %d" % master)
+    if slave is not None:
+      cmds.append("SET GLOBAL rpl_semi_sync_slave_enabled = %d" % master)
+    return cmds
 
   def extra_my_cnf(self):
     """Returns the path to an extra my_cnf file, or None."""
@@ -157,6 +167,11 @@ def mysql_flavor():
 
 
 def set_mysql_flavor(flavor):
+  """Set the object that will be returned by mysql_flavor().
+
+  If flavor is not specified, set it based on MYSQL_FLAVOR environment variable.
+  """
+
   global __mysql_flavor
 
   if not flavor:

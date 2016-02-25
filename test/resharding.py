@@ -472,7 +472,7 @@ primary key (name)
     shard_0_ny_rdonly.init_tablet('rdonly', 'test_keyspace', '-80')
     shard_1_master.init_tablet('master', 'test_keyspace', '80-')
     shard_1_slave1.init_tablet('replica', 'test_keyspace', '80-')
-    shard_1_slave2.init_tablet('spare', 'test_keyspace', '80-')
+    shard_1_slave2.init_tablet('replica', 'test_keyspace', '80-')
     shard_1_ny_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
     shard_1_rdonly1.init_tablet('rdonly', 'test_keyspace', '80-')
 
@@ -497,7 +497,7 @@ primary key (name)
     shard_0_ny_rdonly.wait_for_vttablet_state('SERVING')
     shard_1_master.wait_for_vttablet_state('SERVING')
     shard_1_slave1.wait_for_vttablet_state('SERVING')
-    shard_1_slave2.wait_for_vttablet_state('NOT_SERVING')  # spare
+    shard_1_slave2.wait_for_vttablet_state('SERVING')
     shard_1_ny_rdonly.wait_for_vttablet_state('SERVING')
     shard_1_rdonly1.wait_for_vttablet_state('SERVING')
 
@@ -521,10 +521,10 @@ primary key (name)
 
     # create the split shards
     shard_2_master.init_tablet('master', 'test_keyspace', '80-c0')
-    shard_2_replica1.init_tablet('spare', 'test_keyspace', '80-c0')
-    shard_2_replica2.init_tablet('spare', 'test_keyspace', '80-c0')
+    shard_2_replica1.init_tablet('replica', 'test_keyspace', '80-c0')
+    shard_2_replica2.init_tablet('replica', 'test_keyspace', '80-c0')
     shard_3_master.init_tablet('master', 'test_keyspace', 'c0-')
-    shard_3_replica.init_tablet('spare', 'test_keyspace', 'c0-')
+    shard_3_replica.init_tablet('replica', 'test_keyspace', 'c0-')
     shard_3_rdonly1.init_tablet('rdonly', 'test_keyspace', 'c0-')
 
     # start vttablet on the split shards (no db created,

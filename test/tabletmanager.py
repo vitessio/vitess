@@ -66,6 +66,7 @@ class TestTabletManager(unittest.TestCase):
     environment.topo_server().wipe()
     for t in [tablet_62344, tablet_62044]:
       t.reset_replication()
+      t.set_semi_sync_enabled(master=False)
       t.clean_dbs()
 
   def _check_srv_shard(self):

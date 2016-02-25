@@ -38,6 +38,8 @@ type MysqlDaemon interface {
 
 	// replication related methods
 	SlaveStatus() (replication.Status, error)
+	SetSemiSyncEnabled(master, slave bool) error
+	SemiSyncEnabled() (master, slave bool)
 
 	// reparenting related methods
 	ResetReplicationCommands() ([]string, error)
@@ -192,6 +194,11 @@ type FakeMysqlDaemon struct {
 
 	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
 	BinlogPlayerEnabled bool
+
+	// SemiSyncMasterEnabled represents the state of rpl_semi_sync_master_enabled.
+	SemiSyncMasterEnabled bool
+	// SemiSyncSlaveEnabled represents the state of rpl_semi_sync_slave_enabled.
+	SemiSyncSlaveEnabled bool
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -437,4 +444,16 @@ func (fmd *FakeMysqlDaemon) GetAppConnection() (dbconnpool.PoolConnection, error
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
 	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
+}
+
+// SetSemiSyncEnabled is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, slave bool) error {
+	fmd.SemiSyncMasterEnabled = master
+	fmd.SemiSyncSlaveEnabled = slave
+	return nil
+}
+
+// SemiSyncEnabled is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (master, slave bool) {
+	return fmd.SemiSyncMasterEnabled, fmd.SemiSyncSlaveEnabled
 }
