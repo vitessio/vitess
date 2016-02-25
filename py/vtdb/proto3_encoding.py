@@ -60,6 +60,30 @@ conversions = {
 INT_UPPERBOUND_PLUS_ONE = 1<<63
 
 
+def make_row(row, convs):
+  """Builds a python native row from proto3 row, and conversion array.
+
+  Args:
+    row: proto3 query.Row object
+    convs: conversion function array
+
+  Returns:
+    an array of converted rows.
+  """
+  converted_row = []
+  offset = 0
+  for i, l in enumerate(row.lengths):
+    if l == -1:
+      converted_row.append(None)
+    elif convs[i]:
+      converted_row.append(convs[i](row.values[offset:offset+l]))
+      offset += l
+    else:
+      converted_row.append(row.values[offset:offset+l])
+      offset += l
+  return converted_row
+
+
 class Proto3Connection(object):
   """A base class for proto3-based python connectors.
 
@@ -184,29 +208,6 @@ class Proto3Connection(object):
           'Message': error.message,
       })
 
-  def _make_row(self, row, convs):
-    """Builds a python native row from proto3 row, and conversion array.
-
-    Args:
-      row: proto3 query.Row object
-      convs: conversion function array
-
-    Returns:
-      an array of converted rows.
-    """
-    converted_row = []
-    offset = 0
-    for i, l in enumerate(row.lengths):
-      if l == -1:
-        converted_row.append(None)
-      elif convs[i]:
-        converted_row.append(convs[i](row.values[offset:offset+l]))
-        offset += l
-      else:
-        converted_row.append(row.values[offset:offset+l])
-        offset += l
-    return converted_row
-
   def build_conversions(self, qr_fields):
     """Builds an array of fields and conversions from a result fields.
 
@@ -241,7 +242,7 @@ class Proto3Connection(object):
     fields, convs = self.build_conversions(query_result.fields)
     results = []
     for row in query_result.rows:
-      results.append(tuple(self._make_row(row, convs)))
+      results.append(tuple(make_row(row, convs)))
     rowcount = query_result.rows_affected
     lastrowid = query_result.insert_id
     return results, rowcount, lastrowid, fields

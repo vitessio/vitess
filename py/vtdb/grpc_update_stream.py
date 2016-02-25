@@ -13,22 +13,6 @@ from vtdb import proto3_encoding
 from vtdb import update_stream
 
 
-def _make_row(row, conversions):
-  """Builds a python native row from proto3 row."""
-  converted_row = []
-  offset = 0
-  for i, l in enumerate(row.lengths):
-    if l == -1:
-      converted_row.append(None)
-    elif conversions[i]:
-      converted_row.append(conversions[i](row.values[offset:offset+l]))
-      offset += l
-    else:
-      converted_row.append(row.values[offset:offset+l])
-      offset += l
-  return converted_row
-
-
 class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
   """The gRPC implementation of UpdateStreamConnection.
 
@@ -70,7 +54,7 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
             conversions.append(proto3_encoding.conversions.get(field.type))
 
           for r in stream_event.primary_key_values:
-            row = tuple(_make_row(r, conversions))
+            row = tuple(proto3_encoding.make_row(r, conversions))
             rows.append(row)
 
         yield update_stream.StreamEvent(
