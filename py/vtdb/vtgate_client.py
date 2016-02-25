@@ -73,13 +73,15 @@ class VTGateClient(object):
   returned / passed in with every method that makes sense.
   """
 
-  def __init__(self, addr, timeout):
+  def __init__(self, addr, timeout, **kwargs):
     """Initialize a vtgate connection.
 
     Args:
       addr: server address. Can be protocol dependent.
       timeout: connection timeout (float, in seconds).
+      **kwargs: passed to super constructor.
     """
+    super(VTGateClient, self).__init__(**kwargs)
     self.addr = addr
     self.timeout = timeout
     # self.session is used by vtgate_utils.exponential_backoff_retry.
