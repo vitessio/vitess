@@ -103,13 +103,13 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure direct dba queries work
     query_result = utils.run_vtctl_json(
-        ['ExecuteFetchAsDba', tablet_62344.tablet_alias,
+        ['ExecuteFetchAsDba', '-json', tablet_62344.tablet_alias,
          'select * from vt_test_keyspace.vt_select_test'])
     self.assertEqual(
-        len(query_result['rows']), 4,
+        len(query_result['Rows']), 4,
         'expected 4 rows in vt_select_test: %s' % str(query_result))
     self.assertEqual(
-        len(query_result['fields']), 2,
+        len(query_result['Fields']), 2,
         'expected 2 fields in vt_select_test: %s' % str(query_result))
 
     # check Ping / RefreshState
