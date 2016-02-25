@@ -327,7 +327,7 @@ index by_msg (msg)
         # table is not blacklisted, should just work
         qr = t.execute('select count(1) from %s' % table)
         logging.debug('Got %s rows from table %s on tablet %s',
-                      qr['Rows'][0][0], table, t.tablet_alias)
+                      qr['rows'][0][0], table, t.tablet_alias)
 
   def _check_client_conn_redirection(
       self, destination_ks, servedfrom_db_types,

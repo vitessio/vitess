@@ -298,7 +298,7 @@ class RowCacheInvalidator(unittest.TestCase):
 
   def _exec_replica_query(self, query):
     result = replica_tablet.execute(query, auto_log=False)
-    return result['Rows']
+    return result['rows']
 
 
 if __name__ == '__main__':
