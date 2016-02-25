@@ -3,7 +3,7 @@
 {
   "Original": "select col1, col2 from main1 group by col2",
   "Instructions": {
-    "PlanID": "SelectUnsharded",
+    "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -18,7 +18,7 @@
 {
   "Original": "select col1, col2 from user where id = 1 group by col2",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -35,7 +35,7 @@
 {
   "Original": "select col1, id from user group by id",
   "Instructions": {
-    "PlanID": "SelectScatter",
+    "Opcode": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -55,7 +55,7 @@
   "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -64,7 +64,7 @@
       "FieldQuery": "select user.col1 as a, user.col2 from user where 1 != 1"
     },
     "Right": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -87,7 +87,7 @@
 {
   "Original": "select id, col from user having col in (select user_extra.col from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = id)",
   "Instructions": {
-    "PlanID": "SelectScatter",
+    "Opcode": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -104,7 +104,7 @@
 {
   "Original": "select id, col from user having col in (select user_extra.col extra_col, user.id as user_id from user join user_extra on user.id = user_extra.user_id having user_id = id and extra_col = col)",
   "Instructions": {
-    "PlanID": "SelectScatter",
+    "Opcode": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -124,7 +124,7 @@
 {
   "Original": "select col from user where id = 1 order by 1",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -142,7 +142,7 @@
   "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a asc, user.col2 desc, music.col3 asc",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectEqualUnique",
+      "Opcode": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -153,7 +153,7 @@
       "Values": 1
     },
     "Right": {
-      "PlanID": "SelectEqualUnique",
+      "Opcode": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -183,7 +183,7 @@
   "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 2 desc, 3 asc",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectEqualUnique",
+      "Opcode": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -194,7 +194,7 @@
       "Values": 1
     },
     "Right": {
-      "PlanID": "SelectEqualUnique",
+      "Opcode": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -235,7 +235,7 @@
 {
   "Original": "select col1 from user where id = 1 limit 1",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true

@@ -10,8 +10,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-// buildSelectPlan2 is the new function to build a Select plan.
-func buildSelectPlan(sel *sqlparser.Select, vschema *VSchema) (plan interface{}, err error) {
+// buildSelectPlan is the new function to build a Select plan.
+func buildSelectPlan(sel *sqlparser.Select, vschema *VSchema) (primitive Primitive, err error) {
 	bindvars := getBindvars(sel)
 	builder, err := processSelect(sel, vschema, nil)
 	if err != nil {

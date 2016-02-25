@@ -67,7 +67,7 @@ A tableAlias element represents a table alias defined
 in the FROM clause. A tableAlias must always point
 to a routeBuilder, which is responsible for building
 the SELECT statement for that alias.
-A colsym represents a result column. It can can optionally
+A colsym represents a result column. It can optionally
 point to a tableAlias if it's a plain column reference
 of that alias. A colsym must always point to a routeBuilder.
 One symtab is created per SELECT statement. tableAlias

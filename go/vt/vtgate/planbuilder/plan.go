@@ -24,23 +24,100 @@ type Plan struct {
 	Original string `json:",omitempty"`
 	// Instructions contains the instructions needed to
 	// fulfil the query. It's a tree of primitives.
-	Instructions interface{} `json:",omitempty"`
+	Instructions Primitive `json:",omitempty"`
 }
 
-// Size is defined so that Plan can be given to an LRUCache.
+// Size is defined so that Plan can be given to a cache.LRUCache.
+// VTGate needs to maintain a cache of plans. It uses LRUCache, which
+// in turn requires its objects to define a Size function.
 func (pln *Plan) Size() int {
 	return 1
 }
 
-// PlanID is a number representing the plan id.
-// These are opcodes for the Route primitve.
-type PlanID int
+// Primitive is the interface that needs to be satisfied by
+// all primitives of a plan. For now, the primitives just
+// have to define an isPrimitive function that does nothing.
+type Primitive interface {
+	isPrimitive()
+}
 
-// This is the list of PlanID values. The PlanID
+// Route represents the instructions to route a query to
+// one or many vttablets. The meaning and values for the
+// the fields are described in the RouteOpcode values comments.
+type Route struct {
+	Opcode     RouteOpcode
+	Keyspace   *Keyspace
+	Query      string
+	FieldQuery string
+	Vindex     Vindex
+	Values     interface{}
+	JoinVars   map[string]struct{}
+	Table      *Table
+	Subquery   string
+}
+
+func (rt *Route) isPrimitive() {}
+
+// MarshalJSON serializes the Route into a JSON representation.
+// It's used for testing and diagnostics.
+func (rt *Route) MarshalJSON() ([]byte, error) {
+	var tname, vindexName string
+	if rt.Table != nil {
+		tname = rt.Table.Name
+	}
+	if rt.Vindex != nil {
+		vindexName = rt.Vindex.String()
+	}
+	marshalRoute := struct {
+		Opcode     RouteOpcode         `json:",omitempty"`
+		Keyspace   *Keyspace           `json:",omitempty"`
+		Query      string              `json:",omitempty"`
+		FieldQuery string              `json:",omitempty"`
+		Vindex     string              `json:",omitempty"`
+		Values     interface{}         `json:",omitempty"`
+		JoinVars   map[string]struct{} `json:",omitempty"`
+		Table      string              `json:",omitempty"`
+		Subquery   string              `json:",omitempty"`
+	}{
+		Opcode:     rt.Opcode,
+		Keyspace:   rt.Keyspace,
+		Query:      rt.Query,
+		FieldQuery: rt.FieldQuery,
+		Vindex:     vindexName,
+		Values:     prettyValue(rt.Values),
+		JoinVars:   rt.JoinVars,
+		Table:      tname,
+		Subquery:   rt.Subquery,
+	}
+	return json.Marshal(marshalRoute)
+}
+
+// prettyValue converts the Values field of a Route
+// to a form that will be human-readable when
+// converted to JSON. This is for testing and diagnostics.
+func prettyValue(value interface{}) interface{} {
+	switch value := value.(type) {
+	case []byte:
+		return string(value)
+	case []interface{}:
+		newvals := make([]interface{}, len(value))
+		for i, old := range value {
+			newvals[i] = prettyValue(old)
+		}
+		return newvals
+	}
+	return value
+}
+
+// RouteOpcode is a number representing the opcode
+// for the Route primitve.
+type RouteOpcode int
+
+// This is the list of RouteOpcode values. The opcode
 // dictates which fields must be set in the Route.
 // All routes require the Query and a Keyspace
 // to be correctly set.
-// For any Select PlanID, the FieldQuery is set
+// For any Select opcode, the FieldQuery is set
 // to a statement with an impossible where clause.
 // This gets used to build the field info in situations
 // where joins end up returning no rows.
@@ -52,7 +129,7 @@ type PlanID int
 // various computations and sanity checks.
 // The rest of the fields depend on the opcode.
 const (
-	NoPlan = PlanID(iota)
+	NoCode = RouteOpcode(iota)
 	// SelectUnsharded is the opcode for routing a
 	// select statement to an unsharded database.
 	SelectUnsharded
@@ -68,7 +145,7 @@ const (
 	// clause using a Vindex. Requires: A Vindex,
 	// and a Values list.
 	SelectIN
-	// SelectScatter is for running a scatter query
+	// SelectScatter is for routing a scatter query
 	// to all shards of a keyspace.
 	SelectScatter
 	// UpdateUnsharded is for routing an update statement
@@ -93,13 +170,13 @@ const (
 	// to a single shard. Requires: A list of Values, one
 	// for each ColVindex.
 	InsertSharded
-	// NumPlans is the total number of opcodes for routes.
-	NumPlans
+	// NumCodes is the total number of opcodes for routes.
+	NumCodes
 )
 
-// planName must exactly match order of plan constants.
-var planName = [NumPlans]string{
-	"NoPlan",
+// opcodeName must exactly match order of opcode constants.
+var opcodeName = [NumCodes]string{
+	"NoCode",
 	"SelectUnsharded",
 	"SelectEqualUnique",
 	"SelectEqual",
@@ -113,83 +190,17 @@ var planName = [NumPlans]string{
 	"InsertSharded",
 }
 
-func (id PlanID) String() string {
-	if id < 0 || id >= NumPlans {
+func (code RouteOpcode) String() string {
+	if code < 0 || code >= NumCodes {
 		return ""
 	}
-	return planName[id]
+	return opcodeName[code]
 }
 
-// MarshalJSON serializes the plan id as a JSON string.
+// MarshalJSON serializes the RouteOpcode as a JSON string.
 // It's used for testing and diagnostics.
-func (id PlanID) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", id.String())), nil
-}
-
-// Route represents the instructions to route a query to
-// one or many vttablets. The meaning and values for the
-// the fields are described in the PlanID values comments.
-type Route struct {
-	PlanID     PlanID
-	Keyspace   *Keyspace
-	Query      string
-	FieldQuery string
-	Vindex     Vindex
-	Values     interface{}
-	JoinVars   map[string]struct{}
-	Table      *Table
-	Subquery   string
-}
-
-// MarshalJSON serializes the Plan into a JSON representation.
-// It's used for testing and diagnostics.
-func (rt *Route) MarshalJSON() ([]byte, error) {
-	var tname, vindexName string
-	if rt.Table != nil {
-		tname = rt.Table.Name
-	}
-	if rt.Vindex != nil {
-		vindexName = rt.Vindex.String()
-	}
-	marshalPlan := struct {
-		PlanID     PlanID              `json:",omitempty"`
-		Keyspace   *Keyspace           `json:",omitempty"`
-		Query      string              `json:",omitempty"`
-		FieldQuery string              `json:",omitempty"`
-		Vindex     string              `json:",omitempty"`
-		Values     interface{}         `json:",omitempty"`
-		JoinVars   map[string]struct{} `json:",omitempty"`
-		Table      string              `json:",omitempty"`
-		Subquery   string              `json:",omitempty"`
-	}{
-		PlanID:     rt.PlanID,
-		Keyspace:   rt.Keyspace,
-		Query:      rt.Query,
-		FieldQuery: rt.FieldQuery,
-		Vindex:     vindexName,
-		Values:     prettyValue(rt.Values),
-		JoinVars:   rt.JoinVars,
-		Table:      tname,
-		Subquery:   rt.Subquery,
-	}
-	return json.Marshal(marshalPlan)
-}
-
-// prettyValue converts the Values field of a Route
-// to a form that will be human-readable when
-// converted to JSON. This is for testing and diagnostics.
-func prettyValue(value interface{}) interface{} {
-	switch value := value.(type) {
-	case []byte:
-		return string(value)
-	case []interface{}:
-		newvals := make([]interface{}, len(value))
-		for i, old := range value {
-			newvals[i] = prettyValue(old)
-		}
-		return newvals
-	}
-	return value
+func (code RouteOpcode) MarshalJSON() ([]byte, error) {
+	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
 // Join specifies the parameters for a join primitive.
@@ -198,7 +209,7 @@ type Join struct {
 	IsLeft bool `json:",omitempty"`
 	// Left and Right are the LHS and RHS primitives
 	// of the Join. They can be any primitive.
-	Left, Right interface{} `json:",omitempty"`
+	Left, Right Primitive `json:",omitempty"`
 	// Cols defines which columns from the left
 	// or right results should be used to build the
 	// return result. For results coming from the
@@ -212,6 +223,8 @@ type Join struct {
 	// the RHS subqquery.
 	Vars map[string]int `json:",omitempty"`
 }
+
+func (jn *Join) isPrimitive() {}
 
 // BuildPlan builds a plan for a query based on the specified vschema.
 // It's the main entry point for this package.

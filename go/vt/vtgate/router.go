@@ -71,7 +71,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	return rtr.execInstruction(vcursor, plan.Instructions, true)
 }
 
-func (rtr *Router) execInstruction(vcursor *requestContext, instruction interface{}, wantFields bool) (*sqltypes.Result, error) {
+func (rtr *Router) execInstruction(vcursor *requestContext, instruction planbuilder.Primitive, wantFields bool) (*sqltypes.Result, error) {
 	switch instruction := instruction.(type) {
 	case *planbuilder.Join:
 		res, err := rtr.execJoin(vcursor, instruction, wantFields)
@@ -168,7 +168,7 @@ func (rtr *Router) execRoute(vcursor *requestContext, route *planbuilder.Route) 
 		vcursor.bindVars[k] = vcursor.JoinVars[k]
 	}
 
-	switch route.PlanID {
+	switch route.Opcode {
 	case planbuilder.UpdateEqual:
 		return rtr.execUpdateEqual(vcursor, route)
 	case planbuilder.DeleteEqual:
@@ -179,7 +179,7 @@ func (rtr *Router) execRoute(vcursor *requestContext, route *planbuilder.Route) 
 
 	var err error
 	var params *scatterParams
-	switch route.PlanID {
+	switch route.Opcode {
 	case planbuilder.SelectUnsharded, planbuilder.UpdateUnsharded,
 		planbuilder.DeleteUnsharded, planbuilder.InsertUnsharded:
 		params, err = rtr.paramsUnsharded(vcursor, route)
@@ -207,7 +207,7 @@ func (rtr *Router) execRoute(vcursor *requestContext, route *planbuilder.Route) 
 	)
 }
 
-func (rtr *Router) getFields(vcursor *requestContext, instruction interface{}) (*sqltypes.Result, error) {
+func (rtr *Router) getFields(vcursor *requestContext, instruction planbuilder.Primitive) (*sqltypes.Result, error) {
 	switch instruction := instruction.(type) {
 	case *planbuilder.Join:
 		return rtr.getJoinFields(vcursor, instruction)
@@ -272,7 +272,7 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 	return rtr.streamExecInstruction(vcursor, plan.Instructions, true, sendReply)
 }
 
-func (rtr *Router) streamExecInstruction(vcursor *requestContext, instruction interface{}, wantFields bool, sendReply func(*sqltypes.Result) error) error {
+func (rtr *Router) streamExecInstruction(vcursor *requestContext, instruction planbuilder.Primitive, wantFields bool, sendReply func(*sqltypes.Result) error) error {
 	switch instruction := instruction.(type) {
 	case *planbuilder.Join:
 		return rtr.streamExecJoin(vcursor, instruction, wantFields, sendReply)
@@ -347,7 +347,7 @@ func (rtr *Router) streamExecRoute(vcursor *requestContext, route *planbuilder.R
 
 	var err error
 	var params *scatterParams
-	switch route.PlanID {
+	switch route.Opcode {
 	case planbuilder.SelectUnsharded:
 		params, err = rtr.paramsUnsharded(vcursor, route)
 	case planbuilder.SelectEqual, planbuilder.SelectEqualUnique:

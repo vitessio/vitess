@@ -85,7 +85,7 @@ func subqueryCanMerge(outer, inner *routeBuilder) error {
 	if !inner.IsSingle() {
 		return errors.New("unsupported: scatter subquery")
 	}
-	if inner.Route.PlanID == SelectUnsharded {
+	if inner.Route.Opcode == SelectUnsharded {
 		return nil
 	}
 	// SelectEqualUnique
@@ -96,7 +96,7 @@ func subqueryCanMerge(outer, inner *routeBuilder) error {
 			return nil
 		}
 	}
-	if outer.Route.PlanID != SelectEqualUnique {
+	if outer.Route.Opcode != SelectEqualUnique {
 		return errors.New("unsupported: subquery does not depend on scatter outer query")
 	}
 	if !valEqual(outer.Route.Values, inner.Route.Values) {

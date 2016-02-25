@@ -121,50 +121,50 @@ func (rtb *routeBuilder) PushFilter(filter sqlparser.BoolExpr, whereType string)
 // routes, where the ON clause gets implicitly pushed into
 // the merged route.
 func (rtb *routeBuilder) UpdatePlan(filter sqlparser.BoolExpr) {
-	planID, vindex, values := rtb.computePlan(filter)
-	if planID == SelectScatter {
+	opcode, vindex, values := rtb.computePlan(filter)
+	if opcode == SelectScatter {
 		return
 	}
-	switch rtb.Route.PlanID {
+	switch rtb.Route.Opcode {
 	case SelectEqualUnique:
-		if planID == SelectEqualUnique && vindex.Cost() < rtb.Route.Vindex.Cost() {
-			rtb.setPlan(planID, vindex, values)
+		if opcode == SelectEqualUnique && vindex.Cost() < rtb.Route.Vindex.Cost() {
+			rtb.setPlan(opcode, vindex, values)
 		}
 	case SelectEqual:
-		switch planID {
+		switch opcode {
 		case SelectEqualUnique:
-			rtb.setPlan(planID, vindex, values)
+			rtb.setPlan(opcode, vindex, values)
 		case SelectEqual:
 			if vindex.Cost() < rtb.Route.Vindex.Cost() {
-				rtb.setPlan(planID, vindex, values)
+				rtb.setPlan(opcode, vindex, values)
 			}
 		}
 	case SelectIN:
-		switch planID {
+		switch opcode {
 		case SelectEqualUnique, SelectEqual:
-			rtb.setPlan(planID, vindex, values)
+			rtb.setPlan(opcode, vindex, values)
 		case SelectIN:
 			if vindex.Cost() < rtb.Route.Vindex.Cost() {
-				rtb.setPlan(planID, vindex, values)
+				rtb.setPlan(opcode, vindex, values)
 			}
 		}
 	case SelectScatter:
-		switch planID {
+		switch opcode {
 		case SelectEqualUnique, SelectEqual, SelectIN:
-			rtb.setPlan(planID, vindex, values)
+			rtb.setPlan(opcode, vindex, values)
 		}
 	}
 }
 
 // setPlan updates the plan info for the route.
-func (rtb *routeBuilder) setPlan(planID PlanID, vindex Vindex, values interface{}) {
-	rtb.Route.PlanID = planID
+func (rtb *routeBuilder) setPlan(opcode RouteOpcode, vindex Vindex, values interface{}) {
+	rtb.Route.Opcode = opcode
 	rtb.Route.Vindex = vindex
 	rtb.Route.Values = values
 }
 
 // ComputePlan computes the plan for the specified filter.
-func (rtb *routeBuilder) computePlan(filter sqlparser.BoolExpr) (planID PlanID, vindex Vindex, values interface{}) {
+func (rtb *routeBuilder) computePlan(filter sqlparser.BoolExpr) (opcode RouteOpcode, vindex Vindex, values interface{}) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
@@ -178,7 +178,7 @@ func (rtb *routeBuilder) computePlan(filter sqlparser.BoolExpr) (planID PlanID, 
 }
 
 // computeEqualPlan computes the plan for an equality constraint.
-func (rtb *routeBuilder) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
+func (rtb *routeBuilder) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode RouteOpcode, vindex Vindex, values interface{}) {
 	left := comparison.Left
 	right := comparison.Right
 	vindex = rtb.Symtab().Vindex(left, rtb, true)
@@ -199,7 +199,7 @@ func (rtb *routeBuilder) computeEqualPlan(comparison *sqlparser.ComparisonExpr) 
 }
 
 // computeINPlan computes the plan for an IN constraint.
-func (rtb *routeBuilder) computeINPlan(comparison *sqlparser.ComparisonExpr) (planID PlanID, vindex Vindex, values interface{}) {
+func (rtb *routeBuilder) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode RouteOpcode, vindex Vindex, values interface{}) {
 	vindex = rtb.Symtab().Vindex(comparison.Left, rtb, true)
 	if vindex == nil {
 		return SelectScatter, nil, nil
@@ -301,5 +301,5 @@ func (rtb *routeBuilder) SupplyCol(col *sqlparser.ColName) int {
 
 // IsSingle returns true if the route targets only one database.
 func (rtb *routeBuilder) IsSingle() bool {
-	return rtb.Route.PlanID == SelectUnsharded || rtb.Route.PlanID == SelectEqualUnique
+	return rtb.Route.Opcode == SelectUnsharded || rtb.Route.Opcode == SelectEqualUnique
 }

@@ -116,13 +116,13 @@ func getTablePlan(tableName *sqlparser.TableName, vschema *VSchema) (*Route, *Ta
 	}
 	if table.Keyspace.Sharded {
 		return &Route{
-			PlanID:   SelectScatter,
+			Opcode:   SelectScatter,
 			Keyspace: table.Keyspace,
 			JoinVars: make(map[string]struct{}),
 		}, table, nil
 	}
 	return &Route{
-		PlanID:   SelectUnsharded,
+		Opcode:   SelectUnsharded,
 		Keyspace: table.Keyspace,
 		JoinVars: make(map[string]struct{}),
 	}, table, nil
@@ -219,7 +219,7 @@ func setSymtab(plan planBuilder, symtab *symtab) {
 	}
 }
 
-func getUnderlyingPlan(plan planBuilder) interface{} {
+func getUnderlyingPlan(plan planBuilder) Primitive {
 	switch plan := plan.(type) {
 	case *joinBuilder:
 		return plan.Join
@@ -261,7 +261,7 @@ func joinRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (pl
 	if lRoute.Route.Keyspace.Name != rRoute.Route.Keyspace.Name {
 		return makejoinBuilder(lRoute, rRoute, join)
 	}
-	if lRoute.Route.PlanID == SelectUnsharded {
+	if lRoute.Route.Opcode == SelectUnsharded {
 		// Two Routes from the same unsharded keyspace can be merged.
 		return mergeRoutes(lRoute, rRoute, join)
 	}
@@ -274,7 +274,7 @@ func joinRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (pl
 	}
 
 	// Both l & r routes point to the sameshard.
-	if lRoute.Route.PlanID == SelectEqualUnique && rRoute.Route.PlanID == SelectEqualUnique {
+	if lRoute.Route.Opcode == SelectEqualUnique && rRoute.Route.Opcode == SelectEqualUnique {
 		if valEqual(lRoute.Route.Values, rRoute.Route.Values) {
 			return mergeRoutes(lRoute, rRoute, join)
 		}

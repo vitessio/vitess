@@ -27,7 +27,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
 		return nil, errors.New("unsupported: subqueries in DML")
 	}
 	if !route.Keyspace.Sharded {
-		route.PlanID = UpdateUnsharded
+		route.Opcode = UpdateUnsharded
 		return route, nil
 	}
 
@@ -35,7 +35,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
 	if err != nil {
 		return nil, err
 	}
-	route.PlanID = UpdateEqual
+	route.Opcode = UpdateEqual
 	if isIndexChanging(upd.Exprs, route.Table.ColVindexes) {
 		return nil, errors.New("unsupported: DML cannot change vindex column")
 	}
@@ -76,7 +76,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
 		return nil, errors.New("unsupported: subqueries in DML")
 	}
 	if !route.Keyspace.Sharded {
-		route.PlanID = DeleteUnsharded
+		route.Opcode = DeleteUnsharded
 		return route, nil
 	}
 
@@ -84,7 +84,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
 	if err != nil {
 		return nil, err
 	}
-	route.PlanID = DeleteEqual
+	route.Opcode = DeleteEqual
 	route.Subquery = generateDeleteSubquery(del, route.Table)
 	return route, nil
 }

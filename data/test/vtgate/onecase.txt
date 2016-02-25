@@ -5,7 +5,7 @@
   "Instructions": {
     "Left": {
       "Left": {
-        "PlanID": "SelectScatter",
+        "Opcode": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -14,7 +14,7 @@
         "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
       },
       "Right": {
-        "PlanID": "SelectScatter",
+        "Opcode": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -34,7 +34,7 @@
       }
     },
     "Right": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true

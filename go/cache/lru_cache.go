@@ -39,7 +39,8 @@ type LRUCache struct {
 
 // Value is the interface values that go into LRUCache need to satisfy
 type Value interface {
-	// Size returns how big this value is.
+	// Size returns how big this value is. If you want to just track
+	// the cache by number of objects, you may return the size as 1.
 	Size() int
 }
 

@@ -8,7 +8,7 @@
   "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -17,7 +17,7 @@
       "FieldQuery": "select u.id as uid from user as u where 1 != 1"
     },
     "Right": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -45,7 +45,7 @@
   "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -54,7 +54,7 @@
       "FieldQuery": "select u.id as uid from user as u where 1 != 1"
     },
     "Right": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -83,7 +83,7 @@
   "Instructions": {
     "Left": {
       "Left": {
-        "PlanID": "SelectScatter",
+        "Opcode": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -92,7 +92,7 @@
         "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
       },
       "Right": {
-        "PlanID": "SelectScatter",
+        "Opcode": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -106,7 +106,7 @@
       ]
     },
     "Right": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -133,7 +133,7 @@
   "Instructions": {
     "Left": {
       "Left": {
-        "PlanID": "SelectScatter",
+        "Opcode": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -142,7 +142,7 @@
         "FieldQuery": "select u1.id from user as u1 where 1 != 1"
       },
       "Right": {
-        "PlanID": "SelectScatter",
+        "Opcode": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -156,7 +156,7 @@
       ]
     },
     "Right": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -183,7 +183,7 @@
   "Instructions": {
     "Left": {
       "Left": {
-        "PlanID": "SelectScatter",
+        "Opcode": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -192,7 +192,7 @@
         "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
       },
       "Right": {
-        "PlanID": "SelectScatter",
+        "Opcode": "SelectScatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -212,7 +212,7 @@
       }
     },
     "Right": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -243,7 +243,7 @@
     "Left": {
       "Left": {
         "Left": {
-          "PlanID": "SelectScatter",
+          "Opcode": "SelectScatter",
           "Keyspace": {
             "Name": "user",
             "Sharded": true
@@ -252,7 +252,7 @@
           "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
         },
         "Right": {
-          "PlanID": "SelectScatter",
+          "Opcode": "SelectScatter",
           "Keyspace": {
             "Name": "user",
             "Sharded": true
@@ -266,7 +266,7 @@
         ]
       },
       "Right": {
-        "PlanID": "SelectEqualUnique",
+        "Opcode": "SelectEqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -288,7 +288,7 @@
       }
     },
     "Right": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -314,7 +314,7 @@
   "Original": "select u1.id from user u1 join (user u2 join user u3) where u2.id = u1.col and u3.id = u1.col",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -324,7 +324,7 @@
     },
     "Right": {
       "Left": {
-        "PlanID": "SelectEqualUnique",
+        "Opcode": "SelectEqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -338,7 +338,7 @@
         }
       },
       "Right": {
-        "PlanID": "SelectEqualUnique",
+        "Opcode": "SelectEqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true

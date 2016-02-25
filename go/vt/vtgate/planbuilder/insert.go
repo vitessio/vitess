@@ -23,7 +23,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
 	}
 	route.Keyspace = route.Table.Keyspace
 	if !route.Keyspace.Sharded {
-		route.PlanID = InsertUnsharded
+		route.Opcode = InsertUnsharded
 		return route, nil
 	}
 
@@ -51,7 +51,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
 		return nil, errors.New("column list doesn't match values")
 	}
 	colVindexes := vschema.Tables[tablename].ColVindexes
-	route.PlanID = InsertSharded
+	route.Opcode = InsertSharded
 	route.Values = make([]interface{}, 0, len(colVindexes))
 	for _, index := range colVindexes {
 		if err := buildIndexPlan(ins, tablename, index, route); err != nil {

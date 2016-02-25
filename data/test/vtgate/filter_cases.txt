@@ -3,7 +3,7 @@
 {
   "Original": "select id from user",
   "Instructions": {
-    "PlanID": "SelectScatter",
+    "Opcode": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -18,7 +18,7 @@
 {
   "Original": "select id from user where user.id = 5",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -35,7 +35,7 @@
 {
   "Original": "select id from user where user.id = 5+5",
   "Instructions": {
-    "PlanID": "SelectScatter",
+    "Opcode": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -50,7 +50,7 @@
 {
   "Original": "select id from music where id = 5 and user_id = 4",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -67,7 +67,7 @@
 {
   "Original": "select id from user where costly = 'aa' and name = 'bb'",
   "Instructions": {
-    "PlanID": "SelectEqual",
+    "Opcode": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -84,7 +84,7 @@
 {
   "Original": "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')",
   "Instructions": {
-    "PlanID": "SelectIN",
+    "Opcode": "SelectIN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -104,7 +104,7 @@
 {
   "Original": "select id from user where name in (col, 'bb')",
   "Instructions": {
-    "PlanID": "SelectScatter",
+    "Opcode": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -119,7 +119,7 @@
 {
   "Original": "select id from user where name = :a",
   "Instructions": {
-    "PlanID": "SelectEqual",
+    "Opcode": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -136,7 +136,7 @@
 {
   "Original": "select id from user where name = 0xFFFFFFFFFFFFFFFF",
   "Instructions": {
-    "PlanID": "SelectEqual",
+    "Opcode": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -153,7 +153,7 @@
 {
   "Original": "select id from user where name in ::list",
   "Instructions": {
-    "PlanID": "SelectIN",
+    "Opcode": "SelectIN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -170,7 +170,7 @@
 {
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -187,7 +187,7 @@
 {
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -204,7 +204,7 @@
 {
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -221,7 +221,7 @@
 {
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
-    "PlanID": "SelectScatter",
+    "Opcode": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -237,7 +237,7 @@
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectEqualUnique",
+      "Opcode": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -248,7 +248,7 @@
       "Values": 5
     },
     "Right": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -274,7 +274,7 @@
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectEqualUnique",
+      "Opcode": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -285,7 +285,7 @@
       "Values": 5
     },
     "Right": {
-      "PlanID": "SelectEqualUnique",
+      "Opcode": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -313,7 +313,7 @@
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -322,7 +322,7 @@
       "FieldQuery": "select user.col from user where 1 != 1"
     },
     "Right": {
-      "PlanID": "SelectEqualUnique",
+      "Opcode": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -350,7 +350,7 @@
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -359,7 +359,7 @@
       "FieldQuery": "select user.col from user where 1 != 1"
     },
     "Right": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -384,7 +384,7 @@
 {
   "Original": "select id from user where user.col = 5 and user.id in (1, 2)",
   "Instructions": {
-    "PlanID": "SelectIN",
+    "Opcode": "SelectIN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -404,7 +404,7 @@
 {
   "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
-    "PlanID": "SelectEqual",
+    "Opcode": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -421,7 +421,7 @@
 {
   "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -438,7 +438,7 @@
 {
   "Original": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -455,7 +455,7 @@
 {
   "Original": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
   "Instructions": {
-    "PlanID": "SelectScatter",
+    "Opcode": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -471,7 +471,7 @@
   "Original": "select main1.id from user join main1 where main1.id = user.id",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -480,7 +480,7 @@
       "FieldQuery": "select user.id from user where 1 != 1"
     },
     "Right": {
-      "PlanID": "SelectUnsharded",
+      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
@@ -506,7 +506,7 @@
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -515,7 +515,7 @@
       "FieldQuery": "select user_extra.col from user_extra where 1 != 1"
     },
     "Right": {
-      "PlanID": "SelectIN",
+      "Opcode": "SelectIN",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -546,7 +546,7 @@
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -555,7 +555,7 @@
       "FieldQuery": "select 1 from user_extra where 1 != 1"
     },
     "Right": {
-      "PlanID": "SelectEqualUnique",
+      "Opcode": "SelectEqualUnique",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -577,7 +577,7 @@
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
   "Instructions": {
     "Left": {
-      "PlanID": "SelectScatter",
+      "Opcode": "SelectScatter",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -586,7 +586,7 @@
       "FieldQuery": "select user_extra.col from user_extra where 1 != 1"
     },
     "Right": {
-      "PlanID": "SelectIN",
+      "Opcode": "SelectIN",
       "Keyspace": {
         "Name": "user",
         "Sharded": true
@@ -616,7 +616,7 @@
 {
   "Original": "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)",
   "Instructions": {
-    "PlanID": "SelectScatter",
+    "Opcode": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -631,7 +631,7 @@
 {
   "Original": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -648,7 +648,7 @@
 {
   "Original": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -665,7 +665,7 @@
 {
   "Original": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
   "Instructions": {
-    "PlanID": "SelectEqualUnique",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -682,7 +682,7 @@
 {
   "Original": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
   "Instructions": {
-    "PlanID": "SelectScatter",
+    "Opcode": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true

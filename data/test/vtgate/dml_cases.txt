@@ -11,7 +11,7 @@
 {
   "Original": "update main1 set val = 1",
   "Instructions": {
-    "PlanID": "UpdateUnsharded",
+    "Opcode": "UpdateUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -26,7 +26,7 @@
 {
   "Original": "delete from main1",
   "Instructions": {
-    "PlanID": "DeleteUnsharded",
+    "Opcode": "DeleteUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -41,7 +41,7 @@
 {
   "Original": "update user set val = 1 where id = 1",
   "Instructions": {
-    "PlanID": "UpdateEqual",
+    "Opcode": "UpdateEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -58,7 +58,7 @@
 {
   "Original": "update user set val = 1 where  id = id2 and id = 1",
   "Instructions": {
-    "PlanID": "UpdateEqual",
+    "Opcode": "UpdateEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -75,7 +75,7 @@
 {
   "Original": "update user set val = 1 where  id = 1.1 and id = 1",
   "Instructions": {
-    "PlanID": "UpdateEqual",
+    "Opcode": "UpdateEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -92,7 +92,7 @@
 {
   "Original": "delete from user where id = 1",
   "Instructions": {
-    "PlanID": "DeleteEqual",
+    "Opcode": "DeleteEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -110,7 +110,7 @@
 {
   "Original": "update music set val = 1 where id = 1",
   "Instructions": {
-    "PlanID": "UpdateEqual",
+    "Opcode": "UpdateEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -127,7 +127,7 @@
 {
   "Original": "delete from music where id = 1",
   "Instructions": {
-    "PlanID": "DeleteEqual",
+    "Opcode": "DeleteEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -145,7 +145,7 @@
 {
   "Original": "delete from music_extra where user_id = 1",
   "Instructions": {
-    "PlanID": "DeleteEqual",
+    "Opcode": "DeleteEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -162,7 +162,7 @@
 {
   "Original": "insert into main1 values(1, 2)",
   "Instructions": {
-    "PlanID": "InsertUnsharded",
+    "Opcode": "InsertUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -185,7 +185,7 @@
 {
   "Original": "insert into user(id) values (1)",
   "Instructions": {
-    "PlanID": "InsertSharded",
+    "Opcode": "InsertSharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -205,7 +205,7 @@
 {
   "Original": "insert into user(nonid) values (2)",
   "Instructions": {
-    "PlanID": "InsertSharded",
+    "Opcode": "InsertSharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -225,7 +225,7 @@
 {
   "Original": "insert into user(nonid, name, id) values (2, 'foo', 1)",
   "Instructions": {
-    "PlanID": "InsertSharded",
+    "Opcode": "InsertSharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
