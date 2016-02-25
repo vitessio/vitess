@@ -203,8 +203,8 @@ func main() {
 }
 
 type results struct {
-	Fields []string
-	Rows   [][]string
+	Fields []string   `json:"fields"`
+	Rows   [][]string `json:"rows"`
 }
 
 func printTable(qr results, dur time.Duration) {

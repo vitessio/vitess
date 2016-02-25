@@ -227,7 +227,7 @@ primary key (id)
           q['query']['sql'],
           'test_keyspace', ','.join(q['shard_part']['shards']),
           tablet_type='master', bindvars=bindvars)
-      for r in qr['Rows']:
+      for r in qr['rows']:
         rows[int(r[0])] = r[1]
     self.assertEqual(len(rows), 20)
     expected = {}
@@ -263,8 +263,8 @@ primary key (id)
                             keyspace='test_keyspace', shard=str(shard))
 
       want = {
-          u'Fields': [u'id', u'name'],
-          u'Rows': [[unicode(id_val), unicode(name_val)]]
+          u'fields': [u'id', u'name'],
+          u'rows': [[unicode(id_val), unicode(name_val)]]
           }
       # read non-streaming
       out, _ = utils.vtgate.vtclient(

@@ -98,7 +98,7 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure the query service is started right away
     qr = tablet_62344.execute('select * from vt_select_test')
-    self.assertEqual(len(qr['Rows']), 4,
+    self.assertEqual(len(qr['rows']), 4,
                      'expected 4 rows in vt_select_test: %s' % str(qr))
 
     # make sure direct dba queries work
@@ -106,10 +106,10 @@ class TestTabletManager(unittest.TestCase):
         ['ExecuteFetchAsDba', '-json', tablet_62344.tablet_alias,
          'select * from vt_test_keyspace.vt_select_test'])
     self.assertEqual(
-        len(query_result['Rows']), 4,
+        len(query_result['rows']), 4,
         'expected 4 rows in vt_select_test: %s' % str(query_result))
     self.assertEqual(
-        len(query_result['Fields']), 2,
+        len(query_result['fields']), 2,
         'expected 2 fields in vt_select_test: %s' % str(query_result))
 
     # check Ping / RefreshState
