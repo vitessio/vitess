@@ -262,17 +262,21 @@ primary key (id)
                             bindvars=[id_val, name_val],
                             keyspace='test_keyspace', shard=str(shard))
 
-      want = ['Index\tid\tname', '0\t%d\t%s' % (id_val, name_val)]
+      want = {
+          u'Fields': [u'id', u'name'],
+          u'Rows': [[unicode(id_val), unicode(name_val)]]
+          }
       # read non-streaming
       out, _ = utils.vtgate.vtclient(
           'select * from data where id = :v1', bindvars=[id_val],
-          keyspace='test_keyspace', shard=str(shard))
+          keyspace='test_keyspace', shard=str(shard), json_output=True)
       self.assertEqual(out, want)
 
       # read streaming
       out, _ = utils.vtgate.vtclient(
           'select * from data where id = :v1', bindvars=[id_val],
-          keyspace='test_keyspace', shard=str(shard), streaming=True)
+          keyspace='test_keyspace', shard=str(shard), streaming=True,
+          json_output=True)
       self.assertEqual(out, want)
 
 

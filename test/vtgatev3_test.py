@@ -754,8 +754,12 @@ class TestVTGateFunctions(unittest.TestCase):
         bindvars=[10, 'test 10'])
 
     out, _ = utils.vtgate.vtclient(
-        'select * from vt_user_extra where user_id = :v1', bindvars=[10])
-    self.assertEqual(out, ['Index\tuser_id\temail', '0\t10\ttest 10'])
+        'select * from vt_user_extra where user_id = :v1', bindvars=[10],
+        json_output=True)
+    self.assertEqual(out, {
+        u'Fields': [u'user_id', u'email'],
+        u'Rows': [[u'10', u'test 10']],
+        })
 
     utils.vtgate.vtclient(
         'update vt_user_extra set email=:v2 where user_id = :v1',
@@ -763,15 +767,22 @@ class TestVTGateFunctions(unittest.TestCase):
 
     out, _ = utils.vtgate.vtclient(
         'select * from vt_user_extra where user_id = :v1', bindvars=[10],
-        streaming=True)
-    self.assertEqual(out, ['Index\tuser_id\temail', '0\t10\ttest 1000'])
+        streaming=True, json_output=True)
+    self.assertEqual(out, {
+        u'Fields': [u'user_id', u'email'],
+        u'Rows': [[u'10', u'test 1000']],
+        })
 
     utils.vtgate.vtclient(
         'delete from vt_user_extra where user_id = :v1', bindvars=[10])
 
     out, _ = utils.vtgate.vtclient(
-        'select * from vt_user_extra where user_id = :v1', bindvars=[10])
-    self.assertEqual(out, ['Index\tuser_id\temail'])
+        'select * from vt_user_extra where user_id = :v1', bindvars=[10],
+        json_output=True)
+    self.assertEqual(out, {
+        u'Fields': [u'user_id', u'email'],
+        u'Rows': None,
+        })
 
   def test_vtctl_vtgate_execute(self):
     """This test uses 'vtctl VtGateExecute' to send and receive various queries.

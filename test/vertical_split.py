@@ -314,7 +314,7 @@ index by_msg (msg)
     for table in ['moving1', 'moving2']:
       if expected and 'moving.*' in expected:
         # table is blacklisted, should get the error
-        _, stderr = utils.run_vtctl(['VtTabletExecute',
+        _, stderr = utils.run_vtctl(['VtTabletExecute', '-json',
                                      '-keyspace', t.keyspace,
                                      '-shard', t.shard,
                                      t.tablet_alias,

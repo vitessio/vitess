@@ -118,6 +118,7 @@ repos="github.com/golang/glog \
        google.golang.org/cloud \
        google.golang.org/cloud/storage \
        golang.org/x/crypto/ssh/terminal \
+       github.com/olekukonko/tablewriter \
 "
 
 # Packages for uploading code coverage to coveralls.io (used by Travis CI).
