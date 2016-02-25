@@ -7,10 +7,33 @@ package mysqlctl
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 )
+
+// getPoolReconnect gets a connection from a pool, tests it, and reconnects if
+// it gets errno 2006.
+func getPoolReconnect(pool *dbconnpool.ConnectionPool, timeout time.Duration) (dbconnpool.PoolConnection, error) {
+	conn, err := pool.Get(timeout)
+	if err != nil {
+		return conn, err
+	}
+	// Run a test query to see if this connection is still good.
+	if _, err := conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
+		// If we get "MySQL server has gone away (errno 2006)", try to reconnect.
+		if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == 2006 {
+			if err := conn.Reconnect(); err != nil {
+				conn.Recycle()
+				return conn, err
+			}
+		}
+	}
+	return conn, nil
+}
 
 // ExecuteSuperQuery allows the user to execute a query as a super user.
 func (mysqld *Mysqld) ExecuteSuperQuery(query string) error {
@@ -19,7 +42,7 @@ func (mysqld *Mysqld) ExecuteSuperQuery(query string) error {
 
 // ExecuteSuperQueryList alows the user to execute queries as a super user.
 func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
-	conn, connErr := mysqld.dbaPool.Get(0)
+	conn, connErr := getPoolReconnect(mysqld.dbaPool, 0)
 	if connErr != nil {
 		return connErr
 	}
@@ -35,7 +58,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
 
 // FetchSuperQuery returns the results of executing a query as a super user.
 func (mysqld *Mysqld) FetchSuperQuery(query string) (*sqltypes.Result, error) {
-	conn, connErr := mysqld.dbaPool.Get(0)
+	conn, connErr := getPoolReconnect(mysqld.dbaPool, 0)
 	if connErr != nil {
 		return nil, connErr
 	}
