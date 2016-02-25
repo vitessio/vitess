@@ -98,12 +98,12 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure the query service is started right away
     qr = tablet_62344.execute('select * from vt_select_test')
-    self.assertEqual(len(qr['Rows']), 4,
+    self.assertEqual(len(qr['rows']), 4,
                      'expected 4 rows in vt_select_test: %s' % str(qr))
 
     # make sure direct dba queries work
     query_result = utils.run_vtctl_json(
-        ['ExecuteFetchAsDba', tablet_62344.tablet_alias,
+        ['ExecuteFetchAsDba', '-json', tablet_62344.tablet_alias,
          'select * from vt_test_keyspace.vt_select_test'])
     self.assertEqual(
         len(query_result['rows']), 4,

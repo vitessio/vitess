@@ -585,13 +585,15 @@ class VtGate(object):
 
   def vtclient(self, sql, keyspace=None, shard=None, tablet_type='master',
                bindvars=None, streaming=False,
-               verbose=False, raise_on_error=True):
+               verbose=False, raise_on_error=True, json_output=False):
     """Uses the vtclient binary to send a query to vtgate."""
     protocol, addr = self.rpc_endpoint()
     args = environment.binary_args('vtclient') + [
         '-server', addr,
         '-tablet_type', tablet_type,
         '-vtgate_protocol', protocol]
+    if json_output:
+      args.append('-json')
     if keyspace:
       args.extend(['-keyspace', keyspace])
     if shard:
@@ -605,13 +607,14 @@ class VtGate(object):
     args.append(sql)
 
     out, err = run(args, raise_on_error=raise_on_error, trap_output=True)
-    out = out.splitlines()
+    if json_output:
+      return json.loads(out), err
     return out, err
 
   def execute(self, sql, tablet_type='master', bindvars=None):
     """Uses 'vtctl VtGateExecute' to execute a command."""
     _, addr = self.rpc_endpoint()
-    args = ['VtGateExecute',
+    args = ['VtGateExecute', '-json',
             '-server', addr,
             '-tablet_type', tablet_type]
     if bindvars:
@@ -623,7 +626,7 @@ class VtGate(object):
                      bindvars=None):
     """Uses 'vtctl VtGateExecuteShards' to execute a command."""
     _, addr = self.rpc_endpoint()
-    args = ['VtGateExecuteShards',
+    args = ['VtGateExecuteShards', '-json',
             '-server', addr,
             '-keyspace', keyspace,
             '-shards', shards,

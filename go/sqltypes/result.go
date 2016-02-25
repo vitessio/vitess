@@ -8,10 +8,10 @@ import querypb "github.com/youtube/vitess/go/vt/proto/query"
 
 // Result represents a query result.
 type Result struct {
-	Fields       []*querypb.Field
-	RowsAffected uint64
-	InsertID     uint64
-	Rows         [][]Value
+	Fields       []*querypb.Field `json:"fields"`
+	RowsAffected uint64           `json:"rows_affected"`
+	InsertID     uint64           `json:"insert_id"`
+	Rows         [][]Value        `json:"rows"`
 }
 
 // Repair fixes the type info in the rows

@@ -174,5 +174,19 @@ class TestVtctld(unittest.TestCase):
         break
     vtctld_connection.close()
 
+  def test_execute_fetch_as_dba(self):
+    """Make sure ExecuteFetchAsDba prints a human-readable table by default."""
+    # Use a simple example so we're not sensitive to alignment settings, etc.
+    # All we care is that it's the human-readable table, not JSON or protobuf.
+    out, _ = utils.run_vtctl(['ExecuteFetchAsDba', shard_0_replica.tablet_alias,
+                              'SELECT 1 AS a'], trap_output=True)
+    want = """+---+
+| a |
++---+
+| 1 |
++---+
+"""
+    self.assertEqual(want, out)
+
 if __name__ == '__main__':
   utils.main()
