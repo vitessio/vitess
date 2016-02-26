@@ -66,6 +66,18 @@ h1, h2, h3, h4, h5, h6 {
 h2, h3, h4, h5 {
   margin-bottom: 0.8em;
 }
+#centerTextCol {
+  h2, h3, h4, h5, h6 {
+    // We need to set padding-top:50px so heading text isn't hidden
+    // by the nav bar when linking to a specific anchor. We then set
+    // a negative margin-top to try to close some of the gap back up,
+    // but we can only go as far as the margin-bottom of the previous
+    // paragraph, or else it will overlap and prevent links above from
+    // being clicked.
+    padding-top: 50px;
+    margin-top: -16px;
+  }
+}
 
 // Code blocks (<code> + <pre>)
 code {
