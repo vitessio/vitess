@@ -194,7 +194,7 @@ func RecordTabletTagAction(cleaner *Cleaner, tabletAlias *topodatapb.TabletAlias
 
 // CleanUp is part of CleanerAction interface.
 func (tta TabletTagAction) CleanUp(ctx context.Context, wr *Wrangler) error {
-	return wr.TopoServer().UpdateTabletFields(ctx, tta.TabletAlias, func(tablet *topodatapb.Tablet) error {
+	_, err := wr.TopoServer().UpdateTabletFields(ctx, tta.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
 		}
@@ -205,6 +205,7 @@ func (tta TabletTagAction) CleanUp(ctx context.Context, wr *Wrangler) error {
 		}
 		return nil
 	})
+	return err
 }
 
 //

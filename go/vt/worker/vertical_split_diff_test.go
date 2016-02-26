@@ -16,12 +16,11 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -33,29 +32,30 @@ import (
 // support the tests
 type verticalDiffTabletServer struct {
 	queryservice.ErrorQueryService
-	t             *testing.T
-	excludedTable string
+	t        *testing.T
+	keyspace string
+	shard    string
 }
 
-func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
-	if strings.Contains(query.Sql, sq.excludedTable) {
-		sq.t.Errorf("Vertical Split Diff operation should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
+func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
+	if !strings.Contains(sql, "moving1") {
+		sq.t.Errorf("Vertical Split Diff operation should only operate on the 'moving1' table. query: %v", sql)
 	}
 
-	if hasKeyspace := strings.Contains(query.Sql, "WHERE keyspace_id"); hasKeyspace == true {
-		sq.t.Errorf("Sql query for VerticalSplitDiff should never contain a keyspace_id WHERE clause; query received: %v", query.Sql)
+	if hasKeyspace := strings.Contains(sql, "WHERE keyspace_id"); hasKeyspace == true {
+		sq.t.Errorf("Sql query for VerticalSplitDiff should never contain a keyspace_id WHERE clause; query received: %v", sql)
 	}
 
-	sq.t.Logf("verticalDiffTabletServer: got query: %v", *query)
+	sq.t.Logf("verticalDiffTabletServer: got query: %v", sql)
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&querypb.Field{
+			{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
@@ -68,7 +68,7 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *q
 	for i := 0; i < 1000; i++ {
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 				},
@@ -80,11 +80,26 @@ func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *q
 	return nil
 }
 
+func (sq *verticalDiffTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
+}
+
 // TODO(aaijazi): Create a test in which source and destination data does not match
 
 func TestVerticalSplitDiff(t *testing.T) {
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
@@ -98,15 +113,15 @@ func TestVerticalSplitDiff(t *testing.T) {
 	// Create the destination keyspace with the appropriate ServedFromMap
 	ki := &topodatapb.Keyspace{
 		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   "source_ks",
 			},
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_REPLICA,
 				Keyspace:   "source_ks",
 			},
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_RDONLY,
 				Keyspace:   "source_ks",
 			},
@@ -140,19 +155,21 @@ func TestVerticalSplitDiff(t *testing.T) {
 	// have a good way to fake the binlog player yet, which is
 	// necessary for synchronizing replication.
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient())
-	excludedTable := "excludedTable1"
 	subFlags := flag.NewFlagSet("VerticalSplitDiff", flag.ContinueOnError)
-	gwrk, err := commandVerticalSplitDiff(wi, wr, subFlags, []string{
-		"-exclude_tables", excludedTable,
-		"destination_ks/0",
-	})
+	gwrk, err := commandVerticalSplitDiff(wi, wr, subFlags, []string{"destination_ks/0"})
 	if err != nil {
 		t.Fatalf("commandVerticalSplitDiff failed: %v", err)
 	}
 	wrk := gwrk.(*VerticalSplitDiffWorker)
 
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, destRdonly1, destRdonly2} {
-		// both source and destination should be identical (for schema and data returned)
+		// both source and destination have the table definition for 'moving1'.
+		// source also has "staying1" while destination has "extra1".
+		// (Both additional tables should be ignored by the diff.)
+		extraTable := "staying1"
+		if rdonly == destRdonly1 || rdonly == destRdonly2 {
+			extraTable = "extra1"
+		}
 		rdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -163,7 +180,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 					Type:              tmutils.TableBaseTable,
 				},
 				{
-					Name:              excludedTable,
+					Name:              extraTable,
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              tmutils.TableBaseTable,
@@ -174,7 +191,11 @@ func TestVerticalSplitDiff(t *testing.T) {
 				},
 			},
 		}
-		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffTabletServer{t: t, excludedTable: excludedTable})
+		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &verticalDiffTabletServer{
+			t:        t,
+			keyspace: rdonly.Tablet.Keyspace,
+			shard:    rdonly.Tablet.Shard,
+		})
 	}
 
 	err = wrk.Run(ctx)

@@ -19,6 +19,11 @@ warnings.simplefilter('ignore')
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
+# Second replica to provide semi-sync ACKs while testing
+# scenarios when the first replica is down.
+replica2_tablet = tablet.Tablet()
+
+all_tablets = [master_tablet, replica_tablet, replica2_tablet]
 
 create_vt_insert_test = '''create table vt_insert_test (
 id bigint auto_increment,
@@ -32,9 +37,7 @@ def setUpModule():
     environment.topo_server().setup()
 
     # start mysql instance external to the test
-    setup_procs = [master_tablet.init_mysql(),
-                   replica_tablet.init_mysql()]
-    utils.wait_procs(setup_procs)
+    utils.wait_procs([t.init_mysql() for t in all_tablets])
 
     # start a vtctld so the vtctl insert commands are just RPCs, not forks
     utils.Vtctld().start()
@@ -44,17 +47,16 @@ def setUpModule():
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
     master_tablet.init_tablet('master', 'test_keyspace', '0')
     replica_tablet.init_tablet('replica', 'test_keyspace', '0')
+    replica2_tablet.init_tablet('replica', 'test_keyspace', '0')
     utils.validate_topology()
 
-    master_tablet.populate('vt_test_keyspace', create_vt_insert_test)
-    replica_tablet.populate('vt_test_keyspace', create_vt_insert_test)
+    for t in all_tablets:
+      t.populate('vt_test_keyspace', create_vt_insert_test)
 
-    utils.VtGate().start()
-
-    master_tablet.start_vttablet(memcache=True, wait_for_state=None)
-    replica_tablet.start_vttablet(memcache=True, wait_for_state=None)
-    master_tablet.wait_for_vttablet_state('SERVING')
-    replica_tablet.wait_for_vttablet_state('SERVING')
+    for t in all_tablets:
+      t.start_vttablet(memcache=True, wait_for_state=None)
+    for t in all_tablets:
+      t.wait_for_vttablet_state('SERVING')
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      master_tablet.tablet_alias], auto_log=True)
@@ -69,19 +71,19 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
   logging.debug('Tearing down the servers and setup')
-  tablet.kill_tablets([master_tablet, replica_tablet])
-  teardown_procs = [master_tablet.teardown_mysql(),
-                    replica_tablet.teardown_mysql()]
-  utils.wait_procs(teardown_procs, raise_on_error=False)
+  tablet.kill_tablets(all_tablets)
+  utils.wait_procs([t.teardown_mysql() for t in all_tablets],
+                   raise_on_error=False)
 
   environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
-  master_tablet.remove_tree()
-  replica_tablet.remove_tree()
+  for t in all_tablets:
+    t.remove_tree()
 
 
 class MultiDict(dict):
@@ -187,13 +189,13 @@ class RowCacheInvalidator(unittest.TestCase):
     self._exec_vt_txn(
         "insert into vt_insert_test (id, msg) values (1000000, 'start')")
     self._wait_for_replica()
-    self._wait_for_value([['1000000', 'start']])
+    self._wait_for_value([[1000000, 'start']])
     utils.mysql_write_query(
         master_tablet.tablet_uid,
         'vt_test_keyspace',
         "update vt_insert_test set msg = 'foo' where id = 1000000")
     self._wait_for_replica()
-    self._wait_for_value([['1000000', 'foo']])
+    self._wait_for_value([[1000000, 'foo']])
     end1 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(start, end1)
 
@@ -212,7 +214,7 @@ class RowCacheInvalidator(unittest.TestCase):
         'vt_test_keyspace',
         "insert into vt_insert_test (id, msg) values(1000000, 'bar')")
     self._wait_for_replica()
-    self._wait_for_value([['1000000', 'bar']])
+    self._wait_for_value([[1000000, 'bar']])
     end3 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(end2, end3)
 
@@ -279,18 +281,18 @@ class RowCacheInvalidator(unittest.TestCase):
                                 'select min(id) from vt_insert_test')
     self.assertNotEqual(res[0][0], None,
                         'Cannot proceed, no rows in vt_insert_test')
-    id = int(res[0][0])
+    mid = int(res[0][0])
     stats_dict = self.replica_stats()['vt_insert_test']
     misses = stats_dict['Misses']
     hits = stats_dict['Hits']
     replica_tablet.execute('select * from vt_insert_test where id=:id',
-                           bindvars={'id': id})
+                           bindvars={'id': mid})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1,
                      "This shouldn't have hit the cache")
 
     replica_tablet.execute('select * from vt_insert_test where id=:id',
-                           bindvars={'id': id})
+                           bindvars={'id': mid})
     hits2 = self.replica_stats()['vt_insert_test']['Hits']
     self.assertEqual(hits2 - hits, 1, 'This should have hit the cache')
 
@@ -299,7 +301,7 @@ class RowCacheInvalidator(unittest.TestCase):
 
   def _exec_replica_query(self, query):
     result = replica_tablet.execute(query, auto_log=False)
-    return result['Rows']
+    return result['rows']
 
 
 if __name__ == '__main__':

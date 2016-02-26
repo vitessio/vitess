@@ -23,12 +23,14 @@ This file contains the Keyspace management code for zktopo.Server
 */
 
 const (
-	globalKeyspacesPath = "/zk/global/vt/keyspaces"
+	// GlobalKeyspacesPath is the path used to store global
+	// information in ZK. Exported for tests.
+	GlobalKeyspacesPath = "/zk/global/vt/keyspaces"
 )
 
 // CreateKeyspace is part of the topo.Server interface
 func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
-	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
+	keyspacePath := path.Join(GlobalKeyspacesPath, keyspace)
 	pathList := []string{
 		keyspacePath,
 		path.Join(keyspacePath, "action"),
@@ -64,7 +66,7 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 
 // UpdateKeyspace is part of the topo.Server interface
 func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace, existingVersion int64) (int64, error) {
-	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
+	keyspacePath := path.Join(GlobalKeyspacesPath, keyspace)
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
@@ -82,7 +84,7 @@ func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *
 
 // DeleteKeyspace is part of the topo.Server interface.
 func (zkts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
-	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
+	keyspacePath := path.Join(GlobalKeyspacesPath, keyspace)
 	err := zk.DeleteRecursive(zkts.zconn, keyspacePath, -1)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
@@ -95,7 +97,7 @@ func (zkts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 
 // GetKeyspace is part of the topo.Server interface
 func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodatapb.Keyspace, int64, error) {
-	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
+	keyspacePath := path.Join(GlobalKeyspacesPath, keyspace)
 	data, stat, err := zkts.zconn.Get(keyspacePath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
@@ -114,7 +116,7 @@ func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topodata
 
 // GetKeyspaces is part of the topo.Server interface
 func (zkts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
-	children, _, err := zkts.zconn.Children(globalKeyspacesPath)
+	children, _, err := zkts.zconn.Children(GlobalKeyspacesPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return nil, nil
@@ -128,7 +130,7 @@ func (zkts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 
 // DeleteKeyspaceShards is part of the topo.Server interface
 func (zkts *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
-	shardsPath := path.Join(globalKeyspacesPath, keyspace, "shards")
+	shardsPath := path.Join(GlobalKeyspacesPath, keyspace, "shards")
 	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 		return err
 	}

@@ -22,8 +22,7 @@ from mysql_flavor import mysql_flavor
 
 src_master = tablet.Tablet()
 src_replica = tablet.Tablet()
-src_rdonly1 = tablet.Tablet()
-src_rdonly2 = tablet.Tablet()
+src_rdonly = tablet.Tablet()
 dst_master = tablet.Tablet()
 dst_replica = tablet.Tablet()
 
@@ -35,8 +34,7 @@ def setUpModule():
     setup_procs = [
         src_master.init_mysql(),
         src_replica.init_mysql(),
-        src_rdonly1.init_mysql(),
-        src_rdonly2.init_mysql(),
+        src_rdonly.init_mysql(),
         dst_master.init_mysql(),
         dst_replica.init_mysql(),
         ]
@@ -51,17 +49,16 @@ def setUpModule():
 
     src_master.init_tablet('master', 'test_keyspace', '0')
     src_replica.init_tablet('replica', 'test_keyspace', '0')
-    src_rdonly1.init_tablet('rdonly', 'test_keyspace', '0')
-    src_rdonly2.init_tablet('rdonly', 'test_keyspace', '0')
+    src_rdonly.init_tablet('rdonly', 'test_keyspace', '0')
 
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
-    for t in [src_master, src_replica, src_rdonly1, src_rdonly2]:
+    for t in [src_master, src_replica, src_rdonly]:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
 
-    for t in [src_master, src_replica, src_rdonly1, src_rdonly2]:
+    for t in [src_master, src_replica, src_rdonly]:
       t.wait_for_vttablet_state('SERVING')
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
@@ -82,7 +79,9 @@ def setUpModule():
                      'test_keyspace'], auto_log=True)
 
     # run a health check on source replica so it responds to discovery
+    # (for binlog players) and on the source rdonlys (for workers)
     utils.run_vtctl(['RunHealthCheck', src_replica.tablet_alias, 'replica'])
+    utils.run_vtctl(['RunHealthCheck', src_rdonly.tablet_alias, 'rdonly'])
 
     # Create destination shard.
     dst_master.init_tablet('master', 'test_keyspace', '-')
@@ -102,7 +101,6 @@ def setUpModule():
     logging.debug('Running the clone worker to start binlog stream...')
     utils.run_vtworker(['--cell', 'test_nj',
                         'SplitClone',
-                        '--strategy=-populate_blp_checkpoint',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         'test_keyspace/0'],
@@ -117,17 +115,17 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
-  tablet.kill_tablets([src_master, src_replica, src_rdonly1, src_rdonly2,
+  tablet.kill_tablets([src_master, src_replica, src_rdonly,
                        dst_master, dst_replica])
 
   teardown_procs = [
       src_master.teardown_mysql(),
       src_replica.teardown_mysql(),
-      src_rdonly1.teardown_mysql(),
-      src_rdonly2.teardown_mysql(),
+      src_rdonly.teardown_mysql(),
       dst_master.teardown_mysql(),
       dst_replica.teardown_mysql(),
       ]
@@ -139,8 +137,7 @@ def tearDownModule():
 
   src_master.remove_tree()
   src_replica.remove_tree()
-  src_rdonly1.remove_tree()
-  src_rdonly2.remove_tree()
+  src_rdonly.remove_tree()
   dst_master.remove_tree()
   dst_replica.remove_tree()
 

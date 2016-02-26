@@ -59,6 +59,10 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+const _ = proto.ProtoPackageIsVersion1
+
 // Session objects are session cookies and are invalidated on
 // use. Query results will contain updated session values.
 // Their content should be opaque to the user.
@@ -67,9 +71,10 @@ type Session struct {
 	ShardSessions []*Session_ShardSession `protobuf:"bytes,2,rep,name=shard_sessions" json:"shard_sessions,omitempty"`
 }
 
-func (m *Session) Reset()         { *m = Session{} }
-func (m *Session) String() string { return proto.CompactTextString(m) }
-func (*Session) ProtoMessage()    {}
+func (m *Session) Reset()                    { *m = Session{} }
+func (m *Session) String() string            { return proto.CompactTextString(m) }
+func (*Session) ProtoMessage()               {}
+func (*Session) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
 func (m *Session) GetShardSessions() []*Session_ShardSession {
 	if m != nil {
@@ -83,9 +88,10 @@ type Session_ShardSession struct {
 	TransactionId int64         `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
-func (m *Session_ShardSession) Reset()         { *m = Session_ShardSession{} }
-func (m *Session_ShardSession) String() string { return proto.CompactTextString(m) }
-func (*Session_ShardSession) ProtoMessage()    {}
+func (m *Session_ShardSession) Reset()                    { *m = Session_ShardSession{} }
+func (m *Session_ShardSession) String() string            { return proto.CompactTextString(m) }
+func (*Session_ShardSession) ProtoMessage()               {}
+func (*Session_ShardSession) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0, 0} }
 
 func (m *Session_ShardSession) GetTarget() *query.Target {
 	if m != nil {
@@ -110,9 +116,10 @@ type ExecuteRequest struct {
 	NotInTransaction bool `protobuf:"varint,5,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
 }
 
-func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
-func (m *ExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteRequest) ProtoMessage()    {}
+func (m *ExecuteRequest) Reset()                    { *m = ExecuteRequest{} }
+func (m *ExecuteRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteRequest) ProtoMessage()               {}
+func (*ExecuteRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
 func (m *ExecuteRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -147,9 +154,10 @@ type ExecuteResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *ExecuteResponse) Reset()         { *m = ExecuteResponse{} }
-func (m *ExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteResponse) ProtoMessage()    {}
+func (m *ExecuteResponse) Reset()                    { *m = ExecuteResponse{} }
+func (m *ExecuteResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteResponse) ProtoMessage()               {}
+func (*ExecuteResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
 func (m *ExecuteResponse) GetError() *vtrpc.RPCError {
 	if m != nil {
@@ -192,9 +200,10 @@ type ExecuteShardsRequest struct {
 	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
 }
 
-func (m *ExecuteShardsRequest) Reset()         { *m = ExecuteShardsRequest{} }
-func (m *ExecuteShardsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteShardsRequest) ProtoMessage()    {}
+func (m *ExecuteShardsRequest) Reset()                    { *m = ExecuteShardsRequest{} }
+func (m *ExecuteShardsRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteShardsRequest) ProtoMessage()               {}
+func (*ExecuteShardsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
 func (m *ExecuteShardsRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -229,9 +238,10 @@ type ExecuteShardsResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *ExecuteShardsResponse) Reset()         { *m = ExecuteShardsResponse{} }
-func (m *ExecuteShardsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteShardsResponse) ProtoMessage()    {}
+func (m *ExecuteShardsResponse) Reset()                    { *m = ExecuteShardsResponse{} }
+func (m *ExecuteShardsResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteShardsResponse) ProtoMessage()               {}
+func (*ExecuteShardsResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
 func (m *ExecuteShardsResponse) GetError() *vtrpc.RPCError {
 	if m != nil {
@@ -275,9 +285,10 @@ type ExecuteKeyspaceIdsRequest struct {
 	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
 }
 
-func (m *ExecuteKeyspaceIdsRequest) Reset()         { *m = ExecuteKeyspaceIdsRequest{} }
-func (m *ExecuteKeyspaceIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyspaceIdsRequest) ProtoMessage()    {}
+func (m *ExecuteKeyspaceIdsRequest) Reset()                    { *m = ExecuteKeyspaceIdsRequest{} }
+func (m *ExecuteKeyspaceIdsRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteKeyspaceIdsRequest) ProtoMessage()               {}
+func (*ExecuteKeyspaceIdsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
 
 func (m *ExecuteKeyspaceIdsRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -312,9 +323,10 @@ type ExecuteKeyspaceIdsResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *ExecuteKeyspaceIdsResponse) Reset()         { *m = ExecuteKeyspaceIdsResponse{} }
-func (m *ExecuteKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyspaceIdsResponse) ProtoMessage()    {}
+func (m *ExecuteKeyspaceIdsResponse) Reset()                    { *m = ExecuteKeyspaceIdsResponse{} }
+func (m *ExecuteKeyspaceIdsResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteKeyspaceIdsResponse) ProtoMessage()               {}
+func (*ExecuteKeyspaceIdsResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
 func (m *ExecuteKeyspaceIdsResponse) GetError() *vtrpc.RPCError {
 	if m != nil {
@@ -358,9 +370,10 @@ type ExecuteKeyRangesRequest struct {
 	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
 }
 
-func (m *ExecuteKeyRangesRequest) Reset()         { *m = ExecuteKeyRangesRequest{} }
-func (m *ExecuteKeyRangesRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyRangesRequest) ProtoMessage()    {}
+func (m *ExecuteKeyRangesRequest) Reset()                    { *m = ExecuteKeyRangesRequest{} }
+func (m *ExecuteKeyRangesRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteKeyRangesRequest) ProtoMessage()               {}
+func (*ExecuteKeyRangesRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
 func (m *ExecuteKeyRangesRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -402,9 +415,10 @@ type ExecuteKeyRangesResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *ExecuteKeyRangesResponse) Reset()         { *m = ExecuteKeyRangesResponse{} }
-func (m *ExecuteKeyRangesResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyRangesResponse) ProtoMessage()    {}
+func (m *ExecuteKeyRangesResponse) Reset()                    { *m = ExecuteKeyRangesResponse{} }
+func (m *ExecuteKeyRangesResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteKeyRangesResponse) ProtoMessage()               {}
+func (*ExecuteKeyRangesResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
 func (m *ExecuteKeyRangesResponse) GetError() *vtrpc.RPCError {
 	if m != nil {
@@ -450,9 +464,10 @@ type ExecuteEntityIdsRequest struct {
 	NotInTransaction bool `protobuf:"varint,8,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
 }
 
-func (m *ExecuteEntityIdsRequest) Reset()         { *m = ExecuteEntityIdsRequest{} }
-func (m *ExecuteEntityIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteEntityIdsRequest) ProtoMessage()    {}
+func (m *ExecuteEntityIdsRequest) Reset()                    { *m = ExecuteEntityIdsRequest{} }
+func (m *ExecuteEntityIdsRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteEntityIdsRequest) ProtoMessage()               {}
+func (*ExecuteEntityIdsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
 
 func (m *ExecuteEntityIdsRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -483,10 +498,10 @@ func (m *ExecuteEntityIdsRequest) GetEntityKeyspaceIds() []*ExecuteEntityIdsRequ
 }
 
 type ExecuteEntityIdsRequest_EntityId struct {
-	// xid_type is the type of the entity's value. Can be NULL.
-	XidType query.Type `protobuf:"varint,1,opt,name=xid_type,enum=query.Type" json:"xid_type,omitempty"`
-	// xid_value is the value for the entity. Not set if xid_type is NULL.
-	XidValue []byte `protobuf:"bytes,2,opt,name=xid_value,proto3" json:"xid_value,omitempty"`
+	// type is the type of the entity's value. Can be NULL_TYPE.
+	Type query.Type `protobuf:"varint,1,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	// value is the value for the entity. Not set if type is NULL_TYPE.
+	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	// keyspace_id is the associated keyspace_id for the entity.
 	KeyspaceId []byte `protobuf:"bytes,3,opt,name=keyspace_id,proto3" json:"keyspace_id,omitempty"`
 }
@@ -494,6 +509,9 @@ type ExecuteEntityIdsRequest_EntityId struct {
 func (m *ExecuteEntityIdsRequest_EntityId) Reset()         { *m = ExecuteEntityIdsRequest_EntityId{} }
 func (m *ExecuteEntityIdsRequest_EntityId) String() string { return proto.CompactTextString(m) }
 func (*ExecuteEntityIdsRequest_EntityId) ProtoMessage()    {}
+func (*ExecuteEntityIdsRequest_EntityId) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{9, 0}
+}
 
 // ExecuteEntityIdsResponse is the returned value from ExecuteEntityIds.
 type ExecuteEntityIdsResponse struct {
@@ -507,9 +525,10 @@ type ExecuteEntityIdsResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *ExecuteEntityIdsResponse) Reset()         { *m = ExecuteEntityIdsResponse{} }
-func (m *ExecuteEntityIdsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteEntityIdsResponse) ProtoMessage()    {}
+func (m *ExecuteEntityIdsResponse) Reset()                    { *m = ExecuteEntityIdsResponse{} }
+func (m *ExecuteEntityIdsResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteEntityIdsResponse) ProtoMessage()               {}
+func (*ExecuteEntityIdsResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
 
 func (m *ExecuteEntityIdsResponse) GetError() *vtrpc.RPCError {
 	if m != nil {
@@ -544,9 +563,10 @@ type BoundShardQuery struct {
 	Shards []string `protobuf:"bytes,3,rep,name=shards" json:"shards,omitempty"`
 }
 
-func (m *BoundShardQuery) Reset()         { *m = BoundShardQuery{} }
-func (m *BoundShardQuery) String() string { return proto.CompactTextString(m) }
-func (*BoundShardQuery) ProtoMessage()    {}
+func (m *BoundShardQuery) Reset()                    { *m = BoundShardQuery{} }
+func (m *BoundShardQuery) String() string            { return proto.CompactTextString(m) }
+func (*BoundShardQuery) ProtoMessage()               {}
+func (*BoundShardQuery) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
 
 func (m *BoundShardQuery) GetQuery() *query.BoundQuery {
 	if m != nil {
@@ -573,9 +593,10 @@ type ExecuteBatchShardsRequest struct {
 	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction" json:"as_transaction,omitempty"`
 }
 
-func (m *ExecuteBatchShardsRequest) Reset()         { *m = ExecuteBatchShardsRequest{} }
-func (m *ExecuteBatchShardsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchShardsRequest) ProtoMessage()    {}
+func (m *ExecuteBatchShardsRequest) Reset()                    { *m = ExecuteBatchShardsRequest{} }
+func (m *ExecuteBatchShardsRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteBatchShardsRequest) ProtoMessage()               {}
+func (*ExecuteBatchShardsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{12} }
 
 func (m *ExecuteBatchShardsRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -610,9 +631,10 @@ type ExecuteBatchShardsResponse struct {
 	Results []*query.QueryResult `protobuf:"bytes,3,rep,name=results" json:"results,omitempty"`
 }
 
-func (m *ExecuteBatchShardsResponse) Reset()         { *m = ExecuteBatchShardsResponse{} }
-func (m *ExecuteBatchShardsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchShardsResponse) ProtoMessage()    {}
+func (m *ExecuteBatchShardsResponse) Reset()                    { *m = ExecuteBatchShardsResponse{} }
+func (m *ExecuteBatchShardsResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteBatchShardsResponse) ProtoMessage()               {}
+func (*ExecuteBatchShardsResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{13} }
 
 func (m *ExecuteBatchShardsResponse) GetError() *vtrpc.RPCError {
 	if m != nil {
@@ -648,9 +670,10 @@ type BoundKeyspaceIdQuery struct {
 	KeyspaceIds [][]byte `protobuf:"bytes,3,rep,name=keyspace_ids,proto3" json:"keyspace_ids,omitempty"`
 }
 
-func (m *BoundKeyspaceIdQuery) Reset()         { *m = BoundKeyspaceIdQuery{} }
-func (m *BoundKeyspaceIdQuery) String() string { return proto.CompactTextString(m) }
-func (*BoundKeyspaceIdQuery) ProtoMessage()    {}
+func (m *BoundKeyspaceIdQuery) Reset()                    { *m = BoundKeyspaceIdQuery{} }
+func (m *BoundKeyspaceIdQuery) String() string            { return proto.CompactTextString(m) }
+func (*BoundKeyspaceIdQuery) ProtoMessage()               {}
+func (*BoundKeyspaceIdQuery) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{14} }
 
 func (m *BoundKeyspaceIdQuery) GetQuery() *query.BoundQuery {
 	if m != nil {
@@ -676,9 +699,10 @@ type ExecuteBatchKeyspaceIdsRequest struct {
 	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction" json:"as_transaction,omitempty"`
 }
 
-func (m *ExecuteBatchKeyspaceIdsRequest) Reset()         { *m = ExecuteBatchKeyspaceIdsRequest{} }
-func (m *ExecuteBatchKeyspaceIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchKeyspaceIdsRequest) ProtoMessage()    {}
+func (m *ExecuteBatchKeyspaceIdsRequest) Reset()                    { *m = ExecuteBatchKeyspaceIdsRequest{} }
+func (m *ExecuteBatchKeyspaceIdsRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteBatchKeyspaceIdsRequest) ProtoMessage()               {}
+func (*ExecuteBatchKeyspaceIdsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{15} }
 
 func (m *ExecuteBatchKeyspaceIdsRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -716,6 +740,9 @@ type ExecuteBatchKeyspaceIdsResponse struct {
 func (m *ExecuteBatchKeyspaceIdsResponse) Reset()         { *m = ExecuteBatchKeyspaceIdsResponse{} }
 func (m *ExecuteBatchKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteBatchKeyspaceIdsResponse) ProtoMessage()    {}
+func (*ExecuteBatchKeyspaceIdsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{16}
+}
 
 func (m *ExecuteBatchKeyspaceIdsResponse) GetError() *vtrpc.RPCError {
 	if m != nil {
@@ -749,9 +776,10 @@ type StreamExecuteRequest struct {
 	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
-func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
-func (m *StreamExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteRequest) ProtoMessage()    {}
+func (m *StreamExecuteRequest) Reset()                    { *m = StreamExecuteRequest{} }
+func (m *StreamExecuteRequest) String() string            { return proto.CompactTextString(m) }
+func (*StreamExecuteRequest) ProtoMessage()               {}
+func (*StreamExecuteRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{17} }
 
 func (m *StreamExecuteRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -775,9 +803,10 @@ type StreamExecuteResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
-func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteResponse) ProtoMessage()    {}
+func (m *StreamExecuteResponse) Reset()                    { *m = StreamExecuteResponse{} }
+func (m *StreamExecuteResponse) String() string            { return proto.CompactTextString(m) }
+func (*StreamExecuteResponse) ProtoMessage()               {}
+func (*StreamExecuteResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{18} }
 
 func (m *StreamExecuteResponse) GetResult() *query.QueryResult {
 	if m != nil {
@@ -801,9 +830,10 @@ type StreamExecuteShardsRequest struct {
 	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
-func (m *StreamExecuteShardsRequest) Reset()         { *m = StreamExecuteShardsRequest{} }
-func (m *StreamExecuteShardsRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteShardsRequest) ProtoMessage()    {}
+func (m *StreamExecuteShardsRequest) Reset()                    { *m = StreamExecuteShardsRequest{} }
+func (m *StreamExecuteShardsRequest) String() string            { return proto.CompactTextString(m) }
+func (*StreamExecuteShardsRequest) ProtoMessage()               {}
+func (*StreamExecuteShardsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{19} }
 
 func (m *StreamExecuteShardsRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -827,9 +857,10 @@ type StreamExecuteShardsResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *StreamExecuteShardsResponse) Reset()         { *m = StreamExecuteShardsResponse{} }
-func (m *StreamExecuteShardsResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteShardsResponse) ProtoMessage()    {}
+func (m *StreamExecuteShardsResponse) Reset()                    { *m = StreamExecuteShardsResponse{} }
+func (m *StreamExecuteShardsResponse) String() string            { return proto.CompactTextString(m) }
+func (*StreamExecuteShardsResponse) ProtoMessage()               {}
+func (*StreamExecuteShardsResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{20} }
 
 func (m *StreamExecuteShardsResponse) GetResult() *query.QueryResult {
 	if m != nil {
@@ -857,6 +888,9 @@ type StreamExecuteKeyspaceIdsRequest struct {
 func (m *StreamExecuteKeyspaceIdsRequest) Reset()         { *m = StreamExecuteKeyspaceIdsRequest{} }
 func (m *StreamExecuteKeyspaceIdsRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteKeyspaceIdsRequest) ProtoMessage()    {}
+func (*StreamExecuteKeyspaceIdsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{21}
+}
 
 func (m *StreamExecuteKeyspaceIdsRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -883,6 +917,9 @@ type StreamExecuteKeyspaceIdsResponse struct {
 func (m *StreamExecuteKeyspaceIdsResponse) Reset()         { *m = StreamExecuteKeyspaceIdsResponse{} }
 func (m *StreamExecuteKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteKeyspaceIdsResponse) ProtoMessage()    {}
+func (*StreamExecuteKeyspaceIdsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{22}
+}
 
 func (m *StreamExecuteKeyspaceIdsResponse) GetResult() *query.QueryResult {
 	if m != nil {
@@ -907,9 +944,10 @@ type StreamExecuteKeyRangesRequest struct {
 	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
-func (m *StreamExecuteKeyRangesRequest) Reset()         { *m = StreamExecuteKeyRangesRequest{} }
-func (m *StreamExecuteKeyRangesRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteKeyRangesRequest) ProtoMessage()    {}
+func (m *StreamExecuteKeyRangesRequest) Reset()                    { *m = StreamExecuteKeyRangesRequest{} }
+func (m *StreamExecuteKeyRangesRequest) String() string            { return proto.CompactTextString(m) }
+func (*StreamExecuteKeyRangesRequest) ProtoMessage()               {}
+func (*StreamExecuteKeyRangesRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{23} }
 
 func (m *StreamExecuteKeyRangesRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -940,9 +978,10 @@ type StreamExecuteKeyRangesResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
-func (m *StreamExecuteKeyRangesResponse) Reset()         { *m = StreamExecuteKeyRangesResponse{} }
-func (m *StreamExecuteKeyRangesResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteKeyRangesResponse) ProtoMessage()    {}
+func (m *StreamExecuteKeyRangesResponse) Reset()                    { *m = StreamExecuteKeyRangesResponse{} }
+func (m *StreamExecuteKeyRangesResponse) String() string            { return proto.CompactTextString(m) }
+func (*StreamExecuteKeyRangesResponse) ProtoMessage()               {}
+func (*StreamExecuteKeyRangesResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{24} }
 
 func (m *StreamExecuteKeyRangesResponse) GetResult() *query.QueryResult {
 	if m != nil {
@@ -958,9 +997,10 @@ type BeginRequest struct {
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 }
 
-func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
-func (m *BeginRequest) String() string { return proto.CompactTextString(m) }
-func (*BeginRequest) ProtoMessage()    {}
+func (m *BeginRequest) Reset()                    { *m = BeginRequest{} }
+func (m *BeginRequest) String() string            { return proto.CompactTextString(m) }
+func (*BeginRequest) ProtoMessage()               {}
+func (*BeginRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{25} }
 
 func (m *BeginRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -975,9 +1015,10 @@ type BeginResponse struct {
 	Session *Session `protobuf:"bytes,1,opt,name=session" json:"session,omitempty"`
 }
 
-func (m *BeginResponse) Reset()         { *m = BeginResponse{} }
-func (m *BeginResponse) String() string { return proto.CompactTextString(m) }
-func (*BeginResponse) ProtoMessage()    {}
+func (m *BeginResponse) Reset()                    { *m = BeginResponse{} }
+func (m *BeginResponse) String() string            { return proto.CompactTextString(m) }
+func (*BeginResponse) ProtoMessage()               {}
+func (*BeginResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{26} }
 
 func (m *BeginResponse) GetSession() *Session {
 	if m != nil {
@@ -995,9 +1036,10 @@ type CommitRequest struct {
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 }
 
-func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
-func (m *CommitRequest) String() string { return proto.CompactTextString(m) }
-func (*CommitRequest) ProtoMessage()    {}
+func (m *CommitRequest) Reset()                    { *m = CommitRequest{} }
+func (m *CommitRequest) String() string            { return proto.CompactTextString(m) }
+func (*CommitRequest) ProtoMessage()               {}
+func (*CommitRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{27} }
 
 func (m *CommitRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -1017,9 +1059,10 @@ func (m *CommitRequest) GetSession() *Session {
 type CommitResponse struct {
 }
 
-func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
-func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
-func (*CommitResponse) ProtoMessage()    {}
+func (m *CommitResponse) Reset()                    { *m = CommitResponse{} }
+func (m *CommitResponse) String() string            { return proto.CompactTextString(m) }
+func (*CommitResponse) ProtoMessage()               {}
+func (*CommitResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{28} }
 
 // RollbackRequest is the payload to Rollback.
 type RollbackRequest struct {
@@ -1030,9 +1073,10 @@ type RollbackRequest struct {
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 }
 
-func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
-func (m *RollbackRequest) String() string { return proto.CompactTextString(m) }
-func (*RollbackRequest) ProtoMessage()    {}
+func (m *RollbackRequest) Reset()                    { *m = RollbackRequest{} }
+func (m *RollbackRequest) String() string            { return proto.CompactTextString(m) }
+func (*RollbackRequest) ProtoMessage()               {}
+func (*RollbackRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{29} }
 
 func (m *RollbackRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -1052,9 +1096,10 @@ func (m *RollbackRequest) GetSession() *Session {
 type RollbackResponse struct {
 }
 
-func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
-func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
-func (*RollbackResponse) ProtoMessage()    {}
+func (m *RollbackResponse) Reset()                    { *m = RollbackResponse{} }
+func (m *RollbackResponse) String() string            { return proto.CompactTextString(m) }
+func (*RollbackResponse) ProtoMessage()               {}
+func (*RollbackResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{30} }
 
 // SplitQueryRequest is the payload to SplitQuery.
 type SplitQueryRequest struct {
@@ -1071,9 +1116,10 @@ type SplitQueryRequest struct {
 	SplitCount int64 `protobuf:"varint,5,opt,name=split_count" json:"split_count,omitempty"`
 }
 
-func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
-func (m *SplitQueryRequest) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryRequest) ProtoMessage()    {}
+func (m *SplitQueryRequest) Reset()                    { *m = SplitQueryRequest{} }
+func (m *SplitQueryRequest) String() string            { return proto.CompactTextString(m) }
+func (*SplitQueryRequest) ProtoMessage()               {}
+func (*SplitQueryRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{31} }
 
 func (m *SplitQueryRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
@@ -1095,9 +1141,10 @@ type SplitQueryResponse struct {
 	Splits []*SplitQueryResponse_Part `protobuf:"bytes,1,rep,name=splits" json:"splits,omitempty"`
 }
 
-func (m *SplitQueryResponse) Reset()         { *m = SplitQueryResponse{} }
-func (m *SplitQueryResponse) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse) ProtoMessage()    {}
+func (m *SplitQueryResponse) Reset()                    { *m = SplitQueryResponse{} }
+func (m *SplitQueryResponse) String() string            { return proto.CompactTextString(m) }
+func (*SplitQueryResponse) ProtoMessage()               {}
+func (*SplitQueryResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{32} }
 
 func (m *SplitQueryResponse) GetSplits() []*SplitQueryResponse_Part {
 	if m != nil {
@@ -1116,6 +1163,9 @@ type SplitQueryResponse_KeyRangePart struct {
 func (m *SplitQueryResponse_KeyRangePart) Reset()         { *m = SplitQueryResponse_KeyRangePart{} }
 func (m *SplitQueryResponse_KeyRangePart) String() string { return proto.CompactTextString(m) }
 func (*SplitQueryResponse_KeyRangePart) ProtoMessage()    {}
+func (*SplitQueryResponse_KeyRangePart) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{32, 0}
+}
 
 func (m *SplitQueryResponse_KeyRangePart) GetKeyRanges() []*topodata.KeyRange {
 	if m != nil {
@@ -1134,6 +1184,9 @@ type SplitQueryResponse_ShardPart struct {
 func (m *SplitQueryResponse_ShardPart) Reset()         { *m = SplitQueryResponse_ShardPart{} }
 func (m *SplitQueryResponse_ShardPart) String() string { return proto.CompactTextString(m) }
 func (*SplitQueryResponse_ShardPart) ProtoMessage()    {}
+func (*SplitQueryResponse_ShardPart) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{32, 1}
+}
 
 type SplitQueryResponse_Part struct {
 	// query is the query and bind variables to execute.
@@ -1146,9 +1199,10 @@ type SplitQueryResponse_Part struct {
 	Size int64 `protobuf:"varint,4,opt,name=size" json:"size,omitempty"`
 }
 
-func (m *SplitQueryResponse_Part) Reset()         { *m = SplitQueryResponse_Part{} }
-func (m *SplitQueryResponse_Part) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse_Part) ProtoMessage()    {}
+func (m *SplitQueryResponse_Part) Reset()                    { *m = SplitQueryResponse_Part{} }
+func (m *SplitQueryResponse_Part) String() string            { return proto.CompactTextString(m) }
+func (*SplitQueryResponse_Part) ProtoMessage()               {}
+func (*SplitQueryResponse_Part) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{32, 2} }
 
 func (m *SplitQueryResponse_Part) GetQuery() *query.BoundQuery {
 	if m != nil {
@@ -1177,9 +1231,10 @@ type GetSrvKeyspaceRequest struct {
 	Keyspace string `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
 }
 
-func (m *GetSrvKeyspaceRequest) Reset()         { *m = GetSrvKeyspaceRequest{} }
-func (m *GetSrvKeyspaceRequest) String() string { return proto.CompactTextString(m) }
-func (*GetSrvKeyspaceRequest) ProtoMessage()    {}
+func (m *GetSrvKeyspaceRequest) Reset()                    { *m = GetSrvKeyspaceRequest{} }
+func (m *GetSrvKeyspaceRequest) String() string            { return proto.CompactTextString(m) }
+func (*GetSrvKeyspaceRequest) ProtoMessage()               {}
+func (*GetSrvKeyspaceRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{33} }
 
 // GetSrvKeyspaceResponse is the returned value from GetSrvKeyspace.
 type GetSrvKeyspaceResponse struct {
@@ -1187,9 +1242,10 @@ type GetSrvKeyspaceResponse struct {
 	SrvKeyspace *topodata.SrvKeyspace `protobuf:"bytes,1,opt,name=srv_keyspace" json:"srv_keyspace,omitempty"`
 }
 
-func (m *GetSrvKeyspaceResponse) Reset()         { *m = GetSrvKeyspaceResponse{} }
-func (m *GetSrvKeyspaceResponse) String() string { return proto.CompactTextString(m) }
-func (*GetSrvKeyspaceResponse) ProtoMessage()    {}
+func (m *GetSrvKeyspaceResponse) Reset()                    { *m = GetSrvKeyspaceResponse{} }
+func (m *GetSrvKeyspaceResponse) String() string            { return proto.CompactTextString(m) }
+func (*GetSrvKeyspaceResponse) ProtoMessage()               {}
+func (*GetSrvKeyspaceResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{34} }
 
 func (m *GetSrvKeyspaceResponse) GetSrvKeyspace() *topodata.SrvKeyspace {
 	if m != nil {
@@ -1239,4 +1295,76 @@ func init() {
 	proto.RegisterType((*SplitQueryResponse_Part)(nil), "vtgate.SplitQueryResponse.Part")
 	proto.RegisterType((*GetSrvKeyspaceRequest)(nil), "vtgate.GetSrvKeyspaceRequest")
 	proto.RegisterType((*GetSrvKeyspaceResponse)(nil), "vtgate.GetSrvKeyspaceResponse")
+}
+
+var fileDescriptor0 = []byte{
+	// 1083 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xcc, 0x58, 0x4f, 0x6f, 0xe3, 0x44,
+	0x14, 0xd7, 0xc4, 0xf9, 0xd3, 0xbc, 0xb8, 0x69, 0xd7, 0xdb, 0xee, 0x66, 0xcd, 0x6e, 0xb7, 0x32,
+	0x08, 0xb2, 0x42, 0x6b, 0x44, 0xe0, 0x80, 0xc4, 0x01, 0xd1, 0x6e, 0x80, 0x8a, 0xcb, 0x92, 0x14,
+	0x71, 0x34, 0xd3, 0x74, 0xd4, 0xb5, 0xd6, 0xb1, 0x83, 0x3d, 0x0e, 0x04, 0x09, 0x09, 0x2d, 0x07,
+	0xf6, 0x13, 0x70, 0xe4, 0x2b, 0x20, 0xae, 0x5c, 0xb8, 0x73, 0xe0, 0xcc, 0x37, 0xe0, 0xbe, 0x9f,
+	0x60, 0xc7, 0x33, 0xe3, 0xf8, 0x4f, 0x93, 0x34, 0x8e, 0xd2, 0xa8, 0xa7, 0xd6, 0xe3, 0x99, 0xf7,
+	0x7e, 0x7f, 0x9e, 0xdf, 0x3c, 0x05, 0xd4, 0x31, 0xbd, 0xc0, 0x94, 0x98, 0x23, 0xdf, 0xa3, 0x9e,
+	0x56, 0x15, 0x4f, 0x7a, 0xe3, 0xbb, 0x90, 0xf8, 0x13, 0xb1, 0xa8, 0x37, 0xa9, 0x37, 0xf2, 0xce,
+	0x31, 0xc5, 0xf2, 0xb9, 0x31, 0xa6, 0xfe, 0x68, 0x20, 0x1e, 0x8c, 0xdf, 0x11, 0xd4, 0xfa, 0x24,
+	0x08, 0x6c, 0xcf, 0xd5, 0xee, 0x40, 0xd3, 0x76, 0x2d, 0xea, 0x63, 0x37, 0xc0, 0x03, 0xca, 0x56,
+	0x5a, 0xe8, 0x10, 0xb5, 0xb7, 0xb4, 0x0f, 0xa1, 0x19, 0x3c, 0xc3, 0xfe, 0xb9, 0x15, 0x88, 0x8d,
+	0x41, 0xab, 0x74, 0xa8, 0xb4, 0x1b, 0x9d, 0xfb, 0xa6, 0x4c, 0x2e, 0x03, 0x98, 0xfd, 0x68, 0x97,
+	0x7c, 0xd0, 0xbb, 0xa0, 0xa6, 0x9f, 0xb5, 0x07, 0x50, 0xa5, 0xd8, 0xbf, 0x20, 0x94, 0x47, 0x6d,
+	0x74, 0xb6, 0x4d, 0x01, 0xf2, 0x94, 0x2f, 0x46, 0xc9, 0x53, 0x99, 0x2d, 0xfb, 0x9c, 0x25, 0x41,
+	0x6d, 0xc5, 0xf8, 0x1b, 0x41, 0xb3, 0xfb, 0x03, 0x19, 0x84, 0x94, 0xf4, 0x08, 0x3b, 0x11, 0x50,
+	0xcd, 0x80, 0xfa, 0x00, 0x3b, 0x0e, 0xf1, 0xa3, 0x5d, 0x22, 0xd8, 0x8e, 0x29, 0x48, 0x1d, 0xf3,
+	0xf5, 0x93, 0x27, 0xda, 0x21, 0xd4, 0x24, 0x5a, 0x1e, 0x47, 0xec, 0x48, 0x83, 0x65, 0x3b, 0x2a,
+	0x1c, 0x40, 0x4b, 0xe1, 0xef, 0x6f, 0x49, 0x38, 0x47, 0x5e, 0xe8, 0x9e, 0x7f, 0x15, 0xfd, 0xab,
+	0x3d, 0x82, 0x06, 0xc5, 0x67, 0x0e, 0xa1, 0x16, 0x9d, 0x8c, 0x48, 0xab, 0xcc, 0xf6, 0x35, 0x3b,
+	0x7b, 0xe6, 0x54, 0xce, 0x53, 0xfe, 0xf2, 0x94, 0xbd, 0xd3, 0x74, 0xd0, 0x5c, 0x8f, 0x5a, 0x39,
+	0xf9, 0x2a, 0x91, 0x7c, 0xc6, 0xf7, 0xb0, 0x33, 0x25, 0x10, 0x8c, 0x98, 0x7c, 0x44, 0x3b, 0x80,
+	0x0a, 0xf1, 0x7d, 0xcf, 0xcf, 0xa1, 0xef, 0x3d, 0x3d, 0xee, 0x46, 0xcb, 0x4b, 0xa0, 0x37, 0xa0,
+	0xea, 0x93, 0x20, 0x74, 0xa8, 0x84, 0xaf, 0x49, 0xf8, 0x1c, 0x79, 0x8f, 0xbf, 0x31, 0xfe, 0x47,
+	0xb0, 0x27, 0x33, 0x73, 0x27, 0x82, 0x4d, 0x0b, 0xb8, 0x0b, 0x5b, 0xcf, 0xc9, 0x24, 0x18, 0xe1,
+	0x81, 0x50, 0xaf, 0xae, 0x35, 0xa1, 0xca, 0x4b, 0x29, 0x60, 0xda, 0x28, 0xec, 0x39, 0x27, 0x71,
+	0xb5, 0xb0, 0xc4, 0x35, 0x2e, 0xf1, 0x4f, 0xb0, 0x9f, 0x23, 0xba, 0x51, 0xa1, 0x5f, 0x21, 0xb8,
+	0x27, 0xf3, 0x7f, 0x29, 0xf9, 0x9e, 0xdc, 0x04, 0xb5, 0xf7, 0x40, 0x8d, 0x57, 0x58, 0x6e, 0xa1,
+	0xb9, 0xba, 0x2e, 0xcd, 0x5f, 0x20, 0xd0, 0x67, 0x91, 0xde, 0xa8, 0xf2, 0x2f, 0x4a, 0x70, 0x37,
+	0x01, 0xd1, 0xc3, 0xee, 0x05, 0xb9, 0x01, 0xba, 0xbf, 0x0d, 0xc0, 0x56, 0x2c, 0x9f, 0xc3, 0xe1,
+	0xaa, 0x47, 0xe8, 0xa7, 0x02, 0xc7, 0x48, 0xd7, 0xe5, 0xc4, 0xcf, 0x08, 0x5a, 0x97, 0x45, 0xd8,
+	0xa8, 0x0f, 0x2f, 0x95, 0xa9, 0x0f, 0x5d, 0x97, 0xda, 0x74, 0x72, 0x23, 0xea, 0x9f, 0x89, 0x46,
+	0x38, 0x1a, 0x6b, 0xe0, 0x39, 0xe1, 0xd0, 0xb5, 0x5c, 0x3c, 0x24, 0xbc, 0x2b, 0xd7, 0xb5, 0x2e,
+	0xdc, 0x96, 0xef, 0x32, 0x9f, 0x48, 0x95, 0x9b, 0xd5, 0x8e, 0xb3, 0xcf, 0xe1, 0x64, 0xc6, 0x0b,
+	0x79, 0x0b, 0x6b, 0x85, 0x2d, 0xdc, 0x8a, 0x2c, 0xd4, 0x4f, 0x60, 0x6b, 0x1a, 0xf2, 0x1e, 0x94,
+	0x79, 0x2c, 0xc4, 0x63, 0x35, 0xe2, 0x6b, 0x32, 0x0a, 0xb1, 0x0d, 0x95, 0x31, 0x76, 0x42, 0xc2,
+	0x45, 0x52, 0xb5, 0xdb, 0xd0, 0x48, 0x81, 0xe7, 0xca, 0xa8, 0xe9, 0x6a, 0x48, 0xc1, 0xde, 0x68,
+	0x35, 0x7c, 0x0d, 0x3b, 0xdc, 0x17, 0xde, 0x8c, 0x85, 0x39, 0x53, 0xfb, 0xd0, 0x32, 0xf6, 0x95,
+	0x72, 0x97, 0x85, 0x12, 0x5d, 0x16, 0xc6, 0xbf, 0x49, 0x9b, 0x3d, 0xc2, 0x74, 0xf0, 0xec, 0x3a,
+	0x2e, 0xb5, 0x36, 0xd4, 0x22, 0x64, 0x36, 0x11, 0x49, 0x1b, 0x9d, 0xbb, 0xf1, 0x8e, 0x3c, 0xa3,
+	0x02, 0xd3, 0x01, 0x9b, 0x6d, 0x70, 0x30, 0x63, 0x32, 0xf8, 0x25, 0x69, 0xa1, 0x19, 0x42, 0x6b,
+	0x33, 0xeb, 0x4d, 0xa8, 0x09, 0xb3, 0x62, 0x36, 0xb3, 0xdc, 0xfa, 0x16, 0xf6, 0x38, 0xb7, 0xa4,
+	0x8b, 0xaf, 0x6e, 0x59, 0xfe, 0xc6, 0x89, 0xb2, 0xaa, 0xc6, 0x7f, 0x08, 0x0e, 0xd2, 0x3c, 0xaf,
+	0xed, 0x92, 0x7c, 0x9c, 0x77, 0xef, 0x7e, 0xc6, 0xbd, 0x3c, 0xc3, 0x35, 0x58, 0xf8, 0x12, 0xc1,
+	0xc3, 0xb9, 0xd4, 0x36, 0xeb, 0xe3, 0xaf, 0x6c, 0xdc, 0xeb, 0x53, 0x9f, 0xe0, 0xe1, 0x4a, 0xf3,
+	0xb2, 0x34, 0xbb, 0xb4, 0xe4, 0x34, 0xac, 0xcc, 0x17, 0xcb, 0xf8, 0x18, 0xf6, 0x73, 0x40, 0xa4,
+	0x12, 0x49, 0xf3, 0x40, 0x73, 0x9b, 0xc7, 0x1f, 0xec, 0xa3, 0xc8, 0x9c, 0x5e, 0xe5, 0x33, 0xbf,
+	0x8a, 0x4c, 0xba, 0x72, 0x95, 0x5c, 0xb3, 0x29, 0xcf, 0x9a, 0x4c, 0x2b, 0x0b, 0xe8, 0x7e, 0x0a,
+	0x6f, 0xcc, 0x04, 0x5c, 0x80, 0xf4, 0x5f, 0xac, 0x8c, 0x32, 0x31, 0x56, 0xfe, 0x44, 0x8a, 0x33,
+	0xcf, 0x7f, 0xb3, 0xe5, 0x59, 0x53, 0xe2, 0x22, 0xfe, 0x9f, 0xc1, 0xe1, 0x7c, 0xec, 0x05, 0x44,
+	0xf8, 0x07, 0xc1, 0x83, 0x7c, 0xa0, 0x55, 0x46, 0xba, 0xe2, 0x12, 0x64, 0x07, 0xb6, 0xf2, 0xb2,
+	0x03, 0xdb, 0x22, 0x51, 0x9e, 0xc0, 0xc1, 0x3c, 0x2e, 0x05, 0x24, 0xe9, 0x80, 0x7a, 0x44, 0x2e,
+	0x6c, 0xb7, 0x80, 0x00, 0xc6, 0xfb, 0xb0, 0x2d, 0xcf, 0xc8, 0x44, 0xa9, 0xfe, 0x82, 0x66, 0xf6,
+	0x17, 0x76, 0x61, 0x6f, 0x1f, 0x7b, 0xc3, 0xa1, 0x4d, 0xd7, 0xda, 0x8e, 0x8d, 0x5d, 0x68, 0xc6,
+	0x61, 0x05, 0x14, 0xe3, 0x1b, 0xd8, 0xe9, 0x79, 0x8e, 0x73, 0x86, 0x07, 0xcf, 0xd7, 0x9b, 0x4a,
+	0x83, 0xdd, 0x24, 0xb0, 0x4c, 0xf6, 0x1b, 0x82, 0x5b, 0xfd, 0x91, 0x63, 0x53, 0xa9, 0xe8, 0xf2,
+	0xf9, 0x2e, 0x5f, 0x6c, 0x57, 0x8f, 0x9f, 0xec, 0x33, 0x0a, 0xa2, 0x64, 0x72, 0xd6, 0x94, 0x23,
+	0x28, 0x1b, 0xd1, 0xe2, 0xd5, 0xd0, 0xa5, 0xbc, 0x62, 0x14, 0xe3, 0x55, 0x09, 0xb4, 0x34, 0x30,
+	0xe9, 0xd3, 0x7b, 0xac, 0x05, 0x45, 0xab, 0x01, 0x83, 0x15, 0x55, 0xe0, 0xc3, 0x29, 0xc9, 0x4b,
+	0x7b, 0xcd, 0xa7, 0xd8, 0xa7, 0xfa, 0x17, 0xa0, 0xc6, 0x65, 0x15, 0x3d, 0x67, 0x60, 0xa3, 0x19,
+	0x85, 0x5d, 0x9a, 0x57, 0xd8, 0xfa, 0x63, 0xa8, 0xf3, 0xae, 0x35, 0x27, 0x4c, 0xd2, 0x1c, 0xa3,
+	0x10, 0x75, 0xfd, 0x4f, 0x04, 0x65, 0xbe, 0xf5, 0xea, 0x19, 0xe1, 0x13, 0x68, 0x4e, 0x11, 0x58,
+	0x23, 0x76, 0x46, 0x3a, 0xf8, 0xce, 0x02, 0x72, 0x19, 0x52, 0x1f, 0x01, 0x88, 0x5f, 0x9f, 0xf8,
+	0x61, 0x21, 0xff, 0x5b, 0x0b, 0x0e, 0x27, 0x3c, 0x54, 0x28, 0x07, 0xf6, 0x8f, 0xe2, 0x5e, 0x57,
+	0x8c, 0x47, 0xb0, 0xff, 0x39, 0xa1, 0x7d, 0x7f, 0x1c, 0xb7, 0xa7, 0xb8, 0x20, 0x2e, 0xd1, 0x35,
+	0xba, 0x70, 0x27, 0xbf, 0x55, 0x5a, 0xf4, 0x2e, 0x33, 0xd9, 0x1f, 0x5b, 0x99, 0xfd, 0x8d, 0xce,
+	0x7e, 0xa2, 0x68, 0xea, 0xd0, 0x91, 0x0e, 0xad, 0x81, 0x37, 0x34, 0x27, 0x5e, 0x48, 0xc3, 0x33,
+	0x62, 0x8e, 0x6d, 0xca, 0x8a, 0x55, 0xfc, 0xee, 0x76, 0x56, 0xe5, 0x7f, 0x3e, 0x78, 0x1d, 0x00,
+	0x00, 0xff, 0xff, 0xd3, 0xc8, 0x31, 0xeb, 0xc0, 0x13, 0x00, 0x00,
 }

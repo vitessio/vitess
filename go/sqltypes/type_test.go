@@ -176,6 +176,13 @@ func TestTypeFlexibility(t *testing.T) {
 	if v != Int8 {
 		t.Errorf("conversion: %v, want %v", v, Int8)
 	}
+	var typ int64
+	for typ = 249; typ <= 252; typ++ {
+		v = MySQLToType(typ, mysqlBinary>>16)
+		if v != Blob {
+			t.Errorf("conversion: %v, want %v", v, Blob)
+		}
+	}
 }
 
 func TestTypePanic(t *testing.T) {

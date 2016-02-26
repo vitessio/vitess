@@ -7,7 +7,6 @@ package wrangler
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -15,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -112,7 +112,8 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		return err
 	}
 
-	// update the Shard object if the master was scrapped
+	// update the Shard object if the master was scrapped.
+	// we lock the shard to not conflict with reparent operations.
 	if wasMaster {
 		actionNode := actionnode.UpdateShard()
 		lockPath, err := wr.lockShard(ctx, ti.Keyspace, ti.Shard, actionNode)
@@ -120,22 +121,16 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 			return err
 		}
 
-		// read the shard with the lock
-		si, err := wr.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
-		if err != nil {
-			return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
-		}
-
-		// update it if the right alias is there
-		if topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
-			si.MasterAlias = nil
-
-			// write it back
-			if err := wr.ts.UpdateShard(ctx, si); err != nil {
-				return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
+		// update the shard record's master
+		if _, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(s *topodatapb.Shard) error {
+			if !topoproto.TabletAliasEqual(s.MasterAlias, tabletAlias) {
+				wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(s.MasterAlias))
+				return topo.ErrNoUpdateNeeded
 			}
-		} else {
-			wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, si.MasterAlias)
+			s.MasterAlias = nil
+			return nil
+		}); err != nil {
+			return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 		}
 
 		// and unlock
@@ -167,6 +162,10 @@ func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *topodatapb
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
+	}
+
+	if !topo.IsTrivialTypeChange(ti.Type, tabletType) {
+		return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeSlaveType", tabletAlias, ti.Type, tabletType)
 	}
 
 	// ask the tablet to make the change
@@ -209,10 +208,10 @@ func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias *topodat
 }
 
 // ExecuteFetchAsDba executes a query remotely using the DBA pool
-func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool, reloadSchema bool) (*sqltypes.Result, error) {
+func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetchAsDba(ctx, ti, query, maxRows, wantFields, disableBinlogs, reloadSchema)
+	return wr.tmc.ExecuteFetchAsDba(ctx, ti, query, maxRows, disableBinlogs, reloadSchema)
 }

@@ -39,17 +39,17 @@ type commandGroup struct {
 
 // commands is the list of available command groups.
 var commands = []commandGroup{
-	commandGroup{
+	{
 		"Diffs",
 		"Workers comparing and validating data",
 		[]Command{},
 	},
-	commandGroup{
+	{
 		"Clones",
 		"Workers copying data for backups and clones",
 		[]Command{},
 	},
-	commandGroup{
+	{
 		"Debugging",
 		"Internal commands to test the general worker functionality",
 		[]Command{},

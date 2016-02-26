@@ -33,6 +33,7 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -111,9 +112,6 @@ class TestSharded(unittest.TestCase):
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       utils.run_vtctl(['ReloadSchema', t.tablet_alias])
 
-    # start vtgate, we'll use it later
-    utils.VtGate().start()
-
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       t.reset_replication()
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
@@ -175,19 +173,18 @@ class TestSharded(unittest.TestCase):
     sql = 'select id, msg from vt_select_test order by id'
 
     qr = shard_0_master.execute(sql)
-    self.assertEqual(qr['Rows'], [['1', 'test 1'],])
+    self.assertEqual(qr['rows'], [[1, 'test 1'],])
 
     qr = shard_1_master.execute(sql)
-    self.assertEqual(qr['Rows'], [['10', 'test 10'],])
+    self.assertEqual(qr['rows'], [[10, 'test 10'],])
 
-    _, stderr = utils.run_vtctl(['VtTabletExecute',
+    _, stderr = utils.run_vtctl(['VtTabletExecute', '-json',
                                  '-keyspace', 'test_keyspace',
                                  '-shard', '-90',
                                  shard_0_master.tablet_alias, sql],
                                 expect_fail=True)
     self.assertIn('fatal: Shard mismatch, expecting -80, received -90', stderr)
 
-    utils.vtgate.kill()
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
                          shard_1_replica])
 

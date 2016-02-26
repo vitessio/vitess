@@ -436,11 +436,11 @@ func TestStatusSlaveSQLNotRunning(t *testing.T) {
 
 func TestStatusMasterAddr(t *testing.T) {
 	table := map[string]*Status{
-		"master-host:1234": &Status{
+		"master-host:1234": {
 			MasterHost: "master-host",
 			MasterPort: 1234,
 		},
-		"[::1]:4321": &Status{
+		"[::1]:4321": {
 			MasterHost: "::1",
 			MasterPort: 4321,
 		},
@@ -454,11 +454,11 @@ func TestStatusMasterAddr(t *testing.T) {
 
 func TestNewStatus(t *testing.T) {
 	table := map[string]*Status{
-		"master-host:1234": &Status{
+		"master-host:1234": {
 			MasterHost: "master-host",
 			MasterPort: 1234,
 		},
-		"[::1]:4321": &Status{
+		"[::1]:4321": {
 			MasterHost: "::1",
 			MasterPort: 4321,
 		},

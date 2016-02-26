@@ -102,10 +102,25 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
 	}
 	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, agent.TabletAlias) {
-		// we are the current master for this shard (probably
-		// means the master tablet process was just restarted),
-		// so InitTablet as master.
-		tabletType = topodatapb.TabletType_MASTER
+		// We're marked as master in the shard record, which could mean the master
+		// tablet process was just restarted. However, we need to check if a new
+		// master is in the process of taking over. In that case, it will let us
+		// know by forcibly updating the old master's tablet record.
+		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		switch err {
+		case topo.ErrNoNode:
+			// There's no existing tablet record, so we can assume
+			// no one has left us a message to step down.
+			tabletType = topodatapb.TabletType_MASTER
+		case nil:
+			if oldTablet.Type == topodatapb.TabletType_MASTER {
+				// We're marked as master in the shard record,
+				// and our existing tablet record agrees.
+				tabletType = topodatapb.TabletType_MASTER
+			}
+		default:
+			return fmt.Errorf("InitTablet failed to read existing tablet record: %v", err)
+		}
 	}
 
 	// See if we need to add the tablet's cell to the shard's cell
@@ -183,8 +198,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		}
 
 	case topo.ErrNodeExists:
-		// The node already exists, will just try to update
-		// it. So we read it first.
+		// The node already exists, will just try to update it. So we read it first.
 		oldTablet, err := agent.TopoServer.GetTablet(ctx, tablet.Alias)
 		if err != nil {
 			return fmt.Errorf("InitTablet failed to read existing tablet record: %v", err)
@@ -195,9 +209,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			return fmt.Errorf("InitTablet failed because existing tablet keyspace and shard %v/%v differ from the provided ones %v/%v", oldTablet.Keyspace, oldTablet.Shard, tablet.Keyspace, tablet.Shard)
 		}
 
-		// And overwrite the rest
-		*(oldTablet.Tablet) = *tablet
-		if err := agent.TopoServer.UpdateTablet(ctx, oldTablet); err != nil {
+		// Then overwrite everything, ignoring version mismatch.
+		if err := agent.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, -1)); err != nil {
 			return fmt.Errorf("UpdateTablet failed: %v", err)
 		}
 

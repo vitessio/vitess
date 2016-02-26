@@ -18,11 +18,10 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -33,15 +32,17 @@ import (
 // verticalTabletServer is a local QueryService implementation to support the tests
 type verticalTabletServer struct {
 	queryservice.ErrorQueryService
-	t *testing.T
+	t        *testing.T
+	keyspace string
+	shard    string
 }
 
-func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, query *proto.Query, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, sessionID int64, sendReply func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
 	var err error
-	parts := strings.Split(query.Sql, " ")
+	parts := strings.Split(sql, " ")
 	for _, part := range parts {
 		if strings.HasPrefix(part, "id>=") {
 			min, err = strconv.Atoi(part[4:])
@@ -52,16 +53,16 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *query
 			max, err = strconv.Atoi(part[3:])
 		}
 	}
-	sq.t.Logf("verticalTabletServer: got query: %v with min %v max %v", *query, min, max)
+	sq.t.Logf("verticalTabletServer: got query: %v with min %v max %v", sql, min, max)
 
 	// Send the headers
 	if err := sendReply(&sqltypes.Result{
 		Fields: []*querypb.Field{
-			&querypb.Field{
+			{
 				Name: "id",
 				Type: sqltypes.Int64,
 			},
-			&querypb.Field{
+			{
 				Name: "msg",
 				Type: sqltypes.VarChar,
 			},
@@ -74,7 +75,7 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *query
 	for i := min; i < max; i++ {
 		if err := sendReply(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
+				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
 					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
 				},
@@ -84,6 +85,21 @@ func (sq *verticalTabletServer) StreamExecute(ctx context.Context, target *query
 		}
 	}
 	return nil
+}
+
+func (sq *verticalTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+	c <- &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			Keyspace:   sq.keyspace,
+			Shard:      sq.shard,
+			TabletType: topodatapb.TabletType_RDONLY,
+		},
+		Serving: true,
+		RealtimeStats: &querypb.RealtimeStats{
+			SecondsBehindMaster: 1,
+		},
+	}
+	return 0, nil
 }
 
 // VerticalFakePoolConnection implements dbconnpool.PoolConnection
@@ -99,7 +115,7 @@ func NewVerticalFakePoolConnectionQuery(t *testing.T, query string, err error) *
 	return &VerticalFakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			ExpectedExecuteFetch{
+			{
 				Query:       query,
 				QueryResult: &sqltypes.Result{},
 				Error:       err,
@@ -164,21 +180,21 @@ func VerticalSourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection
 		return &VerticalFakePoolConnection{
 			t: t,
 			ExpectedExecuteFetch: []ExpectedExecuteFetch{
-				ExpectedExecuteFetch{
+				{
 					Query: "SELECT MIN(id), MAX(id) FROM vt_source_ks.moving1",
 					QueryResult: &sqltypes.Result{
 						Fields: []*querypb.Field{
-							&querypb.Field{
+							{
 								Name: "min",
 								Type: sqltypes.Int64,
 							},
-							&querypb.Field{
+							{
 								Name: "max",
 								Type: sqltypes.Int64,
 							},
 						},
 						Rows: [][]sqltypes.Value{
-							[]sqltypes.Value{
+							{
 								sqltypes.MakeString([]byte("100")),
 								sqltypes.MakeString([]byte("200")),
 							},
@@ -223,13 +239,9 @@ func VerticalDestinationsFactory(t *testing.T, insertCount int64) func() (dbconn
 	}
 }
 
-func TestVerticalSplitClonePopulateBlpCheckpoint(t *testing.T) {
-	testVerticalSplitClone(t, "-populate_blp_checkpoint")
-}
-
-func testVerticalSplitClone(t *testing.T, strategy string) {
+func TestVerticalSplitClone(t *testing.T) {
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	ctx := context.Background()
 	wi := NewInstance(ctx, ts, "cell1", time.Second)
 
@@ -243,15 +255,15 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	// Create the destination keyspace with the appropriate ServedFromMap
 	ki := &topodatapb.Keyspace{
 		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_MASTER,
 				Keyspace:   "source_ks",
 			},
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_REPLICA,
 				Keyspace:   "source_ks",
 			},
-			&topodatapb.Keyspace_ServedFrom{
+			{
 				TabletType: topodatapb.TabletType_RDONLY,
 				Keyspace:   "source_ks",
 			},
@@ -280,7 +292,6 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	subFlags := flag.NewFlagSet("SplitClone", flag.ContinueOnError)
 	gwrk, err := commandVerticalSplitClone(wi, wi.wr, subFlags, []string{
 		"-tables", "moving.*,view1",
-		"-strategy", strategy,
 		"-source_reader_count", "10",
 		"-destination_pack_count", "4",
 		"-min_table_size_for_split", "1",
@@ -318,7 +329,11 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 			"STOP SLAVE",
 			"START SLAVE",
 		}
-		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalTabletServer{t: t})
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalTabletServer{
+			t:        t,
+			keyspace: sourceRdonly.Tablet.Keyspace,
+			shard:    sourceRdonly.Tablet.Shard,
+		})
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so

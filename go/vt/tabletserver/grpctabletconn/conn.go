@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -88,7 +88,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 		return nil, tabletconn.ConnClosed
 	}
 
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -108,13 +108,8 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	return sqltypes.Proto3ToResult(er.Result), nil
 }
 
-// Execute2 is the same with Execute in gRPC, since Execute is already CallerID enabled
-func (conn *gRPCQueryClient) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	return conn.Execute(ctx, query, bindVars, transactionID)
-}
-
 // ExecuteBatch sends a batch query to VTTablet.
-func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -131,7 +126,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 		SessionId:         conn.sessionID,
 	}
 	for i, q := range queries {
-		qq, err := tproto.BoundQueryToProto3(q.Sql, q.BindVariables)
+		qq, err := querytypes.BoundQueryToProto3(q.Sql, q.BindVariables)
 		if err != nil {
 			return nil, err
 		}
@@ -141,12 +136,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
-	return tproto.Proto3ToQueryResultList(ebr.Results), nil
-}
-
-// ExecuteBatch2 is the same with ExecuteBatch in gRPC, which is already CallerID enabled
-func (conn *gRPCQueryClient) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
-	return conn.ExecuteBatch(ctx, queries, asTransaction, transactionID)
+	return sqltypes.Proto3ToResults(ebr.Results), nil
 }
 
 // StreamExecute starts a streaming query to VTTablet.
@@ -157,7 +147,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 		return nil, nil, tabletconn.ConnClosed
 	}
 
-	q, err := tproto.BoundQueryToProto3(query, bindVars)
+	q, err := querytypes.BoundQueryToProto3(query, bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -175,6 +165,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	sr := make(chan *sqltypes.Result, 10)
 	var finalError error
 	go func() {
+		var fields []*querypb.Field
 		for {
 			ser, err := stream.Recv()
 			if err != nil {
@@ -184,17 +175,15 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 				close(sr)
 				return
 			}
-			sr <- sqltypes.Proto3ToResult(ser.Result)
+			if fields == nil {
+				fields = ser.Result.Fields
+			}
+			sr <- sqltypes.CustomProto3ToResult(fields, ser.Result)
 		}
 	}()
 	return sr, func() error {
 		return finalError
 	}, nil
-}
-
-// StreamExecute2 is the same as StreamExecute for gRPC
-func (conn *gRPCQueryClient) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return conn.StreamExecute(ctx, query, bindVars, transactionID)
 }
 
 // Begin starts a transaction.
@@ -216,11 +205,6 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 		return 0, tabletconn.TabletErrorFromGRPC(err)
 	}
 	return br.TransactionId, nil
-}
-
-// Begin2 is the same as Begin for gRPC
-func (conn *gRPCQueryClient) Begin2(ctx context.Context) (transactionID int64, err error) {
-	return conn.Begin(ctx)
 }
 
 // Commit commits the ongoing transaction.
@@ -245,11 +229,6 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 	return nil
 }
 
-// Commit2 is the same as Commit for gRPC
-func (conn *gRPCQueryClient) Commit2(ctx context.Context, transactionID int64) error {
-	return conn.Commit(ctx, transactionID)
-}
-
 // Rollback rolls back the ongoing transaction.
 func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) error {
 	conn.mu.RLock()
@@ -272,13 +251,8 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 	return nil
 }
 
-// Rollback2 is the same as Rollback for gRPC
-func (conn *gRPCQueryClient) Rollback2(ctx context.Context, transactionID int64) error {
-	return conn.Rollback(ctx, transactionID)
-}
-
 // SplitQuery is the stub for TabletServer.SplitQuery RPC
-func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
+func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -286,7 +260,7 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 		return
 	}
 
-	q, err := tproto.BoundQueryToProto3(query.Sql, query.BindVariables)
+	q, err := querytypes.BoundQueryToProto3(query.Sql, query.BindVariables)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
@@ -296,14 +270,14 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Query:             q,
 		SplitColumn:       splitColumn,
-		SplitCount:        int64(splitCount),
+		SplitCount:        splitCount,
 		SessionId:         conn.sessionID,
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}
-	split, err := tproto.Proto3ToQuerySplits(sqr.Queries)
+	split, err := querytypes.Proto3ToQuerySplits(sqr.Queries)
 	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(err)
 	}

@@ -10,54 +10,54 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 var errGeneric = errors.New("generic error")
 
-func errFromCode(c vtrpc.ErrorCode) error {
+func errFromCode(c vtrpcpb.ErrorCode) error {
 	return vterrors.FromError(c, errGeneric)
 }
 
 func TestAggregateVtGateErrorCodes(t *testing.T) {
 	var testcases = []struct {
 		input    []error
-		expected vtrpc.ErrorCode
+		expected vtrpcpb.ErrorCode
 	}{
 		{
 			// aggregation of no errors is a success code
 			input:    nil,
-			expected: vtrpc.ErrorCode_SUCCESS,
+			expected: vtrpcpb.ErrorCode_SUCCESS,
 		},
 		{
 			// single error code gets returned directly
-			input:    []error{errFromCode(vtrpc.ErrorCode_BAD_INPUT)},
-			expected: vtrpc.ErrorCode_BAD_INPUT,
+			input:    []error{errFromCode(vtrpcpb.ErrorCode_BAD_INPUT)},
+			expected: vtrpcpb.ErrorCode_BAD_INPUT,
 		},
 		{
 			// aggregate two codes to the highest priority
 			input: []error{
-				errFromCode(vtrpc.ErrorCode_SUCCESS),
-				errFromCode(vtrpc.ErrorCode_TRANSIENT_ERROR),
+				errFromCode(vtrpcpb.ErrorCode_SUCCESS),
+				errFromCode(vtrpcpb.ErrorCode_TRANSIENT_ERROR),
 			},
-			expected: vtrpc.ErrorCode_TRANSIENT_ERROR,
+			expected: vtrpcpb.ErrorCode_TRANSIENT_ERROR,
 		},
 		{
 			input: []error{
-				errFromCode(vtrpc.ErrorCode_SUCCESS),
-				errFromCode(vtrpc.ErrorCode_TRANSIENT_ERROR),
-				errFromCode(vtrpc.ErrorCode_BAD_INPUT),
+				errFromCode(vtrpcpb.ErrorCode_SUCCESS),
+				errFromCode(vtrpcpb.ErrorCode_TRANSIENT_ERROR),
+				errFromCode(vtrpcpb.ErrorCode_BAD_INPUT),
 			},
-			expected: vtrpc.ErrorCode_BAD_INPUT,
+			expected: vtrpcpb.ErrorCode_BAD_INPUT,
 		},
 		{
 			// unknown errors map to the unknown code
 			input: []error{
-				errFromCode(vtrpc.ErrorCode_SUCCESS),
+				errFromCode(vtrpcpb.ErrorCode_SUCCESS),
 				fmt.Errorf("unknown error"),
 			},
-			expected: vtrpc.ErrorCode_UNKNOWN_ERROR,
+			expected: vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 		},
 	}
 	for _, tc := range testcases {
@@ -80,12 +80,12 @@ func TestAggregateVtGateErrors(t *testing.T) {
 		},
 		{
 			input: []error{
-				errFromCode(vtrpc.ErrorCode_SUCCESS),
-				errFromCode(vtrpc.ErrorCode_TRANSIENT_ERROR),
-				errFromCode(vtrpc.ErrorCode_BAD_INPUT),
+				errFromCode(vtrpcpb.ErrorCode_SUCCESS),
+				errFromCode(vtrpcpb.ErrorCode_TRANSIENT_ERROR),
+				errFromCode(vtrpcpb.ErrorCode_BAD_INPUT),
 			},
 			expected: vterrors.FromError(
-				vtrpc.ErrorCode_BAD_INPUT,
+				vtrpcpb.ErrorCode_BAD_INPUT,
 				vterrors.ConcatenateErrors([]error{errGeneric, errGeneric, errGeneric}),
 			),
 		},

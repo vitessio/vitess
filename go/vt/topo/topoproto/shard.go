@@ -14,6 +14,12 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+// KeyspaceShardString returns a "keyspace/shard" string taking
+// keyspace and shard as separate inputs.
+func KeyspaceShardString(keyspace, shard string) string {
+	return fmt.Sprintf("%v/%v", keyspace, shard)
+}
+
 // ParseKeyspaceShard parse a "keyspace/shard" string and extract
 // both keyspace and shard
 func ParseKeyspaceShard(param string) (string, string, error) {
@@ -42,4 +48,14 @@ func SourceShardAsHTML(source *topodatapb.Shard_SourceShard) template.HTML {
 			strings.Join(source.Tables, " "))
 	}
 	return template.HTML(result)
+}
+
+// ShardHasCell returns true if the cell is listed in the Cells for the shard.
+func ShardHasCell(shard *topodatapb.Shard, cell string) bool {
+	for _, c := range shard.Cells {
+		if c == cell {
+			return true
+		}
+	}
+	return false
 }

@@ -270,11 +270,6 @@ func (conn *MetaConn) SetACL(path string, aclv []zookeeper.ACL, version int) (er
 	return
 }
 
-// Implements expvar.Var()
-func (conn *MetaConn) String() string {
-	return conn.connCache.String()
-}
-
 func NewMetaConn() *MetaConn {
 	return &MetaConn{NewConnCache()}
 }

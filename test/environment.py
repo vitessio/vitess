@@ -1,22 +1,30 @@
 #!/usr/bin/env python
+"""Initialize the test environment."""
 
-import json
 import logging
 import os
-import socket
 import subprocess
 import sys
 
+import protocols_flavor
+
 # Import the topo implementations that you want registered as options for the
 # --topo-server-flavor flag.
+# pylint: disable=unused-import
 import topo_flavor.zookeeper
 import topo_flavor.etcd
 
+# This imports topo_server into this module, so clients can write
+# environment.topo_server().
+# pylint: disable=unused-import
 from topo_flavor.server import topo_server
 
-# import the protocol flavors we want to use
-import gorpc_protocols_flavor
-import grpc_protocols_flavor
+# Import the VTGate gateway flavors that you want registered as options for the
+# --gateway_implementation flag.
+# pylint: disable=unused-import
+import vtgate_gateway_flavor.shardgateway
+import vtgate_gateway_flavor.discoverygateway
+
 
 # sanity check the environment
 if os.environ['USER'] == 'root':
@@ -77,7 +85,6 @@ flush_logs_url = '/debug/flushlogs'
 
 
 def setup():
-  global tmproot
   try:
     os.makedirs(tmproot)
   except OSError:
@@ -93,8 +100,20 @@ def reserve_ports(count):
   return result
 
 
-# simple run command, cannot use utils.run to avoid circular dependencies
 def run(args, raise_on_error=True, **kargs):
+  """simple run command, cannot use utils.run to avoid circular dependencies.
+
+  Args:
+    args: Variable length argument list.
+    raise_on_error: if exception should be raised when seeing error.
+    **kargs: Arbitrary keyword arguments.
+
+  Returns:
+    None
+
+  Raises:
+    Exception: when it cannot start subprocess.
+  """
   try:
     logging.debug(
         'run: %s %s', str(args),
@@ -139,6 +158,7 @@ def binary_path(name):
 # returns flags specific to a given binary
 # use this to globally inject flags any time a given command runs
 # e.g. - if name == 'vtctl': return ['-extra_arg', 'value']
+# pylint: disable=unused-argument
 def binary_flags(name):
   return []
 
@@ -160,6 +180,34 @@ def mysql_binary_path(name):
   return os.path.join(vt_mysql_root, 'bin', name)
 
 
-# add environment-specific command-line options
+# pylint: disable=unused-argument
 def add_options(parser):
+  """Add environment-specific command-line options."""
   pass
+
+
+def setup_protocol_flavor(flavor):
+  """Imports the right protocols flavor implementation.
+
+  This is a separate method that does dynamic import of the module so the
+  tests only depend and import the code they will use.
+  Each protocols flavor implementation will import the modules it needs.
+
+  Args:
+    flavor: the flavor name to use.
+  """
+  if flavor == 'grpc':
+    import grpc_protocols_flavor  # pylint: disable=g-import-not-at-top
+    protocols_flavor.set_protocols_flavor(
+        grpc_protocols_flavor.GRpcProtocolsFlavor())
+
+  elif flavor == 'gorpc':
+    import gorpc_protocols_flavor  # pylint: disable=g-import-not-at-top
+    protocols_flavor.set_protocols_flavor(
+        gorpc_protocols_flavor.GoRpcProtocolsFlavor())
+
+  else:
+    logging.error('Unknown protocols flavor %s', flavor)
+    exit(1)
+
+  logging.debug('Using protocols flavor \'%s\'', flavor)

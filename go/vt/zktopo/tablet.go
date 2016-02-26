@@ -72,41 +72,6 @@ func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet,
 	return int64(stat.Version()), nil
 }
 
-// UpdateTabletFields is part of the topo.Server interface
-func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
-	// Store the last tablet value so we can log it if the change succeeds.
-	var lastTablet *topodatapb.Tablet
-
-	zkTabletPath := TabletPathForAlias(tabletAlias)
-	f := func(oldValue string, oldStat zk.Stat) (string, error) {
-		if oldValue == "" {
-			return "", fmt.Errorf("no data for tablet addr update: %v", tabletAlias)
-		}
-
-		tablet := &topodatapb.Tablet{}
-		if err := json.Unmarshal([]byte(oldValue), tablet); err != nil {
-			return "", err
-		}
-		if err := update(tablet); err != nil {
-			return "", err
-		}
-		lastTablet = tablet
-		data, err := json.MarshalIndent(tablet, "", "  ")
-		if err != nil {
-			return "", err
-		}
-		return string(data), nil
-	}
-	err := zkts.zconn.RetryChange(zkTabletPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return nil, err
-	}
-	return lastTablet, nil
-}
-
 // DeleteTablet is part of the topo.Server interface
 func (zkts *Server) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error {
 	zkTabletPath := TabletPathForAlias(alias)

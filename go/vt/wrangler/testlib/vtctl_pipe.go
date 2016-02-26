@@ -13,10 +13,13 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl/grpcvtctlserver"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
@@ -79,7 +82,16 @@ func (vp *VtctlPipe) Run(args []string) error {
 		return fmt.Errorf("VtctlPipe.Run() failed: %v", err)
 	}
 	for le := range c {
-		vp.t.Logf(le.String())
+		vp.t.Logf(logutil.EventString(le))
 	}
 	return errFunc()
+}
+
+// RunAndStreamOutput returns the output of the vtctl command as a channel.
+// When the channcel is closed, the command did finish.
+func (vp *VtctlPipe) RunAndStreamOutput(args []string) (<-chan *logutilpb.Event, vtctlclient.ErrFunc, error) {
+	actionTimeout := 30 * time.Second
+	ctx := context.Background()
+
+	return vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout)
 }

@@ -23,7 +23,7 @@ func TestSchamazHandler(t *testing.T) {
 	tableB := schema.NewTable("b")
 	tableC := schema.NewTable("c")
 
-	tableA.AddColumn("column1", sqltypes.Int64, sqltypes.MakeNumeric([]byte("0")), "auto_increment")
+	tableA.AddColumn("column1", sqltypes.Int64, sqltypes.MakeTrusted(sqltypes.Int32, []byte("0")), "auto_increment")
 	tableA.AddIndex("index1").AddColumn("index_column", 1000)
 	tableA.CacheType = schema.CacheRW
 

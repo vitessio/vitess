@@ -22,21 +22,21 @@ func endPoints3() (*topodatapb.EndPoints, error) {
 	counter++
 	return &topodatapb.EndPoints{
 		Entries: []*topodatapb.EndPoint{
-			&topodatapb.EndPoint{
+			{
 				Uid:  0,
 				Host: "0",
 				PortMap: map[string]int32{
 					"vt": 1,
 				},
 			},
-			&topodatapb.EndPoint{
+			{
 				Uid:  1,
 				Host: "1",
 				PortMap: map[string]int32{
 					"vt": 2,
 				},
 			},
-			&topodatapb.EndPoint{
+			{
 				Uid:  2,
 				Host: "2",
 				PortMap: map[string]int32{
@@ -186,21 +186,21 @@ func endPointsMorph() (*topodatapb.EndPoints, error) {
 	addrNum++
 	return &topodatapb.EndPoints{
 		Entries: []*topodatapb.EndPoint{
-			&topodatapb.EndPoint{
+			{
 				Uid:  addrNum,
 				Host: fmt.Sprintf("%d", addrNum),
 				PortMap: map[string]int32{
 					"vt": 1,
 				},
 			},
-			&topodatapb.EndPoint{
+			{
 				Uid:  1,
 				Host: "1",
 				PortMap: map[string]int32{
 					"vt": int32(addrNum),
 				},
 			},
-			&topodatapb.EndPoint{
+			{
 				Uid:  2,
 				Host: "2",
 				PortMap: map[string]int32{

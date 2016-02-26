@@ -71,7 +71,7 @@ type TopologyWatcher struct {
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and starts refreshing.
 func NewTopologyWatcher(topoServer topo.Server, hc HealthCheck, cell string, refreshInterval time.Duration, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error)) *TopologyWatcher {
-	ctw := &TopologyWatcher{
+	tw := &TopologyWatcher{
 		topoServer:      topoServer,
 		hc:              hc,
 		cell:            cell,
@@ -80,19 +80,19 @@ func NewTopologyWatcher(topoServer topo.Server, hc HealthCheck, cell string, ref
 		sem:             make(chan int, topoReadConcurrency),
 		endPoints:       make(map[string]*tabletEndPoint),
 	}
-	ctw.ctx, ctw.cancelFunc = context.WithCancel(context.Background())
-	go ctw.watch()
-	return ctw
+	tw.ctx, tw.cancelFunc = context.WithCancel(context.Background())
+	go tw.watch()
+	return tw
 }
 
 // watch pulls all endpoints and notifies HealthCheck by adding/removing endpoints.
-func (ctw *TopologyWatcher) watch() {
-	ticker := time.NewTicker(ctw.refreshInterval)
+func (tw *TopologyWatcher) watch() {
+	ticker := time.NewTicker(tw.refreshInterval)
 	defer ticker.Stop()
 	for {
-		ctw.loadTablets()
+		tw.loadTablets()
 		select {
-		case <-ctw.ctx.Done():
+		case <-tw.ctx.Done():
 			return
 		case <-ticker.C:
 		}
@@ -100,29 +100,29 @@ func (ctw *TopologyWatcher) watch() {
 }
 
 // loadTablets reads all tablets from topology, converts to endpoints, and updates HealthCheck.
-func (ctw *TopologyWatcher) loadTablets() {
+func (tw *TopologyWatcher) loadTablets() {
 	var wg sync.WaitGroup
 	newEndPoints := make(map[string]*tabletEndPoint)
-	tabletAlias, err := ctw.getTablets(ctw)
+	tabletAlias, err := tw.getTablets(tw)
 	if err != nil {
 		select {
-		case <-ctw.ctx.Done():
+		case <-tw.ctx.Done():
 			return
 		default:
 		}
-		log.Errorf("cannot get tablets for cell: %v: %v", ctw.cell, err)
+		log.Errorf("cannot get tablets for cell: %v: %v", tw.cell, err)
 		return
 	}
 	for _, tAlias := range tabletAlias {
 		wg.Add(1)
 		go func(alias *topodatapb.TabletAlias) {
 			defer wg.Done()
-			ctw.sem <- 1 // Wait for active queue to drain.
-			tablet, err := ctw.topoServer.GetTablet(ctw.ctx, alias)
-			<-ctw.sem // Done; enable next request to run
+			tw.sem <- 1 // Wait for active queue to drain.
+			tablet, err := tw.topoServer.GetTablet(tw.ctx, alias)
+			<-tw.sem // Done; enable next request to run
 			if err != nil {
 				select {
-				case <-ctw.ctx.Done():
+				case <-tw.ctx.Done():
 					return
 				default:
 				}
@@ -135,32 +135,32 @@ func (ctw *TopologyWatcher) loadTablets() {
 				return
 			}
 			key := EndPointToMapKey(endPoint)
-			ctw.mu.Lock()
+			tw.mu.Lock()
 			newEndPoints[key] = &tabletEndPoint{
 				alias:    topoproto.TabletAliasString(alias),
 				endPoint: endPoint,
 			}
-			ctw.mu.Unlock()
+			tw.mu.Unlock()
 		}(tAlias)
 	}
 
 	wg.Wait()
-	ctw.mu.Lock()
+	tw.mu.Lock()
 	for key, tep := range newEndPoints {
-		if _, ok := ctw.endPoints[key]; !ok {
-			ctw.hc.AddEndPoint(ctw.cell, tep.alias, tep.endPoint)
+		if _, ok := tw.endPoints[key]; !ok {
+			tw.hc.AddEndPoint(tw.cell, tep.alias, tep.endPoint)
 		}
 	}
-	for key, tep := range ctw.endPoints {
+	for key, tep := range tw.endPoints {
 		if _, ok := newEndPoints[key]; !ok {
-			ctw.hc.RemoveEndPoint(tep.endPoint)
+			tw.hc.RemoveEndPoint(tep.endPoint)
 		}
 	}
-	ctw.endPoints = newEndPoints
-	ctw.mu.Unlock()
+	tw.endPoints = newEndPoints
+	tw.mu.Unlock()
 }
 
 // Stop stops the watcher. It does not clean up the endpoints added to HealthCheck.
-func (ctw *TopologyWatcher) Stop() {
-	ctw.cancelFunc()
+func (tw *TopologyWatcher) Stop() {
+	tw.cancelFunc()
 }

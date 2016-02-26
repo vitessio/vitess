@@ -10,6 +10,8 @@ source $script_root/env.sh
 VTGATE_REPLICAS=${VTGATE_REPLICAS:-3}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 VTGATE_TEMPLATE=${VTGATE_TEMPLATE:-'vtgate-controller-template.yaml'}
+CELLS=${CELLS:-'test'}
+VITESS_NAME=${VITESS_NAME:-'default'}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
@@ -18,13 +20,21 @@ fi
 
 replicas=$VTGATE_REPLICAS
 
-echo "Creating vtgate service..."
-$KUBECTL create -f vtgate-service.yaml
+cells=`echo $CELLS | tr ',' ' '`
+for cell in $cells; do
+  sed_script=""
+  for var in cell; do
+    sed_script+="s,{{$var}},${!var},g;"
+  done
 
-sed_script=""
-for var in replicas vtdataroot_volume; do
-  sed_script+="s,{{$var}},${!var},g;"
+  echo "Creating vtgate service in cell $cell..."
+  cat vtgate-service-template.yaml | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
+
+  sed_script=""
+  for var in replicas vtdataroot_volume cell; do
+    sed_script+="s,{{$var}},${!var},g;"
+  done
+
+  echo "Creating vtgate replicationcontroller in cell $cell..."
+  cat $VTGATE_TEMPLATE | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
 done
-
-echo "Creating vtgate replicationcontroller..."
-cat $VTGATE_TEMPLATE | sed -e "$sed_script" | $KUBECTL create -f -

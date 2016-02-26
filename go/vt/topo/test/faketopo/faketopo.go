@@ -109,11 +109,6 @@ func (ft FakeTopo) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, 
 	return 0, errNotImplemented
 }
 
-// UpdateTabletFields implements topo.Server.
-func (ft FakeTopo) UpdateTabletFields(ctx context.Context, tabletAlias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
-	return nil, errNotImplemented
-}
-
 // DeleteTablet implements topo.Server.
 func (ft FakeTopo) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error {
 	return errNotImplemented
@@ -180,8 +175,8 @@ func (ft FakeTopo) DeleteEndPoints(ctx context.Context, cell, keyspace, shard st
 }
 
 // WatchSrvKeyspace implements topo.Server.WatchSrvKeyspace
-func (ft FakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
-	return nil, nil, errNotImplemented
+func (ft FakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
+	return nil, errNotImplemented
 }
 
 // UpdateSrvShard implements topo.Server.

@@ -52,7 +52,7 @@ const verticalSplitCloneHTML2 = `
       <LABEL for="tables">Tables: </LABEL>
         <INPUT type="text" id="tables" name="tables" value="moving.*"></BR>
       <LABEL for="strategy">Strategy: </LABEL>
-        <INPUT type="text" id="strategy" name="strategy" value="-populate_blp_checkpoint"></BR>
+        <INPUT type="text" id="strategy" name="strategy" value=""></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
       <LABEL for="destinationPackCount">Destination Pack Count: </LABEL>
@@ -68,8 +68,8 @@ const verticalSplitCloneHTML2 = `
   <h1>Help</h1>
     <p>Strategy can have the following values, comma separated:</p>
     <ul>
-      <li><b>populateBlpCheckpoint</b>: creates (if necessary) and populates the blp_checkpoint table in the destination. Required for filtered replication to start.</li>
-      <li><b>dontStartBinlogPlayer</b>: (requires populateBlpCheckpoint) will setup, but not start binlog replication on the destination. The flag has to be manually cleared from the _vt.blp_checkpoint table.</li>
+      <li><b>skipPopulateBlpCheckpoint</b>: skips creating (if necessary) and populating the blp_checkpoint table in the destination. Not skipped by default because it's required for filtered replication to start.</li>
+      <li><b>dontStartBinlogPlayer</b>: (requires skipPopulateBlpCheckpoint to be false) will setup, but not start binlog replication on the destination. The flag has to be manually cleared from the _vt.blp_checkpoint table.</li>
       <li><b>skipSetSourceShards</b>: we won't set SourceShards on the destination shards, disabling filtered replication. Useful for worker tests.</li>
     </ul>
   </body>

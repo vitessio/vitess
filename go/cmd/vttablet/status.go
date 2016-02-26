@@ -8,6 +8,7 @@ import (
 	_ "github.com/youtube/vitess/go/vt/status"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
@@ -75,11 +76,11 @@ var (
 	healthTemplate = `
 <div style="font-size: x-large">Current status: <span style="padding-left: 0.5em; padding-right: 0.5em; padding-bottom: 0.5ex; padding-top: 0.5ex;" class="{{.CurrentClass}}">{{.CurrentHTML}}</span></div>
 <p>Polling health information from {{github_com_youtube_vitess_health_html_name}}. ({{.Config}})</p>
-<h2>History</h2>
+<h2>Health History</h2>
 <table>
   <tr>
     <th class="time">Time</th>
-    <th>State</th>
+    <th>Healthcheck Result</th>
   </tr>
   {{range .Records}}
   <tr class="{{.Class}}">
@@ -172,7 +173,7 @@ var onStatusRegistered func()
 func addStatusParts(qsc tabletserver.Controller) {
 	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
 		return map[string]interface{}{
-			"Tablet":              agent.Tablet(),
+			"Tablet":              topo.NewTabletInfo(agent.Tablet(), -1),
 			"BlacklistedTables":   agent.BlacklistedTables(),
 			"DisableQueryService": agent.DisableQueryService(),
 		}

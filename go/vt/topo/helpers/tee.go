@@ -417,21 +417,6 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, exi
 	return
 }
 
-// UpdateTabletFields is part of the topo.Server interface
-func (tee *Tee) UpdateTabletFields(ctx context.Context, tabletAlias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error) {
-	tablet, err := tee.primary.UpdateTabletFields(ctx, tabletAlias, update)
-	if err != nil {
-		// failed on primary, not updating secondary
-		return nil, err
-	}
-
-	if _, err := tee.secondary.UpdateTabletFields(ctx, tabletAlias, update); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateTabletFields(%v) failed: %v", tabletAlias, err)
-	}
-	return tablet, nil
-}
-
 // DeleteTablet is part of the topo.Server interface
 func (tee *Tee) DeleteTablet(ctx context.Context, alias *topodatapb.TabletAlias) error {
 	if err := tee.primary.DeleteTablet(ctx, alias); err != nil {
@@ -695,7 +680,7 @@ func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string,
 
 // WatchSrvKeyspace is part of the topo.Server interface.
 // We only watch for changes on the primary.
-func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
+func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
 	return tee.primary.WatchSrvKeyspace(ctx, cell, keyspace)
 }
 

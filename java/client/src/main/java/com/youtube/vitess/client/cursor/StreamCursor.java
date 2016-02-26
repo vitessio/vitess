@@ -11,10 +11,13 @@ import java.sql.SQLFeatureNotSupportedException;
 import java.util.Iterator;
 import java.util.List;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 /**
  * A {@link Cursor} that serves records from the sequence of {@link QueryResult} objects
  * represented by a {@link StreamIterator}.
  */
+@NotThreadSafe
 public class StreamCursor extends Cursor {
   private StreamIterator<QueryResult> streamIterator;
   private Iterator<Query.Row> rowIterator;
@@ -50,6 +53,7 @@ public class StreamCursor extends Cursor {
 
     return fields;
   }
+
   @Override
   public void close() throws Exception {
     streamIterator.close();
@@ -64,14 +68,14 @@ public class StreamCursor extends Cursor {
 
     // Get the next Row from the current QueryResult.
     if (rowIterator != null && rowIterator.hasNext()) {
-      return new Row(getFields(), rowIterator.next(), getFieldMap());
+      return new Row(getFieldMap(), rowIterator.next());
     }
 
     // Get the next QueryResult. Loop in case we get a QueryResult with no Rows (e.g. only Fields).
     while (nextQueryResult()) {
       // Get the first Row from the new QueryResult.
       if (rowIterator.hasNext()) {
-        return new Row(getFields(), rowIterator.next(), getFieldMap());
+        return new Row(getFieldMap(), rowIterator.next());
       }
     }
 

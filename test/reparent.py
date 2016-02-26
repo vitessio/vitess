@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-import warnings
-
 import logging
 import time
 import unittest
@@ -14,9 +12,6 @@ import tablet
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
 
-# Dropping a table inexplicably produces a warning despite
-# the 'IF EXISTS' clause. Squelch these warnings.
-warnings.simplefilter('ignore')
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
@@ -43,6 +38,7 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -71,6 +67,7 @@ class TestReparent(unittest.TestCase):
     environment.topo_server().wipe()
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
+      t.set_semi_sync_enabled(master=False)
       t.clean_dbs()
     super(TestReparent, self).tearDown()
 
@@ -115,9 +112,9 @@ class TestReparent(unittest.TestCase):
           (host, 'localhost'))
 
   def _check_master_cell(self, cell, shard_id, master_cell):
-    srvShard = utils.run_vtctl_json(['GetSrvShard', cell,
-                                     'test_keyspace/%s' % (shard_id)])
-    self.assertEqual(srvShard['master_cell'], master_cell)
+    srv_shard = utils.run_vtctl_json(['GetSrvShard', cell,
+                                      'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srv_shard['master_cell'], master_cell)
 
   def test_master_to_spare_state_change_impossible(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -324,13 +321,7 @@ class TestReparent(unittest.TestCase):
     self._check_master_cell('test_nj', shard_id, 'test_nj')
     self._check_master_cell('test_ny', shard_id, 'test_nj')
 
-    # Convert two replica to spare. That should leave only one node
-    # serving traffic, but still needs to appear in the replication
-    # graph.
-    utils.run_vtctl(['ChangeSlaveType', tablet_41983.tablet_alias, 'spare'])
-    utils.run_vtctl(['ChangeSlaveType', tablet_31981.tablet_alias, 'spare'])
     utils.validate_topology()
-    self._check_db_addr(shard_id, 'replica', tablet_62044.port)
 
     # Run this to make sure it succeeds.
     utils.run_vtctl(['ShardReplicationPositions', 'test_keyspace/' + shard_id],
@@ -366,7 +357,7 @@ class TestReparent(unittest.TestCase):
       try:
         self._check_db_addr(shard_id, 'master', new_port)
         break
-      except:
+      except protocols_flavor().client_error_exception_type():
         timeout = utils.wait_step('waiting for new port to register',
                                   timeout, sleep_time=0.1)
 
@@ -478,19 +469,19 @@ class TestReparent(unittest.TestCase):
     logging.debug('New master position: %s', str(new_pos))
     # Use 'localhost' as hostname because Travis CI worker hostnames
     # are too long for MySQL replication.
-    changeMasterCmds = mysql_flavor().change_master_commands(
+    change_master_cmds = mysql_flavor().change_master_commands(
         'localhost',
         tablet_62044.mysql_port,
         new_pos)
 
     # 62344 will now be a slave of 62044
     tablet_62344.mquery('', ['RESET MASTER', 'RESET SLAVE'] +
-                        changeMasterCmds +
+                        change_master_cmds +
                         ['START SLAVE'])
 
     # 41983 will be a slave of 62044
     tablet_41983.mquery('', ['STOP SLAVE'] +
-                        changeMasterCmds +
+                        change_master_cmds +
                         ['START SLAVE'])
 
     # in brutal mode, we kill the old master first
@@ -573,13 +564,12 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
-    tablet_41983.init_tablet('spare', 'test_keyspace', shard_id, start=True,
+    tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
 
     # wait for all tablets to start
-    for t in [tablet_62344, tablet_62044, tablet_31981]:
+    for t in [tablet_62344, tablet_62044, tablet_31981, tablet_41983]:
       t.wait_for_vttablet_state('SERVING')
-    tablet_41983.wait_for_vttablet_state('NOT_SERVING')
 
     # Recompute the shard layout node - until you do that, it might not be
     # valid.

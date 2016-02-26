@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	"github.com/youtube/vitess/go/vt/vtctl/fakevtctlclient"
 )
 
 func testingTaskCreator(taskName string) Task {
@@ -105,7 +106,7 @@ func (t *TestingEmitEchoFailEchoTask) OptionalParameters() []string {
 // testTask runs the given tasks and checks if it succeeds.
 // To make the task succeed you have to register the result with a fake first
 // e.g. see migrate_served_types_task_test.go for an example.
-func testTask(t *testing.T, test string, task Task, parameters map[string]string) {
+func testTask(t *testing.T, test string, task Task, parameters map[string]string, vtctlClientFake *fakevtctlclient.FakeVtctlClient) {
 	err := validateParameters(task, parameters)
 	if err != nil {
 		t.Fatalf("%s: Not all required parameters were specified: %v", test, err)
@@ -117,5 +118,9 @@ func testTask(t *testing.T, test string, task Task, parameters map[string]string
 	}
 	if err != nil {
 		t.Errorf("%s: Task should not fail: %v", err, test)
+	}
+
+	if c := vtctlClientFake.RegisteredCommands(); len(c) != 0 {
+		t.Errorf("Not all registered results were consumed from the fake. Commands left: %v", c)
 	}
 }

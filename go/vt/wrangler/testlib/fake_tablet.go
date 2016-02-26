@@ -174,7 +174,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	// create a test agent on that port, and re-read the record
 	// (it has new ports and IP)
 	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon)
-	ft.Tablet = ft.Agent.Tablet().Tablet
+	ft.Tablet = ft.Agent.Tablet()
 
 	// create the gRPC server
 	ft.RPCServer = grpc.NewServer()
@@ -188,7 +188,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	c := tmclient.NewTabletManagerClient()
 	for timeout >= 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		err := c.Ping(ctx, ft.Agent.Tablet())
+		err := c.Ping(ctx, topo.NewTabletInfo(ft.Agent.Tablet(), -1))
 		cancel()
 		if err == nil {
 			break

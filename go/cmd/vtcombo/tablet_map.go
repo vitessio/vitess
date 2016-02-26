@@ -11,18 +11,25 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -161,10 +168,20 @@ func initTabletMap(ts topo.Server, topology string, mysqld mysqlctl.MysqlDaemon,
 		}
 	}
 
-	// Register the tablet dialer
+	// Register the tablet dialer for tablet server
 	tabletconn.RegisterDialer("internal", dialer)
 	*tabletconn.TabletProtocol = "internal"
+
+	// Register the tablet manager client factory for tablet manager
+	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
+		return &internalTabletManagerClient{}
+	})
+	*tmclient.TabletManagerProtocol = "internal"
 }
+
+//
+// TabletConn implementation
+//
 
 // dialer is our tabletconn.Dialer
 func dialer(ctx context.Context, endPoint *topodatapb.EndPoint, keyspace, shard string, tabletType topodatapb.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
@@ -189,24 +206,20 @@ type internalTabletConn struct {
 // Execute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	bv, err := tproto.BindVariablesToProto3(bindVars)
+	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, err
 	}
-	bindVars, err = tproto.Proto3ToBindVariables(bv)
+	bindVars, err = querytypes.Proto3ToBindVariables(bv)
 	if err != nil {
 		return nil, err
 	}
-	reply := &sqltypes.Result{}
-	if err := itc.tablet.qsc.QueryService().Execute(ctx, &querypb.Target{
+	reply, err := itc.tablet.qsc.QueryService().Execute(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Query{
-		Sql:           query,
-		BindVariables: bindVars,
-		TransactionId: transactionID,
-	}, reply); err != nil {
+	}, query, bindVars, 0, transactionID)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
 	return reply, nil
@@ -214,43 +227,39 @@ func (itc *internalTabletConn) Execute(ctx context.Context, query string, bindVa
 
 // ExecuteBatch is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
-	q := make([]tproto.BoundQuery, len(queries))
+func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) ([]sqltypes.Result, error) {
+	q := make([]querytypes.BoundQuery, len(queries))
 	for i, query := range queries {
-		bv, err := tproto.BindVariablesToProto3(query.BindVariables)
+		bv, err := querytypes.BindVariablesToProto3(query.BindVariables)
 		if err != nil {
 			return nil, err
 		}
-		bindVars, err := tproto.Proto3ToBindVariables(bv)
+		bindVars, err := querytypes.Proto3ToBindVariables(bv)
 		if err != nil {
 			return nil, err
 		}
 		q[i].Sql = query.Sql
 		q[i].BindVariables = bindVars
 	}
-	reply := &tproto.QueryResultList{}
-	if err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &querypb.Target{
+	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.QueryList{
-		Queries:       q,
-		AsTransaction: asTransaction,
-		TransactionId: transactionID,
-	}, reply); err != nil {
+	}, q, 0, asTransaction, transactionID)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return reply, nil
+	return results, nil
 }
 
 // StreamExecute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	bv, err := tproto.BindVariablesToProto3(bindVars)
+	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
-	bindVars, err = tproto.Proto3ToBindVariables(bv)
+	bindVars, err = querytypes.Proto3ToBindVariables(bv)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -262,12 +271,10 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 			Keyspace:   itc.tablet.keyspace,
 			Shard:      itc.tablet.shard,
 			TabletType: itc.tablet.tabletType,
-		}, &tproto.Query{
-			Sql:           query,
-			BindVariables: bindVars,
-			TransactionId: transactionID,
-		}, func(reply *sqltypes.Result) error {
-			result <- reply
+		}, query, bindVars, 0, func(reply *sqltypes.Result) error {
+			// We need to deep-copy the reply before returning,
+			// because the underlying buffers are reused.
+			result <- reply.Copy()
 			return nil
 		})
 
@@ -282,16 +289,16 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, query string, 
 }
 
 // Begin is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Begin(ctx context.Context) (transactionID int64, err error) {
-	result := &tproto.TransactionInfo{}
-	if err := itc.tablet.qsc.QueryService().Begin(ctx, &querypb.Target{
+func (itc *internalTabletConn) Begin(ctx context.Context) (int64, error) {
+	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{}, result); err != nil {
+	}, 0)
+	if err != nil {
 		return 0, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return result.TransactionId, nil
+	return transactionID, nil
 }
 
 // Commit is part of tabletconn.TabletConn
@@ -300,9 +307,7 @@ func (itc *internalTabletConn) Commit(ctx context.Context, transactionID int64) 
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{
-		TransactionId: transactionID,
-	})
+	}, 0, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 }
 
@@ -312,40 +317,8 @@ func (itc *internalTabletConn) Rollback(ctx context.Context, transactionID int64
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.Session{
-		TransactionId: transactionID,
-	})
+	}, 0, transactionID)
 	return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
-}
-
-// Execute2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*sqltypes.Result, error) {
-	return itc.Execute(ctx, query, bindVars, transactionID)
-}
-
-// ExecuteBatch2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
-	return itc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
-}
-
-// Begin2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Begin2(ctx context.Context) (transactionID int64, err error) {
-	return itc.Begin(ctx)
-}
-
-// Commit2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Commit2(ctx context.Context, transactionID int64) error {
-	return itc.Commit(ctx, transactionID)
-}
-
-// Rollback2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Rollback2(ctx context.Context, transactionID int64) error {
-	return itc.Rollback(ctx, transactionID)
-}
-
-// StreamExecute2 is part of tabletconn.TabletConn
-func (itc *internalTabletConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *sqltypes.Result, tabletconn.ErrFunc, error) {
-	return itc.StreamExecute(ctx, query, bindVars, transactionID)
 }
 
 // Close is part of tabletconn.TabletConn
@@ -363,20 +336,16 @@ func (itc *internalTabletConn) EndPoint() *topodatapb.EndPoint {
 }
 
 // SplitQuery is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error) {
-	reply := &tproto.SplitQueryResult{}
-	if err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
+func (itc *internalTabletConn) SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, &querypb.Target{
 		Keyspace:   itc.tablet.keyspace,
 		Shard:      itc.tablet.shard,
 		TabletType: itc.tablet.tabletType,
-	}, &tproto.SplitQueryRequest{
-		Query:       query,
-		SplitColumn: splitColumn,
-		SplitCount:  splitCount,
-	}, reply); err != nil {
+	}, query.Sql, query.BindVariables, splitColumn, splitCount, 0)
+	if err != nil {
 		return nil, tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(err))
 	}
-	return reply.Queries, nil
+	return splits, nil
 }
 
 // StreamHealth is part of tabletconn.TabletConn
@@ -401,4 +370,258 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context) (<-chan *queryp
 	return result, func() error {
 		return tabletconn.TabletErrorFromGRPC(tabletserver.ToGRPCError(finalErr))
 	}, nil
+}
+
+//
+// TabletManagerClient implementation
+//
+
+// internalTabletManagerClient implements tmclient.TabletManagerClient
+type internalTabletManagerClient struct{}
+
+func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topo.TabletInfo) error {
+	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
+	if !ok {
+		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
+	}
+	return t.agent.RPCWrap(ctx, actionnode.TabletActionPing, nil, nil, func() error {
+		t.agent.Ping(ctx, "payload")
+		return nil
+	})
+}
+
+func (itmc *internalTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
+	if !ok {
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
+	}
+	var result *tabletmanagerdatapb.SchemaDefinition
+	if err := t.agent.RPCWrap(ctx, actionnode.TabletActionGetSchema, nil, nil, func() error {
+		sd, err := t.agent.GetSchema(ctx, tables, excludeTables, includeViews)
+		if err == nil {
+			result = sd
+		}
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*tabletmanagerdatapb.Permissions, error) {
+	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
+	if !ok {
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
+	}
+	var result *tabletmanagerdatapb.Permissions
+	if err := t.agent.RPCWrap(ctx, actionnode.TabletActionGetPermissions, nil, nil, func() error {
+		p, err := t.agent.GetPermissions(ctx)
+		if err == nil {
+			result = p
+		}
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (itmc *internalTabletManagerClient) SetReadOnly(ctx context.Context, tablet *topo.TabletInfo) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) SetReadWrite(ctx context.Context, tablet *topo.TabletInfo) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topodatapb.TabletType) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) Sleep(ctx context.Context, tablet *topo.TabletInfo, duration time.Duration) error {
+	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
+	if !ok {
+		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
+	}
+	return t.agent.RPCWrapLockAction(ctx, actionnode.TabletActionSleep, nil, nil, true, func() error {
+		t.agent.Sleep(ctx, duration)
+		return nil
+	})
+}
+
+func (itmc *internalTabletManagerClient) ExecuteHook(ctx context.Context, tablet *topo.TabletInfo, hk *hook.Hook) (*hook.HookResult, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) RefreshState(ctx context.Context, tablet *topo.TabletInfo) error {
+	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
+	if !ok {
+		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
+	}
+	return t.agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, nil, nil, true, func() error {
+		t.agent.RefreshState(ctx)
+		return nil
+	})
+}
+
+func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topodatapb.TabletType) error {
+	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
+	if !ok {
+		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
+	}
+	return t.agent.RPCWrap(ctx, actionnode.TabletActionRunHealthCheck, nil, nil, func() error {
+		t.agent.RunHealthCheck(ctx, targetTabletType)
+		return nil
+	})
+}
+
+func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error {
+	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
+	if !ok {
+		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
+	}
+	return t.agent.RPCWrapLockAction(ctx, actionnode.TabletActionReloadSchema, nil, nil, true, func() error {
+		t.agent.ReloadSchema(ctx)
+		return nil
+	})
+}
+
+func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*tmutils.SchemaChangeResult, error) {
+	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
+	if !ok {
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
+	}
+	var result *tmutils.SchemaChangeResult
+	if err := t.agent.RPCWrapLockAction(ctx, actionnode.TabletActionPreflightSchema, nil, nil, true, func() error {
+		scr, err := t.agent.PreflightSchema(ctx, change)
+		if err == nil {
+			result = scr
+		}
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
+	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
+	if !ok {
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
+	}
+	var result *tmutils.SchemaChangeResult
+	if err := t.agent.RPCWrapLockAction(ctx, actionnode.TabletActionApplySchema, nil, nil, true, func() error {
+		scr, err := t.agent.ApplySchema(ctx, change)
+		if err == nil {
+			result = scr
+		}
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int) (*querypb.QueryResult, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*replicationdatapb.Status, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+	return "", fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) StopSlave(ctx context.Context, tablet *topo.TabletInfo) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, stopPos string, waitTime time.Duration) (string, error) {
+	return "", fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) StartSlave(ctx context.Context, tablet *topo.TabletInfo) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) TabletExternallyReparented(ctx context.Context, tablet *topo.TabletInfo, externalID string) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) GetSlaves(ctx context.Context, tablet *topo.TabletInfo) ([]string, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*tabletmanagerdatapb.BlpPosition, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) StartBlp(ctx context.Context, tablet *topo.TabletInfo) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
+	return "", fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ResetReplication(ctx context.Context, tablet *topo.TabletInfo) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+	return "", fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+	return "", fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos string) (string, error) {
+	return "", fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topo.TabletInfo) (*replicationdatapb.Status, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
+	return "", fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutilpb.Event, tmclient.ErrFunc, error) {
+	return nil, nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) IsTimeoutError(err error) bool {
+	return false
 }

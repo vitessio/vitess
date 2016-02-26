@@ -19,13 +19,16 @@ keyspace='test_keyspace'
 SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-5}
 UID_BASE=${UID_BASE:-100}
+VITESS_NAME=${VITESS_NAME:-'default'}
 
 num_shards=`echo $SHARDS | tr "," " " | wc -w`
 uid_base=$UID_BASE
+cells=`echo $CELLS | tr ',' ' '`
+num_cells=`echo $cells | wc -w`
 
 for shard in `seq 1 $num_shards`; do
-  cell_index=0
-  for cell in `echo $CELLS | tr "," " "`; do
+  [[ $num_cells -gt 1 ]] && cell_index=100000000 || cell_index=0
+  for cell in $cells; do
     for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
       uid=$[$uid_base + $uid_index + $cell_index]
       printf -v alias '%s-%010d' $cell $uid
@@ -38,7 +41,7 @@ for shard in `seq 1 $num_shards`; do
       fi
 
       echo "Deleting pod for tablet $alias..."
-      $KUBECTL delete pod vttablet-$uid
+      $KUBECTL delete pod vttablet-$uid --namespace=$VITESS_NAME
     done
     let cell_index=cell_index+100000000
   done

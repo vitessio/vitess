@@ -11,17 +11,19 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/discovery"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -30,38 +32,69 @@ var (
 	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
 )
 
-const gatewayImplementationDiscovery = "discoverygateway"
+const (
+	gatewayImplementationDiscovery = "discoverygateway"
+)
 
 func init() {
 	RegisterGatewayCreator(gatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
-func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway {
-	return &discoveryGateway{
-		hc:              hc,
-		topoServer:      topoServer,
-		localCell:       cell,
-		retryCount:      retryCount,
-		tabletsWatchers: make([]*discovery.TopologyWatcher, 0, 1),
+func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, _ time.Duration, retryCount int, _, _, _ time.Duration, _ *stats.MultiTimings, tabletTypesToWait []topodatapb.TabletType) Gateway {
+	dg := &discoveryGateway{
+		hc:                hc,
+		topoServer:        topoServer,
+		srvTopoServer:     serv,
+		localCell:         cell,
+		retryCount:        retryCount,
+		tabletTypesToWait: tabletTypesToWait,
+		tabletsWatchers:   make([]*discovery.TopologyWatcher, 0, 1),
 	}
+	dg.hc.SetListener(dg)
+	for _, c := range strings.Split(*cellsToWatch, ",") {
+		if c == "" {
+			continue
+		}
+		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, dg.hc, c, *refreshInterval, *topoReadConcurrency)
+		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
+	}
+	err := dg.waitForEndPoints()
+	if err != nil {
+		log.Errorf("createDiscoveryGateway: %v", err)
+	}
+	return dg
 }
 
 type discoveryGateway struct {
-	hc         discovery.HealthCheck
-	topoServer topo.Server
-	localCell  string
-	retryCount int
+	hc                discovery.HealthCheck
+	topoServer        topo.Server
+	srvTopoServer     topo.SrvTopoServer
+	localCell         string
+	retryCount        int
+	tabletTypesToWait []topodatapb.TabletType
 
 	tabletsWatchers []*discovery.TopologyWatcher
 }
 
+func (dg *discoveryGateway) waitForEndPoints() error {
+	// Skip waiting for endpoints if we are not told to do so.
+	if len(dg.tabletTypesToWait) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	err := discovery.WaitForAllEndPoints(ctx, dg.hc, dg.srvTopoServer, dg.localCell, dg.tabletTypesToWait)
+	if err == discovery.ErrWaitForEndPointsTimeout {
+		// ignore this error, we will still start up, and may not serve
+		// all endpoints.
+		err = nil
+	}
+	return err
+}
+
 // InitializeConnections creates connections to VTTablets.
 func (dg *discoveryGateway) InitializeConnections(ctx context.Context) error {
-	dg.hc.SetListener(dg)
-	for _, cell := range strings.Split(*cellsToWatch, ",") {
-		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, dg.hc, cell, *refreshInterval, *topoReadConcurrency)
-		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
-	}
 	return nil
 }
 
@@ -69,17 +102,17 @@ func (dg *discoveryGateway) InitializeConnections(ctx context.Context) error {
 func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (qr *sqltypes.Result, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qr, innerErr = conn.Execute2(ctx, query, bindVars, transactionID)
+		qr, innerErr = conn.Execute(ctx, query, bindVars, transactionID)
 		return innerErr
 	}, transactionID, false)
 	return qr, err
 }
 
 // ExecuteBatch executes a group of queries for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (qrs *tproto.QueryResultList, err error) {
+func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64) (qrs []sqltypes.Result, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qrs, innerErr = conn.ExecuteBatch2(ctx, queries, asTransaction, transactionID)
+		qrs, innerErr = conn.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 		return innerErr
 	}, transactionID, false)
 	return qrs, err
@@ -92,7 +125,7 @@ func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard s
 	var results <-chan *sqltypes.Result
 	err := dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var err error
-		results, erFunc, err = conn.StreamExecute2(ctx, query, bindVars, transactionID)
+		results, erFunc, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
 		usedConn = conn
 		return err
 	}, transactionID, true)
@@ -110,7 +143,7 @@ func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard s
 func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType) (transactionID int64, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		transactionID, innerErr = conn.Begin2(ctx)
+		transactionID, innerErr = conn.Begin(ctx)
 		return innerErr
 	}, 0, false)
 	return transactionID, err
@@ -119,22 +152,22 @@ func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard st
 // Commit commits the current transaction for the specified keyspace, shard, and tablet type.
 func (dg *discoveryGateway) Commit(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
 	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
-		return conn.Commit2(ctx, transactionID)
+		return conn.Commit(ctx, transactionID)
 	}, transactionID, false)
 }
 
 // Rollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
 func (dg *discoveryGateway) Rollback(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
 	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
-		return conn.Rollback2(ctx, transactionID)
+		return conn.Rollback(ctx, transactionID)
 	}, transactionID, false)
 }
 
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) SplitQuery(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
+func (dg *discoveryGateway) SplitQuery(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
 	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		queries, innerErr = conn.SplitQuery(ctx, tproto.BoundQuery{
+		queries, innerErr = conn.SplitQuery(ctx, querytypes.BoundQuery{
 			Sql:           sql,
 			BindVariables: bindVariables,
 		}, splitColumn, splitCount)
@@ -148,6 +181,11 @@ func (dg *discoveryGateway) Close(ctx context.Context) error {
 	for _, ctw := range dg.tabletsWatchers {
 		ctw.Stop()
 	}
+	return nil
+}
+
+// CacheStatus returns a list of GatewayEndPointCacheStatus per endpoint.
+func (dg *discoveryGateway) CacheStatus() GatewayEndPointCacheStatusList {
 	return nil
 }
 
@@ -171,7 +209,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		endPoints := dg.getEndPoints(keyspace, shard, tabletType)
 		if len(endPoints) == 0 {
 			// fail fast if there is no endpoint
-			err = vterrors.FromError(vtrpc.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid endpoint"))
+			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid endpoint"))
 			break
 		}
 		shuffleEndPoints(endPoints)
@@ -186,7 +224,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		if endPoint == nil {
 			if err == nil {
 				// do not override error from last attempt.
-				err = vterrors.FromError(vtrpc.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no available connection"))
+				err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no available connection"))
 			}
 			break
 		}
@@ -195,7 +233,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		endPointLastUsed = endPoint
 		conn := dg.hc.GetConnection(endPoint)
 		if conn == nil {
-			err = vterrors.FromError(vtrpc.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for %+v", endPoint))
+			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for %+v", endPoint))
 			invalidEndPoints[discovery.EndPointToMapKey(endPoint)] = true
 			continue
 		}

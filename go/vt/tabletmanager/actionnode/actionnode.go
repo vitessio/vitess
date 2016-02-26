@@ -180,9 +180,6 @@ const (
 	// shard-wide actions.
 	ShardActionCheck = "CheckShard"
 
-	// ShardActionApplySchema applies a schema change on an entire shard
-	ShardActionApplySchema = "ApplySchemaShard"
-
 	// ShardActionSetServedTypes changes the ServedTypes inside a shard
 	ShardActionSetServedTypes = "SetShardServedTypes"
 

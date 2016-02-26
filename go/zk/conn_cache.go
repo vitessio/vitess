@@ -5,10 +5,7 @@
 package zk
 
 import (
-	"bytes"
-	"fmt"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 
@@ -18,7 +15,7 @@ import (
 )
 
 var (
-	cachedConnStates      = stats.NewCounters("ZkCachedConn")
+	cachedConnStates      = stats.NewStringMap("ZkCachedConn")
 	cachedConnStatesMutex sync.Mutex
 )
 
@@ -26,36 +23,37 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-/* When you need to talk to multiple zk cells, you need a simple
-abstraction so you aren't caching clients all over the place.
-
-ConnCache guarantees that you have at most one zookeeper connection per cell.
-*/
+// state is the state of the Zookeeper connection. It's not tracked in the
+// connection struct itself, only in the stat variable cachedConnStates.
+type state string
 
 const (
-	DISCONNECTED = 0
-	CONNECTING   = 1
-	CONNECTED    = 2
+	disconnected state = "Disconnected"
+	connecting         = "Connecting"
+	connected          = "Connected"
 )
 
 type cachedConn struct {
-	mutex  sync.Mutex // used to notify if multiple goroutine simultaneously want a connection
-	zconn  Conn
-	states *stats.States
+	mutex sync.Mutex
+	// guarded by mutex
+	zconn Conn
 }
 
+// ConnCache is a cache for Zookeeper connections which guarantees that you have
+// at most one zookeeper connection per cell.
 type ConnCache struct {
 	mutex        sync.Mutex
 	zconnCellMap map[string]*cachedConn // map cell name to connection
 }
 
-func (cc *ConnCache) setState(zcell string, conn *cachedConn, state int64) {
-	conn.states.SetState(state)
+func (cc *ConnCache) setState(zcell string, state state) {
 	cachedConnStatesMutex.Lock()
 	defer cachedConnStatesMutex.Unlock()
-	cachedConnStates.Set(zcell, state)
+	cachedConnStates.Set(zcell, string(state))
 }
 
+// ConnForPath returns a connection for a given Zookeeper path. If no connection
+// is cached, it creates a new one.
 func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	zcell, err := ZkCellFromZkPath(zkPath)
 	if err != nil {
@@ -71,7 +69,6 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	conn, ok := cc.zconnCellMap[zcell]
 	if !ok {
 		conn = &cachedConn{}
-		conn.states = stats.NewStates("ZkCachedConn"+strings.Title(zcell), []string{"Disconnected", "Connecting", "Connected"}, time.Now(), DISCONNECTED)
 		cc.zconnCellMap[zcell] = conn
 	}
 	cc.mutex.Unlock()
@@ -90,12 +87,12 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZSYSTEMERROR, SystemError: err, Path: zkPath}
 	}
 
-	cc.setState(zcell, conn, CONNECTING)
+	cc.setState(zcell, connecting)
 	conn.zconn, err = cc.newZookeeperConn(zkAddr, zcell)
 	if conn.zconn != nil {
-		cc.setState(zcell, conn, CONNECTED)
+		cc.setState(zcell, connected)
 	} else {
-		cc.setState(zcell, conn, DISCONNECTED)
+		cc.setState(zcell, disconnected)
 	}
 	return conn.zconn, err
 }
@@ -133,8 +130,8 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan 
 					cached.zconn.Close()
 				}
 				cached.zconn = nil
+				cc.setState(cell, disconnected)
 				cached.mutex.Unlock()
-				cc.setState(cell, cached, DISCONNECTED)
 			}
 
 			log.Infof("zk conn cache: session for cell %v ended: %v", cell, event)
@@ -145,6 +142,7 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan 
 	}
 }
 
+// Close closes all cached connections.
 func (cc *ConnCache) Close() error {
 	cc.mutex.Lock()
 	defer cc.mutex.Unlock()
@@ -160,28 +158,7 @@ func (cc *ConnCache) Close() error {
 	return nil
 }
 
-// Implements expvar.Var()
-func (cc *ConnCache) String() string {
-	cc.mutex.Lock()
-	defer cc.mutex.Unlock()
-
-	b := bytes.NewBuffer(make([]byte, 0, 4096))
-	fmt.Fprintf(b, "{")
-
-	firstCell := true
-	for cell, conn := range cc.zconnCellMap {
-		if firstCell {
-			firstCell = false
-		} else {
-			fmt.Fprintf(b, ", ")
-		}
-		fmt.Fprintf(b, "\"%v\": %v", cell, conn.states.String())
-	}
-
-	fmt.Fprintf(b, "}")
-	return b.String()
-}
-
+// NewConnCache creates a new Zookeeper connection cache.
 func NewConnCache() *ConnCache {
 	return &ConnCache{
 		zconnCellMap: make(map[string]*cachedConn),

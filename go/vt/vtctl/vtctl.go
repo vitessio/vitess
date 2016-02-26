@@ -90,6 +90,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
+	"github.com/youtube/vitess/go/sqltypes"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -110,6 +111,12 @@ var (
 	ErrUnknownCommand = errors.New("unknown command")
 )
 
+var (
+	healthCheckTopologyRefresh = flag.Duration("vtctl_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
+	healthcheckRetryDelay      = flag.Duration("vtctl_healthcheck_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck")
+	healthCheckTimeout         = flag.Duration("vtctl_healthcheck_timeout", time.Minute, "the health check timeout period")
+)
+
 type command struct {
 	name   string
 	method func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error
@@ -123,241 +130,249 @@ type commandGroup struct {
 }
 
 var commands = []commandGroup{
-	commandGroup{
+	{
 		"Tablets", []command{
-			command{"InitTablet", commandInitTablet,
+			{"InitTablet", commandInitTablet,
 				"[-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
 				"Initializes a tablet in the topology.\n" +
 					"Valid <tablet type> values are:\n" +
 					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.AllTabletTypes), " ")},
-			command{"GetTablet", commandGetTablet,
+			{"GetTablet", commandGetTablet,
 				"<tablet alias>",
 				"Outputs a JSON structure that contains information about the Tablet."},
-			command{"UpdateTabletAddrs", commandUpdateTabletAddrs,
+			{"UpdateTabletAddrs", commandUpdateTabletAddrs,
 				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-grpc-port <grpc port>] <tablet alias> ",
 				"Updates the IP address and port numbers of a tablet."},
-			command{"DeleteTablet", commandDeleteTablet,
+			{"DeleteTablet", commandDeleteTablet,
 				"[-allow_master] [-skip_rebuild] <tablet alias> ...",
 				"Deletes tablet(s) from the topology."},
-			command{"SetReadOnly", commandSetReadOnly,
+			{"SetReadOnly", commandSetReadOnly,
 				"<tablet alias>",
 				"Sets the tablet as read-only."},
-			command{"SetReadWrite", commandSetReadWrite,
+			{"SetReadWrite", commandSetReadWrite,
 				"<tablet alias>",
 				"Sets the tablet as read-write."},
-			command{"StartSlave", commandStartSlave,
+			{"StartSlave", commandStartSlave,
 				"<tablet alias>",
 				"Starts replication on the specified slave."},
-			command{"StopSlave", commandStopSlave,
+			{"StopSlave", commandStopSlave,
 				"<tablet alias>",
 				"Stops replication on the specified slave."},
-			command{"ChangeSlaveType", commandChangeSlaveType,
+			{"ChangeSlaveType", commandChangeSlaveType,
 				"[-dry-run] <tablet alias> <tablet type>",
 				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
 					"NOTE: This command automatically updates the serving graph.\n" +
 					"Valid <tablet type> values are:\n" +
 					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.SlaveTabletTypes), " ")},
-			command{"Ping", commandPing,
+			{"Ping", commandPing,
 				"<tablet alias>",
 				"Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations."},
-			command{"RefreshState", commandRefreshState,
+			{"RefreshState", commandRefreshState,
 				"<tablet alias>",
 				"Reloads the tablet record on the specified tablet."},
-			command{"RunHealthCheck", commandRunHealthCheck,
+			{"RunHealthCheck", commandRunHealthCheck,
 				"<tablet alias> <target tablet type>",
 				"Runs a health check on a remote tablet with the specified target type."},
-			command{"Sleep", commandSleep,
+			{"Sleep", commandSleep,
 				"<tablet alias> <duration>",
 				"Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing."},
-			command{"Backup", commandBackup,
+			{"Backup", commandBackup,
 				"[-concurrency=4] <tablet alias>",
 				"Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes."},
-			command{"ExecuteHook", commandExecuteHook,
+			{"ExecuteHook", commandExecuteHook,
 				"<tablet alias> <hook name> [<param1=value1> <param2=value2> ...]",
 				"Runs the specified hook on the given tablet. A hook is a script that resides in the $VTROOT/vthook directory. You can put any script into that directory and use this command to run that script.\n" +
 					"For this command, the param=value arguments are parameters that the command passes to the specified hook."},
-			command{"ExecuteFetchAsDba", commandExecuteFetchAsDba,
-				"[--max_rows=10000] [--want_fields] [--disable_binlogs] <tablet alias> <sql command>",
+			{"ExecuteFetchAsDba", commandExecuteFetchAsDba,
+				"[-max_rows=10000] [-disable_binlogs] [-json] <tablet alias> <sql command>",
 				"Runs the given SQL command as a DBA on the remote tablet."},
 		},
 	},
-	commandGroup{
+	{
 		"Shards", []command{
-			command{"CreateShard", commandCreateShard,
+			{"CreateShard", commandCreateShard,
 				"[-force] [-parent] <keyspace/shard>",
 				"Creates the specified shard."},
-			command{"GetShard", commandGetShard,
+			{"GetShard", commandGetShard,
 				"<keyspace/shard>",
 				"Outputs a JSON structure that contains information about the Shard."},
-			command{"RebuildShardGraph", commandRebuildShardGraph,
+			{"RebuildShardGraph", commandRebuildShardGraph,
 				"[-cells=a,b] <keyspace/shard> ... ",
 				"Rebuilds the replication graph and shard serving data in ZooKeeper or etcd. This may trigger an update to all connected clients."},
-			command{"TabletExternallyReparented", commandTabletExternallyReparented,
+			{"TabletExternallyReparented", commandTabletExternallyReparented,
 				"<tablet alias>",
 				"Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the Reparenting guide for more information:" +
 					"https://github.com/youtube/vitess/blob/master/doc/Reparenting.md#external-reparents."},
-			command{"ValidateShard", commandValidateShard,
+			{"ValidateShard", commandValidateShard,
 				"[-ping-tablets] <keyspace/shard>",
 				"Validates that all nodes that are reachable from this shard are consistent."},
-			command{"ShardReplicationPositions", commandShardReplicationPositions,
+			{"ShardReplicationPositions", commandShardReplicationPositions,
 				"<keyspace/shard>",
 				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets."},
-			command{"ListShardTablets", commandListShardTablets,
+			{"ListShardTablets", commandListShardTablets,
 				"<keyspace/shard>",
 				"Lists all tablets in the specified shard."},
-			command{"SetShardServedTypes", commandSetShardServedTypes,
+			{"SetShardServedTypes", commandSetShardServedTypes,
 				"<keyspace/shard> [<served tablet type1>,<served tablet type2>,...]",
 				"Sets a given shard's served tablet types. Does not rebuild any serving graph."},
-			command{"SetShardTabletControl", commandSetShardTabletControl,
+			{"SetShardTabletControl", commandSetShardTabletControl,
 				"[--cells=c1,c2,...] [--blacklisted_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard> <tablet type>",
 				"Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The *MigrateServedFrom* and *MigrateServedType* commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits."},
-			command{"SourceShardDelete", commandSourceShardDelete,
+			{"SourceShardDelete", commandSourceShardDelete,
 				"<keyspace/shard> <uid>",
 				"Deletes the SourceShard record with the provided index. This is meant as an emergency cleanup function. It does not call RefreshState for the shard master."},
-			command{"SourceShardAdd", commandSourceShardAdd,
+			{"SourceShardAdd", commandSourceShardAdd,
 				"[--key_range=<keyrange>] [--tables=<table1,table2,...>] <keyspace/shard> <uid> <source keyspace/shard>",
 				"Adds the SourceShard record with the provided index. This is meant as an emergency function. It does not call RefreshState for the shard master."},
-			command{"ShardReplicationAdd", commandShardReplicationAdd,
+			{"ShardReplicationAdd", commandShardReplicationAdd,
 				"<keyspace/shard> <tablet alias> <parent tablet alias>",
 				"HIDDEN Adds an entry to the replication graph in the given cell."},
-			command{"ShardReplicationRemove", commandShardReplicationRemove,
+			{"ShardReplicationRemove", commandShardReplicationRemove,
 				"<keyspace/shard> <tablet alias>",
 				"HIDDEN Removes an entry from the replication graph in the given cell."},
-			command{"ShardReplicationFix", commandShardReplicationFix,
+			{"ShardReplicationFix", commandShardReplicationFix,
 				"<cell> <keyspace/shard>",
 				"Walks through a ShardReplication object and fixes the first error that it encounters."},
-			command{"WaitForFilteredReplication", commandWaitForFilteredReplication,
+			{"WaitForFilteredReplication", commandWaitForFilteredReplication,
 				"[-max_delay <max_delay, default 30s>] <keyspace/shard>",
 				"Blocks until the specified shard has caught up with the filtered replication of its source shard."},
-			command{"RemoveShardCell", commandRemoveShardCell,
+			{"RemoveShardCell", commandRemoveShardCell,
 				"[-force] [-recursive] <keyspace/shard> <cell>",
 				"Removes the cell from the shard's Cells list."},
-			command{"DeleteShard", commandDeleteShard,
+			{"DeleteShard", commandDeleteShard,
 				"[-recursive] <keyspace/shard> ...",
 				"Deletes the specified shard(s). In recursive mode, it also deletes all tablets belonging to the shard. Otherwise, there must be no tablets left in the shard."},
 		},
 	},
-	commandGroup{
+	{
 		"Keyspaces", []command{
-			command{"CreateKeyspace", commandCreateKeyspace,
+			{"CreateKeyspace", commandCreateKeyspace,
 				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-split_shard_count=N] [-force] <keyspace name>",
 				"Creates the specified keyspace."},
-			command{"DeleteKeyspace", commandDeleteKeyspace,
+			{"DeleteKeyspace", commandDeleteKeyspace,
 				"[-recursive] <keyspace>",
 				"Deletes the specified keyspace. In recursive mode, it also recursively deletes all shards in the keyspace. Otherwise, there must be no shards left in the keyspace."},
-			command{"RemoveKeyspaceCell", commandRemoveKeyspaceCell,
+			{"RemoveKeyspaceCell", commandRemoveKeyspaceCell,
 				"[-force] [-recursive] <keyspace> <cell>",
 				"Removes the cell from the Cells list for all shards in the keyspace."},
-			command{"GetKeyspace", commandGetKeyspace,
+			{"GetKeyspace", commandGetKeyspace,
 				"<keyspace>",
 				"Outputs a JSON structure that contains information about the Keyspace."},
-			command{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
+			{"GetKeyspaces", commandGetKeyspaces,
+				"",
+				"Outputs a sorted list of all keyspaces."},
+			{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
 				"[-force] [-split_shard_count=N] <keyspace name> [<column name>] [<column type>]",
 				"Updates the sharding information for a keyspace."},
-			command{"SetKeyspaceServedFrom", commandSetKeyspaceServedFrom,
+			{"SetKeyspaceServedFrom", commandSetKeyspaceServedFrom,
 				"[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
 				"Changes the ServedFromMap manually. This command is intended for emergency fixes. This field is automatically set when you call the *MigrateServedFrom* command. This command does not rebuild the serving graph."},
-			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
+			{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
 				"[-cells=a,b] [-rebuild_srv_shards] <keyspace> ...",
 				"Rebuilds the serving data for the keyspace and, optionally, all shards in the specified keyspace. This command may trigger an update to all connected clients."},
-			command{"ValidateKeyspace", commandValidateKeyspace,
+			{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name>",
 				"Validates that all nodes reachable from the specified keyspace are consistent."},
-			command{"MigrateServedTypes", commandMigrateServedTypes,
+			{"MigrateServedTypes", commandMigrateServedTypes,
 				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] <keyspace/shard> <served tablet type>",
 				"Migrates a serving type from the source shard to the shards that it replicates to. This command also rebuilds the serving graph. The <keyspace/shard> argument can specify any of the shards involved in the migration."},
-			command{"MigrateServedFrom", commandMigrateServedFrom,
+			{"MigrateServedFrom", commandMigrateServedFrom,
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served tablet type>",
 				"Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph."},
-			command{"FindAllShardsInKeyspace", commandFindAllShardsInKeyspace,
+			{"FindAllShardsInKeyspace", commandFindAllShardsInKeyspace,
 				"<keyspace>",
 				"Displays all of the shards in the specified keyspace."},
+			{"WaitForDrain", commandWaitForDrain,
+				"[-timeout <duration>] <keyspace/shard> <served tablet type>",
+				"Blocks until no new queries were observed on all tablets with the given tablet type in the specifed keyspace. " +
+					" This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes " +
+					" and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached."},
 		},
 	},
-	commandGroup{
+	{
 		"Generic", []command{
-			command{"RebuildReplicationGraph", commandRebuildReplicationGraph,
+			{"RebuildReplicationGraph", commandRebuildReplicationGraph,
 				"<cell1>,<cell2>... <keyspace1>,<keyspace2>,...",
 				"HIDDEN This takes the Thor's hammer approach of recovery and should only be used in emergencies.  cell1,cell2,... are the canonical source of data for the system. This function uses that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
-			command{"Validate", commandValidate,
+			{"Validate", commandValidate,
 				"[-ping-tablets]",
 				"Validates that all nodes reachable from the global replication graph and that all tablets in all discoverable cells are consistent."},
-			command{"ListAllTablets", commandListAllTablets,
+			{"ListAllTablets", commandListAllTablets,
 				"<cell name>",
 				"Lists all tablets in an awk-friendly way."},
-			command{"ListTablets", commandListTablets,
+			{"ListTablets", commandListTablets,
 				"<tablet alias> ...",
 				"Lists specified tablets in an awk-friendly way."},
-			command{"Panic", commandPanic,
+			{"Panic", commandPanic,
 				"",
 				"HIDDEN Triggers a panic on the server side, to test the handling."},
 		},
 	},
-	commandGroup{
+	{
 		"Schema, Version, Permissions", []command{
-			command{"GetSchema", commandGetSchema,
+			{"GetSchema", commandGetSchema,
 				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] <tablet alias>",
 				"Displays the full schema for a tablet, or just the schema for the specified tables in that tablet."},
-			command{"ReloadSchema", commandReloadSchema,
+			{"ReloadSchema", commandReloadSchema,
 				"<tablet alias>",
 				"Reloads the schema on a remote tablet."},
-			command{"ValidateSchemaShard", commandValidateSchemaShard,
+			{"ValidateSchemaShard", commandValidateSchemaShard,
 				"[-exclude_tables=''] [-include-views] <keyspace/shard>",
 				"Validates that the master schema matches all of the slaves."},
-			command{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
+			{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
 				"[-exclude_tables=''] [-include-views] <keyspace name>",
 				"Validates that the master schema from shard 0 matches the schema on all of the other tablets in the keyspace."},
-			command{"ApplySchema", commandApplySchema,
-				"[-force] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
-				"Applies the schema change to the specified keyspace on every master, running in parallel on all shards. The changes are then propagated to slaves via replication. If the force flag is set, then numerous checks will be ignored, so that option should be used very cautiously."},
-			command{"CopySchemaShard", commandCopySchemaShard,
+			{"ApplySchema", commandApplySchema,
+				"[-allow_long_unavailability] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
+				"Applies the schema change to the specified keyspace on every master, running in parallel on all shards. The changes are then propagated to slaves via replication. If -allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected."},
+			{"CopySchemaShard", commandCopySchemaShard,
 				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
 				"Copies the schema from a source shard's master (or a specific tablet) to a destination shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs."},
 
-			command{"ValidateVersionShard", commandValidateVersionShard,
+			{"ValidateVersionShard", commandValidateVersionShard,
 				"<keyspace/shard>",
 				"Validates that the master version matches all of the slaves."},
-			command{"ValidateVersionKeyspace", commandValidateVersionKeyspace,
+			{"ValidateVersionKeyspace", commandValidateVersionKeyspace,
 				"<keyspace name>",
 				"Validates that the master version from shard 0 matches all of the other tablets in the keyspace."},
 
-			command{"GetPermissions", commandGetPermissions,
+			{"GetPermissions", commandGetPermissions,
 				"<tablet alias>",
 				"Displays the permissions for a tablet."},
-			command{"ValidatePermissionsShard", commandValidatePermissionsShard,
+			{"ValidatePermissionsShard", commandValidatePermissionsShard,
 				"<keyspace/shard>",
 				"Validates that the master permissions match all the slaves."},
-			command{"ValidatePermissionsKeyspace", commandValidatePermissionsKeyspace,
+			{"ValidatePermissionsKeyspace", commandValidatePermissionsKeyspace,
 				"<keyspace name>",
 				"Validates that the master permissions from shard 0 match those of all of the other tablets in the keyspace."},
 
-			command{"GetVSchema", commandGetVSchema,
+			{"GetVSchema", commandGetVSchema,
 				"",
 				"Displays the VTGate routing schema."},
-			command{"ApplyVSchema", commandApplyVSchema,
+			{"ApplyVSchema", commandApplyVSchema,
 				"{-vschema=<vschema> || -vschema_file=<vschema file>}",
 				"Applies the VTGate routing schema."},
 		},
 	},
-	commandGroup{
+	{
 		"Serving Graph", []command{
-			command{"GetSrvKeyspace", commandGetSrvKeyspace,
+			{"GetSrvKeyspace", commandGetSrvKeyspace,
 				"<cell> <keyspace>",
 				"Outputs a JSON structure that contains information about the SrvKeyspace."},
-			command{"GetSrvKeyspaceNames", commandGetSrvKeyspaceNames,
+			{"GetSrvKeyspaceNames", commandGetSrvKeyspaceNames,
 				"<cell>",
 				"Outputs a list of keyspace names."},
-			command{"GetSrvShard", commandGetSrvShard,
+			{"GetSrvShard", commandGetSrvShard,
 				"<cell> <keyspace/shard>",
 				"Outputs a JSON structure that contains information about the SrvShard."},
-			command{"GetEndPoints", commandGetEndPoints,
+			{"GetEndPoints", commandGetEndPoints,
 				"<cell> <keyspace/shard> <tablet type>",
 				"Outputs a JSON structure that contains information about the EndPoints."},
 		},
 	},
-	commandGroup{
+	{
 		"Replication Graph", []command{
-			command{"GetShardReplication", commandGetShardReplication,
+			{"GetShardReplication", commandGetShardReplication,
 				"<cell> <keyspace/shard>",
 				"Outputs a JSON structure that contains information about the ShardReplication."},
 		},
@@ -643,7 +658,7 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, tabletInfo)
+	return printJSON(wr.Logger(), tabletInfo)
 }
 
 func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -667,7 +682,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	return wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
+	_, err = wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if *hostname != "" {
 			tablet.Hostname = *hostname
 		}
@@ -690,6 +705,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 		}
 		return nil
 	})
+	return err
 }
 
 func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -882,6 +898,37 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
 }
 
+func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	var cells flagutil.StringListValue
+	subFlags.Var(&cells, "cells", "Specifies a comma-separated list of cells to look for tablets")
+	timeout := subFlags.Duration("timeout", 0*time.Second, "Timeout after which the command fails")
+	retryDelay := subFlags.Duration("retry_delay", 1*time.Second, "Time to wait between two checks")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("The <keyspace/shard> and <tablet type> arguments are both required for the WaitForDrain command.")
+	}
+	if *timeout != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, *timeout)
+		defer cancel()
+	}
+
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	servedType, err := parseServingTabletType3(subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+
+	return wr.WaitForDrain(ctx, cells, keyspace, shard, servedType,
+		*retryDelay, *healthCheckTopologyRefresh, *healthcheckRetryDelay, *healthCheckTimeout)
+}
+
 func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -926,16 +973,16 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		return err
 	}
 	for e := range logStream {
-		wr.Logger().Infof("%v", e)
+		logutil.LogEvent(wr.Logger(), e)
 	}
 	return errFunc()
 }
 
 func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	maxRows := subFlags.Int("max_rows", 10000, "Specifies the maximum number of rows to allow in reset")
-	wantFields := subFlags.Bool("want_fields", false, "Indicates whether the request should also get field names")
 	disableBinlogs := subFlags.Bool("disable_binlogs", false, "Disables writing to binlogs during the query")
 	reloadSchema := subFlags.Bool("reload_schema", false, "Indicates whether the tablet schema will be reloaded after executing the SQL command. The default value is <code>false</code>, which indicates that the tablet schema will not be reloaded.")
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -949,11 +996,16 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	query := subFlags.Arg(1)
-	qr, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *wantFields, *disableBinlogs, *reloadSchema)
+	qrproto, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *disableBinlogs, *reloadSchema)
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, qr)
+	qr := sqltypes.Proto3ToResult(qrproto)
+	if *json {
+		return printJSON(wr.Logger(), qr)
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
 }
 
 func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -973,7 +1025,7 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, hr)
+	return printJSON(wr.Logger(), hr)
 }
 
 func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1020,7 +1072,7 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, shardInfo)
+	return printJSON(wr.Logger(), shardInfo)
 }
 
 func commandRebuildShardGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1507,7 +1559,16 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, keyspaceInfo)
+	return printJSON(wr.Logger(), keyspaceInfo)
+}
+
+func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
+	if err != nil {
+		return err
+	}
+	wr.Logger().Printf("%v\n", strings.Join(keyspaces, "\n"))
+	return nil
 }
 
 func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1532,6 +1593,12 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 		if err != nil {
 			return err
 		}
+	}
+
+	keyspaceIDTypeSet := (kit != topodatapb.KeyspaceIdType_UNSET)
+	columnNameSet := (columnName != "")
+	if (keyspaceIDTypeSet && !columnNameSet) || (!keyspaceIDTypeSet && columnNameSet) {
+		return fmt.Errorf("Both <column name> and <column type> must be set, or both must be unset.")
 	}
 
 	return wr.SetKeyspaceShardingInfo(ctx, keyspace, columnName, kit, int32(*splitShardCount), *force)
@@ -1669,7 +1736,7 @@ func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, result)
+	return printJSON(wr.Logger(), result)
 }
 
 func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1768,7 +1835,7 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		}
 		return nil
 	}
-	return printJSON(wr, sd)
+	return printJSON(wr.Logger(), sd)
 }
 
 func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1825,7 +1892,7 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "Applies the schema even if the preflight schema doesn't match")
+	allowLongUnavailability := subFlags.Bool("allow_long_unavailability", false, "Allow large schema changes which incur a longer unavailability of the database.")
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "The amount of time to wait for slaves to catch up during reparenting. The default value is 30 seconds.")
@@ -1841,11 +1908,10 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, *force, *waitSlaveTimeout)
-	if err != nil {
+	if err := wr.ApplySchemaKeyspace(ctx, keyspace, change, *allowLongUnavailability, *waitSlaveTimeout); err != nil {
 		return err
 	}
-	return printJSON(wr, scr)
+	return nil
 }
 
 func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2002,7 +2068,7 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, srvKeyspace)
+	return printJSON(wr.Logger(), srvKeyspace)
 }
 
 func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2039,7 +2105,7 @@ func commandGetSrvShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, srvShard)
+	return printJSON(wr.Logger(), srvShard)
 }
 
 func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2062,7 +2128,7 @@ func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, endPoints)
+	return printJSON(wr.Logger(), endPoints)
 }
 
 func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2081,7 +2147,7 @@ func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	return printJSON(wr, shardReplication)
+	return printJSON(wr.Logger(), shardReplication)
 }
 
 func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2162,14 +2228,13 @@ func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*replicationdata
 	return rtablets
 }
 
-// printJSON will print the JSON version of the structure to the logger
-// console output, or an error to the logger's Error channel.
-func printJSON(wr *wrangler.Wrangler, val interface{}) error {
+// printJSON will print the JSON version of the structure to the logger.
+func printJSON(logger logutil.Logger, val interface{}) error {
 	data, err := json.MarshalIndent(val, "", "  ")
 	if err != nil {
 		return fmt.Errorf("cannot marshal data: %v", err)
 	}
-	wr.Logger().Printf("%v\n", string(data))
+	logger.Printf("%v\n", string(data))
 	return nil
 }
 

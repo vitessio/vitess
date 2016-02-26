@@ -43,6 +43,10 @@ var (
 	// ErrPartialResult is returned by a function that could only
 	// get a subset of its results
 	ErrPartialResult = errors.New("partial result")
+
+	// ErrNoUpdateNeeded can be returned by an 'UpdateFields' method
+	// to skip any update.
+	ErrNoUpdateNeeded = errors.New("no update needed")
 )
 
 // Impl is the interface used to talk to a persistent
@@ -150,11 +154,6 @@ type Impl interface {
 	// Do not use directly, but instead use topo.UpdateTablet.
 	UpdateTablet(ctx context.Context, tablet *topodatapb.Tablet, existingVersion int64) (newVersion int64, err error)
 
-	// UpdateTabletFields updates the current tablet record
-	// with new values, independently of the version
-	// Can return ErrNoNode if the tablet doesn't exist.
-	UpdateTabletFields(ctx context.Context, tabletAlias *topodatapb.TabletAlias, update func(*topodatapb.Tablet) error) (*topodatapb.Tablet, error)
-
 	// DeleteTablet removes a tablet from the system.
 	// We assume no RPC is currently running to it.
 	// TODO(alainjobart) verify this assumption, link with RPC code.
@@ -243,15 +242,17 @@ type Impl interface {
 	// It should receive a notification with the initial value fairly
 	// quickly after this is set. A value of nil means the SrvKeyspace
 	// object doesn't exist or is empty. To stop watching this
-	// SrvKeyspace object, close the stopWatching channel.
+	// SrvKeyspace object, cancel the context.
 	// If the underlying topo.Server encounters an error watching the node,
 	// it should retry on a regular basis until it can succeed.
 	// The initial error returned by this method is meant to catch
 	// the obvious bad cases (invalid cell, invalid tabletType, ...)
 	// that are never going to work. Mutiple notifications with the
-	// same contents may be sent (for instance when the serving graph
-	// is rebuilt, but the content hasn't changed).
-	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *topodatapb.SrvKeyspace, stopWatching chan<- struct{}, err error)
+	// same contents may be sent (for instance, when the serving graph
+	// is rebuilt, but the content of SrvKeyspace is the same,
+	// the object version will change, most likely triggering the
+	// notification, but the content hasn't changed).
+	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *topodatapb.SrvKeyspace, err error)
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.
@@ -323,6 +324,18 @@ type Impl interface {
 // Outside modules should just use the Server object.
 type Server struct {
 	Impl
+}
+
+// SrvTopoServer is a subset of Server that only contains the serving
+// graph read-only calls used by clients to resolve serving addresses.
+type SrvTopoServer interface {
+	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
+
+	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
+
+	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topodatapb.SrvShard, error)
+
+	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.EndPoints, int64, error)
 }
 
 // Registry for Server implementations.

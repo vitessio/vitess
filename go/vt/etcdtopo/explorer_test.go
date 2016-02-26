@@ -26,9 +26,9 @@ func toJSON(t *testing.T, value interface{}) string {
 
 func TestSplitCellPath(t *testing.T) {
 	table := map[string][]string{
-		"/cell-a":            []string{"cell-a", "/"},
-		"/cell-b/x":          []string{"cell-b", "/x"},
-		"/cell1/other/stuff": []string{"cell1", "/other/stuff"},
+		"/cell-a":            {"cell-a", "/"},
+		"/cell-b/x":          {"cell-b", "/x"},
+		"/cell1/other/stuff": {"cell1", "/other/stuff"},
 	}
 	for input, want := range table {
 		cell, rest, err := splitCellPath(input)
@@ -59,28 +59,26 @@ func TestHandlePathInvalid(t *testing.T) {
 	// Don't panic!
 	ex := NewExplorer(nil)
 	result := ex.HandlePath("xxx", nil)
-	exResult := result.(*explorerResult)
-	if want := "invalid"; !strings.Contains(exResult.Error, want) {
-		t.Errorf("HandlePath returned wrong error: got %q, want %q", exResult.Error, want)
+	if want := "invalid"; !strings.Contains(result.Error, want) {
+		t.Errorf("HandlePath returned wrong error: got %q, want %q", result.Error, want)
 	}
 }
 
 func TestHandlePathRoot(t *testing.T) {
-	input := explorerRoot
+	input := "/"
 	cells := []string{"cell1", "cell2", "cell3"}
 	want := []string{"global", "cell1", "cell2", "cell3"}
 
 	ts := newTestServer(t, cells)
 	ex := NewExplorer(ts)
 	result := ex.HandlePath(input, nil)
-	exResult := result.(*explorerResult)
-	if got := exResult.Children; !reflect.DeepEqual(got, want) {
+	if got := result.Children; !reflect.DeepEqual(got, want) {
 		t.Errorf("HandlePath(%q) = %v, want %v", input, got, want)
 	}
 }
 
 func TestHandlePathKeyspace(t *testing.T) {
-	input := path.Join(explorerRoot, "global", keyspaceDirPath("test_keyspace"))
+	input := path.Join("/global", keyspaceDirPath("test_keyspace"))
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &topodatapb.Keyspace{}
 	shard := &topodatapb.Shard{}
@@ -100,17 +98,16 @@ func TestHandlePathKeyspace(t *testing.T) {
 
 	ex := NewExplorer(ts)
 	result := ex.HandlePath(input, nil)
-	exResult := result.(*explorerResult)
-	if got := exResult.Data; got != want {
+	if got := result.Data; got != want {
 		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
 	}
-	if got, want := exResult.Children, []string{"10-20", "20-30"}; !reflect.DeepEqual(got, want) {
+	if got, want := result.Children, []string{"10-20", "20-30"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("Children = %v, want %v", got, want)
 	}
 }
 
 func TestHandlePathShard(t *testing.T) {
-	input := path.Join(explorerRoot, "global", shardDirPath("test_keyspace", "-80"))
+	input := path.Join("/global", shardDirPath("test_keyspace", "-80"))
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &topodatapb.Keyspace{}
 	shard := &topodatapb.Shard{}
@@ -127,14 +124,13 @@ func TestHandlePathShard(t *testing.T) {
 
 	ex := NewExplorer(ts)
 	result := ex.HandlePath(input, nil)
-	exResult := result.(*explorerResult)
-	if got := exResult.Data; got != want {
+	if got := result.Data; got != want {
 		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
 	}
 }
 
 func TestHandlePathTablet(t *testing.T) {
-	input := path.Join(explorerRoot, "cell1", path.Join(tabletsDirPath, "cell1-0000000123"))
+	input := path.Join("/cell1", path.Join(tabletsDirPath, "cell1-0000000123"))
 	cells := []string{"cell1", "cell2", "cell3"}
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 123},
@@ -151,8 +147,7 @@ func TestHandlePathTablet(t *testing.T) {
 
 	ex := NewExplorer(ts)
 	result := ex.HandlePath(input, nil)
-	exResult := result.(*explorerResult)
-	if got := exResult.Data; got != want {
+	if got := result.Data; got != want {
 		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
 	}
 }

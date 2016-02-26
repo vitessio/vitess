@@ -494,7 +494,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInf
 				return nil, errors.New("column count doesn't match value count")
 			}
 			node := row[columnNumber]
-			if !sqlparser.IsValue(node) {
+			if !sqlparser.IsNull(node) && !sqlparser.IsValue(node) {
 				return nil, nil
 			}
 			var err error

@@ -2,7 +2,7 @@
 sudo: false
 language: go
 go:
-  - 1.4
+  - 1.5
 addons:
   apt:
     sources:
@@ -17,7 +17,6 @@ addons:
     - python-dev
     - python-mysqldb
     - python-pip
-    - python-virtualenv
     - libssl-dev
     - g++-4.8
     - gcc-4.8
@@ -36,14 +35,7 @@ cache:
   - $MYSQL_ROOT
   # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
   - $HOME/gopath/dist/grpc/.build_finished
-  # Required by make proto and subsequently check_make_proto.sh.
-  - $HOME/gopath/dist/grpc/bin/grpc_python_plugin
-  - $HOME/gopath/dist/grpc/lib
-  - $HOME/gopath/dist/grpc/include
-  - $HOME/gopath/dist/protobuf/.build_finished
-  - $HOME/gopath/dist/protobuf/lib
-  # Required by make proto and subsequently check_make_proto.sh.
-  - $HOME/gopath/dist/protobuf/bin/protoc
+  - $HOME/gopath/dist/grpc/usr/local
   - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
   - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
   - $HOME/gopath/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages
@@ -58,6 +50,10 @@ before_cache:
   - rm $HOME/gopath/bin/zksrv.sh
   # Delete these files because they keep changing (having the latest timestamp
   # of an update) and trigger a lengthy update of the cache (~25 seconds).
+  - rm $HOME/.m2/repository/com/youtube/vitess/*/maven-metadata-local.xml
+  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/*-SNAPSHOT.jar
+  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/_remote.repositories
+  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/maven-metadata-local.xml
   - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/resolver-status.properties
   - rm $HOME/.m2/repository/io/grpc/protoc-gen-grpc-java/*/protoc-gen-grpc-java-*.pom.lastUpdated
   # Don't cache unnecessary PHP files.
@@ -96,7 +92,6 @@ before_install:
   - travis/php_init.sh
 install:
   - ./bootstrap.sh
-  - travis/php_grpc.sh
 before_script:
   - source dev.env
   # Travis only tests. Run only on the first shard.

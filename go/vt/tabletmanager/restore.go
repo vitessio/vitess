@@ -36,7 +36,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	// always authorized)
 	tablet := agent.Tablet()
 	originalType := tablet.Type
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = topodatapb.TabletType_RESTORE
 		return nil
 	}); err != nil {
@@ -63,7 +63,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	}
 
 	// Change type back to original type if we're ok to serve.
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = originalType
 		return nil
 	}); err != nil {
@@ -99,6 +99,13 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.
 	ti, err := agent.TopoServer.GetTablet(ctx, si.MasterAlias)
 	if err != nil {
 		return fmt.Errorf("Cannot read master tablet %v: %v", si.MasterAlias, err)
+	}
+
+	// If using semi-sync, we need to enable it before connecting to master.
+	if *EnableSemiSync {
+		if err := agent.enableSemiSync(false); err != nil {
+			return err
+		}
 	}
 
 	// Set master and start slave.

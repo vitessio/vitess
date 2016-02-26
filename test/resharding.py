@@ -73,6 +73,7 @@ def setUpModule():
 
 
 def tearDownModule():
+  utils.required_teardown()
   if utils.options.skip_teardown:
     return
 
@@ -243,7 +244,7 @@ primary key (name)
 
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
-  def _insert_value(self, tablet_obj, table, id, msg, keyspace_id):
+  def _insert_value(self, tablet_obj, table, mid, msg, keyspace_id):
     k = utils.uint64_to_hex(keyspace_id)
     tablet_obj.mquery(
         'vt_test_keyspace',
@@ -251,33 +252,33 @@ primary key (name)
          'insert into %s(id, msg, keyspace_id) '
          'values(%d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
          '/* user_id:%d */' %
-         (table, id, msg, keyspace_id, k, id),
+         (table, mid, msg, keyspace_id, k, mid),
          'commit'],
         write=True)
 
-  def _get_value(self, tablet_obj, table, id):
+  def _get_value(self, tablet_obj, table, mid):
     return tablet_obj.mquery(
         'vt_test_keyspace',
-        'select id, msg, keyspace_id from %s where id=%d' % (table, id))
+        'select id, msg, keyspace_id from %s where id=%d' % (table, mid))
 
-  def _check_value(self, tablet_obj, table, id, msg, keyspace_id,
+  def _check_value(self, tablet_obj, table, mid, msg, keyspace_id,
                    should_be_here=True):
-    result = self._get_value(tablet_obj, table, id)
+    result = self._get_value(tablet_obj, table, mid)
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = '%s'
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
       fmt = '%x'
     if should_be_here:
-      self.assertEqual(result, ((id, msg, keyspace_id),),
+      self.assertEqual(result, ((mid, msg, keyspace_id),),
                        ('Bad row in tablet %s for id=%d, keyspace_id=' +
-                        fmt + ', row=%s') % (tablet_obj.tablet_alias, id,
+                        fmt + ', row=%s') % (tablet_obj.tablet_alias, mid,
                                              keyspace_id, str(result)))
     else:
       self.assertEqual(
           len(result), 0,
           ('Extra row in tablet %s for id=%d, keyspace_id=' +
-           fmt + ': %s') % (tablet_obj.tablet_alias, id, keyspace_id,
+           fmt + ': %s') % (tablet_obj.tablet_alias, mid, keyspace_id,
                             str(result)))
 
   # _is_value_present_and_correct tries to read a value.
@@ -285,8 +286,8 @@ primary key (name)
   # if not correct, it will self.fail.
   # if not there, it will return False.
   def _is_value_present_and_correct(
-      self, tablet_obj, table, id, msg, keyspace_id):
-    result = self._get_value(tablet_obj, table, id)
+      self, tablet_obj, table, mid, msg, keyspace_id):
+    result = self._get_value(tablet_obj, table, mid)
     if not result:
       return False
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
@@ -294,9 +295,9 @@ primary key (name)
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
       fmt = '%x'
-    self.assertEqual(result, ((id, msg, keyspace_id),),
+    self.assertEqual(result, ((mid, msg, keyspace_id),),
                      ('Bad row in tablet %s for id=%d, keyspace_id=' + fmt) % (
-                         tablet_obj.tablet_alias, id, keyspace_id))
+                         tablet_obj.tablet_alias, mid, keyspace_id))
     return True
 
   def _insert_startup_values(self):
@@ -452,6 +453,9 @@ primary key (name)
       )
 
   def test_resharding(self):
+    # we're going to reparent and swap these two
+    global shard_2_master, shard_2_replica1
+
     utils.run_vtctl(['CreateKeyspace',
                      '--sharding_column_name', 'bad_column',
                      '--sharding_column_type', 'bytes',
@@ -468,7 +472,7 @@ primary key (name)
     shard_0_ny_rdonly.init_tablet('rdonly', 'test_keyspace', '-80')
     shard_1_master.init_tablet('master', 'test_keyspace', '80-')
     shard_1_slave1.init_tablet('replica', 'test_keyspace', '80-')
-    shard_1_slave2.init_tablet('spare', 'test_keyspace', '80-')
+    shard_1_slave2.init_tablet('replica', 'test_keyspace', '80-')
     shard_1_ny_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
     shard_1_rdonly1.init_tablet('rdonly', 'test_keyspace', '80-')
 
@@ -493,7 +497,7 @@ primary key (name)
     shard_0_ny_rdonly.wait_for_vttablet_state('SERVING')
     shard_1_master.wait_for_vttablet_state('SERVING')
     shard_1_slave1.wait_for_vttablet_state('SERVING')
-    shard_1_slave2.wait_for_vttablet_state('NOT_SERVING')  # spare
+    shard_1_slave2.wait_for_vttablet_state('SERVING')
     shard_1_ny_rdonly.wait_for_vttablet_state('SERVING')
     shard_1_rdonly1.wait_for_vttablet_state('SERVING')
 
@@ -509,15 +513,18 @@ primary key (name)
     self._test_keyrange_constraints()
 
     # run a health check on source replicas so they respond to discovery
-    utils.run_vtctl(['RunHealthCheck', shard_0_replica.tablet_alias, 'replica'])
-    utils.run_vtctl(['RunHealthCheck', shard_1_slave1.tablet_alias, 'replica'])
+    # (for binlog players) and on the source rdonlys (for workers)
+    for t in [shard_0_replica, shard_1_slave1]:
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'])
+    for t in [shard_0_ny_rdonly, shard_1_ny_rdonly, shard_1_rdonly1]:
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'rdonly'])
 
     # create the split shards
     shard_2_master.init_tablet('master', 'test_keyspace', '80-c0')
-    shard_2_replica1.init_tablet('spare', 'test_keyspace', '80-c0')
-    shard_2_replica2.init_tablet('spare', 'test_keyspace', '80-c0')
+    shard_2_replica1.init_tablet('replica', 'test_keyspace', '80-c0')
+    shard_2_replica2.init_tablet('replica', 'test_keyspace', '80-c0')
     shard_3_master.init_tablet('master', 'test_keyspace', 'c0-')
-    shard_3_replica.init_tablet('spare', 'test_keyspace', 'c0-')
+    shard_3_replica.init_tablet('replica', 'test_keyspace', 'c0-')
     shard_3_rdonly1.init_tablet('rdonly', 'test_keyspace', 'c0-')
 
     # start vttablet on the split shards (no db created,
@@ -559,7 +566,6 @@ primary key (name)
                         '--command_display_interval', '10ms',
                         'SplitClone',
                         '--exclude_tables', 'unrelated',
-                        '--strategy=-populate_blp_checkpoint',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         'test_keyspace/80-'],
@@ -605,7 +611,9 @@ primary key (name)
     self._check_binlog_player_vars(shard_2_master, seconds_behind_master_max=30)
     self._check_binlog_player_vars(shard_3_master, seconds_behind_master_max=30)
 
-    # use vtworker to compare the data
+    # use vtworker to compare the data (after health-checking the destination
+    # rdonly tablets so discovery works)
+    utils.run_vtctl(['RunHealthCheck', shard_3_rdonly1.tablet_alias, 'rdonly'])
     logging.debug('Running vtworker SplitDiff')
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', '--exclude_tables',
                         'unrelated', 'test_keyspace/c0-'],
@@ -753,8 +761,8 @@ primary key (name)
     # see it flow through still
     utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/80-c0',
                      shard_2_replica1.tablet_alias])
+
     # update our test variables to point at the new master
-    global shard_2_master, shard_2_replica1
     shard_2_master, shard_2_replica1 = shard_2_replica1, shard_2_master
 
     logging.debug('Inserting lots of data on source shard after reparenting')

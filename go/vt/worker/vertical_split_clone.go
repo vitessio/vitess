@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"strings"
@@ -71,6 +72,9 @@ type VerticalSplitCloneWorker struct {
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
 func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+	if len(tables) == 0 {
+		return nil, errors.New("list of tablets to be split out must not be empty")
+	}
 	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -330,7 +334,7 @@ func (vscw *VerticalSplitCloneWorker) findReloadTargets(ctx context.Context) err
 }
 
 // copy phase:
-//	- copy the data from source tablets to destination masters (wtih replication on)
+//	- copy the data from source tablets to destination masters (with replication on)
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
 func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
@@ -459,7 +463,9 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	}
 
 	// then create and populate the blp_checkpoint table
-	if vscw.strategy.populateBlpCheckpoint {
+	if vscw.strategy.skipPopulateBlpCheckpoint {
+		vscw.wr.Logger().Infof("Skipping populating the blp_checkpoint table")
+	} else {
 		// get the current position from the source
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet)

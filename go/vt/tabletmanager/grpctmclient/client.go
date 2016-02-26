@@ -13,15 +13,15 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
@@ -274,7 +274,7 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, 
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface
-func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*sqltypes.Result, error) {
+func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -284,32 +284,30 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.Tablet
 		Query:          query,
 		DbName:         tablet.DbName(),
 		MaxRows:        uint64(maxRows),
-		WantFields:     wantFields,
 		DisableBinlogs: disableBinlogs,
 		ReloadSchema:   reloadSchema,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return sqltypes.Proto3ToResult(response.Result), nil
+	return response.Result, nil
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface
-func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
+func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int) (*querypb.QueryResult, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer cc.Close()
 	response, err := c.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
-		Query:      query,
-		MaxRows:    uint64(maxRows),
-		WantFields: wantFields,
+		Query:   query,
+		MaxRows: uint64(maxRows),
 	})
 	if err != nil {
 		return nil, err
 	}
-	return sqltypes.Proto3ToResult(response.Result), nil
+	return response.Result, nil
 }
 
 //
@@ -628,13 +626,13 @@ func (client *Client) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo)
 //
 
 // Backup is part of the tmclient.TabletManagerClient interface
-func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutil.LoggerEvent, tmclient.ErrFunc, error) {
+func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutilpb.Event, tmclient.ErrFunc, error) {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	logstream := make(chan *logutil.LoggerEvent, 10)
+	logstream := make(chan *logutilpb.Event, 10)
 	stream, err := c.Backup(ctx, &tabletmanagerdatapb.BackupRequest{
 		Concurrency: int64(concurrency),
 	})
@@ -654,7 +652,7 @@ func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concu
 				close(logstream)
 				return
 			}
-			logstream <- logutil.ProtoToLoggerEvent(br.Event)
+			logstream <- br.Event
 		}
 	}()
 	return logstream, func() error {
@@ -669,7 +667,7 @@ func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concu
 
 // IsTimeoutError is part of the tmclient.TabletManagerClient interface
 func (client *Client) IsTimeoutError(err error) bool {
-	if grpc.Code(err) == codes.DeadlineExceeded {
+	if err == grpc.ErrClientConnTimeout || grpc.Code(err) == codes.DeadlineExceeded {
 		return true
 	}
 	switch err.(type) {

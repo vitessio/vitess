@@ -32,7 +32,8 @@ from vttest import vt_processes
 shard_exp = re.compile(r'(.+)/(.+):(.+)')
 
 
-def main(port, topology, schema_dir, vschema, mysql_only):
+def main(port, topology, schema_dir, vschema, mysql_only,
+         web_dir=None):
   shards = []
 
   for shard in topology.split(','):
@@ -45,7 +46,8 @@ def main(port, topology, schema_dir, vschema, mysql_only):
       sys.exit(1)
 
   environment.base_port = port
-  with local_database.LocalDatabase(shards, schema_dir, vschema, mysql_only) as local_db:
+  with local_database.LocalDatabase(shards, schema_dir, vschema, mysql_only,
+                                    web_dir=web_dir) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
     try:
@@ -90,6 +92,9 @@ if __name__ == '__main__':
       ' Also, the output specifies the mysql unix socket'
       ' instead of the vtgate port.')
   parser.add_option(
+      '-w', '--web_dir',
+      help='location of the vtctld web server files.')
+  parser.add_option(
       '-v', '--verbose', action='store_true',
       help='Display extra error messages.')
   (options, args) = parser.parse_args()
@@ -100,4 +105,5 @@ if __name__ == '__main__':
   # or default to MariaDB.
   mysql_flavor.set_mysql_flavor(None)
 
-  main(options.port, options.topology, options.schema_dir, options.vschema, options.mysql_only)
+  main(options.port, options.topology, options.schema_dir, options.vschema,
+       options.mysql_only, web_dir=options.web_dir)

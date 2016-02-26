@@ -19,12 +19,12 @@ func TestUpdateServedFromMap(t *testing.T) {
 		version:  1,
 		Keyspace: &topodatapb.Keyspace{
 			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-				&topodatapb.Keyspace_ServedFrom{
+				{
 					TabletType: topodatapb.TabletType_RDONLY,
 					Cells:      nil,
 					Keyspace:   "source",
 				},
-				&topodatapb.Keyspace_ServedFrom{
+				{
 					TabletType: topodatapb.TabletType_MASTER,
 					Cells:      nil,
 					Keyspace:   "source",
@@ -36,12 +36,12 @@ func TestUpdateServedFromMap(t *testing.T) {
 
 	// migrate one cell
 	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, []string{"first"}, "source", true, allCells); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*topodatapb.Keyspace_ServedFrom{
-		&topodatapb.Keyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 			Cells:      []string{"second", "third"},
 			Keyspace:   "source",
 		},
-		&topodatapb.Keyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_MASTER,
 			Cells:      nil,
 			Keyspace:   "source",
@@ -52,12 +52,12 @@ func TestUpdateServedFromMap(t *testing.T) {
 
 	// re-add that cell, going back
 	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, []string{"first"}, "source", false, nil); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*topodatapb.Keyspace_ServedFrom{
-		&topodatapb.Keyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 			Cells:      []string{"second", "third", "first"},
 			Keyspace:   "source",
 		},
-		&topodatapb.Keyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_MASTER,
 			Cells:      nil,
 			Keyspace:   "source",
@@ -68,12 +68,12 @@ func TestUpdateServedFromMap(t *testing.T) {
 
 	// now remove the cell again
 	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, []string{"first"}, "source", true, allCells); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*topodatapb.Keyspace_ServedFrom{
-		&topodatapb.Keyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_RDONLY,
 			Cells:      []string{"second", "third"},
 			Keyspace:   "source",
 		},
-		&topodatapb.Keyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_MASTER,
 			Cells:      nil,
 			Keyspace:   "source",
@@ -92,7 +92,7 @@ func TestUpdateServedFromMap(t *testing.T) {
 
 	// now remove all cells
 	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, []string{"second", "third"}, "source", true, allCells); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*topodatapb.Keyspace_ServedFrom{
-		&topodatapb.Keyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_MASTER,
 			Cells:      nil,
 			Keyspace:   "source",
@@ -124,12 +124,12 @@ func TestComputeCellServedFrom(t *testing.T) {
 		version:  1,
 		Keyspace: &topodatapb.Keyspace{
 			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-				&topodatapb.Keyspace_ServedFrom{
+				{
 					TabletType: topodatapb.TabletType_MASTER,
 					Cells:      nil,
 					Keyspace:   "source",
 				},
-				&topodatapb.Keyspace_ServedFrom{
+				{
 					TabletType: topodatapb.TabletType_REPLICA,
 					Cells:      []string{"c1", "c2"},
 					Keyspace:   "source",
@@ -140,7 +140,7 @@ func TestComputeCellServedFrom(t *testing.T) {
 
 	m := ki.ComputeCellServedFrom("c3")
 	if !reflect.DeepEqual(m, []*topodatapb.SrvKeyspace_ServedFrom{
-		&topodatapb.SrvKeyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_MASTER,
 			Keyspace:   "source",
 		},
@@ -150,11 +150,11 @@ func TestComputeCellServedFrom(t *testing.T) {
 
 	m = ki.ComputeCellServedFrom("c2")
 	if !reflect.DeepEqual(m, []*topodatapb.SrvKeyspace_ServedFrom{
-		&topodatapb.SrvKeyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_MASTER,
 			Keyspace:   "source",
 		},
-		&topodatapb.SrvKeyspace_ServedFrom{
+		{
 			TabletType: topodatapb.TabletType_REPLICA,
 			Keyspace:   "source",
 		},

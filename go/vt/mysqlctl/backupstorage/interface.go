@@ -69,6 +69,11 @@ type BackupStorage interface {
 	// RemoveBackup removes all the data associated with a backup.
 	// It will not appear in ListBackups after RemoveBackup succeeds.
 	RemoveBackup(dir, name string) error
+
+	// Close frees resources associated with an active backup session,
+	// such as closing connections. Implementations of BackupStorage must support
+	// being reused after Close() is called.
+	Close() error
 }
 
 // BackupStorageMap contains the registered implementations for BackupStorage
@@ -76,6 +81,7 @@ var BackupStorageMap = make(map[string]BackupStorage)
 
 // GetBackupStorage returns the current BackupStorage implementation.
 // Should be called after flags have been initialized.
+// When all operations are done, call BackupStorage.Close() to free resources.
 func GetBackupStorage() (BackupStorage, error) {
 	bs, ok := BackupStorageMap[*BackupStorageImplementation]
 	if !ok {

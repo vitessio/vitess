@@ -177,3 +177,77 @@ func TestIntersectOverlap(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkUint64KeyBytes(b *testing.B) {
+	keys := []Uint64Key{
+		0, 1, 0x7FFFFFFFFFFFFFFF, 0x8000000000000000, 0xFFFFFFFFFFFFFFFF,
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, key := range keys {
+			key.Bytes()
+		}
+	}
+}
+
+func BenchmarkUint64KeyString(b *testing.B) {
+	keys := []Uint64Key{
+		0, 1, 0x7FFFFFFFFFFFFFFF, 0x8000000000000000, 0xFFFFFFFFFFFFFFFF,
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, key := range keys {
+			key.String()
+		}
+	}
+}
+
+func BenchmarkKeyRangeContains(b *testing.B) {
+	kr := &topodatapb.KeyRange{
+		Start: []byte{0x40, 0, 0, 0, 0, 0, 0, 0},
+		End:   []byte{0x80, 0, 0, 0, 0, 0, 0, 0},
+	}
+	keys := [][]byte{
+		{0x30, 0, 0, 0, 0, 0, 0, 0},
+		{0x40, 0, 0, 0, 0, 0, 0, 0},
+		{0x50, 0, 0, 0, 0, 0, 0, 0},
+		{0x80, 0, 0, 0, 0, 0, 0, 0},
+		{0x90, 0, 0, 0, 0, 0, 0, 0},
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, key := range keys {
+			KeyRangeContains(kr, key)
+		}
+	}
+}
+
+func BenchmarkKeyRangesIntersect(b *testing.B) {
+	kr1 := &topodatapb.KeyRange{
+		Start: []byte{0x40, 0, 0, 0, 0, 0, 0, 0},
+		End:   []byte{0x80, 0, 0, 0, 0, 0, 0, 0},
+	}
+	kr2 := &topodatapb.KeyRange{
+		Start: []byte{0x30, 0, 0, 0, 0, 0, 0, 0},
+		End:   []byte{0x50, 0, 0, 0, 0, 0, 0, 0},
+	}
+
+	for i := 0; i < b.N; i++ {
+		KeyRangesIntersect(kr1, kr2)
+	}
+}
+
+func BenchmarkKeyRangesOverlap(b *testing.B) {
+	kr1 := &topodatapb.KeyRange{
+		Start: []byte{0x40, 0, 0, 0, 0, 0, 0, 0},
+		End:   []byte{0x80, 0, 0, 0, 0, 0, 0, 0},
+	}
+	kr2 := &topodatapb.KeyRange{
+		Start: []byte{0x30, 0, 0, 0, 0, 0, 0, 0},
+		End:   []byte{0x50, 0, 0, 0, 0, 0, 0, 0},
+	}
+
+	for i := 0; i < b.N; i++ {
+		KeyRangesOverlap(kr1, kr2)
+	}
+}

@@ -10,7 +10,6 @@ import utils
 
 from net import gorpc
 from vtdb import vtgate_utils
-from vtdb import vtgatev2
 from vtproto import vtrpc_pb2
 
 
@@ -30,11 +29,11 @@ class AnotherException(exceptions.Exception):
   pass
 
 
-class FakeVtGateConnection(vtgatev2.VTGateConnection):
+class FakeVtGateConnection(object):
 
   def __init__(self):
     self.invoked_intervals = []
-    self.keyspace = 'test_keyspace'
+    # session is used by exponential_backoff_retry
     self.session = None
 
   @vtgate_utils.exponential_backoff_retry(
@@ -117,21 +116,21 @@ class TestExtractRPCError(unittest.TestCase):
     response = gorpc.GoRpcResponse()
     response.reply = {'Err': {'foo': 'bar'}}
     with self.assertRaisesRegexp(vtgate_utils.VitessError,
-        'Missing error message'):
+                                 'Missing error message'):
       vtgate_utils.extract_rpc_error('method', response)
 
   def test_reply_has_err_message(self):
     response = gorpc.GoRpcResponse()
     response.reply = {'Err': {'Message': 'bar'}}
     with self.assertRaisesRegexp(vtgate_utils.VitessError,
-        'UNKNOWN_ERROR.+bar'):
+                                 'UNKNOWN_ERROR.+bar'):
       vtgate_utils.extract_rpc_error('method', response)
 
   def test_reply_has_err_code(self):
     response = gorpc.GoRpcResponse()
     response.reply = {'Err': {'Code': vtrpc_pb2.TRANSIENT_ERROR}}
     with self.assertRaisesRegexp(vtgate_utils.VitessError,
-        'TRANSIENT_ERROR'):
+                                 'TRANSIENT_ERROR'):
       vtgate_utils.extract_rpc_error('method', response)
 
 if __name__ == '__main__':

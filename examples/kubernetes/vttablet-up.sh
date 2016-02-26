@@ -18,6 +18,7 @@ UID_BASE=${UID_BASE:-100}
 VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 RDONLY_COUNT=${RDONLY_COUNT:-2}
+VITESS_NAME=${VITESS_NAME:-'default'}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
@@ -26,10 +27,13 @@ fi
 
 uid_base=$UID_BASE
 indices=${TASKS:-`seq 0 $(($TABLETS_PER_SHARD-1))`}
+cells=`echo $CELLS | tr ',' ' '`
+num_cells=`echo $cells | wc -w`
+
 for shard in $(echo $SHARDS | tr "," " "); do
-  cell_index=0
-  for cell in `echo $CELLS | tr ',' ' '`; do
-    echo "Creating $keyspace.shard-$shard pods in cell $CELL..."
+  [[ $num_cells -gt 1 ]] && cell_index=100000000 || cell_index=0
+  for cell in $cells; do
+    echo "Creating $keyspace.shard-$shard pods in cell $cell..."
     for uid_index in $indices; do
       uid=$[$uid_base + $uid_index + $cell_index]
       printf -v alias '%s-%010d' $cell $uid
@@ -53,7 +57,7 @@ for shard in $(echo $SHARDS | tr "," " "); do
       done
 
       # Instantiate template and send to kubectl.
-      cat $VTTABLET_TEMPLATE | sed -e "$sed_script" | $KUBECTL create -f -
+      cat $VTTABLET_TEMPLATE | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
     done
     let cell_index=cell_index+100000000
   done

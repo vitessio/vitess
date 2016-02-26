@@ -136,6 +136,11 @@ func (fbs *FileBackupStorage) RemoveBackup(dir, name string) error {
 	return os.RemoveAll(p)
 }
 
+// Close implements BackupStorage.
+func (fbs *FileBackupStorage) Close() error {
+	return nil
+}
+
 func init() {
 	backupstorage.BackupStorageMap["file"] = &FileBackupStorage{}
 }

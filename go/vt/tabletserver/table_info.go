@@ -182,7 +182,7 @@ func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, comment string
 	ti.Cache = NewRowCache(ti, cachePool)
 }
 
-// StatsJSON retuns a JSON representation of the TableInfo stats.
+// StatsJSON returns a JSON representation of the TableInfo stats.
 func (ti *TableInfo) StatsJSON() string {
 	if ti.Cache == nil {
 		return fmt.Sprintf("null")

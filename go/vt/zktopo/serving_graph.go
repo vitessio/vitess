@@ -315,17 +315,16 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 }
 
 // WatchSrvKeyspace is part of the topo.Server interface
-func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, chan<- struct{}, error) {
+func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topodatapb.SrvKeyspace, error) {
 	filePath := zkPathForVtKeyspace(cell, keyspace)
 
 	notifications := make(chan *topodatapb.SrvKeyspace, 10)
-	stopWatching := make(chan struct{})
 
-	// waitOrInterrupted will return true if stopWatching is triggered
+	// waitOrInterrupted will return true if context.Done() is triggered
 	waitOrInterrupted := func() bool {
 		timer := time.After(WatchSleepDuration)
 		select {
-		case <-stopWatching:
+		case <-ctx.Done():
 			close(notifications)
 			return true
 		case <-timer:
@@ -382,7 +381,7 @@ func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string)
 						return
 					}
 				}
-			case <-stopWatching:
+			case <-ctx.Done():
 				// user is not interested any more
 				close(notifications)
 				return
@@ -390,6 +389,5 @@ func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string)
 		}
 	}()
 
-	return notifications, stopWatching, nil
-
+	return notifications, nil
 }

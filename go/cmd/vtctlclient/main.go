@@ -6,7 +6,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"time"
 
@@ -15,6 +14,8 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
+
+	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
 )
 
 // The default values used by these flags cannot be taken from wrangler and
@@ -30,20 +31,13 @@ func main() {
 
 	flag.Parse()
 
+	logger := logutil.NewConsoleLogger()
+
 	err := vtctlclient.RunCommandAndWait(
 		context.Background(), *server, flag.Args(),
 		*dialTimeout, *actionTimeout,
-		func(e *logutil.LoggerEvent) {
-			switch e.Level {
-			case logutil.LOGGER_INFO:
-				log.Info(e.String())
-			case logutil.LOGGER_WARNING:
-				log.Warning(e.String())
-			case logutil.LOGGER_ERROR:
-				log.Error(e.String())
-			case logutil.LOGGER_CONSOLE:
-				fmt.Print(e.String())
-			}
+		func(e *logutilpb.Event) {
+			logutil.LogEvent(logger, e)
 		})
 	if err != nil {
 		log.Error(err)

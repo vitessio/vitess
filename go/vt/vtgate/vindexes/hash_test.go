@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -72,7 +72,7 @@ func TestHashCreate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "insert into t(c) values(:c)",
 		BindVariables: map[string]interface{}{
 			"c": 1,
@@ -96,7 +96,7 @@ func TestHashDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery := &tproto.BoundQuery{
+	wantQuery := &querytypes.BoundQuery{
 		Sql: "delete from t where c in ::c",
 		BindVariables: map[string]interface{}{
 			"c": []interface{}{1},

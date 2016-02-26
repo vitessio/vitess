@@ -17,9 +17,9 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/terminal"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/crypto/ssh/terminal"
 
 	"launchpad.net/gozk/zookeeper"
 )
@@ -578,7 +578,7 @@ func cmdCat(subFlags *flag.FlagSet, args []string) error {
 				fmt.Printf("%v:\n", zkPath)
 			}
 			fmt.Print(data)
-			if len(data) > 0 && data[len(data)-1] != '\n' && (terminal.IsTerminal(os.Stdout.Fd()) || *longListing) {
+			if len(data) > 0 && data[len(data)-1] != '\n' && (terminal.IsTerminal(int(os.Stdout.Fd())) || *longListing) {
 				fmt.Print("\n")
 			}
 		}

@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
 	. "github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -25,7 +25,7 @@ func TestCreateShard(t *testing.T) {
 	cells := []string{"test_cell"}
 
 	// Set up topology.
-	ts := zktopo.NewTestServer(t, cells)
+	ts := zktestserver.New(t, cells)
 
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -53,7 +53,7 @@ func TestCreateShardCustomSharding(t *testing.T) {
 	cells := []string{"test_cell"}
 
 	// Set up topology.
-	ts := zktopo.NewTestServer(t, cells)
+	ts := zktestserver.New(t, cells)
 
 	// create keyspace
 	keyspace := "test_keyspace"
@@ -96,7 +96,7 @@ func TestGetOrCreateShard(t *testing.T) {
 	cells := []string{"test_cell"}
 
 	// Set up topology.
-	ts := zktopo.NewTestServer(t, cells)
+	ts := zktestserver.New(t, cells)
 
 	// and do massive parallel GetOrCreateShard
 	keyspace := "test_keyspace"

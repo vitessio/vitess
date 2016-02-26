@@ -152,12 +152,12 @@ func testDiff(t *testing.T, left, right *tabletmanagerdatapb.SchemaDefinition, l
 func TestSchemaDiff(t *testing.T) {
 	sd1 := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-			&tabletmanagerdatapb.TableDefinition{
+			{
 				Name:   "table1",
 				Schema: "schema1",
 				Type:   TableBaseTable,
 			},
-			&tabletmanagerdatapb.TableDefinition{
+			{
 				Name:   "table2",
 				Schema: "schema2",
 				Type:   TableBaseTable,
@@ -169,7 +169,7 @@ func TestSchemaDiff(t *testing.T) {
 
 	sd3 := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-			&tabletmanagerdatapb.TableDefinition{
+			{
 				Name:   "table2",
 				Schema: "schema2",
 				Type:   TableBaseTable,
@@ -179,7 +179,7 @@ func TestSchemaDiff(t *testing.T) {
 
 	sd4 := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-			&tabletmanagerdatapb.TableDefinition{
+			{
 				Name:   "table2",
 				Schema: "table2",
 				Type:   TableView,
@@ -189,7 +189,7 @@ func TestSchemaDiff(t *testing.T) {
 
 	sd5 := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-			&tabletmanagerdatapb.TableDefinition{
+			{
 				Name:   "table2",
 				Schema: "table2",
 				Type:   TableBaseTable,

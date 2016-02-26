@@ -38,6 +38,8 @@ type MysqlDaemon interface {
 
 	// replication related methods
 	SlaveStatus() (replication.Status, error)
+	SetSemiSyncEnabled(master, slave bool) error
+	SemiSyncEnabled() (master, slave bool)
 
 	// reparenting related methods
 	ResetReplicationCommands() ([]string, error)
@@ -156,6 +158,10 @@ type FakeMysqlDaemon struct {
 	// PromoteSlaveResult is returned by PromoteSlave
 	PromoteSlaveResult replication.Position
 
+	// SchemaFunc provides the return value for GetSchema.
+	// If not defined, the "Schema" field will be used instead, see below.
+	SchemaFunc func() (*tabletmanagerdatapb.SchemaDefinition, error)
+
 	// Schema will be returned by GetSchema. If nil we'll
 	// return an error.
 	Schema *tabletmanagerdatapb.SchemaDefinition
@@ -188,6 +194,11 @@ type FakeMysqlDaemon struct {
 
 	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
 	BinlogPlayerEnabled bool
+
+	// SemiSyncMasterEnabled represents the state of rpl_semi_sync_master_enabled.
+	SemiSyncMasterEnabled bool
+	// SemiSyncSlaveEnabled represents the state of rpl_semi_sync_slave_enabled.
+	SemiSyncSlaveEnabled bool
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -397,6 +408,9 @@ func (fmd *FakeMysqlDaemon) CheckSuperQueryList() error {
 
 // GetSchema is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	if fmd.SchemaFunc != nil {
+		return fmd.SchemaFunc()
+	}
 	if fmd.Schema == nil {
 		return nil, fmt.Errorf("no schema defined")
 	}
@@ -430,4 +444,16 @@ func (fmd *FakeMysqlDaemon) GetAppConnection() (dbconnpool.PoolConnection, error
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
 	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
+}
+
+// SetSemiSyncEnabled is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, slave bool) error {
+	fmd.SemiSyncMasterEnabled = master
+	fmd.SemiSyncSlaveEnabled = slave
+	return nil
+}
+
+// SemiSyncEnabled is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (master, slave bool) {
+	return fmd.SemiSyncMasterEnabled, fmd.SemiSyncSlaveEnabled
 }

@@ -23,17 +23,16 @@ func TestCopySchemaShardTask(t *testing.T) {
 
 	task := &CopySchemaShardTask{}
 	parameters := map[string]string{
-		"keyspace":        "test_keyspace",
-		"source_shard":    "0",
-		"dest_shard":      "2",
-		"vtctld_endpoint": "localhost:15000",
-		"exclude_tables":  "",
+		"source_keyspace_and_shard": "test_keyspace/0",
+		"dest_keyspace_and_shard":   "test_keyspace/2",
+		"vtctld_endpoint":           "localhost:15000",
+		"exclude_tables":            "",
 	}
-	testTask(t, "CopySchemaShard", task, parameters)
+	testTask(t, "CopySchemaShard", task, parameters, fake)
 
 	fake.RegisterResult([]string{"CopySchemaShard", "--exclude_tables=excluded_table1", "test_keyspace/0", "test_keyspace/2"},
 		"",  // No output.
 		nil) // No error.
 	parameters["exclude_tables"] = "excluded_table1"
-	testTask(t, "CopySchemaShard", task, parameters)
+	testTask(t, "CopySchemaShard", task, parameters, fake)
 }

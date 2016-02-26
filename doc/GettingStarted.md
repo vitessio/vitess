@@ -67,6 +67,9 @@ Vitess without Docker.
 ### Install Dependencies
 
 We currently test Vitess regularly on Ubuntu 14.04 (Trusty) and Debian 8 (Jessie).
+OS X 10.11 (El Capitan) should work as well, the installation instructions are below.
+
+#### Ubuntu and Debian
 
 In addition, Vitess requires the software and libraries listed below.
 
@@ -122,6 +125,81 @@ In addition, Vitess requires the software and libraries listed below.
     ``` sh
     $ sudo apt-get install openjdk-7-jre
     ```
+    
+#### OS X
+
+1.  [Install Homebrew](http://brew.sh/). If your /usr/local directory is not empty and you never used Homebrew before,
+    it will be 
+    [mandatory](https://github.com/Homebrew/homebrew/blob/master/share/doc/homebrew/El_Capitan_and_Homebrew.md) 
+    to run the following command:
+    
+    ``` sh
+    sudo chown -R $(whoami):admin /usr/local
+    ```
+
+2.  On OS X, MySQL 5.6 has to be used, MariaDB doesn't work for some reason yet. It should be installed from Homebrew
+    (install steps are below).
+    
+3.  If Xcode is installed (with Console tools, which should be bundled automatically since the 7.1 version), all 
+    the dev dependencies should be satisfied in this step. If no Xcode is present, it is necessery to install pkg-config.
+     
+    ``` sh
+    brew install pkg-config
+    ```
+   
+4.  ZooKeeper is used as lock service.
+
+5.  Run the following commands:
+
+    ``` sh
+    brew install go automake libtool memcached python mercurial git bison curl wget homebrew/versions/mysql56
+    pip install --upgrade pip setuptools
+    pip install virtualenv
+    pip install MySQL-python
+    pip install tox
+    ```
+    
+6.  Install Java runtime from this URL: https://support.apple.com/kb/dl1572?locale=en_US
+    Apple only supports Java 6. If you need to install a newer version, this link might be helpful:
+    [http://osxdaily.com/2015/10/17/how-to-install-java-in-os-x-el-capitan/](http://osxdaily.com/2015/10/17/how-to-install-java-in-os-x-el-capitan/)
+    
+7.  The Vitess bootstrap script makes some checks for the go runtime, so it is recommended to have the following
+    commands in your ~/.profile or ~/.bashrc or ~/.zshrc:
+    
+    ``` sh
+    export PATH=/usr/local/opt/go/libexec/bin:$PATH
+    export GOROOT=/usr/local/opt/go/libexec
+    ```
+    
+8.  There is a problem with installing the enum34 Python package using pip, so the following file has to be edited:
+    ```
+    /usr/local/opt/python/Frameworks/Python.framework/Versions/2.7/lib/python2.7/distutils/distutils.cfg
+    ```
+    
+    and this line:
+    
+    ```
+    prefix=/usr/local
+    ```
+    
+    has to be commented out:
+    
+    ```
+    # prefix=/usr/local
+    ```
+    
+    After running the ./bootstrap.sh script from the next step, you can revert the change.
+    
+9.  For the Vitess hostname resolving functions to work correctly, a new entry has to be added into the /etc/hosts file
+    with the current LAN IP address of the computer (preferably IPv4) and the current hostname, which you get by
+    typing the 'hostname' command in the terminal.
+    
+    It is also a good idea to put the following line to [force the Go DNS resolver](https://golang.org/doc/go1.5#net) 
+    in your ~/.profile or ~/.bashrc or ~/.zshrc:
+    
+    ```
+    export GODEBUG=netdns=go
+    ```
 
 ### Build Vitess
 
@@ -140,8 +218,8 @@ In addition, Vitess requires the software and libraries listed below.
 
     ``` sh
     export MYSQL_FLAVOR=MariaDB
-    or
-    export MYSQL_FLAVOR=MySQL56
+    # or (mandatory for OS X)
+    # export MYSQL_FLAVOR=MySQL56
     ```
 
 1.  If your selected database installed in a location other than `/usr/bin`,
@@ -151,6 +229,9 @@ In addition, Vitess requires the software and libraries listed below.
 
     ``` sh
     export VT_MYSQL_ROOT=/usr/local/mysql
+    
+    # on OS X, this is the correct value:
+    # export VT_MYSQL_ROOT=/usr/local/opt/mysql56
     ```
 
     Note that the command indicates that the `mysql` executable should
@@ -165,6 +246,8 @@ In addition, Vitess requires the software and libraries listed below.
     If your machine requires a proxy to access the Internet, you will need
     to set the usual environment variables (e.g. `http_proxy`,
     `https_proxy`, `no_proxy`).
+    
+    Run the boostrap.sh script:
 
     ``` sh
     ./bootstrap.sh

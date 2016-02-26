@@ -10,14 +10,14 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 const (
@@ -27,7 +27,7 @@ const (
 // Router is the layer to route queries to the correct shards
 // based on the values in the query.
 type Router struct {
-	serv        SrvTopoServer
+	serv        topo.SrvTopoServer
 	cell        string
 	planner     *Planner
 	scatterConn *ScatterConn
@@ -51,7 +51,7 @@ func newScatterParams(query, ks string, bv map[string]interface{}, shards []stri
 }
 
 // NewRouter creates a new Router.
-func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, statsName string, scatterConn *ScatterConn) *Router {
+func NewRouter(serv topo.SrvTopoServer, cell string, schema *planbuilder.Schema, statsName string, scatterConn *ScatterConn) *Router {
 	return &Router{
 		serv:        serv,
 		cell:        cell,
@@ -61,7 +61,7 @@ func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, stat
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *pbg.Session, notInTransaction bool) (*sqltypes.Result, error) {
+func (rtr *Router) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool) (*sqltypes.Result, error) {
 	if bindVariables == nil {
 		bindVariables = make(map[string]interface{})
 	}
@@ -339,18 +339,16 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface{}) (keys []interface{}, err error) {
 	keys = make([]interface{}, 0, len(vals))
 	for _, val := range vals {
-		switch val := val.(type) {
-		case string:
-			v, ok := bindVars[val[1:]]
+		if v, ok := val.(string); ok {
+			val, ok = bindVars[v[1:]]
 			if !ok {
-				return nil, fmt.Errorf("could not find bind var %s", val)
+				return nil, fmt.Errorf("could not find bind var %s", v)
 			}
-			keys = append(keys, v)
-		case []byte:
-			keys = append(keys, string(val))
-		default:
-			keys = append(keys, val)
 		}
+		if v, ok := val.([]byte); ok {
+			val = string(v)
+		}
+		keys = append(keys, val)
 	}
 	return keys, nil
 }
@@ -437,11 +435,7 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilde
 	for i, colVindex := range plan.Table.Owned {
 		keys := make(map[interface{}]bool)
 		for _, row := range result.Rows {
-			k, err := mproto.Convert(result.Fields[i], row[i])
-			if err != nil {
-				return err
-			}
-			switch k := k.(type) {
+			switch k := row[i].ToNative().(type) {
 			case []byte:
 				keys[string(k)] = true
 			default:

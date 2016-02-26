@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+"""Common import for all tests."""
+
 import base64
 import json
 import logging
@@ -9,26 +11,23 @@ import shlex
 import shutil
 import signal
 import socket
-from subprocess import Popen, CalledProcessError, PIPE
+import subprocess
 import sys
 import time
 import unittest
 import urllib2
 
-import MySQLdb
-
-from vtproto import topodata_pb2
-
-from vtdb import keyrange_constants
-
-from vtctl import vtctl_client
-
 import environment
 from mysql_flavor import mysql_flavor
 from mysql_flavor import set_mysql_flavor
+import MySQLdb
 from protocols_flavor import protocols_flavor
-from protocols_flavor import set_protocols_flavor
 from topo_flavor.server import set_topo_server_flavor
+from vtctl import vtctl_client
+from vtdb import keyrange_constants
+from vtgate_gateway_flavor.gateway import set_vtgate_gateway_flavor
+from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
+from vtproto import topodata_pb2
 
 
 options = None
@@ -87,8 +86,9 @@ def add_options(parser):
       '--skip-teardown', action='store_true',
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
-  parser.add_option('--protocols-flavor')
+  parser.add_option('--protocols-flavor', default='gorpc')
   parser.add_option('--topo-server-flavor', default='zookeeper')
+  parser.add_option('--vtgate-gateway-flavor', default='shardgateway')
 
 
 def set_options(opts):
@@ -96,8 +96,9 @@ def set_options(opts):
   options = opts
 
   set_mysql_flavor(options.mysql_flavor)
-  set_protocols_flavor(options.protocols_flavor)
+  environment.setup_protocol_flavor(options.protocols_flavor)
   set_topo_server_flavor(options.topo_server_flavor)
+  set_vtgate_gateway_flavor(options.vtgate_gateway_flavor)
   environment.skip_build = options.skip_build
 
 
@@ -122,13 +123,7 @@ def main(mod=None, test_options=None):
     test_options(parser)
   (options, args) = parser.parse_args()
 
-  if options.verbose == 0:
-    level = logging.WARNING
-  elif options.verbose == 1:
-    level = logging.INFO
-  else:
-    level = logging.DEBUG
-  logging.getLogger().setLevel(level)
+  set_log_level(options.verbose)
   logging.basicConfig(
       format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
 
@@ -197,15 +192,17 @@ def _add_proc(proc):
     print >> f, proc.pid, os.path.basename(proc.args[0])
 
 
-def kill_sub_processes():
-  # FIXME(alainjobart): this part is not really related to sub-processes,
-  # but it's a general clean-up. Maybe a utils.clean_up() might be better,
-  # as all integration tests end up running this anyway.
+def required_teardown():
+  """Required cleanup steps that can't be skipped with --skip-teardown."""
+  # We can't skip closing of gRPC connections, because the Python interpreter
+  # won't let us die if any connections are left open.
   global vtctld_connection
   if vtctld_connection:
     vtctld_connection.close()
     vtctld_connection = None
 
+
+def kill_sub_processes():
   for proc in pid_map.values():
     if proc.pid and proc.returncode is None:
       proc.kill()
@@ -244,12 +241,12 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
   else:
     args = cmd
   if trap_output:
-    kargs['stdout'] = PIPE
-    kargs['stderr'] = PIPE
+    kargs['stdout'] = subprocess.PIPE
+    kargs['stderr'] = subprocess.PIPE
   logging.debug(
       'run: %s %s', str(cmd),
       ', '.join('%s=%s' % x for x in kargs.iteritems()))
-  proc = Popen(args, **kargs)
+  proc = subprocess.Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()
   if proc.returncode:
@@ -268,13 +265,13 @@ def run_fail(cmd, **kargs):
     args = shlex.split(cmd)
   else:
     args = cmd
-  kargs['stdout'] = PIPE
-  kargs['stderr'] = PIPE
+  kargs['stdout'] = subprocess.PIPE
+  kargs['stderr'] = subprocess.PIPE
   if options.verbose == 2:
     logging.debug(
         'run: (expect fail) %s %s', cmd,
         ', '.join('%s=%s' % x for x in kargs.iteritems()))
-  proc = Popen(args, **kargs)
+  proc = subprocess.Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()
   if proc.returncode == 0:
@@ -297,7 +294,7 @@ def run_bg(cmd, **kargs):
     args = shlex.split(cmd)
   else:
     args = cmd
-  proc = Popen(args=args, **kargs)
+  proc = subprocess.Popen(args=args, **kargs)
   proc.args = args
   _add_proc(proc)
   return proc
@@ -315,7 +312,8 @@ def wait_procs(proc_list, raise_on_error=True):
       if options.verbose >= 1 and proc.returncode not in (-9,):
         sys.stderr.write('proc failed: %s %s\n' % (proc.returncode, proc.args))
       if raise_on_error:
-        raise CalledProcessError(proc.returncode, ' '.join(proc.args))
+        raise subprocess.CalledProcessError(proc.returncode,
+                                            ' '.join(proc.args))
 
 
 def validate_topology(ping_tablets=False):
@@ -347,7 +345,7 @@ def zk_cat_json(path):
 #      if done:
 #        break
 #      timeout = utils.wait_step('condition', timeout)
-def wait_step(msg, timeout, sleep_time=1.0):
+def wait_step(msg, timeout, sleep_time=0.1):
   timeout -= sleep_time
   if timeout <= 0:
     raise TestError('timeout waiting for condition "%s"' % msg)
@@ -359,16 +357,13 @@ def wait_step(msg, timeout, sleep_time=1.0):
 
 # vars helpers
 def get_vars(port):
-  """Returns the dict for vars from a vtxxx process.
-
-  Returns: None if we can't get them.
-  """
+  """Returns the dict for vars from a vtxxx process. None if not available."""
   try:
     url = 'http://localhost:%d/debug/vars' % int(port)
     f = urllib2.urlopen(url)
     data = f.read()
     f.close()
-  except:
+  except urllib2.URLError:
     return None
   try:
     return json.loads(data)
@@ -448,11 +443,19 @@ def apply_vschema(vschema):
 def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
   """Waits for a given tablet's SlaveType to become the expected value.
 
-  If the SlaveType does not become expected_type within timeout seconds,
-  it will raise a TestError.
+  Args:
+    tablet_alias: Alias of the tablet.
+    expected_type: Type of the tablet e.g. "replica".
+    timeout: Timeout in seconds.
+
+  Raises:
+    TestError: SlaveType did not become expected_type within timeout seconds.
   """
+  type_as_int = topodata_pb2.TabletType.Value(expected_type.upper())
   while True:
-    if run_vtctl_json(['GetTablet', tablet_alias])['type'] == expected_type:
+    if run_vtctl_json(['GetTablet', tablet_alias])['type'] == type_as_int:
+      logging.debug('tablet %s went to expected type: %s',
+                    tablet_alias, expected_type)
       break
     timeout = wait_step(
         "%s's SlaveType to be %s" % (tablet_alias, expected_type),
@@ -462,8 +465,13 @@ def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
 def wait_for_replication_pos(tablet_a, tablet_b, timeout=60.0):
   """Waits for tablet B to catch up to the replication position of tablet A.
 
-  If the replication position does not catch up within timeout seconds, it will
-  raise a TestError.
+  Args:
+    tablet_a: tablet Object for tablet A.
+    tablet_b: tablet Object for tablet B.
+    timeout: Timeout in seconds.
+
+  Raises:
+    TestError: replication position did not catch up within timeout seconds.
   """
   replication_pos_a = mysql_flavor().master_position(tablet_a)
   while True:
@@ -486,23 +494,18 @@ class VtGate(object):
   """VtGate object represents a vtgate process."""
 
   def __init__(self, port=None):
-    """Creates the Vtgate instance and reserve the ports if necessary.
-    """
+    """Creates the Vtgate instance and reserve the ports if necessary."""
     self.port = port or environment.reserve_ports(1)
     if protocols_flavor().vtgate_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
-    self.secure_port = None
     self.proc = None
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            timeout_total='4s', timeout_per_conn='2s',
-            extra_args=None):
-    """Starts the process for this vtgate instance.
+            timeout_total='2s', timeout_per_conn='1s',
+            extra_args=None, tablets=None):
+    """Start vtgate. Saves it into the global vtgate variable if not set yet."""
 
-    If no other instance has been started, saves it into the global
-    vtgate variable.
-    """
     args = environment.binary_args('vtgate') + [
         '-port', str(self.port),
         '-cell', cell,
@@ -514,7 +517,10 @@ class VtGate(object):
         '-conn-timeout-per-conn', timeout_per_conn,
         '-bsonrpc_timeout', '5s',
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+        '-gateway_implementation', vtgate_gateway_flavor().flavor(),
+        '-tablet_types_to_wait', 'MASTER,REPLICA',
     ]
+    args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():
@@ -527,10 +533,7 @@ class VtGate(object):
       args.extend(extra_args)
 
     self.proc = run_bg(args)
-    if self.secure_port:
-      wait_for_vars('vtgate', self.port, 'SecureConnections')
-    else:
-      wait_for_vars('vtgate', self.port)
+    wait_for_vars('vtgate', self.port)
 
     global vtgate
     if not vtgate:
@@ -559,18 +562,18 @@ class VtGate(object):
       vtgate = None
 
   def addr(self):
-    """Returns the address of the vtgate process."""
+    """Returns the address of the vtgate process, for web access."""
     return 'localhost:%d' % self.port
 
-  def secure_addr(self):
-    """Returns the secure address of the vtgate process."""
-    return 'localhost:%d' % self.secure_port
-
-  def rpc_endpoint(self):
-    """Returns the endpoint to use for RPCs."""
-    if protocols_flavor().vtgate_protocol() == 'grpc':
-      return 'localhost:%d' % self.grpc_port
-    return self.addr()
+  def rpc_endpoint(self, python=False):
+    """Returns the protocol and endpoint to use for RPCs."""
+    if python:
+      protocol = protocols_flavor().vtgate_python_protocol()
+    else:
+      protocol = protocols_flavor().vtgate_protocol()
+    if protocol == 'grpc':
+      return protocol, 'localhost:%d' % self.grpc_port
+    return protocol, self.addr()
 
   def get_status(self):
     """Returns the status page for this process."""
@@ -580,13 +583,21 @@ class VtGate(object):
     """Returns the vars for this process."""
     return get_vars(self.port)
 
-  def vtclient(self, sql, tablet_type='master', bindvars=None,
-               streaming=False, verbose=False, raise_on_error=False):
+  def vtclient(self, sql, keyspace=None, shard=None, tablet_type='master',
+               bindvars=None, streaming=False,
+               verbose=False, raise_on_error=True, json_output=False):
     """Uses the vtclient binary to send a query to vtgate."""
+    protocol, addr = self.rpc_endpoint()
     args = environment.binary_args('vtclient') + [
-        '-server', self.rpc_endpoint(),
+        '-server', addr,
         '-tablet_type', tablet_type,
-        '-vtgate_protocol', protocols_flavor().vtgate_protocol()]
+        '-vtgate_protocol', protocol]
+    if json_output:
+      args.append('-json')
+    if keyspace:
+      args.extend(['-keyspace', keyspace])
+    if shard:
+      args.extend(['-shard', shard])
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if streaming:
@@ -596,13 +607,15 @@ class VtGate(object):
     args.append(sql)
 
     out, err = run(args, raise_on_error=raise_on_error, trap_output=True)
-    out = out.splitlines()
+    if json_output:
+      return json.loads(out), err
     return out, err
 
   def execute(self, sql, tablet_type='master', bindvars=None):
     """Uses 'vtctl VtGateExecute' to execute a command."""
-    args = ['VtGateExecute',
-            '-server', self.rpc_endpoint(),
+    _, addr = self.rpc_endpoint()
+    args = ['VtGateExecute', '-json',
+            '-server', addr,
             '-tablet_type', tablet_type]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
@@ -612,8 +625,9 @@ class VtGate(object):
   def execute_shards(self, sql, keyspace, shards, tablet_type='master',
                      bindvars=None):
     """Uses 'vtctl VtGateExecuteShards' to execute a command."""
-    args = ['VtGateExecuteShards',
-            '-server', self.rpc_endpoint(),
+    _, addr = self.rpc_endpoint()
+    args = ['VtGateExecuteShards', '-json',
+            '-server', addr,
             '-keyspace', keyspace,
             '-shards', shards,
             '-tablet_type', tablet_type]
@@ -624,8 +638,9 @@ class VtGate(object):
 
   def split_query(self, sql, keyspace, split_count, bindvars=None):
     """Uses 'vtctl VtGateSplitQuery' to cut a query up in chunks."""
+    _, addr = self.rpc_endpoint()
     args = ['VtGateSplitQuery',
-            '-server', self.rpc_endpoint(),
+            '-server', addr,
             '-keyspace', keyspace,
             '-split_count', str(split_count)]
     if bindvars:
@@ -707,6 +722,15 @@ def get_log_level():
     return 'ERROR'
 
 
+def set_log_level(verbose):
+  level = logging.DEBUG
+  if verbose == 0:
+    level = logging.WARNING
+  elif verbose == 1:
+    level = logging.INFO
+  logging.getLogger().setLevel(level)
+
+
 # vtworker helpers
 def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
   """Runs a vtworker process, returning the stdout and stderr."""
@@ -717,19 +741,17 @@ def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
 
 
 def run_vtworker_bg(clargs, auto_log=False, **kwargs):
-  """Starts a background vtworker process.
-
-  Returns:
-    proc - process returned by subprocess.Popen
-    port - int with the port number that the vtworker is running with
-    rpc_port - int with the port number of the RPC interface
-  """
+  """Starts a background vtworker process."""
   cmd, port, rpc_port = _get_vtworker_cmd(clargs, auto_log)
   return run_bg(cmd, **kwargs), port, rpc_port
 
 
 def _get_vtworker_cmd(clargs, auto_log=False):
   """Assembles the command that is needed to run a vtworker.
+
+  Args:
+    clargs: Command line arguments passed to vtworker.
+    auto_log: If true, set --stderrthreshold according to the test log level.
 
   Returns:
     cmd - list of cmd arguments, can be passed to any `run`-like functions
@@ -768,25 +790,22 @@ def _get_vtworker_cmd(clargs, auto_log=False):
 
 
 # vtworker client helpers
-def run_vtworker_client(args, rpc_port):
+def run_vtworker_client_bg(args, rpc_port):
   """Runs vtworkerclient to execute a command on a remote vtworker.
 
   Args:
-    args: Atr string to send to binary.
+    args: Full vtworker command.
     rpc_port: Port number.
 
   Returns:
-    out: stdout of the vtworkerclient invocation
-    err: stderr of the vtworkerclient invocation
+    proc: process returned by subprocess.Popen
   """
-  out, err = run(
+  return run_bg(
       environment.binary_args('vtworkerclient') +
       ['-vtworker_client_protocol',
        protocols_flavor().vtworker_client_protocol(),
        '-server', 'localhost:%d' % rpc_port,
-       '-stderrthreshold', get_log_level()] + args,
-      trap_output=True)
-  return out, err
+       '-stderrthreshold', get_log_level()] + args)
 
 
 def run_automation_server(auto_log=False):
@@ -802,7 +821,8 @@ def run_automation_server(auto_log=False):
   args = environment.binary_args('automation_server') + [
       '-log_dir', environment.vtlogroot,
       '-port', str(rpc_port),
-      '-vtctl_client_protocol', protocols_flavor().vtctl_client_protocol(),
+      '-vtctl_client_protocol',
+      protocols_flavor().vtctl_client_protocol(),
       '-vtworker_client_protocol',
       protocols_flavor().vtworker_client_protocol(),
   ]
@@ -942,14 +962,7 @@ def check_shard_query_services(
 
 def check_tablet_query_service(
     testcase, tablet, serving, tablet_control_disabled):
-  """Check that the query service is enabled or disabled on the tablet.
-
-  It will also check if the tablet control status is the reason for
-  being enabled / disabled.
-
-  It will also run a remote RunHealthCheck to be sure it doesn't change
-  the serving state.
-  """
+  """Check that the query service is enabled or disabled on the tablet."""
   tablet_vars = get_vars(tablet.port)
   if serving:
     expected_state = 'SERVING'
@@ -969,6 +982,7 @@ def check_tablet_query_service(
     testcase.assertNotIn('Query Service disabled by TabletControl', status)
 
   if tablet.tablet_type == 'rdonly':
+    # Run RunHealthCheck to be sure the tablet doesn't change its serving state.
     run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'],
               auto_log=True)
 
@@ -1035,18 +1049,8 @@ class Vtctld(object):
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
 
-  def serving_graph(self):
-    data = json.load(
-        urllib2.urlopen(
-            'http://localhost:%d/serving_graph/test_nj?format=json' %
-            self.port))
-    if data['Errors']:
-      raise VtctldError(data['Errors'])
-    return data['Keyspaces']
-
   def start(self):
     args = environment.binary_args('vtctld') + [
-        '-debug',
         '-web_dir', environment.vttop + '/web/vtctld',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),
@@ -1106,9 +1110,6 @@ class Vtctld(object):
       protocol = protocols_flavor().vtctl_client_protocol()
     rpc_port = self.port
     if protocol == 'grpc':
-      # import the grpc vtctl client implementation, change the port
-      if python:
-        from vtctl import grpc_vtctl_client
       rpc_port = self.grpc_port
     return (protocol, '%s:%d' % (socket.getfqdn(), rpc_port))
 
@@ -1147,9 +1148,51 @@ def uint64_to_hex(integer):
   Args:
     integer: the value to print.
 
+  Returns:
+    String with the hex representation.
+
   Raises:
     ValueError: if the integer is out of range.
   """
   if integer > (1<<64)-1 or integer < 0:
     raise ValueError('Integer out of range: %d' % integer)
   return '%016X' % integer
+
+
+def get_shard_name(shard, num_shards):
+  """Returns an appropriate shard name, as a string.
+
+  A single shard name is simply 0; otherwise it will attempt to split up 0x100
+  into multiple shards.  For example, shard 1 of 2 is -80, shard 2 of 2 is 80-.
+
+  Args:
+    shard: The integer shard index (zero based)
+    num_shards: Total number of shards (int)
+
+  Returns:
+    The shard name as a string.
+  """
+
+  if num_shards == 1:
+    return '0'
+
+  shard_width = 0x100 / num_shards
+
+  if shard == 0:
+    return '-%02x' % shard_width
+  elif shard == num_shards - 1:
+    return '%02x-' % (shard * shard_width)
+  else:
+    return '%02x-%02x' % (shard * shard_width, (shard + 1) * shard_width)
+
+
+def get_shard_names(num_shards):
+  """Create a generator of shard names.
+
+  Args:
+    num_shards: Total number of shards (int)
+
+  Returns:
+    The shard name generator.
+  """
+  return (get_shard_name(x, num_shards) for x in xrange(num_shards))

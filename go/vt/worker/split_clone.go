@@ -322,7 +322,7 @@ func (scw *SplitCloneWorker) ResolveDestinationMasters(ctx context.Context) erro
 	destinationShardsToTablets := make(map[string]*topo.TabletInfo)
 
 	// Allow at most one resolution request at a time; if there are concurrent requests, only
-	// one of them will actualy hit the topo server.
+	// one of them will actually hit the topo server.
 	scw.resolveMu.Lock()
 	defer scw.resolveMu.Unlock()
 
@@ -529,7 +529,9 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	}
 
 	// then create and populate the blp_checkpoint table
-	if scw.strategy.populateBlpCheckpoint {
+	if scw.strategy.skipPopulateBlpCheckpoint {
+		scw.wr.Logger().Infof("Skipping populating the blp_checkpoint table")
+	} else {
 		queries := make([]string, 0, 4)
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		flags := ""

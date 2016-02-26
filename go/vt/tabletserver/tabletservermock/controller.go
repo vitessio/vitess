@@ -79,7 +79,7 @@ func (tqsc *Controller) InitDBConfig(target querypb.Target, dbConfigs dbconfigs.
 }
 
 // SetServingType is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving bool) error {
+func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) error {
 	if tqsc.SetServingTypeError == nil {
 		tqsc.CurrentTarget.TabletType = tabletType
 		tqsc.QueryServiceEnabled = serving
@@ -124,10 +124,19 @@ func (tqsc *Controller) QueryService() queryservice.QueryService {
 	return nil
 }
 
+// QueryServiceStats is part of the tabletserver.Controller interface
+func (tqsc *Controller) QueryServiceStats() *tabletserver.QueryServiceStats {
+	return nil
+}
+
 // BroadcastHealth is part of the tabletserver.Controller interface
 func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats) {
 	tqsc.BroadcastData <- &BroadcastData{
 		TERTimestamp:  terTimestamp,
 		RealtimeStats: *stats,
 	}
+}
+
+// EnterLameduck implements tabletserver.Controller.
+func (tqsc *Controller) EnterLameduck() {
 }

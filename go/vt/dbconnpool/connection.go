@@ -76,7 +76,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 		}
 		qr.Rows = append(qr.Rows, row)
 		for _, s := range row {
-			byteCount += len(s.Raw())
+			byteCount += s.Len()
 		}
 
 		if byteCount >= streamBufferSize {
@@ -101,12 +101,12 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	return nil
 }
 
-var getModeSql = "select @@global.sql_mode"
+var getModeSQL = "select @@global.sql_mode"
 
 // VerifyStrict is a helper method to verify mysql is running with
 // sql_mode = STRICT_TRANS_TABLES.
 func (dbc *DBConnection) VerifyStrict() bool {
-	qr, err := dbc.ExecuteFetch(getModeSql, 2, false)
+	qr, err := dbc.ExecuteFetch(getModeSQL, 2, false)
 	if err != nil {
 		return false
 	}

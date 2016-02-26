@@ -10,12 +10,12 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 const (
@@ -44,13 +44,13 @@ type ServerError struct {
 	Code int
 	Err  string
 	// ServerCode is the error code that we got from the server.
-	ServerCode vtrpc.ErrorCode
+	ServerCode vtrpcpb.ErrorCode
 }
 
 func (e *ServerError) Error() string { return e.Err }
 
 // VtErrorCode returns the underlying Vitess error code
-func (e *ServerError) VtErrorCode() vtrpc.ErrorCode { return e.ServerCode }
+func (e *ServerError) VtErrorCode() vtrpcpb.ErrorCode { return e.ServerCode }
 
 // OperationalError represents an error due to a failure to
 // communicate with vttablet.
@@ -81,7 +81,7 @@ type TabletConn interface {
 	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*sqltypes.Result, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) (*tproto.QueryResultList, error)
+	ExecuteBatch(ctx context.Context, queries []querytypes.BoundQuery, asTransaction bool, transactionId int64) ([]sqltypes.Result, error)
 
 	// StreamExecute executes a streaming query on vttablet. It returns a channel, ErrFunc and error.
 	// If error is non-nil, it means that the StreamExecute failed to send the request. Otherwise,
@@ -93,15 +93,6 @@ type TabletConn interface {
 	Begin(ctx context.Context) (transactionId int64, err error)
 	Commit(ctx context.Context, transactionId int64) error
 	Rollback(ctx context.Context, transactionId int64) error
-
-	// These should not be used for anything except tests for now; they will eventually
-	// replace the existing methods.
-	Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*sqltypes.Result, error)
-	ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) (*tproto.QueryResultList, error)
-	Begin2(ctx context.Context) (transactionId int64, err error)
-	Commit2(ctx context.Context, transactionId int64) error
-	Rollback2(ctx context.Context, transactionId int64) error
-	StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *sqltypes.Result, ErrFunc, error)
 
 	// Close must be called for releasing resources.
 	Close()
@@ -116,7 +107,7 @@ type TabletConn interface {
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) ([]tproto.QuerySplit, error)
+	SplitQuery(ctx context.Context, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
 
 	// StreamHealth streams StreamHealthResponse to the client
 	StreamHealth(ctx context.Context) (<-chan *querypb.StreamHealthResponse, ErrFunc, error)

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
-
 	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestLocalControllerNoSchemaChanges(t *testing.T) {
@@ -169,7 +169,7 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 		Sqls: []string{"create table test_table (id int)"},
 		SuccessShards: []ShardResult{{
 			Shard:  "0",
-			Result: &sqltypes.Result{},
+			Result: &querypb.QueryResult{},
 		}},
 	}
 	logPath := path.Join(controller.logDir, controller.sqlFilename)

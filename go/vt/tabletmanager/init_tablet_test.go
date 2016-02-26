@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -25,7 +25,7 @@ import (
 func TestInitTablet(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	ts := zktestserver.New(t, []string{"cell1", "cell2"})
 	tabletAlias := &topodatapb.TabletAlias{
 		Cell: "cell1",
 		Uid:  1,
@@ -108,6 +108,23 @@ func TestInitTablet(t *testing.T) {
 	si.MasterAlias = tabletAlias
 	if err := ts.UpdateShard(ctx, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
+	}
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
+		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
+	}
+	ti, err = ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	// It should still be spare, because the tablet record doesn't agree.
+	if ti.Type != topodatapb.TabletType_SPARE {
+		t.Errorf("wrong tablet type: %v", ti.Type)
+	}
+
+	// Fix the tablet record to agree that we're master.
+	ti.Type = topodatapb.TabletType_MASTER
+	if err := ts.UpdateTablet(ctx, ti); err != nil {
+		t.Fatalf("UpdateTablet failed: %v", err)
 	}
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
