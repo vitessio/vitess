@@ -332,7 +332,8 @@ class TestVTGateFunctions(unittest.TestCase):
 
     # Test scatter
     result = vtgate_conn._execute(
-        'select id, name from vt_user', {}, tablet_type='master', keyspace_name=None)
+        'select id, name from vt_user',
+        {}, tablet_type='master', keyspace_name=None)
     result[0].sort()
     self.assertEqual(
         result,
@@ -491,6 +492,12 @@ class TestVTGateFunctions(unittest.TestCase):
     result = lookup_master.mquery(
         'vt_lookup', 'select name, user2_id from name_user2_map')
     self.assertEqual(result, (('name1', 7L),))
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'delete from vt_user2 where id = :id',
+        {'id': 7})
+    vtgate_conn.commit()
 
   def test_user_extra(self):
     # user_extra is for testing unowned functional vindex
@@ -560,6 +567,16 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_1_master.mquery(
         'vt_user', 'select user_id, email from vt_user_extra')
     self.assertEqual(result, ())
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'delete from  vt_user_extra where user_id = :user_id',
+        {'user_id': 2})
+    self.execute_on_master(
+        vtgate_conn,
+        'delete from  vt_user_extra where user_id = :user_id',
+        {'user_id': 3})
+    vtgate_conn.commit()
 
   def test_music(self):
     # music is for testing owned lookup index
@@ -684,7 +701,8 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn.commit()
     result = self.execute_on_master(
         vtgate_conn,
-        'select music_id, user_id, artist from vt_music_extra where music_id = :music_id',
+        'select music_id, user_id, artist '
+        'from vt_music_extra where music_id = :music_id',
         {'music_id': 6})
     self.assertEqual(
         result, ([(6L, 5L, 'test 6')], 1, 0,
@@ -731,6 +749,93 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_0_master.mquery(
         'vt_user', 'select music_id, user_id, artist from vt_music_extra')
     self.assertEqual(result, ((1L, 1L, 'test 1'),))
+
+  def test_joins(self):
+    vtgate_conn = get_connection()
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_user2 (id, name) values (:id, :name)',
+        {'id': 1, 'name': 'name1'})
+    self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_user_extra (user_id, email) values (:user_id, :email)',
+        {'user_id': 1, 'email': 'email1'})
+    self.execute_on_master(
+        vtgate_conn,
+        'insert into vt_user_extra (user_id, email) values (:user_id, :email)',
+        {'user_id': 2, 'email': 'email2'})
+    vtgate_conn.commit()
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select u.id, u.name, e.user_id, e.email '
+        'from vt_user2 u join vt_user_extra e where e.user_id = u.id',
+        {})
+    self.assertEqual(
+        result,
+        ([(1L, 'name1', 1L, 'email1')],
+         1,
+         0,
+         [('id', 8), ('name', 253), ('user_id', 8), ('email', 253)]))
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select u.id, u.name, e.user_id, e.email '
+        'from vt_user2 u join vt_user_extra e where e.user_id = u.id+1',
+        {})
+    self.assertEqual(
+        result,
+        ([(1L, 'name1', 2L, 'email2')],
+         1,
+         0,
+         [('id', 8), ('name', 253), ('user_id', 8), ('email', 253)]))
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select u.id, u.name, e.user_id, e.email '
+        'from vt_user2 u left join vt_user_extra e on e.user_id = u.id+1',
+        {})
+    self.assertEqual(
+        result,
+        ([(1L, 'name1', 2L, 'email2')],
+         1,
+         0,
+         [('id', 8), ('name', 253), ('user_id', 8), ('email', 253)]))
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select u.id, u.name, e.user_id, e.email '
+        'from vt_user2 u left join vt_user_extra e on e.user_id = u.id+2',
+        {})
+    self.assertEqual(
+        result,
+        ([(1L, 'name1', None, None)],
+         1,
+         0,
+         [('id', 8), ('name', 253), ('user_id', 8), ('email', 253)]))
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select u.id, u.name, e.user_id, e.email '
+        'from vt_user2 u join vt_user_extra e on e.user_id = u.id+2 '
+        'where u.id = 2',
+        {})
+    self.assertEqual(
+        result,
+        ([],
+         0,
+         0,
+         [('id', 8), ('name', 253), ('user_id', 8), ('email', 253)]))
+    vtgate_conn.begin()
+    self.execute_on_master(
+        vtgate_conn,
+        'delete from vt_user2 where id = :id',
+        {'id': 1})
+    self.execute_on_master(
+        vtgate_conn,
+        'delete from  vt_user_extra where user_id = :user_id',
+        {'user_id': 1})
+    self.execute_on_master(
+        vtgate_conn,
+        'delete from  vt_user_extra where user_id = :user_id',
+        {'user_id': 2})
+    vtgate_conn.commit()
 
   def test_insert_value_required(self):
     vtgate_conn = get_connection()
