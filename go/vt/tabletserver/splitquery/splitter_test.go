@@ -47,9 +47,6 @@ type FakeSplitAlgorithm struct {
 	boundaries []tuple
 }
 
-func (algorithm *FakeSplitAlgorithm) initialize(*SplitParams, SQLExecuter) error {
-	return nil
-}
 func (algorithm *FakeSplitAlgorithm) generateBoundaries() ([]tuple, error) {
 	return algorithm.boundaries, nil
 }
@@ -69,7 +66,7 @@ func verifyQueryPartsEqual(t *testing.T, expected, got []querytypes.QuerySplit) 
 				i, expected[i].Sql, i, got[i].Sql)
 		}
 		if expected[i].RowCount != got[i].RowCount {
-			message += fmt.Sprintf("expected[%v].RowCount: %v != got[%v].RowCount\n",
+			message += fmt.Sprintf("expected[%v].RowCount: %v != got[%v].RowCount: %v\n",
 				i, expected[i].RowCount, i, got[i].RowCount)
 		}
 		if !reflect.DeepEqual(expected[i].BindVariables, got[i].BindVariables) {
@@ -81,26 +78,19 @@ func verifyQueryPartsEqual(t *testing.T, expected, got []querytypes.QuerySplit) 
 }
 
 func TestSplit(t *testing.T) {
-	var err error
-	var splitParams SplitParams
-	err = splitParams.Initialize("select * from test_table",
+	splitParams, err := NewSplitParams("select * from test_table",
 		map[string]interface{}{}, []string{"id", "user_id"}, getSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
-	var splitter Splitter
-	err = splitter.Initialize(&splitParams,
+	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
 				{Int64Value(1), Int64Value(2)},
 				{Int64Value(1), Int64Value(3)},
 				{Int64Value(5), Int64Value(1)},
 			},
-		},
-		nil /* sqlExecuter */)
-	if err != nil {
-		t.Errorf("Splitter.Initialize() failed with: %v", err)
-	}
+		})
 	var queryParts []querytypes.QuerySplit
 	queryParts, err = splitter.Split()
 	if err != nil {
@@ -158,26 +148,19 @@ func TestSplit(t *testing.T) {
 }
 
 func TestSplitWithWhereClause(t *testing.T) {
-	var err error
-	var splitParams SplitParams
-	err = splitParams.Initialize("select * from test_table where name!='foo'",
+	splitParams, err := NewSplitParams("select * from test_table where name!='foo'",
 		map[string]interface{}{}, []string{"id", "user_id"}, getSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
-	var splitter Splitter
-	err = splitter.Initialize(&splitParams,
+	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
 				{Int64Value(1), Int64Value(2)},
 				{Int64Value(1), Int64Value(3)},
 				{Int64Value(5), Int64Value(1)},
 			},
-		},
-		nil /* sqlExecuter */)
-	if err != nil {
-		t.Errorf("Splitter.Initialize() failed with: %v", err)
-	}
+		})
 	var queryParts []querytypes.QuerySplit
 	queryParts, err = splitter.Split()
 	if err != nil {
@@ -235,26 +218,19 @@ func TestSplitWithWhereClause(t *testing.T) {
 }
 
 func TestSplitWithExistingBindVariables(t *testing.T) {
-	var err error
-	var splitParams SplitParams
-	err = splitParams.Initialize("select * from test_table",
+	splitParams, err := NewSplitParams("select * from test_table",
 		map[string]interface{}{"foo": int64(100)}, []string{"id", "user_id"}, getSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
-	var splitter Splitter
-	err = splitter.Initialize(&splitParams,
+	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{
 				{Int64Value(1), Int64Value(2)},
 				{Int64Value(1), Int64Value(3)},
 				{Int64Value(5), Int64Value(1)},
 			},
-		},
-		nil /* sqlExecuter */)
-	if err != nil {
-		t.Errorf("Splitter.Initialize() failed with: %v", err)
-	}
+		})
 	var queryParts []querytypes.QuerySplit
 	queryParts, err = splitter.Split()
 	if err != nil {
@@ -316,22 +292,15 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 }
 
 func TestSplitWithEmptyBoundaryList(t *testing.T) {
-	var err error
-	var splitParams SplitParams
-	err = splitParams.Initialize("select * from test_table",
+	splitParams, err := NewSplitParams("select * from test_table",
 		map[string]interface{}{"foo": int64(100)}, []string{"id", "user_id"}, getSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
-	var splitter Splitter
-	err = splitter.Initialize(&splitParams,
+	splitter := NewSplitter(splitParams,
 		&FakeSplitAlgorithm{
 			boundaries: []tuple{},
-		},
-		nil /* sqlExecuter */)
-	if err != nil {
-		t.Errorf("Splitter.Initialize() failed with: %v", err)
-	}
+		})
 	var queryParts []querytypes.QuerySplit
 	queryParts, err = splitter.Split()
 	if err != nil {
