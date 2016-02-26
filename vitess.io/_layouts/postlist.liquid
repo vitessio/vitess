@@ -20,7 +20,11 @@ bodyclass: posts
 
   {% if site.excerpt_separator %}
 
+      {% if forloop.first == true %}
+<h3 style="margin-top: 0;">{{ post.title }}</h3>
+      {% else %}
 <h3>{{ post.title }}</h3>
+      {% endif %}
 
 <p><b>{{ post.date | date_to_string }}{% if post.attribution %}, {{ post.attribution }}{% endif %}</b></p>
 
