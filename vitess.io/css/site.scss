@@ -558,9 +558,6 @@ h4.arrow-d::before {
   }
 }
 @media (min-width: 992px) {
-  .container {
-    width: calc(100% - 22px);
-  }
   #sidebar.affix-top, #tocSidebar.affix-top {
     position: static;
   }
@@ -569,10 +566,6 @@ h4.arrow-d::before {
   body .home-full-width {
     width: 100%;
     margin: 0px;
-  }
-  .container {
-    width: calc(100% - 30px);
-    margin: 0 15px;
   }
   #sidebar.affix {
     position: fixed;
