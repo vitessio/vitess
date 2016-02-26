@@ -62,7 +62,7 @@ func (splitter *Splitter) Split() ([]querytypes.QuerySplit, error) {
 // initQueryPartSQLs initializes the firstQueryPartSQL, middleQueryPartSQL and lastQueryPartSQL
 // fields.
 func (splitter *Splitter) initQueryPartSQLs() {
-	splitColumns := convertColNamesToValExpr(splitter.splitParams.splitColumns)
+	splitColumns := convertColumnNamesToValExpr(splitter.splitParams.splitColumns)
 	startBindVariables := convertBindVariableNamesToValExpr(splitter.startBindVariableNames)
 	endBindVariables := convertBindVariableNamesToValExpr(splitter.endBindVariableNames)
 	splitColsLessThanEnd := constructTupleInequality(
