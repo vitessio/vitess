@@ -20,6 +20,10 @@ gems:
 
 markdown: redcarpet
 
+# Use the following setting to only show an excerpt from each blog post
+# in the postlist template.
+excerpt_separator: <!-- more -->
+
 analytics:
   id: UA-60219601-1
 
