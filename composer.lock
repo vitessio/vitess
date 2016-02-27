@@ -4,8 +4,8 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "930fb7c526f47d860e0213abaf955a82",
-    "content-hash": "d7346520737cf572d05f8686725588bf",
+    "hash": "f94639fdd21d6d8c0d4303d1f31a2ac7",
+    "content-hash": "54e74f04ae871f8c990be820ed4d2404",
     "packages": [
         {
             "name": "datto/protobuf-php",
@@ -110,12 +110,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/google/google-auth-library-php.git",
-                "reference": "eb4aaf0bad5b12ff273df618fcf281793f126c4a"
+                "reference": "45c5e62244995d4dae51aa379894401ebe992b4d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/google/google-auth-library-php/zipball/eb4aaf0bad5b12ff273df618fcf281793f126c4a",
-                "reference": "eb4aaf0bad5b12ff273df618fcf281793f126c4a",
+                "url": "https://api.github.com/repos/google/google-auth-library-php/zipball/45c5e62244995d4dae51aa379894401ebe992b4d",
+                "reference": "45c5e62244995d4dae51aa379894401ebe992b4d",
                 "shasum": ""
             },
             "require": {
@@ -149,20 +149,20 @@
                 "google",
                 "oauth2"
             ],
-            "time": "2015-12-17 22:16:55"
+            "time": "2016-02-24 18:00:02"
         },
         {
             "name": "grpc/grpc",
-            "version": "dev-release-0_12",
+            "version": "dev-release-0_13",
             "source": {
                 "type": "git",
                 "url": "https://github.com/grpc/grpc.git",
-                "reference": "1a39077b64dcb88553fe2b7be17bc6dafc88899a"
+                "reference": "22648b7f7c83d80b71ac312864f760775f8d5abd"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/grpc/grpc/zipball/1a39077b64dcb88553fe2b7be17bc6dafc88899a",
-                "reference": "1a39077b64dcb88553fe2b7be17bc6dafc88899a",
+                "url": "https://api.github.com/repos/grpc/grpc/zipball/22648b7f7c83d80b71ac312864f760775f8d5abd",
+                "reference": "22648b7f7c83d80b71ac312864f760775f8d5abd",
                 "shasum": ""
             },
             "require": {
@@ -184,7 +184,7 @@
             "keywords": [
                 "rpc"
             ],
-            "time": "2016-01-15 18:21:08"
+            "time": "2016-02-23 02:54:24"
         },
         {
             "name": "guzzlehttp/guzzle",
@@ -192,12 +192,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/guzzle.git",
-                "reference": "789bd2309e982eaabf3905f68c0a227b7f5a5cd3"
+                "reference": "739b9c8378c462943c42fee5353453ab4164ed8e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/789bd2309e982eaabf3905f68c0a227b7f5a5cd3",
-                "reference": "789bd2309e982eaabf3905f68c0a227b7f5a5cd3",
+                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/739b9c8378c462943c42fee5353453ab4164ed8e",
+                "reference": "739b9c8378c462943c42fee5353453ab4164ed8e",
                 "shasum": ""
             },
             "require": {
@@ -213,7 +213,7 @@
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-master": "6.1-dev"
+                    "dev-master": "6.2-dev"
                 }
             },
             "autoload": {
@@ -246,7 +246,7 @@
                 "rest",
                 "web service"
             ],
-            "time": "2016-01-20 22:04:50"
+            "time": "2016-02-17 21:09:10"
         },
         {
             "name": "guzzlehttp/promises",
@@ -254,12 +254,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/promises.git",
-                "reference": "b1e1c0d55f8083c71eda2c28c12a228d708294ea"
+                "reference": "976e0f50981f845dcee1c25bfcac2304a7bb5583"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/promises/zipball/b1e1c0d55f8083c71eda2c28c12a228d708294ea",
-                "reference": "b1e1c0d55f8083c71eda2c28c12a228d708294ea",
+                "url": "https://api.github.com/repos/guzzle/promises/zipball/976e0f50981f845dcee1c25bfcac2304a7bb5583",
+                "reference": "976e0f50981f845dcee1c25bfcac2304a7bb5583",
                 "shasum": ""
             },
             "require": {
@@ -297,20 +297,20 @@
             "keywords": [
                 "promise"
             ],
-            "time": "2015-10-15 22:28:00"
+            "time": "2016-02-26 22:29:15"
         },
         {
             "name": "guzzlehttp/psr7",
-            "version": "1.2.1",
+            "version": "1.2.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/psr7.git",
-                "reference": "4d0bdbe1206df7440219ce14c972aa57cc5e4982"
+                "reference": "2e89629ff057ebb49492ba08e6995d3a6a80021b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/psr7/zipball/4d0bdbe1206df7440219ce14c972aa57cc5e4982",
-                "reference": "4d0bdbe1206df7440219ce14c972aa57cc5e4982",
+                "url": "https://api.github.com/repos/guzzle/psr7/zipball/2e89629ff057ebb49492ba08e6995d3a6a80021b",
+                "reference": "2e89629ff057ebb49492ba08e6995d3a6a80021b",
                 "shasum": ""
             },
             "require": {
@@ -355,7 +355,7 @@
                 "stream",
                 "uri"
             ],
-            "time": "2015-11-03 01:34:55"
+            "time": "2016-02-18 21:54:00"
         },
         {
             "name": "psr/http-message",
