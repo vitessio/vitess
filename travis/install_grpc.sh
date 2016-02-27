@@ -12,19 +12,19 @@ if [ "$grpc_dist" != "" ]; then
 fi
 
 # for python, we'll need the latest virtualenv and tox.
-# running gRPC requires the six package, any version will do.
+# running gRPC requires the six package, version >=1.10.
 if [ "$grpc_dist" != "" ]; then
-  pip install --upgrade --root $grpc_dist --ignore-installed virtualenv tox
-  pip install --root $grpc_dist --ignore-installed six
+  # Create a virtualenv, which also creates a virualenv-boxed pip.
+  virtualenv $grpc_dist/usr/local
+  $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv tox six
 else
-  pip install --upgrade virtualenv tox
-  pip install six
+  pip install --upgrade --ignore-installed virtualenv tox six
 fi
 
 # clone the repository, setup the submodules
 git clone https://github.com/grpc/grpc.git
 cd grpc
-git checkout release-0_12_0
+git checkout release-0_13_0
 git submodule update --init
 
 # on OSX beta-1 doesn't work, it has to be built in version beta-2
@@ -67,14 +67,10 @@ else
 fi
 
 # and now build and install gRPC python libraries
-# Note: running this twice as the first run exists
-# with 'build_data' not found error. Seems the python
-# libraries still work though.
-CONFIG=opt ./tools/run_tests/build_python.sh || CONFIG=opt ./tools/run_tests/build_python.sh
 if [ "$grpc_dist" != "" ]; then
-  CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/grpcio --root $grpc_dist
+  $grpc_dist/usr/local/bin/pip install .
 else
-  pip install src/python/grpcio
+  pip install .
 fi
 
 # Build PHP extension, only in Travis.
