@@ -13,11 +13,11 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/olekukonko/tablewriter"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
-
 	"github.com/youtube/vitess/go/vt/vitessdriver"
+	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var (
@@ -35,6 +35,7 @@ in the form of :v1, :v2, etc.
 	bindVariables = newBindvars("bind_variables", "bind variables as a json list")
 	keyspace      = flag.String("keyspace", "", "Keyspace of a specific keyspace/shard to target. Disables vtgate v3.")
 	shard         = flag.String("shard", "", "Shard of a specific keyspace/shard to target. Disables vtgate v3.")
+	jsonOutput    = flag.Bool("json", false, "Output JSON instead of human-readable table")
 )
 
 func init() {
@@ -121,7 +122,7 @@ func main() {
 	}
 
 	log.Infof("Sending the query...")
-	now := time.Now()
+	startTime := time.Now()
 
 	// handle dml
 	if isDml(args[0]) {
@@ -145,9 +146,8 @@ func main() {
 
 		rowsAffected, err := result.RowsAffected()
 		lastInsertID, err := result.LastInsertId()
-		log.Infof("Total time: %v / Row affected: %v / Last Insert Id: %v", time.Now().Sub(now), rowsAffected, lastInsertID)
+		log.Infof("Total time: %v / Row affected: %v / Last Insert Id: %v", time.Since(startTime), rowsAffected, lastInsertID)
 	} else {
-
 		// launch the query
 		rows, err := db.Query(args[0], []interface{}(*bindVariables)...)
 		if err != nil {
@@ -156,20 +156,16 @@ func main() {
 		}
 		defer rows.Close()
 
-		// print the headers
+		// get the headers
+		var qr results
 		cols, err := rows.Columns()
 		if err != nil {
 			log.Errorf("client error: %v", err)
 			exit.Return(1)
 		}
-		line := "Index"
-		for _, field := range cols {
-			line += "\t" + field
-		}
-		fmt.Printf("%s\n", line)
+		qr.Fields = cols
 
 		// get the rows
-		rowIndex := 0
 		for rows.Next() {
 			row := make([]interface{}, len(cols))
 			for i := range row {
@@ -181,18 +177,41 @@ func main() {
 				exit.Return(1)
 			}
 
-			// print the line
-			line := fmt.Sprintf("%d", rowIndex)
+			// unpack []*string into []string
+			vals := make([]string, 0, len(row))
 			for _, value := range row {
-				line += fmt.Sprintf("\t%v", *(value.(*string)))
+				vals = append(vals, *(value.(*string)))
 			}
-			fmt.Printf("%s\n", line)
-			rowIndex++
+			qr.Rows = append(qr.Rows, vals)
 		}
 		if err := rows.Err(); err != nil {
 			log.Errorf("Error %v\n", err)
 			exit.Return(1)
 		}
-		log.Infof("Total time: %v / Row count: %v", time.Now().Sub(now), rowIndex)
+
+		if *jsonOutput {
+			data, err := json.MarshalIndent(qr, "", "  ")
+			if err != nil {
+				log.Errorf("cannot marshal data: %v", err)
+				exit.Return(1)
+			}
+			fmt.Print(string(data))
+		} else {
+			printTable(qr, time.Since(startTime))
+		}
 	}
+}
+
+type results struct {
+	Fields []string   `json:"fields"`
+	Rows   [][]string `json:"rows"`
+}
+
+func printTable(qr results, dur time.Duration) {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader(qr.Fields)
+	table.SetAutoFormatHeaders(false)
+	table.AppendBulk(qr.Rows)
+	table.Render()
+	fmt.Printf("%v rows in set (%v)\n", len(qr.Rows), dur)
 }

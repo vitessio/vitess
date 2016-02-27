@@ -20,6 +20,8 @@ import java.util.TimeZone;
 @RunWith(JUnit4.class)
 public class DateTimeTest {
   private static final Calendar GMT = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
+  private static final Calendar PST = Calendar.getInstance(TimeZone.getTimeZone("GMT-8"));
+  private static final Calendar IST = Calendar.getInstance(TimeZone.getTimeZone("GMT+0530"));
 
   private static final Map<String, Date> TEST_DATES =
       new ImmutableMap.Builder<String, Date>()
@@ -120,6 +122,40 @@ public class DateTimeTest {
   }
 
   @Test
+  public void testParseTimePST() throws Exception {
+    // Test absolute UNIX epoch values in a negative GMT offset.
+    final Map<String, Time> TEST_TIMES =
+        new ImmutableMap.Builder<String, Time>()
+            .put("-08:00:00", new Time(0))
+            .put("04:34:56", new Time(45296000L))
+            .put("-20:34:56", new Time(-45296000L))
+            .build();
+
+    for (Map.Entry<String, Time> entry : TEST_TIMES.entrySet()) {
+      String timeString = entry.getKey();
+      Time time = entry.getValue();
+      assertEquals(time, DateTime.parseTime(timeString, PST));
+    }
+  }
+
+  @Test
+  public void testParseTimeIST() throws Exception {
+    // Test absolute UNIX epoch values in a positive GMT offset.
+    final Map<String, Time> TEST_TIMES =
+        new ImmutableMap.Builder<String, Time>()
+            .put("05:30:00", new Time(0))
+            .put("18:04:56", new Time(45296000L))
+            .put("-07:04:56", new Time(-45296000L))
+            .build();
+
+    for (Map.Entry<String, Time> entry : TEST_TIMES.entrySet()) {
+      String timeString = entry.getKey();
+      Time time = entry.getValue();
+      assertEquals(time, DateTime.parseTime(timeString, IST));
+    }
+  }
+
+  @Test
   public void testFormatTimeGMT() throws Exception {
     // Test absolute UNIX epoch values in GMT,
     // including MySQL-specific syntax that Time.toString() doesn't support.
@@ -129,6 +165,7 @@ public class DateTimeTest {
             .put("12:34:00", new Time(45240000L))
             .put("01:23:00", new Time(4980000L))
             .put("12:34:56", new Time(45296000L))
+            .put("-01:23:00", new Time(-4980000L))
             .put("-12:34:56", new Time(-45296000L))
             .put("812:34:56", new Time(2925296000L))
             .put("-812:34:56", new Time(-2925296000L))
@@ -139,6 +176,40 @@ public class DateTimeTest {
       String timeString = entry.getKey();
       Time time = entry.getValue();
       assertEquals(timeString, DateTime.formatTime(time, GMT));
+    }
+  }
+
+  @Test
+  public void testFormatTimePST() throws Exception {
+    // Test absolute UNIX epoch values in a negative GMT offset.
+    final Map<String, Time> TEST_TIMES =
+        new ImmutableMap.Builder<String, Time>()
+            .put("-08:00:00", new Time(0))
+            .put("04:34:56", new Time(45296000L))
+            .put("-20:34:56", new Time(-45296000L))
+            .build();
+
+    for (Map.Entry<String, Time> entry : TEST_TIMES.entrySet()) {
+      String timeString = entry.getKey();
+      Time time = entry.getValue();
+      assertEquals(timeString, DateTime.formatTime(time, PST));
+    }
+  }
+
+  @Test
+  public void testFormatTimeIST() throws Exception {
+    // Test absolute UNIX epoch values in a positive GMT offset.
+    final Map<String, Time> TEST_TIMES =
+        new ImmutableMap.Builder<String, Time>()
+            .put("05:30:00", new Time(0))
+            .put("18:04:56", new Time(45296000L))
+            .put("-07:04:56", new Time(-45296000L))
+            .build();
+
+    for (Map.Entry<String, Time> entry : TEST_TIMES.entrySet()) {
+      String timeString = entry.getKey();
+      Time time = entry.getValue();
+      assertEquals(timeString, DateTime.formatTime(time, IST));
     }
   }
 

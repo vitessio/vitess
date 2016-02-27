@@ -94,6 +94,7 @@ for uid_index in $uids; do
     -target_tablet_type $tablet_type \
     -health_check_interval 5s \
     -enable-rowcache \
+    -enable_semi_sync \
     -rowcache-bin $memcached_path \
     -rowcache-socket $VTDATAROOT/$tablet_dir/memcache.sock \
     -backup_storage_implementation file \

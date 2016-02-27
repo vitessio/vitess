@@ -141,4 +141,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	if goodSlave2.FakeMysqlDaemon.Replicating {
 		t.Errorf("goodSlave2.FakeMysqlDaemon.Replicating set")
 	}
+
+	checkSemiSyncEnabled(t, true, true, newMaster)
+	checkSemiSyncEnabled(t, false, true, goodSlave1, goodSlave2, oldMaster)
 }

@@ -21,7 +21,12 @@ class TestEnv(object):
     self.tablet_map = {}
 
   def launch(
-      self, keyspace, shards=None, replica_count=0, rdonly_count=0, ddls=None):
+      self, keyspace, shards=None, replica_count=1, rdonly_count=0, ddls=None):
+    """Launch test environment."""
+
+    if replica_count < 1:
+      raise Exception('replica_count=%d < 1; tests now use semi-sync'
+                      ' and must have at least one replica' % replica_count)
     self.tablets = []
     utils.run_vtctl(['CreateKeyspace', keyspace])
     if not shards or shards[0] == '0':
@@ -52,8 +57,6 @@ class TestEnv(object):
       if t.tablet_type == 'master':
         utils.run_vtctl(['InitShardMaster', keyspace+'/'+t.shard,
                          t.tablet_alias], auto_log=True)
-        # Force read-write even if there are no replicas.
-        utils.run_vtctl(['SetReadWrite', t.tablet_alias], auto_log=True)
 
     for ddl in ddls:
       fname = os.path.join(environment.tmproot, 'ddl.sql')
@@ -70,6 +73,8 @@ class TestEnv(object):
       t.remove_tree()
 
   def _start_tablet(self, keyspace, shard, tablet_type, index):
+    """Start a tablet."""
+
     t = tablet.Tablet()
     self.tablets.append(t)
     if tablet_type == 'master':
