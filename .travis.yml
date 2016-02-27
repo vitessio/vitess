@@ -22,6 +22,7 @@ addons:
     - gcc-4.8
     - git
     - pkg-config
+    - python-virtualenv
     # installs libaio1 which is required by MariaDB 10.0 server package
     - libaio-dev
     # required by travis script below to measure CPU and memory usage
