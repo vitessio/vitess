@@ -73,15 +73,13 @@ else
   pip install .
 fi
 
-# Build PHP extension, only in Travis.
-if [ "$TRAVIS" == "true" ]; then
+# Build PHP extension, only if requested.
+if [ -n "$INSTALL_GRPC_PHP" ]; then
   echo "Building gRPC PHP extension..."
-  eval "$(phpenv init -)"
-  cd $grpc_dist/grpc/src/php/ext/grpc
+  cd src/php/ext/grpc
   phpize
   ./configure --enable-grpc=$grpc_dist/usr/local
   make
-  mkdir -p $HOME/.phpenv/lib
-  mv modules/grpc.so $HOME/.phpenv/lib/
-  echo "extension=$HOME/.phpenv/lib/grpc.so" > ~/.phpenv/versions/$(phpenv global)/etc/conf.d/grpc.ini
+  mkdir -p $INSTALL_GRPC_PHP
+  mv modules/grpc.so $INSTALL_GRPC_PHP
 fi

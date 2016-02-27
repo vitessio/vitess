@@ -85,14 +85,15 @@ COPY composer.json composer.lock /vt/src/github.com/youtube/vitess/
 
 # Install gRPC (and protobuf) as root
 RUN cd /vt/dist && \
-    $VTTOP/travis/install_grpc.sh && \
+    INSTALL_GRPC_PHP=`php-config --extension-dir` $VTTOP/travis/install_grpc.sh && \
+    echo 'extension=grpc.so' > /etc/php5/cli/conf.d/20-grpc.ini && \
     rm -rf /vt/dist/grpc
 
 # Install gRPC PHP dependencies
-RUN pecl install grpc-beta && \
-    echo 'extension=grpc.so' > /etc/php5/cli/conf.d/20-grpc.ini && \
-    cd /vt/src/github.com/youtube/vitess && \
-    composer install
+RUN cd /vt/src/github.com/youtube/vitess && \
+    composer install && \
+    find php/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf && \
+    find php/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
