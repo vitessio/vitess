@@ -80,7 +80,7 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 	}
 	wg.Wait()
 	if er.HasErrors() {
-		return fmt.Errorf("Permissions diffs:\n%v", er.Error().Error())
+		return fmt.Errorf("Permissions diffs: %v", er.Error().Error())
 	}
 	return nil
 }
@@ -139,7 +139,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 	}
 	wg.Wait()
 	if er.HasErrors() {
-		return fmt.Errorf("Permissions diffs:\n%v", er.Error().Error())
+		return fmt.Errorf("Permissions diffs: %v", er.Error().Error())
 	}
 	return nil
 }
