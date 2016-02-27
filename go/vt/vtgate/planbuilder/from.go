@@ -15,7 +15,7 @@ import (
 // for select statements.
 
 // processTableExprs analyzes the FROM clause. It produces a planBuilder
-// and the associated symtab with all the routes identified.
+// with all the routes identified.
 func processTableExprs(tableExprs sqlparser.TableExprs, vschema *VSchema) (planBuilder, error) {
 	if len(tableExprs) != 1 {
 		return nil, errors.New("unsupported: ',' join operator")
@@ -23,8 +23,7 @@ func processTableExprs(tableExprs sqlparser.TableExprs, vschema *VSchema) (planB
 	return processTableExpr(tableExprs[0], vschema)
 }
 
-// processTableExpr produces a planBuilder subtree and symtab
-// for the given TableExpr.
+// processTableExpr produces a planBuilder subtree for the given TableExpr.
 func processTableExpr(tableExpr sqlparser.TableExpr, vschema *VSchema) (planBuilder, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
@@ -44,8 +43,16 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema *VSchema) (planBuil
 	panic("unreachable")
 }
 
-// processAliasedTable produces a planBuilder subtree and symtab
-// for the given AliasedTableExpr.
+// processAliasedTable produces a planBuilder subtree for the given AliasedTableExpr.
+// If the expression is a subquery, then the the route built for it will contain
+// the entire subquery tree in the from clause, as if it was a table.
+// The symtab entry for the query will be a tableAlias where the columns
+// will be built from the select expressions of the subquery.
+// Since the table aliases only contain vindex columns, we'll follow
+// the same rule: only columns from the subquery that are identified as
+// vindex columns will be added to the tableAlias.
+// The above statements imply that a subquery is allowed only if it's a route
+// that can be treated like a normal table. If not, we return an error.
 func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema *VSchema) (planBuilder, error) {
 	switch expr := tableExpr.Expr.(type) {
 	case *sqlparser.TableName:
@@ -128,10 +135,9 @@ func getTablePlan(tableName *sqlparser.TableName, vschema *VSchema) (*Route, *Ta
 	}, table, nil
 }
 
-// processJoin produces a planBuilder subtree and symtab
-// for the given Join. If the left and right nodes can be part
-// of the same route, then it's a routeBuilder. Otherwise,
-// it's a joinBuilder.
+// processJoin produces a planBuilder subtree for the given Join.
+// If the left and right nodes can be part of the same route,
+// then it's a routeBuilder. Otherwise, it's a joinBuilder.
 func processJoin(join *sqlparser.JoinTableExpr, vschema *VSchema) (planBuilder, error) {
 	switch join.Join {
 	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
@@ -163,6 +169,20 @@ func processJoin(join *sqlparser.JoinTableExpr, vschema *VSchema) (planBuilder, 
 // makejoinBuilder creates a new joinBuilder node out of the two builders.
 // This function is called when the two builders cannot be part of
 // the same route.
+// Before the join, each plan has its own symtab. After the join, it's
+// necessary that all primitives on both sides point to the same common
+// symtab.
+// Similarly, the Order has to be recomputed when two joins come together.
+// After the joins are merged, the ON clause has to be pushed down into
+// the appropriate routes. In the case of a LEFT JOIN, the condition must
+// only be pushed to the RHS. Otherwise, the push can go left or right
+// depending on what expressions reference. We reuse processBoolExpr
+// which in turn uses the standard findRoute algorithm.
+// In the case of a LEFT JOIN, we also mark all nodes of the RHS, which
+// puts restrictions on what can be pushed into those nodes. These
+// are enforced by the routeBuilder methods.
+// The push can fail if the ON clause contains a subquery that's
+// too complex.
 func makejoinBuilder(lplan, rplan planBuilder, join *sqlparser.JoinTableExpr) (planBuilder, error) {
 	// This function converts ON clauses to WHERE clauses. The WHERE clause
 	// scope can see all tables, whereas the ON clause can only see the
@@ -273,7 +293,7 @@ func joinRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (pl
 		}
 	}
 
-	// Both l & r routes point to the sameshard.
+	// Both l & r routes point to the same shard.
 	if lRoute.Route.Opcode == SelectEqualUnique && rRoute.Route.Opcode == SelectEqualUnique {
 		if valEqual(lRoute.Route.Values, rRoute.Route.Values) {
 			return mergeRoutes(lRoute, rRoute, join)
@@ -286,6 +306,9 @@ func joinRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (pl
 // mergeRoutes makes a new routeBuilder by joining the left and right
 // nodes of a join. The merged routeBuilder inherits the plan of the
 // left Route. This function is called if two routes can be merged.
+// After the routes are merged, the ON clause is analyzed to see if the
+// plan can be improved. Note that the analysis can fail if the expression
+// contains a complex subquery.
 func mergeRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (planBuilder, error) {
 	lRoute.Select.From = sqlparser.TableExprs{join}
 	if join.Join == sqlparser.LeftJoinStr {
@@ -298,7 +321,7 @@ func mergeRoutes(lRoute, rRoute *routeBuilder, join *sqlparser.JoinTableExpr) (p
 	}
 	for _, filter := range splitAndExpression(nil, join.On) {
 		// If VTGate evolves, this section should be rewritten
-		// to use PushFilter.
+		// to use processBoolExpr.
 		_, err = findRoute(filter, lRoute)
 		if err != nil {
 			return nil, err

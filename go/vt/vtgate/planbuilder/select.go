@@ -76,6 +76,9 @@ func processSelect(sel *sqlparser.Select, vschema *VSchema, outer planBuilder) (
 	return plan, nil
 }
 
+// processBoolExpr identifies the target route for the specified bool expr,
+// pushes it down, and updates the route info if the new constraint improves
+// the plan. This function can push to a WHERE or HAVING clause.
 func processBoolExpr(boolExpr sqlparser.BoolExpr, plan planBuilder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
@@ -92,6 +95,11 @@ func processBoolExpr(boolExpr sqlparser.BoolExpr, plan planBuilder, whereType st
 	return nil
 }
 
+// reorderBySubquery reorders the filters by pushing subqueries
+// to the end. This allows the non-subquery filters to be
+// pushed first because they can potentially improve the routing
+// plan, which can later allow a filter containing a subquery
+// to successfully merge with the corresponding route.
 func reorderBySubquery(filters []sqlparser.BoolExpr) {
 	max := len(filters)
 	for i := 0; i < max; i++ {
@@ -107,6 +115,8 @@ func reorderBySubquery(filters []sqlparser.BoolExpr) {
 	}
 }
 
+// processSelectExprs identifies the target route for the
+// select expressions and pushes them down.
 func processSelectExprs(sel *sqlparser.Select, plan planBuilder) error {
 	err := checkAggregates(sel, plan)
 	if err != nil {
@@ -129,6 +139,9 @@ func processSelectExprs(sel *sqlparser.Select, plan planBuilder) error {
 	return nil
 }
 
+// checkAggregates returns an error if the select statement
+// has aggregates that cannot be pushed down due to a complex
+// plan.
 func checkAggregates(sel *sqlparser.Select, plan planBuilder) error {
 	hasAggregates := false
 	if sel.Distinct != "" {
@@ -171,6 +184,8 @@ func checkAggregates(sel *sqlparser.Select, plan planBuilder) error {
 	return errors.New("unsupported: scatter with aggregates")
 }
 
+// pusheSelectRoutes is a convenience function that pushes all the select
+// expressions and returns the list of colsyms generated for it.
 func pushSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*colsym, error) {
 	colsyms := make([]*colsym, len(selectExprs))
 	for i, node := range selectExprs {

@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-// Plan represents the routing strategy for a given query.
+// Plan represents the execution strategy for a given query.
 // For now it's a simple wrapper around the real instructions.
 // An instruction (aka primitive), tells VTGate how to execute
 // a single command. Primitives can be cascaded as long as

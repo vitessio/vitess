@@ -71,6 +71,9 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	return rtr.execInstruction(vcursor, plan.Instructions, true)
 }
 
+// execInstruction performs a non-streaming execution of the specified primitve.
+// If wantFields is true, it makes sure to fetch the field info even if there are
+// no results.
 func (rtr *Router) execInstruction(vcursor *requestContext, instruction planbuilder.Primitive, wantFields bool) (*sqltypes.Result, error) {
 	switch instruction := instruction.(type) {
 	case *planbuilder.Join:
@@ -82,6 +85,11 @@ func (rtr *Router) execInstruction(vcursor *requestContext, instruction planbuil
 	panic("unreachable")
 }
 
+// execJoin performs a non-streaming join operation. It fetches rows from the LHS,
+// builds the necessary join variables for each fetched row, and invokes the RHS.
+// It then joins the left and right results based on the requested columns.
+// If the LHS returned no rows and wantFields is set, it performs a field
+// query to fetch the field info.
 func (rtr *Router) execJoin(vcursor *requestContext, join *planbuilder.Join, wantFields bool) (*sqltypes.Result, error) {
 	lresult, err := rtr.execInstruction(vcursor, join.Left, wantFields)
 	if err != nil {
@@ -161,6 +169,7 @@ func joinRows(lrow, rrow []sqltypes.Value, cols []int) []sqltypes.Value {
 	return row
 }
 
+// execRoute executes the route query for all route opcodes.
 func (rtr *Router) execRoute(vcursor *requestContext, route *planbuilder.Route) (*sqltypes.Result, error) {
 	saved := copyBindVars(vcursor.bindVars)
 	defer func() { vcursor.bindVars = saved }()
@@ -207,6 +216,7 @@ func (rtr *Router) execRoute(vcursor *requestContext, route *planbuilder.Route) 
 	)
 }
 
+// getFields fetches the field info for the given primitive.
 func (rtr *Router) getFields(vcursor *requestContext, instruction planbuilder.Primitive) (*sqltypes.Result, error) {
 	switch instruction := instruction.(type) {
 	case *planbuilder.Join:
@@ -217,6 +227,7 @@ func (rtr *Router) getFields(vcursor *requestContext, instruction planbuilder.Pr
 	panic("unreachable")
 }
 
+// getJoinFields fetches the field info for the join.
 func (rtr *Router) getJoinFields(vcursor *requestContext, join *planbuilder.Join) (*sqltypes.Result, error) {
 	lresult, err := rtr.getFields(vcursor, join.Left)
 	if err != nil {
@@ -236,6 +247,7 @@ func (rtr *Router) getJoinFields(vcursor *requestContext, join *planbuilder.Join
 	return result, nil
 }
 
+// getRouteFields fetches the field info for the route.
 func (rtr *Router) getRouteFields(vcursor *requestContext, route *planbuilder.Route) (*sqltypes.Result, error) {
 	saved := copyBindVars(vcursor.bindVars)
 	defer func() { vcursor.bindVars = saved }()
@@ -272,6 +284,7 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 	return rtr.streamExecInstruction(vcursor, plan.Instructions, true, sendReply)
 }
 
+// streamExecInstruction performs a streaming execution of the specified instruction.
 func (rtr *Router) streamExecInstruction(vcursor *requestContext, instruction planbuilder.Primitive, wantFields bool, sendReply func(*sqltypes.Result) error) error {
 	switch instruction := instruction.(type) {
 	case *planbuilder.Join:
@@ -282,6 +295,7 @@ func (rtr *Router) streamExecInstruction(vcursor *requestContext, instruction pl
 	panic("unreachable")
 }
 
+// StreamExecJoin performs a streaming join.
 func (rtr *Router) streamExecJoin(vcursor *requestContext, join *planbuilder.Join, wantFields bool, sendReply func(*sqltypes.Result) error) error {
 	err := rtr.streamExecInstruction(vcursor, join.Left, wantFields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
@@ -338,6 +352,7 @@ func (rtr *Router) streamExecJoin(vcursor *requestContext, join *planbuilder.Joi
 	return err
 }
 
+// streamExecRoute performs a streaming route. Only selects are allowed.
 func (rtr *Router) streamExecRoute(vcursor *requestContext, route *planbuilder.Route, sendReply func(*sqltypes.Result) error) error {
 	saved := copyBindVars(vcursor.bindVars)
 	defer func() { vcursor.bindVars = saved }()

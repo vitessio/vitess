@@ -12,10 +12,12 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+// buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema *VSchema) (*Route, error) {
 	route := &Route{
 		Query: generateQuery(upd),
 	}
+	// We allow only one table in an update.
 	tablename := sqlparser.GetTableName(upd.Table)
 	var err error
 	route.Table, err = vschema.FindTable(tablename)
@@ -48,6 +50,8 @@ func generateQuery(statement sqlparser.Statement) string {
 	return buf.String()
 }
 
+// isIndexChanging returns true if any of the update
+// expressions modify a vindex column.
 func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex) bool {
 	vindexCols := make([]string, len(colVindexes))
 	for i, index := range colVindexes {
@@ -61,10 +65,12 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex)
 	return false
 }
 
+// buildUpdatePlan builds the instructions for a DELETE statement.
 func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
 	route := &Route{
 		Query: generateQuery(del),
 	}
+	// We allow only one table in a delete.
 	tablename := sqlparser.GetTableName(del.Table)
 	var err error
 	route.Table, err = vschema.FindTable(tablename)
@@ -89,6 +95,9 @@ func buildDeletePlan(del *sqlparser.Delete, vschema *VSchema) (*Route, error) {
 	return route, nil
 }
 
+// generateDeleteSubquery generates the query to fetch the rows
+// that will be deleted. This allows VTGate to clean up any
+// owned vindexes as needed.
 func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
 	if len(table.Owned) == 0 {
 		return ""
@@ -107,6 +116,8 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
 	return buf.String()
 }
 
+// getDMLRouting updates the route with the necessary routing
+// info. If it cannot find a unique route, then it returns an error.
 func getDMLRouting(where *sqlparser.Where, route *Route) error {
 	if where == nil {
 		return errors.New("unsupported: multi-shard where clause in DML")
@@ -124,6 +135,9 @@ func getDMLRouting(where *sqlparser.Where, route *Route) error {
 	return errors.New("unsupported: multi-shard where clause in DML")
 }
 
+// getMatch returns the matched value if there is an equality
+// constraint on the specified column that can be used to
+// decide on a route.
 func getMatch(node sqlparser.BoolExpr, col string) interface{} {
 	filters := splitAndExpression(nil, node)
 	for _, filter := range filters {

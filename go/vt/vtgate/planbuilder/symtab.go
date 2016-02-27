@@ -23,7 +23,7 @@ import (
 // "table alias phase", in which case, only those symbols will
 // be searched for that symtab.
 // For any column reference that was successfully resolved, the
-// information is "cached" as Metadata in the sqlparser.ColName
+// information is persisted as Metadata in the sqlparser.ColName
 // structure. This ensures that the changing state of the symtab
 // does not change the meaning of a previously resolved column
 // reference.

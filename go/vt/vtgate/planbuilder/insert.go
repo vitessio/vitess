@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+// buildInsertPlan builds the route for an INSERT statement.
 func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
 	route := &Route{
 		Query: generateQuery(ins),
@@ -62,6 +63,8 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema *VSchema) (*Route, error) {
 	return route, nil
 }
 
+// buildIndexPlan adds the insert value to the Values field for the specified ColVindex.
+// This value will be used at the time of insert to validate the vindex value.
 func buildIndexPlan(ins *sqlparser.Insert, tablename string, colVindex *ColVindex, route *Route) error {
 	pos := -1
 	for i, column := range ins.Columns {
