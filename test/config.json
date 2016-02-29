@@ -162,7 +162,7 @@
 		"python_client_grpc": {
 			"File": "python_client_test.py",
 			"Args": [
-			  "--protocols-flavor=grpc"
+				"--protocols-flavor=grpc"
 			],
 			"Command": [],
 			"Manual": false,
@@ -322,7 +322,9 @@
 		},
 		"vtgatev2": {
 			"File": "vtgatev2_test.py",
-			"Args": [],
+			"Args": [
+				"--vtgate-gateway-flavor=shardgateway"
+			],
 			"Command": [],
 			"Manual": false,
 			"Shard": 1,
