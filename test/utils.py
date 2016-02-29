@@ -88,7 +88,7 @@ def add_options(parser):
   parser.add_option('--mysql-flavor')
   parser.add_option('--protocols-flavor', default='gorpc')
   parser.add_option('--topo-server-flavor', default='zookeeper')
-  parser.add_option('--vtgate-gateway-flavor', default='shardgateway')
+  parser.add_option('--vtgate-gateway-flavor', default='discoverygateway')
 
 
 def set_options(opts):
