@@ -7,24 +7,24 @@ set -ex
 
 # grpc_dist can be empty, in which case we just install to the default paths
 grpc_dist="$1"
-if [ "$grpc_dist" != "" ]; then
+if [ -n "$grpc_dist" ]; then
   cd $grpc_dist
 fi
 
 # for python, we'll need the latest virtualenv and tox.
-# running gRPC requires the six package, any version will do.
-if [ "$grpc_dist" != "" ]; then
-  pip install --upgrade --root $grpc_dist --ignore-installed virtualenv tox
-  pip install --root $grpc_dist --ignore-installed six
+# running gRPC requires the six package, version >=1.10.
+if [ -n "$grpc_dist" ]; then
+  # Create a virtualenv, which also creates a virualenv-boxed pip.
+  virtualenv $grpc_dist/usr/local
+  $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv tox six
 else
-  pip install --upgrade virtualenv tox
-  pip install six
+  pip install --upgrade --ignore-installed virtualenv tox six
 fi
 
 # clone the repository, setup the submodules
 git clone https://github.com/grpc/grpc.git
 cd grpc
-git checkout release-0_12_0
+git checkout release-0_13_0
 git submodule update --init
 
 # on OSX beta-1 doesn't work, it has to be built in version beta-2
@@ -42,7 +42,7 @@ make
 
 # install protobuf side (it was already built by the 'make' earlier)
 cd third_party/protobuf
-if [ "$grpc_dist" != "" ]; then
+if [ -n "$grpc_dist" ]; then
   make install prefix=$grpc_dist/usr/local
 else
   make install
@@ -50,9 +50,9 @@ fi
 
 # build and install python protobuf side
 cd python
-if [ "$grpc_dist" != "" ]; then
+if [ -n "$grpc_dist" ]; then
   python setup.py build --cpp_implementation
-  python setup.py install --cpp_implementation --root=$grpc_dist
+  python setup.py install --cpp_implementation --prefix=$grpc_dist/usr/local
 else
   python setup.py build --cpp_implementation
   python setup.py install --cpp_implementation
@@ -60,32 +60,26 @@ fi
 
 # now install grpc itself
 cd ../../..
-if [ "$grpc_dist" != "" ]; then
+if [ -n "$grpc_dist" ]; then
   make install prefix=$grpc_dist/usr/local
 else
   make install
 fi
 
 # and now build and install gRPC python libraries
-# Note: running this twice as the first run exists
-# with 'build_data' not found error. Seems the python
-# libraries still work though.
-CONFIG=opt ./tools/run_tests/build_python.sh || CONFIG=opt ./tools/run_tests/build_python.sh
-if [ "$grpc_dist" != "" ]; then
-  CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/grpcio --root $grpc_dist
+if [ -n "$grpc_dist" ]; then
+  $grpc_dist/usr/local/bin/pip install .
 else
-  pip install src/python/grpcio
+  pip install .
 fi
 
-# Build PHP extension, only in Travis.
-if [ "$TRAVIS" == "true" ]; then
+# Build PHP extension, only if requested.
+if [ -n "$INSTALL_GRPC_PHP" ]; then
   echo "Building gRPC PHP extension..."
-  eval "$(phpenv init -)"
-  cd $grpc_dist/grpc/src/php/ext/grpc
+  cd src/php/ext/grpc
   phpize
   ./configure --enable-grpc=$grpc_dist/usr/local
   make
-  mkdir -p $HOME/.phpenv/lib
-  mv modules/grpc.so $HOME/.phpenv/lib/
-  echo "extension=$HOME/.phpenv/lib/grpc.so" > ~/.phpenv/versions/$(phpenv global)/etc/conf.d/grpc.ini
+  mkdir -p $INSTALL_GRPC_PHP
+  mv modules/grpc.so $INSTALL_GRPC_PHP
 fi

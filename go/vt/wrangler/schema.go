@@ -97,7 +97,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	}
 	wg.Wait()
 	if er.HasErrors() {
-		return fmt.Errorf("Schema diffs:\n%v", er.Error().Error())
+		return fmt.Errorf("Schema diffs: %v", er.Error().Error())
 	}
 	return nil
 }
@@ -180,7 +180,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 	}
 	wg.Wait()
 	if er.HasErrors() {
-		return fmt.Errorf("Schema diffs:\n%v", er.Error().Error())
+		return fmt.Errorf("Schema diffs: %v", er.Error().Error())
 	}
 	return nil
 }

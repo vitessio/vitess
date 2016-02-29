@@ -5,15 +5,15 @@
 package testlib
 
 import (
+	"flag"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
 func init() {
 	// Enable semi-sync for all testlib tests.
-	*tabletmanager.EnableSemiSync = true
+	flag.Set("enable_semi_sync", "true")
 }
 
 func checkSemiSyncEnabled(t *testing.T, master, slave bool, tablets ...*FakeTablet) {
