@@ -175,28 +175,31 @@ func constructTupleInequalityUnchecked(
 			Right:    rhsTuple[0],
 		}
 	}
-	// (lhsTuple[0] < rhsTuple[0]) OR
-	// ( (lhsTuple[0] = rhsTuple[0]) AND
-	//   (constructTupleInequalityUnchecked(lhsTuple[1:], rhsTuple[1:], strict)) )
+	restOfTupleInequality := constructTupleInequalityUnchecked(lhsTuple[1:], rhsTuple[1:], strict)
+	if len(lhsTuple[1:]) > 1 {
+		// A non-scalar inequality need to be parenthesized since we combine them below with
+		// other expressions.
+		restOfTupleInequality = &sqlparser.ParenBoolExpr{
+			Expr: restOfTupleInequality,
+		}
+	}
+	// Return:
+	// lhsTuple[0] < rhsTuple[0] OR
+	// ( lhsTuple[0] = rhsTuple[0] AND restOfTupleInequality)
 	return &sqlparser.OrExpr{
-		Left: &sqlparser.ParenBoolExpr{
-			Expr: &sqlparser.ComparisonExpr{
-				Operator: sqlparser.LessThanStr,
-				Left:     lhsTuple[0],
-				Right:    rhsTuple[0],
-			}},
+		Left: &sqlparser.ComparisonExpr{
+			Operator: sqlparser.LessThanStr,
+			Left:     lhsTuple[0],
+			Right:    rhsTuple[0],
+		},
 		Right: &sqlparser.ParenBoolExpr{
 			Expr: &sqlparser.AndExpr{
-				Left: &sqlparser.ParenBoolExpr{
-					Expr: &sqlparser.ComparisonExpr{
-						Operator: sqlparser.EqualStr,
-						Left:     lhsTuple[0],
-						Right:    rhsTuple[0],
-					},
+				Left: &sqlparser.ComparisonExpr{
+					Operator: sqlparser.EqualStr,
+					Left:     lhsTuple[0],
+					Right:    rhsTuple[0],
 				},
-				Right: &sqlparser.ParenBoolExpr{
-					Expr: constructTupleInequalityUnchecked(lhsTuple[1:], rhsTuple[1:], strict),
-				},
+				Right: restOfTupleInequality,
 			},
 		},
 	}
