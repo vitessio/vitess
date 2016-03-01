@@ -72,6 +72,7 @@ public class VitessClientExample {
       System.out.println("Vitess Java example failed.");
       System.out.println("Error Details:");
       e.printStackTrace();
+      System.exit(2);
     }
   }
 }
