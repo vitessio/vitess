@@ -99,8 +99,8 @@ func TestSplit(t *testing.T) {
 	expected := []querytypes.QuerySplit{
 		{
 			Sql: "select * from test_table where" +
-				" (id < :_splitquery_end_id) or" +
-				" ((id = :_splitquery_end_id) and (user_id < :_splitquery_end_user_id))",
+				" id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)",
 			BindVariables: map[string]interface{}{
 				"_splitquery_end_id":      int64(1),
 				"_splitquery_end_user_id": int64(2),
@@ -108,11 +108,11 @@ func TestSplit(t *testing.T) {
 		},
 		{
 			Sql: "select * from test_table where" +
-				" ((:_splitquery_start_id < id) or" +
-				" ((:_splitquery_start_id = id) and (:_splitquery_start_user_id <= user_id)))" +
+				" (:_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
 				" and" +
-				" ((id < :_splitquery_end_id) or" +
-				" ((id = :_splitquery_end_id) and (user_id < :_splitquery_end_user_id)))",
+				" (id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 			BindVariables: map[string]interface{}{
 				"_splitquery_start_id":      int64(1),
 				"_splitquery_start_user_id": int64(2),
@@ -122,11 +122,11 @@ func TestSplit(t *testing.T) {
 		},
 		{
 			Sql: "select * from test_table where" +
-				" ((:_splitquery_start_id < id) or" +
-				" ((:_splitquery_start_id = id) and (:_splitquery_start_user_id <= user_id)))" +
+				" (:_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
 				" and" +
-				" ((id < :_splitquery_end_id) or" +
-				" ((id = :_splitquery_end_id) and (user_id < :_splitquery_end_user_id)))",
+				" (id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 			BindVariables: map[string]interface{}{
 				"_splitquery_start_id":      int64(1),
 				"_splitquery_start_user_id": int64(3),
@@ -136,8 +136,8 @@ func TestSplit(t *testing.T) {
 		},
 		{
 			Sql: "select * from test_table where" +
-				" (:_splitquery_start_id < id) or" +
-				" ((:_splitquery_start_id = id) and (:_splitquery_start_user_id <= user_id))",
+				" :_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id)",
 			BindVariables: map[string]interface{}{
 				"_splitquery_start_user_id": int64(1),
 				"_splitquery_start_id":      int64(5),
@@ -169,8 +169,8 @@ func TestSplitWithWhereClause(t *testing.T) {
 	expected := []querytypes.QuerySplit{
 		{
 			Sql: "select * from test_table where (name != 'foo') and" +
-				" ((id < :_splitquery_end_id) or" +
-				" ((id = :_splitquery_end_id) and (user_id < :_splitquery_end_user_id)))",
+				" (id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 			BindVariables: map[string]interface{}{
 				"_splitquery_end_id":      int64(1),
 				"_splitquery_end_user_id": int64(2),
@@ -178,11 +178,11 @@ func TestSplitWithWhereClause(t *testing.T) {
 		},
 		{
 			Sql: "select * from test_table where (name != 'foo') and" +
-				" (((:_splitquery_start_id < id) or" +
-				" ((:_splitquery_start_id = id) and (:_splitquery_start_user_id <= user_id)))" +
+				" ((:_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
 				" and" +
-				" ((id < :_splitquery_end_id) or" +
-				" ((id = :_splitquery_end_id) and (user_id < :_splitquery_end_user_id))))",
+				" (id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)))",
 			BindVariables: map[string]interface{}{
 				"_splitquery_start_id":      int64(1),
 				"_splitquery_start_user_id": int64(2),
@@ -192,11 +192,11 @@ func TestSplitWithWhereClause(t *testing.T) {
 		},
 		{
 			Sql: "select * from test_table where (name != 'foo') and" +
-				" (((:_splitquery_start_id < id) or" +
-				" ((:_splitquery_start_id = id) and (:_splitquery_start_user_id <= user_id)))" +
+				" ((:_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
 				" and" +
-				" ((id < :_splitquery_end_id) or" +
-				" ((id = :_splitquery_end_id) and (user_id < :_splitquery_end_user_id))))",
+				" (id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)))",
 			BindVariables: map[string]interface{}{
 				"_splitquery_start_id":      int64(1),
 				"_splitquery_start_user_id": int64(3),
@@ -206,8 +206,8 @@ func TestSplitWithWhereClause(t *testing.T) {
 		},
 		{
 			Sql: "select * from test_table where (name != 'foo') and" +
-				" ((:_splitquery_start_id < id) or" +
-				" ((:_splitquery_start_id = id) and (:_splitquery_start_user_id <= user_id)))",
+				" (:_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))",
 			BindVariables: map[string]interface{}{
 				"_splitquery_start_user_id": int64(1),
 				"_splitquery_start_id":      int64(5),
@@ -239,8 +239,8 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 	expected := []querytypes.QuerySplit{
 		{
 			Sql: "select * from test_table where" +
-				" (id < :_splitquery_end_id) or" +
-				" ((id = :_splitquery_end_id) and (user_id < :_splitquery_end_user_id))",
+				" id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id)",
 			BindVariables: map[string]interface{}{
 				"foo":                     int64(100),
 				"_splitquery_end_id":      int64(1),
@@ -249,11 +249,11 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 		},
 		{
 			Sql: "select * from test_table where" +
-				" ((:_splitquery_start_id < id) or" +
-				" ((:_splitquery_start_id = id) and (:_splitquery_start_user_id <= user_id)))" +
+				" (:_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
 				" and" +
-				" ((id < :_splitquery_end_id) or" +
-				" ((id = :_splitquery_end_id) and (user_id < :_splitquery_end_user_id)))",
+				" (id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 			BindVariables: map[string]interface{}{
 				"foo": int64(100),
 				"_splitquery_start_id":      int64(1),
@@ -264,11 +264,11 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 		},
 		{
 			Sql: "select * from test_table where" +
-				" ((:_splitquery_start_id < id) or" +
-				" ((:_splitquery_start_id = id) and (:_splitquery_start_user_id <= user_id)))" +
+				" (:_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id))" +
 				" and" +
-				" ((id < :_splitquery_end_id) or" +
-				" ((id = :_splitquery_end_id) and (user_id < :_splitquery_end_user_id)))",
+				" (id < :_splitquery_end_id or" +
+				" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 			BindVariables: map[string]interface{}{
 				"foo": int64(100),
 				"_splitquery_start_id":      int64(1),
@@ -279,8 +279,8 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 		},
 		{
 			Sql: "select * from test_table where" +
-				" (:_splitquery_start_id < id) or" +
-				" ((:_splitquery_start_id = id) and (:_splitquery_start_user_id <= user_id))",
+				" :_splitquery_start_id < id or" +
+				" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id)",
 			BindVariables: map[string]interface{}{
 				"foo": int64(100),
 				"_splitquery_start_user_id": int64(1),

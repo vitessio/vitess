@@ -70,6 +70,6 @@ func assertFalse(a bool) {
 
 func assertGreaterOrEqual(a, b int) {
 	if a < b {
-		panic(fmt.Sprintf("assertion %v<=%v failed", a, b))
+		panic(fmt.Sprintf("assertion %v>=%v failed", a, b))
 	}
 }
