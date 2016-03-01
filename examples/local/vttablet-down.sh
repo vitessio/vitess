@@ -15,6 +15,8 @@ source $script_root/env.sh
 # Pass a list of UID indices on the command line to override.
 uids=${@:-'0 1 2'}
 
+wait_pids=''
+
 for uid_index in $uids; do
   uid=$[$uid_base + $uid_index]
   printf -v alias '%s-%010d' $cell $uid
@@ -23,12 +25,18 @@ for uid_index in $uids; do
   echo "Stopping vttablet for $alias..."
   pid=`cat $VTDATAROOT/$tablet_dir/vttablet.pid`
   kill $pid
-  while ps -p $pid > /dev/null; do sleep 1; done
+  wait_pids="$wait_pids $pid"
 
   echo "Stopping MySQL for tablet $alias..."
   $VTROOT/bin/mysqlctl \
     -db-config-dba-uname vt_dba \
     -tablet_uid $uid \
-    shutdown
+    shutdown &
 done
+
+# Wait for vttablets to die.
+while ps -p $wait_pids > /dev/null; do sleep 1; done
+
+# Wait for 'mysqlctl shutdown' commands to finish.
+wait
 
