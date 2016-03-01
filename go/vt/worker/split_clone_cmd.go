@@ -115,7 +115,7 @@ func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) 
 	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
 	cancel()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get list of keyspaces: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
