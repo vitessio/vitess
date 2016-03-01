@@ -45,11 +45,7 @@ func NewSplitParams(
 		selectAST.Having != nil || len(selectAST.From) != 1 ||
 		selectAST.OrderBy != nil || selectAST.Limit != nil ||
 		selectAST.Lock != "" {
-		return nil, fmt.Errorf("splitquery.NewSplitParams(): unsupported query")
-	}
-	if len(selectAST.From) != 1 {
-		return nil, fmt.Errorf("splitquery.NewSplitParams(): query must have exactly one table"+
-			" in FROM clause. Got: %d", len(selectAST.From))
+		return nil, fmt.Errorf("splitquery.NewSplitParams(): unsupported query: %v", sql)
 	}
 	var aliasedTableExpr *sqlparser.AliasedTableExpr
 	aliasedTableExpr, ok = selectAST.From[0].(*sqlparser.AliasedTableExpr)
