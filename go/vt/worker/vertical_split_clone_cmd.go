@@ -146,7 +146,7 @@ func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]stri
 		return nil, rec.Error()
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("There are no keyspaces with ServedFrom")
+		return nil, fmt.Errorf("there are no keyspaces with ServedFrom")
 	}
 	return result, nil
 }

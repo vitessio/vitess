@@ -123,7 +123,7 @@ func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[
 		return nil, rec.Error()
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("There are no shards with SourceShards")
+		return nil, fmt.Errorf("there are no shards with SourceShards")
 	}
 	return result, nil
 }
