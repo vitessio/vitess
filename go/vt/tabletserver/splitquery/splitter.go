@@ -177,7 +177,7 @@ func constructTupleInequalityUnchecked(
 	}
 	restOfTupleInequality := constructTupleInequalityUnchecked(lhsTuple[1:], rhsTuple[1:], strict)
 	if len(lhsTuple[1:]) > 1 {
-		// A non-scalar inequality need to be parenthesized since we combine them below with
+		// A non-scalar inequality need to be parenthesized since we combine it below with
 		// other expressions.
 		restOfTupleInequality = &sqlparser.ParenBoolExpr{
 			Expr: restOfTupleInequality,
