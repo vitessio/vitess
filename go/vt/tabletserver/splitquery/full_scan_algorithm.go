@@ -1,13 +1,15 @@
 package splitquery
 
 import (
+	"fmt"
+
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 // FullScanAlgorithm implements the SplitAlgorithmInterface and represents the full-scan algorithm
-// for generating the boundary tuples. The algorithm regards the table as ordered by the
-// split columns. It then returns boundary tuples from rows which are
+// for generating the boundary tuples. The algorithm regards the table as ordered (ascendingly) by
+// the split columns. It then returns boundary tuples from rows which are
 // splitParams.numRowsPerQueryPart rows apart. More precisely, it works as follows:
 // It iteratively executes the following query over the replica’s database (recall that MySQL
 // performs tuple comparisons lexicographically):
@@ -18,56 +20,73 @@ import (
 // where <split_columns> denotes the ordered list of split columns, and <table> and <where> are the
 // values of the FROM and WHERE clauses of the input query, respectefully.
 // The 'prev_boundary' bind variable holds a tuple consisting of split column values.
-// It is updated after each iteration with the result of the query. In the initial query,
-// the term 'AND (:prev_boundary <= (<split_columns>))' is ommitted.
+// It is updated after each iteration with the result of the query. In the query executed in the
+// first iteration (the initial query) the term 'AND (:prev_boundary <= (<split_columns>))' is
+// ommitted.
 // The algorithm stops when the query returns no results. The result of this algorithm is the list
 // consisting of the result of each query in order.
 //
-// The code below differs slightly from the above description: the lexicographial tuple inequality
-// in the query above is actually re-written to use only scalar comparisons since MySQL does not
-// optimize queries involving tuple inequalities, correctly. Instead of using a single tuple
-// bind variable 'prev_boundary', the code uses a list of scalar bind-variables--one for each
-// element of the tuple. In this tuple, the bind variable containing the tuple element
-// corresponding to a split-column named 'x' is called <prevBoundVariable><x>, where
-// prevBoundVariable is the string constant defined below.
+// Actually, the code below differs slightly from the above description: the lexicographial tuple
+// inequality in the query above is actually re-written to use only scalar comparisons since MySQL
+// does not optimize queries involving tuple inequalities, correctly. Instead of using a single
+// tuple bind variable: 'prev_boundary', the code uses a list of scalar bind-variables--one for each
+// element of the tuple. The bind variable storing the tuple element corresponding to a
+// split-column named 'x' is called <prevBindVariablePrefix><x>, where prevBindVariablePrefix is
+// the string constant defined below.
 type FullScanAlgorithm struct {
 	splitParams *SplitParams
 	sqlExecuter SQLExecuter
 
-	initialQuery    *querytypes.BoundQuery
-	noninitialQuery *querytypes.BoundQuery
+	prevBindVariableNames []string
+	initialQuery          *querytypes.BoundQuery
+	noninitialQuery       *querytypes.BoundQuery
 }
 
 // NewFullScanAlgorithm constructs a new FullScanAlgorithm.
 func NewFullScanAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) *FullScanAlgorithm {
 	result := &FullScanAlgorithm{
-		splitParams:     splitParams,
-		sqlExecuter:     sqlExecuter,
-		initialQuery:    buildInitialQuery(splitParams),
-		noninitialQuery: buildNoninitialQuery(splitParams),
+		splitParams:           splitParams,
+		sqlExecuter:           sqlExecuter,
+		prevBindVariableNames: buildPrevBindVariableNames(splitParams.splitColumns),
 	}
+	result.initialQuery = buildInitialQuery(splitParams)
+	result.noninitialQuery = buildNoninitialQuery(splitParams, result.prevBindVariableNames)
+	return result
 }
 
+const (
+	maxIterations int64 = 100000
+)
+
 func (algorithm *FullScanAlgorithm) generateBoundaries() ([]tuple, error) {
-	prevTuple, err := algorithm.executeQuery(algorithm.firstQuery)
+	prevTuple, err := algorithm.executeQuery(algorithm.initialQuery)
 	if err != nil {
 		return nil, err
 	}
 	result := make([]tuple, 0, algorithm.splitParams.splitCount)
-	for iteration := 0; prev != nil; iteration++ {
+	var iteration int64
+	for iteration = 0; prevTuple != nil; iteration++ {
 		// TODO(erez): Change maxIterations to use some function of splitParams.splitCount
 		if iteration > maxIterations {
-			panic("splitquery.FullScanAlgorithm.generateBoundaries(): didn't terminate"+
-				" after %v iterations. FullScanAlgorithm: %v", maxIterations, algorithm)
+			panic(fmt.Sprintf("splitquery.FullScanAlgorithm.generateBoundaries(): didn't terminate"+
+				" after %v iterations. FullScanAlgorithm: %v", maxIterations, algorithm))
 		}
-		result = append(result, prev)
-		algorithm.populatePrevTupleInBindVariables(prev, algorithm.nonInitialQuery.BindVariables)
-		prev, err = algorithm.executeQuery(algorithm.noninitialQuery)
+		result = append(result, prevTuple)
+		algorithm.populatePrevTupleInBindVariables(prevTuple, algorithm.noninitialQuery.BindVariables)
+		prevTuple, err = algorithm.executeQuery(algorithm.noninitialQuery)
 		if err != nil {
 			return nil, err
 		}
 	}
 	return result, nil
+}
+
+func (algorithm *FullScanAlgorithm) populatePrevTupleInBindVariables(
+	prevTuple tuple, bindVariables map[string]interface{}) {
+	assertEqual(len(prevTuple), len(algorithm.prevBindVariableNames))
+	for i, tupleElement := range prevTuple {
+		populateNewBindVariable(algorithm.prevBindVariableNames[i], tupleElement, bindVariables)
+	}
 }
 
 // buildInitialQuery returns the initial query to execute to get the
@@ -79,25 +98,25 @@ func (algorithm *FullScanAlgorithm) generateBoundaries() ([]tuple, error) {
 //                            WHERE <where>
 //                            LIMIT splitParams.numRowsPerQueryPart, 1",
 // The BindVariables field of the result will contain a deep-copy of splitParams.BindVariables.
-func (algorithm *FullScanAlgorithm) buildInitialQuery() *querytypes.BoundQuery {
-	resultSelectAST := algorithm.buildInitialQueryAST()
+func buildInitialQuery(splitParams *SplitParams) *querytypes.BoundQuery {
+	resultSelectAST := buildInitialQueryAST(splitParams)
 	return &querytypes.BoundQuery{
-		Sql:           String(resultSelectAST),
-		BindVariables: cloneBindVariables(algorithm.splitParams.BindVariables),
+		Sql:           sqlparser.String(resultSelectAST),
+		BindVariables: cloneBindVariables(splitParams.bindVariables),
 	}
 }
 
-func (algorithm *FullScanAlgorithm) buildInitialQueryAST() *sqlparser.Select {
-	if algorithm.splitParams.selectAST.Limit != nil {
-		panic(fmt.SPrintf(
+func buildInitialQueryAST(splitParams *SplitParams) *sqlparser.Select {
+	if splitParams.selectAST.Limit != nil {
+		panic(fmt.Sprintf(
 			"splitquery.buildInitialQueryAST(): splitParams query already has a LIMIT clause: %v",
 			*splitParams))
 	}
-	resultSelectAST := *algorithm.splitParams.selectAST
+	resultSelectAST := *splitParams.selectAST
 	resultSelectAST.SelectExprs = convertColumnNamesToSelectExprs(splitParams.splitColumns)
 	resultSelectAST.Limit = buildLimitClause(splitParams.numRowsPerQueryPart, 1)
 	resultSelectAST.OrderBy = buildOrderByClause(splitParams.splitColumns)
-	return resultSelectAST
+	return &resultSelectAST
 }
 
 // buildNonInitialQuery returns the non-initial query to execute to get the
@@ -112,18 +131,18 @@ func (algorithm *FullScanAlgorithm) buildInitialQueryAST() *sqlparser.Select {
 // and :prev_sc_1,...,:_prev_sc_n are the bind variable names for the previous tuple.
 // The BindVariables field of the result will contain a deep-copy of splitParams.BindVariables.
 // The new "prev_<sc>" bind variables are not populated yet.
-func (algorithm *FullScanAlgorithm) buildNoninitialQuery() *querytypes.BoundQuery {
-	resultSelectAST := algorithm.buildInitialQueryAST()
-	resultSelectAST.Where = sqlparser.NewWhere(
-		sqlparser.WhereStr,
-		addAndTermToBoolExpr(splitParams.selectAST.Where.Expr,
-			constructTupleInequality(
-				convertBindVariableNamesToValExpr(algorithm.prevBindVariableNames),
-				convertColumnNamesToValExpr(splitParams.splitColumns),
-				true /* strict */)))
+func buildNoninitialQuery(
+	splitParams *SplitParams, prevBindVariableNames []string) *querytypes.BoundQuery {
+	resultSelectAST := buildInitialQueryAST(splitParams)
+	addAndTermToWhereClause(
+		resultSelectAST,
+		constructTupleInequality(
+			convertBindVariableNamesToValExpr(prevBindVariableNames),
+			convertColumnNamesToValExpr(splitParams.splitColumns),
+			true /* strict */))
 	return &querytypes.BoundQuery{
-		Sql:           String(resultSelectAST),
-		BindVariables: cloneBindVariables(splitParams.BindVariables),
+		Sql:           sqlparser.String(resultSelectAST),
+		BindVariables: cloneBindVariables(splitParams.bindVariables),
 	}
 }
 
@@ -131,9 +150,9 @@ func convertColumnNamesToSelectExprs(columnNames []string) sqlparser.SelectExprs
 	result := make([]sqlparser.SelectExpr, 0, len(columnNames))
 	for _, columnName := range columnNames {
 		result = append(result,
-			&NonStarExpr{
-				Expr: &ColName{
-					Name: SQLName(columnName),
+			&sqlparser.NonStarExpr{
+				Expr: &sqlparser.ColName{
+					Name: sqlparser.SQLName(columnName),
 				},
 			})
 	}
@@ -148,14 +167,26 @@ func buildLimitClause(offset, rowcount int64) *sqlparser.Limit {
 }
 
 func buildOrderByClause(splitColumns []string) sqlparser.OrderBy {
-	result := make(sqlParser.OrderBy, 0, len(splitColumns))
+	result := make(sqlparser.OrderBy, 0, len(splitColumns))
 	for splitColumn := range splitColumns {
 		result = append(result,
-			&Order{
-				Expr:      &ColName{Name: SQLName(splitColumn)},
+			&sqlparser.Order{
+				Expr:      &sqlparser.ColName{Name: sqlparser.SQLName(splitColumn)},
 				Direction: sqlparser.AscScr,
 			},
 		)
+	}
+	return result
+}
+
+const (
+	prevBindVariablePrefix string = "_splitquery_prev_"
+)
+
+func buildPrevBindVariableNames(splitColumns []string) []string {
+	result := make([]string, 0, len(splitColumns))
+	for _, splitColumn := range splitColumns {
+		result = append(result, prevBindVariablePrefix+splitColumn)
 	}
 	return result
 }
