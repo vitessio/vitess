@@ -84,7 +84,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
 	cancel()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get list of keyspaces: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -99,7 +99,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 			shards, err := wr.TopoServer().GetShardNames(shortCtx, keyspace)
 			cancel()
 			if err != nil {
-				rec.RecordError(err)
+				rec.RecordError(fmt.Errorf("failed to get list of shards for keyspace '%v': %v", keyspace, err))
 				return
 			}
 			for _, shard := range shards {
@@ -110,7 +110,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 					si, err := wr.TopoServer().GetShard(shortCtx, keyspace, shard)
 					cancel()
 					if err != nil {
-						rec.RecordError(err)
+						rec.RecordError(fmt.Errorf("failed to get details for shard '%v': %v", topoproto.KeyspaceShardString(keyspace, shard), err))
 						return
 					}
 
