@@ -89,6 +89,7 @@ else
 
   if [ `uname -s` == "Darwin" ]; then
     # on OSX tox is installed in the following path
+    export PYTHONPATH=$(prepend_path $PYTHONPATH $grpc_dist/usr/local/lib/python2.7/site-packages)
     export PATH=$(prepend_path $PATH /usr/local/Cellar/python/2.7.11/Frameworks/Python.framework/Versions/2.7/bin)
   fi
 
