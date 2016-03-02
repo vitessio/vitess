@@ -86,10 +86,10 @@ env:
     #       We should always utilize all 5 slots because the cost of the setup is high (up to one minute).
     # NOTE: Use "" if you specify a space separated list of multiple targets.
     - TEST_MATRIX="-shard 0"
-    - TEST_MATRIX="-shard 1"
-    - TEST_MATRIX="-shard 2"
-    - TEST_MATRIX="-shard 3"
-    - TEST_MATRIX="-shard 4"
+    #- TEST_MATRIX="-shard 1"
+    #- TEST_MATRIX="-shard 2"
+    #- TEST_MATRIX="-shard 3"
+    #- TEST_MATRIX="-shard 4"
 before_install:
   - travis/download_mariadb.sh
   - travis/php_init.sh
@@ -107,7 +107,11 @@ before_script:
 script:
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
-  - go run test.go $TEST_FLAGS $TEST_MATRIX
+  #- go run test.go $TEST_FLAGS $TEST_MATRIX
+  - ./test/debug_protobuf.py
+  - python -v ./test/debug_protobuf.py
+  - echo $PYTHONPATH
+  - ./test/resharding.py
 after_failure:
   # In case of errors, output log files to make it easier to debug the error.
   # List all available files.
