@@ -11,14 +11,13 @@ if [ -n "$grpc_dist" ]; then
   cd $grpc_dist
 fi
 
-# for python, we'll need the latest virtualenv and tox.
-# running gRPC requires the six package, version >=1.10.
+# Python requires a very recent version of virtualenv.
 if [ -n "$grpc_dist" ]; then
   # Create a virtualenv, which also creates a virualenv-boxed pip.
   virtualenv $grpc_dist/usr/local
-  $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv tox six
+  $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv
 else
-  pip install --upgrade --ignore-installed virtualenv tox six
+  pip install --upgrade --ignore-installed virtualenv
 fi
 
 # clone the repository, setup the submodules
@@ -48,18 +47,8 @@ else
   make install
 fi
 
-# build and install python protobuf side
-cd python
-if [ -n "$grpc_dist" ]; then
-  python setup.py build --cpp_implementation
-  python setup.py install --cpp_implementation --prefix=$grpc_dist/usr/local
-else
-  python setup.py build --cpp_implementation
-  python setup.py install --cpp_implementation
-fi
-
 # now install grpc itself
-cd ../../..
+cd ../..
 if [ -n "$grpc_dist" ]; then
   make install prefix=$grpc_dist/usr/local
 else

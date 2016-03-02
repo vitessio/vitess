@@ -87,11 +87,6 @@ else
   export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
   export LD_LIBRARY_PATH=$(prepend_path $LD_LIBRARY_PATH $grpc_dist/usr/local/lib)
 
-  if [ `uname -s` == "Darwin" ]; then
-    # on OSX tox is installed in the following path
-    export PATH=$(prepend_path $PATH /usr/local/Cellar/python/2.7.11/Frameworks/Python.framework/Versions/2.7/bin)
-  fi
-
   ./travis/install_grpc.sh $grpc_dist || fail "gRPC build failed"
   echo "$grpc_ver" > $grpc_dist/.build_finished
 
