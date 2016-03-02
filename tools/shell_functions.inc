@@ -17,3 +17,19 @@ function goversion_min() {
   [ "$gotminor" -lt "$wantminor" ] && return 1
   return 0
 }
+
+# prepend_path returns $2 prepended the colon separated path $1.
+# If it's already part of the path, it won't be added again.
+# If $1 is a directory, it will also be prepended to $PATH.
+function prepend_path() {
+  # $1 path variable
+  # $2 path to add
+  if [ -d "$2" ] && [[ ":$1:" != *":$2:"* ]]; then
+    echo "$2:$1"
+  else
+    echo "$1"
+  fi
+  if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
+    export PATH="$1:$PATH"
+  fi
+}

@@ -5,6 +5,14 @@
 # as root in the image.
 set -ex
 
+# Import prepend_path function.
+dir="$(dirname "${BASH_SOURCE[0]}")"
+source "${dir}/../tools/shell_functions.inc"
+if [ $? -ne 0 ]; then
+  echo "failed to load ../tools/shell_functions.inc"
+  return 1
+fi
+
 # grpc_dist can be empty, in which case we just install to the default paths
 grpc_dist="$1"
 if [ -n "$grpc_dist" ]; then
@@ -51,6 +59,10 @@ fi
 cd ../..
 if [ -n "$grpc_dist" ]; then
   make install prefix=$grpc_dist/usr/local
+
+  # Add bin directory to the path such that gRPC python won't complain that
+  # it cannot find "grpc_python_plugin".
+  export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
 else
   make install
 fi
