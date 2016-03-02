@@ -129,7 +129,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 			return err
 		}
 	}
-	return NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Exec: unreachable code"))
+	return NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Stream: unreachable code"))
 }
 
 func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
