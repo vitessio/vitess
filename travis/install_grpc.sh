@@ -70,6 +70,13 @@ fi
 # and now build and install gRPC python libraries
 if [ -n "$grpc_dist" ]; then
   $grpc_dist/usr/local/bin/pip install .
+
+  # Manually ensure that we run at least python protobuf-3.0.0-beta2.
+  # (Our Python code is currently generated with this version and older
+  #  versions like the gRPC Python requirement 3.0.0a3 won't work with it
+  #  due to the error:
+  #    TypeError: __init__() got an unexpected keyword argument 'syntax')
+  $grpc_dist/usr/local/bin/pip install -U protobuf==3.0.0b2
 else
   pip install .
 fi
