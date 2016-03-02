@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,8 +128,8 @@ func TestDBConnStream(t *testing.T) {
 			return nil
 		}, 10)
 	db.DisableConnFail()
-	want := "err: connection fail"
-	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want %s\n", err, want)
+	want := "connection fail"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Error: %v, must contain %s\n", err, want)
 	}
 }
