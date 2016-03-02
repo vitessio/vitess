@@ -120,4 +120,15 @@ func TestDBConnStream(t *testing.T) {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
 	testUtils.checkEqual(t, expectedResult, &result)
+	// Stream fail
+	db.EnableConnFail()
+	err = dbConn.Stream(
+		ctx, sql, func(r *sqltypes.Result) error {
+			return nil
+		}, 10)
+	db.DisableConnFail()
+	want := "err: connection fail"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want %s\n", err, want)
+	}
 }

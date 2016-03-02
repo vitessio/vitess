@@ -101,6 +101,38 @@ func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, want
 
 // Stream executes the query and streams the results.
 func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("DBConn.Stream")
+	defer span.Finish()
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		resultSent := false
+		err := dbc.streamOnce(
+			ctx,
+			query,
+			func(r *sqltypes.Result) error {
+				resultSent = true
+				return callback(r)
+			},
+			streamBufferSize,
+		)
+		switch {
+		case err == nil:
+			return nil
+		case !IsConnErr(err) || resultSent || attempt == 2:
+			// MySQL error that isn't due to a connection issue
+			return err
+		}
+		err2 := dbc.reconnect()
+		if err2 != nil {
+			dbc.pool.checker.CheckMySQL()
+			return err
+		}
+	}
+	return NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Exec: unreachable code"))
+}
+
+func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
