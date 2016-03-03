@@ -18,7 +18,7 @@ gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
 
 # If any checks are found to be useless, they can be disabled here.
 # See the output of "go tool vet" for a list of flags.
-vetflags="-all=true"
+vetflags="-all=true -composites=false"
 
 errors=
 

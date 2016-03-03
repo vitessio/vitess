@@ -15,4 +15,4 @@ fi
 # To avoid AUFS permission issues, files must allow access by "other"
 chmod -R o=g *
 
-docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor -t vitess/bootstrap:$flavor .
+docker build -f docker/bootstrap/Dockerfile.$flavor -t vitess/bootstrap:$flavor .

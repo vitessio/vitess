@@ -44,6 +44,9 @@ case "$MYSQL_FLAVOR" in
   "MariaDB")
     export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mariadb.cnf
     ;;
+   "Percona")
+    export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_percona.cnf
+    ;;
   *)
     echo "Please set MYSQL_FLAVOR to MySQL56 or MariaDB."
     exit 1

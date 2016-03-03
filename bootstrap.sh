@@ -140,44 +140,41 @@ ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
 # install mysql
-if [ -z "$MYSQL_FLAVOR" ]; then
-  export MYSQL_FLAVOR=MariaDB
-fi
-case "$MYSQL_FLAVOR" in
-  "MySQL56")
-    myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep 'Distrib 5\.6'`
-    [ "$myversion" != "" ] || fail "Couldn't find MySQL 5.6 in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-    echo "Found MySQL 5.6 installation in $VT_MYSQL_ROOT."
+case "${MYSQL_FLAVOR}" in
+  "MySQL56" | "Percona")
+    myversion=`${VT_MYSQL_ROOT}/bin/mysql --version | grep 'Distrib 5\.6'`
+    [ "$myversion" != "" ] || fail "Couldn't find MySQL 5.6 in ${VT_MYSQL_ROOT}. Set VT_MYSQL_ROOT to override search location."
+    echo "Found MySQL 5.6 installation in ${VT_MYSQL_ROOT}."
     ;;
 
   "MariaDB")
-    myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep MariaDB`
-    [ "$myversion" != "" ] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-    echo "Found MariaDB installation in $VT_MYSQL_ROOT."
+    myversion=`${VT_MYSQL_ROOT}/bin/mysql --version | grep MariaDB`
+    [ "$myversion" != "" ] || fail "Couldn't find MariaDB in ${VT_MYSQL_ROOT}. Set VT_MYSQL_ROOT to override search location."
+    echo "Found MariaDB installation in ${VT_MYSQL_ROOT}."
     ;;
 
   *)
-    fail "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
+    fail "Unsupported MYSQL_FLAVOR ${MYSQL_FLAVOR}"
     ;;
 
 esac
 
 # save the flavor that was used in bootstrap, so it can be restored
 # every time dev.env is sourced.
-echo "$MYSQL_FLAVOR" > $VTROOT/dist/MYSQL_FLAVOR
+echo "${MYSQL_FLAVOR}" > $VTROOT/dist/MYSQL_FLAVOR
 
 # generate pkg-config, so go can use mysql C client
-[ -x $VT_MYSQL_ROOT/bin/mysql_config ] || fail "Cannot execute $VT_MYSQL_ROOT/bin/mysql_config. Did you install a client dev package?"
+[ -x ${VT_MYSQL_ROOT}/bin/mysql_config ] || fail "Cannot execute ${VT_MYSQL_ROOT}/bin/mysql_config. Did you install a client dev package?"
 
 cp $VTTOP/config/gomysql.pc.tmpl $VTROOT/lib/gomysql.pc
-echo "Version:" "$($VT_MYSQL_ROOT/bin/mysql_config --version)" >> $VTROOT/lib/gomysql.pc
-echo "Cflags:" "$($VT_MYSQL_ROOT/bin/mysql_config --cflags) -ggdb -fPIC" >> $VTROOT/lib/gomysql.pc
-if [ "$MYSQL_FLAVOR" == "MariaDB" ]; then
+echo "Version:" "$(${VT_MYSQL_ROOT}/bin/mysql_config --version)" >> $VTROOT/lib/gomysql.pc
+echo "Cflags:" "$(${VT_MYSQL_ROOT}/bin/mysql_config --cflags) -ggdb -fPIC" >> $VTROOT/lib/gomysql.pc
+if [ "${MYSQL_FLAVOR}" == "MariaDB" ] || [ "${MYSQL_FLAVOR}" == "Percona" ]; then
   # Use static linking because the shared library doesn't export
   # some internal functions we use, like cli_safe_read.
-  echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed -r 's,-lmysqlclient(_r)?,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
+  echo "Libs:" "$(${VT_MYSQL_ROOT}/bin/mysql_config --libs_r | sed -r 's,-lmysqlclient(_r)?,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
 else
-  echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
+  echo "Libs:" "$(${VT_MYSQL_ROOT}/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
 fi
 
 # install bson

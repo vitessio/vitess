@@ -3,6 +3,12 @@
 # This is the script to build the vitess/lite Docker image by extracting
 # the pre-built binaries from a vitess/base image.
 
+flavor=$1
+
+if [[ -z "$flavor" ]]; then
+  echo "Flavor not specified as first argument building default image"
+fi
+
 # Extract files from vitess/base image
 mkdir base
 sudo docker run -ti --rm -v $PWD/base:/base -u root vitess/base bash -c 'cp -R /vt /base/'
@@ -31,7 +37,12 @@ sudo rm -rf base
 chmod -R o=g lite
 
 # Build vitess/lite image
-sudo docker build -t vitess/lite .
+
+if [[ -n "$flavor" ]]; then
+	sudo docker build -f docker/bootstrap/Dockerfile.$flavor -t vitess/lite:$flavor .
+else
+	sudo docker build -t vitess/lite .
+fi
 
 # Clean up temporary files
 rm -rf lite
