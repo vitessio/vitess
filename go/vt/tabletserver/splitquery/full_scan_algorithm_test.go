@@ -7,7 +7,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/splitquery/mock_splitquery"
+	"github.com/youtube/vitess/go/vt/tabletserver/splitquery/splitquery_testing"
 )
 
 func TestMultipleBoundaries(t *testing.T) {
@@ -18,12 +18,12 @@ func TestMultipleBoundaries(t *testing.T) {
 		nil, /* bindVariables */
 		[]string{"id", "user_id"}, /* splitColumns */
 		1000,
-		getSchema(),
+		splitquery_testing.GetSchema(),
 	)
 	if err != nil {
 		t.Fatalf("NewSplitParamsWithNumRowsPerQueryPart failed with: %v", err)
 	}
-	mockSQLExecuter := mock_splitquery.NewMockSQLExecuter(mockCtrl)
+	mockSQLExecuter := splitquery_testing.NewMockSQLExecuter(mockCtrl)
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
 			" where int_col > 5"+
@@ -32,7 +32,8 @@ func TestMultipleBoundaries(t *testing.T) {
 		map[string]interface{}{})
 	expectedCall1.Return(
 		&sqltypes.Result{
-			Rows: [][]sqltypes.Value{{Int64Value(1), Int64Value(1)}},
+			Rows: [][]sqltypes.Value{
+				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(1)}},
 		},
 		nil)
 	expectedCall2 := mockSQLExecuter.EXPECT().SQLExecute(
@@ -48,7 +49,8 @@ func TestMultipleBoundaries(t *testing.T) {
 		})
 	expectedCall2.Return(
 		&sqltypes.Result{
-			Rows: [][]sqltypes.Value{{Int64Value(2), Int64Value(10)}},
+			Rows: [][]sqltypes.Value{
+				{splitquery_testing.Int64Value(2), splitquery_testing.Int64Value(10)}},
 		},
 		nil)
 	expectedCall2.After(expectedCall1)
@@ -73,8 +75,8 @@ func TestMultipleBoundaries(t *testing.T) {
 		t.Fatalf("FullScanAlgorithm.generateBoundaries() failed with: %v", err)
 	}
 	expectedBoundaries := []tuple{
-		{Int64Value(1), Int64Value(1)},
-		{Int64Value(2), Int64Value(10)},
+		{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(1)},
+		{splitquery_testing.Int64Value(2), splitquery_testing.Int64Value(10)},
 	}
 	if !reflect.DeepEqual(expectedBoundaries, boundaries) {
 		t.Fatalf("expected: %v, got: %v", expectedBoundaries, boundaries)
@@ -89,12 +91,12 @@ func TestSmallNumberOfRows(t *testing.T) {
 		nil, /* bindVariables */
 		[]string{"id", "user_id"}, /* splitColumns */
 		1000,
-		getSchema(),
+		splitquery_testing.GetSchema(),
 	)
 	if err != nil {
 		t.Fatalf("NewSplitParamsWithNumRowsPerQueryPart failed with: %v", err)
 	}
-	mockSQLExecuter := mock_splitquery.NewMockSQLExecuter(mockCtrl)
+	mockSQLExecuter := splitquery_testing.NewMockSQLExecuter(mockCtrl)
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
 			" where int_col > 5"+
@@ -123,12 +125,12 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 		nil, /* bindVariables */
 		[]string{"id", "user_id"}, /* splitColumns */
 		1000,
-		getSchema(),
+		splitquery_testing.GetSchema(),
 	)
 	if err != nil {
 		t.Fatalf("NewSplitParamsWithNumRowsPerQueryPart failed with: %v", err)
 	}
-	mockSQLExecuter := mock_splitquery.NewMockSQLExecuter(mockCtrl)
+	mockSQLExecuter := splitquery_testing.NewMockSQLExecuter(mockCtrl)
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
 			" where int_col > 5"+
@@ -137,7 +139,8 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 		map[string]interface{}{})
 	expectedCall1.Return(
 		&sqltypes.Result{
-			Rows: [][]sqltypes.Value{{Int64Value(1), Int64Value(1)}},
+			Rows: [][]sqltypes.Value{
+				{splitquery_testing.Int64Value(1), splitquery_testing.Int64Value(1)}},
 		},
 		nil)
 	expectedCall2 := mockSQLExecuter.EXPECT().SQLExecute(
