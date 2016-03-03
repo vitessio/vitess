@@ -1,8 +1,5 @@
 FROM golang:1.5
 
-# Use all cores for parallel make (load bound to number of cores as well).
-ENV MAKEFLAGS -j$(nproc) -l$(nproc)
-
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     automake \
@@ -36,7 +33,8 @@ RUN curl -sL --connect-timeout 10 --retry 3 \
     https://bootstrap.pypa.io/get-pip.py | python
 
 # Install PHP modules for running tests
-RUN mkdir -p /vt/bin && \
+RUN export MAKEFLAGS="-j$(nproc)" && \
+    mkdir -p /vt/bin && \
     curl -sL --connect-timeout 10 --retry 3 \
         https://phar.phpunit.de/phpunit-4.8.9.phar > /vt/bin/phpunit && \
     chmod +x /vt/bin/phpunit && \
@@ -87,7 +85,8 @@ COPY travis /vt/src/github.com/youtube/vitess/travis
 COPY composer.json composer.lock /vt/src/github.com/youtube/vitess/
 
 # Install gRPC (and protobuf) as root
-RUN cd /vt/dist && \
+RUN export MAKEFLAGS="-j$(nproc)" && \
+    cd /vt/dist && \
     INSTALL_GRPC_PHP=`php-config --extension-dir` $VTTOP/travis/install_grpc.sh && \
     echo 'extension=grpc.so' > /etc/php5/cli/conf.d/20-grpc.ini && \
     rm -rf /vt/dist/grpc
