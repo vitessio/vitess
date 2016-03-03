@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	lowReplicationLag            = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
+	// LowReplicationLag defines the duration that replication lag is low enough that the VTTablet is considered healthy.
+	LowReplicationLag            = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
 	highReplicationLagMinServing = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting miminum 2 vttablets for serving")
 )
 
@@ -34,7 +35,7 @@ func FilterByReplicationLag(epsList []*EndPointStats) []*EndPointStats {
 	// if all have low replication lag (<=30s), return all endpoints.
 	allLowLag := true
 	for _, eps := range list {
-		if float64(eps.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds() {
+		if float64(eps.Stats.SecondsBehindMaster) > LowReplicationLag.Seconds() {
 			allLowLag = false
 			break
 		}

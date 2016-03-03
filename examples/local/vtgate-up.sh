@@ -17,6 +17,9 @@ $VTROOT/bin/vtgate \
   -port $web_port \
   -grpc_port $grpc_port \
   -cell $cell \
+  -cells_to_watch $cell \
+  -tablet_types_to_wait MASTER,REPLICA \
+  -gateway_implementation discoverygateway \
   -tablet_protocol grpc \
   -service_map 'bsonrpc-vt-vtgateservice,grpc-vtgateservice' \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \

@@ -192,7 +192,7 @@ func (ts Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 func (ts Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) (map[string]*ShardInfo, error) {
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get list of shards for keyspace '%v': %v", keyspace, err)
 	}
 
 	result := make(map[string]*ShardInfo, len(shards))

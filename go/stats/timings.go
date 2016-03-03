@@ -19,6 +19,7 @@ type Timings struct {
 	totalCount int64
 	totalTime  int64
 	histograms map[string]*Histogram
+	hook       func(string, time.Duration)
 }
 
 // NewTimings creates a new Timings object, and publishes it if name is set.
@@ -50,6 +51,9 @@ func (t *Timings) Add(name string, elapsed time.Duration) {
 	hist.Add(elapsedNs)
 	t.totalCount++
 	t.totalTime += elapsedNs
+	if t.hook != nil {
+		t.hook(name, elapsed)
+	}
 }
 
 // Record is a convenience function that records completion
@@ -117,7 +121,13 @@ func (t *Timings) Counts() map[string]int64 {
 	return counts
 }
 
-var bucketCutoffs = []int64{0.0005 * 1e9, 0.001 * 1e9, 0.005 * 1e9, 0.010 * 1e9, 0.050 * 1e9, 0.100 * 1e9, 0.500 * 1e9, 1.000 * 1e9, 5.000 * 1e9, 10.00 * 1e9}
+// Cutoffs returns the cutoffs used in the component histograms.
+// Do not change the returned slice.
+func (t *Timings) Cutoffs() []int64 {
+	return bucketCutoffs
+}
+
+var bucketCutoffs = []int64{5e5, 1e6, 5e6, 1e7, 5e7, 1e8, 5e8, 1e9, 5e9, 1e10}
 
 var bucketLabels []string
 
@@ -169,4 +179,10 @@ func (mt *MultiTimings) Record(names []string, startTime time.Time) {
 		panic("MultiTimings: wrong number of values in Record")
 	}
 	mt.Timings.Record(strings.Join(names, "."), startTime)
+}
+
+// Cutoffs returns the cutoffs used in the component histograms.
+// Do not change the returned slice.
+func (mt *MultiTimings) Cutoffs() []int64 {
+	return bucketCutoffs
 }

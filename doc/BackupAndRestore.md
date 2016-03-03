@@ -90,8 +90,8 @@ In response to this command, the designated tablet performs the following sequen
 1. Restarts replication. By default, the tablet changes its status to
     <code>spare</code> until it catches up on replication and proceeds
     to the next step.
-    If you override the default, recommended behavior by setting the
-    ____ flag to ____ when starting the tablet,
+    If you override the default recommended behavior by setting the
+    <code>-target_tablet_type</code> flag to <code>""</code> when starting the tablet,
     the tablet will restart replication and then proceed to the following
     step even if it has not caught up on the replication process.
 

@@ -102,7 +102,7 @@ def add_entry(page, value):
   cursor.commit()
 
   # Read the list back from master (critical read) because it's
-  # important that the user sees his own addition immediately.
+  # important that the user sees their own addition immediately.
   cursor.execute(
       'SELECT message FROM messages WHERE page=%(page)s'
       ' ORDER BY time_created_ns',
