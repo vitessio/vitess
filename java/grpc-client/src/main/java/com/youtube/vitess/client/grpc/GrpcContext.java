@@ -2,6 +2,7 @@ package com.youtube.vitess.client.grpc;
 
 import com.youtube.vitess.client.Context;
 
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -12,6 +13,8 @@ import java.util.concurrent.TimeUnit;
  * <p><code>try (GrpcContext gctx = new GrpcContext(ctx)) { ... }</code>
  */
 class GrpcContext implements AutoCloseable {
+  private static final ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(1);
+
   private io.grpc.Context ctx;
   private io.grpc.Context previous;
 
@@ -19,7 +22,7 @@ class GrpcContext implements AutoCloseable {
     if (ctx != null && ctx.getDeadline() != null) {
       this.ctx =
           io.grpc.Context.current()
-              .withDeadlineAfter(ctx.getDeadline().getMillis(), TimeUnit.MILLISECONDS);
+              .withDeadlineAfter(ctx.getDeadline().getMillis(), TimeUnit.MILLISECONDS, scheduler);
       previous = this.ctx.attach();
     }
   }
