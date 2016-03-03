@@ -58,15 +58,18 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *vtctldatapb.ExecuteVtctlCommandR
 		wg.Done()
 	}()
 
+	// Defer cleanup in case we panic.
+	defer func() {
+		// close the log channel, and wait for them all to be sent
+		close(logstream)
+		wg.Wait()
+	}()
+
 	// create the wrangler
 	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient())
 
 	// execute the command
 	err = vtctl.RunCommand(stream.Context(), wr, args.Args)
-
-	// close the log channel, and wait for them all to be sent
-	close(logstream)
-	wg.Wait()
 
 	return err
 }

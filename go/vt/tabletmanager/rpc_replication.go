@@ -22,8 +22,7 @@ import (
 )
 
 var (
-	// EnableSemiSync is exported for use by vt/wrangler/testlib.
-	EnableSemiSync = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on master and replica tablets only (rdonly tablets will not ack).")
+	enableSemiSync = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on master and replica tablets only (rdonly tablets will not ack).")
 )
 
 // SlaveStatus returns the replication status
@@ -78,7 +77,7 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 // replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartSlave(ctx context.Context) error {
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
 			return err
 		}
@@ -119,7 +118,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(true); err != nil {
 			return "", err
 		}
@@ -170,7 +169,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	}
 
 	// If using semi-sync, we need to enable it before connecting to master.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
 			return err
 		}
@@ -214,7 +213,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	}
 
 	// If using semi-sync, we need to disable master-side.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
 			return "", err
 		}
@@ -259,7 +258,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(true); err != nil {
 			return "", err
 		}
@@ -304,7 +303,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	}
 
 	// If using semi-sync, we need to enable it before connecting to master.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(false); err != nil {
 			return err
 		}
@@ -393,7 +392,7 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if *EnableSemiSync {
+	if *enableSemiSync {
 		if err := agent.enableSemiSync(true); err != nil {
 			return "", err
 		}

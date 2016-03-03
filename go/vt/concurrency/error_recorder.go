@@ -85,9 +85,10 @@ func (aer *AllErrorRecorder) HasErrors() bool {
 	return len(aer.Errors) > 0
 }
 
+// AllErrorAggregator aggregates errors.
 type AllErrorAggregator func(errors []error) error
 
-// AggrError() runs the provided aggregator over all errors
+// AggrError runs the provided aggregator over all errors
 // and returns the error from aggregator.
 func (aer *AllErrorRecorder) AggrError(aggr AllErrorAggregator) error {
 	aer.mu.Lock()
@@ -98,18 +99,18 @@ func (aer *AllErrorRecorder) AggrError(aggr AllErrorAggregator) error {
 	return aggr(aer.Errors)
 }
 
-// Error() returns an aggregate of all errors by concatenation.
+// Error returns an aggregate of all errors by concatenation.
 func (aer *AllErrorRecorder) Error() error {
 	return aer.AggrError(func(errors []error) error {
 		errs := make([]string, 0, len(aer.Errors))
 		for _, e := range aer.Errors {
 			errs = append(errs, e.Error())
 		}
-		return fmt.Errorf("%v", strings.Join(errs, "\n"))
+		return fmt.Errorf("%v", strings.Join(errs, ";"))
 	})
 }
 
-// ErrorStrings() returns all errors as string array.
+// ErrorStrings returns all errors as string array.
 func (aer *AllErrorRecorder) ErrorStrings() []string {
 	aer.mu.Lock()
 	defer aer.mu.Unlock()
