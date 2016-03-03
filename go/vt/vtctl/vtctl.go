@@ -58,9 +58,9 @@ COMMAND ARGUMENT DEFINITIONS
   -- rdonly: A slaved copy of data for OLAP load patterns
   -- replica: A slaved copy of data ready to be promoted to master
   -- restore: A tablet that is restoring from a snapshot. Typically, this
-              happens at tablet startup, then it goes to its right state..
+              happens at tablet startup, then it goes to its right state.
   -- schema_apply: A slaved copy of data that had been serving query traffic
-                   but that is not applying a schema change. Following the
+                   but that is now applying a schema change. Following the
                    change, the tablet will revert to its serving type.
   -- snapshot_source: A slaved copy of data where mysqld is <b>not</b>
                       running and where Vitess is serving data files to
@@ -134,9 +134,7 @@ var commands = []commandGroup{
 		"Tablets", []command{
 			{"InitTablet", commandInitTablet,
 				"[-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
-				"Initializes a tablet in the topology.\n" +
-					"Valid <tablet type> values are:\n" +
-					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.AllTabletTypes), " ")},
+				"Initializes a tablet in the topology.\n"},
 			{"GetTablet", commandGetTablet,
 				"<tablet alias>",
 				"Outputs a JSON structure that contains information about the Tablet."},
@@ -161,9 +159,7 @@ var commands = []commandGroup{
 			{"ChangeSlaveType", commandChangeSlaveType,
 				"[-dry-run] <tablet alias> <tablet type>",
 				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
-					"NOTE: This command automatically updates the serving graph.\n" +
-					"Valid <tablet type> values are:\n" +
-					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.SlaveTabletTypes), " ")},
+					"NOTE: This command automatically updates the serving graph.\n"},
 			{"Ping", commandPing,
 				"<tablet alias>",
 				"Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations."},

@@ -22,7 +22,6 @@ trap teardown SIGTERM SIGINT
 # Set up servers.
 timeout $timeout ./zk-up.sh || teardown
 timeout $timeout ./vtctld-up.sh || teardown
-timeout $timeout ./vtgate-up.sh || teardown
 timeout $timeout ./vttablet-up.sh || teardown
 
 # Retry loop function
@@ -32,9 +31,21 @@ retry_with_timeout() {
     teardown
   fi
 
-  echo "Waiting 5 seconds to try again..."
-  sleep 5
+  echo "Waiting 2 seconds to try again..."
+  sleep 2
 }
+
+# Wait for vttablets to show up in topology.
+# If we don't do this, then vtgate might take up to a minute
+# to notice the new tablets, which is normally fine, but not
+# when we're trying to get through the test ASAP.
+echo "Waiting for tablets to appear in topology..."
+start=`date +%s`
+until [[ $(vtctlclient -server localhost:15999 ListAllTablets test | wc -l) -eq 3 ]]; do
+  retry_with_timeout
+done
+
+timeout $timeout ./vtgate-up.sh || teardown
 
 echo "Rebuild keyspace..."
 start=`date +%s`

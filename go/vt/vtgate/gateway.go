@@ -131,11 +131,18 @@ type GatewayEndPointCacheStatus struct {
 
 // NewGatewayEndPointStatusAggregator creates a GatewayEndPointStatusAggregator.
 func NewGatewayEndPointStatusAggregator() *GatewayEndPointStatusAggregator {
-	gepsa := &GatewayEndPointStatusAggregator{}
+	gepsa := &GatewayEndPointStatusAggregator{
+		qiChan: make(chan *queryInfo, 10000),
+	}
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		for range ticker.C {
 			gepsa.resetNextSlot()
+		}
+	}()
+	go func() {
+		for qi := range gepsa.qiChan {
+			gepsa.processQueryInfo(qi)
 		}
 	}()
 	return gepsa
@@ -148,6 +155,7 @@ type GatewayEndPointStatusAggregator struct {
 	TabletType topodatapb.TabletType
 	Name       string // the alternative name of an endpoint
 	Addr       string // the host:port of an endpoint
+	qiChan     chan *queryInfo
 
 	// mu protects below fields.
 	mu         sync.RWMutex
@@ -159,20 +167,51 @@ type GatewayEndPointStatusAggregator struct {
 	latencyInMinute    [60]time.Duration
 }
 
+type queryInfo struct {
+	addr       string
+	tabletType topodatapb.TabletType
+	elapsed    time.Duration
+	hasError   bool
+}
+
 // UpdateQueryInfo updates the aggregator with the given information about a query.
 func (gepsa *GatewayEndPointStatusAggregator) UpdateQueryInfo(addr string, tabletType topodatapb.TabletType, elapsed time.Duration, hasError bool) {
-	gepsa.mu.Lock()
-	defer gepsa.mu.Unlock()
-	if addr != "" {
-		gepsa.Addr = addr
+	qi := &queryInfo{
+		addr:       addr,
+		tabletType: tabletType,
+		elapsed:    elapsed,
+		hasError:   hasError,
 	}
-	gepsa.TabletType = tabletType
+	select {
+	case gepsa.qiChan <- qi:
+	default:
+	}
+}
+
+func (gepsa *GatewayEndPointStatusAggregator) processQueryInfo(qi *queryInfo) {
+	gepsa.mu.Lock()
+	if gepsa.TabletType != qi.tabletType {
+		// reset counters
+		gepsa.QueryCount = 0
+		gepsa.QueryError = 0
+		for i := 0; i < len(gepsa.queryCountInMinute); i++ {
+			gepsa.queryCountInMinute[i] = 0
+		}
+		for i := 0; i < len(gepsa.latencyInMinute); i++ {
+			gepsa.latencyInMinute[i] = 0
+		}
+	}
+	if qi.addr != "" {
+		gepsa.Addr = qi.addr
+	}
+	gepsa.TabletType = qi.tabletType
 	gepsa.QueryCount++
 	gepsa.queryCountInMinute[gepsa.tick]++
-	gepsa.latencyInMinute[gepsa.tick] += elapsed
-	if hasError {
+	gepsa.latencyInMinute[gepsa.tick] += qi.elapsed
+	if qi.hasError {
 		gepsa.QueryError++
 	}
+	gepsa.mu.Unlock()
 }
 
 // GetCacheStatus returns a GatewayEndPointCacheStatus representing the current gateway status.
