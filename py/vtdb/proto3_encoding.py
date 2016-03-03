@@ -288,10 +288,14 @@ class Proto3Connection(object):
     self._add_session(request)
     return request
 
-  def execute_shards_request(self, sql, bind_variables, tablet_type,
-                             keyspace_name, shards,
-                             not_in_transaction, effective_caller_id):
-    """Builds a vtgate_pb2.ExecuteShardsRequest object.
+  def execute_request_and_name(self, sql, bind_variables, tablet_type,
+                               keyspace_name,
+                               shards,
+                               keyspace_ids,
+                               key_ranges,
+                               entity_column_name, entity_keyspace_id_map,
+                               not_in_transaction, effective_caller_id):
+    """Builds the right vtgate_pb2 Request and method for an _execute call.
 
     Args:
       sql: the query to run. Bind Variables in there should be in python format.
@@ -299,163 +303,63 @@ class Proto3Connection(object):
       tablet_type: string tablet type.
       keyspace_name: keyspace to apply the query to.
       shards: array of strings representing the shards.
-      not_in_transaction: do not create a transaction to a new shard.
-      effective_caller_id: optional vtgate_client.CallerID.
-
-    Returns:
-      A vtgate_pb2.ExecuteShardsRequest object.
-      A dict that contains the routing parameters.
-      The name of the remote method called.
-    """
-    sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-
-    request = vtgate_pb2.ExecuteShardsRequest(
-        query=query_pb2.BoundQuery(sql=sql),
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-        keyspace=keyspace_name,
-        not_in_transaction=not_in_transaction,
-    )
-    self._add_caller_id(request, effective_caller_id)
-    self._add_session(request)
-    request.shards.extend(shards)
-    self._convert_bind_vars(bind_variables, request.query.bind_variables)
-
-    return request, {'shards': shards}, 'ExecuteShards'
-
-  def execute_keyspace_ids_request(self, sql, bind_variables, tablet_type,
-                                   keyspace_name, keyspace_ids,
-                                   not_in_transaction, effective_caller_id):
-    """Builds a vtgate_pb2.ExecuteKeyspaceIdsRequest object.
-
-    Args:
-      sql: the query to run. Bind Variables in there should be in python format.
-      bind_variables: python map of bind variables.
-      tablet_type: string tablet type.
-      keyspace_name: keyspace to apply the query to.
       keyspace_ids: array of keyspace ids.
-      not_in_transaction: do not create a transaction to a new shard.
-      effective_caller_id: optional vtgate_client.CallerID.
-
-    Returns:
-      A vtgate_pb2.ExecuteKeyspaceIdsRequest object.
-      A dict that contains the routing parameters.
-      The name of the remote method called.
-    """
-    sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-
-    request = vtgate_pb2.ExecuteKeyspaceIdsRequest(
-        query=query_pb2.BoundQuery(sql=sql),
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-        keyspace=keyspace_name,
-        not_in_transaction=not_in_transaction,
-    )
-    self._add_caller_id(request, effective_caller_id)
-    self._add_session(request)
-    request.keyspace_ids.extend(keyspace_ids)
-    self._convert_bind_vars(bind_variables, request.query.bind_variables)
-
-    return request, {'keyspace_ids': keyspace_ids}, 'ExecuteKeyspaceIds'
-
-  def execute_key_ranges_request(self, sql, bind_variables, tablet_type,
-                                 keyspace_name, key_ranges,
-                                 not_in_transaction, effective_caller_id):
-    """Builds a vtgate_pb2.ExecuteKeysRangesRequest object.
-
-    Args:
-      sql: the query to run. Bind Variables in there should be in python format.
-      bind_variables: python map of bind variables.
-      tablet_type: string tablet type.
-      keyspace_name: keyspace to apply the query to.
       key_ranges: array of keyrange.KeyRange objects.
-      not_in_transaction: do not create a transaction to a new shard.
-      effective_caller_id: optional vtgate_client.CallerID.
-
-    Returns:
-      A vtgate_pb2.ExecuteKeyRangesRequest object.
-      A dict that contains the routing parameters.
-      The name of the remote method called.
-    """
-    sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-
-    request = vtgate_pb2.ExecuteKeyRangesRequest(
-        query=query_pb2.BoundQuery(sql=sql),
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-        keyspace=keyspace_name,
-        not_in_transaction=not_in_transaction,
-    )
-    self._add_caller_id(request, effective_caller_id)
-    self._add_session(request)
-    self._add_key_ranges(request, key_ranges)
-    self._convert_bind_vars(bind_variables, request.query.bind_variables)
-
-    return request, {'keyranges': key_ranges}, 'ExecuteKeyRanges'
-
-  def execute_entity_ids_request(self, sql, bind_variables, tablet_type,
-                                 keyspace_name, entity_column_name,
-                                 entity_keyspace_id_map,
-                                 not_in_transaction, effective_caller_id):
-    """Builds a vtgate_pb2.ExecuteEntityIdsRequest object.
-
-    Args:
-      sql: the query to run. Bind Variables in there should be in python format.
-      bind_variables: python map of bind variables.
-      tablet_type: string tablet type.
-      keyspace_name: keyspace to apply the query to.
       entity_column_name: the column name to vary.
       entity_keyspace_id_map: map of external id to keyspace id.
       not_in_transaction: do not create a transaction to a new shard.
       effective_caller_id: optional vtgate_client.CallerID.
 
     Returns:
-      A vtgate_pb2.ExecuteEntityIdsRequest object.
+      A vtgate_pb2.XXXRequest object.
       A dict that contains the routing parameters.
       The name of the remote method called.
     """
-    sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
 
-    request = vtgate_pb2.ExecuteEntityIdsRequest(
-        query=query_pb2.BoundQuery(sql=sql),
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-        keyspace=keyspace_name,
-        entity_column_name=entity_column_name,
-        not_in_transaction=not_in_transaction,
-    )
+    if shards is not None:
+      request = vtgate_pb2.ExecuteShardsRequest(keyspace=keyspace_name)
+      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
+      request.shards.extend(shards)
+      routing_kwargs = {'shards': shards}
+      method_name = 'ExecuteShards'
+
+    elif keyspace_ids is not None:
+      request = vtgate_pb2.ExecuteKeyspaceIdsRequest(keyspace=keyspace_name)
+      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
+      request.keyspace_ids.extend(keyspace_ids)
+      routing_kwargs = {'keyspace_ids': keyspace_ids}
+      method_name = 'ExecuteKeyspaceIds'
+
+    elif key_ranges is not None:
+      request = vtgate_pb2.ExecuteKeyRangesRequest(keyspace=keyspace_name)
+      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
+      self._add_key_ranges(request, key_ranges)
+      routing_kwargs = {'keyranges': key_ranges}
+      method_name = 'ExecuteKeyRanges'
+
+    elif entity_keyspace_id_map is not None:
+      request = vtgate_pb2.ExecuteEntityIdsRequest(
+          keyspace=keyspace_name,
+          entity_column_name=entity_column_name)
+      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
+      self._convert_entity_ids(entity_keyspace_id_map,
+                               request.entity_keyspace_ids)
+      routing_kwargs = {'entity_keyspace_id_map': entity_keyspace_id_map,
+                        'entity_column_name': entity_column_name}
+      method_name = 'ExecuteEntityIds'
+
+    else:
+      request = vtgate_pb2.ExecuteRequest()
+      routing_kwargs = {}
+      method_name = 'Execute'
+
+    request.query.sql = sql
+    self._convert_bind_vars(bind_variables, request.query.bind_variables)
+    request.tablet_type = topodata_pb2.TabletType.Value(tablet_type.upper())
+    request.not_in_transaction = not_in_transaction
     self._add_caller_id(request, effective_caller_id)
     self._add_session(request)
-    self._convert_bind_vars(bind_variables, request.query.bind_variables)
-    self._convert_entity_ids(entity_keyspace_id_map,
-                             request.entity_keyspace_ids)
-
-    return request, {'entity_keyspace_id_map': entity_keyspace_id_map,
-                     'entity_column_name': entity_column_name,
-                    }, 'ExecuteEntityIds'
-
-  def execute_request(self, sql, bind_variables, tablet_type,
-                      not_in_transaction, effective_caller_id):
-    """Builds a vtgate_pb2.ExecuteRequest object.
-
-    Args:
-      sql: the query to run. Bind Variables in there should be in python format.
-      bind_variables: python map of bind variables.
-      tablet_type: string tablet type.
-      not_in_transaction: do not create a transaction to a new shard.
-      effective_caller_id: optional vtgate_client.CallerID.
-
-    Returns:
-      A vtgate_pb2.ExecuteRequest object.
-      A dict that contains the routing parameters.
-      The name of the remote method called.
-    """
-    request = vtgate_pb2.ExecuteRequest(
-        query=query_pb2.BoundQuery(sql=sql),
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-        not_in_transaction=not_in_transaction,
-    )
-    self._add_caller_id(request, effective_caller_id)
-    self._add_session(request)
-    self._convert_bind_vars(bind_variables, request.query.bind_variables)
-
-    return request, {}, 'Execute'
+    return request, routing_kwargs, method_name
 
   def process_execute_response(self, exec_method, response):
     """Processes an Execute* response, and returns the rowset.
@@ -473,81 +377,55 @@ class Proto3Connection(object):
     self._extract_rpc_error(exec_method, response.error)
     return self._get_rowset_from_query_result(response.result)
 
-  def execute_batch_keyspace_ids_request(self, sql_list, bind_variables_list,
-                                         keyspace_list, keyspace_ids_list,
-                                         tablet_type, as_transaction,
-                                         effective_caller_id):
-    """Builds a vtgate_pb2.ExecuteBatchKeyspaceIdsRequest object.
+  def execute_batch_request_and_name(self, sql_list, bind_variables_list,
+                                     keyspace_list,
+                                     keyspace_ids_list, shards_list,
+                                     tablet_type, as_transaction,
+                                     effective_caller_id):
+    """Builds the right vtgate_pb2 ExecuteBatch query.
 
     Args:
       sql_list: list os SQL statements.
       bind_variables_list: list of bind variables.
       keyspace_list: list of keyspaces.
       keyspace_ids_list: list of list of keyspace_ids.
-      tablet_type: target tablet type.
-      as_transaction: execute all statements in a single transaction.
-      effective_caller_id: optional vtgate_client.CallerID.
-
-    Returns:
-      A vtgate_pb2.ExecuteBatchKeyspaceIdsRequest object.
-      The name of the remote method called.
-    """
-    request = vtgate_pb2.ExecuteBatchKeyspaceIdsRequest(
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-        as_transaction=as_transaction,
-    )
-    self._add_caller_id(request, effective_caller_id)
-    self._add_session(request)
-
-    for sql, bind_variables, keyspace_name, keyspace_ids in zip(
-        sql_list, bind_variables_list, keyspace_list, keyspace_ids_list):
-      sql, bind_variables = dbapi.prepare_query_bind_vars(sql,
-                                                          bind_variables)
-      query = request.queries.add()
-      query.query.sql = sql
-      query.keyspace = keyspace_name
-      query.keyspace_ids.extend(keyspace_ids)
-      self._convert_bind_vars(bind_variables, query.query.bind_variables)
-
-    return request, 'ExecuteBatchKeyspaceIds'
-
-  def execute_batch_shards_request(self, sql_list, bind_variables_list,
-                                   keyspace_list, shards_list,
-                                   tablet_type, as_transaction,
-                                   effective_caller_id):
-    """Builds a vtgate_pb2.ExecuteBatchShardsRequest object.
-
-    Args:
-      sql_list: list os SQL statements.
-      bind_variables_list: list of bind variables.
-      keyspace_list: list of keyspaces.
       shards_list: list of shards.
       tablet_type: target tablet type.
       as_transaction: execute all statements in a single transaction.
       effective_caller_id: optional vtgate_client.CallerID.
 
     Returns:
-      A vtgate_pb2.ExecuteBatchKeyspaceIdsRequest object.
-      The name of the remote method called.
+      A proper vtgate_pb2.ExecuteBatchXXX object.
+      The name of the remote method to call.
     """
-    request = vtgate_pb2.ExecuteBatchShardsRequest(
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-        as_transaction=as_transaction,
-    )
+    if keyspace_ids_list and keyspace_ids_list[0]:
+      request = vtgate_pb2.ExecuteBatchKeyspaceIdsRequest()
+      for sql, bind_variables, keyspace_name, keyspace_ids in zip(
+          sql_list, bind_variables_list, keyspace_list, keyspace_ids_list):
+        sql, bind_variables = dbapi.prepare_query_bind_vars(sql,
+                                                            bind_variables)
+        query = request.queries.add(keyspace=keyspace_name)
+        query.query.sql = sql
+        self._convert_bind_vars(bind_variables, query.query.bind_variables)
+        query.keyspace_ids.extend(keyspace_ids)
+      method_name = 'ExecuteBatchKeyspaceIds'
+    else:
+      request = vtgate_pb2.ExecuteBatchShardsRequest()
+      for sql, bind_variables, keyspace_name, shards in zip(
+          sql_list, bind_variables_list, keyspace_list, shards_list):
+        sql, bind_variables = dbapi.prepare_query_bind_vars(sql,
+                                                            bind_variables)
+        query = request.queries.add(keyspace=keyspace_name)
+        query.query.sql = sql
+        self._convert_bind_vars(bind_variables, query.query.bind_variables)
+        query.shards.extend(shards)
+      method_name = 'ExecuteBatchShards'
+
+    request.tablet_type = topodata_pb2.TabletType.Value(tablet_type.upper())
+    request.as_transaction = as_transaction
     self._add_caller_id(request, effective_caller_id)
     self._add_session(request)
-
-    for sql, bind_variables, keyspace_name, shards in zip(
-        sql_list, bind_variables_list, keyspace_list, shards_list):
-      sql, bind_variables = dbapi.prepare_query_bind_vars(sql,
-                                                          bind_variables)
-      query = request.queries.add()
-      query.query.sql = sql
-      query.keyspace = keyspace_name
-      query.shards.extend(shards)
-      self._convert_bind_vars(bind_variables, query.query.bind_variables)
-
-    return request, 'ExecuteBatchShards'
+    return request, method_name
 
   def process_execute_batch_response(self, exec_method, response):
     """Processes an ExecuteBatch* response, and returns the rowsets.
@@ -568,10 +446,13 @@ class Proto3Connection(object):
       rowsets.append(rowset)
     return rowsets
 
-  def stream_execute_shards_request(self, sql, bind_variables, tablet_type,
-                                    keyspace_name, shards,
-                                    effective_caller_id):
-    """Builds a vtgate_pb2.StreamExecuteShardsRequest object.
+  def stream_execute_request_and_name(self, sql, bind_variables, tablet_type,
+                                      keyspace_name,
+                                      shards,
+                                      keyspace_ids,
+                                      key_ranges,
+                                      effective_caller_id):
+    """Builds the right vtgate_pb2 Request and method for a _stream_execute.
 
     Args:
       sql: the query to run. Bind Variables in there should be in python format.
@@ -579,99 +460,38 @@ class Proto3Connection(object):
       tablet_type: string tablet type.
       keyspace_name: keyspace to apply the query to.
       shards: array of strings representing the shards.
-      effective_caller_id: optional vtgate_client.CallerID.
-
-    Returns:
-      A vtgate_pb2.StreamExecuteShardsRequest object.
-    """
-    sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-    request = vtgate_pb2.StreamExecuteShardsRequest(
-        query=query_pb2.BoundQuery(sql=sql),
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-        keyspace=keyspace_name,
-    )
-    self._add_caller_id(request, effective_caller_id)
-    request.shards.extend(shards)
-    self._convert_bind_vars(bind_variables, request.query.bind_variables)
-    return request
-
-  def stream_execute_keyspace_ids_request(self, sql, bind_variables,
-                                          tablet_type,
-                                          keyspace_name, keyspace_ids,
-                                          effective_caller_id):
-    """Builds a vtgate_pb2.StreamExecuteKeyspaceIdsRequest object.
-
-    Args:
-      sql: the query to run. Bind Variables in there should be in python format.
-      bind_variables: python map of bind variables.
-      tablet_type: string tablet type.
-      keyspace_name: keyspace to apply the query to.
       keyspace_ids: array of keyspace ids.
-      effective_caller_id: optional vtgate_client.CallerID.
-
-    Returns:
-      A vtgate_pb2.StreamExecuteKeyspaceIdsRequest object.
-    """
-    sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-    request = vtgate_pb2.StreamExecuteKeyspaceIdsRequest(
-        query=query_pb2.BoundQuery(sql=sql),
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-        keyspace=keyspace_name,
-    )
-    self._add_caller_id(request, effective_caller_id)
-    request.keyspace_ids.extend(keyspace_ids)
-    self._convert_bind_vars(bind_variables, request.query.bind_variables)
-    return request
-
-  def stream_execute_key_ranges_request(self, sql, bind_variables, tablet_type,
-                                        keyspace_name, key_ranges,
-                                        effective_caller_id):
-    """Builds a vtgate_pb2.StreamExecuteKeyRangesRequest object.
-
-    Args:
-      sql: the query to run. Bind Variables in there should be in python format.
-      bind_variables: python map of bind variables.
-      tablet_type: string tablet type.
-      keyspace_name: keyspace to apply the query to.
       key_ranges: array of keyrange.KeyRange objects.
       effective_caller_id: optional vtgate_client.CallerID.
 
     Returns:
-      A vtgate_pb2.StreamExecuteKeyRangesRequest object.
-      A dict that contains the routing parameters.
+      A vtgate_pb2.StreamExecuteXXXXRequest object.
       The name of the remote method called.
     """
+
+    if shards is not None:
+      request = vtgate_pb2.StreamExecuteShardsRequest(keyspace=keyspace_name)
+      request.shards.extend(shards)
+      method_name = 'StreamExecuteShards'
+
+    elif keyspace_ids is not None:
+      request = vtgate_pb2.StreamExecuteKeyspaceIdsRequest(
+          keyspace=keyspace_name)
+      request.keyspace_ids.extend(keyspace_ids)
+      method_name = 'StreamExecuteKeyspaceIds'
+
+    elif key_ranges is not None:
+      request = vtgate_pb2.StreamExecuteKeyRangesRequest(keyspace=keyspace_name)
+      self._add_key_ranges(request, key_ranges)
+      method_name = 'StreamExecuteKeyRanges'
+
+    else:
+      request = vtgate_pb2.StreamExecuteRequest()
+      method_name = 'StreamExecute'
+
     sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-    request = vtgate_pb2.StreamExecuteKeyRangesRequest(
-        query=query_pb2.BoundQuery(sql=sql),
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-        keyspace=keyspace_name,
-    )
-    self._add_caller_id(request, effective_caller_id)
-    self._add_key_ranges(request, key_ranges)
+    request.query.sql = sql
     self._convert_bind_vars(bind_variables, request.query.bind_variables)
-    return request
-
-  def stream_execute_request(self, sql, bind_variables, tablet_type,
-                             effective_caller_id):
-    """Builds a vtgate_pb2.StreamExecuteRequest object.
-
-    Args:
-      sql: the query to run. Bind Variables in there should be in python format.
-      bind_variables: python map of bind variables.
-      tablet_type: string tablet type.
-      effective_caller_id: optional vtgate_client.CallerID.
-
-    Returns:
-      A vtgate_pb2.StreamExecuteRequest object.
-      A dict that contains the routing parameters.
-      The name of the remote method called.
-    """
-    sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-    request = vtgate_pb2.StreamExecuteRequest(
-        query=query_pb2.BoundQuery(sql=sql),
-        tablet_type=topodata_pb2.TabletType.Value(tablet_type.upper()),
-    )
+    request.tablet_type = topodata_pb2.TabletType.Value(tablet_type.upper())
     self._add_caller_id(request, effective_caller_id)
-    self._convert_bind_vars(bind_variables, request.query.bind_variables)
-    return request
+    return request, method_name
