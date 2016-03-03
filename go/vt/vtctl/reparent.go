@@ -33,7 +33,7 @@ func init() {
 		"InitShardMaster",
 		commandInitShardMaster,
 		"[-force] [-wait_slave_timeout=<duration>] <keyspace/shard> <tablet alias>",
-		"Sets the initial master for a shard. Will make all other tablets in the shard slaves of the provided master. WARNING: this could cause data loss on an already replicating shard, then PlannedReparentShard or EmergencyReparentShard should be used instead."})
+		"Sets the initial master for a shard. Will make all other tablets in the shard slaves of the provided master. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead."})
 	addCommand("Shards", command{
 		"PlannedReparentShard",
 		commandPlannedReparentShard,
