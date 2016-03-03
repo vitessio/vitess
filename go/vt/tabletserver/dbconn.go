@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -78,7 +77,7 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 			return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
 	}
-	return nil, NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Exec: unreachable code"))
+	panic("unreachable")
 }
 
 func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
@@ -129,7 +128,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 			return err
 		}
 	}
-	return NewTabletErrorSQL(ErrFatal, vtrpcpb.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Stream: unreachable code"))
+	panic("unreachable")
 }
 
 func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
