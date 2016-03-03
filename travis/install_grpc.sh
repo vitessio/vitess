@@ -69,7 +69,7 @@ fi
 
 # and now build and install gRPC python libraries
 if [ -n "$grpc_dist" ]; then
-  $grpc_dist/usr/local/bin/pip install .
+  $grpc_dist/usr/local/bin/pip -v install .
 
   # Manually ensure that we run at least python protobuf-3.0.0-beta2.
   # (Our Python code is currently generated with this version and older
