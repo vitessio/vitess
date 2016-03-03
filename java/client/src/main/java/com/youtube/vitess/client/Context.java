@@ -60,6 +60,13 @@ public class Context {
     return deadline;
   }
 
+  public Duration getTimeout() {
+    if (deadline == null) {
+      return null;
+    }
+    return new Duration(null, deadline);
+  }
+
   public CallerID getCallerId() {
     return callerId;
   }

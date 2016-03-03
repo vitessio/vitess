@@ -1,13 +1,8 @@
 package com.youtube.vitess.example;
 
-import java.net.InetSocketAddress;
-import java.util.Arrays;
-import java.util.Map;
-
-import org.joda.time.Duration;
-
 import com.google.common.collect.ImmutableMap;
 import com.google.common.net.HostAndPort;
+
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.VTGateConn;
@@ -16,6 +11,12 @@ import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
 import com.youtube.vitess.client.grpc.GrpcClientFactory;
 import com.youtube.vitess.proto.Topodata.TabletType;
+
+import org.joda.time.Duration;
+
+import java.net.InetSocketAddress;
+import java.util.Arrays;
+import java.util.Map;
 
 /**
  * VitessClientExample.java is a sample for using the Vitess Java Client with an unsharded keyspace.
@@ -52,15 +53,27 @@ public class VitessClientExample {
       // Insert something.
       System.out.println("Inserting into master...");
       VTGateTx tx = conn.begin(ctx).checkedGet();
-      tx.executeShards(ctx, "INSERT INTO test_table (msg) VALUES (:msg)", keyspace, shards,
-          bindVars, TabletType.MASTER).checkedGet();
+      tx.executeShards(
+              ctx,
+              "INSERT INTO test_table (msg) VALUES (:msg)",
+              keyspace,
+              shards,
+              bindVars,
+              TabletType.MASTER)
+          .checkedGet();
       tx.commit(ctx).checkedGet();
 
       // Read it back from the master.
       System.out.println("Reading from master...");
       try (Cursor cursor =
-          conn.executeShards(ctx, "SELECT id, msg FROM test_table", keyspace, shards,
-              null /* bindVars */, TabletType.MASTER).checkedGet()) {
+              conn.executeShards(
+                      ctx,
+                      "SELECT id, msg FROM test_table",
+                      keyspace,
+                      shards,
+                      null /* bindVars */,
+                      TabletType.MASTER)
+                  .checkedGet()) {
         Row row;
         while ((row = cursor.next()) != null) {
           long id = row.getLong("id");
