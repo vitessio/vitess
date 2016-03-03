@@ -192,7 +192,6 @@ class VTGateClient(object):
     """Executes the given sql.
 
     FIXME(alainjobart): should take the session in.
-    FIXME(alainjobart): implementations have keyspace before tablet_type!
 
     Args:
       sql: query to execute.

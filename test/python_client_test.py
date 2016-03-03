@@ -455,7 +455,7 @@ class TestEcho(TestPythonClientBase):
 
   echo_prefix = 'echo://'
 
-  query = 'test query with bind variables: %(int)s %(float)s %(bytes)s'
+  query = 'test query with bind variables: :int :float :bytes'
   query_echo = 'test query with bind variables: :int :float :bytes'
   keyspace = 'test_keyspace'
 
