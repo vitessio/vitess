@@ -85,7 +85,7 @@ func (algorithm *FullScanAlgorithm) populatePrevTupleInBindVariables(
 	prevTuple tuple, bindVariables map[string]interface{}) {
 	assertEqual(len(prevTuple), len(algorithm.prevBindVariableNames))
 	for i, tupleElement := range prevTuple {
-		populateNewBindVariable(algorithm.prevBindVariableNames[i], tupleElement, bindVariables)
+		bindVariables[algorithm.prevBindVariableNames[i]] = tupleElement.ToNative()
 	}
 }
 
@@ -139,7 +139,7 @@ func buildNoninitialQuery(
 		constructTupleInequality(
 			convertBindVariableNamesToValExpr(prevBindVariableNames),
 			convertColumnNamesToValExpr(splitParams.splitColumns),
-			true /* strict */))
+			false /* strict */))
 	return &querytypes.BoundQuery{
 		Sql:           sqlparser.String(resultSelectAST),
 		BindVariables: cloneBindVariables(splitParams.bindVariables),
@@ -168,7 +168,7 @@ func buildLimitClause(offset, rowcount int64) *sqlparser.Limit {
 
 func buildOrderByClause(splitColumns []string) sqlparser.OrderBy {
 	result := make(sqlparser.OrderBy, 0, len(splitColumns))
-	for splitColumn := range splitColumns {
+	for _, splitColumn := range splitColumns {
 		result = append(result,
 			&sqlparser.Order{
 				Expr:      &sqlparser.ColName{Name: sqlparser.SQLName(splitColumn)},

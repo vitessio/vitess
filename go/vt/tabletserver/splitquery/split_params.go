@@ -27,10 +27,11 @@ type SplitParams struct {
 // 'splitColumns' the list of splitColumns to use. These must adhere to the restrictions found in
 // the documentation of the vtgate.SplitQueryRequest.split_column protocol buffer field.
 // If splitColumns is nil, the split columns used are the primary key columns (in order).
-func NewSplitParams(
+func NewSplitParamsWithNumRowsPerQueryPart(
 	sql string,
 	bindVariables map[string]interface{},
 	splitColumns []string,
+	numRowsPerQueryPart int64,
 	schema map[string]*schema.Table) (*SplitParams, error) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
@@ -72,5 +73,6 @@ func NewSplitParams(
 	splitParams.bindVariables = bindVariables
 	splitParams.splitColumns = splitColumns
 	splitParams.selectAST = selectAST
+	splitParams.numRowsPerQueryPart = numRowsPerQueryPart
 	return &splitParams, nil
 }
