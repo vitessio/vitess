@@ -78,8 +78,12 @@ func verifyQueryPartsEqual(t *testing.T, expected, got []querytypes.QuerySplit) 
 }
 
 func TestSplit(t *testing.T) {
-	splitParams, err := NewSplitParams("select * from test_table",
-		map[string]interface{}{}, []string{"id", "user_id"}, getSchema())
+	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		"select * from test_table",
+		map[string]interface{}{},
+		[]string{"id", "user_id"},
+		1000, // numRowsPerQueryPart
+		getSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
@@ -148,8 +152,12 @@ func TestSplit(t *testing.T) {
 }
 
 func TestSplitWithWhereClause(t *testing.T) {
-	splitParams, err := NewSplitParams("select * from test_table where name!='foo'",
-		map[string]interface{}{}, []string{"id", "user_id"}, getSchema())
+	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		"select * from test_table where name!='foo'",
+		map[string]interface{}{},
+		[]string{"id", "user_id"},
+		1000, // numRowsPerQueryPart
+		getSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
@@ -218,8 +226,12 @@ func TestSplitWithWhereClause(t *testing.T) {
 }
 
 func TestSplitWithExistingBindVariables(t *testing.T) {
-	splitParams, err := NewSplitParams("select * from test_table",
-		map[string]interface{}{"foo": int64(100)}, []string{"id", "user_id"}, getSchema())
+	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		"select * from test_table",
+		map[string]interface{}{"foo": int64(100)},
+		[]string{"id", "user_id"},
+		1000, // numRowsPerQueryPart
+		getSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
@@ -292,8 +304,12 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 }
 
 func TestSplitWithEmptyBoundaryList(t *testing.T) {
-	splitParams, err := NewSplitParams("select * from test_table",
-		map[string]interface{}{"foo": int64(100)}, []string{"id", "user_id"}, getSchema())
+	splitParams, err := NewSplitParamsWithNumRowsPerQueryPart(
+		"select * from test_table",
+		map[string]interface{}{"foo": int64(100)},
+		[]string{"id", "user_id"},
+		1000,
+		getSchema())
 	if err != nil {
 		t.Fatalf("SplitParams.Initialize() failed with: %v", err)
 	}
