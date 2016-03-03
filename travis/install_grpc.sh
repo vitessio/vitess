@@ -25,7 +25,9 @@ if [ -n "$grpc_dist" ]; then
   virtualenv $grpc_dist/usr/local
   $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv
 else
-  pip install --upgrade --ignore-installed virtualenv
+  # system wide installations require an explicit upgrade of
+  # certain gRPC Python dependencies e.g. "six" on Debian Jessie.
+  pip install --upgrade --ignore-installed six
 fi
 
 # clone the repository, setup the submodules
