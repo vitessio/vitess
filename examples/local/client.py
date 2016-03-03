@@ -40,7 +40,7 @@ try:
       keyranges=UNSHARDED, writable=True)
   cursor.begin()
   cursor.execute(
-      'INSERT INTO test_table (msg) VALUES (%(msg)s)',
+      'INSERT INTO test_table (msg) VALUES (:msg)',
       {'msg': 'V is for speed'})
   cursor.commit()
 

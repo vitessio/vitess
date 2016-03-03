@@ -64,7 +64,7 @@ class TestCustomSharding(unittest.TestCase):
     return vtgate_client.connect(protocol, addr, 30.0)
 
   def _insert_data(self, shard, start, count, table='data'):
-    sql = 'insert into ' + table + '(id, name) values (%(id)s, %(name)s)'
+    sql = 'insert into ' + table + '(id, name) values (:id, :name)'
     conn = self._vtdb_conn()
     cursor = conn.cursor(
         tablet_type='master', keyspace='test_keyspace',
@@ -81,7 +81,7 @@ class TestCustomSharding(unittest.TestCase):
     conn.close()
 
   def _check_data(self, shard, start, count, table='data'):
-    sql = 'select name from ' + table + ' where id=%(id)s'
+    sql = 'select name from ' + table + ' where id=:id'
     conn = self._vtdb_conn()
     cursor = conn.cursor(
         tablet_type='master', keyspace='test_keyspace',
