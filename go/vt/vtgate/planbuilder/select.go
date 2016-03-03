@@ -189,17 +189,25 @@ func checkAggregates(sel *sqlparser.Select, plan planBuilder) error {
 func pushSelectRoutes(selectExprs sqlparser.SelectExprs, plan planBuilder) ([]*colsym, error) {
 	colsyms := make([]*colsym, len(selectExprs))
 	for i, node := range selectExprs {
-		node, ok := node.(*sqlparser.NonStarExpr)
-		if !ok {
-			return nil, errors.New("unsupported: '*' expression in select")
-		}
-		route, err := findRoute(node.Expr, plan)
-		if err != nil {
-			return nil, err
-		}
-		colsyms[i], _, err = plan.PushSelect(node, route)
-		if err != nil {
-			return nil, err
+		switch node := node.(type) {
+		case *sqlparser.NonStarExpr:
+			route, err := findRoute(node.Expr, plan)
+			if err != nil {
+				return nil, err
+			}
+			colsyms[i], _, err = plan.PushSelect(node, route)
+			if err != nil {
+				return nil, err
+			}
+		case *sqlparser.StarExpr:
+			// We'll allow select * for simple routes.
+			route, ok := plan.(*routeBuilder)
+			if !ok {
+				return nil, errors.New("unsupported: '*' expression in complex join")
+			}
+			// We can push without validating the reference because
+			// MySQL will fail if it's invalid.
+			colsyms[i] = route.PushStar(node)
 		}
 	}
 	return colsyms, nil

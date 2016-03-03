@@ -13,6 +13,21 @@
   }
 }
 
+# '*' expression for simple route
+"select user.* from user"
+{
+  "Original": "select user.* from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.* from user",
+    "FieldQuery": "select user.* from user where 1 != 1"
+  }
+}
+
 # RHS route referenced
 "select user_extra.id from user join user_extra"
 {

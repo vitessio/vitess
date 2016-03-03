@@ -240,6 +240,15 @@ func (rtb *routeBuilder) PushSelect(expr *sqlparser.NonStarExpr, _ *routeBuilder
 	return colsym, len(rtb.Colsyms) - 1, nil
 }
 
+// PushStar pushes the '*' expression into the route.
+func (rtb *routeBuilder) PushStar(expr *sqlparser.StarExpr) *colsym {
+	colsym := newColsym(rtb, rtb.Symtab())
+	colsym.Alias = sqlparser.SQLName(sqlparser.String(expr))
+	rtb.Select.SelectExprs = append(rtb.Select.SelectExprs, expr)
+	rtb.Colsyms = append(rtb.Colsyms, colsym)
+	return colsym
+}
+
 // MakeDistinct sets the DISTINCT property to the select.
 func (rtb *routeBuilder) MakeDistinct() {
 	rtb.Select.Distinct = sqlparser.DistinctStr
