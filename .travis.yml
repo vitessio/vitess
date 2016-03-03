@@ -92,9 +92,9 @@ env:
     #- TEST_MATRIX="-shard 4"
 before_install:
   - travis/download_mariadb.sh
-  - travis/php_init.sh
+#  - travis/php_init.sh
 install:
-  - eval "$(phpenv init -)"
+#  - eval "$(phpenv init -)"
   - ./bootstrap.sh
 before_script:
   - source dev.env
