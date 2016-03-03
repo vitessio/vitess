@@ -16,7 +16,6 @@ from grpc.framework.interfaces.face import face
 from vtproto import vtgate_pb2
 from vtproto import vtgateservice_pb2
 
-from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import keyrange_constants
 from vtdb import keyspace
@@ -107,10 +106,6 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     # FIXME(alainjobart): keyspace should be in routing_kwargs,
     # as it's not used for v3.
 
-    # FIXME(alainjobart): the v3 part doesn't take the python-style queries
-    # for bind variables (the %(xxx)s), but our style (the :xxx).
-    # this is not consistent with the rest.
-
     try:
       request, routing_kwargs, method_name = self.execute_request_and_name(
           sql, bind_variables, tablet_type,
@@ -155,7 +150,6 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       **kwargs):
 
     try:
-      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
       request, method_name = self.stream_execute_request_and_name(
           sql, bind_variables, tablet_type,
           keyspace_name,

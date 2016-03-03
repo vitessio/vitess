@@ -279,7 +279,7 @@ def write_rows_to_shard(count, shard_index):
     cursor.begin()
     cursor.execute(
         'insert into vt_insert_test (msg, keyspace_id) '
-        'values (%(msg)s, %(keyspace_id)s)',
+        'values (:msg, :keyspace_id)',
         {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
     cursor.commit()
 
@@ -349,7 +349,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.begin()
       cursor.execute(
           'insert into vt_insert_test (msg, keyspace_id) '
-          'values (%(msg)s, %(keyspace_id)s)',
+          'values (:msg, :keyspace_id)',
           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       cursor.commit()
     cursor = vtgate_conn.cursor(
@@ -397,7 +397,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.begin()
       cursor.execute(
           'insert into vt_insert_test (msg, keyspace_id) '
-          'values (%(msg)s, %(keyspace_id)s)',
+          'values (:msg, :keyspace_id)',
           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       cursor.commit()
     vtgate_conn.begin()
@@ -433,7 +433,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.begin()
       cursor.execute(
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+          'values (:eid, :id, :keyspace_id)',
           {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       cursor.commit()
     cursor = vtgate_conn.cursor(
@@ -458,7 +458,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.begin()
       cursor.execute(
           'insert into vt_insert_test (msg, keyspace_id) '
-          'values (%(msg)s, %(keyspace_id)s)',
+          'values (:msg, :keyspace_id)',
           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       cursor.commit()
     _delete_all(self.shard_index, 'vt_a')
@@ -471,7 +471,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.begin()
       cursor.execute(
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+          'values (:eid, :id, :keyspace_id)',
           {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       cursor.commit()
     kid_list = [pack_kid(kid) for kid in kid_list]
@@ -550,7 +550,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
                shards=None))
     cursor.executemany(
         sql='insert into vt_insert_test (msg, keyspace_id) '
-        'values (%(msg)s, %(keyspace_id)s)',
+        'values (:msg, :keyspace_id)',
         params_list=params_list)
     cursor.executemany(
         sql=None,
@@ -562,7 +562,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       keyspace_id = kid_list[x%len(kid_list)]
       sql = (
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)')
+          'values (:eid, :id, :keyspace_id)')
       bind_variables = {'eid': x, 'id': x, 'keyspace_id': keyspace_id}
       keyspace = KEYSPACE_NAME
       keyspace_ids = [pack_kid(keyspace_id)]
@@ -691,14 +691,14 @@ class TestCoreVTGateFunctions(BaseTestCase):
         keyspace_id = kid_list[x]
         vtgate_conn._execute(
             'insert into vt_insert_test (msg, keyspace_id) '
-            'values (%(msg)s, %(keyspace_id)s)',
+            'values (:msg, :keyspace_id)',
             {'msg': 'test %s' % x, 'keyspace_id': keyspace_id},
             tablet_type=tablet_type, keyspace_name=KEYSPACE_NAME,
             keyspace_ids=[pack_kid(keyspace_id)])
       vtgate_conn.commit()
       vtgate_conn2 = get_connection()
       query = (
-          'select keyspace_id from vt_insert_test where keyspace_id = %(kid)s')
+          'select keyspace_id from vt_insert_test where keyspace_id = :kid')
       thd = threading.Thread(target=self._query_lots, args=(
           vtgate_conn2,
           query,
@@ -741,8 +741,8 @@ class TestCoreVTGateFunctions(BaseTestCase):
       cursor.execute(
           'insert into vt_field_types '
           '(uint_val, str_val, unicode_val, float_val, keyspace_id) '
-          'values (%(uint_val)s, %(str_val)s, %(unicode_val)s, '
-          '%(float_val)s, %(keyspace_id)s)',
+          'values (:uint_val, :str_val, :unicode_val, '
+          ':float_val, :keyspace_id)',
           {'uint_val': base_uint + x, 'str_val': 'str_%d' % x,
            'unicode_val': unicode('str_%d' % x), 'float_val': x * 1.2,
            'keyspace_id': keyspace_id})
@@ -767,7 +767,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       float_val_list.append(row.float_val)
 
     # iterable type checks - list, tuple, set are supported.
-    query = 'select * from vt_field_types where id in %(id_1)s'
+    query = 'select * from vt_field_types where id in ::id_1'
     rowcount = cursor.execute(query, {'id_1': id_list})
     self.assertEqual(rowcount, len(id_list), "rowcount doesn't match")
     rowcount = cursor.execute(query, {'id_1': tuple(id_list)})
@@ -780,7 +780,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
     # received field types same as input.
     # uint
-    query = 'select * from vt_field_types where uint_val in %(uint_val_1)s'
+    query = 'select * from vt_field_types where uint_val in ::uint_val_1'
     rowcount = cursor.execute(query, {'uint_val_1': uint_val_list})
     self.assertEqual(rowcount, len(uint_val_list), "rowcount doesn't match")
     for _, r in enumerate(cursor.results):
@@ -790,7 +790,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
           row.uint_val, base_uint, 'uint value not in correct range')
 
     # str
-    query = 'select * from vt_field_types where str_val in %(str_val_1)s'
+    query = 'select * from vt_field_types where str_val in ::str_val_1'
     rowcount = cursor.execute(query, {'str_val_1': str_val_list})
     self.assertEqual(rowcount, len(str_val_list), "rowcount doesn't match")
     for r in cursor.results:
@@ -799,7 +799,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
     # unicode str
     query = (
-        'select * from vt_field_types where unicode_val in %(unicode_val_1)s')
+        'select * from vt_field_types where unicode_val in ::unicode_val_1')
     rowcount = cursor.execute(query, {'unicode_val_1': unicode_val_list})
     self.assertEqual(
         rowcount, len(unicode_val_list), "rowcount doesn't match")
@@ -1463,7 +1463,7 @@ class TestFailures(BaseTestCase):
         eid_map[x] = str(keyspace_id)
         vtgate_conn._execute(
             'insert into vt_a (eid, id, keyspace_id) '
-            'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+            'values (:eid, :id, :keyspace_id)',
             {'eid': x, 'id': x, 'keyspace_id': keyspace_id},
             tablet_type='master', keyspace_name=KEYSPACE_NAME,
             keyspace_ids=[pack_kid(keyspace_id)])
@@ -1733,13 +1733,13 @@ class TestExceptionLogging(BaseTestCase):
       vtgate_conn.begin()
       vtgate_conn._execute(
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+          'values (:eid, :id, :keyspace_id)',
           {'eid': 1, 'id': 1, 'keyspace_id': keyspace_id},
           tablet_type='master', keyspace_name=KEYSPACE_NAME,
           keyspace_ids=[pack_kid(keyspace_id)])
       vtgate_conn._execute(
           'insert into vt_a (eid, id, keyspace_id) '
-          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+          'values (:eid, :id, :keyspace_id)',
           {'eid': 1, 'id': 1, 'keyspace_id': keyspace_id},
           tablet_type='master', keyspace_name=KEYSPACE_NAME,
           keyspace_ids=[pack_kid(keyspace_id)])

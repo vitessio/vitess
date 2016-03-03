@@ -15,7 +15,6 @@ from vtproto import query_pb2
 from vtproto import topodata_pb2
 from vtproto import vtgate_pb2
 
-from vtdb import dbapi
 from vtdb import field_types
 from vtdb import times
 from vtdb import vtgate_utils
@@ -318,21 +317,18 @@ class Proto3Connection(object):
 
     if shards is not None:
       request = vtgate_pb2.ExecuteShardsRequest(keyspace=keyspace_name)
-      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
       request.shards.extend(shards)
       routing_kwargs = {'shards': shards}
       method_name = 'ExecuteShards'
 
     elif keyspace_ids is not None:
       request = vtgate_pb2.ExecuteKeyspaceIdsRequest(keyspace=keyspace_name)
-      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
       request.keyspace_ids.extend(keyspace_ids)
       routing_kwargs = {'keyspace_ids': keyspace_ids}
       method_name = 'ExecuteKeyspaceIds'
 
     elif key_ranges is not None:
       request = vtgate_pb2.ExecuteKeyRangesRequest(keyspace=keyspace_name)
-      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
       self._add_key_ranges(request, key_ranges)
       routing_kwargs = {'keyranges': key_ranges}
       method_name = 'ExecuteKeyRanges'
@@ -341,7 +337,6 @@ class Proto3Connection(object):
       request = vtgate_pb2.ExecuteEntityIdsRequest(
           keyspace=keyspace_name,
           entity_column_name=entity_column_name)
-      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
       self._convert_entity_ids(entity_keyspace_id_map,
                                request.entity_keyspace_ids)
       routing_kwargs = {'entity_keyspace_id_map': entity_keyspace_id_map,
@@ -402,8 +397,6 @@ class Proto3Connection(object):
       request = vtgate_pb2.ExecuteBatchKeyspaceIdsRequest()
       for sql, bind_variables, keyspace_name, keyspace_ids in zip(
           sql_list, bind_variables_list, keyspace_list, keyspace_ids_list):
-        sql, bind_variables = dbapi.prepare_query_bind_vars(sql,
-                                                            bind_variables)
         query = request.queries.add(keyspace=keyspace_name)
         query.query.sql = sql
         self._convert_bind_vars(bind_variables, query.query.bind_variables)
@@ -413,8 +406,6 @@ class Proto3Connection(object):
       request = vtgate_pb2.ExecuteBatchShardsRequest()
       for sql, bind_variables, keyspace_name, shards in zip(
           sql_list, bind_variables_list, keyspace_list, shards_list):
-        sql, bind_variables = dbapi.prepare_query_bind_vars(sql,
-                                                            bind_variables)
         query = request.queries.add(keyspace=keyspace_name)
         query.query.sql = sql
         self._convert_bind_vars(bind_variables, query.query.bind_variables)
@@ -489,7 +480,6 @@ class Proto3Connection(object):
       request = vtgate_pb2.StreamExecuteRequest()
       method_name = 'StreamExecute'
 
-    sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
     request.query.sql = sql
     self._convert_bind_vars(bind_variables, request.query.bind_variables)
     request.tablet_type = topodata_pb2.TabletType.Value(tablet_type.upper())

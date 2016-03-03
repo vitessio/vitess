@@ -16,7 +16,6 @@ from vtproto import topodata_pb2
 from net import bsonrpc
 from net import gorpc
 
-from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import keyrange_constants
@@ -45,7 +44,6 @@ def _create_v2_request_with_shards(
     A (str: value) dict.
   """
   # keyspace_ids are Keyspace Ids packed to byte[]
-  sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
   new_binds = field_types.convert_bind_vars(new_binds)
   req = {
       'Sql': sql,
@@ -76,7 +74,6 @@ def _create_v2_request_with_keyspace_ids(
     A (str: value) dict.
   """
   # keyspace_ids are Keyspace Ids packed to byte[]
-  sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
   new_binds = field_types.convert_bind_vars(new_binds)
   req = {
       'Sql': sql,
@@ -129,7 +126,6 @@ def _create_v2_request_with_keyranges(
   Returns:
     A (str: value) dict.
   """
-  sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
   new_binds = field_types.convert_bind_vars(new_binds)
   req = {
       'Sql': sql,
@@ -341,8 +337,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
         raise dbexceptions.ProgrammingError(
             '_execute called with entity_keyspace_id_map and no '
             'entity_column_name')
-      sql, new_binds = dbapi.prepare_query_bind_vars(sql, bind_variables)
-      new_binds = field_types.convert_bind_vars(new_binds)
+      new_binds = field_types.convert_bind_vars(bind_variables)
       req = {
           'Sql': sql,
           'BindVariables': new_binds,
@@ -422,7 +417,6 @@ class VTGateConnection(vtgate_client.VTGateClient):
       for sql, bind_vars, keyspace_name, keyspace_ids, shards in zip(
           sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
           shards_list):
-        sql, bind_vars = dbapi.prepare_query_bind_vars(sql, bind_vars)
         query = {}
         query['Sql'] = sql
         query['BindVariables'] = field_types.convert_bind_vars(bind_vars)
