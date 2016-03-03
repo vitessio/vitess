@@ -145,7 +145,7 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	fqs2.addHealthResponse(1.0)
 
 	for le := range c {
-		line := le.String()
+		line := logutil.EventString(le)
 		t.Logf(line)
 		if strings.Contains(line, "for all healthy tablets to be drained") {
 			t.Log("Successfully waited for WaitForDrain to be blocked because tablets have a QPS rate > 0.0")
@@ -169,7 +169,7 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	// If a cell was drained, rate should go below <0.0 now.
 	// If not all selected cells were drained, this will end after "-timeout".
 	for le := range c {
-		vp.t.Logf(le.String())
+		vp.t.Logf(logutil.EventString(le))
 	}
 
 	err = errFunc()

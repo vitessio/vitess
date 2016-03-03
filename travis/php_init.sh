@@ -22,6 +22,9 @@ fi
 phpenv global $version
 phpenv rehash
 
+# gRPC plugin will be placed by install_grpc.sh
+echo "extension=$HOME/.phpenv/lib/grpc.so" > ~/.phpenv/versions/$(phpenv global)/etc/conf.d/grpc.ini
+
 if [ -f $HOME/.phpenv/bin/phpunit ]; then
   echo "Using cached phpunit"
 else

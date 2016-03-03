@@ -668,7 +668,9 @@ func RegisterTestDialProtocol(impl vtgateconn.Impl) {
 // HandlePanic is part of the VTGateService interface
 func (f *fakeVTGateService) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		*err = fmt.Errorf("uncaught panic: %v\n%s", x, tb.Stack(4))
+		// gRPC 0.13 chokes when you return a streaming error that contains newlines.
+		*err = fmt.Errorf("uncaught panic: %v, %s", x,
+			strings.Replace(string(tb.Stack(4)), "\n", ";", -1))
 	}
 }
 

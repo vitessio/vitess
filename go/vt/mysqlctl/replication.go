@@ -378,11 +378,7 @@ func (mysqld *Mysqld) SemiSyncEnabled() (master, slave bool) {
 	if err != nil {
 		return false, false
 	}
-	if mval, mok := vars["rpl_semi_sync_master_enabled"]; mok {
-		master = (mval == "ON")
-	}
-	if sval, sok := vars["rpl_semi_sync_slave_enabled"]; sok {
-		slave = (sval == "ON")
-	}
+	master = (vars["rpl_semi_sync_master_enabled"] == "ON")
+	slave = (vars["rpl_semi_sync_slave_enabled"] == "ON")
 	return master, slave
 }
