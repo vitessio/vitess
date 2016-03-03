@@ -30,39 +30,39 @@ addons:
       # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
       - rsyslog
 # Cache directories of dependencies which are built by bootstrap.sh
-cache:
-  directories:
-    # Cache downloaded and extracted MariaDB 10.0 packages.
-    - $MYSQL_ROOT
-    # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
-    - $HOME/gopath/dist/grpc/.build_finished
-    - $HOME/gopath/dist/grpc/usr/local
-    - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
-    - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
-    - $HOME/gopath/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages
-    - $HOME/gopath/dist/vt-zookeeper-3.4.6/.build_finished
-    - $HOME/gopath/dist/vt-zookeeper-3.4.6/include
-    - $HOME/gopath/dist/vt-zookeeper-3.4.6/lib
-    # Maven repository for Java dependencies.
-    - $HOME/.m2
-    - $HOME/.phpenv
-before_cache:
-  # Travis CI caching doesn't work with this symlink. Just delete it.
-  - rm $HOME/gopath/bin/zksrv.sh
-  # Delete these files because they keep changing (having the latest timestamp
-  # of an update) and trigger a lengthy update of the cache (~25 seconds).
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/maven-metadata-local.xml
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/*-SNAPSHOT.jar
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/_remote.repositories
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/maven-metadata-local.xml
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/resolver-status.properties
-  - rm $HOME/.m2/repository/io/grpc/protoc-gen-grpc-java/*/protoc-gen-grpc-java-*.pom.lastUpdated
-  # Don't cache unnecessary PHP files.
-  - rm $HOME/.phpenv/versions/*/sbin/*
-  - rm $HOME/.phpenv/versions/*/bin/php-cgi
-  - rm $HOME/.phpenv/shims/php-cgi
-  - find $HOME/.phpenv/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf
-  - find $HOME/.phpenv/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
+#cache:
+  #directories:
+    ## Cache downloaded and extracted MariaDB 10.0 packages.
+    #- $MYSQL_ROOT
+    ## Cache bootstrapped dependencies (e.g. protobuf and gRPC).
+    #- $HOME/gopath/dist/grpc/.build_finished
+    #- $HOME/gopath/dist/grpc/usr/local
+    #- $HOME/gopath/dist/py-mock-1.0.1/.build_finished
+    #- $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
+    #- $HOME/gopath/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages
+    #- $HOME/gopath/dist/vt-zookeeper-3.4.6/.build_finished
+    #- $HOME/gopath/dist/vt-zookeeper-3.4.6/include
+    #- $HOME/gopath/dist/vt-zookeeper-3.4.6/lib
+    ## Maven repository for Java dependencies.
+    #- $HOME/.m2
+    #- $HOME/.phpenv
+#before_cache:
+  ## Travis CI caching doesn't work with this symlink. Just delete it.
+  #- rm $HOME/gopath/bin/zksrv.sh
+  ## Delete these files because they keep changing (having the latest timestamp
+  ## of an update) and trigger a lengthy update of the cache (~25 seconds).
+  #- rm $HOME/.m2/repository/com/youtube/vitess/*/maven-metadata-local.xml
+  #- rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/*-SNAPSHOT.jar
+  #- rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/_remote.repositories
+  #- rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/maven-metadata-local.xml
+  #- rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/resolver-status.properties
+  #- rm $HOME/.m2/repository/io/grpc/protoc-gen-grpc-java/*/protoc-gen-grpc-java-*.pom.lastUpdated
+  ## Don't cache unnecessary PHP files.
+  #- rm $HOME/.phpenv/versions/*/sbin/*
+  #- rm $HOME/.phpenv/versions/*/bin/php-cgi
+  #- rm $HOME/.phpenv/shims/php-cgi
+  #- find $HOME/.phpenv/vendor/grpc/grpc -mindepth 1 -maxdepth 1 ! -name src | xargs rm -rf
+  #- find $HOME/.phpenv/vendor/grpc/grpc/src -mindepth 1 -maxdepth 1 ! -name php | xargs rm -rf
 env:
   global:
     - MYSQL_FLAVOR=MariaDB
