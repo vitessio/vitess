@@ -69,7 +69,6 @@ fi
 
 # and now build and install gRPC python libraries
 if [ -n "$grpc_dist" ]; then
-  $grpc_dist/usr/local/bin/pip show pip
   $grpc_dist/usr/local/bin/pip --version
 
   $grpc_dist/usr/local/bin/pip -v install .
