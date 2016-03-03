@@ -69,6 +69,9 @@ fi
 
 # and now build and install gRPC python libraries
 if [ -n "$grpc_dist" ]; then
+  $grpc_dist/pip show pip
+  $grpc_dist/pip --version
+
   $grpc_dist/usr/local/bin/pip -v install .
 
   # Manually ensure that we run at least python protobuf-3.0.0-beta2.
@@ -81,13 +84,13 @@ else
   pip install .
 fi
 
-# Build PHP extension, only if requested.
-if [ -n "$INSTALL_GRPC_PHP" ]; then
-  echo "Building gRPC PHP extension..."
-  cd src/php/ext/grpc
-  phpize
-  ./configure --enable-grpc=$grpc_dist/usr/local
-  make
-  mkdir -p $INSTALL_GRPC_PHP
-  mv modules/grpc.so $INSTALL_GRPC_PHP
-fi
+# # Build PHP extension, only if requested.
+# if [ -n "$INSTALL_GRPC_PHP" ]; then
+#   echo "Building gRPC PHP extension..."
+#   cd src/php/ext/grpc
+#   phpize
+#   ./configure --enable-grpc=$grpc_dist/usr/local
+#   make
+#   mkdir -p $INSTALL_GRPC_PHP
+#   mv modules/grpc.so $INSTALL_GRPC_PHP
+# fi
