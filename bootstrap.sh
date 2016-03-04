@@ -137,9 +137,10 @@ ln -snf $VTTOP/py $VTROOT/py-vtdb
 ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
-# install mysql
+# find mysql and prepare to use libmysqlclient
 if [ -z "$MYSQL_FLAVOR" ]; then
-  export MYSQL_FLAVOR=MariaDB
+  export MYSQL_FLAVOR=MySQL56
+  echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
 fi
 case "$MYSQL_FLAVOR" in
   "MySQL56")
