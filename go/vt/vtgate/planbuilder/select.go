@@ -49,37 +49,37 @@ func processSelect(sel *sqlparser.Select, vschema *VSchema, outer planBuilder) (
 		plan.Symtab().Outer = outer.Symtab()
 	}
 	if sel.Where != nil {
-		err = processBoolExpr(sel.Where.Expr, plan, sqlparser.WhereStr)
+		err = pushFilter(sel.Where.Expr, plan, sqlparser.WhereStr)
 		if err != nil {
 			return nil, err
 		}
 	}
-	err = processSelectExprs(sel, plan)
+	err = pushSelectExprs(sel, plan)
 	if err != nil {
 		return nil, err
 	}
 	if sel.Having != nil {
-		err = processBoolExpr(sel.Having.Expr, plan, sqlparser.HavingStr)
+		err = pushFilter(sel.Having.Expr, plan, sqlparser.HavingStr)
 		if err != nil {
 			return nil, err
 		}
 	}
-	err = processOrderBy(sel.OrderBy, plan)
+	err = pushOrderBy(sel.OrderBy, plan)
 	if err != nil {
 		return nil, err
 	}
-	err = processLimit(sel.Limit, plan)
+	err = pushLimit(sel.Limit, plan)
 	if err != nil {
 		return nil, err
 	}
-	processMisc(sel, plan)
+	pushMisc(sel, plan)
 	return plan, nil
 }
 
-// processBoolExpr identifies the target route for the specified bool expr,
+// pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the plan. This function can push to a WHERE or HAVING clause.
-func processBoolExpr(boolExpr sqlparser.BoolExpr, plan planBuilder, whereType string) error {
+func pushFilter(boolExpr sqlparser.BoolExpr, plan planBuilder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
@@ -115,9 +115,9 @@ func reorderBySubquery(filters []sqlparser.BoolExpr) {
 	}
 }
 
-// processSelectExprs identifies the target route for the
+// pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func processSelectExprs(sel *sqlparser.Select, plan planBuilder) error {
+func pushSelectExprs(sel *sqlparser.Select, plan planBuilder) error {
 	err := checkAggregates(sel, plan)
 	if err != nil {
 		return err
@@ -132,7 +132,7 @@ func processSelectExprs(sel *sqlparser.Select, plan planBuilder) error {
 		return err
 	}
 	plan.Symtab().Colsyms = colsyms
-	err = processGroupBy(sel.GroupBy, plan)
+	err = pushGroupBy(sel.GroupBy, plan)
 	if err != nil {
 		return err
 	}

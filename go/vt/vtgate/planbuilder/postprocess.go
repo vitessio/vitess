@@ -15,11 +15,11 @@ import (
 // This file has functions to analyze postprocessing
 // clauses like GROUP BY, etc.
 
-// processGroupBy processes the group by clause. It resolves all symbols,
+// pushGroupBy processes the group by clause. It resolves all symbols,
 // and ensures that there are no subqueries. It also verifies that the
 // references don't addres an outer query. We only support group by
 // for unsharded or single shard routes.
-func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
+func pushGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 	if groupBy == nil {
 		return nil
 	}
@@ -62,13 +62,13 @@ func processGroupBy(groupBy sqlparser.GroupBy, plan planBuilder) error {
 	return errors.New("unsupported: scatter and group by")
 }
 
-// processOrderBy pushes the order by clause to the appropriate routes.
+// pushOrderBy pushes the order by clause to the appropriate routes.
 // In the case of a join, this is allowed only if the order by columns
 // match the join order. Otherwise, it's an error.
 // If column numbers were used to reference the columns, those numbers
 // are readjusted on push-down to match the numbers of the individual
 // queries.
-func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
+func pushOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 	if orderBy == nil {
 		return nil
 	}
@@ -129,7 +129,7 @@ func processOrderBy(orderBy sqlparser.OrderBy, plan planBuilder) error {
 	return nil
 }
 
-func processLimit(limit *sqlparser.Limit, plan planBuilder) error {
+func pushLimit(limit *sqlparser.Limit, plan planBuilder) error {
 	if limit == nil {
 		return nil
 	}
@@ -144,13 +144,13 @@ func processLimit(limit *sqlparser.Limit, plan planBuilder) error {
 	return nil
 }
 
-// processMisc pushes comments and 'for update' clauses
+// pushMisc pushes comments and 'for update' clauses
 // down to all routes.
-func processMisc(sel *sqlparser.Select, plan planBuilder) {
+func pushMisc(sel *sqlparser.Select, plan planBuilder) {
 	switch plan := plan.(type) {
 	case *joinBuilder:
-		processMisc(sel, plan.Left)
-		processMisc(sel, plan.Right)
+		pushMisc(sel, plan.Left)
+		pushMisc(sel, plan.Right)
 	case *routeBuilder:
 		plan.SetMisc(sel.Comments, sel.Lock)
 	}

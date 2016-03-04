@@ -230,14 +230,14 @@ func makejoinBuilder(lplan, rplan planBuilder, join *sqlparser.JoinTableExpr) (p
 		},
 	}
 	if isLeft {
-		err := processBoolExpr(join.On, rplan, sqlparser.WhereStr)
+		err := pushFilter(join.On, rplan, sqlparser.WhereStr)
 		if err != nil {
 			return nil, err
 		}
 		setRHS(rplan)
 		return jb, nil
 	}
-	err = processBoolExpr(join.On, jb, sqlparser.WhereStr)
+	err = pushFilter(join.On, jb, sqlparser.WhereStr)
 	if err != nil {
 		return nil, err
 	}
