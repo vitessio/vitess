@@ -16,7 +16,6 @@ from grpc.framework.interfaces.face import face
 from vtproto import vtgate_pb2
 from vtproto import vtgateservice_pb2
 
-from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import keyrange_constants
 from vtdb import keyspace
@@ -107,49 +106,15 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     # FIXME(alainjobart): keyspace should be in routing_kwargs,
     # as it's not used for v3.
 
-    # FIXME(alainjobart): the v3 part doesn't take the python-style queries
-    # for bind variables (the %(xxx)s), but our style (the :xxx).
-    # this is not consistent with the rest.
-
     try:
-      routing_kwargs = {}
-      method = None
-
-      if shards is not None:
-        request, routing_kwargs, method = self.execute_shards_request(
-            sql, bind_variables, tablet_type,
-            keyspace_name, shards,
-            not_in_transaction, effective_caller_id)
-        response = self.stub.ExecuteShards(request, self.timeout)
-
-      elif keyspace_ids is not None:
-        request, routing_kwargs, method = self.execute_keyspace_ids_request(
-            sql, bind_variables, tablet_type,
-            keyspace_name, keyspace_ids,
-            not_in_transaction, effective_caller_id)
-        response = self.stub.ExecuteKeyspaceIds(request, self.timeout)
-
-      elif keyranges is not None:
-        request, routing_kwargs, method = self.execute_key_ranges_request(
-            sql, bind_variables, tablet_type,
-            keyspace_name, keyranges,
-            not_in_transaction, effective_caller_id)
-        response = self.stub.ExecuteKeyRanges(request, self.timeout)
-
-      elif entity_keyspace_id_map is not None:
-        request, routing_kwargs, method = self.execute_entity_ids_request(
-            sql, bind_variables, tablet_type,
-            keyspace_name, entity_column_name, entity_keyspace_id_map,
-            not_in_transaction, effective_caller_id)
-        response = self.stub.ExecuteEntityIds(request, self.timeout)
-
-      else:
-        request, routing_kwargs, method = self.execute_request(
-            sql, bind_variables, tablet_type,
-            not_in_transaction, effective_caller_id)
-        response = self.stub.Execute(request, self.timeout)
-
-      return self.process_execute_response(method, response)
+      request, routing_kwargs, method_name = self.execute_request_and_name(
+          sql, bind_variables, tablet_type,
+          keyspace_name, shards, keyspace_ids, keyranges,
+          entity_column_name, entity_keyspace_id_map,
+          not_in_transaction, effective_caller_id)
+      method = getattr(self.stub, method_name)
+      response = method(request, self.timeout)
+      return self.process_execute_response(method_name, response)
 
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
@@ -164,26 +129,18 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       **kwargs):
 
     try:
-      if keyspace_ids_list[0]:
-        request, method = self.execute_batch_keyspace_ids_request(
-            sql_list, bind_variables_list,
-            keyspace_list, keyspace_ids_list,
-            tablet_type, as_transaction, effective_caller_id)
-        response = self.stub.ExecuteBatchKeyspaceIds(request, self.timeout)
-
-      else:
-        request, method = self.execute_batch_shards_request(
-            sql_list, bind_variables_list,
-            keyspace_list, shards_list,
-            tablet_type, as_transaction, effective_caller_id)
-        response = self.stub.ExecuteBatchShards(request, self.timeout)
-
-      return self.process_execute_batch_response(method, response)
+      request, method_name = self.execute_batch_request_and_name(
+          sql_list, bind_variables_list, keyspace_list,
+          keyspace_ids_list, shards_list,
+          tablet_type, as_transaction, effective_caller_id)
+      method = getattr(self.stub, method_name)
+      response = method(request, self.timeout)
+      return self.process_execute_batch_response(method_name, response)
 
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables_list)
       raise _convert_exception(
-          e, sql_list, method, keyspace='', tablet_type=tablet_type)
+          e, sql_list, method_name, keyspace='', tablet_type=tablet_type)
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.TransientError))
   def _stream_execute(
@@ -193,35 +150,15 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
       **kwargs):
 
     try:
-      sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-
-      if shards is not None:
-        request = self.stream_execute_shards_request(
-            sql, bind_variables, tablet_type,
-            keyspace_name, shards,
-            effective_caller_id)
-        it = self.stub.StreamExecuteShards(request, self.timeout)
-
-      elif keyspace_ids is not None:
-        request = self.stream_execute_keyspace_ids_request(
-            sql, bind_variables, tablet_type,
-            keyspace_name, keyspace_ids,
-            effective_caller_id)
-        it = self.stub.StreamExecuteKeyspaceIds(request, self.timeout)
-
-      elif keyranges is not None:
-        request = self.stream_execute_key_ranges_request(
-            sql, bind_variables, tablet_type,
-            keyspace_name, keyranges,
-            effective_caller_id)
-        it = self.stub.StreamExecuteKeyRanges(request, self.timeout)
-
-      else:
-        request = self.stream_execute_request(
-            sql, bind_variables, tablet_type,
-            effective_caller_id)
-        it = self.stub.StreamExecute(request, self.timeout)
-
+      request, method_name = self.stream_execute_request_and_name(
+          sql, bind_variables, tablet_type,
+          keyspace_name,
+          shards,
+          keyspace_ids,
+          keyranges,
+          effective_caller_id)
+      method = getattr(self.stub, method_name)
+      it = method(request, self.timeout)
       first_response = it.next()
     except (face.AbortionError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)

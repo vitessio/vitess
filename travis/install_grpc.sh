@@ -5,20 +5,29 @@
 # as root in the image.
 set -ex
 
+# Import prepend_path function.
+dir="$(dirname "${BASH_SOURCE[0]}")"
+source "${dir}/../tools/shell_functions.inc"
+if [ $? -ne 0 ]; then
+  echo "failed to load ../tools/shell_functions.inc"
+  return 1
+fi
+
 # grpc_dist can be empty, in which case we just install to the default paths
 grpc_dist="$1"
 if [ -n "$grpc_dist" ]; then
   cd $grpc_dist
 fi
 
-# for python, we'll need the latest virtualenv and tox.
-# running gRPC requires the six package, version >=1.10.
+# Python requires a very recent version of virtualenv.
 if [ -n "$grpc_dist" ]; then
   # Create a virtualenv, which also creates a virualenv-boxed pip.
   virtualenv $grpc_dist/usr/local
-  $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv tox six
+  $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv
 else
-  pip install --upgrade --ignore-installed virtualenv tox six
+  # system wide installations require an explicit upgrade of
+  # certain gRPC Python dependencies e.g. "six" on Debian Jessie.
+  pip install --upgrade --ignore-installed six
 fi
 
 # clone the repository, setup the submodules
@@ -48,25 +57,29 @@ else
   make install
 fi
 
-# build and install python protobuf side
-cd python
-if [ -n "$grpc_dist" ]; then
-  python setup.py build --cpp_implementation
-  python setup.py install --cpp_implementation --prefix=$grpc_dist/usr/local
-else
-  python setup.py build --cpp_implementation
-  python setup.py install --cpp_implementation
-fi
-
 # now install grpc itself
-cd ../../..
+cd ../..
 if [ -n "$grpc_dist" ]; then
   make install prefix=$grpc_dist/usr/local
+
+  # Add bin directory to the path such that gRPC python won't complain that
+  # it cannot find "grpc_python_plugin".
+  export PATH=$(prepend_path $PATH $grpc_dist/usr/local/bin)
 else
   make install
 fi
 
+# Pin the protobuf python dependency to a specific version which is >=3.0.0a3.
+#
+# This prevents us from running into the bug that the protobuf package with the
+# version "3.0.0-alpha-1" is treated as newer than "3.0.0a3" (alpha-3).
+# See: https://github.com/google/protobuf/issues/855
+# Also discussed here: https://github.com/grpc/grpc/issues/5534
+# In particular, we hit this issue on Travis.
+sed -i -e 's/protobuf>=3.0.0a3/protobuf==3.0.0a3/' setup.py
+
 # and now build and install gRPC python libraries
+# (Dependencies like protobuf python will be installed automatically.)
 if [ -n "$grpc_dist" ]; then
   $grpc_dist/usr/local/bin/pip install .
 else
