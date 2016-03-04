@@ -62,10 +62,6 @@
 "select * from user.user"
 "unsupported: keyspace name qualifier for tables"
 
-# right join
-"select * from user right join user_extra on a=b"
-"unsupported: right join"
-
 # natural join
 "select * from user natural join user_extra"
 "unsupported: natural join"

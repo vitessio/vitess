@@ -87,7 +87,7 @@
   }
 }
 
-# Left join , multi-chunk
+# Left join, multi-chunk
 "select u.col from user u left join main1 m on u.a = m.b"
 {
   "Original": "select u.col from user u left join main1 m on u.a = m.b",
@@ -232,6 +232,36 @@
     "Vars": {
       "user_col": 0
     }
+  }
+}
+
+# Right join
+"select m1.col from main1 as m1 right join main1 as m2 on m1.a=m2.b"
+{
+  "Original": "select m1.col from main1 as m1 right join main1 as m2 on m1.a=m2.b",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select m1.col from main1 as m2 left join main1 as m1 on m1.a = m2.b",
+    "FieldQuery": "select m1.col from main1 as m2 left join main1 as m1 on 1 != 1 where 1 != 1"
+  }
+}
+
+# Right join with a join LHS
+"select m1.col from main1 as m1 join main1 as m2 right join main1 as m3 on m1.a=m2.b"
+{
+  "Original": "select m1.col from main1 as m1 join main1 as m2 right join main1 as m3 on m1.a=m2.b",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select m1.col from main1 as m3 left join (main1 as m1 join main1 as m2) on m1.a = m2.b",
+    "FieldQuery": "select m1.col from main1 as m3 left join (main1 as m1 join main1 as m2) on 1 != 1 where 1 != 1"
   }
 }
 

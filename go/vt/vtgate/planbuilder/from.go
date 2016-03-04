@@ -141,6 +141,8 @@ func getTablePlan(tableName *sqlparser.TableName, vschema *VSchema) (*Route, *Ta
 func processJoin(join *sqlparser.JoinTableExpr, vschema *VSchema) (planBuilder, error) {
 	switch join.Join {
 	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
+	case sqlparser.RightJoinStr:
+		convertToLeftJoin(join)
 	default:
 		return nil, fmt.Errorf("unsupported: %s", join.Join)
 	}
@@ -164,6 +166,20 @@ func processJoin(join *sqlparser.JoinTableExpr, vschema *VSchema) (planBuilder, 
 		}
 	}
 	panic("unreachable")
+}
+
+// convertToLeftJoin converts a right join into a left join.
+func convertToLeftJoin(join *sqlparser.JoinTableExpr) {
+	newRHS := join.LeftExpr
+	// If the LHS is a join, we have to parenthesize it.
+	// Otherwise, it can be used as is.
+	if _, ok := newRHS.(*sqlparser.JoinTableExpr); ok {
+		newRHS = &sqlparser.ParenTableExpr{
+			Exprs: sqlparser.TableExprs{newRHS},
+		}
+	}
+	join.LeftExpr, join.RightExpr = join.RightExpr, newRHS
+	join.Join = sqlparser.LeftJoinStr
 }
 
 // makejoinBuilder creates a new joinBuilder node out of the two builders.
