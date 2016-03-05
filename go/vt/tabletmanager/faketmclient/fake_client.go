@@ -56,28 +56,28 @@ type FakeTabletManagerClient struct {
 // Various read-only methods
 //
 
-// Ping is part of the tmclient.TabletManagerClient interface
+// Ping is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) Ping(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil
 }
 
-// Sleep is part of the tmclient.TabletManagerClient interface
+// Sleep is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) Sleep(ctx context.Context, tablet *topo.TabletInfo, duration time.Duration) error {
 	return nil
 }
 
-// ExecuteHook is part of the tmclient.TabletManagerClient interface
+// ExecuteHook is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ExecuteHook(ctx context.Context, tablet *topo.TabletInfo, hk *hook.Hook) (*hook.HookResult, error) {
 	var hr hook.HookResult
 	return &hr, nil
 }
 
-// GetSchema is part of the tmclient.TabletManagerClient interface
+// GetSchema is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return client.tmc.GetSchema(ctx, tablet, tables, excludeTables, includeViews)
 }
 
-// GetPermissions is part of the tmclient.TabletManagerClient interface
+// GetPermissions is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*tabletmanagerdatapb.Permissions, error) {
 	return &tabletmanagerdatapb.Permissions{}, nil
 }
@@ -86,52 +86,57 @@ func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, table
 // Various read-write methods
 //
 
-// SetReadOnly is part of the tmclient.TabletManagerClient interface
+// SetReadOnly is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) SetReadOnly(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil
 }
 
-// SetReadWrite is part of the tmclient.TabletManagerClient interface
+// SetReadWrite is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) SetReadWrite(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil
 }
 
-// ChangeType is part of the tmclient.TabletManagerClient interface
+// ChangeType is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topodatapb.TabletType) error {
 	return nil
 }
 
-// RefreshState is part of the tmclient.TabletManagerClient interface
+// RefreshState is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) RefreshState(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil
 }
 
-// RunHealthCheck is part of the tmclient.TabletManagerClient interface
+// RunHealthCheck is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topodatapb.TabletType) error {
 	return nil
 }
 
-// ReloadSchema is part of the tmclient.TabletManagerClient interface
+// IgnoreHealthError is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) IgnoreHealthError(ctx context.Context, tablet *topo.TabletInfo, pattern string) error {
+	return nil
+}
+
+// ReloadSchema is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil
 }
 
-// PreflightSchema is part of the tmclient.TabletManagerClient interface
+// PreflightSchema is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*tmutils.SchemaChangeResult, error) {
 	return &tmutils.SchemaChangeResult{}, nil
 }
 
-// ApplySchema is part of the tmclient.TabletManagerClient interface
+// ApplySchema is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *tmutils.SchemaChange) (*tmutils.SchemaChangeResult, error) {
 	return &tmutils.SchemaChangeResult{}, nil
 }
 
-// ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface
+// ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	return &querypb.QueryResult{}, nil
 }
 
-// ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface
+// ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int) (*querypb.QueryResult, error) {
 	return &querypb.QueryResult{}, nil
 }
@@ -140,47 +145,47 @@ func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, ta
 // Replication related methods
 //
 
-// SlaveStatus is part of the tmclient.TabletManagerClient interface
+// SlaveStatus is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*replicationdatapb.Status, error) {
 	return &replicationdatapb.Status{}, nil
 }
 
-// MasterPosition is part of the tmclient.TabletManagerClient interface
+// MasterPosition is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
 	return "", nil
 }
 
-// StopSlave is part of the tmclient.TabletManagerClient interface
+// StopSlave is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StopSlave(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil
 }
 
-// StopSlaveMinimum is part of the tmclient.TabletManagerClient interface
+// StopSlaveMinimum is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos string, waitTime time.Duration) (string, error) {
 	return "", nil
 }
 
-// StartSlave is part of the tmclient.TabletManagerClient interface
+// StartSlave is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StartSlave(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil
 }
 
-// TabletExternallyReparented is part of the tmclient.TabletManagerClient interface
+// TabletExternallyReparented is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) TabletExternallyReparented(ctx context.Context, tablet *topo.TabletInfo, externalID string) error {
 	return nil
 }
 
-// GetSlaves is part of the tmclient.TabletManagerClient interface
+// GetSlaves is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) GetSlaves(ctx context.Context, tablet *topo.TabletInfo) ([]string, error) {
 	return nil, nil
 }
 
-// WaitBlpPosition is part of the tmclient.TabletManagerClient interface
+// WaitBlpPosition is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) WaitBlpPosition(ctx context.Context, tablet *topo.TabletInfo, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
 	return nil
 }
 
-// StopBlp is part of the tmclient.TabletManagerClient interface
+// StopBlp is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StopBlp(ctx context.Context, tablet *topo.TabletInfo) ([]*tabletmanagerdatapb.BlpPosition, error) {
 	// TODO(aaijazi): this works because all tests so far only need to rely on Uid 0.
 	// Ideally, this should turn into a full mock, where the caller can configure the exact
@@ -193,12 +198,12 @@ func (client *FakeTabletManagerClient) StopBlp(ctx context.Context, tablet *topo
 	return bpl, nil
 }
 
-// StartBlp is part of the tmclient.TabletManagerClient interface
+// StartBlp is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StartBlp(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil
 }
 
-// RunBlpUntil is part of the tmclient.TabletManagerClient interface
+// RunBlpUntil is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
 	return "", nil
 }
@@ -207,57 +212,57 @@ func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *
 // Reparenting related functions
 //
 
-// ResetReplication is part of the tmclient.TabletManagerClient interface
+// ResetReplication is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ResetReplication(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil
 }
 
-// InitMaster is part of the tmclient.TabletManagerClient interface
+// InitMaster is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
 	return "", nil
 }
 
-// PopulateReparentJournal is part of the tmclient.TabletManagerClient interface
+// PopulateReparentJournal is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
 	return nil
 }
 
-// InitSlave is part of the tmclient.TabletManagerClient interface
+// InitSlave is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
 	return nil
 }
 
-// DemoteMaster is part of the tmclient.TabletManagerClient interface
+// DemoteMaster is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
 	return "", nil
 }
 
-// PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface
+// PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, position string) (string, error) {
 	return "", nil
 }
 
-// SlaveWasPromoted is part of the tmclient.TabletManagerClient interface
+// SlaveWasPromoted is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil
 }
 
-// SetMaster is part of the tmclient.TabletManagerClient interface
+// SetMaster is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	return nil
 }
 
-// SlaveWasRestarted is part of the tmclient.TabletManagerClient interface
+// SlaveWasRestarted is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error {
 	return nil
 }
 
-// StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface
+// StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topo.TabletInfo) (*replicationdatapb.Status, error) {
 	return &replicationdatapb.Status{}, nil
 }
 
-// PromoteSlave is part of the tmclient.TabletManagerClient interface
+// PromoteSlave is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (string, error) {
 	return "", nil
 }
@@ -266,7 +271,7 @@ func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet 
 // Backup related methods
 //
 
-// Backup is part of the tmclient.TabletManagerClient interface
+// Backup is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutilpb.Event, tmclient.ErrFunc, error) {
 	logstream := make(chan *logutilpb.Event, 10)
 	return logstream, func() error {
@@ -278,7 +283,7 @@ func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topo.
 // RPC related methods
 //
 
-// IsTimeoutError is part of the tmclient.TabletManagerClient interface
+// IsTimeoutError is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) IsTimeoutError(err error) bool {
 	switch err.(type) {
 	case timeoutError:

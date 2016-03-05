@@ -495,13 +495,14 @@ Executes the given SQL query with the provided bound variables against the vtgat
 
 #### Example
 
-<pre class="command-example">VtGateExecute -server &lt;vtgate&gt; [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecute -server &lt;vtgate&gt; [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] [-json] &lt;sql&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vtgate client |
+| json | Boolean | Output JSON instead of human-readable table |
 | server | string | VtGate server to connect to |
 | tablet_type | string | tablet type to query |
 
@@ -524,13 +525,14 @@ Executes the given SQL query with the provided bound variables against the vtgat
 
 #### Example
 
-<pre class="command-example">VtGateExecuteKeyspaceIds -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -keyspace_ids &lt;ks1 in hex&gt;,&lt;k2 in hex&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecuteKeyspaceIds -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -keyspace_ids &lt;ks1 in hex&gt;,&lt;k2 in hex&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] [-json] &lt;sql&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vtgate client |
+| json | Boolean | Output JSON instead of human-readable table |
 | keyspace | string | keyspace to send query to |
 | keyspace_ids | string | comma-separated list of keyspace ids (in hex) that will map into shards to send query to |
 | server | string | VtGate server to connect to |
@@ -558,13 +560,14 @@ Executes the given SQL query with the provided bound variables against the vtgat
 
 #### Example
 
-<pre class="command-example">VtGateExecuteShards -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -shards &lt;shard0&gt;,&lt;shard1&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] &lt;sql&gt;</pre>
+<pre class="command-example">VtGateExecuteShards -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -shards &lt;shard0&gt;,&lt;shard1&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] [-json] &lt;sql&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vtgate client |
+| json | Boolean | Output JSON instead of human-readable table |
 | keyspace | string | keyspace to send query to |
 | server | string | VtGate server to connect to |
 | shards | string | comma-separated list of shards to send query to |
@@ -690,13 +693,14 @@ Executes the given query on the given tablet.
 
 #### Example
 
-<pre class="command-example">VtTabletExecute [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-tablet_type &lt;tablet_type&gt;] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt; &lt;sql&gt;</pre>
+<pre class="command-example">VtTabletExecute [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-tablet_type &lt;tablet_type&gt;] [-json] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt; &lt;sql&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vttablet client |
+| json | Boolean | Output JSON instead of human-readable table |
 | keyspace | string | keyspace the tablet belongs to |
 | shard | string | shard the tablet belongs to |
 | tablet_type | string | tablet type we expect from the tablet (use unknown to use sessionId) |
@@ -1682,6 +1686,7 @@ Blocks until the specified shard has caught up with the filtered replication of 
 * [ExecuteFetchAsDba](#executefetchasdba)
 * [ExecuteHook](#executehook)
 * [GetTablet](#gettablet)
+* [IgnoreHealthError](#ignorehealtherror)
 * [InitTablet](#inittablet)
 * [Ping](#ping)
 * [RefreshState](#refreshstate)
@@ -1805,13 +1810,14 @@ Runs the given SQL command as a DBA on the remote tablet.
 
 #### Example
 
-<pre class="command-example">ExecuteFetchAsDba [--max_rows=10000] [--disable_binlogs] &lt;tablet alias&gt; &lt;sql command&gt;</pre>
+<pre class="command-example">ExecuteFetchAsDba [-max_rows=10000] [-disable_binlogs] [-json] &lt;tablet alias&gt; &lt;sql command&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | disable_binlogs | Boolean | Disables writing to binlogs during the query |
+| json | Boolean | Output JSON instead of human-readable table |
 | max_rows | Int | Specifies the maximum number of rows to allow in reset |
 | reload_schema | Boolean | Indicates whether the tablet schema will be reloaded after executing the SQL command. The default value is <code>false</code>, which indicates that the tablet schema will not be reloaded. |
 
@@ -1860,6 +1866,24 @@ Outputs a JSON structure that contains information about the Tablet.
 #### Errors
 
 * The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetTablet&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+
+
+### IgnoreHealthError
+
+Sets the regexp for health check errors to ignore on the specified tablet. The pattern has implicit ^$ anchors. Set to empty string or restart vttablet to stop ignoring anything.
+
+#### Example
+
+<pre class="command-example">IgnoreHealthError &lt;tablet alias&gt; &lt;ignore regexp&gt;</pre>
+
+#### Arguments
+
+* <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.
+* <code>&lt;ignore regexp&gt;</code> &ndash; Required.
+
+#### Errors
+
+* The <code>&lt;tablet alias&gt;</code> and <code>&lt;ignore regexp&gt;</code> arguments are required for the <code>&lt;IgnoreHealthError&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### InitTablet

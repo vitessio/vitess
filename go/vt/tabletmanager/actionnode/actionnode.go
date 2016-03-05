@@ -132,9 +132,11 @@ const (
 	// tablet record from the topo server.
 	TabletActionRefreshState = "RefreshState"
 
-	// TabletActionRunHealthCheck tells the tablet to refresh its
-	// tablet record from the topo server.
+	// TabletActionRunHealthCheck tells the tablet to run a health check.
 	TabletActionRunHealthCheck = "RunHealthCheck"
+
+	// TabletActionIgnoreHealthError sets the regexp for health errors to ignore.
+	TabletActionIgnoreHealthError = "IgnoreHealthError"
 
 	// TabletActionReloadSchema tells the tablet to reload its schema.
 	TabletActionReloadSchema = "ReloadSchema"

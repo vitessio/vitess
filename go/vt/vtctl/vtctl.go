@@ -169,6 +169,9 @@ var commands = []commandGroup{
 			{"RunHealthCheck", commandRunHealthCheck,
 				"<tablet alias> <target tablet type>",
 				"Runs a health check on a remote tablet with the specified target type."},
+			{"IgnoreHealthError", commandIgnoreHealthError,
+				"<tablet alias> <ignore regexp>",
+				"Sets the regexp for health check errors to ignore on the specified tablet. The pattern has implicit ^$ anchors. Set to empty string or restart vttablet to stop ignoring anything."},
 			{"Sleep", commandSleep,
 				"<tablet alias> <duration>",
 				"Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing."},
@@ -892,6 +895,25 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
+}
+
+func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("The <tablet alias> and <ignore regexp> arguments are required for the IgnoreHealthError command.")
+	}
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	pattern := subFlags.Arg(1)
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+	return wr.TabletManagerClient().IgnoreHealthError(ctx, tabletInfo, pattern)
 }
 
 func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
