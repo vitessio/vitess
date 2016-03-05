@@ -1,5 +1,6 @@
 package com.youtube.vitess.client.cursor;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 
@@ -35,7 +36,15 @@ public class Row {
   private final FieldMap fieldMap;
   private final List<ByteString> values;
   private final Query.Row rawRow;
-  private boolean lastGetWasNull;
+  /**
+   * Remembers whether the column referenced by the last {@code get*()} was
+   * MySQL {@code NULL}.
+   *
+   * <p>Although {@link Row} is not supposed to be used by multiple threads,
+   * we defensively declare {@code lastGetWasNull} as {@code volatile} since
+   * {@link Cursor} in general is used in asynchronous callbacks.
+   */
+  private volatile boolean lastGetWasNull;
 
   /**
    * Construct a Row from {@link com.youtube.vitess.proto.Query.Row}
@@ -71,6 +80,7 @@ public class Row {
    * so a Row created in this way can't be used with code that requires
    * access to the raw row proto.
    */
+  @VisibleForTesting
   public Row(List<Field> fields, List<ByteString> values) {
     this.fieldMap = new FieldMap(fields);
     this.rawRow = null;

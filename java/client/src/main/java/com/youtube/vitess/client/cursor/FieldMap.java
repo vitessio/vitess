@@ -1,11 +1,17 @@
 package com.youtube.vitess.client.cursor;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import com.youtube.vitess.proto.Query.Field;
 
 import java.util.List;
 import java.util.Map;
+
+import javax.annotation.Nullable;
 
 /**
  * A wrapper for {@code List<Field>} that also facilitates lookup by field name.
@@ -17,27 +23,27 @@ public class FieldMap {
   private final List<Field> fields;
   private final Map<String, Integer> indexMap;
 
-  public FieldMap(List<Field> fields) {
+  public FieldMap(Iterable<Field> fields) {
+    this.fields = ImmutableList.copyOf(checkNotNull(fields));
+
     ImmutableMap.Builder<String, Integer> builder = new ImmutableMap.Builder<>();
-    for (int i = 0; i < fields.size(); i++) {
-      builder.put(fields.get(i).getName(), i);
+    int i = 0;
+    for (Field field : this.fields) {
+      builder.put(field.getName(), i++);
     }
     indexMap = builder.build();
-    this.fields = fields;
   }
 
   public List<Field> getList() {
     return fields;
   }
 
-  public Map<String, Integer> getIndexMap() {
-    return indexMap;
+  public Field get(int fieldIndex) {
+    checkArgument(fieldIndex >= 0);
+    return fields.get(fieldIndex);
   }
 
-  public Field get(int i) {
-    return fields.get(i);
-  }
-
+  @Nullable
   public Integer getIndex(String fieldName) {
     return indexMap.get(fieldName);
   }
