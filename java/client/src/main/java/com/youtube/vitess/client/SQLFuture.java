@@ -30,6 +30,9 @@ import java.util.concurrent.TimeoutException;
  * for more information.
  */
 public class SQLFuture<V> extends SimpleForwardingListenableFuture<V> {
+  /**
+   * Creates a SQLFuture that wraps the given ListenableFuture.
+   */
   public SQLFuture(ListenableFuture<V> delegate) {
     super(delegate);
   }
