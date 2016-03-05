@@ -475,6 +475,17 @@ func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tab
 	})
 }
 
+func (itmc *internalTabletManagerClient) IgnoreHealthError(ctx context.Context, tablet *topo.TabletInfo, pattern string) error {
+	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
+	if !ok {
+		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Tablet.Alias.Uid)
+	}
+	return t.agent.RPCWrap(ctx, actionnode.TabletActionIgnoreHealthError, nil, nil, func() error {
+		t.agent.IgnoreHealthError(ctx, pattern)
+		return nil
+	})
+}
+
 func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error {
 	t, ok := tabletMap[tablet.Tablet.Alias.Uid]
 	if !ok {

@@ -70,6 +70,12 @@ namespace Vitess\Proto\Tabletmanagerservice {
       return $this->_simpleRequest('/tabletmanagerservice.TabletManager/RunHealthCheck', $argument, '\Vitess\Proto\Tabletmanagerdata\RunHealthCheckResponse::deserialize', $metadata, $options);
     }
     /**
+     * @param Vitess\Proto\Tabletmanagerdata\IgnoreHealthErrorRequest $input
+     */
+    public function IgnoreHealthError(\Vitess\Proto\Tabletmanagerdata\IgnoreHealthErrorRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/tabletmanagerservice.TabletManager/IgnoreHealthError', $argument, '\Vitess\Proto\Tabletmanagerdata\IgnoreHealthErrorResponse::deserialize', $metadata, $options);
+    }
+    /**
      * @param Vitess\Proto\Tabletmanagerdata\ReloadSchemaRequest $input
      */
     public function ReloadSchema(\Vitess\Proto\Tabletmanagerdata\ReloadSchemaRequest $argument, $metadata = array(), $options = array()) {

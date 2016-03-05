@@ -156,6 +156,13 @@ message RunHealthCheckRequest {
 message RunHealthCheckResponse {
 }
 
+message IgnoreHealthErrorRequest {
+  string pattern = 1;
+}
+
+message IgnoreHealthErrorResponse {
+}
+
 message ReloadSchemaRequest {
 }
 

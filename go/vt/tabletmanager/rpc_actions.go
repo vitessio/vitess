@@ -5,6 +5,8 @@
 package tabletmanager
 
 import (
+	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/hook"
@@ -69,8 +71,24 @@ func (agent *ActionAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.
 func (agent *ActionAgent) RefreshState(ctx context.Context) {
 }
 
-// RunHealthCheck will manually run the health check on the tablet
+// RunHealthCheck will manually run the health check on the tablet.
 // Should be called under RPCWrap.
 func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType topodatapb.TabletType) {
 	agent.runHealthCheck(targetTabletType)
+}
+
+// IgnoreHealthError sets the regexp for health check errors to ignore.
+// Should be called under RPCWrap.
+func (agent *ActionAgent) IgnoreHealthError(ctx context.Context, pattern string) error {
+	var expr *regexp.Regexp
+	if pattern != "" {
+		var err error
+		if expr, err = regexp.Compile(fmt.Sprintf("^%s$", pattern)); err != nil {
+			return err
+		}
+	}
+	agent.mutex.Lock()
+	agent._ignoreHealthErrorExpr = expr
+	agent.mutex.Unlock()
+	return nil
 }
