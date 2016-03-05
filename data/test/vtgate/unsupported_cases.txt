@@ -217,3 +217,7 @@
 # insert with subquery as value
 "insert into user(id) values (select 1 from dual)"
 "unsupported: subqueries in insert"
+
+# nextval not supported yet
+"select nextval(t) from user"
+"unsupported: NEXTVAL construct"

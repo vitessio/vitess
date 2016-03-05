@@ -84,6 +84,7 @@ var keywords = map[string]int{
 	"lock":           LOCK,
 	"minus":          MINUS,
 	"natural":        NATURAL,
+	"nextval":        NEXTVAL,
 	"not":            NOT,
 	"null":           NULL,
 	"on":             ON,

@@ -297,7 +297,7 @@ func analyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selec
 			}
 			selects = append(selects, colIndex)
 		default:
-			panic("unreachable")
+			return nil, fmt.Errorf("unsupported construct: %s", sqlparser.String(expr))
 		}
 	}
 	return selects, nil
