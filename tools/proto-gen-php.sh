@@ -41,3 +41,8 @@ for stubfile in `find php/src/Vitess/Proto -name '*Stub.php'`; do
   clientfile=${stubfile/Stub/Client}
   mv $stubfile $clientfile
 done
+
+# Strip dates from generated files.
+for file in `find php/src -name '*.php'`; do
+  sed -i -r '/^\/\/   Date: /d' $file
+done
