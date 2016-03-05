@@ -202,7 +202,10 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 			}
 
 			// If starting queryservice fails, that's our new reason for being unhealthy.
-			healthErr = agent.allowQueries(desiredType)
+			//
+			// We don't care if the QueryService state actually changed because we'll
+			// broadcast the latest health status after this immediately anway.
+			_ /* state changed */, healthErr = agent.allowQueries(desiredType)
 		}
 	} else {
 		if isServing {
@@ -217,9 +220,15 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topodatapb.TabletType)
 			//   go away when vtgate is the only one looking at lag.
 			// * We're in a special state where queryservice should be disabled
 			//   despite being non-SPARE: This is not a live serving instance anyway.
-			agent.disallowQueries(tablet.Type,
+			//
+			// We don't care if the QueryService state actually changed because we'll
+			// broadcast the latest health status after this immediately anway.
+			_ /* state changed */, err := agent.disallowQueries(tablet.Type,
 				fmt.Sprintf("health-check failure(%v)", healthErr),
 			)
+			if err != nil {
+				log.Errorf("disallowQueries failed: %v", err)
+			}
 		}
 	}
 

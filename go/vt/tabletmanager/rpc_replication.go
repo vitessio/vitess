@@ -208,7 +208,9 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// Now disallow queries, to make sure nobody is writing to the
 	// database.
 	tablet := agent.Tablet()
-	if err := agent.disallowQueries(tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
+	// We don't care if the QueryService state actually changed because we'll
+	// let vtgate keep serving read traffic from this master (see comment below).
+	if _ /* state changed */, err := agent.disallowQueries(tablet.Type, "DemoteMaster marks server rdonly"); err != nil {
 		return "", fmt.Errorf("disallowQueries failed: %v", err)
 	}
 
@@ -227,7 +229,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// There is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will
 	// succeed. It will be less noisy to simply leave the entry
-	// until well promote the master.
+	// until we'll promote the master.
 }
 
 // PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
