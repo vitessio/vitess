@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
@@ -84,7 +83,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		defer conn.Recycle()
 		conn.RecordQuery(qre.query)
 		var invalidator CacheInvalidator
-		if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CacheNone {
+		if qre.plan.TableInfo != nil && qre.plan.TableInfo.IsCached() {
 			invalidator = conn.DirtyKeys(qre.plan.TableName)
 		}
 		switch qre.plan.PlanID {
@@ -186,7 +185,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 	defer conn.Recycle()
 	conn.RecordQuery(qre.query)
 	var invalidator CacheInvalidator
-	if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CacheNone {
+	if qre.plan.TableInfo != nil && qre.plan.TableInfo.IsCached() {
 		invalidator = conn.DirtyKeys(qre.plan.TableName)
 	}
 	switch qre.plan.PlanID {

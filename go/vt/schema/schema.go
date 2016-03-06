@@ -20,6 +20,7 @@ const (
 	CacheNone = 0
 	CacheRW   = 1
 	CacheW    = 2
+	Sequence  = 3
 )
 
 // TableColumn contains info about a table's column.
@@ -36,7 +37,7 @@ type Table struct {
 	Columns   []TableColumn
 	Indexes   []*Index
 	PKColumns []int
-	CacheType int
+	Type      int
 
 	// These vars can be accessed concurrently.
 	TableRows   sync2.AtomicInt64
@@ -52,6 +53,17 @@ func NewTable(name string) *Table {
 		Columns: make([]TableColumn, 0, 16),
 		Indexes: make([]*Index, 0, 8),
 	}
+}
+
+// IsCached returns true if the table has a rowcache association.
+func (ta *Table) IsCached() bool {
+	return ta.Type == CacheRW || ta.Type == CacheW
+}
+
+// IsReadCached returns true if the rowcache can be used for reads.
+// TODO(sougou): remove after deprecating schema overrides.
+func (ta *Table) IsReadCached() bool {
+	return ta.Type == CacheRW
 }
 
 // AddColumn adds a column to the Table.

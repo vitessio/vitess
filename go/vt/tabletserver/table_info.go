@@ -178,7 +178,7 @@ func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, comment string
 		return
 	}
 
-	ti.CacheType = schema.CacheRW
+	ti.Type = schema.CacheRW
 	ti.Cache = NewRowCache(ti, cachePool)
 }
 
