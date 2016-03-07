@@ -49,9 +49,7 @@ type Table struct {
 // NewTable creates a new Table.
 func NewTable(name string) *Table {
 	return &Table{
-		Name:    name,
-		Columns: make([]TableColumn, 0, 16),
-		Indexes: make([]*Index, 0, 8),
+		Name: name,
 	}
 }
 

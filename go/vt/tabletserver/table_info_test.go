@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -279,6 +281,28 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	}
 }
 
+func TestTableInfoSequence(t *testing.T) {
+	db := fakesqldb.Register()
+	for query, result := range getTestTableInfoQueries() {
+		db.AddQuery(query, result)
+	}
+	tableInfo, err := newTestTableInfo(nil, "USER_TABLE", "vitess_sequence", db)
+	if err != nil {
+		t.Fatalf("failed to create a test table info")
+	}
+	want := &TableInfo{
+		Table: &schema.Table{
+			Name: "test_table",
+			Type: schema.Sequence,
+		},
+		CurVal:  1,
+		LastVal: 1,
+	}
+	if !reflect.DeepEqual(tableInfo, want) {
+		t.Errorf("TableInfo:\n%#v, want\n%#v", tableInfo, want)
+	}
+}
+
 func newTestTableInfo(cachePool *CachePool, tableType string, comment string, db *fakesqldb.DB) (*TableInfo, error) {
 	ctx := context.Background()
 	appParams := sqldb.ConnParams{Engine: db.Name}
@@ -393,6 +417,12 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("300")),
 				},
 			},
+		},
+		"select next_id from `test_table` where id = 0": {
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			}},
 		},
 	}
 }
