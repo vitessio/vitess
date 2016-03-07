@@ -295,9 +295,12 @@ func TestTableInfoSequence(t *testing.T) {
 			Name: "test_table",
 			Type: schema.Sequence,
 		},
-		CurVal:  1,
+		NextVal: 1,
 		LastVal: 1,
 	}
+	tableInfo.Columns = nil
+	tableInfo.Indexes = nil
+	tableInfo.PKColumns = nil
 	if !reflect.DeepEqual(tableInfo, want) {
 		t.Errorf("TableInfo:\n%#v, want\n%#v", tableInfo, want)
 	}

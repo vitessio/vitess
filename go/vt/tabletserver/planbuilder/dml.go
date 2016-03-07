@@ -29,9 +29,6 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 	if err != nil {
 		return nil, err
 	}
-	if tableInfo.Type == schema.Sequence {
-		return nil, fmt.Errorf("DML not allowed on sequences: %s", tableName)
-	}
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
 		log.Warningf("no primary key for table %s", tableName)
@@ -81,9 +78,6 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
 	if err != nil {
 		return nil, err
-	}
-	if tableInfo.Type == schema.Sequence {
-		return nil, fmt.Errorf("DML not allowed on sequences: %s", tableName)
 	}
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
@@ -393,9 +387,6 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
 	if err != nil {
 		return nil, err
-	}
-	if tableInfo.Type == schema.Sequence {
-		return nil, fmt.Errorf("DML not allowed on sequences: %s", tableName)
 	}
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {

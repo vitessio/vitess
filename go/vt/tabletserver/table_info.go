@@ -26,8 +26,10 @@ type TableInfo struct {
 
 	// Seq must be locked before accessing the sequence vars.
 	// If CurVal==LastVal, a new chunk has to be obtained.
-	Seq             sync.Mutex
-	CurVal, LastVal int64
+	Seq       sync.Mutex
+	NextVal   int64
+	Increment int64
+	LastVal   int64
 
 	// rowcache stats updated by query_executor.go and query_engine.go.
 	hits, absent, misses, invalidations sync2.AtomicInt64
@@ -35,12 +37,16 @@ type TableInfo struct {
 
 // NewTableInfo creates a new TableInfo.
 func NewTableInfo(conn *DBConn, tableName string, tableType string, comment string, cachePool *CachePool) (ti *TableInfo, err error) {
-	if strings.Contains(comment, "vitess_sequence") {
-		return loadSequence(conn, tableName)
-	}
 	ti, err = loadTableInfo(conn, tableName)
 	if err != nil {
 		return nil, err
+	}
+	if strings.Contains(comment, "vitess_sequence") {
+		err = ti.initSequence(conn)
+		if err != nil {
+			return nil, err
+		}
+		return ti, nil
 	}
 	ti.initRowCache(conn, tableType, comment, cachePool)
 	return ti, nil
@@ -54,25 +60,6 @@ func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
 	if err = ti.fetchIndexes(conn); err != nil {
 		return nil, err
 	}
-	return ti, nil
-}
-
-func loadSequence(conn *DBConn, tableName string) (ti *TableInfo, err error) {
-	ti = &TableInfo{Table: schema.NewTable(tableName)}
-	ti.Type = schema.Sequence
-	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select next_id from `%s` where id = 0", ti.Name), 10000, true)
-	if err != nil {
-		return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
-	}
-	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("unexpected rows from loading sequence %s: %d", tableName, len(qr.Rows))
-	}
-	nextID, err := qr.Rows[0][0].ParseInt64()
-	if err != nil {
-		return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
-	}
-	ti.CurVal = nextID
-	ti.LastVal = nextID
 	return ti, nil
 }
 
@@ -209,6 +196,24 @@ func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, comment string
 
 	ti.Type = schema.CacheRW
 	ti.Cache = NewRowCache(ti, cachePool)
+}
+
+func (ti *TableInfo) initSequence(conn *DBConn) error {
+	ti.Type = schema.Sequence
+	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select next_id from `%s` where id = 0", ti.Name), 10000, true)
+	if err != nil {
+		return fmt.Errorf("error loading sequence %s: %v", ti.Name, err)
+	}
+	if len(qr.Rows) != 1 {
+		return fmt.Errorf("unexpected rows from loading sequence %s: %d", ti.Name, len(qr.Rows))
+	}
+	nextID, err := qr.Rows[0][0].ParseInt64()
+	if err != nil {
+		return fmt.Errorf("error loading sequence %s: %v", ti.Name, err)
+	}
+	ti.NextVal = nextID
+	ti.LastVal = nextID
+	return nil
 }
 
 // StatsJSON returns a JSON representation of the TableInfo stats.

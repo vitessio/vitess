@@ -1110,18 +1110,6 @@
 "select nextval(id) from dual"
 "table id not found in schema"
 
-# insert not allowed on sequences
-"insert into seq values (1)"
-"DML not allowed on sequences: seq"
-
-# update not allowed on sequences
-"update seq set a = 1"
-"DML not allowed on sequences: seq"
-
-#delete not allowed on sequences
-"delete from seq"
-"DML not allowed on sequences: seq"
-
 # int
 "set  a=1"
 {

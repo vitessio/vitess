@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -73,8 +75,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, err
 	}
 
-	if qre.plan.PlanID == planbuilder.PlanDDL {
+	switch qre.plan.PlanID {
+	case planbuilder.PlanDDL:
 		return qre.execDDL()
+	case planbuilder.PlanNextval:
+		return qre.execNextval()
 	}
 
 	if qre.transactionID != 0 {
@@ -166,6 +171,36 @@ func (qre *QueryExecutor) Stream(sendReply func(*sqltypes.Result) error) error {
 }
 
 func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error) {
+	return qre.execAsTransaction(func(conn *TxConnection) (reply *sqltypes.Result, err error) {
+		conn.RecordQuery(qre.query)
+		var invalidator CacheInvalidator
+		if qre.plan.TableInfo != nil && qre.plan.TableInfo.IsCached() {
+			invalidator = conn.DirtyKeys(qre.plan.TableName)
+		}
+		switch qre.plan.PlanID {
+		case planbuilder.PlanPassDML:
+			if qre.qe.strictMode.Get() != 0 {
+				return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
+			}
+			reply, err = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
+		case planbuilder.PlanInsertPK:
+			reply, err = qre.execInsertPK(conn)
+		case planbuilder.PlanInsertSubquery:
+			reply, err = qre.execInsertSubquery(conn)
+		case planbuilder.PlanDMLPK:
+			reply, err = qre.execDMLPK(conn, invalidator)
+		case planbuilder.PlanDMLSubquery:
+			reply, err = qre.execDMLSubquery(conn, invalidator)
+		case planbuilder.PlanUpsertPK:
+			reply, err = qre.execUpsertPK(conn, invalidator)
+		default:
+			return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
+		}
+		return reply, err
+	})
+}
+
+func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
 	transactionID := qre.qe.txPool.Begin(qre.ctx)
 	qre.logStats.AddRewrittenSQL("begin", time.Now())
 	defer func() {
@@ -183,31 +218,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 	}()
 	conn := qre.qe.txPool.Get(transactionID)
 	defer conn.Recycle()
-	conn.RecordQuery(qre.query)
-	var invalidator CacheInvalidator
-	if qre.plan.TableInfo != nil && qre.plan.TableInfo.IsCached() {
-		invalidator = conn.DirtyKeys(qre.plan.TableName)
-	}
-	switch qre.plan.PlanID {
-	case planbuilder.PlanPassDML:
-		if qre.qe.strictMode.Get() != 0 {
-			return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
-		}
-		reply, err = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
-	case planbuilder.PlanInsertPK:
-		reply, err = qre.execInsertPK(conn)
-	case planbuilder.PlanInsertSubquery:
-		reply, err = qre.execInsertSubquery(conn)
-	case planbuilder.PlanDMLPK:
-		reply, err = qre.execDMLPK(conn, invalidator)
-	case planbuilder.PlanDMLSubquery:
-		reply, err = qre.execDMLSubquery(conn, invalidator)
-	case planbuilder.PlanUpsertPK:
-		reply, err = qre.execUpsertPK(conn, invalidator)
-	default:
-		return nil, NewTabletError(ErrFail, vtrpcpb.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
-	}
-	return reply, err
+	return f(conn)
 }
 
 // checkPermissions
@@ -322,6 +333,68 @@ func (qre *QueryExecutor) execPKIN() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	return qre.fetchMulti(pkRows, limit)
+}
+
+func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
+	t := qre.plan.TableInfo
+	t.Seq.Lock()
+	defer t.Seq.Unlock()
+	if t.NextVal >= t.LastVal {
+		_, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
+			query := fmt.Sprintf("select next_id, chunk_size, increment from `%s` where id = 0", qre.plan.TableName)
+			conn.RecordQuery(query)
+			qr, err := qre.execSQL(conn, query, false)
+			if err != nil {
+				return nil, err
+			}
+			if len(qr.Rows) != 1 {
+				return nil, fmt.Errorf("unexpected rows from reading sequence %s: %d", qre.plan.TableName, len(qr.Rows))
+			}
+			nextID, err := qr.Rows[0][0].ParseInt64()
+			if err != nil {
+				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
+			}
+			chunkSize, err := qr.Rows[0][1].ParseInt64()
+			if err != nil {
+				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
+			}
+			if chunkSize < 1 {
+				return nil, fmt.Errorf("invalid chunk size for sequence %s: %d", qre.plan.TableName, chunkSize)
+			}
+			inc, err := qr.Rows[0][2].ParseInt64()
+			if err != nil {
+				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
+			}
+			if inc < 1 || inc > chunkSize {
+				return nil, fmt.Errorf("invalid increment for sequence %s: %d", qre.plan.TableName, inc)
+			}
+			query = fmt.Sprintf("update `%s` set next_id = %d where id = 0", qre.plan.TableName, nextID+chunkSize)
+			conn.RecordQuery(query)
+			_, err = qre.execSQL(conn, query, false)
+			if err != nil {
+				return nil, err
+			}
+			t.NextVal = nextID
+			t.Increment = inc
+			t.LastVal = nextID + chunkSize
+			return nil, nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	ret := t.NextVal
+	t.NextVal += t.Increment
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, strconv.AppendInt(nil, ret, 10)),
+		}},
+		RowsAffected: 1,
+	}, nil
 }
 
 func (qre *QueryExecutor) execSubquery() (*sqltypes.Result, error) {
