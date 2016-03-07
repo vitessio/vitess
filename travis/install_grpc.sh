@@ -36,14 +36,10 @@ cd grpc
 git checkout release-0_13_0
 git submodule update --init
 
-# on OSX beta-1 doesn't work, it has to be built in version beta-2
+# OSX specific setting + dependencies
 if [ `uname -s` == "Darwin" ]; then
-  cd third_party/protobuf
-  git checkout v3.0.0-beta-2
-  cd ../..
-
-  # grpc with protobuf beta-2 fix (https://github.com/jtattermusch/grpc/commit/da717f464d667aca410f3a0ddeaa7ab45d34b7d3)
-  sed -i -- 's/GetUmbrellaClassName/GetReflectionClassName/g' ./src/compiler/csharp_generator.cc
+  export GRPC_PYTHON_BUILD_WITH_CYTHON=1
+  $grpc_dist/usr/local/bin/pip install Cython
 fi
 
 # build everything
