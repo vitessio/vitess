@@ -249,25 +249,37 @@ func TestSetServingType(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = tsv.SetServingType(topodatapb.TabletType_REPLICA, false, nil)
+	stateChanged, err := tsv.SetServingType(topodatapb.TabletType_REPLICA, false, nil)
+	if stateChanged != false {
+		t.Errorf("SetServingType() should NOT have changed the QueryService state, but did")
+	}
 	if err != nil {
 		t.Error(err)
 	}
 	checkTabletServerState(t, tsv, StateNotConnected)
 
-	err = tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	stateChanged, err = tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	if stateChanged != true {
+		t.Errorf("SetServingType() should have changed the QueryService state, but did not")
+	}
 	if err != nil {
 		t.Error(err)
 	}
 	checkTabletServerState(t, tsv, StateServing)
 
-	err = tsv.SetServingType(topodatapb.TabletType_RDONLY, true, nil)
+	stateChanged, err = tsv.SetServingType(topodatapb.TabletType_RDONLY, true, nil)
+	if stateChanged != true {
+		t.Errorf("SetServingType() should have changed the tablet type, but did not")
+	}
 	if err != nil {
 		t.Error(err)
 	}
 	checkTabletServerState(t, tsv, StateServing)
 
-	err = tsv.SetServingType(topodatapb.TabletType_SPARE, false, nil)
+	stateChanged, err = tsv.SetServingType(topodatapb.TabletType_SPARE, false, nil)
+	if stateChanged != true {
+		t.Errorf("SetServingType() should have changed the QueryService state, but did not")
+	}
 	if err != nil {
 		t.Error(err)
 	}
@@ -278,7 +290,10 @@ func TestSetServingType(t *testing.T) {
 	if stateName := tsv.GetState(); stateName != "NOT_SERVING" {
 		t.Errorf("GetState: %s, want NOT_SERVING", stateName)
 	}
-	err = tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	stateChanged, err = tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	if stateChanged != true {
+		t.Errorf("SetServingType() should have changed the QueryService state, but did not")
+	}
 	if err != nil {
 		t.Error(err)
 	}
@@ -396,9 +411,12 @@ func TestTabletServerCheckMysql(t *testing.T) {
 	if !tsv.isMySQLReachable() {
 		t.Error("isMySQLReachable should return true")
 	}
-	err = tsv.SetServingType(topodatapb.TabletType_SPARE, false, nil)
+	stateChanged, err := tsv.SetServingType(topodatapb.TabletType_SPARE, false, nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if stateChanged != true {
+		t.Errorf("SetServingType() should have changed the QueryService state, but did not")
 	}
 	if !tsv.isMySQLReachable() {
 		t.Error("isMySQLReachable should return true")
